@@ -1,0 +1,230 @@
+You are a senior full-stack engineer.
+
+Build a full MVP web app called:
+
+"AI Clinical Companion for NDIS Providers"
+
+Tech stack:
+
+* Frontend: React + TypeScript + Tailwind + shadcn/ui
+* Backend: Python FastAPI
+* Database: Supabase DATABASE 
+* Storage: Supabase Storage
+* AI: OpenAI API (for summaries)
+
+---
+
+## CORE PRODUCT CONCEPT
+
+This is a PATIENT-FIRST system (not a clinic PMS).
+
+It helps solo NDIS providers:
+
+* view patient history quickly
+* record session notes (audio + text)
+* generate AI summaries
+* ensure compliance automatically
+
+---
+
+## UI STRUCTURE (3 MAIN TABS)
+
+Sidebar navigation:
+
+* Dashboard
+* Patients
+* Progress Notes
+* Compliance Engine
+
+---
+
+1. DASHBOARD PAGE
+
+---
+
+Cards:
+
+* Total Patients
+* Sessions This Week
+* Notes Missing
+* Compliance Alerts
+
+List:
+
+* Recent Sessions
+* Recent Alerts
+
+Buttons:
+
+* New Session
+* Add Patient
+
+---
+
+2. PATIENT PAGE
+
+---
+
+List view (left panel):
+
+* patient name
+* plan status
+
+Detail view (main panel):
+
+* NDIS Plan
+* Goals
+* Budget (simple bar)
+* Recent Sessions
+
+AI PANEL:
+
+* last session summary
+* progress trend
+* suggested next step
+
+Buttons:
+
+* Add Session
+* Edit Patient
+
+---
+
+3. SESSION / PROGRESS NOTES PAGE
+
+---
+
+Form:
+
+* Patient dropdown
+* Date
+* Duration
+* Session type
+
+Audio section:
+
+* Record button
+* Stop button
+* Playback
+
+Text area:
+
+* Transcribed notes
+* Editable
+
+Photo upload:
+
+* Upload image
+* Preview grid
+
+Tags:
+
+* Pain
+* Mobility
+* Strength
+
+Buttons:
+
+* Save Draft
+* Save Session
+
+---
+
+4. COMPLIANCE ENGINE PAGE
+
+---
+
+Show:
+
+Compliance score (circle %)
+
+Checklist:
+
+* Notes present
+* Duration recorded
+* Goals linked
+* Outcome described
+
+Table:
+
+* Session compliance results
+
+Templates:
+
+* Session template
+* Progress report template
+
+---
+
+## BACKEND (FASTAPI)
+
+Create these endpoints:
+
+POST /auth/login
+GET /patients
+POST /patients
+GET /patients/{id}
+
+POST /sessions
+GET /sessions/{patient_id}
+
+POST /ai/insight
+POST /ai/compliance
+GET /ai/summary/{patient_id}
+
+---
+
+## AI LOGIC
+
+Use OpenAI.
+
+PROMPT 1: patient summary
+PROMPT 2: clinical insights
+PROMPT 3: compliance check
+
+When saving session:
+
+* transcribe audio
+* run insight prompt
+* run compliance prompt
+* save results
+
+---
+
+## DATABASE CONNECTION
+
+Use Supabase:
+
+* connect via API key
+* use Postgres queries
+
+---
+
+## FUNCTIONAL REQUIREMENTS
+
+* All buttons must work
+* Forms must submit data
+* Data saved to Supabase
+* AI endpoints return real responses
+* UI updates after save
+* Error handling basic
+
+---
+
+## DELIVERABLE
+
+Generate:
+
+* Full React frontend
+* Full FastAPI backend
+* API integration
+* Clean folder structure
+* Working MVP UI
+* Working buttons
+
+Do NOT overbuild.
+Keep it clean, fast, and usable.
+
+---
+
+Build the full project.
