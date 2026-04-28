@@ -3,20 +3,29 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AI Clinical Companion for NDIS Providers API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: participants
+    description: NDIS participants management
+  - name: sessions
+    description: Clinical sessions management
+  - name: alerts
+    description: System alerts
+  - name: dashboard
+    description: Dashboard statistics
+  - name: ai
+    description: AI features
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +33,355 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /participants:
+    get:
+      operationId: getParticipants
+      tags: [participants]
+      summary: List all participants
+      responses:
+        "200":
+          description: List of participants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Participant"
+    post:
+      operationId: createParticipant
+      tags: [participants]
+      summary: Create a new participant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateParticipantBody"
+      responses:
+        "201":
+          description: Created participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Participant"
+
+  /participants/dashboard-stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /participants/{participantId}:
+    get:
+      operationId: getParticipant
+      tags: [participants]
+      summary: Get a participant by ID
+      parameters:
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Participant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Participant"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateParticipant
+      tags: [participants]
+      summary: Update a participant
+      parameters:
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateParticipantBody"
+      responses:
+        "200":
+          description: Updated participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Participant"
+
+  /sessions:
+    get:
+      operationId: getSessions
+      tags: [sessions]
+      summary: List all sessions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "201":
+          description: Created session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/recent:
+    get:
+      operationId: getRecentSessions
+      tags: [sessions]
+      summary: Get recent sessions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+
+  /sessions/compliance-report:
+    get:
+      operationId: getComplianceReport
+      tags: [sessions]
+      summary: Get compliance report for all sessions
+      responses:
+        "200":
+          description: Compliance report
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ComplianceReportItem"
+
+  /sessions/participant/{participantId}:
+    get:
+      operationId: getParticipantSessions
+      tags: [sessions]
+      summary: Get sessions for a participant
+      parameters:
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sessions for participant
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a session by ID
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionBody"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}/save-with-ai:
+    post:
+      operationId: saveSessionWithAI
+      tags: [sessions]
+      summary: Save session and run AI analysis
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Session saved with AI analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AISessionResult"
+
+  /alerts:
+    get:
+      operationId: getAlerts
+      tags: [alerts]
+      summary: List all alerts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/unread:
+    get:
+      operationId: getUnreadAlerts
+      tags: [alerts]
+      summary: Get unread alerts
+      responses:
+        "200":
+          description: Unread alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Alert"
+
+  /alerts/mark-all-read:
+    post:
+      operationId: markAllAlertsRead
+      tags: [alerts]
+      summary: Mark all alerts as read
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+
+  /alerts/{alertId}/read:
+    patch:
+      operationId: markAlertRead
+      tags: [alerts]
+      summary: Mark an alert as read
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+
+  /ai/summary/{participantId}:
+    get:
+      operationId: getAISummary
+      tags: [ai]
+      summary: Get AI summary for a participant
+      parameters:
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AISummary"
+
+  /reports/compliance-overview:
+    get:
+      operationId: getComplianceOverview
+      tags: [ai]
+      summary: Get overall compliance overview
+      responses:
+        "200":
+          description: Compliance overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComplianceOverview"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +389,373 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    Participant:
+      type: object
+      properties:
+        id:
+          type: string
+        full_name:
+          type: string
+        ndis_number:
+          type: string
+        date_of_birth:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        plan_status:
+          type: string
+        plan_start_date:
+          type: string
+          nullable: true
+        plan_end_date:
+          type: string
+          nullable: true
+        total_budget:
+          type: number
+          nullable: true
+        used_budget:
+          type: number
+          nullable: true
+        primary_disability:
+          type: string
+          nullable: true
+        goals:
+          type: array
+          items:
+            type: string
+          nullable: true
+        created_at:
+          type: string
+          nullable: true
+      required: [id, full_name, ndis_number, plan_status]
+
+    CreateParticipantBody:
+      type: object
+      properties:
+        full_name:
+          type: string
+        ndis_number:
+          type: string
+        date_of_birth:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        plan_status:
+          type: string
+          default: active
+        plan_start_date:
+          type: string
+          nullable: true
+        plan_end_date:
+          type: string
+          nullable: true
+        total_budget:
+          type: number
+          nullable: true
+        used_budget:
+          type: number
+          nullable: true
+          default: 0
+        primary_disability:
+          type: string
+          nullable: true
+        goals:
+          type: array
+          items:
+            type: string
+          nullable: true
+      required: [full_name, ndis_number]
+
+    UpdateParticipantBody:
+      type: object
+      properties:
+        full_name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        plan_status:
+          type: string
+          nullable: true
+        total_budget:
+          type: number
+          nullable: true
+        used_budget:
+          type: number
+          nullable: true
+        primary_disability:
+          type: string
+          nullable: true
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        participant_id:
+          type: string
+        session_date:
+          type: string
+        duration_minutes:
+          type: integer
+        session_type:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        transcription:
+          type: string
+          nullable: true
+        ai_summary:
+          type: string
+          nullable: true
+        ai_insights:
+          type: string
+          nullable: true
+        compliance_score:
+          type: number
+          nullable: true
+        compliance_notes:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        goals_addressed:
+          type: array
+          items:
+            type: string
+          nullable: true
+        photo_urls:
+          type: array
+          items:
+            type: string
+          nullable: true
+        audio_url:
+          type: string
+          nullable: true
+        status:
+          type: string
+        created_at:
+          type: string
+          nullable: true
+        participants:
+          nullable: true
+          type: object
+          properties:
+            full_name:
+              type: string
+            ndis_number:
+              type: string
+      required: [id, participant_id, session_date, duration_minutes, session_type, status]
+
+    CreateSessionBody:
+      type: object
+      properties:
+        participant_id:
+          type: string
+        session_date:
+          type: string
+        duration_minutes:
+          type: integer
+        session_type:
+          type: string
+        notes:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        goals_addressed:
+          type: array
+          items:
+            type: string
+          nullable: true
+        status:
+          type: string
+          default: draft
+      required: [participant_id, session_date, duration_minutes, session_type]
+
+    UpdateSessionBody:
+      type: object
+      properties:
+        notes:
+          type: string
+          nullable: true
+        transcription:
+          type: string
+          nullable: true
+        duration_minutes:
+          type: integer
+          nullable: true
+        session_type:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        goals_addressed:
+          type: array
+          items:
+            type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        participant_id:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+        alert_type:
+          type: string
+        severity:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          nullable: true
+        participants:
+          nullable: true
+          type: object
+          properties:
+            full_name:
+              type: string
+      required: [id, alert_type, severity, title, message, is_read]
+
+    DashboardStats:
+      type: object
+      properties:
+        total_participants:
+          type: integer
+        sessions_this_week:
+          type: integer
+        notes_missing:
+          type: integer
+        compliance_alerts:
+          type: integer
+        active_participants:
+          type: integer
+      required: [total_participants, sessions_this_week, notes_missing, compliance_alerts, active_participants]
+
+    ComplianceReportItem:
+      type: object
+      properties:
+        session_id:
+          type: string
+        participant_name:
+          type: string
+        session_date:
+          type: string
+        session_type:
+          type: string
+        compliance_score:
+          type: number
+        status:
+          type: string
+        checks:
+          type: object
+          properties:
+            notes_present:
+              type: boolean
+            duration_recorded:
+              type: boolean
+            goals_linked:
+              type: boolean
+            session_type_set:
+              type: boolean
+      required: [session_id, participant_name, session_date, session_type, compliance_score, status]
+
+    AISummary:
+      type: object
+      properties:
+        participant_id:
+          type: string
+        participant_name:
+          type: string
+        summary:
+          type: string
+        sessions_count:
+          type: integer
+      required: [participant_id, participant_name, summary, sessions_count]
+
+    AISessionResult:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+        compliance:
+          type: object
+          properties:
+            score:
+              type: number
+            assessment:
+              type: string
+        insights:
+          type: object
+          properties:
+            summary:
+              type: string
+            progress_trend:
+              type: string
+      required: [session]
+
+    ComplianceOverview:
+      type: object
+      properties:
+        average_score:
+          type: number
+        total_sessions:
+          type: integer
+        compliant:
+          type: integer
+        non_compliant:
+          type: integer
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComplianceReportItem"
+      required: [average_score, total_sessions, compliant, non_compliant]
