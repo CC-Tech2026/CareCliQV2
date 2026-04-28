@@ -25,14 +25,21 @@ async def get_participant_by_id(participant_id: str) -> Optional[dict]:
 async def create_participant(data: ParticipantCreate) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
-    if "date_of_birth" in payload and payload["date_of_birth"]:
-        payload["date_of_birth"] = str(payload["date_of_birth"])
-    if "plan_start_date" in payload and payload["plan_start_date"]:
-        payload["plan_start_date"] = str(payload["plan_start_date"])
-    if "plan_end_date" in payload and payload["plan_end_date"]:
-        payload["plan_end_date"] = str(payload["plan_end_date"])
-    if "goals" in payload and isinstance(payload["goals"], list):
-        payload["goals"] = json.dumps(payload["goals"])
+
+    # Remove fields that don't exist in the actual DB table
+    payload.pop("address", None)
+
+    # Date fields must be ISO strings
+    for date_field in ("date_of_birth", "plan_start_date", "plan_end_date"):
+        if date_field in payload and payload[date_field]:
+            payload[date_field] = str(payload[date_field])
+
+    # goals is TEXT in DB — store as JSON string so we can parse it back as a list
+    if "goals" in payload:
+        if isinstance(payload["goals"], list):
+            payload["goals"] = json.dumps(payload["goals"])
+        elif payload["goals"] is None:
+            payload.pop("goals")
 
     result = supabase.table(TABLE).insert(payload).execute()
     return _normalize(result.data[0]) if result.data else {}
@@ -41,8 +48,13 @@ async def create_participant(data: ParticipantCreate) -> dict:
 async def update_participant(participant_id: str, data: ParticipantUpdate) -> Optional[dict]:
     supabase = get_supabase_admin()
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
-    if "date_of_birth" in payload and payload["date_of_birth"]:
-        payload["date_of_birth"] = str(payload["date_of_birth"])
+    payload.pop("address", None)
+    for date_field in ("date_of_birth", "plan_start_date", "plan_end_date"):
+        if date_field in payload and payload[date_field]:
+            payload[date_field] = str(payload[date_field])
+    if "goals" in payload:
+        if isinstance(payload["goals"], list):
+            payload["goals"] = json.dumps(payload["goals"])
     result = supabase.table(TABLE).update(payload).eq("id", participant_id).execute()
     return _normalize(result.data[0]) if result.data else None
 
@@ -103,14 +115,19 @@ def _normalize(row: dict) -> dict:
     if not row:
         return row
     out = dict(row)
+
+    # goals is TEXT in DB; we store JSON arrays as strings, but handle plain text too
     goals = out.get("goals")
-    if isinstance(goals, str):
+    if isinstance(goals, str) and goals:
         try:
-            out["goals"] = json.loads(goals)
+            parsed = json.loads(goals)
+            out["goals"] = parsed if isinstance(parsed, list) else [goals]
         except Exception:
-            out["goals"] = []
-    if not isinstance(out.get("goals"), list):
-        out["goals"] = out.get("goals") or []
+            # Plain text fallback — split by newline or comma
+            out["goals"] = [g.strip() for g in goals.replace("\n", ",").split(",") if g.strip()]
+    elif not isinstance(goals, list):
+        out["goals"] = []
+
     if out.get("total_budget") is None:
         out["total_budget"] = 0.0
     if out.get("used_budget") is None:

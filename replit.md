@@ -12,8 +12,16 @@ A full-stack clinical management system for solo NDIS (National Disability Insur
 ## Running the App
 
 - **Python Backend**: Runs via "Python Backend" workflow on port 8000
+- **API Server (Node/Express)**: Runs via "artifacts/api-server: API Server" workflow on port 8080
 - **Frontend**: Runs via "artifacts/frontend: web" workflow on port 18130
-- Frontend proxies `/api` requests to the backend via Vite proxy config
+
+### Request Routing
+
+The Replit preview proxy (`localhost:80`) routes to the `api-server` (port 8080) for API calls. The `api-server` acts as a reverse proxy:
+- Routes under `/api/participants`, `/api/sessions`, `/api/alerts`, `/api/compliance`, `/api/ai` are proxied to the Python backend (port 8000)
+- The Express proxy middleware runs **before** body-parsing middleware so POST/PATCH request bodies are correctly forwarded
+
+The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8000 for local development.
 
 ## Features
 

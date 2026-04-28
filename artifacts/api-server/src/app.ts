@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -26,6 +27,33 @@ app.use(
   }),
 );
 app.use(cors());
+
+const PYTHON_BACKEND = "http://localhost:8000";
+
+const PYTHON_PREFIXES = [
+  "/api/participants",
+  "/api/sessions",
+  "/api/alerts",
+  "/api/compliance",
+  "/api/ai",
+];
+
+// Proxy must be registered BEFORE body-parsing middleware so that
+// express.json() does not consume the request body before it can be streamed.
+app.use(
+  createProxyMiddleware({
+    target: PYTHON_BACKEND,
+    changeOrigin: true,
+    pathFilter: (path: string) =>
+      PYTHON_PREFIXES.some(
+        (prefix) =>
+          path === prefix ||
+          path.startsWith(prefix + "/") ||
+          path.startsWith(prefix + "?"),
+      ),
+  }),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

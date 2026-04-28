@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGetParticipants, useGetParticipant, useGetParticipantSessions, useGetAISummary, useCreateParticipant } from "@workspace/api-client-react";
+import { useGetParticipants, useGetParticipant, useGetParticipantSessions, useGetAISummary, useCreateParticipant, type CreateParticipantBody } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Search, UserPlus, Calendar, Activity, Target, ShieldCheck, Clock, FileText, Loader2, Users } from "lucide-react";
@@ -20,8 +20,14 @@ import { useToast } from "@/hooks/use-toast";
 const participantSchema = z.object({
   full_name: z.string().min(1, "Name is required"),
   ndis_number: z.string().min(1, "NDIS Number is required"),
+  date_of_birth: z.string().min(1, "Date of birth is required"),
+  email: z.string().email("Invalid email").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  primary_disability: z.string().optional(),
   plan_status: z.string().min(1, "Plan status is required"),
-  total_budget: z.coerce.number().optional(),
+  plan_start_date: z.string().optional(),
+  plan_end_date: z.string().optional(),
+  total_budget: z.coerce.number().min(0).optional(),
 });
 
 type ParticipantFormValues = z.infer<typeof participantSchema>;
@@ -41,13 +47,32 @@ export default function Patients() {
     defaultValues: {
       full_name: "",
       ndis_number: "",
+      date_of_birth: "",
+      email: "",
+      phone: "",
+      primary_disability: "",
       plan_status: "active",
+      plan_start_date: "",
+      plan_end_date: "",
       total_budget: 0,
     },
   });
 
   const onSubmit = (data: ParticipantFormValues) => {
-    createParticipant.mutate({ data }, {
+    const payload: Record<string, unknown> = {
+      full_name: data.full_name,
+      ndis_number: data.ndis_number,
+      date_of_birth: data.date_of_birth,
+      plan_status: data.plan_status,
+    };
+    if (data.email) payload.email = data.email;
+    if (data.phone) payload.phone = data.phone;
+    if (data.primary_disability) payload.primary_disability = data.primary_disability;
+    if (data.plan_start_date) payload.plan_start_date = data.plan_start_date;
+    if (data.plan_end_date) payload.plan_end_date = data.plan_end_date;
+    if (data.total_budget !== undefined) payload.total_budget = data.total_budget;
+
+    createParticipant.mutate({ data: payload as unknown as CreateParticipantBody }, {
       onSuccess: (newParticipant) => {
         toast({ title: "Participant added successfully" });
         setIsAddOpen(false);
@@ -81,75 +106,157 @@ export default function Patients() {
                   <span>Add</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Participant</DialogTitle>
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="full_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Full Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="John Doe" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="ndis_number"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>NDIS Number</FormLabel>
-                          <FormControl>
-                            <Input placeholder="123 456 789" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="plan_status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Plan Status</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="full_name"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Full Name <span className="text-destructive">*</span></FormLabel>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
+                              <Input placeholder="Jane Smith" data-testid="input-full-name" {...field} />
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="review">Under Review</SelectItem>
-                              <SelectItem value="expired">Expired</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="total_budget"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total Budget ($)</FormLabel>
-                          <FormControl>
-                            <Input type="number" placeholder="50000" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="ndis_number"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>NDIS Number <span className="text-destructive">*</span></FormLabel>
+                            <FormControl>
+                              <Input placeholder="430012345" data-testid="input-ndis-number" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="date_of_birth"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Date of Birth <span className="text-destructive">*</span></FormLabel>
+                            <FormControl>
+                              <Input type="date" data-testid="input-date-of-birth" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Phone</FormLabel>
+                            <FormControl>
+                              <Input placeholder="0412 345 678" data-testid="input-phone" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="primary_disability"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Primary Disability</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g. Autism Spectrum Disorder" data-testid="input-primary-disability" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="plan_status"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Plan Status</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-plan-status">
+                                  <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="expired">Expired</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="total_budget"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Total Budget ($)</FormLabel>
+                            <FormControl>
+                              <Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="plan_start_date"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Plan Start Date</FormLabel>
+                            <FormControl>
+                              <Input type="date" data-testid="input-plan-start-date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="plan_end_date"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Plan End Date</FormLabel>
+                            <FormControl>
+                              <Input type="date" data-testid="input-plan-end-date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <DialogFooter>
-                      <Button type="submit" disabled={createParticipant.isPending}>
+                      <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
+                      <Button type="submit" data-testid="button-add-participant" disabled={createParticipant.isPending}>
                         {createParticipant.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Add Participant
                       </Button>
@@ -177,7 +284,8 @@ export default function Patients() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="review">Under Review</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
