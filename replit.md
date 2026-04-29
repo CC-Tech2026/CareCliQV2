@@ -18,7 +18,7 @@ A full-stack clinical management system for solo NDIS (National Disability Insur
 ### Request Routing
 
 The Replit preview proxy (`localhost:80`) routes to the `api-server` (port 8080) for API calls. The `api-server` acts as a reverse proxy:
-- Routes under `/api/participants`, `/api/sessions`, `/api/alerts`, `/api/compliance`, `/api/ai` are proxied to the Python backend (port 8000)
+- Routes under `/api/participants`, `/api/sessions`, `/api/alerts`, `/api/compliance`, `/api/ai`, `/api/reports`, `/api/budget` are proxied to the Python backend (port 8000)
 - The Express proxy middleware runs **before** body-parsing middleware so POST/PATCH request bodies are correctly forwarded
 
 The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8000 for local development.
@@ -39,6 +39,14 @@ The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8
 - Add participant modal + Edit participant modal (PATCH endpoint)
 - Set Up NDIS Plan dialog (creates ndis_plans + plan_budgets records)
 
+### Compliance Centre (`/compliance`)
+- **Gauge** showing overall NDIS audit score (SVG arc, colour-coded)
+- **Status cards**: Compliant (≥85%), At Risk (60-84%), Non-Compliant (<60%) session counts
+- **Most Common Issues**: Aggregated failing rules across all sessions with relative frequency bars
+- **Budget Impact**: Estimated at-risk revenue from non-compliant sessions + overall claim rate
+- **Session Audit Log**: Filterable table with status filter tabs (All/Compliant/At Risk/Non-Compliant/Draft), compliance score bar, rules check icons, Review link
+- New backend endpoints: `GET /api/reports/compliance-overview`, `POST /api/compliance/run/{id}`
+
 ### Backend Compliance Engine (`backend/app/services/compliance_engine.py`)
 8 rules-based checks on every session: duration present, notes not empty, goals linked, service type set, outcome described, within plan dates, no duplicate timestamps, budget not exceeded. Score = (passed + warnings×0.5) / total × 100. Blended 70/30 with AI compliance score.
 
@@ -54,7 +62,20 @@ The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8
 - `budget_usage` — Per-session cost records linked to plan budgets
 - `support_items` — Simplified NDIS price guide (9 seeded items)
 - `compliance_audit_logs` — Rule-by-rule audit trail per session
-> **Note**: Run the new section of `backend/supabase_setup.sql` in Supabase SQL editor to create these tables.
+> **Note**: Run the new section of `backend/supabase_setup.sql` in Supabase SQL editor to create these tables and add the new columns (`compliance_status`, `cost`, `support_category` on sessions; `ndis_plan_id` on patients).
+
+### Important: Supabase FK Join Workaround
+PostgREST's relational join syntax (e.g. `patients(full_name)`) requires a registered FK in the schema cache. Because this can be unreliable, **all session service queries use a two-query approach**: fetch sessions first, then batch-fetch patient names by ID. Do not add PostgREST join syntax back to `session_service.py`.
+
+### Session Detail (`/sessions/:id`) — Claim Readiness Centre
+- **Claim Readiness Badge**: Compliant / At Risk / Non-Compliant / Draft derived from score (≥85 / 60-84 / <60 / null)
+- **Live Compliance Warning Bar**: Real-time local rules check as you type notes — shows errors (blocking) and warnings (advisory) with character count feedback
+- **Blocking Save Dialog**: AlertDialog modal when critical issues detected before saving notes — user can "Fix First" or "Save Draft Anyway"
+- **Rules Breakdown Panel**: Pass/warn/fail icons per rule after AI analysis (from `rules_result` in `ai_insights` JSON)
+- **AI Fix Suggestions**: On-demand fetch from `POST /ai/explain-compliance` — shows explanation + how-to-fix for failed rules
+- **Re-check Button**: Calls `POST /compliance/run/:id` to re-run compliance engine without full AI analysis
+- **Cost/Billing Card**: Shows `support_category` and `cost` columns if set on session
+- **Upgraded AI Insights Panel**: Summary, key observations, next session recommendations, progress trend
 
 ### Sessions (`/sessions`, `/sessions/new`, `/sessions/:id`)
 - Session list with search + filter by status

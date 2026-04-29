@@ -7,6 +7,18 @@ import json
 logger = logging.getLogger(__name__)
 
 
+def _fetch_patient_name_map(supabase, patient_ids: List[str]) -> dict:
+    """Batch-fetch patient names by IDs, returns {patient_id: full_name}."""
+    if not patient_ids:
+        return {}
+    try:
+        result = supabase.table("patients").select("id, full_name, ndis_number").in_("id", patient_ids).execute()
+        return {r["id"]: r for r in (result.data or [])}
+    except Exception as e:
+        logger.warning(f"Could not fetch patient names: {e}")
+        return {}
+
+
 async def get_sessions_by_participant(participant_id: str) -> List[dict]:
     supabase = get_supabase_admin()
     result = supabase.table("sessions").select("*").eq("patient_id", participant_id).order("session_date", desc=True).execute()
@@ -15,14 +27,39 @@ async def get_sessions_by_participant(participant_id: str) -> List[dict]:
 
 async def get_all_sessions(limit: int = 50) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*, patients(full_name)").order("session_date", desc=True).limit(limit).execute()
-    return [_normalize_with_participant(r) for r in (result.data or [])]
+    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit).execute()
+    sessions = result.data or []
+
+    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
+
+    out = []
+    for s in sessions:
+        row = _normalize(s)
+        patient = name_map.get(s.get("patient_id") or "", {})
+        row["participants"] = {
+            "full_name": patient.get("full_name", ""),
+            "ndis_number": patient.get("ndis_number", ""),
+        } if patient else None
+        out.append(row)
+    return out
 
 
 async def get_session_by_id(session_id: str) -> Optional[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*, patients(full_name, ndis_number)").eq("id", session_id).single().execute()
-    return _normalize_with_participant(result.data) if result.data else None
+    result = supabase.table("sessions").select("*").eq("id", session_id).single().execute()
+    if not result.data:
+        return None
+    row = _normalize(result.data)
+    pid = result.data.get("patient_id")
+    if pid:
+        name_map = _fetch_patient_name_map(supabase, [pid])
+        patient = name_map.get(pid, {})
+        row["participants"] = {
+            "full_name": patient.get("full_name", ""),
+            "ndis_number": patient.get("ndis_number", ""),
+        }
+    return row
 
 
 async def create_session(data: SessionCreate) -> dict:
@@ -63,24 +100,51 @@ async def update_session(session_id: str, data: dict) -> Optional[dict]:
 
 async def get_recent_sessions(limit: int = 10) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*, patients(full_name)").order("created_at", desc=True).limit(limit).execute()
-    return [_normalize_with_participant(r) for r in (result.data or [])]
+    result = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit).execute()
+    sessions = result.data or []
+
+    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
+
+    out = []
+    for s in sessions:
+        row = _normalize(s)
+        patient = name_map.get(s.get("patient_id") or "", {})
+        row["participants"] = {
+            "full_name": patient.get("full_name", ""),
+            "ndis_number": patient.get("ndis_number", ""),
+        } if patient else None
+        out.append(row)
+    return out
 
 
 async def get_compliance_report() -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*, patients(full_name)").order("session_date", desc=True).limit(100).execute()
+    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(100).execute()
     sessions = result.data or []
+
+    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
 
     report = []
     for s in sessions:
-        patient = s.get("patients") or {}
+        patient = name_map.get(s.get("patient_id") or "", {})
         participant_name = patient.get("full_name", "Unknown")
         score = s.get("compliance_score", 0) or 0
+        notes = s.get("notes") or ""
+        goals = s.get("goals_addressed") or ""
+        if isinstance(goals, str):
+            try:
+                goals_list = json.loads(goals)
+            except Exception:
+                goals_list = []
+        else:
+            goals_list = goals if isinstance(goals, list) else []
+
         checks = {
-            "notes_present": bool(s.get("notes") and len(s.get("notes", "")) > 20),
+            "notes_present": bool(notes and len(notes) > 20),
             "duration_recorded": bool(s.get("duration_minutes", 0) > 0),
-            "goals_linked": bool(s.get("goals_addressed") and s.get("goals_addressed") != "[]"),
+            "goals_linked": bool(goals_list),
             "session_type_set": bool(s.get("session_type")),
         }
         report.append({
@@ -89,7 +153,11 @@ async def get_compliance_report() -> List[dict]:
             "participant_id": s.get("patient_id"),
             "session_date": s.get("session_date"),
             "session_type": s.get("session_type"),
+            "duration_minutes": s.get("duration_minutes", 0),
+            "notes_length": len(notes),
+            "goals_linked": checks["goals_linked"],
             "compliance_score": score,
+            "compliance_status": s.get("compliance_status", "draft"),
             "checks": checks,
             "status": s.get("status", "draft"),
         })
@@ -114,15 +182,4 @@ def _normalize(row: dict) -> dict:
             out[field] = []
     if out.get("status") is None:
         out["status"] = "draft"
-    return out
-
-
-def _normalize_with_participant(row: dict) -> dict:
-    if not row:
-        return row
-    out = _normalize(row)
-    patient = out.pop("patients", None)
-    if patient and isinstance(patient, dict):
-        out["participant_name"] = patient.get("full_name", "")
-        out["participant_ndis"] = patient.get("ndis_number", "")
     return out

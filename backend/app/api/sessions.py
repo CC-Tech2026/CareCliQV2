@@ -94,8 +94,17 @@ async def save_session_with_ai(session_id: str):
             rules_result["score"] * 0.7 + ai_compliance["score"] * 0.3, 1
         )
 
+        # Derive claim readiness status from score
+        if blended_score >= 85:
+            compliance_status = "compliant"
+        elif blended_score >= 60:
+            compliance_status = "at_risk"
+        else:
+            compliance_status = "non_compliant"
+
         updates = {
             "compliance_score": blended_score,
+            "compliance_status": compliance_status,
             "compliance_notes": ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps({

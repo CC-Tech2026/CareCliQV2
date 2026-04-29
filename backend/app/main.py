@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import auth, participants, sessions, alerts, plans, reports, ai
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +27,8 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(plans.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(compliance.router, prefix="/api")
+app.include_router(budget_api.router, prefix="/api")
 
 
 @app.get("/api/health")

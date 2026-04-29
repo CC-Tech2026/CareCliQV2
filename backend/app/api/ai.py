@@ -27,6 +27,11 @@ class ComplianceRequest(BaseModel):
     tags: Optional[List[str]] = []
 
 
+class ExplainComplianceRequest(BaseModel):
+    failed_rules: List[dict]
+    session_notes: Optional[str] = ""
+
+
 @router.post("/insight")
 async def get_insights(body: InsightRequest):
     participant = await participant_service.get_participant_by_id(body.participant_id)
@@ -49,6 +54,17 @@ async def check_compliance(body: ComplianceRequest):
         return result
     except Exception as e:
         logger.error(f"Compliance check error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/explain-compliance")
+async def explain_compliance(body: ExplainComplianceRequest):
+    """Generate human-readable compliance explanation and actionable fix suggestions."""
+    try:
+        result = await ai_service.explain_compliance(body.failed_rules, body.session_notes or "")
+        return result
+    except Exception as e:
+        logger.error(f"Explain compliance error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

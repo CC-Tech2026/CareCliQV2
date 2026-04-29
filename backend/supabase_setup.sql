@@ -81,6 +81,28 @@ BEGIN
     END IF;
 END $$;
 
+-- Add claim readiness + cost tracking columns to sessions
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='compliance_status') THEN
+        ALTER TABLE sessions ADD COLUMN compliance_status TEXT DEFAULT 'draft';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='cost') THEN
+        ALTER TABLE sessions ADD COLUMN cost NUMERIC(10, 2) DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='support_category') THEN
+        ALTER TABLE sessions ADD COLUMN support_category TEXT;
+    END IF;
+END $$;
+
+-- Add ndis_plan_id to patients
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='ndis_plan_id') THEN
+        ALTER TABLE patients ADD COLUMN ndis_plan_id UUID;
+    END IF;
+END $$;
+
 -- Create ALERTS table (new table)
 CREATE TABLE IF NOT EXISTS public.alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,9 +1,21 @@
 from fastapi import APIRouter, HTTPException
 from ..services import ai_service, participant_service, session_service
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+def _derive_status(score) -> str:
+    if score is None:
+        return "draft"
+    score = float(score)
+    if score >= 85:
+        return "compliant"
+    if score >= 60:
+        return "at_risk"
+    return "non_compliant"
 
 
 @router.get("/participant/{participant_id}/summary")
@@ -20,16 +32,41 @@ async def participant_summary(participant_id: str):
 async def compliance_overview():
     report = await session_service.get_compliance_report()
     if not report:
-        return {"average_score": 0, "total_sessions": 0, "compliant": 0, "non_compliant": 0, "sessions": []}
+        return {
+            "average_score": 0,
+            "total_sessions": 0,
+            "compliant": 0,
+            "at_risk": 0,
+            "non_compliant": 0,
+            "sessions": [],
+        }
 
-    scores = [r["compliance_score"] for r in report if r["compliance_score"] is not None]
+    scores = [float(r["compliance_score"]) for r in report if r.get("compliance_score") is not None]
     avg = sum(scores) / len(scores) if scores else 0
-    compliant = sum(1 for s in scores if s >= 80)
+    compliant = sum(1 for s in scores if s >= 85)
+    at_risk = sum(1 for s in scores if 60 <= s < 85)
+    non_compliant = sum(1 for s in scores if s < 60)
+
+    sessions_with_status = []
+    for item in report[:50]:
+        score = item.get("compliance_score")
+        goals = item.get("goals_addressed") or []
+        if isinstance(goals, str):
+            try:
+                goals = json.loads(goals)
+            except Exception:
+                goals = []
+        sessions_with_status.append({
+            **item,
+            "compliance_status": _derive_status(score),
+            "goals_linked": bool(goals),
+        })
 
     return {
         "average_score": round(avg, 1),
         "total_sessions": len(report),
         "compliant": compliant,
-        "non_compliant": len(report) - compliant,
-        "sessions": report[:20]
+        "at_risk": at_risk,
+        "non_compliant": non_compliant,
+        "sessions": sessions_with_status,
     }
