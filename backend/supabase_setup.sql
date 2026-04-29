@@ -168,6 +168,130 @@ UPDATE patients SET
     plan_end_date = '2025-06-30'
 WHERE ndis_number = '430012345' AND plan_status IS NULL;
 
+-- ============================================================
+-- NDIS FUNDING TRACKER TABLES
+-- ============================================================
+
+-- NDIS Plans table
+CREATE TABLE IF NOT EXISTS public.ndis_plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    patient_id UUID NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    plan_number TEXT,
+    plan_start DATE NOT NULL,
+    plan_end DATE NOT NULL,
+    total_funding NUMERIC(12, 2) DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Budget allocation by support category
+CREATE TABLE IF NOT EXISTS public.plan_budgets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan_id UUID NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,   -- 'core', 'capacity_building', 'capital'
+    allocated_amount NUMERIC(12, 2) DEFAULT 0,
+    used_amount NUMERIC(12, 2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (plan_id, category)
+);
+
+-- Individual session cost records
+CREATE TABLE IF NOT EXISTS public.budget_usage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plan_id UUID NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES public.sessions(id) ON DELETE SET NULL,
+    category TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    hourly_rate NUMERIC(10, 2) DEFAULT 0,
+    duration_minutes INT DEFAULT 0,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- NDIS support item catalog (simplified price guide)
+CREATE TABLE IF NOT EXISTS public.support_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_code TEXT UNIQUE,
+    item_name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    unit TEXT DEFAULT 'hour',     -- 'hour', 'each', 'km'
+    default_rate NUMERIC(10, 2) DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- COMPLIANCE AUDIT LOG
+CREATE TABLE IF NOT EXISTS public.compliance_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES public.sessions(id) ON DELETE CASCADE,
+    compliance_score NUMERIC(5, 2) DEFAULT 0,
+    rules_checked INT DEFAULT 0,
+    rules_passed INT DEFAULT 0,
+    rules_warnings INT DEFAULT 0,
+    rules_failed INT DEFAULT 0,
+    failed_rules JSONB DEFAULT '[]',
+    all_rules JSONB DEFAULT '[]',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for new tables
+CREATE INDEX IF NOT EXISTS idx_ndis_plans_patient_id ON ndis_plans(patient_id);
+CREATE INDEX IF NOT EXISTS idx_ndis_plans_status ON ndis_plans(status);
+CREATE INDEX IF NOT EXISTS idx_plan_budgets_plan_id ON plan_budgets(plan_id);
+CREATE INDEX IF NOT EXISTS idx_budget_usage_plan_id ON budget_usage(plan_id);
+CREATE INDEX IF NOT EXISTS idx_budget_usage_session_id ON budget_usage(session_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_audit_session_id ON compliance_audit_logs(session_id);
+
+-- Auto-update trigger for ndis_plans
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_ndis_plans_updated_at') THEN
+        CREATE TRIGGER update_ndis_plans_updated_at
+            BEFORE UPDATE ON ndis_plans
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+-- Enable RLS
+ALTER TABLE ndis_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE plan_budgets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE compliance_audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Service role policies
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'ndis_plans' AND policyname = 'service_role_all_ndis_plans') THEN
+        CREATE POLICY "service_role_all_ndis_plans" ON ndis_plans FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'plan_budgets' AND policyname = 'service_role_all_plan_budgets') THEN
+        CREATE POLICY "service_role_all_plan_budgets" ON plan_budgets FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'budget_usage' AND policyname = 'service_role_all_budget_usage') THEN
+        CREATE POLICY "service_role_all_budget_usage" ON budget_usage FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'support_items' AND policyname = 'service_role_all_support_items') THEN
+        CREATE POLICY "service_role_all_support_items" ON support_items FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'compliance_audit_logs' AND policyname = 'service_role_all_compliance_audit_logs') THEN
+        CREATE POLICY "service_role_all_compliance_audit_logs" ON compliance_audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- Seed support items (simplified NDIS price guide)
+INSERT INTO support_items (item_code, item_name, category, unit, default_rate) VALUES
+    ('01_002_0107_1_1', 'Daily Activities - Support Worker', 'core', 'hour', 67.56),
+    ('01_011_0107_1_1', 'Personal Care - Support Worker', 'core', 'hour', 67.56),
+    ('04_049_0125_6_1', 'Assistance with Social, Economic & Community Participation', 'core', 'hour', 67.56),
+    ('07_002_0106_1', 'Assessment, Recommendation, Therapy - OT', 'capacity_building', 'hour', 193.99),
+    ('07_001_0128_1_3', 'Physiotherapy', 'capacity_building', 'hour', 193.99),
+    ('07_003_0128_1_3', 'Speech Pathology', 'capacity_building', 'hour', 193.99),
+    ('07_004_0128_1_3', 'Psychology', 'capacity_building', 'hour', 234.83),
+    ('10_001_0102_5_3', 'Plan Management - Administration', 'capacity_building', 'hour', 104.45),
+    ('07_100_0106_1', 'Support Coordination', 'capacity_building', 'hour', 100.14)
+ON CONFLICT (item_code) DO NOTHING;
+
 -- Update existing sessions to add status
 UPDATE sessions SET status = 'completed' WHERE status IS NULL;
 

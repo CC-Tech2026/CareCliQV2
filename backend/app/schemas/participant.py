@@ -30,3 +30,14 @@ class ParticipantUpdate(BaseModel):
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
     goals: Optional[List[str]] = None
+
+
+class NDISPlanCreate(BaseModel):
+    plan_number: Optional[str] = None
+    plan_start: date
+    plan_end: date
+    total_funding: float = 0.0
+    status: str = "active"
+    core_budget: Optional[float] = None
+    capacity_budget: Optional[float] = None
+    capital_budget: Optional[float] = None

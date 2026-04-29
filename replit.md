@@ -31,11 +31,30 @@ The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8
 - Unread alerts / action required panel
 
 ### Participants (`/patients`)
-- Split-pane layout: list on left, detail view on right
+- Split-pane layout: list on left, tabbed detail view on right
 - Search + filter by plan status
-- AI summary panel per participant
-- Budget progress bar (used_budget / total_budget)
-- Add participant modal
+- **Overview tab**: AI summary, plan details, clinical profile, goals, recent sessions
+- **NDIS Plan tab**: Full plan overview, budget by support category (Core/Capacity Building/Capital), budget alerts, goals
+- **Client History tab**: Full session history with search, compliance scores, session status
+- Add participant modal + Edit participant modal (PATCH endpoint)
+- Set Up NDIS Plan dialog (creates ndis_plans + plan_budgets records)
+
+### Backend Compliance Engine (`backend/app/services/compliance_engine.py`)
+8 rules-based checks on every session: duration present, notes not empty, goals linked, service type set, outcome described, within plan dates, no duplicate timestamps, budget not exceeded. Score = (passed + warnings×0.5) / total × 100. Blended 70/30 with AI compliance score.
+
+### NDIS Funding Tracker (`backend/app/services/funding_service.py`)
+- Manages `ndis_plans`, `plan_budgets`, `budget_usage`, `compliance_audit_logs` tables
+- Session cost calculated from duration × hourly_rate (mapped from NDIS support item catalog)
+- Budget usage recorded per session; plan budget `used_amount` updated in real time
+- Compliance audit log stored after every "Save with AI" call
+
+### New Database Tables (`backend/supabase_setup.sql`)
+- `ndis_plans` — NDIS plan records per participant
+- `plan_budgets` — Budget allocation by support category (core, capacity_building, capital)
+- `budget_usage` — Per-session cost records linked to plan budgets
+- `support_items` — Simplified NDIS price guide (9 seeded items)
+- `compliance_audit_logs` — Rule-by-rule audit trail per session
+> **Note**: Run the new section of `backend/supabase_setup.sql` in Supabase SQL editor to create these tables.
 
 ### Sessions (`/sessions`, `/sessions/new`, `/sessions/:id`)
 - Session list with search + filter by status

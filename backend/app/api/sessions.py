@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import Optional
 from ..schemas.session import SessionCreate, SessionUpdate
-from ..services import session_service, ai_service, alert_service
+from ..services import session_service, ai_service, alert_service, funding_service
+from ..services.compliance_engine import run_compliance_check
+from ..services import participant_service
 from ..schemas.alert import AlertCreate
 import logging
 import json
@@ -65,37 +67,92 @@ async def save_session_with_ai(session_id: str):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id)
+
     participant_data = {
         "full_name": session.get("participant_name", ""),
         "ndis_number": session.get("participant_ndis", ""),
     }
 
     try:
-        compliance = await ai_service.check_compliance(session)
+        # 1. Run the rules-based compliance engine
+        existing_sessions = []
+        if participant_id:
+            existing_sessions = await session_service.get_sessions_by_participant(participant_id)
+
+        rules_result = run_compliance_check(session, participant, existing_sessions)
+
+        # 2. Run AI compliance check for narrative assessment
+        ai_compliance = await ai_service.check_compliance(session)
         insights = await ai_service.generate_clinical_insights(session, participant_data)
 
+        # Use rules engine score blended with AI score (70/30 weight)
+        blended_score = round(
+            rules_result["score"] * 0.7 + ai_compliance["score"] * 0.3, 1
+        )
+
         updates = {
-            "compliance_score": compliance["score"],
-            "compliance_notes": compliance["assessment"],
+            "compliance_score": blended_score,
+            "compliance_notes": ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
-            "ai_insights": json.dumps(insights),
-            "status": "completed"
+            "ai_insights": json.dumps({
+                **insights,
+                "rules_result": rules_result,
+            }),
+            "status": "completed",
         }
         updated = await session_service.update_session(session_id, updates)
 
-        if compliance["score"] < 70:
+        # 3. Store compliance audit log
+        rules_result["score"] = blended_score
+        await funding_service.create_compliance_audit_log(session_id, rules_result)
+
+        # 4. Record budget usage
+        duration = session.get("duration_minutes") or 0
+        session_type = session.get("session_type") or "Support"
+        if participant_id and duration > 0:
+            await funding_service.record_session_budget_usage(
+                session_id, participant_id, int(duration), session_type
+            )
+
+        # 5. Create alerts for low compliance or budget issues
+        if blended_score < 70:
             await alert_service.create_alert(AlertCreate(
-                participant_id=session.get("participant_id"),
+                participant_id=participant_id,
                 session_id=session_id,
                 alert_type="compliance",
                 severity="high",
                 title="Low Compliance Score",
-                message=f"Session on {session.get('session_date')} has compliance score of {compliance['score']}%. Review required."
+                message=(
+                    f"Session on {session.get('session_date')} scored {blended_score:.0f}%. "
+                    f"Failed rules: {', '.join(r['rule'] for r in rules_result.get('failed_rules', []))}"
+                ),
             ))
 
-        return {"session": updated, "compliance": compliance, "insights": insights}
+        budget_rule = next(
+            (r for r in rules_result["rules"] if r["rule"] == "budget_not_exceeded"),
+            None,
+        )
+        if budget_rule and budget_rule["status"] in ("warning", "fail"):
+            await alert_service.create_alert(AlertCreate(
+                participant_id=participant_id,
+                session_id=session_id,
+                alert_type="budget",
+                severity="high" if budget_rule["status"] == "fail" else "medium",
+                title="Budget Alert",
+                message=budget_rule["message"],
+            ))
+
+        return {
+            "session": updated,
+            "compliance": {**ai_compliance, "score": blended_score, "rules_result": rules_result},
+            "insights": insights,
+        }
     except Exception as e:
-        logger.error(f"Error in save-with-ai: {str(e)}")
+        logger.error(f"Error in save-with-ai: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
