@@ -1,0 +1,114 @@
+Build an MVP “Live Clinical Session System” inside an existing React (or Next.js) application for SOLO practitioners (especially unregistered NDIS providers). The app already has a Sessions dashboard with routing, filtering, and useGetSessions(). Do NOT rebuild existing features—only extend them.
+
+Create a new route: /sessions/:id/live which is the Active Live Session screen.
+
+The goal is to eliminate post-session documentation by enabling real-time, low-friction session capture.
+
+Core Requirements
+1. Live Session Control Bar
+
+At the top of the live session screen, implement a persistent control bar containing:
+
+Start Session button (initiates session state and timer)
+Stop Session button (ends session and triggers auto-generation of notes)
+Live session timer (HH:MM:SS, auto-starts on session start)
+Status indicator showing active session state
+
+The system should not record video/audio continuously. It is strictly for documentation support, not surveillance.
+
+2. Voice-First Documentation
+
+Add a voice note component:
+
+One-click record button
+Speech-to-text transcription (Web Speech API or placeholder implementation allowed)
+Automatically append transcribed notes to the session with timestamps
+
+Store voice notes in the session object.
+
+3. Quick Activity Logging (No Forms)
+
+Replace forms with fast tap-based buttons for logging activities such as:
+
+Community Access
+Mobility Support
+Meal Preparation
+Behaviour Support
+Communication Support
+
+Each tap logs an activity with timestamp and stores it in the session.
+
+4. Evidence Capture
+
+Add optional image upload functionality:
+
+Attach photos to session
+Automatically timestamp each upload
+Store as part of session evidence
+5. Goal Tracking
+
+Display participant goals in a simple checklist format:
+
+Goal name
+Status toggle: In Progress / Achieved / Needs Review
+
+No text inputs or forms.
+
+6. Translation Mode (MVP Version)
+
+Add a toggle switch for translation mode:
+
+When enabled, session notes are translated into English (clinical record view)
+Optionally support participant-language view (can be stubbed for MVP)
+
+Translation can use a placeholder service or mock function initially.
+
+7. Auto Session Summary (On Stop)
+
+When “Stop Session” is clicked, automatically generate a session summary including:
+
+Session summary
+Clinical notes in structured format
+List of activities performed
+Goal progress updates
+Evidence summary
+Basic compliance score (0–100 heuristic)
+
+Display results in a modal or summary screen.
+
+Data Model Extension
+
+Extend existing session object with:
+
+live_session:
+is_active
+start_time
+end_time
+duration
+activities (array)
+voice_notes (array with text + timestamp)
+images (array)
+goals (name + status)
+auto_summary
+clinical_notes
+compliance_score
+translations (english, original)
+UI/UX Requirements
+Clean healthcare SaaS design
+Minimal clutter
+Tap-first and voice-first interactions
+Mobile responsive layout
+No large text forms
+Fast, single-action workflows
+Integration Requirements
+
+From the existing Sessions dashboard:
+
+Add a “Start Live Session” button on each session card
+Navigate to /sessions/:id/live
+
+Do not break existing functionality.
+
+Core Principle
+
+The practitioner should focus entirely on the patient while the system silently captures structured clinical documentation in the background.

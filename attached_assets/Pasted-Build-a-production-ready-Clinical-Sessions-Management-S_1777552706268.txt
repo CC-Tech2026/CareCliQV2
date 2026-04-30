@@ -1,0 +1,158 @@
+Build a production-ready “Clinical Sessions Management System” for a web app targeting SOLO PRACTITIONERS (especially unregistered NDIS providers).
+
+The goal is to REMOVE admin burden after sessions and allow practitioners to document everything DURING the session, not after.
+
+## CORE PROBLEM TO SOLVE
+Solo practitioners currently struggle with:
+- writing notes after sessions
+- compliance documentation
+- progress reports
+- multilingual communication with participants
+- switching between forms and care delivery
+
+This system must eliminate manual note-taking workflows.
+
+---
+
+## UI / FEATURE REQUIREMENTS
+
+Create a “Sessions Module” with two main screens:
+
+### 1. Sessions Dashboard
+Show:
+- Today’s sessions timeline (like a care schedule)
+- session status: Upcoming / In Progress / Completed
+- participant name + NDIS ID
+- session type (Community Access, Life Skills, etc.)
+- location (home / clinic / telehealth)
+- duration
+- quick actions:
+  - Start Session
+  - Continue Session
+  - View Session
+
+Design should look like a modern healthcare SaaS dashboard (clean, minimal, card-based like Notion/Stripe style).
+
+---
+
+### 2. Active Session Screen (MOST IMPORTANT)
+
+This is where real-time care happens.
+
+When session starts, open an “Active Session Mode”:
+
+#### Must include:
+
+### A. Live Timer
+- session timer (00:00:00)
+- auto-start when session begins
+
+### B. Quick Capture Actions (NO FORMS)
+Replace text fields with ACTION-BASED inputs:
+
+- 🎤 Voice Note (speech-to-text auto transcription)
+- 📷 Photo Evidence
+- ✅ Activity Logging (tap to add activity quickly)
+- ⭐ Goal Tracking (checkbox style progress updates)
+
+NO large text boxes as primary input.
+
+Everything must be FAST TAP OR VOICE.
+
+---
+
+### C. Auto Notes Engine
+System should:
+- convert voice notes into structured clinical notes automatically
+- summarise activities into a session summary
+- generate compliance-ready session note at end
+
+User should NOT manually write reports.
+
+---
+
+### D. Translation System (VERY IMPORTANT)
+Support non-English users:
+
+- Add a “Language Mode Toggle”
+- Auto-detect participant language (if possible)
+- Translate:
+  - session activities
+  - voice notes
+  - session summaries
+
+Use translation layer so users NEVER need to type translations manually.
+
+Example:
+- User speaks Khmer → system stores English clinical note + Khmer view toggle
+
+---
+
+### E. Session Summary Output (END OF SESSION)
+On “End Session”, generate:
+
+- session summary
+- activities completed
+- progress notes
+- compliance score (optional)
+- invoice-ready session record
+
+---
+
+## DATA STRUCTURE (IMPORTANT)
+
+Session object should include:
+
+- id
+- participant
+- ndis_number
+- session_type
+- status (upcoming / active / completed)
+- start_time
+- end_time
+- duration
+- location
+- activities[]
+- voice_notes[]
+- translated_versions{}
+- compliance_score
+
+---
+
+## UX GOAL
+
+This system must feel like:
+
+“Uber for clinical sessions documentation”
+
+NOT like a form system.
+
+Everything should be:
+- tap-based
+- voice-based
+- auto-generated
+- minimal typing
+
+---
+
+## DESIGN STYLE
+
+- modern healthcare SaaS
+- clean white + soft purple/blue accents
+- card-based layout
+- mobile-first responsive design
+- fast interaction UX
+- minimal clutter
+
+---
+
+## BONUS (if possible)
+
+Add:
+- AI assistant panel that suggests next action during session
+- “auto-compliance checker”
+- invoice generation from session automatically
+
+---
+
+Build this using React (or Next.js if needed) with clean component structure and reusable session modules.

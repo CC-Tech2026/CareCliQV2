@@ -39,6 +39,21 @@ The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8
 - Add participant modal + Edit participant modal (PATCH endpoint)
 - Set Up NDIS Plan dialog (creates ndis_plans + plan_budgets records)
 
+### Live Clinical Session (`/sessions/:id/live`)
+- Full-screen mobile-first interface, no sidebar (dedicated session mode)
+- **Live timer** (HH:MM:SS, mono font) with animated pulse indicator
+- **Control bar**: Start Session / End Session buttons (green/red) with colour-coded dark header (indigo when active)
+- **Translation mode toggle** (top-right) — adds EN translation markers to voice notes and clinical notes
+- **4 tabs**: Activities · Notes · Goals · Evidence
+  - **Activities**: Quick-Add grid (8 colour-coded NDIS activity types with emoji); tap to log with timestamp; activity log list below
+  - **Notes**: Web Speech API voice recording; real-time transcription preview; timestamped note cards; graceful fallback for unsupported browsers
+  - **Goals**: List of session goals from participant record (or 3 defaults); tap to cycle status: Not Started → In Progress → Achieved → Needs Review
+  - **Evidence**: Photo capture via file input with `capture="environment"`; thumbnail grid with timestamp overlay; remove individual photos
+- **Bottom quick-action bar** (fixed): Activity / Voice Note (mic, large center button) / Photo / Goal
+- **End Session → Auto-Summary Modal**: compliance score heuristic, clinical notes paragraph, activities logged, goal progress, evidence count, voice note count; "View Full Session" or "Done" actions
+- Also calls `POST /api/sessions/:id/save-with-ai` in background after ending session
+- **Entry points**: "Start Live" button on each session card in Sessions list; "Start Live" button in session detail header
+
 ### Compliance Centre (`/compliance`)
 - **Gauge** showing overall NDIS audit score (SVG arc, colour-coded)
 - **Status cards**: Compliant (≥85%), At Risk (60-84%), Non-Compliant (<60%) session counts

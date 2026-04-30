@@ -24,7 +24,7 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign,
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -311,6 +311,12 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div className="flex gap-2 flex-wrap">
           <Link href="/patients">
             <Button variant="outline" size="sm">View Participant</Button>
+          </Link>
+          <Link href={`/sessions/${sessionId}/live`}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+              <Play className="h-3.5 w-3.5 fill-indigo-600" />
+              Start Live
+            </Button>
           </Link>
           <Button
             variant="outline"

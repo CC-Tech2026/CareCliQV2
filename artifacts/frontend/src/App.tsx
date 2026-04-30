@@ -9,6 +9,7 @@ import Patients from "@/pages/patients";
 import Sessions from "@/pages/sessions";
 import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
+import SessionLive from "@/pages/session-live";
 import Compliance from "@/pages/compliance";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,9 @@ function Router() {
         <AppLayout>
           <SessionNew />
         </AppLayout>
+      </Route>
+      <Route path="/sessions/:id/live">
+        {params => <SessionLive />}
       </Route>
       <Route path="/sessions/:id">
         {params => (
