@@ -3,29 +3,73 @@ import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { useGetParticipants, useCreateSession } from "@workspace/api-client-react";
+import {
+  useGetParticipants,
+  useCreateSession,
+} from "@workspace/api-client-react";
 import { format } from "date-fns";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarIcon, Clock, Activity, FileText, Check, Loader2 } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  CalendarIcon,
+  Clock,
+  Activity,
+  FileText,
+  Check,
+  Loader2,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
-const AVAILABLE_TAGS = ["Pain", "Mobility", "Strength", "Communication", "Behavior", "Equipment", "Review"];
+const AVAILABLE_TAGS = [
+  "Pain",
+  "Mobility",
+  "Strength",
+  "Communication",
+  "Behavior",
+  "Equipment",
+  "Review",
+];
 
 const sessionSchema = z.object({
   participant_id: z.string().min(1, "Participant is required"),
   session_date: z.date({
     required_error: "Date is required",
   }),
-  duration_minutes: z.coerce.number().min(1, "Duration must be at least 1 minute"),
+  duration_minutes: z.coerce
+    .number()
+    .min(1, "Duration must be at least 1 minute"),
   session_type: z.string().min(1, "Session type is required"),
   notes: z.string().optional(),
   tags: z.array(z.string()).default([]),
@@ -37,7 +81,8 @@ type SessionFormValues = z.infer<typeof sessionSchema>;
 export default function SessionNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: participants, isLoading: participantsLoading } = useGetParticipants();
+  const { data: participants, isLoading: participantsLoading } =
+    useGetParticipants();
   const createSessionMutation = useCreateSession();
 
   const form = useForm<SessionFormValues>({
@@ -52,44 +97,52 @@ export default function SessionNew() {
 
   const onSubmit = (data: SessionFormValues, isDraft: boolean) => {
     // Parse goals into array if comma separated
-    const goalsArray = data.goals_addressed 
-      ? data.goals_addressed.split(",").map(s => s.trim()).filter(Boolean)
+    const goalsArray = data.goals_addressed
+      ? data.goals_addressed
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
 
-    createSessionMutation.mutate({
-      data: {
-        participant_id: data.participant_id,
-        session_date: data.session_date.toISOString(),
-        duration_minutes: data.duration_minutes,
-        session_type: data.session_type,
-        notes: data.notes,
-        tags: data.tags,
-        goals_addressed: goalsArray,
-        status: isDraft ? "draft" : "completed"
-      }
-    }, {
-      onSuccess: (response) => {
-        toast({
-          title: isDraft ? "Draft Saved" : "Session Created",
-          description: "Your session has been successfully recorded.",
-        });
-        setLocation(`/sessions/${response.id}`);
+    createSessionMutation.mutate(
+      {
+        data: {
+          participant_id: data.participant_id,
+          session_date: format(data.session_date, "yyyy-MM-dd"),
+          duration_minutes: data.duration_minutes,
+          session_type: data.session_type,
+          notes: data.notes,
+          tags: data.tags,
+          goals_addressed: goalsArray,
+          status: isDraft ? "draft" : "completed",
+        },
       },
-      onError: () => {
-        toast({
-          title: "Error",
-          description: "Failed to create session. Please try again.",
-          variant: "destructive"
-        });
-      }
-    });
+      {
+        onSuccess: (response) => {
+          toast({
+            title: isDraft ? "Draft Saved" : "Session Created",
+            description: "Your session has been successfully recorded.",
+          });
+          setLocation(`/sessions/${response.id}`);
+        },
+        onError: () => {
+          toast({
+            title: "Error",
+            description: "Failed to create session. Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">New Session</h1>
-        <p className="text-slate-500 dark:text-slate-400">Record a new clinical session with a participant.</p>
+        <p className="text-slate-500 dark:text-slate-400">
+          Record a new clinical session with a participant.
+        </p>
       </div>
 
       <Form {...form}>
@@ -107,15 +160,29 @@ export default function SessionNew() {
                 render={({ field }) => (
                   <FormItem className="col-span-1 md:col-span-2">
                     <FormLabel>Participant</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
-                        <SelectTrigger disabled={participantsLoading} data-testid="select-participant">
-                          <SelectValue placeholder={participantsLoading ? "Loading participants..." : "Select a participant"} />
+                        <SelectTrigger
+                          disabled={participantsLoading}
+                          data-testid="select-participant"
+                        >
+                          <SelectValue
+                            placeholder={
+                              participantsLoading
+                                ? "Loading participants..."
+                                : "Select a participant"
+                            }
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {participants?.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                        {participants?.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.full_name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -151,7 +218,9 @@ export default function SessionNew() {
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
                           initialFocus
                         />
                       </PopoverContent>
@@ -184,18 +253,27 @@ export default function SessionNew() {
                 render={({ field }) => (
                   <FormItem className="col-span-1 md:col-span-2">
                     <FormLabel>Session Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="e.g., Initial Assessment, Therapy Session" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="Initial Assessment">Initial Assessment</SelectItem>
-                        <SelectItem value="Therapy Session">Therapy Session</SelectItem>
+                        <SelectItem value="Initial Assessment">
+                          Initial Assessment
+                        </SelectItem>
+                        <SelectItem value="Therapy Session">
+                          Therapy Session
+                        </SelectItem>
                         <SelectItem value="Review">Review</SelectItem>
                         <SelectItem value="Telehealth">Telehealth</SelectItem>
-                        <SelectItem value="Report Writing">Report Writing</SelectItem>
+                        <SelectItem value="Report Writing">
+                          Report Writing
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -219,10 +297,10 @@ export default function SessionNew() {
                   <FormItem>
                     <FormLabel>Session Notes</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Document observations, interventions, and outcomes..." 
+                      <Textarea
+                        placeholder="Document observations, interventions, and outcomes..."
                         className="min-h-[200px] resize-y"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -237,10 +315,14 @@ export default function SessionNew() {
                   <FormItem>
                     <FormLabel>Goals Addressed (comma separated)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Improve core strength, Increase community access" {...field} />
+                      <Input
+                        placeholder="e.g., Improve core strength, Increase community access"
+                        {...field}
+                      />
                     </FormControl>
                     <FormDescription className="text-xs text-slate-500 mt-1">
-                      Link these notes to the participant's NDIS goals for compliance.
+                      Link these notes to the participant's NDIS goals for
+                      compliance.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -254,7 +336,7 @@ export default function SessionNew() {
                   <FormItem>
                     <FormLabel>Clinical Tags</FormLabel>
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {AVAILABLE_TAGS.map(tag => {
+                      {AVAILABLE_TAGS.map((tag) => {
                         const isSelected = field.value.includes(tag);
                         return (
                           <Badge
@@ -263,7 +345,9 @@ export default function SessionNew() {
                             className="cursor-pointer hover:bg-primary/90 transition-colors"
                             onClick={() => {
                               if (isSelected) {
-                                field.onChange(field.value.filter(t => t !== tag));
+                                field.onChange(
+                                  field.value.filter((t) => t !== tag),
+                                );
                               } else {
                                 field.onChange([...field.value, tag]);
                               }
@@ -281,25 +365,31 @@ export default function SessionNew() {
               />
             </CardContent>
             <CardFooter className="flex justify-between border-t border-slate-100 dark:border-slate-800 pt-6">
-              <Button variant="ghost" type="button" onClick={() => window.history.back()}>
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => window.history.back()}
+              >
                 Cancel
               </Button>
               <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   type="button"
                   disabled={createSessionMutation.isPending}
                   onClick={form.handleSubmit((data) => onSubmit(data, true))}
                 >
                   Save Draft
                 </Button>
-                <Button 
+                <Button
                   type="button"
                   disabled={createSessionMutation.isPending}
                   onClick={form.handleSubmit((data) => onSubmit(data, false))}
                   data-testid="button-save-session"
                 >
-                  {createSessionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {createSessionMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Complete Session
                 </Button>
               </div>
@@ -312,6 +402,12 @@ export default function SessionNew() {
 }
 
 // Minimal stub for form description component
-function FormDescription({ children, className }: { children: React.ReactNode, className?: string }) {
+function FormDescription({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return <p className={className}>{children}</p>;
 }

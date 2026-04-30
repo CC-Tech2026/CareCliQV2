@@ -214,6 +214,7 @@ export default function Patients() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const { toast } = useToast();
 
@@ -266,9 +267,9 @@ export default function Patients() {
   }) || [];
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-6 overflow-hidden">
+    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
       {/* Left panel — participant list */}
-      <div className="w-1/3 flex flex-col gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm`}>
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg">Participants</h2>
@@ -329,7 +330,7 @@ export default function Patients() {
             filteredParticipants.map(p => (
               <button
                 key={p.id}
-                onClick={() => setSelectedId(p.id)}
+                onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
                 data-testid={`button-participant-${p.id}`}
                 className={`w-full text-left p-3 rounded-lg transition-colors flex flex-col gap-1.5 ${
                   selectedId === p.id
@@ -351,9 +352,20 @@ export default function Patients() {
       </div>
 
       {/* Right panel — participant detail */}
-      <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto shadow-sm">
+      <div className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto shadow-sm`}>
         {selectedId ? (
-          <ParticipantDetail id={selectedId} onRefreshList={refetch} />
+          <>
+            <button
+              className="md:hidden flex items-center gap-2 text-sm text-indigo-600 font-medium px-4 py-3 border-b border-slate-100 hover:bg-slate-50 shrink-0"
+              onClick={() => { setShowMobileDetail(false); }}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              Back to Participants
+            </button>
+            <div className="flex-1 overflow-y-auto">
+              <ParticipantDetail id={selectedId} onRefreshList={refetch} />
+            </div>
+          </>
         ) : (
           <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
             <Users className="h-12 w-12 opacity-20" />
