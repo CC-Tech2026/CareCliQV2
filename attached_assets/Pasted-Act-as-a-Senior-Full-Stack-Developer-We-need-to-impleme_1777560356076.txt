@@ -1,0 +1,39 @@
+Act as a Senior Full-Stack Developer. We need to implement the following core features and logic for the Live Session module, ensuring a frictionless experience for the practitioner:
+
+1. Non-Annoying Session Start Alert
+- Implement a subtle, non-blocking visual indicator or toast notification that reminds the practitioner to start the session when the scheduled time arrives.
+- The reminder should include a "Start Session" and a "Snooze (5 mins)" action to minimize disruption.
+
+2. Translation, Transcription, and Data Keeping
+- Configure the background translation pipeline to process spoken audio and transcription data, translating it into clean, standardized clinical terminology in real time.
+- Temporary session records (transcripts, evidence flags, audio chunks) must be preserved in secure, encrypted local session storage or an ephemeral database state.
+
+3. Practitioner Approval & Save Pipeline
+- Before final submission to the database, display a summary modal for the practitioner to review the generated notes, translation data, and draft invoices.
+- Data is only sent to permanent storage upon explicit approval from the practitioner.
+
+4. Session Restart with Confirmation
+- Implement a "Restart Session" button.
+- Clicking the button must trigger a confirmation modal warning the practitioner that current session logs will be archived or temporarily saved before restarting the timer and clearing the active state.
+
+
+
+
+Act as a Senior React Developer. The dashboard UI is complete, but we need to ensure all components, links, and buttons are fully interactive using the wouter Link and existing React hooks.
+
+Please update the dashboard component to include the following functionalities:
+
+1. Quick Action Ribbon
+- Route the "Start New Session" button to open the live session or scheduling wizard.
+- Bind the "Add Case Note", "Create Invoice", and "Upload Evidence" buttons to open their respective slide-out panels or modal components.
+
+2. Sessions List Dynamic State
+- Update the sessions list ("John Smith", "Sarah Lee", "Michael Brown") to dynamically render actual session statuses (Upcoming, In Progress, Completed) from the useGetRecentSessions hook.
+- Ensure the "Continue Session" and "View Session" buttons map to dynamic route parameters based on the session ID.
+
+3. Participant Focus Section
+- Ensure the NDIS ID, progress bars, and "Recent Note" data correspond to the active participant object fetched from the backend, including dynamic name and NDIS number bindings.
+
+4. Compliance and Alerts Functionality
+- Ensure that clicking "View compliance dashboard" routes to the compliance page.
+- Fully wire up the markRead and markAllRead handlers for the alert cards so that clicking a dismiss/read action reduces the badge count on screen.
