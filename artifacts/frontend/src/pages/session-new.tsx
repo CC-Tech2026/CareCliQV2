@@ -96,14 +96,6 @@ export default function SessionNew() {
   });
 
   const onSubmit = (data: SessionFormValues, isDraft: boolean) => {
-    // Parse goals into array if comma separated
-    const goalsArray = data.goals_addressed
-      ? data.goals_addressed
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-
     createSessionMutation.mutate(
       {
         data: {
@@ -111,24 +103,24 @@ export default function SessionNew() {
           session_date: format(data.session_date, "yyyy-MM-dd"),
           duration_minutes: data.duration_minutes,
           session_type: data.session_type,
-          notes: data.notes,
-          tags: data.tags,
-          goals_addressed: goalsArray,
-          status: isDraft ? "draft" : "completed",
+          notes: data.notes ?? "",
+          status: isDraft ? "draft" : "draft",
         },
       },
       {
         onSuccess: (response) => {
           toast({
-            title: isDraft ? "Draft Saved" : "Session Created",
-            description: "Your session has been successfully recorded.",
+            title: "Session Created",
+            description: isDraft
+              ? "Draft saved. Start the live session when ready."
+              : "Session created. You can begin live documentation.",
           });
           setLocation(`/sessions/${response.id}`);
         },
         onError: () => {
           toast({
             title: "Error",
-            description: "Failed to create session. Please try again.",
+            description: "Failed to create session. Please check your inputs and try again.",
             variant: "destructive",
           });
         },

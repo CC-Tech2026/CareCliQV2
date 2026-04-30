@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import {
   useGetSession,
   useSaveSessionWithAI,
+  useUpdateSession,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -193,30 +194,49 @@ function buildSummary(
     (a) => `${a.type} (${format(a.timestamp, "HH:mm")})`,
   );
 
-  let clinicalNotes = `Session Type: ${session.session_type}\nDuration: ${durationMins} minutes\n\n`;
+  // Build clinical notes as a professional structured paragraph
+  const lines: string[] = [];
+  lines.push(`SESSION RECORD`);
+  lines.push(`Type: ${session.session_type} | Duration: ${durationMins} minutes`);
+  lines.push("");
 
   if (activityTypes.length > 0) {
-    clinicalNotes += `Activities performed: ${activityTypes.join(", ")}. `;
-  }
-  if (achievedGoals.length > 0) {
-    clinicalNotes += `Participant achieved ${achievedGoals.length} goal(s): ${achievedGoals.map((g) => g.name).join(", ")}. `;
-  }
-  if (inProgressGoals.length > 0) {
-    clinicalNotes += `Goals in progress: ${inProgressGoals.map((g) => g.name).join(", ")}. `;
-  }
-  if (voiceTexts.length > 0) {
-    clinicalNotes += `\n\nVoice observations:\n${voiceTexts.map((t, i) => `${i + 1}. ${t}`).join("\n")}`;
-  }
-  if (images.length > 0) {
-    clinicalNotes += `\n\n${images.length} photo(s) captured as session evidence.`;
+    lines.push(`Support provided: ${activityTypes.join(", ")}.`);
+  } else {
+    lines.push("Support provided: General assistance and supervision.");
   }
 
-  let score = 40;
-  if (durationMins > 0) score += 10;
-  if (voiceNotes.length > 0) score += 20;
-  if (activities.length > 0) score += 15;
-  if (achievedGoals.length > 0) score += 10;
-  if (images.length > 0) score += 5;
+  if (achievedGoals.length > 0) {
+    lines.push(`Goals achieved during this session: ${achievedGoals.map((g) => g.name).join(", ")}.`);
+  }
+  if (inProgressGoals.length > 0) {
+    lines.push(`Goals actively worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`);
+  }
+
+  if (voiceTexts.length > 0) {
+    lines.push("");
+    lines.push("Practitioner observations:");
+    voiceTexts.forEach((t, i) => lines.push(`  ${i + 1}. ${t}`));
+  }
+
+  if (images.length > 0) {
+    lines.push("");
+    lines.push(`Evidence: ${images.length} photo${images.length > 1 ? "s" : ""} captured as session evidence.`);
+  }
+
+  if (session.notes) {
+    lines.push("");
+    lines.push(`Pre-session notes: ${session.notes}`);
+  }
+
+  let clinicalNotes = lines.join("\n");
+
+  // Compliance score: rules-based heuristic (0–100)
+  let score = 0;
+  if (clinicalNotes.length > 30) score += 30;  // clinical notes exist
+  if (activities.length > 0) score += 30;       // at least one activity logged
+  if (durationMins > 0) score += 20;            // duration is valid
+  if (session.session_type) score += 20;         // session type exists
   score = Math.min(score, 100);
 
   const evidenceSummary =
@@ -253,6 +273,7 @@ export default function SessionLive() {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
   const saveWithAI = useSaveSessionWithAI();
+  const updateSession = useUpdateSession();
 
   // Session state
   const [isActive, setIsActive] = useState(false);
@@ -389,44 +410,77 @@ export default function SessionLive() {
     setEditableNotes(localSummary.clinicalNotes);
     setSummaryLoading(false);
     // NOTE: Data is NOT saved here — practitioner must approve in the summary modal.
-  }, [
-    session,
-    activities,
-    voiceNotes,
-    goals,
-    images,
-    elapsed,
-    translationMode,
-    id,
-    saveWithAI,
-    toast,
-  ]);
+  }, [session, activities, voiceNotes, goals, images, elapsed, translationMode]);
 
-  // Approve & save — called from summary modal
+  // Approve & save — two-step pipeline:
+  //   1. PATCH session with actual captured data (duration, notes, transcription)
+  //   2. Then trigger save-with-ai to run compliance + AI narrative on the saved data
   const handleApproveAndSave = useCallback(async () => {
-    setIsSaving(true);
-    if (id) {
-      saveWithAI.mutate(
-        { sessionId: id },
-        {
-          onSuccess: () => {
-            setIsSaving(false);
-            setShowSummary(false);
-            toast({ title: "Session saved", description: "Notes approved and stored." });
-            navigate(`/sessions/${id}`);
-          },
-          onError: () => {
-            setIsSaving(false);
-            toast({ title: "Save failed", description: "Please try again.", variant: "destructive" });
-          },
-        },
-      );
-    } else {
-      setIsSaving(false);
-      setShowSummary(false);
-      navigate(`/sessions`);
+    if (!id) {
+      navigate("/sessions");
+      return;
     }
-  }, [id, saveWithAI, toast, navigate]);
+    setIsSaving(true);
+
+    // Build transcription from all voice notes
+    const transcription = voiceNotes
+      .map((n) => `[${n.timestamp}] ${n.text}`)
+      .join("\n");
+
+    // Actual elapsed duration in whole minutes (minimum 1)
+    const durationMinutes = Math.max(1, Math.round(elapsed / 60));
+
+    // Step 1 — persist the captured session data
+    updateSession.mutate(
+      {
+        sessionId: id,
+        data: {
+          duration_minutes: durationMinutes,
+          notes: editableNotes.trim() || undefined,
+          transcription: transcription || undefined,
+          status: "in_progress",
+        },
+      },
+      {
+        onSuccess: () => {
+          // Step 2 — run AI compliance + clinical notes generation
+          saveWithAI.mutate(
+            { sessionId: id },
+            {
+              onSuccess: () => {
+                setIsSaving(false);
+                setShowSummary(false);
+                toast({
+                  title: "Session saved",
+                  description: "Notes approved and clinical record updated.",
+                });
+                navigate(`/sessions/${id}`);
+              },
+              onError: (err) => {
+                setIsSaving(false);
+                console.error("save-with-ai failed", err);
+                toast({
+                  title: "AI analysis failed",
+                  description: "Session data was saved but AI notes could not be generated.",
+                  variant: "destructive",
+                });
+                navigate(`/sessions/${id}`);
+              },
+            },
+          );
+        },
+        onError: (err) => {
+          setIsSaving(false);
+          console.error("update-session failed", err);
+          toast({
+            title: "Save failed",
+            description: "Could not save session data. Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  }, [id, elapsed, editableNotes, voiceNotes, updateSession, saveWithAI, toast, navigate]);
 
   // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {

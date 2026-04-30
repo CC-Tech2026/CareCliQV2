@@ -18,8 +18,15 @@ async def get_all_participants() -> List[dict]:
 
 async def get_participant_by_id(participant_id: str) -> Optional[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table(TABLE).select("*").eq("id", participant_id).single().execute()
-    return _normalize(result.data) if result.data else None
+    if not participant_id:
+        return None
+    try:
+        result = supabase.table(TABLE).select("*").eq("id", participant_id).execute()
+        rows = result.data or []
+        return _normalize(rows[0]) if rows else None
+    except Exception as e:
+        logger.warning(f"get_participant_by_id({participant_id}) failed: {e}")
+        return None
 
 
 async def create_participant(data: ParticipantCreate) -> dict:

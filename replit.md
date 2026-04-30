@@ -2,6 +2,11 @@
 
 A full-stack clinical management system for solo NDIS (National Disability Insurance Scheme) support providers in Australia.
 
+## Known Backend Constraints
+
+- **sessions `updated_at` trigger**: The Supabase `sessions` table has a `BEFORE UPDATE` trigger that references `NEW.updated_at`, but that column does not exist. Direct `UPDATE` always fails. **Workaround in `session_service.update_session()`**: catches the error (`42703`) and falls back to a READ → MERGE → DELETE → INSERT operation. Any future migration should add `ALTER TABLE sessions ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();` to remove this workaround.
+- **Side-effect failures in save-with-ai**: Alert creation, budget recording, and audit logging are wrapped in individual try/except blocks so a FK or other side-effect failure never aborts the core AI + compliance pipeline.
+
 ## Architecture
 
 - **Frontend**: React + TypeScript + Tailwind + shadcn/ui (`artifacts/frontend/`)

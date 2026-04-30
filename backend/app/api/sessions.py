@@ -104,56 +104,65 @@ async def save_session_with_ai(session_id: str):
 
         updates = {
             "compliance_score": blended_score,
-            "compliance_status": compliance_status,
             "compliance_notes": ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps({
                 **insights,
                 "rules_result": rules_result,
+                "compliance_status": compliance_status,
             }),
             "status": "completed",
         }
         updated = await session_service.update_session(session_id, updates)
 
-        # 3. Store compliance audit log
-        rules_result["score"] = blended_score
-        await funding_service.create_compliance_audit_log(session_id, rules_result)
+        # 3. Store compliance audit log (non-critical — do not fail the response)
+        try:
+            rules_result["score"] = blended_score
+            await funding_service.create_compliance_audit_log(session_id, rules_result)
+        except Exception as side_e:
+            logger.warning(f"Audit log failed (non-critical): {side_e}")
 
-        # 4. Record budget usage
-        duration = session.get("duration_minutes") or 0
-        session_type = session.get("session_type") or "Support"
-        if participant_id and duration > 0:
-            await funding_service.record_session_budget_usage(
-                session_id, participant_id, int(duration), session_type
+        # 4. Record budget usage (non-critical)
+        try:
+            duration = session.get("duration_minutes") or 0
+            session_type = session.get("session_type") or "Support"
+            if participant_id and duration > 0:
+                await funding_service.record_session_budget_usage(
+                    session_id, participant_id, int(duration), session_type
+                )
+        except Exception as side_e:
+            logger.warning(f"Budget usage record failed (non-critical): {side_e}")
+
+        # 5. Create alerts for low compliance or budget issues (non-critical)
+        try:
+            if blended_score < 70 and participant_id:
+                await alert_service.create_alert(AlertCreate(
+                    participant_id=participant_id,
+                    session_id=session_id,
+                    alert_type="compliance",
+                    severity="high",
+                    title="Low Compliance Score",
+                    message=(
+                        f"Session on {session.get('session_date')} scored {blended_score:.0f}%. "
+                        f"Failed rules: {', '.join(r['rule'] for r in rules_result.get('failed_rules', []))}"
+                    ),
+                ))
+
+            budget_rule = next(
+                (r for r in rules_result.get("rules", []) if r["rule"] == "budget_not_exceeded"),
+                None,
             )
-
-        # 5. Create alerts for low compliance or budget issues
-        if blended_score < 70:
-            await alert_service.create_alert(AlertCreate(
-                participant_id=participant_id,
-                session_id=session_id,
-                alert_type="compliance",
-                severity="high",
-                title="Low Compliance Score",
-                message=(
-                    f"Session on {session.get('session_date')} scored {blended_score:.0f}%. "
-                    f"Failed rules: {', '.join(r['rule'] for r in rules_result.get('failed_rules', []))}"
-                ),
-            ))
-
-        budget_rule = next(
-            (r for r in rules_result["rules"] if r["rule"] == "budget_not_exceeded"),
-            None,
-        )
-        if budget_rule and budget_rule["status"] in ("warning", "fail"):
-            await alert_service.create_alert(AlertCreate(
-                participant_id=participant_id,
-                session_id=session_id,
-                alert_type="budget",
-                severity="high" if budget_rule["status"] == "fail" else "medium",
-                title="Budget Alert",
-                message=budget_rule["message"],
-            ))
+            if budget_rule and budget_rule["status"] in ("warning", "fail") and participant_id:
+                await alert_service.create_alert(AlertCreate(
+                    participant_id=participant_id,
+                    session_id=session_id,
+                    alert_type="budget",
+                    severity="high" if budget_rule["status"] == "fail" else "medium",
+                    title="Budget Alert",
+                    message=budget_rule["message"],
+                ))
+        except Exception as side_e:
+            logger.warning(f"Alert creation failed (non-critical): {side_e}")
 
         return {
             "session": updated,

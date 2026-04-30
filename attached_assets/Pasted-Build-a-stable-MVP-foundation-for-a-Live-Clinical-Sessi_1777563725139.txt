@@ -1,0 +1,49 @@
+Build a stable MVP foundation for a Live Clinical Session System inside an existing React (or Next.js) application. The app already has a Sessions dashboard, session creation page, and a Live Session UI at /sessions/:id/live. Do NOT rebuild UI but if suitable or easier alternatives please do change for the convenience of the practitioner, no used of emojis please make it loook professional. Focus only on fixing data flow, backend compatibility, and core logic.
+The goal is to ensure sessions can be created reliably, live session data is captured in real time, and a complete session record (with auto-generated notes and a basic compliance score) is saved at the end without requiring post-session work.
+First, fix session creation. Ensure the frontend sends a minimal, backend-safe payload. The request must include only:
+	• participant_id (string) 
+	• session_date formatted as "YYYY-MM-DD" (not ISO with time) 
+	• duration_minutes (number) 
+	• session_type (string) 
+	• notes (string, default empty) 
+Do not send arrays or optional fields like tags, goals_addressed, or custom status unless confirmed supported. This step must eliminate all 422 errors.
+Next, implement a local live session state inside the Live Session screen. The state should include:
+	• isActive, startTime, endTime, duration 
+	• activities (array) 
+	• voiceNotes (array) 
+	• images (array) 
+	• goals (array, optional for MVP) 
+	• summary, clinicalNotes, complianceScore 
+This state should start when the user clicks “Start Session”, update in real time, and persist in memory until “Stop Session”.
+Implement a timer system that:
+	• starts on “Start Session” 
+	• updates every second 
+	• stops on “Stop Session” 
+	• calculates total duration in minutes 
+Wire the existing Live Session UI actions to this state:
+	• Activity buttons should push { activity, timestamp } into activities 
+	• Voice notes should push { text, timestamp } into voiceNotes (speech-to-text can be stubbed) 
+	• Evidence uploads should push { url, timestamp } into images 
+Do not sync to backend during the session. Keep everything local until the session ends.
+When the user clicks “Stop Session”, generate session outputs automatically. Create a simple session summary string using participant name, activities, and duration. Then generate structured clinical notes describing what support was provided, what activities occurred, and observed outcomes (derived from voice notes if available). This does not require AI for MVP—use simple string construction.
+Calculate a basic compliance score using a simple heuristic:
+	• +30 if clinical notes exist 
+	• +30 if at least one activity is logged 
+	• +20 if duration is valid 
+	• +20 if session type exists 
+Store the result as a number between 0–100.
+Finally, send one update request to the backend when the session ends. Update the session with:
+	• duration_minutes 
+	• notes (use the generated clinical notes) 
+	• compliance_score 
+Ensure all values are defined and safe before sending. Add error handling around API calls and show feedback on failure.
+The system is complete when:
+	• session creation works with no 422 or 500 errors 
+	• live session can start and stop correctly 
+	• timer works accurately 
+	• activities and notes are captured during session 
+	• session saves successfully at the end 
+	• clinical notes are automatically generated 
+	• compliance score is displayed 
+	• no manual post-session editing is required 
+Do not over-engineer. Focus on stability, simplicity, and real-time capture.
