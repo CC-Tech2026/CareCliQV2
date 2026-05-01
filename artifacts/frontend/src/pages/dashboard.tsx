@@ -36,7 +36,8 @@ import {
 
 const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 
-// Display time for a session — uses created_at as a proxy (no dedicated time field yet)
+// Display time for a session — uses created_at as a proxy until the API exposes
+// a dedicated `scheduled_time` field. TODO: swap to scheduled_time when available.
 function sessionDisplayTime(session: Session): string {
   if (session.created_at) {
     try {
@@ -258,14 +259,14 @@ export default function Dashboard() {
       .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
   }, [sessions]);
 
-  // The single "Next" session: first draft today, or first in_progress today
-  const nextSession = useMemo<Session | null>(
-    () =>
-      todaySessions.find((s) => s.status === "in_progress") ??
-      todaySessions.find((s) => s.status === "draft") ??
-      null,
-    [todaySessions],
-  );
+  // The single "Next" session: earliest (by created_at) draft or in_progress today.
+  // NOTE: Uses created_at as sort key — switch to scheduled_time once API supports it.
+  const nextSession = useMemo<Session | null>(() => {
+    const actionable = todaySessions.filter(
+      (s) => s.status === "draft" || s.status === "in_progress",
+    );
+    return actionable[0] ?? null; // todaySessions is already sorted by created_at asc
+  }, [todaySessions]);
 
   // Past incomplete sessions (not ended before today)
   const pastIncomplete = useMemo<Session[]>(() => {
