@@ -36,6 +36,18 @@ import {
 
 const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 
+// Display time for a session — uses created_at as a proxy (no dedicated time field yet)
+function sessionDisplayTime(session: Session): string {
+  if (session.created_at) {
+    try {
+      return format(new Date(session.created_at), "h:mm a");
+    } catch {
+      // fall through
+    }
+  }
+  return "--:--";
+}
+
 function getInitials(name: string): string {
   return name
     .split(" ")
@@ -288,15 +300,17 @@ export default function Dashboard() {
   }, [pastIncomplete, lowQuality]);
 
   // Readiness summary
+  // "Ready" = completed AND compliance ≥70
   const readyCount = todaySessions.filter(
     (s) => s.status === "completed" && (s.compliance_score ?? 0) >= 70,
   ).length;
+  // "Needs attention" = not completed, OR completed but missing/low compliance
   const needsAttentionCount = todaySessions.filter(
     (s) =>
       s.status !== "completed" ||
-      (s.compliance_score !== null &&
-        s.compliance_score !== undefined &&
-        s.compliance_score < 70),
+      s.compliance_score === null ||
+      s.compliance_score === undefined ||
+      s.compliance_score < 70,
   ).length;
 
   // Compliance donut data — this week's completed sessions only
@@ -601,12 +615,15 @@ function NextPatientPanel({
           {ndis && (
             <p className="text-sm opacity-70 mt-0.5">NDIS: {ndis}</p>
           )}
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
             <Badge className="bg-white/20 border-white/30 text-white border text-xs">
               {session.session_type}
             </Badge>
-            <span className="text-xs opacity-70">
-              {format(parseISO(session.session_date), "d MMM yyyy")}
+            <span className="text-xs opacity-80 font-semibold">
+              {sessionDisplayTime(session)}
+            </span>
+            <span className="text-xs opacity-60">
+              {format(parseISO(session.session_date), "d MMM")}
               {" · "}
               {session.duration_minutes} min planned
             </span>
@@ -708,8 +725,15 @@ function SessionRow({
   const light = getTrafficLight(session);
   const isResume = session.status === "in_progress";
 
+  const timeStr = sessionDisplayTime(session);
+
   return (
     <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors">
+      {/* Time slot */}
+      <div className="w-12 shrink-0 text-right hidden sm:block">
+        <p className="text-xs font-semibold text-slate-700">{timeStr}</p>
+      </div>
+
       {/* Avatar */}
       <div
         className={cn(
@@ -731,6 +755,8 @@ function SessionRow({
           )}
         </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          {/* Mobile: show time inline */}
+          <span className="text-xs text-slate-600 font-medium sm:hidden">{timeStr}</span>
           <span className="text-xs text-slate-500">{session.session_type}</span>
           <span className="text-slate-300 text-xs">·</span>
           <span className="text-xs text-slate-400">
