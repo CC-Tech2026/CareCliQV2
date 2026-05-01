@@ -28,6 +28,22 @@ The Replit preview proxy (`localhost:80`) routes to the `api-server` (port 8080)
 
 The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8000 for local development.
 
+## Input Intelligence Layer
+
+A system-wide voice + AI input component available on all clinical text fields.
+
+- **`SmartInput`** (`artifacts/frontend/src/components/SmartInput.tsx`): wraps `<input>` elements
+- **`SmartTextarea`**: wraps `<textarea>` elements
+- **Mic button** embedded inside each field; uses browser Web Speech API (continuous, interimResults)
+- **30+ language support** via auto-detection from the browser; no user config required
+- **Mode pills** appear after dictation: Raw | Translate | Clinical
+  - **Raw**: exact transcript shown as-is
+  - **Translate** → calls `POST /api/ai/translate` (OpenAI GPT-4o-mini) — returns fluent English preserving clinical meaning; result cached per-transcript
+  - **Clinical** → calls `POST /api/ai/clinical-rewrite` — removes fillers, standardises NDIS terminology, rewrites in 3rd-person clinical format; result cached
+- **Language badge**: shows detected ISO code (FR, ZH, ES, etc.) after translate/clinical processing
+- **Integrated into**: Session Focus + Pre-session Notes (session-new), Clinical Notes (session-live), Primary Disability (participant form)
+- Backend endpoints added to `backend/app/api/ai.py` and `backend/app/services/ai_service.py`
+
 ## Features
 
 ### Dashboard (`/dashboard`)

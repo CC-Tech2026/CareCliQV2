@@ -32,6 +32,15 @@ class ExplainComplianceRequest(BaseModel):
     session_notes: Optional[str] = ""
 
 
+class TranslateRequest(BaseModel):
+    text: str
+    source_language: Optional[str] = "auto"
+
+
+class ClinicalRewriteRequest(BaseModel):
+    text: str
+
+
 @router.post("/insight")
 async def get_insights(body: InsightRequest):
     participant = await participant_service.get_participant_by_id(body.participant_id)
@@ -86,4 +95,26 @@ async def get_ai_summary(participant_id: str):
         }
     except Exception as e:
         logger.error(f"AI summary error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/translate")
+async def translate_text(body: TranslateRequest):
+    """Translate text to English, detecting source language automatically."""
+    try:
+        result = await ai_service.translate_to_english(body.text, body.source_language or "auto")
+        return result
+    except Exception as e:
+        logger.error(f"Translation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/clinical-rewrite")
+async def rewrite_clinical(body: ClinicalRewriteRequest):
+    """Rewrite informal or dictated text into NDIS-compliant clinical documentation."""
+    try:
+        result = await ai_service.clinical_rewrite(body.text)
+        return result
+    except Exception as e:
+        logger.error(f"Clinical rewrite error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

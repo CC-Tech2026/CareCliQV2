@@ -168,6 +168,78 @@ Write in plain English. Be specific about what information is actually missing. 
     return result
 
 
+async def translate_to_english(text: str, source_language: str = "auto") -> dict:
+    """Translate text into fluent English, preserving clinical meaning."""
+    if not text or not text.strip():
+        return {"translated": "", "detected_language": "en", "confidence": 1.0}
+
+    lang_hint = f"The source language is {source_language}." if source_language != "auto" else "Detect the source language automatically."
+
+    prompt = f"""You are a multilingual clinical translator.
+{lang_hint}
+
+Translate the following text into fluent, natural English. Preserve clinical and medical meaning exactly. Do not paraphrase — only translate.
+
+Input: {text}
+
+Respond with a JSON object:
+{{
+  "translated": "the English translation",
+  "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
+}}"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500,
+        temperature=0.1,
+        response_format={"type": "json_object"}
+    )
+    result = json.loads(response.choices[0].message.content)
+    return {
+        "translated": result.get("translated", text),
+        "detected_language": result.get("detected_language", "en"),
+        "confidence": 0.95
+    }
+
+
+async def clinical_rewrite(text: str) -> dict:
+    """Rewrite dictated or informal text into structured NDIS clinical documentation."""
+    if not text or not text.strip():
+        return {"clinical": "", "translated": "", "detected_language": "en"}
+
+    prompt = f"""You are a clinical documentation specialist for NDIS (National Disability Insurance Scheme) providers in Australia.
+
+Convert the following spoken or informal text into professional clinical documentation. Apply these rules:
+- Remove filler words (um, uh, like, you know, so, basically)
+- Use third-person clinical language (e.g. "Participant reports..." not "I said...")
+- Standardise terminology (use "ambulation" not "walking around", "demonstrates" not "shows", etc.)
+- Align with NDIS Active Support documentation standards
+- Be factual and specific — do not add information not present in the input
+- Preserve all clinical facts and observations
+
+Input: {text}
+
+Respond with a JSON object:
+{{
+  "clinical": "the clinical rewrite in professional NDIS documentation style",
+  "detected_language": "ISO 639-1 language code of the input (e.g. en, fr, zh)"
+}}"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=600,
+        temperature=0.2,
+        response_format={"type": "json_object"}
+    )
+    result = json.loads(response.choices[0].message.content)
+    return {
+        "clinical": result.get("clinical", text),
+        "detected_language": result.get("detected_language", "en"),
+    }
+
+
 async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
     import tempfile
     import os

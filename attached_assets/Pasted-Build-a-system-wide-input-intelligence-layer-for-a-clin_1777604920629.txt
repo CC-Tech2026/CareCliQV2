@@ -1,0 +1,174 @@
+Build a system-wide input intelligence layer for a clinical sessions platform used by solo practitioners (NDIS and allied health providers). This system must work across all input fields in the application, not just live sessions or notes.
+
+The goal is to remove typing friction entirely by enabling voice input, multilingual speech recognition, automatic translation, and clinical rewriting across the entire product.
+
+Core Objective
+
+Enable users to:
+
+Speak or type in any language
+Automatically convert input into:
+original text
+English translation
+optional clinical documentation format
+Use this capability across:
+session creation forms
+session notes
+client records
+billing notes
+live sessions
+any text input field in the system
+Language Support Requirements
+
+The system must support speech recognition and translation for the following languages:
+
+European:
+en-US, es-ES, fr-FR, de-DE, it-IT, pt-PT, pt-BR, nl-NL, sv-SE, no-NO, da-DK
+
+East Asian:
+zh-CN, zh-TW, ja-JP, ko-KR
+
+South Asia and Middle East:
+ar-SA, he-IL, hi-IN, ur-PK, bn-BD
+
+Southeast Asia:
+th-TH, vi-VN, id-ID, tl-PH, ms-MY, km-KH, lo-LA
+
+Eastern Europe:
+ru-RU, uk-UA, pl-PL, cs-CZ, tr-TR, el-GR
+
+Africa:
+sw-KE, zu-ZA, am-ET, so-SO
+
+Feature 1: Global Input Intelligence Engine
+
+Create a reusable system that can attach to any input field in the application.
+
+It must support the following modes:
+
+Manual typing (default)
+Voice dictation
+Automatic language detection
+Translation to English
+Clinical rewriting mode
+Feature 2: Universal Dictation System
+
+The dictation system must:
+
+Work inside any text input or textarea
+Detect spoken language automatically or allow manual selection
+Support continuous speech input
+Handle accents and mixed-language speech (code switching)
+Work in real time with low latency
+
+Output format:
+
+{
+  rawTranscript: string,
+  detectedLanguage: string,
+  confidence: number,
+  timestamp: string
+}
+Feature 3: Translation Layer
+
+After transcription:
+
+Optionally translate into English
+Preserve meaning, not literal word-for-word translation
+Convert natural speech into professional clinical language when needed
+
+Example:
+Input:
+“Le patient se plaint de douleur légère en marchant”
+
+Output:
+“Patient reports mild pain during ambulation.”
+
+Feature 4: Clinical Rewrite Mode
+
+Provide three processing modes:
+
+raw: original transcript
+translated: English translation
+clinical: structured clinical documentation
+
+Clinical mode must:
+
+remove filler words
+standardize terminology
+convert casual speech into professional clinical notes
+align with NDIS-style documentation standards
+Feature 5: Smart Input Component
+
+Create a reusable input wrapper component called SmartInput.
+
+This component must:
+
+wrap any input or textarea
+include a microphone button
+show detected language indicator
+allow toggles for translation and clinical mode
+provide real-time preview of output states
+
+Example usage:
+
+<SmartInput
+  value={value}
+  onChange={setValue}
+  mode="clinical"
+/>
+Feature 6: System-Wide Integration
+
+This system must integrate into every input context in the application, including:
+
+session creation forms
+session notes
+live sessions
+client profiles
+billing notes
+administrative fields
+
+It must not be limited to any single page or feature.
+
+UX Requirements
+Single microphone button per field
+No separate dictation screen
+No complex form workflows
+Real-time preview of:
+original text
+translated text
+clinical version
+Users can switch between modes instantly
+Minimal clicks required to complete any input
+Technical Requirements
+
+Build modular services:
+
+speechToText
+detectLanguage
+translateText
+clinicalRewrite
+smartInputAdapter
+
+Recommended backend options:
+
+Whisper API or equivalent speech-to-text system
+LLM-based translation and rewriting layer
+Fallback to browser Web Speech API when backend is unavailable
+Restrictions
+
+Do not:
+
+restrict dictation to session pages only
+force English-only input
+require manual language configuration from users
+create separate UI screens for dictation
+introduce heavy or form-heavy UX
+Success Criteria
+
+A practitioner must be able to:
+
+click any input field
+speak in any supported language
+receive structured English or clinical text instantly
+continue workflow without typing or interruptions

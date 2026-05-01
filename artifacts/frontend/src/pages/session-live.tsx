@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+import { SmartTextarea } from "@/components/SmartInput";
 import {
   Dialog,
   DialogContent,
@@ -1110,13 +1111,13 @@ export default function SessionLive() {
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                   <FileText className="h-3.5 w-3.5" /> Clinical Notes
-                  <span className="text-indigo-500 font-normal normal-case tracking-normal">— editable</span>
+                  <span className="text-indigo-500 font-normal normal-case tracking-normal">— editable · mic available</span>
                 </label>
-                <textarea
+                <SmartTextarea
                   value={editableNotes}
-                  onChange={e => setEditableNotes(e.target.value)}
+                  onChange={setEditableNotes}
                   rows={8}
-                  className="w-full text-xs p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-slate-700 whitespace-pre-wrap leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-slate-700 whitespace-pre-wrap leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                 />
               </div>
 

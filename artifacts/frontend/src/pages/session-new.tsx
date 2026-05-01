@@ -37,15 +37,13 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { SmartInput, SmartTextarea } from "@/components/SmartInput";
 
 import {
   CalendarIcon,
   Clock,
   Activity,
   Loader2,
-  Mic,
-  Sparkles,
-  Languages,
   Zap,
 } from "lucide-react";
 
@@ -95,43 +93,6 @@ const sessionSchema = z.object({
 
 type SessionFormValues = z.infer<typeof sessionSchema>;
 
-/* ---------------- TRANSLATION (LIGHTWEIGHT MOCK) ---------------- */
-
-const translateText = async (text: string, targetLang: string) => {
-  // placeholder for real API (Google / DeepL / OpenAI)
-  return `[${targetLang} translation]: ${text}`;
-};
-
-/* ---------------- DICTATION ---------------- */
-
-const startDictation = (callback: (val: string) => void) => {
-  const SpeechRecognition =
-    (window as any).SpeechRecognition ||
-    (window as any).webkitSpeechRecognition;
-
-  if (!SpeechRecognition) return;
-
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-
-  recognition.onresult = (event: any) => {
-    const text = event.results[0][0].transcript;
-    callback(text);
-  };
-
-  recognition.start();
-};
-
-/* ---------------- AI REWRITE ---------------- */
-
-const improveText = (text: string) => {
-  return text
-    .replace(/tired/g, "reduced energy levels")
-    .replace(/walking/g, "ambulation")
-    .replace(/pain/g, "discomfort")
-    .replace(/can't/g, "unable to");
-};
 
 /* ---------------- COMPONENT ---------------- */
 
@@ -164,7 +125,6 @@ export default function SessionNew() {
         data: {
           participant_id: data.participant_id,
           session_date: format(data.session_date, "yyyy-MM-dd"),
-          session_time: data.session_time,
           duration_minutes: data.duration_minutes,
           session_type: data.session_type,
           notes: data.pre_session_notes ?? "",
@@ -326,69 +286,28 @@ export default function SessionNew() {
 
               {/* SESSION FOCUS */}
               <div>
-                <label className="text-sm font-medium flex justify-between">
+                <label className="text-sm font-medium block mb-1.5">
                   Session Focus
-                  <div className="flex gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        startDictation((v) => setField("session_focus", v))
-                      }
-                      className="text-indigo-600 flex items-center gap-1"
-                    >
-                      <Mic className="w-3 h-3" /> Speak
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const v = form.getValues("session_focus") || "";
-                        const t = await translateText(v, "es");
-                        toast({ title: "Translated", description: t });
-                      }}
-                      className="text-emerald-600 flex items-center gap-1"
-                    >
-                      <Languages className="w-3 h-3" /> Translate
-                    </button>
-                  </div>
                 </label>
-
-                <Input
-                  placeholder="e.g. improve mobility"
-                  {...form.register("session_focus")}
+                <SmartInput
+                  id="session_focus"
+                  placeholder="e.g. improve mobility — or tap the mic to speak"
+                  value={form.watch("session_focus") ?? ""}
+                  onChange={(v) => form.setValue("session_focus", v)}
                 />
-
-                <button
-                  type="button"
-                  className="text-xs text-emerald-600 mt-1 flex items-center gap-1"
-                  onClick={() => {
-                    const v = form.getValues("session_focus") || "";
-                    setField("session_focus", improveText(v));
-                  }}
-                >
-                  <Sparkles className="w-3 h-3" />
-                  Improve clinical wording
-                </button>
               </div>
 
               {/* NOTES */}
               <div>
-                <label className="text-sm font-medium flex justify-between">
+                <label className="text-sm font-medium block mb-1.5">
                   Pre-session Notes
-                  <button
-                    type="button"
-                    onClick={() =>
-                      startDictation((v) => setField("pre_session_notes", v))
-                    }
-                    className="text-indigo-600 flex items-center gap-1"
-                  >
-                    <Mic className="w-3 h-3" /> Dictate
-                  </button>
                 </label>
-
-                <Textarea
-                  {...form.register("pre_session_notes")}
-                  placeholder="Anything important..."
+                <SmartTextarea
+                  id="pre_session_notes"
+                  placeholder="Anything important to know before starting — or tap the mic to dictate in any language"
+                  rows={3}
+                  value={form.watch("pre_session_notes") ?? ""}
+                  onChange={(v) => form.setValue("pre_session_notes", v)}
                 />
               </div>
 

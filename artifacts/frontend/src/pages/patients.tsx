@@ -38,6 +38,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { SmartInput } from "@/components/SmartInput";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -151,7 +152,14 @@ function ParticipantForm({
           <FormField control={form.control} name="primary_disability" render={({ field }) => (
             <FormItem className="col-span-2">
               <FormLabel>Primary Disability</FormLabel>
-              <FormControl><Input placeholder="e.g. Autism Spectrum Disorder" data-testid="input-primary-disability" {...field} /></FormControl>
+              <FormControl>
+                <SmartInput
+                  placeholder="e.g. Autism Spectrum Disorder — or tap the mic to speak"
+                  data-testid="input-primary-disability"
+                  value={field.value ?? ""}
+                  onChange={(v) => field.onChange(v)}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )} />
