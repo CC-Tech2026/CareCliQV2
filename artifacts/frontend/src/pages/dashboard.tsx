@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { format, isToday, isBefore, startOfDay, parseISO } from "date-fns";
+import { format, isBefore, startOfDay, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import {
   useGetSessions,
   useGetParticipants,
@@ -173,7 +173,13 @@ function DonutChart({
 // Status badge
 // ---------------------------------------------------------------------------
 
-function SessionStatusBadge({ session }: { session: Session }) {
+function SessionStatusBadge({
+  session,
+  isNext = false,
+}: {
+  session: Session;
+  isNext?: boolean;
+}) {
   if (session.status === "completed")
     return (
       <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium text-xs gap-1 border">
@@ -184,6 +190,12 @@ function SessionStatusBadge({ session }: { session: Session }) {
     return (
       <Badge className="bg-blue-50 text-blue-700 border-blue-200 font-medium text-xs gap-1 border">
         <Clock className="h-3 w-3" /> In Progress
+      </Badge>
+    );
+  if (isNext)
+    return (
+      <Badge className="bg-primary/10 text-primary border-primary/20 font-medium text-xs gap-1 border">
+        <Play className="h-3 w-3" /> Next
       </Badge>
     );
   return (
@@ -227,14 +239,23 @@ export default function Dashboard() {
     );
   }
 
-  // Today's sessions, sorted by time (session_date asc, then created_at)
+  // Today's sessions, sorted by created_at (best proxy until a scheduled_time field exists)
   const todaySessions = useMemo<Session[]>(() => {
     return [...sessions]
       .filter((s) => s.session_date === TODAY_STR)
       .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
   }, [sessions]);
 
-  // Past incomplete sessions
+  // The single "Next" session: first draft today, or first in_progress today
+  const nextSession = useMemo<Session | null>(
+    () =>
+      todaySessions.find((s) => s.status === "in_progress") ??
+      todaySessions.find((s) => s.status === "draft") ??
+      null,
+    [todaySessions],
+  );
+
+  // Past incomplete sessions (not ended before today)
   const pastIncomplete = useMemo<Session[]>(() => {
     const todayStart = startOfDay(new Date());
     return sessions.filter((s) => {
@@ -243,18 +264,28 @@ export default function Dashboard() {
     });
   }, [sessions]);
 
-  // Low compliance completed sessions
-  const lowCompliance = useMemo<Session[]>(() => {
-    return sessions.filter(
-      (s) =>
-        s.status === "completed" &&
+  // Completed sessions with low compliance OR missing notes
+  const lowQuality = useMemo<Session[]>(() => {
+    return sessions.filter((s) => {
+      if (s.status !== "completed") return false;
+      const missingNotes = !(s.notes && s.notes.trim().length > 10);
+      const lowScore =
         s.compliance_score !== null &&
         s.compliance_score !== undefined &&
-        s.compliance_score < 60,
-    );
+        s.compliance_score < 60;
+      return missingNotes || lowScore;
+    });
   }, [sessions]);
 
-  const atRiskItems = [...pastIncomplete, ...lowCompliance].slice(0, 5);
+  // Deduplicate by id (a session could satisfy both criteria)
+  const atRiskItems = useMemo<Session[]>(() => {
+    const seen = new Set<string>();
+    const combined: Session[] = [];
+    for (const s of [...pastIncomplete, ...lowQuality]) {
+      if (!seen.has(s.id)) { seen.add(s.id); combined.push(s); }
+    }
+    return combined.slice(0, 5);
+  }, [pastIncomplete, lowQuality]);
 
   // Readiness summary
   const readyCount = todaySessions.filter(
@@ -268,26 +299,24 @@ export default function Dashboard() {
         s.compliance_score < 70),
   ).length;
 
-  // Next session to action (first draft or in_progress today)
-  const nextSession = useMemo<Session | null>(
-    () =>
-      todaySessions.find(
-        (s) => s.status === "draft" || s.status === "in_progress",
-      ) ?? null,
-    [todaySessions],
+  // Compliance donut data — this week's completed sessions only
+  const weekInterval = {
+    start: startOfWeek(new Date(), { weekStartsOn: 1 }),
+    end: endOfWeek(new Date(), { weekStartsOn: 1 }),
+  };
+  const weekSessions = sessions.filter((s) =>
+    isWithinInterval(parseISO(s.session_date), weekInterval),
   );
-
-  // Compliance donut data (all sessions)
-  const compliantCount = sessions.filter(
+  const compliantCount = weekSessions.filter(
     (s) => s.status === "completed" && (s.compliance_score ?? 0) >= 85,
   ).length;
-  const atRiskCount = sessions.filter(
+  const atRiskCount = weekSessions.filter(
     (s) =>
       s.status === "completed" &&
       (s.compliance_score ?? 0) >= 60 &&
       (s.compliance_score ?? 0) < 85,
   ).length;
-  const nonCompliantCount = sessions.filter(
+  const nonCompliantCount = weekSessions.filter(
     (s) =>
       s.status === "completed" &&
       (s.compliance_score ?? 0) < 60,
@@ -384,6 +413,7 @@ export default function Dashboard() {
                       session={s}
                       name={participantName(s)}
                       ndis={participantNdis(s)}
+                      isNext={nextSession?.id === s.id}
                     />
                   ))
                 )}
@@ -421,7 +451,7 @@ export default function Dashboard() {
           <section className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-900">Compliance Overview</h2>
-              <span className="text-xs text-slate-400">All sessions</span>
+              <span className="text-xs text-slate-400">This week</span>
             </div>
 
             <div className="flex justify-center mb-4">
@@ -591,14 +621,33 @@ function NextPatientPanel({
         </div>
       </div>
 
-      {session.notes && (
-        <div className="mt-4 p-3 rounded-xl bg-white/10 text-sm opacity-90">
-          <span className="font-medium opacity-70 text-xs uppercase tracking-wide block mb-1">
-            Pre-session note
-          </span>
-          <p className="line-clamp-2">{session.notes}</p>
-        </div>
-      )}
+      {(() => {
+        const noteText =
+          session.compliance_notes?.trim() ||
+          session.ai_summary?.trim() ||
+          session.notes?.trim();
+        const label = session.compliance_notes
+          ? "Last session assessment"
+          : session.ai_summary
+          ? "AI summary"
+          : session.notes
+          ? "Pre-session note"
+          : null;
+        return noteText ? (
+          <div className="mt-4 p-3 rounded-xl bg-white/10 text-sm opacity-90">
+            {label && (
+              <span className="font-medium opacity-70 text-xs uppercase tracking-wide block mb-1">
+                {label}
+              </span>
+            )}
+            <p className="line-clamp-2">{noteText}</p>
+          </div>
+        ) : (
+          <div className="mt-4 p-3 rounded-xl bg-white/10 text-sm opacity-75 italic">
+            No prior session notes for this participant.
+          </div>
+        );
+      })()}
 
       <div className="flex gap-3 mt-5">
         <Link href={`/sessions/${session.id}/live`}>
@@ -647,10 +696,12 @@ function SessionRow({
   session,
   name,
   ndis,
+  isNext = false,
 }: {
   session: Session;
   name: string;
   ndis: string;
+  isNext?: boolean;
 }) {
   const initials = getInitials(name);
   const colorCls = avatarColor(name);
@@ -696,7 +747,7 @@ function SessionRow({
 
       {/* Status + action */}
       <div className="flex items-center gap-2 shrink-0">
-        <SessionStatusBadge session={session} />
+        <SessionStatusBadge session={session} isNext={isNext} />
         {session.status === "completed" ? (
           <Link href={`/sessions/${session.id}`}>
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1 px-3">
@@ -732,9 +783,21 @@ function AtRiskRow({
   name: string;
   isPast: boolean;
 }) {
-  const issue = isPast
-    ? "Session not completed — missing documentation"
-    : `Low compliance score: ${Math.round(session.compliance_score ?? 0)}%`;
+  const issues: string[] = [];
+  if (isPast && session.status !== "completed") issues.push("session not ended");
+  if (!(session.notes && session.notes.trim().length > 10)) issues.push("notes missing");
+  if (
+    session.compliance_score !== null &&
+    session.compliance_score !== undefined &&
+    session.compliance_score < 60
+  ) {
+    issues.push(`low compliance (${Math.round(session.compliance_score)}%)`);
+  }
+  const issueText = issues.length > 0 ? issues.join(", ") : "needs attention";
+  const fixHref =
+    isPast && session.status !== "completed"
+      ? `/sessions/${session.id}/live`
+      : `/sessions/${session.id}`;
 
   return (
     <div className="flex items-center gap-4 px-5 py-3.5">
@@ -743,13 +806,12 @@ function AtRiskRow({
         <p className="text-sm font-medium text-slate-800 truncate">{name}</p>
         <p className="text-xs text-slate-500 mt-0.5">
           <span className="text-slate-400">
-            {format(parseISO(session.session_date), "d MMM")} ·{" "}
-            {session.session_type}
+            {format(parseISO(session.session_date), "d MMM")} · {session.session_type}
           </span>{" "}
-          — {issue}
+          &mdash; {issueText}
         </p>
       </div>
-      <Link href={`/sessions/${session.id}${isPast ? "/live" : ""}`}>
+      <Link href={fixHref}>
         <Button
           size="sm"
           variant="destructive"
