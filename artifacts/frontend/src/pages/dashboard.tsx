@@ -6,7 +6,7 @@ import {
   useGetParticipants,
   useGetDashboardStats,
 } from "@workspace/api-client-react";
-import type { Session, Participant } from "@workspace/api-client-react";
+import type { Session, Participant, ParticipantGoal } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -398,6 +398,7 @@ export default function Dashboard() {
               session={nextSession}
               name={participantName(nextSession)}
               ndis={participantNdis(nextSession)}
+              goals={participantMap[nextSession.participant_id]?.goals ?? []}
             />
           ) : todaySessions.length === 0 ? (
             <EmptyToday />
@@ -585,15 +586,18 @@ function NextPatientPanel({
   session,
   name,
   ndis,
+  goals = [],
 }: {
   session: Session;
   name: string;
   ndis: string;
+  goals?: ParticipantGoal[];
 }) {
   const isResume = session.status === "in_progress";
   const initials = getInitials(name);
   const colorCls = avatarColor(name);
   const light = getTrafficLight(session);
+  const topGoals = (goals ?? []).slice(0, 3);
 
   return (
     <section className="rounded-2xl border bg-gradient-to-br from-primary to-primary/80 text-white p-6 shadow-md">
@@ -638,6 +642,33 @@ function NextPatientPanel({
           </div>
         </div>
       </div>
+
+      {/* Participant Goal Progress */}
+      {topGoals.length > 0 && (
+        <div className="mt-5 p-3 rounded-xl bg-white/10 space-y-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-1">
+            Today's Focus
+          </p>
+          {topGoals.map((goal, i) => (
+            <div key={i}>
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs opacity-90 leading-tight line-clamp-1 flex-1 mr-2">
+                  {goal.text}
+                </span>
+                <span className="text-xs font-semibold opacity-80 shrink-0">
+                  {goal.progress}%
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-white/70 transition-all"
+                  style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {(() => {
         const noteText =

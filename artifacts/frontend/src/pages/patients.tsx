@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useGetParticipants,
@@ -6,7 +6,9 @@ import {
   useGetParticipantSessions,
   useGetAISummary,
   useCreateParticipant,
+  useUpdateParticipant,
   type CreateParticipantBody,
+  type ParticipantGoal,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -608,6 +610,141 @@ function RuleBadge({ status }: { status: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Goal Progress Panel
+// ---------------------------------------------------------------------------
+
+function GoalProgressPanel({
+  participantId,
+  goals: goalsProp,
+  onUpdated,
+}: {
+  participantId: string;
+  goals: ParticipantGoal[];
+  onUpdated: () => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [goals, setGoals] = useState<ParticipantGoal[]>(goalsProp);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [draftProgress, setDraftProgress] = useState<number>(0);
+
+  // Sync when parent data changes (e.g. after query refetch)
+  useEffect(() => {
+    setGoals(goalsProp);
+  }, [goalsProp]);
+
+  const updateParticipant = useUpdateParticipant({
+    mutation: {
+      onSuccess: () => {
+        setEditingIndex(null);
+        queryClient.invalidateQueries({ queryKey: ["getParticipant", participantId] });
+        queryClient.invalidateQueries({ queryKey: ["getParticipants"] });
+        onUpdated();
+        toast({ title: "Goal progress updated" });
+      },
+      onError: () => {
+        toast({ title: "Failed to update goal", variant: "destructive" });
+      },
+    },
+  });
+
+  function startEdit(index: number) {
+    setEditingIndex(index);
+    setDraftProgress(goals[index]?.progress ?? 0);
+  }
+
+  function cancelEdit() {
+    setEditingIndex(null);
+  }
+
+  function saveProgress(index: number) {
+    const newProgress = Math.min(100, Math.max(0, draftProgress));
+    const snapshot = goals; // capture pre-edit snapshot for rollback
+    const updated = goals.map((g, i) =>
+      i === index ? { ...g, progress: newProgress } : g,
+    );
+    // Optimistic update
+    setGoals(updated);
+    updateParticipant.mutate(
+      { participantId, data: { goals: updated } },
+      {
+        onError: () => {
+          setGoals(snapshot); // restore pre-edit state on failure
+        },
+      },
+    );
+  }
+
+  if (goals.length === 0 && goalsProp.length === 0) {
+    return (
+      <span className="text-slate-400 italic text-sm">
+        No goals documented — edit participant to add goals
+      </span>
+    );
+  }
+
+  return (
+    <ul className="space-y-3">
+      {goals.map((goal, i) => (
+        <li key={i} className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm text-slate-700 dark:text-slate-300 leading-snug flex-1">
+              {goal.text}
+            </span>
+            <span className="text-xs font-semibold text-slate-600 shrink-0 w-9 text-right">
+              {goal.progress}%
+            </span>
+            {editingIndex !== i && (
+              <button
+                className="text-xs text-primary hover:underline shrink-0"
+                onClick={() => startEdit(i)}
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary/70 transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }}
+            />
+          </div>
+          {editingIndex === i && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={draftProgress}
+                onChange={(e) => setDraftProgress(Number(e.target.value))}
+                className="flex-1 accent-primary"
+              />
+              <span className="text-xs font-semibold text-slate-700 w-9 text-right">
+                {draftProgress}%
+              </span>
+              <button
+                className="text-xs text-emerald-600 font-medium hover:underline shrink-0"
+                onClick={() => saveProgress(i)}
+                disabled={updateParticipant.isPending}
+              >
+                {updateParticipant.isPending ? "Saving…" : "Save"}
+              </button>
+              <button
+                className="text-xs text-slate-500 hover:underline shrink-0"
+                onClick={cancelEdit}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Participant Detail (tabbed)
 // ---------------------------------------------------------------------------
 
@@ -780,18 +917,11 @@ function ParticipantDetail({
                   <span className="text-slate-500 flex items-center gap-1 mb-2">
                     <Target className="h-3.5 w-3.5" /> Goals
                   </span>
-                  {Array.isArray(participant.goals) && participant.goals.length > 0 ? (
-                    <ul className="space-y-1.5">
-                      {(participant.goals as string[]).map((g, i) => (
-                        <li key={i} className="flex gap-2 text-slate-700 dark:text-slate-300">
-                          <span className="text-primary mt-0.5">•</span>
-                          <span className="leading-snug">{g}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span className="text-slate-400 italic">No goals documented</span>
-                  )}
+                  <GoalProgressPanel
+                    participantId={id}
+                    goals={(participant.goals as ParticipantGoal[]) ?? []}
+                    onUpdated={handleSaved}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -968,18 +1098,11 @@ function ParticipantDetail({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {Array.isArray(participant.goals) && participant.goals.length > 0 ? (
-                <ul className="space-y-2">
-                  {(participant.goals as string[]).map((g, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <span className="text-slate-700 dark:text-slate-300">{g}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <span className="text-slate-400 italic text-sm">No goals documented — edit participant to add goals</span>
-              )}
+              <GoalProgressPanel
+                participantId={id}
+                goals={(participant.goals as ParticipantGoal[]) ?? []}
+                onUpdated={handleSaved}
+              />
             </CardContent>
           </Card>
         </TabsContent>

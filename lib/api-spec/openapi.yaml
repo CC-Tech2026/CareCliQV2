@@ -391,6 +391,17 @@ components:
           type: string
       required: [status]
 
+    ParticipantGoal:
+      type: object
+      properties:
+        text:
+          type: string
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+      required: [text, progress]
+
     Participant:
       type: object
       properties:
@@ -432,7 +443,7 @@ components:
         goals:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/ParticipantGoal"
           nullable: true
         created_at:
           type: string
@@ -480,7 +491,7 @@ components:
         goals:
           type: array
           items:
-            type: string
+            $ref: "#/components/schemas/ParticipantGoal"
           nullable: true
       required: [full_name, ndis_number]
 
@@ -510,6 +521,11 @@ components:
           nullable: true
         primary_disability:
           type: string
+          nullable: true
+        goals:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParticipantGoal"
           nullable: true
 
     Session:

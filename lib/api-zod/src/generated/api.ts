@@ -17,6 +17,9 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary List all participants
  */
+export const getParticipantsResponseGoalsItemProgressMin = 0;
+export const getParticipantsResponseGoalsItemProgressMax = 100;
+
 export const GetParticipantsResponseItem = zod.object({
   id: zod.string(),
   full_name: zod.string(),
@@ -31,7 +34,17 @@ export const GetParticipantsResponseItem = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
-  goals: zod.array(zod.string()).nullish(),
+  goals: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        progress: zod
+          .number()
+          .min(getParticipantsResponseGoalsItemProgressMin)
+          .max(getParticipantsResponseGoalsItemProgressMax),
+      }),
+    )
+    .nullish(),
   created_at: zod.string().nullish(),
 });
 export const GetParticipantsResponse = zod.array(GetParticipantsResponseItem);
@@ -41,6 +54,8 @@ export const GetParticipantsResponse = zod.array(GetParticipantsResponseItem);
  */
 export const createParticipantBodyPlanStatusDefault = `active`;
 export const createParticipantBodyUsedBudgetDefault = 0;
+export const createParticipantBodyGoalsItemProgressMin = 0;
+export const createParticipantBodyGoalsItemProgressMax = 100;
 
 export const CreateParticipantBody = zod.object({
   full_name: zod.string(),
@@ -58,7 +73,17 @@ export const CreateParticipantBody = zod.object({
     .nullish()
     .default(createParticipantBodyUsedBudgetDefault),
   primary_disability: zod.string().nullish(),
-  goals: zod.array(zod.string()).nullish(),
+  goals: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        progress: zod
+          .number()
+          .min(createParticipantBodyGoalsItemProgressMin)
+          .max(createParticipantBodyGoalsItemProgressMax),
+      }),
+    )
+    .nullish(),
 });
 
 /**
@@ -79,6 +104,9 @@ export const GetParticipantParams = zod.object({
   participantId: zod.coerce.string(),
 });
 
+export const getParticipantResponseGoalsItemProgressMin = 0;
+export const getParticipantResponseGoalsItemProgressMax = 100;
+
 export const GetParticipantResponse = zod.object({
   id: zod.string(),
   full_name: zod.string(),
@@ -93,7 +121,17 @@ export const GetParticipantResponse = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
-  goals: zod.array(zod.string()).nullish(),
+  goals: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        progress: zod
+          .number()
+          .min(getParticipantResponseGoalsItemProgressMin)
+          .max(getParticipantResponseGoalsItemProgressMax),
+      }),
+    )
+    .nullish(),
   created_at: zod.string().nullish(),
 });
 
@@ -104,6 +142,9 @@ export const UpdateParticipantParams = zod.object({
   participantId: zod.coerce.string(),
 });
 
+export const updateParticipantBodyGoalsItemProgressMin = 0;
+export const updateParticipantBodyGoalsItemProgressMax = 100;
+
 export const UpdateParticipantBody = zod.object({
   full_name: zod.string().nullish(),
   email: zod.string().nullish(),
@@ -113,7 +154,21 @@ export const UpdateParticipantBody = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  goals: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        progress: zod
+          .number()
+          .min(updateParticipantBodyGoalsItemProgressMin)
+          .max(updateParticipantBodyGoalsItemProgressMax),
+      }),
+    )
+    .nullish(),
 });
+
+export const updateParticipantResponseGoalsItemProgressMin = 0;
+export const updateParticipantResponseGoalsItemProgressMax = 100;
 
 export const UpdateParticipantResponse = zod.object({
   id: zod.string(),
@@ -129,7 +184,17 @@ export const UpdateParticipantResponse = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
-  goals: zod.array(zod.string()).nullish(),
+  goals: zod
+    .array(
+      zod.object({
+        text: zod.string(),
+        progress: zod
+          .number()
+          .min(updateParticipantResponseGoalsItemProgressMin)
+          .max(updateParticipantResponseGoalsItemProgressMax),
+      }),
+    )
+    .nullish(),
   created_at: zod.string().nullish(),
 });
 

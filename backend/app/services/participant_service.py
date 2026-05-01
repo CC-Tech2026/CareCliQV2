@@ -118,21 +118,37 @@ async def get_dashboard_stats() -> dict:
     }
 
 
+def _coerce_goal(g) -> dict:
+    """Normalise a single goal value to {text, progress} dict."""
+    if isinstance(g, dict):
+        try:
+            progress = max(0, min(100, int(g.get("progress") or 0)))
+        except (TypeError, ValueError):
+            progress = 0
+        return {"text": str(g.get("text") or ""), "progress": progress}
+    if isinstance(g, str):
+        return {"text": g, "progress": 0}
+    return {"text": str(g), "progress": 0}
+
+
 def _normalize(row: dict) -> dict:
     if not row:
         return row
     out = dict(row)
 
-    # goals is TEXT in DB; we store JSON arrays as strings, but handle plain text too
+    # goals may be stored as a JSON string (TEXT column) or already parsed (JSONB)
     goals = out.get("goals")
     if isinstance(goals, str) and goals:
         try:
             parsed = json.loads(goals)
-            out["goals"] = parsed if isinstance(parsed, list) else [goals]
+            raw_list = parsed if isinstance(parsed, list) else [goals]
         except Exception:
             # Plain text fallback — split by newline or comma
-            out["goals"] = [g.strip() for g in goals.replace("\n", ",").split(",") if g.strip()]
-    elif not isinstance(goals, list):
+            raw_list = [g.strip() for g in goals.replace("\n", ",").split(",") if g.strip()]
+        out["goals"] = [_coerce_goal(g) for g in raw_list]
+    elif isinstance(goals, list):
+        out["goals"] = [_coerce_goal(g) for g in goals]
+    else:
         out["goals"] = []
 
     if out.get("total_budget") is None:

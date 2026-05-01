@@ -9,6 +9,15 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface ParticipantGoal {
+  text: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  progress: number;
+}
+
 export interface Participant {
   id: string;
   full_name: string;
@@ -23,7 +32,7 @@ export interface Participant {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  goals?: string[] | null;
+  goals?: ParticipantGoal[] | null;
   created_at?: string | null;
 }
 
@@ -40,7 +49,7 @@ export interface CreateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  goals?: string[] | null;
+  goals?: ParticipantGoal[] | null;
 }
 
 export interface UpdateParticipantBody {
@@ -52,6 +61,7 @@ export interface UpdateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
+  goals?: ParticipantGoal[] | null;
 }
 
 export type SessionParticipants = {
