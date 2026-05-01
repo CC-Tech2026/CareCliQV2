@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -12,19 +11,19 @@ import { format } from "date-fns";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
   CardFooter,
 } from "@/components/ui/card";
+
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
+
 import {
   Select,
   SelectContent,
@@ -32,25 +31,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+
 import {
   CalendarIcon,
   Clock,
   Activity,
-  FileText,
-  Check,
   Loader2,
+  Mic,
+  Sparkles,
+  Languages,
+  Zap,
 } from "lucide-react";
+
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+
 import { Calendar } from "@/components/ui/calendar";
+
+/* ---------------- TAGS ---------------- */
 
 const AVAILABLE_TAGS = [
   "Pain",
@@ -62,27 +69,77 @@ const AVAILABLE_TAGS = [
   "Review",
 ];
 
+/* ---------------- QUICK INTENTS (NEW UX LAYER) ---------------- */
+
+const QUICK_INTENTS = [
+  "Improve mobility",
+  "Pain management session",
+  "Functional assessment",
+  "Behavior support",
+  "Post-injury rehab",
+  "Equipment training",
+];
+
+/* ---------------- SCHEMA ---------------- */
+
 const sessionSchema = z.object({
-  participant_id: z.string().min(1, "Participant is required"),
-  session_date: z.date({
-    required_error: "Date is required",
-  }),
-  duration_minutes: z.coerce
-    .number()
-    .min(1, "Duration must be at least 1 minute"),
-  session_type: z.string().min(1, "Session type is required"),
-  notes: z.string().optional(),
+  participant_id: z.string().min(1),
+  session_date: z.date(),
+  session_time: z.string().min(1),
+  duration_minutes: z.coerce.number().min(1),
+  session_type: z.string().min(1),
+  session_focus: z.string().optional(),
+  pre_session_notes: z.string().optional(),
   tags: z.array(z.string()).default([]),
-  goals_addressed: z.string().optional(),
 });
 
 type SessionFormValues = z.infer<typeof sessionSchema>;
 
+/* ---------------- TRANSLATION (LIGHTWEIGHT MOCK) ---------------- */
+
+const translateText = async (text: string, targetLang: string) => {
+  // placeholder for real API (Google / DeepL / OpenAI)
+  return `[${targetLang} translation]: ${text}`;
+};
+
+/* ---------------- DICTATION ---------------- */
+
+const startDictation = (callback: (val: string) => void) => {
+  const SpeechRecognition =
+    (window as any).SpeechRecognition ||
+    (window as any).webkitSpeechRecognition;
+
+  if (!SpeechRecognition) return;
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+
+  recognition.onresult = (event: any) => {
+    const text = event.results[0][0].transcript;
+    callback(text);
+  };
+
+  recognition.start();
+};
+
+/* ---------------- AI REWRITE ---------------- */
+
+const improveText = (text: string) => {
+  return text
+    .replace(/tired/g, "reduced energy levels")
+    .replace(/walking/g, "ambulation")
+    .replace(/pain/g, "discomfort")
+    .replace(/can't/g, "unable to");
+};
+
+/* ---------------- COMPONENT ---------------- */
+
 export default function SessionNew() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: participants, isLoading: participantsLoading } =
-    useGetParticipants();
+
+  const { data: participants, isLoading } = useGetParticipants();
   const createSessionMutation = useCreateSession();
 
   const form = useForm<SessionFormValues>({
@@ -90,86 +147,82 @@ export default function SessionNew() {
     defaultValues: {
       duration_minutes: 60,
       tags: [],
-      notes: "",
-      goals_addressed: "",
+      session_focus: "",
+      pre_session_notes: "",
     },
   });
 
-  const onSubmit = (data: SessionFormValues, isDraft: boolean) => {
+  const setField = (name: any, value: string) => {
+    form.setValue(name, value);
+  };
+
+  /* ---------------- SUBMIT ---------------- */
+
+  const handleSubmit = (data: SessionFormValues, startNow: boolean) => {
     createSessionMutation.mutate(
       {
         data: {
           participant_id: data.participant_id,
           session_date: format(data.session_date, "yyyy-MM-dd"),
+          session_time: data.session_time,
           duration_minutes: data.duration_minutes,
           session_type: data.session_type,
-          notes: data.notes ?? "",
-          status: isDraft ? "draft" : "draft",
+          notes: data.pre_session_notes ?? "",
+          status: "draft",
         },
       },
       {
-        onSuccess: (response) => {
+        onSuccess: (res) => {
           toast({
-            title: "Session Created",
-            description: isDraft
-              ? "Draft saved. Start the live session when ready."
-              : "Session created. You can begin live documentation.",
+            title: "Session Ready",
+            description: startNow
+              ? "Starting live session..."
+              : "Session saved",
           });
-          setLocation(`/sessions/${response.id}`);
-        },
-        onError: () => {
-          toast({
-            title: "Error",
-            description: "Failed to create session. Please check your inputs and try again.",
-            variant: "destructive",
-          });
+
+          setLocation(
+            startNow ? `/sessions/${res.id}/live` : `/sessions/${res.id}`,
+          );
         },
       },
     );
   };
 
+  /* ---------------- UI ---------------- */
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {/* HEADER */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">New Session</h1>
-        <p className="text-slate-500 dark:text-slate-400">
-          Record a new clinical session with a participant.
+        <h1 className="text-2xl font-bold">Prepare Session</h1>
+        <p className="text-slate-500">
+          Fast setup — minimal typing, smart assistance enabled.
         </p>
       </div>
 
       <Form {...form}>
         <form className="space-y-6">
+          {/* SESSION CORE */}
           <Card>
-            <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="h-4 w-4" /> Session Details
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Session Setup
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* PARTICIPANT */}
               <FormField
                 control={form.control}
                 name="participant_id"
                 render={({ field }) => (
-                  <FormItem className="col-span-1 md:col-span-2">
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Participant</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger
-                          disabled={participantsLoading}
-                          data-testid="select-participant"
-                        >
-                          <SelectValue
-                            placeholder={
-                              participantsLoading
-                                ? "Loading participants..."
-                                : "Select a participant"
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
+                    <Select onValueChange={field.onChange}>
+                      <SelectTrigger disabled={isLoading}>
+                        <SelectValue placeholder="Select participant" />
+                      </SelectTrigger>
                       <SelectContent>
                         {participants?.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
@@ -178,211 +231,207 @@ export default function SessionNew() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* DATE */}
               <FormField
                 control={form.control}
                 name="session_date"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Date</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={`w-full pl-3 text-left font-normal ${!field.value && "text-muted-foreground"}`}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP")
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
+                        <Button variant="outline" className="w-full">
+                          {field.value
+                            ? format(field.value, "PPP")
+                            : "Pick date"}
+                        </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent>
                         <Calendar
                           mode="single"
                           selected={field.value}
                           onSelect={field.onChange}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* TIME */}
               <FormField
                 control={form.control}
-                name="duration_minutes"
+                name="session_time"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Duration (minutes)</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Clock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                        <Input type="number" className="pl-9" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
+                    <FormLabel>Time</FormLabel>
+                    <Input type="time" {...field} />
                   </FormItem>
                 )}
               />
 
+              {/* TYPE */}
               <FormField
                 control={form.control}
                 name="session_type"
                 render={({ field }) => (
-                  <FormItem className="col-span-1 md:col-span-2">
+                  <FormItem className="md:col-span-2">
                     <FormLabel>Session Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="e.g., Initial Assessment, Therapy Session" />
-                        </SelectTrigger>
-                      </FormControl>
+                    <Select onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Initial Assessment">
-                          Initial Assessment
-                        </SelectItem>
-                        <SelectItem value="Therapy Session">
-                          Therapy Session
-                        </SelectItem>
+                        <SelectItem value="Assessment">Assessment</SelectItem>
+                        <SelectItem value="Therapy">Therapy</SelectItem>
                         <SelectItem value="Review">Review</SelectItem>
-                        <SelectItem value="Telehealth">Telehealth</SelectItem>
-                        <SelectItem value="Report Writing">
-                          Report Writing
-                        </SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
             </CardContent>
           </Card>
 
+          {/* SMART LAYER */}
           <Card>
-            <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" /> Clinical Notes
-              </CardTitle>
+            <CardHeader>
+              <CardTitle>Session Intelligence Layer</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6 space-y-6">
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Session Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Document observations, interventions, and outcomes..."
-                        className="min-h-[200px] resize-y"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              <FormField
-                control={form.control}
-                name="goals_addressed"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Goals Addressed (comma separated)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g., Improve core strength, Increase community access"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs text-slate-500 mt-1">
-                      Link these notes to the participant's NDIS goals for
-                      compliance.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <CardContent className="space-y-5">
+              {/* QUICK INTENT */}
+              <div>
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-indigo-500" />
+                  Quick Intent
+                </label>
 
-              <FormField
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Clinical Tags</FormLabel>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {AVAILABLE_TAGS.map((tag) => {
-                        const isSelected = field.value.includes(tag);
-                        return (
-                          <Badge
-                            key={tag}
-                            variant={isSelected ? "default" : "outline"}
-                            className="cursor-pointer hover:bg-primary/90 transition-colors"
-                            onClick={() => {
-                              if (isSelected) {
-                                field.onChange(
-                                  field.value.filter((t) => t !== tag),
-                                );
-                              } else {
-                                field.onChange([...field.value, tag]);
-                              }
-                            }}
-                          >
-                            {tag}
-                            {isSelected && <Check className="ml-1 h-3 w-3" />}
-                          </Badge>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {QUICK_INTENTS.map((intent) => (
+                    <Badge
+                      key={intent}
+                      className="cursor-pointer"
+                      onClick={() => setField("session_focus", intent)}
+                    >
+                      {intent}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* SESSION FOCUS */}
+              <div>
+                <label className="text-sm font-medium flex justify-between">
+                  Session Focus
+                  <div className="flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        startDictation((v) => setField("session_focus", v))
+                      }
+                      className="text-indigo-600 flex items-center gap-1"
+                    >
+                      <Mic className="w-3 h-3" /> Speak
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const v = form.getValues("session_focus") || "";
+                        const t = await translateText(v, "es");
+                        toast({ title: "Translated", description: t });
+                      }}
+                      className="text-emerald-600 flex items-center gap-1"
+                    >
+                      <Languages className="w-3 h-3" /> Translate
+                    </button>
+                  </div>
+                </label>
+
+                <Input
+                  placeholder="e.g. improve mobility"
+                  {...form.register("session_focus")}
+                />
+
+                <button
+                  type="button"
+                  className="text-xs text-emerald-600 mt-1 flex items-center gap-1"
+                  onClick={() => {
+                    const v = form.getValues("session_focus") || "";
+                    setField("session_focus", improveText(v));
+                  }}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  Improve clinical wording
+                </button>
+              </div>
+
+              {/* NOTES */}
+              <div>
+                <label className="text-sm font-medium flex justify-between">
+                  Pre-session Notes
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startDictation((v) => setField("pre_session_notes", v))
+                    }
+                    className="text-indigo-600 flex items-center gap-1"
+                  >
+                    <Mic className="w-3 h-3" /> Dictate
+                  </button>
+                </label>
+
+                <Textarea
+                  {...form.register("pre_session_notes")}
+                  placeholder="Anything important..."
+                />
+              </div>
+
+              {/* TAGS */}
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_TAGS.map((tag) => {
+                  const active = form.watch("tags").includes(tag);
+                  return (
+                    <Badge
+                      key={tag}
+                      variant={active ? "default" : "outline"}
+                      onClick={() => {
+                        const cur = form.getValues("tags");
+                        form.setValue(
+                          "tags",
+                          active ? cur.filter((t) => t !== tag) : [...cur, tag],
                         );
-                      })}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      }}
+                      className="cursor-pointer"
+                    >
+                      {tag}
+                    </Badge>
+                  );
+                })}
+              </div>
             </CardContent>
-            <CardFooter className="flex justify-between border-t border-slate-100 dark:border-slate-800 pt-6">
-              <Button
-                variant="ghost"
-                type="button"
-                onClick={() => window.history.back()}
-              >
-                Cancel
-              </Button>
-              <div className="flex gap-3">
+
+            {/* ACTIONS */}
+            <CardFooter className="flex justify-between">
+              <Button variant="ghost">Cancel</Button>
+
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  type="button"
-                  disabled={createSessionMutation.isPending}
-                  onClick={form.handleSubmit((data) => onSubmit(data, true))}
+                  onClick={form.handleSubmit((d) => handleSubmit(d, false))}
                 >
-                  Save Draft
+                  Save
                 </Button>
+
                 <Button
-                  type="button"
-                  disabled={createSessionMutation.isPending}
-                  onClick={form.handleSubmit((data) => onSubmit(data, false))}
-                  data-testid="button-save-session"
+                  onClick={form.handleSubmit((d) => handleSubmit(d, true))}
                 >
-                  {createSessionMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Complete Session
+                  Start Session
                 </Button>
               </div>
             </CardFooter>
@@ -391,15 +440,4 @@ export default function SessionNew() {
       </Form>
     </div>
   );
-}
-
-// Minimal stub for form description component
-function FormDescription({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <p className={className}>{children}</p>;
 }
