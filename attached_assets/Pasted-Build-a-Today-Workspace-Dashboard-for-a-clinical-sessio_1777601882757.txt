@@ -1,0 +1,86 @@
+Build a “Today Workspace Dashboard” for a clinical session platform focused on solo practitioners.
+
+The dashboard must prioritise TODAY’S sessions and help the practitioner prepare, execute, and complete sessions without missing documentation.
+
+Core Requirements:
+
+1. Today Readiness Summary (Top Section)
+
+* Show total sessions today
+* Show how many are:
+
+  * Ready
+  * Need attention
+* Highlight any incomplete sessions from previous days
+
+2. Next Patient Focus Panel (Primary Section)
+
+* Display the next upcoming session
+* Include:
+
+  * Patient name
+  * Time and session type
+  * Last session summary (static or placeholder)
+  * Key goals for today
+  * Important notes or flags
+* Include actions:
+
+  * Start Session (links to live session mode)
+  * View Summary
+
+3. Session Timeline (Main Area)
+
+* Display today’s sessions in order
+* Each session shows:
+
+  * Time
+  * Patient name
+  * Session type
+  * Status:
+
+    * Completed
+    * Next
+    * Upcoming
+* Each item has a single clear action:
+
+  * Start / Resume / View
+
+4. Compliance & Completion Indicators
+
+* Each session should indicate:
+
+  * Notes completed or missing
+  * Goals linked or not
+  * Session ready for completion
+* Use simple visual indicators (green, amber, red)
+
+5. Incomplete / Risk Panel
+
+* Show sessions that are not properly completed
+* Include:
+
+  * Missing notes
+  * Session not ended
+  * Incomplete data
+* Each item should have a “Fix Now” action
+
+6. UX Principles
+
+* No clutter
+* Focus only on TODAY
+* Reduce cognitive load
+* Prioritise actions over information
+* Design for in-session usage (quick glance, quick actions)
+
+7. Integration Context
+
+* Must align with existing Live Session Mode
+* “Start Session” should connect to /sessions/:id/live
+* Data structure should support:
+
+  * compliance status
+  * session status
+  * lightweight patient context
+
+Goal:
+Transform the dashboard from a passive overview into an active execution tool that helps practitioners stay on track throughout the day and complete sessions properly in real time.
