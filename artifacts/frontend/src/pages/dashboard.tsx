@@ -1,343 +1,839 @@
-import React, { useState } from "react";
+import { useMemo } from "react";
+import { Link } from "wouter";
+import { format, isToday, isBefore, startOfDay, parseISO } from "date-fns";
 import {
-  Calendar,
-  DollarSign,
-  Search,
-  Bell,
+  useGetSessions,
+  useGetParticipants,
+  useGetDashboardStats,
+} from "@workspace/api-client-react";
+import type { Session, Participant } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import {
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Play,
+  Eye,
+  RotateCcw,
+  FileText,
+  ArrowRight,
   Users,
-  Settings,
-  LogOut,
-  LayoutGrid,
+  UploadCloud,
+  Package,
+  ClipboardList,
+  ShieldCheck,
+  ChevronRight,
+  Calendar,
+  Loader2,
+  UserCircle2,
 } from "lucide-react";
 
-/* =========================
-   TYPES
-========================= */
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-type TabType = "dashboard" | "clients" | "schedule" | "billing" | "settings";
+const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 
-type Compliance = {
-  notes: boolean;
-  goals: boolean;
-  claimReady: boolean;
-};
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
-type Session = {
-  id: number;
-  time: string;
-  patient: string;
-  type: string;
-  room: string;
-  status: "completed" | "next" | "pending";
-  compliance: Compliance;
-};
-
-type Client = {
-  id: number;
-  name: string;
-  dob: string;
-  phone: string;
-  status: string;
-};
-
-type NavBtnProps = {
-  icon: React.ReactNode;
-  label: string;
-  activeTab: TabType;
-  setActiveTab: (tab: TabType) => void;
-};
-
-/* =========================
-   COMPONENT
-========================= */
-
-export default function PractitionerDashboard() {
-  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
-
-  /* =========================
-     DATA
-  ========================= */
-
-  const todaysAppointments: Session[] = [
-    {
-      id: 1,
-      time: "09:00 AM",
-      patient: "Sarah Jenkins",
-      type: "Initial Consultation",
-      room: "Telehealth",
-      status: "completed",
-      compliance: { notes: true, goals: true, claimReady: true },
-    },
-    {
-      id: 2,
-      time: "11:00 AM",
-      patient: "Mark Davis",
-      type: "Follow-up / Therapy",
-      room: "Clinic A",
-      status: "next",
-      compliance: { notes: false, goals: false, claimReady: false },
-    },
-    {
-      id: 3,
-      time: "01:30 PM",
-      patient: "Emily Robinson",
-      type: "Equipment Assessment",
-      room: "Home Visit",
-      status: "pending",
-      compliance: { notes: false, goals: false, claimReady: false },
-    },
+function avatarColor(name: string): string {
+  const colors = [
+    "bg-violet-100 text-violet-700",
+    "bg-blue-100 text-blue-700",
+    "bg-emerald-100 text-emerald-700",
+    "bg-amber-100 text-amber-700",
+    "bg-rose-100 text-rose-700",
+    "bg-teal-100 text-teal-700",
+    "bg-indigo-100 text-indigo-700",
   ];
+  let hash = 0;
+  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % colors.length;
+  return colors[hash];
+}
 
-  const allClients: Client[] = [
-    {
-      id: 1,
-      name: "Sarah Jenkins",
-      dob: "12/05/1982",
-      phone: "0412 345 678",
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "Mark Davis",
-      dob: "22/09/1975",
-      phone: "0423 456 789",
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Emily Robinson",
-      dob: "14/02/1990",
-      phone: "0434 567 890",
-      status: "Active",
-    },
-  ];
+type ComplianceLevel = "compliant" | "at_risk" | "non_compliant" | "pending";
 
-  /* =========================
-     LOGIC
-  ========================= */
+function getComplianceLevel(session: Session): ComplianceLevel {
+  if (session.status !== "completed") return "pending";
+  const score = session.compliance_score ?? 0;
+  if (score >= 85) return "compliant";
+  if (score >= 60) return "at_risk";
+  return "non_compliant";
+}
 
-  const nextSession = todaysAppointments.find((s) => s.status === "next");
+interface TrafficLight {
+  notes: boolean | null;
+  goals: boolean | null;
+  claim: boolean | null;
+}
 
-  const incompleteSessions = todaysAppointments.filter(
-    (s) => !s.compliance.claimReady,
+function getTrafficLight(session: Session): TrafficLight {
+  const hasNotes = !!(session.notes && session.notes.trim().length > 10);
+  const hasGoals =
+    Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0;
+  const score = session.compliance_score;
+  const claimReady =
+    session.status === "completed" && score !== null && score !== undefined
+      ? score >= 70
+      : session.status === "completed"
+      ? false
+      : null;
+  return { notes: hasNotes, goals: hasGoals, claim: claimReady };
+}
+
+function TrafficDot({ value }: { value: boolean | null }) {
+  if (value === null)
+    return <span className="h-2.5 w-2.5 rounded-full bg-slate-200 inline-block" />;
+  return (
+    <span
+      className={cn(
+        "h-2.5 w-2.5 rounded-full inline-block",
+        value ? "bg-emerald-500" : "bg-red-400",
+      )}
+    />
   );
+}
 
-  /* =========================
-     UI
-  ========================= */
+// ---------------------------------------------------------------------------
+// Donut chart (pure SVG)
+// ---------------------------------------------------------------------------
+
+function DonutChart({
+  compliant,
+  atRisk,
+  nonCompliant,
+}: {
+  compliant: number;
+  atRisk: number;
+  nonCompliant: number;
+}) {
+  const total = compliant + atRisk + nonCompliant || 1;
+  const pct = compliant / total;
+  const size = 120;
+  const r = 44;
+  const cx = 60;
+  const cy = 60;
+  const circ = 2 * Math.PI * r;
+
+  // Three arcs for the donut
+  function arc(
+    value: number,
+    offset: number,
+    color: string,
+    key: string,
+  ) {
+    const frac = value / total;
+    const dash = frac * circ;
+    const gap = circ - dash;
+    return (
+      <circle
+        key={key}
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="14"
+        strokeDasharray={`${dash} ${gap}`}
+        strokeDashoffset={-offset * circ}
+        transform={`rotate(-90 ${cx} ${cy})`}
+        strokeLinecap="butt"
+      />
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex text-slate-900">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r p-6 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="bg-indigo-600 text-white p-2 rounded-lg font-bold">
-              PM
-            </div>
-            <span className="font-bold">PMS System</span>
-          </div>
-
-          <nav className="space-y-2">
-            <NavBtn
-              icon={<LayoutGrid />}
-              label="dashboard"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <NavBtn
-              icon={<Users />}
-              label="clients"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <NavBtn
-              icon={<Calendar />}
-              label="schedule"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <NavBtn
-              icon={<DollarSign />}
-              label="billing"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-            <NavBtn
-              icon={<Settings />}
-              label="settings"
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-          </nav>
-        </div>
-
-        <div className="border-t pt-4 flex justify-between items-center">
-          <div>
-            <p className="text-xs font-semibold">John Doe</p>
-            <p className="text-[10px] text-slate-500">Occupational Therapist</p>
-          </div>
-          <LogOut className="w-4 h-4 text-slate-400" />
-        </div>
-      </aside>
-
-      {/* Main */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white border-b px-8 py-4 flex justify-between">
-          <div className="relative">
-            <Search className="absolute left-3 top-2 w-4 h-4 text-slate-400" />
-            <input
-              className="pl-9 pr-4 py-2 bg-slate-100 rounded-lg text-sm"
-              placeholder="Search..."
-            />
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <Bell className="w-5 h-5 text-slate-500" />
-            <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm">
-              + Add
-            </button>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="p-8">
-          {activeTab === "dashboard" && (
-            <div className="max-w-5xl mx-auto space-y-6">
-              {/* ⚠ Incomplete */}
-              {incompleteSessions.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-sm font-semibold text-amber-700">
-                  ⚠ {incompleteSessions.length} sessions need completion before
-                  claims
-                </div>
-              )}
-
-              {/* 🔵 Next Session */}
-              {nextSession && (
-                <div className="bg-indigo-600 text-white p-6 rounded-xl flex justify-between items-center">
-                  <div>
-                    <p className="text-xs opacity-80">Next Session</p>
-                    <h2 className="text-xl font-bold">{nextSession.patient}</h2>
-                    <p className="text-sm opacity-80">
-                      {nextSession.time} • {nextSession.type}
-                    </p>
-                  </div>
-
-                  <button className="bg-white text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold">
-                    Start Session
-                  </button>
-                </div>
-              )}
-
-              {/* 📅 Sessions */}
-              <div className="bg-white p-6 rounded-xl border">
-                <h2 className="font-bold mb-4">Today’s Sessions</h2>
-
-                {todaysAppointments.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex justify-between p-4 border rounded-xl mb-3 hover:bg-slate-50"
-                  >
-                    {/* Left */}
-                    <div>
-                      <p className="text-xs text-slate-500">{s.time}</p>
-                      <p className="font-bold text-slate-800">{s.patient}</p>
-                      <p className="text-xs text-slate-400">
-                        {s.type} • {s.room}
-                      </p>
-
-                      <div className="flex space-x-2 text-[10px] mt-1">
-                        <span
-                          className={
-                            s.compliance.notes
-                              ? "text-green-600"
-                              : "text-red-500"
-                          }
-                        >
-                          Notes
-                        </span>
-                        <span
-                          className={
-                            s.compliance.goals
-                              ? "text-green-600"
-                              : "text-red-500"
-                          }
-                        >
-                          Goals
-                        </span>
-                        <span
-                          className={
-                            s.compliance.claimReady
-                              ? "text-green-600"
-                              : "text-amber-500"
-                          }
-                        >
-                          Claim
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Right */}
-                    <div className="flex items-center space-x-2">
-                      {s.status === "completed" && (
-                        <span className="text-green-600 text-xs font-bold">
-                          ✔ Done
-                        </span>
-                      )}
-
-                      {s.status === "next" && (
-                        <button className="bg-indigo-600 text-white px-3 py-1 text-xs rounded">
-                          Start
-                        </button>
-                      )}
-
-                      {!s.compliance.claimReady && (
-                        <button className="bg-amber-100 text-amber-700 px-2 py-1 text-xs rounded font-semibold">
-                          Fix
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "clients" && (
-            <div className="bg-white p-6 rounded-xl border max-w-4xl mx-auto">
-              <h2 className="font-bold mb-4">Clients</h2>
-
-              {allClients.map((c) => (
-                <div key={c.id} className="border-b py-3">
-                  <p className="font-medium">{c.name}</p>
-                  <p className="text-xs text-slate-400">{c.phone}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+    <div className="relative flex items-center justify-center">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="14" />
+        {arc(compliant, 0, "#22c55e", "c")}
+        {arc(atRisk, compliant / total, "#f59e0b", "a")}
+        {arc(nonCompliant, (compliant + atRisk) / total, "#ef4444", "n")}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold text-slate-800">
+          {total > 0 ? Math.round(pct * 100) : "--"}%
+        </span>
+        <span className="text-[10px] text-slate-500 font-medium">Compliant</span>
       </div>
     </div>
   );
 }
 
-/* =========================
-   NAV BUTTON
-========================= */
+// ---------------------------------------------------------------------------
+// Status badge
+// ---------------------------------------------------------------------------
 
-function NavBtn({ icon, label, activeTab, setActiveTab }: NavBtnProps) {
-  const tab = label as TabType;
+function SessionStatusBadge({ session }: { session: Session }) {
+  if (session.status === "completed")
+    return (
+      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-medium text-xs gap-1 border">
+        <CheckCircle2 className="h-3 w-3" /> Completed
+      </Badge>
+    );
+  if (session.status === "in_progress")
+    return (
+      <Badge className="bg-blue-50 text-blue-700 border-blue-200 font-medium text-xs gap-1 border">
+        <Clock className="h-3 w-3" /> In Progress
+      </Badge>
+    );
+  return (
+    <Badge className="bg-slate-100 text-slate-600 border-slate-200 font-medium text-xs gap-1 border">
+      <Calendar className="h-3 w-3" /> Upcoming
+    </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+export default function Dashboard() {
+  const { data: sessions = [], isLoading: sessionsLoading } = useGetSessions(
+    { limit: 200 },
+  );
+  const { data: participants = [] } = useGetParticipants();
+  const { data: stats } = useGetDashboardStats();
+
+  // Participant name lookup
+  const participantMap = useMemo<Record<string, Participant>>(() => {
+    const m: Record<string, Participant> = {};
+    for (const p of participants) m[p.id] = p;
+    return m;
+  }, [participants]);
+
+  function participantName(session: Session): string {
+    return (
+      session.participants?.full_name ??
+      participantMap[session.participant_id]?.full_name ??
+      "Unknown Participant"
+    );
+  }
+
+  function participantNdis(session: Session): string {
+    return (
+      session.participants?.ndis_number ??
+      participantMap[session.participant_id]?.ndis_number ??
+      ""
+    );
+  }
+
+  // Today's sessions, sorted by time (session_date asc, then created_at)
+  const todaySessions = useMemo<Session[]>(() => {
+    return [...sessions]
+      .filter((s) => s.session_date === TODAY_STR)
+      .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
+  }, [sessions]);
+
+  // Past incomplete sessions
+  const pastIncomplete = useMemo<Session[]>(() => {
+    const todayStart = startOfDay(new Date());
+    return sessions.filter((s) => {
+      const d = parseISO(s.session_date);
+      return isBefore(d, todayStart) && s.status !== "completed";
+    });
+  }, [sessions]);
+
+  // Low compliance completed sessions
+  const lowCompliance = useMemo<Session[]>(() => {
+    return sessions.filter(
+      (s) =>
+        s.status === "completed" &&
+        s.compliance_score !== null &&
+        s.compliance_score !== undefined &&
+        s.compliance_score < 60,
+    );
+  }, [sessions]);
+
+  const atRiskItems = [...pastIncomplete, ...lowCompliance].slice(0, 5);
+
+  // Readiness summary
+  const readyCount = todaySessions.filter(
+    (s) => s.status === "completed" && (s.compliance_score ?? 0) >= 70,
+  ).length;
+  const needsAttentionCount = todaySessions.filter(
+    (s) =>
+      s.status !== "completed" ||
+      (s.compliance_score !== null &&
+        s.compliance_score !== undefined &&
+        s.compliance_score < 70),
+  ).length;
+
+  // Next session to action (first draft or in_progress today)
+  const nextSession = useMemo<Session | null>(
+    () =>
+      todaySessions.find(
+        (s) => s.status === "draft" || s.status === "in_progress",
+      ) ?? null,
+    [todaySessions],
+  );
+
+  // Compliance donut data (all sessions)
+  const compliantCount = sessions.filter(
+    (s) => s.status === "completed" && (s.compliance_score ?? 0) >= 85,
+  ).length;
+  const atRiskCount = sessions.filter(
+    (s) =>
+      s.status === "completed" &&
+      (s.compliance_score ?? 0) >= 60 &&
+      (s.compliance_score ?? 0) < 85,
+  ).length;
+  const nonCompliantCount = sessions.filter(
+    (s) =>
+      s.status === "completed" &&
+      (s.compliance_score ?? 0) < 60,
+  ).length;
+
+  const hour = new Date().getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
-    <button
-      onClick={() => setActiveTab(tab)}
-      className={`flex items-center space-x-2 w-full px-3 py-2 rounded-lg capitalize ${
-        activeTab === tab ? "bg-indigo-100 text-indigo-600" : "text-slate-600"
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
+    <div className="space-y-6">
+      {/* ── Page title ── */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">{greeting}, Dr. Provider!</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Here's what's happening today.</p>
+      </div>
+
+      {/* ── Today Readiness Bar ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <ReadinessCard
+          label="Sessions today"
+          value={todaySessions.length}
+          icon={<Calendar className="h-4 w-4 text-primary" />}
+          color="bg-primary/5"
+        />
+        <ReadinessCard
+          label="Ready"
+          value={readyCount}
+          icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+          color="bg-emerald-50"
+          textColor="text-emerald-700"
+        />
+        <ReadinessCard
+          label="Need attention"
+          value={needsAttentionCount}
+          icon={<AlertCircle className="h-4 w-4 text-amber-600" />}
+          color="bg-amber-50"
+          textColor="text-amber-700"
+        />
+        <ReadinessCard
+          label="Incomplete (prior days)"
+          value={pastIncomplete.length}
+          icon={<Clock className="h-4 w-4 text-red-500" />}
+          color={pastIncomplete.length > 0 ? "bg-red-50" : "bg-slate-50"}
+          textColor={pastIncomplete.length > 0 ? "text-red-700" : "text-slate-500"}
+        />
+      </div>
+
+      {/* ── Two-column layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── Left: main content ── */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Next Patient Focus Panel */}
+          {sessionsLoading ? (
+            <div className="rounded-2xl border bg-white p-8 flex items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : nextSession ? (
+            <NextPatientPanel
+              session={nextSession}
+              name={participantName(nextSession)}
+              ndis={participantNdis(nextSession)}
+            />
+          ) : todaySessions.length === 0 ? (
+            <EmptyToday />
+          ) : (
+            <AllDonePanel />
+          )}
+
+          {/* Session Timeline */}
+          {todaySessions.length > 0 && (
+            <section className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b flex items-center justify-between">
+                <h2 className="font-semibold text-slate-900">Today's Sessions</h2>
+                <Link href="/sessions">
+                  <span className="text-xs text-primary font-medium flex items-center gap-1 hover:underline cursor-pointer">
+                    View all <ChevronRight className="h-3.5 w-3.5" />
+                  </span>
+                </Link>
+              </div>
+              <div className="divide-y">
+                {sessionsLoading ? (
+                  <div className="p-8 flex justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                  </div>
+                ) : (
+                  todaySessions.map((s) => (
+                    <SessionRow
+                      key={s.id}
+                      session={s}
+                      name={participantName(s)}
+                      ndis={participantNdis(s)}
+                    />
+                  ))
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Incomplete / At Risk Panel */}
+          {atRiskItems.length > 0 && (
+            <section className="rounded-2xl border border-red-100 bg-red-50/50 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-red-100 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <h2 className="font-semibold text-red-800">Incomplete / At Risk</h2>
+                <span className="ml-auto text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                  {atRiskItems.length} item{atRiskItems.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="divide-y divide-red-100">
+                {atRiskItems.map((s) => (
+                  <AtRiskRow
+                    key={s.id}
+                    session={s}
+                    name={participantName(s)}
+                    isPast={pastIncomplete.includes(s)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* ── Right: sidebar ── */}
+        <div className="space-y-5">
+          {/* Compliance Overview */}
+          <section className="rounded-2xl border bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-slate-900">Compliance Overview</h2>
+              <span className="text-xs text-slate-400">All sessions</span>
+            </div>
+
+            <div className="flex justify-center mb-4">
+              <DonutChart
+                compliant={compliantCount}
+                atRisk={atRiskCount}
+                nonCompliant={nonCompliantCount}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <LegendRow
+                color="bg-emerald-500"
+                label="Compliant"
+                count={compliantCount}
+              />
+              <LegendRow
+                color="bg-amber-400"
+                label="Needs Attention"
+                count={atRiskCount}
+              />
+              <LegendRow
+                color="bg-red-400"
+                label="At Risk"
+                count={nonCompliantCount}
+              />
+            </div>
+
+            {stats && (
+              <div className="mt-4 pt-4 border-t text-xs text-slate-500">
+                <span className="text-slate-700 font-medium">{stats.sessions_this_week}</span> sessions this week
+                {stats.notes_missing > 0 && (
+                  <span className="ml-2 text-amber-600 font-medium">
+                    · {stats.notes_missing} notes missing
+                  </span>
+                )}
+              </div>
+            )}
+
+            <Link href="/compliance">
+              <button className="mt-4 w-full text-xs text-primary font-medium flex items-center justify-center gap-1 hover:underline">
+                View compliance dashboard <ArrowRight className="h-3 w-3" />
+              </button>
+            </Link>
+          </section>
+
+          {/* Quick Actions */}
+          <section className="rounded-2xl border bg-white overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b">
+              <h2 className="font-semibold text-slate-900">Quick Actions</h2>
+            </div>
+            <div className="divide-y">
+              <QuickAction
+                icon={<UploadCloud className="h-4 w-4 text-blue-500" />}
+                label="Upload Document / Evidence"
+                sub="Add photos, files or signed documents"
+                href="/sessions"
+              />
+              <QuickAction
+                icon={<Package className="h-4 w-4 text-emerald-500" />}
+                label="Generate Audit Pack"
+                sub="Export all records for a participant"
+                href="/compliance"
+              />
+              <QuickAction
+                icon={<ClipboardList className="h-4 w-4 text-amber-500" />}
+                label="Check Incomplete Records"
+                sub="See records that need your attention"
+                href="/sessions"
+              />
+              <QuickAction
+                icon={<ShieldCheck className="h-4 w-4 text-violet-500" />}
+                label="Provider Payment Assurance"
+                sub="Stay compliant and get paid on time"
+                href="/compliance"
+              />
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function ReadinessCard({
+  label,
+  value,
+  icon,
+  color,
+  textColor = "text-slate-800",
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  textColor?: string;
+}) {
+  return (
+    <div className={cn("rounded-xl border bg-white p-4 shadow-sm flex items-center gap-3")}>
+      <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", color)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className={cn("text-xl font-bold leading-none", textColor)}>{value}</p>
+        <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function NextPatientPanel({
+  session,
+  name,
+  ndis,
+}: {
+  session: Session;
+  name: string;
+  ndis: string;
+}) {
+  const isResume = session.status === "in_progress";
+  const initials = getInitials(name);
+  const colorCls = avatarColor(name);
+  const light = getTrafficLight(session);
+
+  return (
+    <section className="rounded-2xl border bg-gradient-to-br from-primary to-primary/80 text-white p-6 shadow-md">
+      <p className="text-xs font-semibold uppercase tracking-wider opacity-70 mb-3">
+        {isResume ? "Resume Session" : "Next Patient"}
+      </p>
+
+      <div className="flex items-start gap-4">
+        <div
+          className={cn(
+            "h-14 w-14 rounded-full flex items-center justify-center text-lg font-bold shrink-0 border-2 border-white/30",
+            "bg-white/20 text-white",
+          )}
+        >
+          {initials}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-bold leading-tight">{name}</h2>
+          {ndis && (
+            <p className="text-sm opacity-70 mt-0.5">NDIS: {ndis}</p>
+          )}
+          <div className="flex items-center gap-3 mt-2">
+            <Badge className="bg-white/20 border-white/30 text-white border text-xs">
+              {session.session_type}
+            </Badge>
+            <span className="text-xs opacity-70">
+              {format(parseISO(session.session_date), "d MMM yyyy")}
+              {" · "}
+              {session.duration_minutes} min planned
+            </span>
+          </div>
+
+          {/* Compliance traffic lights */}
+          <div className="flex items-center gap-3 mt-3">
+            <TrafficItem label="Notes" value={light.notes} light />
+            <TrafficItem label="Goals" value={light.goals} light />
+            <TrafficItem label="Claim" value={light.claim} light />
+          </div>
+        </div>
+      </div>
+
+      {session.notes && (
+        <div className="mt-4 p-3 rounded-xl bg-white/10 text-sm opacity-90">
+          <span className="font-medium opacity-70 text-xs uppercase tracking-wide block mb-1">
+            Pre-session note
+          </span>
+          <p className="line-clamp-2">{session.notes}</p>
+        </div>
+      )}
+
+      <div className="flex gap-3 mt-5">
+        <Link href={`/sessions/${session.id}/live`}>
+          <Button className="gap-2 bg-white text-primary font-semibold hover:bg-white/90 shadow-sm">
+            <Play className="h-4 w-4" />
+            {isResume ? "Resume Session" : "Start Session"}
+          </Button>
+        </Link>
+        <Link href={`/sessions/${session.id}`}>
+          <Button
+            variant="outline"
+            className="gap-2 border-white/40 bg-white/10 text-white hover:bg-white/20"
+          >
+            <Eye className="h-4 w-4" /> View Summary
+          </Button>
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function TrafficItem({
+  label,
+  value,
+  light = false,
+}: {
+  label: string;
+  value: boolean | null;
+  light?: boolean;
+}) {
+  const dot =
+    value === null
+      ? "bg-white/30"
+      : value
+      ? "bg-emerald-400"
+      : "bg-red-400";
+  return (
+    <span className="flex items-center gap-1.5 text-xs opacity-90">
+      <span className={cn("h-2 w-2 rounded-full", dot)} />
+      {label}
+    </span>
+  );
+}
+
+function SessionRow({
+  session,
+  name,
+  ndis,
+}: {
+  session: Session;
+  name: string;
+  ndis: string;
+}) {
+  const initials = getInitials(name);
+  const colorCls = avatarColor(name);
+  const light = getTrafficLight(session);
+  const isResume = session.status === "in_progress";
+
+  return (
+    <div className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors">
+      {/* Avatar */}
+      <div
+        className={cn(
+          "h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+          colorCls,
+        )}
+      >
+        {initials}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-medium text-slate-900 text-sm truncate">{name}</p>
+          {ndis && (
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              NDIS: {ndis}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <span className="text-xs text-slate-500">{session.session_type}</span>
+          <span className="text-slate-300 text-xs">·</span>
+          <span className="text-xs text-slate-400">
+            {session.duration_minutes} min
+          </span>
+          {/* Traffic lights */}
+          <span className="flex items-center gap-1.5 ml-1">
+            <TrafficDot value={light.notes} />
+            <TrafficDot value={light.goals} />
+            <TrafficDot value={light.claim} />
+          </span>
+        </div>
+      </div>
+
+      {/* Status + action */}
+      <div className="flex items-center gap-2 shrink-0">
+        <SessionStatusBadge session={session} />
+        {session.status === "completed" ? (
+          <Link href={`/sessions/${session.id}`}>
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1 px-3">
+              <Eye className="h-3.5 w-3.5" /> View
+            </Button>
+          </Link>
+        ) : (
+          <Link href={`/sessions/${session.id}/live`}>
+            <Button size="sm" className="h-8 text-xs gap-1 px-3">
+              {isResume ? (
+                <>
+                  <RotateCcw className="h-3.5 w-3.5" /> Resume
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5" /> Start
+                </>
+              )}
+            </Button>
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AtRiskRow({
+  session,
+  name,
+  isPast,
+}: {
+  session: Session;
+  name: string;
+  isPast: boolean;
+}) {
+  const issue = isPast
+    ? "Session not completed — missing documentation"
+    : `Low compliance score: ${Math.round(session.compliance_score ?? 0)}%`;
+
+  return (
+    <div className="flex items-center gap-4 px-5 py-3.5">
+      <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-800 truncate">{name}</p>
+        <p className="text-xs text-slate-500 mt-0.5">
+          <span className="text-slate-400">
+            {format(parseISO(session.session_date), "d MMM")} ·{" "}
+            {session.session_type}
+          </span>{" "}
+          — {issue}
+        </p>
+      </div>
+      <Link href={`/sessions/${session.id}${isPast ? "/live" : ""}`}>
+        <Button
+          size="sm"
+          variant="destructive"
+          className="h-8 text-xs px-3 gap-1 shrink-0"
+        >
+          Fix Now <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function LegendRow({
+  color,
+  label,
+  count,
+}: {
+  color: string;
+  label: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", color)} />
+      <span className="text-sm text-slate-600 flex-1">{label}</span>
+      <span className="text-sm font-semibold text-slate-800">{count}</span>
+    </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  sub,
+  href,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  href: string;
+}) {
+  return (
+    <Link href={href}>
+      <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
+        <div className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+          {icon}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-slate-800">{label}</p>
+          <p className="text-xs text-slate-500 truncate">{sub}</p>
+        </div>
+        <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+      </div>
+    </Link>
+  );
+}
+
+function EmptyToday() {
+  return (
+    <div className="rounded-2xl border bg-white p-8 text-center shadow-sm">
+      <Calendar className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+      <p className="font-medium text-slate-700">No sessions scheduled for today</p>
+      <p className="text-sm text-slate-500 mt-1 mb-4">
+        Start by creating a new session for a participant.
+      </p>
+      <Link href="/sessions/new">
+        <Button size="sm" className="gap-2">
+          <Play className="h-4 w-4" /> Start New Session
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function AllDonePanel() {
+  return (
+    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-6 flex items-center gap-4 shadow-sm">
+      <CheckCircle2 className="h-10 w-10 text-emerald-500 shrink-0" />
+      <div>
+        <p className="font-semibold text-emerald-800">All sessions completed!</p>
+        <p className="text-sm text-emerald-700 mt-0.5">
+          Great work — all of today's sessions are done.
+        </p>
+      </div>
+    </div>
   );
 }
