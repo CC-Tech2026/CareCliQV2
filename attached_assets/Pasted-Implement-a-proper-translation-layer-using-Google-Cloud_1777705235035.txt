@@ -1,0 +1,118 @@
+Implement a proper translation layer using Google Cloud Translation API (v2 or v3).
+
+Requirements:
+Create a reusable service: translationService.ts
+Use environment variable:
+GOOGLE_CLOUD_TRANSLATION_API_KEY
+
+Build a function:
+
+translateText(text: string, targetLanguage: string): Promise<string>
+Batch support for multiple voice notes
+Auto-detect source language enabled
+Cache translations in-memory during session to avoid repeated API calls
+Integration points:
+Voice notes in Live Session
+Clinical dictation text (recordingText)
+Summary modal (editable clinical notes should optionally show translated view)
+Translation Mode behavior:
+When translationMode = true:
+Auto-translate all new voice notes on save
+Show translated version under original text
+Store both text and translated fields
+2. Improve Live Session UX (Professional Workspace Upgrade)
+
+Refactor the Live Session UI/logic to feel like a clinical-grade documentation workspace, not a casual app.
+
+A. Remove informal UI patterns
+REMOVE all emojis from:
+Quick Actions
+Status indicators
+Buttons
+Replace with:
+Clean labels
+Icons only where necessary (Lucide icons only)
+B. Improve Workflow Structure
+
+Reorganize session into a 3-phase workflow model:
+
+Phase 1: Start Session
+Minimal view
+Show:
+Start button
+Session type
+Participant info
+No distractions
+Phase 2: Active Documentation Mode
+Enable:
+Quick Actions (now renamed “Activity Log”)
+Voice dictation
+Goal tracking
+Evidence upload
+Add a subtle “Recording Active” status bar
+Improve spacing and grouping into:
+Clinical Observations
+Activities
+Evidence
+Goals
+Phase 3: Review & Approve
+Full-screen review modal already exists → refine it:
+Cleaner typography
+Section dividers
+Sticky “Approve & Save” bar
+Inline editing only (no clutter)
+C. Improve Quick Actions System
+
+Rename:
+
+“Quick Actions” → “Activity Log”
+
+Enhance:
+
+Group activities into categories:
+Personal Care
+Community Access
+Therapy Support
+Communication
+Daily Living
+
+Remove emojis completely.
+Replace with:
+
+Text labels + optional small Lucide icon
+
+Add:
+
+Search/filter activities (optional but preferred)
+D. Clinical-Grade Improvements
+
+Add:
+
+Auto-timestamp formatting consistency (ISO internally, human readable UI)
+
+Better audit-style activity log format:
+
+[HH:mm] Activity Type - Logged
+Ensure all logs are immutable once saved (no silent edits)
+E. Translation UX Improvements
+Add toggle:
+“Original / Translated / Both”
+Ensure translations do NOT overwrite original text
+Add loading state for translation per note
+Handle API failure gracefully (fallback to original text only)
+F. Code Quality Requirements
+Keep TypeScript strict
+No UI emojis anywhere
+Separate concerns:
+services/translationService.ts
+hooks/useTranslation.ts
+Ensure no blocking UI calls during session recording
+Goal
+
+Transform this Live Session page into a professional-grade clinical documentation workspace with:
+
+Real-time structured documentation
+Reliable translation system (Google Cloud)
+Clean audit-style logs
+Minimal, distraction-free UI
+Workflow aligned with real practitioners (NDIS / allied health / support workers)
