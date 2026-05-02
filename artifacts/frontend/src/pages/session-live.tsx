@@ -7,8 +7,6 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
 import { SmartTextarea } from "@/components/SmartInput";
 import {
   Dialog,
@@ -35,27 +33,36 @@ import {
   Plus,
   Clock,
   Loader2,
-  Zap,
   Globe,
-  ChevronRight,
   Shield,
   X,
-  ClockIcon,
   Sparkles,
+  User,
+  MapPin,
+  HeartPulse,
+  MessageSquare,
+  Users,
+  Home,
+  Utensils,
+  BookOpen,
+  ShieldCheck,
+  Radio,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { translateToEnglish } from "@/services/translationService";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
+type TranslationView = "original" | "translated" | "both";
+
 interface ActivityLog {
   id: string;
   type: string;
   timestamp: Date;
-  icon: string;
 }
 
 interface VoiceNote {
@@ -63,6 +70,8 @@ interface VoiceNote {
   text: string;
   timestamp: Date;
   translated?: string;
+  detectedLanguage?: string;
+  isTranslating?: boolean;
 }
 
 interface GoalItem {
@@ -83,51 +92,112 @@ interface LiveSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Quick-activity definitions
+// Activity category definitions (no emojis — Lucide icons only)
 // ---------------------------------------------------------------------------
 
-const QUICK_ACTIVITIES = [
+type LucideIcon = React.ComponentType<{ className?: string }>;
+
+interface ActivityDef {
+  type: string;
+  icon: LucideIcon;
+  color: string;
+}
+
+interface ActivityCategory {
+  label: string;
+  icon: LucideIcon;
+  items: ActivityDef[];
+}
+
+const ACTIVITY_CATEGORIES: ActivityCategory[] = [
   {
-    type: "Community Access",
-    emoji: "🏘️",
-    color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100",
+    label: "Personal Care",
+    icon: User,
+    items: [
+      {
+        type: "Personal Care",
+        icon: User,
+        color: "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100",
+      },
+    ],
   },
   {
-    type: "Mobility Support",
-    emoji: "🚶",
-    color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
+    label: "Community Access",
+    icon: MapPin,
+    items: [
+      {
+        type: "Community Access",
+        icon: MapPin,
+        color:
+          "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100",
+      },
+    ],
   },
   {
-    type: "Meal Preparation",
-    emoji: "🍽️",
-    color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100",
+    label: "Therapy Support",
+    icon: HeartPulse,
+    items: [
+      {
+        type: "Mobility Support",
+        icon: Activity,
+        color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
+      },
+      {
+        type: "Behaviour Support",
+        icon: ShieldCheck,
+        color:
+          "bg-green-50 text-green-700 border-green-200 hover:bg-green-100",
+      },
+    ],
   },
   {
-    type: "Behaviour Support",
-    emoji: "🧠",
-    color: "bg-green-50 text-green-700 border-green-200 hover:bg-green-100",
+    label: "Communication",
+    icon: MessageSquare,
+    items: [
+      {
+        type: "Communication",
+        icon: MessageSquare,
+        color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100",
+      },
+      {
+        type: "Social Skills",
+        icon: Users,
+        color:
+          "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
+      },
+    ],
   },
   {
-    type: "Communication",
-    emoji: "💬",
-    color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100",
-  },
-  {
-    type: "Life Skills",
-    emoji: "⭐",
-    color: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100",
-  },
-  {
-    type: "Personal Care",
-    emoji: "🧼",
-    color: "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100",
-  },
-  {
-    type: "Social Skills",
-    emoji: "🤝",
-    color: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
+    label: "Daily Living",
+    icon: Home,
+    items: [
+      {
+        type: "Meal Preparation",
+        icon: Utensils,
+        color:
+          "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100",
+      },
+      {
+        type: "Life Skills",
+        icon: BookOpen,
+        color:
+          "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100",
+      },
+    ],
   },
 ];
+
+function findActivityDef(type: string): ActivityDef | undefined {
+  for (const cat of ACTIVITY_CATEGORIES) {
+    const found = cat.items.find((a) => a.type === type);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Goal status config
+// ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
   not_started: {
@@ -164,7 +234,7 @@ function formatDuration(totalSeconds: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Auto-summary generator (local heuristic)
+// Clinical summary builder
 // ---------------------------------------------------------------------------
 
 function buildSummary(
@@ -178,10 +248,9 @@ function buildSummary(
   goals: GoalItem[],
   images: string[],
   elapsed: number,
-  translationMode: boolean,
+  translationView: TranslationView,
 ): LiveSummary {
   const durationMins = Math.max(Math.round(elapsed / 60), 1);
-
   const activityTypes = [...new Set(activities.map((a) => a.type))];
   const achievedGoals = goals.filter((g) => g.status === "achieved");
   const inProgressGoals = goals.filter((g) => g.status === "in_progress");
@@ -190,12 +259,16 @@ function buildSummary(
     .filter((g) => g.status !== "not_started")
     .map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`);
 
-  const voiceTexts = voiceNotes.map((v) => v.text).filter(Boolean);
+  const voiceTexts = voiceNotes
+    .map((v) =>
+      translationView !== "original" && v.translated ? v.translated : v.text,
+    )
+    .filter(Boolean);
+
   const activitiesFormatted = activities.map(
     (a) => `${a.type} (${format(a.timestamp, "HH:mm")})`,
   );
 
-  // Build clinical notes as a professional structured paragraph
   const lines: string[] = [];
   lines.push(`SESSION RECORD`);
   lines.push(`Type: ${session.session_type} | Duration: ${durationMins} minutes`);
@@ -208,10 +281,14 @@ function buildSummary(
   }
 
   if (achievedGoals.length > 0) {
-    lines.push(`Goals achieved during this session: ${achievedGoals.map((g) => g.name).join(", ")}.`);
+    lines.push(
+      `Goals achieved during this session: ${achievedGoals.map((g) => g.name).join(", ")}.`,
+    );
   }
   if (inProgressGoals.length > 0) {
-    lines.push(`Goals actively worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`);
+    lines.push(
+      `Goals actively worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`,
+    );
   }
 
   if (voiceTexts.length > 0) {
@@ -222,7 +299,9 @@ function buildSummary(
 
   if (images.length > 0) {
     lines.push("");
-    lines.push(`Evidence: ${images.length} photo${images.length > 1 ? "s" : ""} captured as session evidence.`);
+    lines.push(
+      `Evidence: ${images.length} photo${images.length > 1 ? "s" : ""} captured as session evidence.`,
+    );
   }
 
   if (session.notes) {
@@ -230,24 +309,23 @@ function buildSummary(
     lines.push(`Pre-session notes: ${session.notes}`);
   }
 
+  if (translationView !== "original") {
+    lines.unshift("[Observations translated to English]\n");
+  }
+
   let clinicalNotes = lines.join("\n");
 
-  // Compliance score: rules-based heuristic (0–100)
   let score = 0;
-  if (clinicalNotes.length > 30) score += 30;  // clinical notes exist
-  if (activities.length > 0) score += 30;       // at least one activity logged
-  if (durationMins > 0) score += 20;            // duration is valid
-  if (session.session_type) score += 20;         // session type exists
+  if (clinicalNotes.length > 30) score += 30;
+  if (activities.length > 0) score += 30;
+  if (durationMins > 0) score += 20;
+  if (session.session_type) score += 20;
   score = Math.min(score, 100);
 
   const evidenceSummary =
     images.length > 0
       ? `${images.length} photo${images.length > 1 ? "s" : ""} captured during session`
       : "No photos captured";
-
-  if (translationMode) {
-    clinicalNotes = `[Translation: English]\n\n${clinicalNotes}`;
-  }
 
   return {
     clinicalNotes,
@@ -287,13 +365,15 @@ export default function SessionLive() {
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [images, setImages] = useState<string[]>([]);
-  const [translationMode, setTranslationMode] = useState(false);
+  const [translationView, setTranslationView] =
+    useState<TranslationView>("original");
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
+  const stopIntentRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Summary / approval modal
@@ -324,16 +404,8 @@ export default function SessionLive() {
         );
       } else {
         setGoals([
-          {
-            id: "1",
-            name: "Improve independent mobility",
-            status: "not_started",
-          },
-          {
-            id: "2",
-            name: "Community participation skills",
-            status: "not_started",
-          },
+          { id: "1", name: "Improve independent mobility", status: "not_started" },
+          { id: "2", name: "Community participation skills", status: "not_started" },
           { id: "3", name: "Daily living tasks", status: "not_started" },
         ]);
       }
@@ -357,13 +429,16 @@ export default function SessionLive() {
     if (!session || isActive || reminderDismissed) return;
     reminderTimerRef.current = setTimeout(() => {
       toast({
-        title: "📋 Session scheduled",
+        title: "Session scheduled",
         description: `Ready to begin: ${session.session_type}. Click "Start" to begin recording.`,
         duration: 30000,
         action: (
           <ToastAction
             altText="Start Session"
-            onClick={() => { handleStart(); setReminderDismissed(true); }}
+            onClick={() => {
+              handleStart();
+              setReminderDismissed(true);
+            }}
             className="bg-emerald-600 text-white hover:bg-emerald-700 border-0 text-xs font-semibold"
           >
             Start Session
@@ -372,8 +447,10 @@ export default function SessionLive() {
       });
       setReminderDismissed(true);
     }, 5000);
-    return () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isActive]);
 
   const handleStart = () => {
@@ -382,15 +459,18 @@ export default function SessionLive() {
     setElapsed(0);
     setReminderDismissed(true);
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
-    toast({
-      title: "Session started",
-      description: "Timer is running. Start documenting.",
-    });
+    toast({ title: "Session started", description: "Timer is running. Start documenting." });
   };
 
   const handleStop = useCallback(async () => {
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
+    // Stop any active recording cleanly
+    if (isRecording) {
+      stopIntentRef.current = true;
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+    }
     setSummaryLoading(true);
     setShowSummary(true);
 
@@ -405,33 +485,24 @@ export default function SessionLive() {
       goals,
       images,
       elapsed,
-      translationMode,
+      translationView,
     );
     setSummary(localSummary);
     setEditableNotes(localSummary.clinicalNotes);
     setSummaryLoading(false);
-    // NOTE: Data is NOT saved here — practitioner must approve in the summary modal.
-  }, [session, activities, voiceNotes, goals, images, elapsed, translationMode]);
+  }, [session, activities, voiceNotes, goals, images, elapsed, translationView, isRecording]);
 
-  // Approve & save — two-step pipeline:
-  //   1. PATCH session with actual captured data (duration, notes, transcription)
-  //   2. Then trigger save-with-ai to run compliance + AI narrative on the saved data
+  // Approve & save — two-step pipeline
   const handleApproveAndSave = useCallback(async () => {
-    if (!id) {
-      navigate("/sessions");
-      return;
-    }
+    if (!id) { navigate("/sessions"); return; }
     setIsSaving(true);
 
-    // Build transcription from all voice notes
     const transcription = voiceNotes
-      .map((n) => `[${n.timestamp}] ${n.text}`)
+      .map((n) => `[${format(n.timestamp, "HH:mm")}] ${n.text}${n.translated && n.translated !== n.text ? ` [EN: ${n.translated}]` : ""}`)
       .join("\n");
 
-    // Actual elapsed duration in whole minutes (minimum 1)
     const durationMinutes = Math.max(1, Math.round(elapsed / 60));
 
-    // Step 1 — persist the captured session data
     updateSession.mutate(
       {
         sessionId: id,
@@ -444,17 +515,13 @@ export default function SessionLive() {
       },
       {
         onSuccess: () => {
-          // Step 2 — run AI compliance + clinical notes generation
           saveWithAI.mutate(
             { sessionId: id },
             {
               onSuccess: () => {
                 setIsSaving(false);
                 setShowSummary(false);
-                toast({
-                  title: "Session saved",
-                  description: "Notes approved and clinical record updated.",
-                });
+                toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
                 navigate(`/sessions/${id}`);
               },
               onError: (err) => {
@@ -473,11 +540,7 @@ export default function SessionLive() {
         onError: (err) => {
           setIsSaving(false);
           console.error("update-session failed", err);
-          toast({
-            title: "Save failed",
-            description: "Could not save session data. Please try again.",
-            variant: "destructive",
-          });
+          toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
         },
       },
     );
@@ -491,11 +554,12 @@ export default function SessionLive() {
     setActivities([]);
     setVoiceNotes([]);
     setImages([]);
-    setGoals(prev => prev.map(g => ({ ...g, status: "not_started" as const })));
+    setGoals((prev) => prev.map((g) => ({ ...g, status: "not_started" as const })));
     setShowRestartConfirm(false);
     setShowSummary(false);
     setSummary(null);
     setEditableNotes("");
+    stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
     toast({ title: "Session restarted", description: "All logs cleared. Ready to begin." });
@@ -505,15 +569,9 @@ export default function SessionLive() {
   const startRecording = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = window as any;
-    const SpeechRecognitionClass =
-      w.SpeechRecognition || w.webkitSpeechRecognition;
-
+    const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
-      toast({
-        title: "Voice not supported",
-        description: "Use Chrome for voice notes.",
-        variant: "destructive",
-      });
+      toast({ title: "Voice not supported", description: "Use Chrome for voice notes.", variant: "destructive" });
       return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -537,29 +595,56 @@ export default function SessionLive() {
     };
 
     recognition.onend = () => {
-      if (isRecording) recognition.start();
+      if (!stopIntentRef.current) recognition.start();
     };
 
+    stopIntentRef.current = false;
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
+    stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
-    if (recordingText.trim()) {
-      const note: VoiceNote = {
-        id: Date.now().toString(),
-        text: recordingText.trim(),
-        timestamp: new Date(),
-        translated: translationMode
-          ? `[EN] ${recordingText.trim()}`
-          : undefined,
-      };
-      setVoiceNotes((prev) => [note, ...prev]);
-      setRecordingText("");
-      toast({ title: "Voice note saved" });
+    const text = recordingText.trim();
+    if (!text) return;
+
+    const noteId = Date.now().toString();
+    const needsTranslation = translationView !== "original";
+
+    const note: VoiceNote = {
+      id: noteId,
+      text,
+      timestamp: new Date(),
+      isTranslating: needsTranslation,
+    };
+    setVoiceNotes((prev) => [note, ...prev]);
+    setRecordingText("");
+    toast({ title: "Voice note saved" });
+
+    if (needsTranslation) {
+      try {
+        const result = await translateToEnglish(text);
+        setVoiceNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId
+              ? {
+                  ...n,
+                  isTranslating: false,
+                  translated: result.translated,
+                  detectedLanguage: result.detectedLanguage,
+                }
+              : n,
+          ),
+        );
+      } catch {
+        setVoiceNotes((prev) =>
+          prev.map((n) => (n.id === noteId ? { ...n, isTranslating: false } : n)),
+        );
+        toast({ title: "Translation unavailable", description: "Original text preserved.", variant: "destructive" });
+      }
     }
   };
 
@@ -569,12 +654,7 @@ export default function SessionLive() {
       return;
     }
     setActivities((prev) => [
-      {
-        id: Date.now().toString(),
-        type,
-        timestamp: new Date(),
-        icon: QUICK_ACTIVITIES.find((a) => a.type === type)?.emoji ?? "•",
-      },
+      { id: Date.now().toString(), type, timestamp: new Date() },
       ...prev,
     ]);
   };
@@ -600,10 +680,7 @@ export default function SessionLive() {
     if (!file) return;
     const url = URL.createObjectURL(file);
     setImages((prev) => [...prev, url]);
-    toast({
-      title: "Photo captured",
-      description: format(new Date(), "HH:mm:ss"),
-    });
+    toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
   };
 
   if (isLoading) {
@@ -633,6 +710,7 @@ export default function SessionLive() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+
       {/* ── Top control bar ── */}
       <div
         className={cn(
@@ -647,20 +725,34 @@ export default function SessionLive() {
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
+
           <div className="text-center">
             <h1 className="text-white font-bold text-sm tracking-tight leading-tight">
               {participantName}
             </h1>
             <p className="text-white/60 text-xs">{session.session_type}</p>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Globe className="h-4 w-4 text-white/50" />
-              <Switch
-                checked={translationMode}
-                onCheckedChange={setTranslationMode}
-                className="data-[state=checked]:bg-emerald-500"
-              />
+
+          <div className="flex items-center gap-3">
+            {/* Translation 3-way toggle */}
+            <div className="flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-white/50 shrink-0" />
+              <div className="flex rounded-md border border-white/20 overflow-hidden">
+                {(["original", "translated", "both"] as TranslationView[]).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setTranslationView(v)}
+                    className={cn(
+                      "px-2 py-1 text-[10px] font-medium transition-colors leading-none",
+                      translationView === v
+                        ? "bg-white/20 text-white"
+                        : "text-white/40 hover:text-white/70",
+                    )}
+                  >
+                    {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
@@ -670,7 +762,9 @@ export default function SessionLive() {
                   variant="ghost"
                   className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10 font-medium px-3 py-1.5 h-auto text-xs"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
                   Restart
                 </Button>
               )}
@@ -695,7 +789,7 @@ export default function SessionLive() {
           </div>
         </div>
 
-        {/* Timer status bar */}
+        {/* Timer + status bar */}
         <div className="max-w-7xl mx-auto flex items-center justify-between px-4 pb-3 text-xs text-white/70 flex-wrap gap-2 border-t border-white/10 pt-2.5">
           <div className="flex items-center gap-3">
             <span className="font-mono text-2xl font-bold text-white tracking-tight leading-none">
@@ -715,12 +809,16 @@ export default function SessionLive() {
                   isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-400",
                 )}
               />
-              {isActive
-                ? "In Progress"
-                : elapsed > 0
-                  ? "Paused"
-                  : "Ready to Start"}
+              {isActive ? "In Progress" : elapsed > 0 ? "Paused" : "Ready to Start"}
             </span>
+
+            {/* Recording active pill */}
+            {isRecording && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
+                <Radio className="h-2.5 w-2.5 animate-pulse" />
+                Recording Active
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
@@ -730,39 +828,57 @@ export default function SessionLive() {
             </div>
             {session.session_date && (
               <div className="flex items-center gap-1">
-                <ClockIcon className="h-3.5 w-3.5 text-white/40" />
-                <span>
-                  {format(new Date(session.session_date), "MMM d, yyyy")}
-                </span>
+                <Clock className="h-3.5 w-3.5 text-white/40" />
+                <span>{format(new Date(session.session_date), "MMM d, yyyy")}</span>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Dashboard Split Grid ── */}
+      {/* ── Main Grid ── */}
       <div className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column: Client Summary & Goals */}
+
+        {/* Left column: Activity Log + Goals + Insights */}
         <div className="space-y-6 md:col-span-1">
-          {/* Quick Actions */}
+
+          {/* Activity Log (was: Quick Actions) */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
             <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-indigo-500" /> Quick Actions
+              <Activity className="h-4 w-4 text-indigo-500" /> Activity Log
             </h2>
-            <div className="grid grid-cols-2 gap-2">
-              {QUICK_ACTIVITIES.map((a) => (
-                <button
-                  key={a.type}
-                  onClick={() => logActivity(a.type)}
-                  className={cn(
-                    "flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium text-left transition-all active:scale-95 shadow-sm",
-                    a.color,
-                  )}
-                >
-                  <span className="text-base">{a.emoji}</span>
-                  <span className="truncate leading-none">{a.type}</span>
-                </button>
-              ))}
+            <div className="space-y-3">
+              {ACTIVITY_CATEGORIES.map((cat) => {
+                const CatIcon = cat.icon;
+                return (
+                  <div key={cat.label}>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <CatIcon className="h-3 w-3 text-slate-400" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                        {cat.label}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {cat.items.map((a) => {
+                        const AIcon = a.icon;
+                        return (
+                          <button
+                            key={a.type}
+                            onClick={() => logActivity(a.type)}
+                            className={cn(
+                              "flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium text-left transition-all active:scale-95 shadow-sm",
+                              a.color,
+                            )}
+                          >
+                            <AIcon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate leading-none">{a.type}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -814,7 +930,6 @@ export default function SessionLive() {
                   </button>
                 );
               })}
-
               {goals.length === 0 && (
                 <div className="text-center py-6 text-slate-400 border border-dashed border-slate-100 rounded-xl">
                   <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
@@ -824,31 +939,31 @@ export default function SessionLive() {
             </div>
           </div>
 
-          {/* AI Clinical Note Helper */}
+          {/* Summary Insights */}
           <div className="bg-indigo-950/10 border border-indigo-500/10 rounded-2xl p-5 shadow-sm">
             <h2 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2 flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-indigo-600" /> Summary Insights
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Activities performed: {activities.length ? activities.length : 0}{" "}
-              items logged.
+              {activities.length} activities logged. {voiceNotes.length} voice note{voiceNotes.length !== 1 ? "s" : ""} captured.
             </p>
             <Button
               onClick={() => {
                 const localSummary = buildSummary(
                   {
-                    session_type: session?.session_type ?? "Session",
-                    duration_minutes: session?.duration_minutes ?? 0,
-                    notes: session?.notes,
+                    session_type: session.session_type ?? "Session",
+                    duration_minutes: session.duration_minutes ?? 0,
+                    notes: session.notes,
                   },
                   activities,
                   voiceNotes,
                   goals,
                   images,
                   elapsed,
-                  translationMode,
+                  translationView,
                 );
                 setSummary(localSummary);
+                setEditableNotes(localSummary.clinicalNotes);
                 setShowSummary(true);
               }}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded-xl h-auto"
@@ -858,16 +973,15 @@ export default function SessionLive() {
           </div>
         </div>
 
-        {/* Right Column: Unified Timeline & Evidence Section */}
+        {/* Right column: Dictation + Audit log + Evidence */}
         <div className="md:col-span-2 space-y-6">
-          {/* Clinical Dictation Section */}
+
+          {/* Clinical Dictation */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Mic className="h-4 w-4 text-indigo-500" /> Clinical Dictation &
-                Observations
+                <Mic className="h-4 w-4 text-indigo-500" /> Clinical Dictation &amp; Observations
               </h2>
-
               <button
                 onClick={isRecording ? stopRecording : startRecording}
                 className={cn(
@@ -878,13 +992,9 @@ export default function SessionLive() {
                 )}
               >
                 {isRecording ? (
-                  <>
-                    <MicOff className="h-3.5 w-3.5" /> Stop Recording
-                  </>
+                  <><MicOff className="h-3.5 w-3.5" /> Stop Recording</>
                 ) : (
-                  <>
-                    <Mic className="h-3.5 w-3.5" /> Start Dictation
-                  </>
+                  <><Mic className="h-3.5 w-3.5" /> Start Dictation</>
                 )}
               </button>
             </div>
@@ -894,13 +1004,16 @@ export default function SessionLive() {
                 <div className="flex items-center gap-2 mb-2">
                   <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                   <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">
-                    Listening…
+                    Listening
                   </span>
+                  {translationView !== "original" && (
+                    <span className="text-[10px] text-emerald-600 font-medium ml-auto">
+                      Auto-translate on save
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-slate-700 italic">
-                  {recordingText
-                    ? `"${recordingText}"`
-                    : "Dictation initialized. Speak clearly..."}
+                  {recordingText ? `"${recordingText}"` : "Dictation initialized. Speak clearly…"}
                 </p>
               </div>
             )}
@@ -912,27 +1025,54 @@ export default function SessionLive() {
                   className="bg-slate-50 rounded-xl border border-slate-100 p-4"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="font-mono text-[10px] text-slate-400">
                       {format(note.timestamp, "HH:mm:ss")}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className="text-[9px] text-indigo-500 border-indigo-200 bg-indigo-50/50"
-                    >
-                      Dictated
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      {note.detectedLanguage && note.detectedLanguage !== "en" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] text-slate-500 border-slate-200 bg-slate-50"
+                        >
+                          {note.detectedLanguage.toUpperCase()}
+                        </Badge>
+                      )}
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] text-indigo-500 border-indigo-200 bg-indigo-50/50"
+                      >
+                        Dictated
+                      </Badge>
+                    </div>
                   </div>
-                  <p className="text-sm text-slate-700 leading-relaxed">
-                    {note.text}
-                  </p>
-                  {translationMode && note.translated && (
-                    <div className="mt-2 pt-2 border-t border-slate-200/50">
-                      <p className="text-[10px] text-emerald-600 font-bold mb-0.5">
-                        Translation (EN)
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {note.translated}
-                      </p>
+
+                  {/* Original text */}
+                  {(translationView === "original" || translationView === "both") && (
+                    <p className="text-sm text-slate-700 leading-relaxed">{note.text}</p>
+                  )}
+
+                  {/* Translation */}
+                  {translationView !== "original" && (
+                    <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-slate-200/50")}>
+                      {note.isTranslating ? (
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 py-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Translating…
+                        </div>
+                      ) : note.translated ? (
+                        <>
+                          {translationView === "both" && (
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 mb-0.5">
+                              EN
+                            </p>
+                          )}
+                          <p className="text-sm text-slate-700 leading-relaxed">
+                            {note.translated}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">Translation unavailable</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -941,44 +1081,41 @@ export default function SessionLive() {
               {voiceNotes.length === 0 && !isRecording && (
                 <div className="text-center py-10 text-slate-300 border border-dashed border-slate-200 rounded-xl">
                   <FileText className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs text-slate-400 font-medium">
-                    No dictations added yet
-                  </p>
-                  <p className="text-[10px] text-slate-400">
-                    Record observations during the session.
-                  </p>
+                  <p className="text-xs text-slate-400 font-medium">No dictations added yet</p>
+                  <p className="text-[10px] text-slate-400">Record observations during the session.</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Timeline and Photo Log */}
+          {/* Audit log + Evidence */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* Activities — audit-style log */}
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
               <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Activity className="h-4 w-4 text-indigo-500" /> Activities
-                Logged
+                <Activity className="h-4 w-4 text-indigo-500" /> Activities Logged
               </h2>
-              <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-                {activities.map((a) => (
-                  <div
-                    key={a.id}
-                    className="flex items-center justify-between bg-slate-50/70 border border-slate-100 rounded-xl p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{a.icon}</span>
-                      <div>
-                        <p className="text-xs font-semibold text-slate-800">
-                          {a.type}
-                        </p>
-                        <p className="text-[10px] text-slate-400">
-                          {format(a.timestamp, "HH:mm")}
-                        </p>
-                      </div>
+              <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
+                {activities.map((a) => {
+                  const def = findActivityDef(a.type);
+                  const AIcon = def?.icon ?? Activity;
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-3 bg-slate-50/70 border border-slate-100 rounded-lg px-3 py-2"
+                    >
+                      <span className="font-mono text-[10px] text-slate-400 shrink-0 w-10">
+                        [{format(a.timestamp, "HH:mm")}]
+                      </span>
+                      <AIcon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      <span className="text-xs font-medium text-slate-800 flex-1 truncate">
+                        {a.type}
+                      </span>
+                      <span className="text-[10px] text-slate-400 shrink-0">Logged</span>
                     </div>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  </div>
-                ))}
+                  );
+                })}
                 {activities.length === 0 && (
                   <div className="text-center py-10 text-slate-400">
                     <p className="text-xs">No activities logged yet.</p>
@@ -987,13 +1124,12 @@ export default function SessionLive() {
               </div>
             </div>
 
-            {/* Session Evidence Section */}
+            {/* Session Evidence */}
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4 text-indigo-500" /> Session
-                    Evidence
+                    <ImageIcon className="h-4 w-4 text-indigo-500" /> Session Evidence
                   </h2>
                   <button
                     onClick={() => fileInputRef.current?.click()}
@@ -1019,22 +1155,12 @@ export default function SessionLive() {
                         key={i}
                         className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm"
                       >
-                        <img
-                          src={url}
-                          alt={`Evidence ${i + 1}`}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-0.5">
-                          <p className="text-[9px] text-white font-mono">
-                            {format(new Date(), "HH:mm:ss")}
-                          </p>
+                          <p className="text-[9px] text-white font-mono">{format(new Date(), "HH:mm:ss")}</p>
                         </div>
                         <button
-                          onClick={() =>
-                            setImages((prev) =>
-                              prev.filter((_, idx) => idx !== i),
-                            )
-                          }
+                          onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
                           className="absolute top-1.5 right-1.5 bg-black/60 rounded-full p-1 hover:bg-black/80"
                         >
                           <X className="h-3 w-3 text-white" />
@@ -1048,19 +1174,14 @@ export default function SessionLive() {
                     className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50/20 cursor-pointer transition-all h-[150px] justify-center"
                   >
                     <Camera className="h-6 w-6 text-slate-300" />
-                    <p className="text-[10px] font-semibold">
-                      Capture Evidence
-                    </p>
-                    <p className="text-[9px] text-slate-400">
-                      Timestamped photos
-                    </p>
+                    <p className="text-[10px] font-semibold">Capture Evidence</p>
+                    <p className="text-[9px] text-slate-400">Timestamped photos</p>
                   </div>
                 )}
               </div>
-
               {images.length > 0 && (
                 <div className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-100 text-center">
-                  Total {images.length} photo(s) captured.
+                  {images.length} photo{images.length !== 1 ? "s" : ""} captured.
                 </div>
               )}
             </div>
@@ -1069,13 +1190,15 @@ export default function SessionLive() {
       </div>
 
       {/* ── Practitioner Approval & Save Modal ── */}
-      <Dialog open={showSummary} onOpenChange={open => { if (!isSaving) setShowSummary(open); }}>
+      <Dialog
+        open={showSummary}
+        onOpenChange={(open) => { if (!isSaving) setShowSummary(open); }}
+      >
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-100 shadow-2xl p-0 bg-white">
-          {/* Header */}
           <div className="px-6 pt-6 pb-4 border-b border-slate-100">
             <DialogTitle className="text-slate-900 font-bold text-lg flex items-center gap-2">
               <Shield className="h-5 w-5 text-indigo-500" />
-              Review & Approve Session Notes
+              Review &amp; Approve Session Notes
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 mt-1">
               Review the auto-generated notes below. Edit anything before approving — data is only saved on your explicit approval.
@@ -1100,7 +1223,16 @@ export default function SessionLive() {
                   <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Activities</p>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                  <p className={cn("text-xl font-bold", summary.complianceScore >= 80 ? "text-emerald-600" : summary.complianceScore >= 60 ? "text-amber-600" : "text-red-600")}>
+                  <p
+                    className={cn(
+                      "text-xl font-bold",
+                      summary.complianceScore >= 80
+                        ? "text-emerald-600"
+                        : summary.complianceScore >= 60
+                          ? "text-amber-600"
+                          : "text-red-600",
+                    )}
+                  >
                     {summary.complianceScore}%
                   </p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Compliance</p>
@@ -1111,7 +1243,9 @@ export default function SessionLive() {
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                   <FileText className="h-3.5 w-3.5" /> Clinical Notes
-                  <span className="text-indigo-500 font-normal normal-case tracking-normal">— editable · mic available</span>
+                  <span className="text-indigo-500 font-normal normal-case tracking-normal">
+                    — editable · mic available
+                  </span>
                 </label>
                 <SmartTextarea
                   value={editableNotes}
@@ -1124,10 +1258,17 @@ export default function SessionLive() {
               {/* Activities */}
               {summary.activities.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Activities Logged</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                    Activities Logged
+                  </label>
                   <div className="flex flex-wrap gap-1.5">
                     {summary.activities.map((a, i) => (
-                      <span key={i} className="text-[10px] px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full font-medium">{a}</span>
+                      <span
+                        key={i}
+                        className="text-[10px] px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full font-medium"
+                      >
+                        {a}
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -1136,30 +1277,35 @@ export default function SessionLive() {
               {/* Goal progress */}
               {summary.goalProgress.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Goal Progress</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                    Goal Progress
+                  </label>
                   <div className="space-y-1">
                     {summary.goalProgress.map((g, i) => (
                       <div key={i} className="flex items-center gap-2 text-xs text-slate-700">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />{g}
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        {g}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Evidence + voice note count */}
+              {/* Evidence + voice count */}
               <div className="flex gap-3">
                 <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />{summary.evidenceSummary}
+                  <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                  {summary.evidenceSummary}
                 </div>
                 {summary.voiceNoteCount > 0 && (
                   <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
-                    <Mic className="h-4 w-4 text-slate-400 shrink-0" />{summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""} captured
+                    <Mic className="h-4 w-4 text-slate-400 shrink-0" />
+                    {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""} captured
                   </div>
                 )}
               </div>
 
-              {/* Approval actions */}
+              {/* Approval actions — sticky feel */}
               <div className="flex gap-3 pt-2 border-t border-slate-100">
                 <Button
                   variant="outline"
@@ -1174,7 +1320,11 @@ export default function SessionLive() {
                   disabled={isSaving}
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2"
                 >
-                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Shield className="h-4 w-4" />
+                  )}
                   {isSaving ? "Saving…" : "Approve & Save"}
                 </Button>
               </div>
@@ -1183,12 +1333,12 @@ export default function SessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Restart Session Confirmation Modal ── */}
+      {/* ── Restart Confirmation Modal ── */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <svg className="h-5 w-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <AlertCircle className="h-5 w-5 text-amber-500" />
               Restart Session?
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 leading-relaxed mt-2">
@@ -1201,7 +1351,10 @@ export default function SessionLive() {
             <Button variant="outline" onClick={() => setShowRestartConfirm(false)} className="flex-1">
               Keep Going
             </Button>
-            <Button onClick={handleConfirmRestart} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold">
+            <Button
+              onClick={handleConfirmRestart}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+            >
               Yes, Restart
             </Button>
           </div>

@@ -1,8 +1,34 @@
 from openai import OpenAI
 from ..core.config import settings
 import json
+import os
+import urllib.request
+import urllib.error
 
 client = OpenAI(api_key=settings.openai_api_key)
+
+_LIBRETRANSLATE_URL = os.getenv("LIBRETRANSLATE_URL", "").rstrip("/")
+
+
+def _libretranslate_sync(text: str) -> dict:
+    """Try LibreTranslate via LIBRETRANSLATE_URL env var. Raises on failure."""
+    if not _LIBRETRANSLATE_URL:
+        raise RuntimeError("LIBRETRANSLATE_URL not configured")
+    payload = json.dumps({"q": text, "source": "auto", "target": "en", "format": "text"}).encode()
+    req = urllib.request.Request(
+        f"{_LIBRETRANSLATE_URL}/translate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        data = json.loads(resp.read())
+    detected = data.get("detectedLanguage", {}).get("language", "")
+    return {
+        "translated": data.get("translatedText", text),
+        "detected_language": detected or "en",
+        "confidence": data.get("detectedLanguage", {}).get("confidence", 0.9),
+    }
 
 
 async def generate_patient_summary(participant_data: dict, sessions: list) -> str:
@@ -169,9 +195,15 @@ Write in plain English. Be specific about what information is actually missing. 
 
 
 async def translate_to_english(text: str, source_language: str = "auto") -> dict:
-    """Translate text into fluent English, preserving clinical meaning."""
+    """Translate text into fluent English. Tries LibreTranslate first, falls back to OpenAI."""
     if not text or not text.strip():
         return {"translated": "", "detected_language": "en", "confidence": 1.0}
+
+    # Try LibreTranslate if configured
+    try:
+        return _libretranslate_sync(text)
+    except Exception:
+        pass  # fall through to OpenAI
 
     lang_hint = f"The source language is {source_language}." if source_language != "auto" else "Detect the source language automatically."
 
