@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
-from typing import Optional
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request
+from typing import Optional, List, Any
 from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
@@ -62,7 +62,17 @@ async def update_session(session_id: str, body: SessionUpdate):
 
 
 @router.post("/{session_id}/save-with-ai")
-async def save_session_with_ai(session_id: str):
+async def save_session_with_ai(session_id: str, request: Request):
+    # Accept optional JSON body with structured_notes and activity_log for audit persistence
+    body_structured_notes = None
+    body_activity_log = None
+    try:
+        body = await request.json()
+        body_structured_notes = body.get("structured_notes")
+        body_activity_log = body.get("activity_log")
+    except Exception:
+        pass  # No body or non-JSON body — proceed without clinical data
+
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -102,12 +112,21 @@ async def save_session_with_ai(session_id: str):
         else:
             compliance_status = "non_compliant"
 
+        # Merge structured clinical data from the frontend (persisted in ai_insights
+        # to avoid requiring new DB columns at this stage)
+        clinical_data: dict = {}
+        if body_structured_notes and isinstance(body_structured_notes, dict):
+            clinical_data["structured_notes"] = body_structured_notes
+        if body_activity_log and isinstance(body_activity_log, list):
+            clinical_data["activity_log"] = body_activity_log
+
         updates = {
             "compliance_score": blended_score,
             "compliance_notes": ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps({
                 **insights,
+                **clinical_data,
                 "rules_result": rules_result,
                 "compliance_status": compliance_status,
             }),
@@ -214,6 +233,10 @@ async def get_session_audit(session_id: str):
     compliance_score = session.get("compliance_score")
     compliance_status = session.get("compliance_status") or ai_insights.get("compliance_status") or "draft"
 
+    # Structured clinical data persisted during save-with-ai
+    structured_notes = ai_insights.get("structured_notes") or {}
+    activity_log = ai_insights.get("activity_log") or []
+
     # Build failed rules list for compliance issues
     rules_result = ai_insights.get("rules_result") or {}
     failed_rules = rules_result.get("failed_rules") or []
@@ -231,19 +254,40 @@ async def get_session_audit(session_id: str):
         f"Status      : {session.get('status') or 'draft'} | Generated: {generated_at}",
         separator,
         "",
-        "CLINICAL NOTES:",
-        notes_text if notes_text else "(No clinical notes recorded)",
-        "",
     ]
+
+    # Include structured note sections if available, else fall back to combined notes
+    if structured_notes:
+        for label, key in [
+            ("ACTIVITIES PERFORMED", "activitiesPerformed"),
+            ("OUTCOMES", "outcomes"),
+            ("PARTICIPANT RESPONSE", "participantResponse"),
+            ("PROGRESS TOWARD GOALS", "progressTowardGoals"),
+        ]:
+            val = (structured_notes.get(key) or "").strip()
+            if val:
+                formatted_lines.extend([f"{label}:", val, ""])
+    else:
+        formatted_lines.extend(["CLINICAL NOTES:", notes_text if notes_text else "(No clinical notes recorded)", ""])
+
+    if activity_log:
+        formatted_lines.append("ACTIVITY LOG (timestamped):")
+        for entry in activity_log if isinstance(activity_log, list) else []:
+            if isinstance(entry, dict):
+                formatted_lines.append(f"  [{entry.get('timestamp', '?')}] {entry.get('label') or entry.get('type', '?')}")
+        formatted_lines.append("")
+
     if goals:
         formatted_lines.append("GOALS ADDRESSED:")
         goal_list = goals if isinstance(goals, list) else []
         for g in goal_list:
             formatted_lines.append(f"  \u2022 {g}")
         formatted_lines.append("")
+
     if photos:
-        formatted_lines.append(f"EVIDENCE: {len(photos)} photo(s) attached")
+        formatted_lines.append(f"PHOTO EVIDENCE: {len(photos)} photo(s) attached")
         formatted_lines.append("")
+
     if compliance_score is not None:
         formatted_lines.append(f"COMPLIANCE SCORE: {compliance_score:.0f}% \u2014 {compliance_status.upper()}")
         if compliance_issues:
@@ -251,6 +295,7 @@ async def get_session_audit(session_id: str):
             for issue in compliance_issues:
                 formatted_lines.append(f"  \u2022 {issue}")
         formatted_lines.append("")
+
     formatted_lines.extend([
         separator,
         'NDIS Principle: "If it cannot be evidenced, it cannot be claimed."',
@@ -274,12 +319,15 @@ async def get_session_audit(session_id: str):
             "full_name": participant_name,
             "ndis_number": participant_ndis,
         },
+        "structured_notes": structured_notes,
         "clinical_notes": notes_text,
+        "activity_log": activity_log if isinstance(activity_log, list) else [],
         "transcription": session.get("transcription"),
         "goals_addressed": goals if isinstance(goals, list) else [],
         "evidence_summary": {
             "photo_count": len(photos),
             "has_transcription": bool(session.get("transcription")),
+            "has_activity_log": bool(activity_log),
         },
         "photo_urls": photos if isinstance(photos, list) else [],
         "compliance": {

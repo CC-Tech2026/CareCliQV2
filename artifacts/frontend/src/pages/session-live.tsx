@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useGetSession,
-  useSaveSessionWithAI,
   useUpdateSession,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -358,7 +357,6 @@ export default function SessionLive() {
   const { data: session, isLoading } = useGetSession(id as string, {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
-  const saveWithAI = useSaveSessionWithAI();
   const updateSession = useUpdateSession();
 
   // Session state
@@ -482,11 +480,20 @@ export default function SessionLive() {
   };
 
   const handleStop = useCallback(async () => {
-    // Pre-modal blocking: timer must be running before ending
+    // Pre-modal blocking: timer must have been started
     if (elapsed === 0) {
       toast({
         title: "Session not started",
         description: "Click \"Start\" to begin the timer before ending the session.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Pre-modal blocking: nothing to document — no activities AND no existing notes
+    if (activities.length === 0 && !session?.notes?.trim()) {
+      toast({
+        title: "Nothing documented",
+        description: "Log at least one activity or add notes before ending the session.",
         variant: "destructive",
       });
       return;
@@ -557,6 +564,13 @@ export default function SessionLive() {
 
     const durationMinutes = Math.max(1, Math.round(elapsed / 60));
 
+    // Build the timestamped activity log for audit persistence
+    const activityLog = activities.map((a) => ({
+      timestamp: format(a.timestamp, "HH:mm"),
+      type: a.type,
+      label: (a as unknown as Record<string, unknown>).label as string | undefined ?? a.type,
+    }));
+
     updateSession.mutate(
       {
         sessionId: id,
@@ -568,28 +582,32 @@ export default function SessionLive() {
         },
       },
       {
-        onSuccess: () => {
-          saveWithAI.mutate(
-            { sessionId: id },
-            {
-              onSuccess: () => {
-                setIsSaving(false);
-                setShowSummary(false);
-                toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
-                navigate(`/sessions/${id}`);
-              },
-              onError: (err) => {
-                setIsSaving(false);
-                console.error("save-with-ai failed", err);
-                toast({
-                  title: "AI analysis failed",
-                  description: "Session data was saved but AI notes could not be generated.",
-                  variant: "destructive",
-                });
-                navigate(`/sessions/${id}`);
-              },
-            },
-          );
+        onSuccess: async () => {
+          try {
+            // Pass structured notes and activity log to save-with-ai for audit persistence
+            const res = await fetch(`/api/sessions/${id}/save-with-ai`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                structured_notes: structuredNotes,
+                activity_log: activityLog,
+              }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            setIsSaving(false);
+            setShowSummary(false);
+            toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
+            navigate(`/sessions/${id}`);
+          } catch (err) {
+            setIsSaving(false);
+            console.error("save-with-ai failed", err);
+            toast({
+              title: "AI analysis failed",
+              description: "Session data was saved but AI notes could not be generated.",
+              variant: "destructive",
+            });
+            navigate(`/sessions/${id}`);
+          }
         },
         onError: (err) => {
           setIsSaving(false);
@@ -598,7 +616,7 @@ export default function SessionLive() {
         },
       },
     );
-  }, [id, elapsed, editableNotes, voiceNotes, updateSession, saveWithAI, toast, navigate]);
+  }, [id, elapsed, editableNotes, voiceNotes, updateSession, structuredNotes, activities, toast, navigate]);
 
   // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {
@@ -766,7 +784,6 @@ export default function SessionLive() {
     Math.round(elapsed / 60),
     activities.length,
     images.length,
-    voiceNotes.length,
   );
 
   // ---------------------------------------------------------------------------

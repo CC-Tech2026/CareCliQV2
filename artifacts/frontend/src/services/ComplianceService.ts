@@ -17,7 +17,6 @@ export function checkStructuredCompliance(
   durationMinutes: number,
   activitiesCount: number,
   imageCount: number,
-  voiceNoteCount: number,
 ): ComplianceResult {
   const issues: string[] = [];
   let score = 0;
@@ -43,33 +42,36 @@ export function checkStructuredCompliance(
     issues.push("No activities were logged — tap activity buttons during the session to build evidence");
   }
 
-  // +20 structured note filled (at least one field with meaningful content)
+  // +20 at least one structured note field filled (non-empty)
   const anyNoteFilled = [
     notes.activitiesPerformed,
     notes.outcomes,
     notes.participantResponse,
     notes.progressTowardGoals,
-  ].some((f) => f.trim().length >= 20);
+  ].some((f) => f.trim().length > 0);
 
   if (anyNoteFilled) {
     score += 20;
   } else {
-    issues.push("At least one clinical note field must be completed with meaningful content (20+ characters)");
+    issues.push("At least one clinical note field must be completed before this session can be claimed");
   }
 
-  // +20 evidence captured (photos or voice notes)
-  if (imageCount > 0 || voiceNoteCount > 0) {
+  // +20 photo evidence captured (photos only — voice transcription is supporting, not primary evidence)
+  if (imageCount > 0) {
     score += 20;
   } else {
-    issues.push(
-      "No evidence captured — add photos or voice dictation notes to support this claim",
-    );
+    issues.push("No photo evidence captured — add photos to support this NDIS claim");
   }
+
+  // Explicit content gate (separate from score): duration AND (activities OR notes) must both be present
+  const meetsContentGate =
+    durationMinutes > 0 && (activitiesCount > 0 || anyNoteFilled);
 
   return {
     score: Math.min(score, 100),
     issues,
-    blocking: score < 50,
+    // Block if score too low OR content gate not met (prevents participant+duration+photos alone = 60% approval)
+    blocking: score < 50 || !meetsContentGate,
   };
 }
 
