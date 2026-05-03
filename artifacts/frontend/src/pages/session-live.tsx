@@ -394,10 +394,10 @@ export default function SessionLive() {
 
   // Keep editable combined preview in sync with structured fields.
   // Stop syncing once the user manually edits the final clinical record.
+  // Always sync (even to empty string) to avoid stale combined note when fields are cleared.
   useEffect(() => {
     if (hasManuallyEditedNotesRef.current) return;
-    const combined = combineStructuredNotes(structuredNotes);
-    if (combined) setEditableNotes(combined);
+    setEditableNotes(combineStructuredNotes(structuredNotes));
   }, [structuredNotes]);
 
   // Restart confirmation modal
@@ -489,10 +489,51 @@ export default function SessionLive() {
       });
       return;
     }
-    // Pre-modal gate: only block when the session hasn't been timed at all.
-    // The compliance gate on "Approve & Save" enforces the content requirements
-    // (duration > 0 AND activities OR structured notes) — practitioners need the
-    // modal open to fill in structured note fields before that gate is evaluated.
+    // Compute pre-filled structured notes from live session data.
+    // Evaluate the content gate AGAINST these values (not the current empty state)
+    // so that voice-notes-only and activity-based workflows both pass correctly.
+    const activityTypes = [...new Set(activities.map((a) => a.type))];
+    const achievedGoals = goals.filter((g) => g.status === "achieved");
+    const inProgressGoals = goals.filter((g) => g.status === "in_progress");
+    const voiceTexts = voiceNotes
+      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.text))
+      .filter(Boolean);
+
+    const prefilled: StructuredNotes = {
+      activitiesPerformed: activityTypes.length > 0
+        ? activityTypes.join(", ")
+        : activities.map((a) => `${a.type} (${format(a.timestamp, "HH:mm")})`).join("\n"),
+      outcomes: [
+        achievedGoals.length > 0
+          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
+          : "",
+        voiceTexts.length > 0
+          ? `Observations: ${voiceTexts.slice(0, 2).join(" ")}`
+          : "",
+      ].filter(Boolean).join("\n"),
+      participantResponse: "",
+      progressTowardGoals: inProgressGoals.length > 0
+        ? inProgressGoals.map((g) => `${g.name}: In Progress`).join("\n")
+        : goals.filter((g) => g.status !== "not_started").map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`).join("\n"),
+    };
+
+    // Pre-modal gate: block if nothing would populate the review modal.
+    // Uses prefilled values (from activities + voice notes + goals) to determine
+    // whether there is anything to document — aligns with the compliance content gate.
+    const prefilledHasContent = [
+      prefilled.activitiesPerformed,
+      prefilled.outcomes,
+      prefilled.progressTowardGoals,
+    ].some((f) => f.trim().length > 0);
+
+    if (!prefilledHasContent && !session?.notes?.trim()) {
+      toast({
+        title: "Nothing to document yet",
+        description: "Log at least one activity or record a voice note before reviewing the session.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Reset manual-edit flag so the auto-generated notes are shown fresh each time
     hasManuallyEditedNotesRef.current = false;
@@ -522,31 +563,7 @@ export default function SessionLive() {
       translationView,
     );
     setSummary(localSummary);
-
-    // Pre-fill structured note fields from session data
-    const activityTypes = [...new Set(activities.map((a) => a.type))];
-    const achievedGoals = goals.filter((g) => g.status === "achieved");
-    const inProgressGoals = goals.filter((g) => g.status === "in_progress");
-    const voiceTexts = voiceNotes
-      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.text))
-      .filter(Boolean);
-    setStructuredNotes({
-      activitiesPerformed: activityTypes.length > 0
-        ? activityTypes.join(", ")
-        : activities.map((a) => `${a.type} (${format(a.timestamp, "HH:mm")})`).join("\n"),
-      outcomes: [
-        achievedGoals.length > 0
-          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
-          : "",
-        voiceTexts.length > 0
-          ? `Observations: ${voiceTexts.slice(0, 2).join(" ")}`
-          : "",
-      ].filter(Boolean).join("\n"),
-      participantResponse: "",
-      progressTowardGoals: inProgressGoals.length > 0
-        ? inProgressGoals.map((g) => `${g.name}: In Progress`).join("\n")
-        : goals.filter((g) => g.status !== "not_started").map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`).join("\n"),
-    });
+    setStructuredNotes(prefilled);
 
     setSummaryLoading(false);
   }, [session, activities, voiceNotes, goals, images, elapsed, translationView, isRecording]);
