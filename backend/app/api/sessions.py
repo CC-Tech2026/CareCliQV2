@@ -232,13 +232,6 @@ async def get_session_audit(session_id: str):
     structured_notes = ai_insights.get("structured_notes") or {}
     activity_log = ai_insights.get("activity_log") or []
 
-    # Build failed rules list for compliance issues
-    rules_result = ai_insights.get("rules_result") or {}
-    failed_rules = rules_result.get("failed_rules") or []
-    compliance_issues = [
-        r.get("message") or r.get("rule", "Unknown rule") for r in failed_rules if isinstance(r, dict)
-    ]
-
     # Deterministic compliance re-computed from saved data (mirrors the frontend gate)
     has_participant = bool(participant_id)
     duration_minutes_val = session.get("duration_minutes") or 0

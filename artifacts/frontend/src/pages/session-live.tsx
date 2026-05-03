@@ -1042,24 +1042,7 @@ export default function SessionLive() {
               {activities.length} activities logged. {voiceNotes.length} voice note{voiceNotes.length !== 1 ? "s" : ""} captured.
             </p>
             <Button
-              onClick={() => {
-                const localSummary = buildSummary(
-                  {
-                    session_type: session.session_type ?? "Session",
-                    duration_minutes: session.duration_minutes ?? 0,
-                    notes: session.notes,
-                  },
-                  activities,
-                  voiceNotes,
-                  goals,
-                  images,
-                  elapsed,
-                  translationView,
-                );
-                setSummary(localSummary);
-                setEditableNotes(localSummary.clinicalNotes);
-                setShowSummary(true);
-              }}
+              onClick={handleStop}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded-xl h-auto"
             >
               View Clinical Notes
