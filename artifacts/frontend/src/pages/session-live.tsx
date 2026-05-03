@@ -489,6 +489,16 @@ export default function SessionLive() {
       });
       return;
     }
+    // Pre-modal gate: nothing documented at all (no activities, voice notes, or existing notes)
+    if (activities.length === 0 && voiceNotes.length === 0 && !session?.notes?.trim()) {
+      toast({
+        title: "Nothing documented yet",
+        description: "Log at least one activity or record a voice note before reviewing the session.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Reset manual-edit flag so the auto-generated notes are shown fresh each time
     hasManuallyEditedNotesRef.current = false;
 

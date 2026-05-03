@@ -190,7 +190,7 @@ async def save_session_with_ai(session_id: str):
 
 
 @router.get("/{session_id}/audit")
-async def get_session_audit(session_id: str, _user: dict = Depends(get_current_user)):
+async def get_session_audit(session_id: str):
     from datetime import datetime, timezone
     session = await session_service.get_session_by_id(session_id)
     if not session:
@@ -353,16 +353,13 @@ async def get_session_audit(session_id: str, _user: dict = Depends(get_current_u
         },
         "photo_urls": photos if isinstance(photos, list) else [],
         "compliance": {
-            "score": compliance_score,
-            "status": compliance_status,
-            "notes": session.get("compliance_notes"),
-            "issues": compliance_issues,
-            "rules_result": rules_result,
-        },
-        "deterministic_compliance": {
             "score": det_score,
             "blocking": det_blocking,
             "issues": det_issues,
+            "status": "approved" if not det_blocking else "blocked",
+            "ai_blended_score": compliance_score,
+            "ai_status": compliance_status,
+            "ai_notes": session.get("compliance_notes"),
         },
         "ai_insights": {
             "summary": ai_insights.get("summary"),

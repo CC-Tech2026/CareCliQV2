@@ -230,13 +230,13 @@ export default function SessionDetail({ id }: { id?: string }) {
       if (!res.ok) throw new Error("Failed to fetch audit record");
       const data = await res.json();
       const participantName = (data.participant?.full_name || "unknown")
-        .toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-      const date = data.session?.date || new Date().toISOString().slice(0, 10);
+        .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      const date = (data.session?.date || new Date().toISOString().slice(0, 10)).replace(/-/g, "_");
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `audit-${participantName}-${date}.json`;
+      a.download = `audit_${participantName}_${date}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
