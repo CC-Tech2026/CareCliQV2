@@ -774,8 +774,8 @@ export default function SessionLive() {
   // Live compliance for review modal (cheap pure fn — recomputes on every render)
   const liveCompliance = checkStructuredCompliance(
     structuredNotes,
-    !!(session && ((session as unknown as Record<string, unknown>).participant_id ?? (session as unknown as Record<string, unknown>).patient_id)),
-    Math.round(elapsed / 60),
+    !!(session?.participant_id),
+    elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
     activities.length,
     images.length,
   );
