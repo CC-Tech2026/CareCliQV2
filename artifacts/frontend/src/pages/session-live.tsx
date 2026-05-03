@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Circle,
   AlertCircle,
+  AlertTriangle,
   Activity,
   FileText,
   Target,
@@ -36,6 +37,7 @@ import {
   Globe,
   Shield,
   X,
+  XCircle,
   Sparkles,
   User,
   MapPin,
@@ -52,6 +54,11 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { translateToEnglish } from "@/services/translationService";
+import {
+  checkStructuredCompliance,
+  combineStructuredNotes,
+  type StructuredNotes,
+} from "@/services/ComplianceService";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -382,6 +389,12 @@ export default function SessionLive() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [editableNotes, setEditableNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [structuredNotes, setStructuredNotes] = useState<StructuredNotes>({
+    activitiesPerformed: "",
+    outcomes: "",
+    participantResponse: "",
+    progressTowardGoals: "",
+  });
 
   // Restart confirmation modal
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
@@ -489,6 +502,32 @@ export default function SessionLive() {
     );
     setSummary(localSummary);
     setEditableNotes(localSummary.clinicalNotes);
+
+    // Pre-fill structured note fields from session data
+    const activityTypes = [...new Set(activities.map((a) => a.type))];
+    const achievedGoals = goals.filter((g) => g.status === "achieved");
+    const inProgressGoals = goals.filter((g) => g.status === "in_progress");
+    const voiceTexts = voiceNotes
+      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.text))
+      .filter(Boolean);
+    setStructuredNotes({
+      activitiesPerformed: activityTypes.length > 0
+        ? activityTypes.join(", ")
+        : activities.map((a) => `${a.type} (${format(a.timestamp, "HH:mm")})`).join("\n"),
+      outcomes: [
+        achievedGoals.length > 0
+          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
+          : "",
+        voiceTexts.length > 0
+          ? `Observations: ${voiceTexts.slice(0, 2).join(" ")}`
+          : "",
+      ].filter(Boolean).join("\n"),
+      participantResponse: "",
+      progressTowardGoals: inProgressGoals.length > 0
+        ? inProgressGoals.map((g) => `${g.name}: In Progress`).join("\n")
+        : goals.filter((g) => g.status !== "not_started").map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`).join("\n"),
+    });
+
     setSummaryLoading(false);
   }, [session, activities, voiceNotes, goals, images, elapsed, translationView, isRecording]);
 
@@ -508,7 +547,7 @@ export default function SessionLive() {
         sessionId: id,
         data: {
           duration_minutes: durationMinutes,
-          notes: editableNotes.trim() || undefined,
+          notes: combineStructuredNotes(structuredNotes) || editableNotes.trim() || undefined,
           transcription: transcription || undefined,
           status: "in_progress",
         },
@@ -559,6 +598,7 @@ export default function SessionLive() {
     setShowSummary(false);
     setSummary(null);
     setEditableNotes("");
+    setStructuredNotes({ activitiesPerformed: "", outcomes: "", participantResponse: "", progressTowardGoals: "" });
     stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
@@ -703,6 +743,14 @@ export default function SessionLive() {
   }
 
   const participantName = session.participants?.full_name ?? "Session";
+
+  // Live compliance for review modal (cheap pure fn — recomputes on every render)
+  const liveCompliance = checkStructuredCompliance(
+    structuredNotes,
+    !!session,
+    Math.max(1, Math.round(elapsed / 60)),
+    activities.length,
+  );
 
   // ---------------------------------------------------------------------------
   // Render
@@ -1222,37 +1270,131 @@ export default function SessionLive() {
                   <p className="text-xl font-bold text-slate-800">{summary.activities.length}</p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Activities</p>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                  <p
-                    className={cn(
-                      "text-xl font-bold",
-                      summary.complianceScore >= 80
-                        ? "text-emerald-600"
-                        : summary.complianceScore >= 60
-                          ? "text-amber-600"
-                          : "text-red-600",
-                    )}
-                  >
-                    {summary.complianceScore}%
+                <div className={cn(
+                  "rounded-xl p-3 text-center border",
+                  liveCompliance.score >= 80 ? "bg-emerald-50 border-emerald-200" :
+                  liveCompliance.score >= 60 ? "bg-amber-50 border-amber-200" :
+                  "bg-red-50 border-red-200",
+                )}>
+                  <p className={cn(
+                    "text-xl font-bold",
+                    liveCompliance.score >= 80 ? "text-emerald-600" :
+                    liveCompliance.score >= 60 ? "text-amber-600" : "text-red-600",
+                  )}>
+                    {liveCompliance.score}%
                   </p>
                   <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Compliance</p>
                 </div>
               </div>
 
-              {/* Editable clinical notes */}
-              <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                  <FileText className="h-3.5 w-3.5" /> Clinical Notes
-                  <span className="text-indigo-500 font-normal normal-case tracking-normal">
-                    — editable · mic available
+              {/* Structured Case Notes */}
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" /> Structured Case Notes
+                  <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
+                    — mic available · required for NDIS compliance
                   </span>
-                </label>
-                <SmartTextarea
-                  value={editableNotes}
-                  onChange={setEditableNotes}
-                  rows={8}
-                  className="text-xs p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-slate-700 whitespace-pre-wrap leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-                />
+                </p>
+                {(
+                  [
+                    {
+                      key: "activitiesPerformed" as keyof StructuredNotes,
+                      label: "Activities Performed",
+                      placeholder: "Describe the specific support activities provided during this session...",
+                      required: true,
+                    },
+                    {
+                      key: "outcomes" as keyof StructuredNotes,
+                      label: "Outcomes",
+                      placeholder: "Measurable outcomes achieved (e.g. participant demonstrated, achieved, progressed toward...)",
+                      required: true,
+                    },
+                    {
+                      key: "participantResponse" as keyof StructuredNotes,
+                      label: "Participant Response",
+                      placeholder: "How did the participant engage and respond during the session?",
+                      required: true,
+                    },
+                    {
+                      key: "progressTowardGoals" as keyof StructuredNotes,
+                      label: "Progress Toward NDIS Goals",
+                      placeholder: "Link outcomes to specific NDIS goals addressed in this session...",
+                      required: false,
+                    },
+                  ] as const
+                ).map(({ key, label, placeholder, required }) => (
+                  <div key={key}>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                      {label}
+                      {required && <span className="text-red-400 ml-0.5">*</span>}
+                    </label>
+                    <SmartTextarea
+                      value={structuredNotes[key]}
+                      onChange={(val) =>
+                        setStructuredNotes((prev) => ({ ...prev, [key]: val }))
+                      }
+                      rows={2}
+                      placeholder={placeholder}
+                      className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Compliance Gate */}
+              <div className={cn(
+                "rounded-xl border p-3 space-y-2",
+                liveCompliance.blocking
+                  ? "bg-red-50 border-red-200"
+                  : liveCompliance.score >= 80
+                    ? "bg-emerald-50 border-emerald-200"
+                    : "bg-amber-50 border-amber-200",
+              )}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5 text-slate-400" />
+                    Compliance Check
+                  </span>
+                  <span className={cn(
+                    "text-sm font-bold",
+                    liveCompliance.score >= 80 ? "text-emerald-700" :
+                    liveCompliance.score >= 60 ? "text-amber-700" : "text-red-700",
+                  )}>
+                    {liveCompliance.score}%
+                  </span>
+                </div>
+                {liveCompliance.blocking && (
+                  <p className="text-xs text-red-700 font-medium flex items-center gap-1.5">
+                    <XCircle className="h-3.5 w-3.5 shrink-0" />
+                    Resolve critical issues before approving this record
+                  </p>
+                )}
+                {liveCompliance.issues.length > 0 && (
+                  <ul className="space-y-1">
+                    {liveCompliance.issues.map((issue, i) => (
+                      <li
+                        key={i}
+                        className={cn(
+                          "text-xs flex items-start gap-1.5",
+                          issue.severity === "error" ? "text-red-700" : "text-amber-700",
+                        )}
+                      >
+                        {issue.severity === "error" ? (
+                          <XCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                        )}
+                        {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!liveCompliance.blocking && liveCompliance.issues.length === 0 && (
+                  <p className="text-xs text-emerald-700 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    All compliance checks passed — ready to approve
+                  </p>
+                )}
               </div>
 
               {/* Activities */}
@@ -1317,15 +1459,16 @@ export default function SessionLive() {
                 </Button>
                 <Button
                   onClick={handleApproveAndSave}
-                  disabled={isSaving}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2"
+                  disabled={isSaving || liveCompliance.blocking}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 disabled:opacity-50"
+                  title={liveCompliance.blocking ? "Resolve compliance issues before approving" : undefined}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Shield className="h-4 w-4" />
                   )}
-                  {isSaving ? "Saving…" : "Approve & Save"}
+                  {isSaving ? "Saving…" : liveCompliance.blocking ? "Fix Issues to Approve" : "Approve & Save"}
                 </Button>
               </div>
             </div>

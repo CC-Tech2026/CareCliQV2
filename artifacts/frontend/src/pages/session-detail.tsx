@@ -24,7 +24,7 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play,
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -221,6 +221,27 @@ export default function SessionDetail({ id }: { id?: string }) {
     });
   };
 
+  const handleExportAudit = async () => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/audit`);
+      if (!res.ok) throw new Error("Failed to fetch audit record");
+      const data = await res.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-${sessionId}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "Audit record exported", description: "JSON file downloaded." });
+    } catch {
+      toast({ title: "Export failed", variant: "destructive" });
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -318,6 +339,15 @@ export default function SessionDetail({ id }: { id?: string }) {
               Start Live
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAudit}
+            title="Export audit record as JSON"
+          >
+            <Download className="h-4 w-4" />
+            <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">Export Audit</span>
+          </Button>
           <Button
             variant="outline"
             size="sm"

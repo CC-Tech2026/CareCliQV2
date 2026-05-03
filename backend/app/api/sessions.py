@@ -174,6 +174,75 @@ async def save_session_with_ai(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{session_id}/audit")
+async def get_session_audit(session_id: str):
+    from datetime import datetime, timezone
+    session = await session_service.get_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ai_insights = session.get("ai_insights") or {}
+    if isinstance(ai_insights, str):
+        try:
+            ai_insights = json.loads(ai_insights)
+        except Exception:
+            ai_insights = {}
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        try:
+            participant = await participant_service.get_participant_by_id(participant_id)
+        except Exception:
+            pass
+
+    participant_name = None
+    participant_ndis = None
+    if participant:
+        participant_name = participant.get("full_name")
+        participant_ndis = participant.get("ndis_number")
+    else:
+        participants_obj = session.get("participants") or {}
+        if isinstance(participants_obj, dict):
+            participant_name = participants_obj.get("full_name")
+            participant_ndis = participants_obj.get("ndis_number")
+
+    audit = {
+        "audit_version": "1.0",
+        "ndis_principle": "If it cannot be evidenced, it cannot be claimed.",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "session": {
+            "id": session.get("id"),
+            "date": session.get("session_date"),
+            "type": session.get("session_type"),
+            "duration_minutes": session.get("duration_minutes"),
+            "status": session.get("status"),
+        },
+        "participant": {
+            "id": participant_id,
+            "full_name": participant_name,
+            "ndis_number": participant_ndis,
+        },
+        "clinical_notes": session.get("notes"),
+        "transcription": session.get("transcription"),
+        "goals_addressed": session.get("goals_addressed") or [],
+        "photo_urls": session.get("photo_urls") or [],
+        "compliance": {
+            "score": session.get("compliance_score"),
+            "status": session.get("compliance_status") or ai_insights.get("compliance_status"),
+            "notes": session.get("compliance_notes"),
+            "rules_result": ai_insights.get("rules_result"),
+        },
+        "ai_insights": {
+            "summary": ai_insights.get("summary"),
+            "key_observations": ai_insights.get("key_observations"),
+            "next_session_recommendations": ai_insights.get("next_session_recommendations"),
+            "progress_trend": ai_insights.get("progress_trend"),
+        },
+    }
+    return audit
+
+
 @router.post("/{session_id}/upload-photo")
 async def upload_photo(session_id: str, file: UploadFile = File(...)):
     from ..services.supabase_client import get_supabase_admin
