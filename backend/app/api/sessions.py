@@ -201,6 +201,8 @@ async def get_session_audit(session_id: str):
             ai_insights = json.loads(ai_insights)
         except Exception:
             ai_insights = {}
+    if not isinstance(ai_insights, dict):
+        ai_insights = {}
 
     participant_id = session.get("participant_id") or session.get("patient_id")
     participant = None
