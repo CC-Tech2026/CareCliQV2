@@ -1,0 +1,132 @@
+CORE PRINCIPLE (ENFORCE IN CODE)
+
+If a service cannot be evidenced, it is not valid for payment.
+
+The system must ensure:
+
+Every session is documented
+Every session has sufficient notes
+Every record is audit-ready
+Incomplete records cannot be finalized
+MVP SCOPE (STRICT)
+
+ONLY build:
+
+Session Logging (core)
+Case Notes (structured)
+Evidence Capture (basic)
+Compliance Engine (core logic)
+Audit Export (critical output)
+
+DO NOT build:
+
+Payments
+Full invoicing system
+Complex rostering
+Advanced dashboards
+1. SESSION LOGGING (CORE FEATURE)
+
+Refactor existing Live Session into a compliance-first workflow
+
+Requirements:
+Start / Stop timer
+Capture:
+Participant
+Session type
+Duration
+Activity logging (text only, no emojis)
+Voice notes (existing system)
+Rules:
+Cannot log anything unless session is active
+Auto timestamp all entries
+Session cannot be completed without:
+Duration > 0
+At least one activity OR note
+2. CASE NOTES (MANDATORY STRUCTURE)
+
+Replace free text with structured fields:
+
+Activities performed
+Outcomes
+Participant response
+Progress toward goals
+Behavior:
+Auto-generate a combined clinical note
+Allow editing before save
+Must not be empty to finalize session
+3. EVIDENCE CAPTURE (BASIC BUT IMPORTANT)
+
+Allow:
+
+Image upload (session evidence)
+
+Rules:
+
+Timestamp all uploads
+Link to session
+Store as immutable once saved
+4. COMPLIANCE ENGINE (CORE LOGIC)
+
+Create: ComplianceService.ts
+
+Validate Session:
+Has participant
+Has duration > 0
+Has:
+activity OR
+structured notes
+(Optional) has evidence
+Output:
+type ComplianceResult = {
+  score: number;        // 0–100
+  issues: string[];
+  blocking: boolean;
+};
+Rules:
+Score < 70 → warning
+Score < 50 → BLOCK finalization
+5. REVIEW & APPROVAL (CRITICAL STEP)
+
+Before saving session:
+
+Show:
+
+Duration
+Activities
+Notes
+Evidence count
+Compliance score
+Requirements:
+Editable notes
+Clear compliance issues
+“Approve & Save” required
+
+NO auto-save of final data without approval.
+
+6. AUDIT EXPORT (MOST IMPORTANT FEATURE)
+
+Build function:
+
+generateAuditRecord(sessionId)
+
+Output must include:
+Participant info
+Session details:
+Date
+Duration
+Type
+Activities log (timestamped)
+Clinical notes
+Evidence summary
+Format:
+Clean structured JSON
+Optional formatted text block (for reports)
+7. UI RULES (PROFESSIONAL)
+No emojis
+Clean layout
+Clear sections:
+Session
+Notes
+Activities
+Evidence
+Focus on readability over visuals
