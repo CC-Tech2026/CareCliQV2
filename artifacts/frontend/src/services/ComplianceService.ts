@@ -5,10 +5,17 @@ export interface StructuredNotes {
   progressTowardGoals: string;
 }
 
+export interface ComplianceCheck {
+  label: string;
+  pass: boolean;
+  note?: string;
+}
+
 export interface ComplianceResult {
   score: number;
   issues: string[];
   blocking: boolean;
+  checks: ComplianceCheck[];
 }
 
 export function checkStructuredCompliance(
@@ -22,21 +29,24 @@ export function checkStructuredCompliance(
   let score = 0;
 
   // +20 participant linked
-  if (hasParticipant) {
+  const participantPass = hasParticipant;
+  if (participantPass) {
     score += 20;
   } else {
     issues.push("Session must be linked to a participant");
   }
 
   // +20 duration > 0
-  if (durationMinutes > 0) {
+  const durationPass = durationMinutes > 0;
+  if (durationPass) {
     score += 20;
   } else {
     issues.push("Session duration must be recorded — start the timer before ending the session");
   }
 
   // +20 at least one activity logged
-  if (activitiesCount > 0) {
+  const activityPass = activitiesCount > 0;
+  if (activityPass) {
     score += 20;
   } else {
     issues.push("No activities were logged — tap activity buttons during the session to build evidence");
@@ -57,21 +67,48 @@ export function checkStructuredCompliance(
   }
 
   // +20 photo evidence captured (photos only — voice transcription is supporting, not primary evidence)
-  if (imageCount > 0) {
+  const photoPass = imageCount > 0;
+  if (photoPass) {
     score += 20;
   } else {
     issues.push("No photo evidence captured — add photos to support this NDIS claim");
   }
 
   // Explicit content gate (separate from score): duration AND (activities OR notes) must both be present
-  const meetsContentGate =
-    durationMinutes > 0 && (activitiesCount > 0 || anyNoteFilled);
+  const meetsContentGate = durationMinutes > 0 && (activitiesCount > 0 || anyNoteFilled);
+
+  const checks: ComplianceCheck[] = [
+    {
+      label: "Participant linked",
+      pass: participantPass,
+    },
+    {
+      label: "Duration recorded",
+      pass: durationPass,
+      note: durationPass ? `${durationMinutes} min` : undefined,
+    },
+    {
+      label: "Activity logged",
+      pass: activityPass,
+      note: activityPass ? `${activitiesCount} logged` : undefined,
+    },
+    {
+      label: "Clinical notes completed",
+      pass: anyNoteFilled,
+    },
+    {
+      label: "Photo evidence captured",
+      pass: photoPass,
+      note: photoPass ? `${imageCount} photo${imageCount !== 1 ? "s" : ""}` : undefined,
+    },
+  ];
 
   return {
     score: Math.min(score, 100),
     issues,
     // Block if score too low OR content gate not met (prevents participant+duration+photos alone = 60% approval)
     blocking: score < 50 || !meetsContentGate,
+    checks,
   };
 }
 

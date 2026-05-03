@@ -489,11 +489,29 @@ export default function SessionLive() {
       });
       return;
     }
-    // Pre-modal gate: nothing documented at all (no activities, voice notes, or existing notes)
-    if (activities.length === 0 && voiceNotes.length === 0 && !session?.notes?.trim()) {
+    // Pre-modal gate: use the compliance engine to check if there is even enough to review.
+    // structuredNotes are empty here (filled in the modal), so we evaluate with empty notes —
+    // this correctly blocks if neither activities nor existing session notes are present.
+    const preCheck = checkStructuredCompliance(
+      structuredNotes,
+      !!(session?.participant_id),
+      elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
+      activities.length,
+      images.length,
+    );
+    // Only block if the content gate fails (no activities AND no notes) — score/photo issues
+    // can still be resolved inside the modal via structured fields or photo capture.
+    const contentGateMet = activities.length > 0 ||
+      [structuredNotes.activitiesPerformed, structuredNotes.outcomes,
+       structuredNotes.participantResponse, structuredNotes.progressTowardGoals]
+        .some((f) => f.trim().length > 0);
+    if (!contentGateMet) {
+      const firstIssue = preCheck.issues.find((issue) =>
+        issue.includes("activit") || issue.includes("note")
+      ) ?? "Log at least one activity or complete a note field before reviewing.";
       toast({
         title: "Nothing documented yet",
-        description: "Log at least one activity or record a voice note before reviewing the session.",
+        description: firstIssue,
         variant: "destructive",
       });
       return;
@@ -1369,66 +1387,48 @@ export default function SessionLive() {
                 ))}
               </div>
 
-              {/* Compliance Gate — all 5 checks with explicit pass/fail */}
-              {(() => {
-                const anyNoteFilled = [
-                  structuredNotes.activitiesPerformed,
-                  structuredNotes.outcomes,
-                  structuredNotes.participantResponse,
-                  structuredNotes.progressTowardGoals,
-                ].some((f) => f.trim().length > 0);
-                const durationMins = elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0;
-                const checks: { label: string; pass: boolean; note?: string }[] = [
-                  { label: "Participant linked", pass: !!(session?.participant_id) },
-                  { label: "Duration recorded", pass: durationMins > 0, note: durationMins > 0 ? `${durationMins} min` : undefined },
-                  { label: "Activity logged", pass: activities.length > 0, note: activities.length > 0 ? `${activities.length} logged` : undefined },
-                  { label: "Clinical notes completed", pass: anyNoteFilled },
-                  { label: "Photo evidence captured", pass: images.length > 0, note: images.length > 0 ? `${images.length} photo${images.length !== 1 ? "s" : ""}` : undefined },
-                ];
-                return (
-                  <div className={cn(
-                    "rounded-xl border p-3 space-y-2",
-                    liveCompliance.blocking
-                      ? "bg-red-50 border-red-200"
-                      : liveCompliance.score >= 80
-                        ? "bg-emerald-50 border-emerald-200"
-                        : "bg-amber-50 border-amber-200",
+              {/* Compliance Gate — all 5 checks with pass/fail from ComplianceService */}
+              <div className={cn(
+                "rounded-xl border p-3 space-y-2",
+                liveCompliance.blocking
+                  ? "bg-red-50 border-red-200"
+                  : liveCompliance.score >= 80
+                    ? "bg-emerald-50 border-emerald-200"
+                    : "bg-amber-50 border-amber-200",
+              )}>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5 text-slate-400" />
+                    Compliance Check
+                  </span>
+                  <span className={cn(
+                    "text-sm font-bold",
+                    liveCompliance.score >= 80 ? "text-emerald-700" :
+                    liveCompliance.score >= 60 ? "text-amber-700" : "text-red-700",
                   )}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                        <Shield className="h-3.5 w-3.5 text-slate-400" />
-                        Compliance Check
-                      </span>
-                      <span className={cn(
-                        "text-sm font-bold",
-                        liveCompliance.score >= 80 ? "text-emerald-700" :
-                        liveCompliance.score >= 60 ? "text-amber-700" : "text-red-700",
-                      )}>
-                        {liveCompliance.score}/100
-                      </span>
-                    </div>
-                    <ul className="space-y-1">
-                      {checks.map((c, i) => (
-                        <li key={i} className={cn("text-xs flex items-center gap-1.5", c.pass ? "text-emerald-700" : liveCompliance.blocking ? "text-red-700" : "text-amber-700")}>
-                          {c.pass
-                            ? <CheckCircle2 className="h-3 w-3 shrink-0" />
-                            : liveCompliance.blocking
-                              ? <XCircle className="h-3 w-3 shrink-0" />
-                              : <AlertTriangle className="h-3 w-3 shrink-0" />
-                          }
-                          <span>{c.label}{c.note ? <span className="text-slate-500 font-normal ml-1">({c.note})</span> : null}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {liveCompliance.blocking && (
-                      <p className="text-xs text-red-700 font-medium flex items-center gap-1.5 pt-1 border-t border-red-200">
-                        <XCircle className="h-3.5 w-3.5 shrink-0" />
-                        Resolve the items above before this session can be approved
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+                    {liveCompliance.score}/100
+                  </span>
+                </div>
+                <ul className="space-y-1">
+                  {liveCompliance.checks.map((c, i) => (
+                    <li key={i} className={cn("text-xs flex items-center gap-1.5", c.pass ? "text-emerald-700" : liveCompliance.blocking ? "text-red-700" : "text-amber-700")}>
+                      {c.pass
+                        ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                        : liveCompliance.blocking
+                          ? <XCircle className="h-3 w-3 shrink-0" />
+                          : <AlertTriangle className="h-3 w-3 shrink-0" />
+                      }
+                      <span>{c.label}{c.note ? <span className="text-slate-500 font-normal ml-1">({c.note})</span> : null}</span>
+                    </li>
+                  ))}
+                </ul>
+                {liveCompliance.blocking && (
+                  <p className="text-xs text-red-700 font-medium flex items-center gap-1.5 pt-1 border-t border-red-200">
+                    <XCircle className="h-3.5 w-3.5 shrink-0" />
+                    Resolve the items above before this session can be approved
+                  </p>
+                )}
+              </div>
 
 
               {/* Combined Clinical Record — editable final version */}
