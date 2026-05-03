@@ -580,7 +580,7 @@ export default function SessionLive() {
         duration_minutes: durationMinutes,
         notes: editableNotes.trim() || undefined,
         transcription: transcription || undefined,
-        status: "in_progress",
+        status: "completed",
         photo_urls: images,
         structured_notes: structuredNotes,
         activity_log: activityLog,

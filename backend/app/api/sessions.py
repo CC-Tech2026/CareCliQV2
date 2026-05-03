@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import Optional
-from ..core.permissions import get_current_user
 from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
