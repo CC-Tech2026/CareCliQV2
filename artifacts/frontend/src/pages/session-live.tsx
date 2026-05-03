@@ -489,33 +489,10 @@ export default function SessionLive() {
       });
       return;
     }
-    // Pre-modal gate: use the compliance engine to check if there is even enough to review.
-    // structuredNotes are empty here (filled in the modal), so we evaluate with empty notes —
-    // this correctly blocks if neither activities nor existing session notes are present.
-    const preCheck = checkStructuredCompliance(
-      structuredNotes,
-      !!(session?.participant_id),
-      elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
-      activities.length,
-      images.length,
-    );
-    // Only block if the content gate fails (no activities AND no notes) — score/photo issues
-    // can still be resolved inside the modal via structured fields or photo capture.
-    const contentGateMet = activities.length > 0 ||
-      [structuredNotes.activitiesPerformed, structuredNotes.outcomes,
-       structuredNotes.participantResponse, structuredNotes.progressTowardGoals]
-        .some((f) => f.trim().length > 0);
-    if (!contentGateMet) {
-      const firstIssue = preCheck.issues.find((issue) =>
-        issue.includes("activit") || issue.includes("note")
-      ) ?? "Log at least one activity or complete a note field before reviewing.";
-      toast({
-        title: "Nothing documented yet",
-        description: firstIssue,
-        variant: "destructive",
-      });
-      return;
-    }
+    // Pre-modal gate: only block when the session hasn't been timed at all.
+    // The compliance gate on "Approve & Save" enforces the content requirements
+    // (duration > 0 AND activities OR structured notes) — practitioners need the
+    // modal open to fill in structured note fields before that gate is evaluated.
 
     // Reset manual-edit flag so the auto-generated notes are shown fresh each time
     hasManuallyEditedNotesRef.current = false;
