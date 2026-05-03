@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List, Dict
 from datetime import date
 
 
@@ -25,5 +25,5 @@ class SessionUpdate(BaseModel):
     photo_urls: Optional[List[str]] = None
     status: Optional[str] = None
     # Audit-critical clinical data — merged into ai_insights at service layer
-    structured_notes: Optional[Any] = None
-    activity_log: Optional[Any] = None
+    structured_notes: Optional[Dict[str, str]] = None
+    activity_log: Optional[List[Dict[str, str]]] = None

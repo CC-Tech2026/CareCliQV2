@@ -65,6 +65,7 @@ type TranslationView = "original" | "translated" | "both";
 interface ActivityLog {
   id: string;
   type: string;
+  label?: string;
   timestamp: Date;
 }
 
@@ -382,6 +383,7 @@ export default function SessionLive() {
   const [summary, setSummary] = useState<LiveSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [editableNotes, setEditableNotes] = useState("");
+  const hasManuallyEditedNotesRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [structuredNotes, setStructuredNotes] = useState<StructuredNotes>({
     activitiesPerformed: "",
@@ -390,8 +392,10 @@ export default function SessionLive() {
     progressTowardGoals: "",
   });
 
-  // Keep editable combined preview in sync with structured fields
+  // Keep editable combined preview in sync with structured fields.
+  // Stop syncing once the user manually edits the final clinical record.
   useEffect(() => {
+    if (hasManuallyEditedNotesRef.current) return;
     const combined = combineStructuredNotes(structuredNotes);
     if (combined) setEditableNotes(combined);
   }, [structuredNotes]);
@@ -485,15 +489,8 @@ export default function SessionLive() {
       });
       return;
     }
-    // Pre-modal blocking: nothing to document — no activities AND no existing notes
-    if (activities.length === 0 && !session?.notes?.trim()) {
-      toast({
-        title: "Nothing documented",
-        description: "Log at least one activity or add notes before ending the session.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Reset manual-edit flag so the auto-generated notes are shown fresh each time
+    hasManuallyEditedNotesRef.current = false;
 
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
@@ -564,7 +561,7 @@ export default function SessionLive() {
     const activityLog = activities.map((a) => ({
       timestamp: format(a.timestamp, "HH:mm"),
       type: a.type,
-      label: (a as unknown as Record<string, unknown>).label as string | undefined ?? a.type,
+      label: a.label ?? a.type,
     }));
 
     try {
@@ -616,6 +613,7 @@ export default function SessionLive() {
     setShowRestartConfirm(false);
     setShowSummary(false);
     setSummary(null);
+    hasManuallyEditedNotesRef.current = false;
     setEditableNotes("");
     setStructuredNotes({ activitiesPerformed: "", outcomes: "", participantResponse: "", progressTowardGoals: "" });
     stopIntentRef.current = true;
@@ -1427,7 +1425,7 @@ export default function SessionLive() {
                 </label>
                 <SmartTextarea
                   value={editableNotes}
-                  onChange={setEditableNotes}
+                  onChange={(v) => { hasManuallyEditedNotesRef.current = true; setEditableNotes(v); }}
                   rows={6}
                   placeholder="Combined clinical record will appear here as you fill the fields above..."
                   className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed"

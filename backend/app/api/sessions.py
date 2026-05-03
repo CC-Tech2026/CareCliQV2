@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Optional
+from ..core.permissions import get_current_user
 from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
@@ -189,7 +190,7 @@ async def save_session_with_ai(session_id: str):
 
 
 @router.get("/{session_id}/audit")
-async def get_session_audit(session_id: str):
+async def get_session_audit(session_id: str, _user: dict = Depends(get_current_user)):
     from datetime import datetime, timezone
     session = await session_service.get_session_by_id(session_id)
     if not session:
@@ -307,13 +308,15 @@ async def get_session_audit(session_id: str):
         formatted_lines.append(f"PHOTO EVIDENCE: {len(photos)} photo(s) attached")
         formatted_lines.append("")
 
+    # Always show deterministic compliance in the audit record (never null)
+    formatted_lines.append(f"COMPLIANCE: {det_score}/100 points \u2014 {'APPROVED' if not det_blocking else 'BLOCKED'}")
+    if det_issues:
+        formatted_lines.append("COMPLIANCE GAPS:")
+        for issue in det_issues:
+            formatted_lines.append(f"  \u2022 {issue}")
     if compliance_score is not None:
-        formatted_lines.append(f"COMPLIANCE SCORE: {compliance_score:.0f}% \u2014 {compliance_status.upper()}")
-        if compliance_issues:
-            formatted_lines.append("COMPLIANCE ISSUES:")
-            for issue in compliance_issues:
-                formatted_lines.append(f"  \u2022 {issue}")
-        formatted_lines.append("")
+        formatted_lines.append(f"  (AI-blended score: {compliance_score:.0f}% \u2014 {compliance_status})")
+    formatted_lines.append("")
 
     formatted_lines.extend([
         separator,
