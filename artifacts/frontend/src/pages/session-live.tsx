@@ -396,6 +396,12 @@ export default function SessionLive() {
     progressTowardGoals: "",
   });
 
+  // Keep editable combined preview in sync with structured fields
+  useEffect(() => {
+    const combined = combineStructuredNotes(structuredNotes);
+    if (combined) setEditableNotes(combined);
+  }, [structuredNotes]);
+
   // Restart confirmation modal
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
@@ -476,6 +482,16 @@ export default function SessionLive() {
   };
 
   const handleStop = useCallback(async () => {
+    // Pre-modal blocking: timer must be running before ending
+    if (elapsed === 0) {
+      toast({
+        title: "Session not started",
+        description: "Click \"Start\" to begin the timer before ending the session.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     // Stop any active recording cleanly
@@ -501,7 +517,6 @@ export default function SessionLive() {
       translationView,
     );
     setSummary(localSummary);
-    setEditableNotes(localSummary.clinicalNotes);
 
     // Pre-fill structured note fields from session data
     const activityTypes = [...new Set(activities.map((a) => a.type))];
@@ -547,7 +562,7 @@ export default function SessionLive() {
         sessionId: id,
         data: {
           duration_minutes: durationMinutes,
-          notes: combineStructuredNotes(structuredNotes) || editableNotes.trim() || undefined,
+          notes: editableNotes.trim() || undefined,
           transcription: transcription || undefined,
           status: "in_progress",
         },
@@ -747,9 +762,11 @@ export default function SessionLive() {
   // Live compliance for review modal (cheap pure fn — recomputes on every render)
   const liveCompliance = checkStructuredCompliance(
     structuredNotes,
-    !!session,
-    Math.max(1, Math.round(elapsed / 60)),
+    !!(session && ((session as unknown as Record<string, unknown>).participant_id ?? (session as unknown as Record<string, unknown>).patient_id)),
+    Math.round(elapsed / 60),
     activities.length,
+    images.length,
+    voiceNotes.length,
   );
 
   // ---------------------------------------------------------------------------
@@ -1376,15 +1393,15 @@ export default function SessionLive() {
                         key={i}
                         className={cn(
                           "text-xs flex items-start gap-1.5",
-                          issue.severity === "error" ? "text-red-700" : "text-amber-700",
+                          liveCompliance.blocking ? "text-red-700" : "text-amber-700",
                         )}
                       >
-                        {issue.severity === "error" ? (
+                        {liveCompliance.blocking ? (
                           <XCircle className="h-3 w-3 shrink-0 mt-0.5" />
                         ) : (
                           <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
                         )}
-                        {issue.message}
+                        {issue}
                       </li>
                     ))}
                   </ul>
@@ -1395,6 +1412,23 @@ export default function SessionLive() {
                     All compliance checks passed — ready to approve
                   </p>
                 )}
+              </div>
+
+              {/* Combined Clinical Record — editable final version */}
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                  <FileText className="h-3.5 w-3.5" /> Clinical Record
+                  <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
+                    — auto-generated from fields above · editable before saving
+                  </span>
+                </label>
+                <SmartTextarea
+                  value={editableNotes}
+                  onChange={setEditableNotes}
+                  rows={6}
+                  placeholder="Combined clinical record will appear here as you fill the fields above..."
+                  className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed"
+                />
               </div>
 
               {/* Activities */}

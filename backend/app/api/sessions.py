@@ -207,10 +207,61 @@ async def get_session_audit(session_id: str):
             participant_name = participants_obj.get("full_name")
             participant_ndis = participants_obj.get("ndis_number")
 
+    generated_at = datetime.now(timezone.utc).isoformat()
+    notes_text = session.get("notes") or ""
+    goals = session.get("goals_addressed") or []
+    photos = session.get("photo_urls") or []
+    compliance_score = session.get("compliance_score")
+    compliance_status = session.get("compliance_status") or ai_insights.get("compliance_status") or "draft"
+
+    # Build failed rules list for compliance issues
+    rules_result = ai_insights.get("rules_result") or {}
+    failed_rules = rules_result.get("failed_rules") or []
+    compliance_issues = [
+        r.get("message") or r.get("rule", "Unknown rule") for r in failed_rules if isinstance(r, dict)
+    ]
+
+    # Human-readable formatted text for auditors
+    separator = "=" * 50
+    formatted_lines = [
+        "NDIS SESSION AUDIT RECORD",
+        separator,
+        f"Participant : {participant_name or 'Unknown'} | NDIS: {participant_ndis or 'Not recorded'}",
+        f"Session Date: {session.get('session_date') or 'N/A'} | Type: {session.get('session_type') or 'N/A'} | Duration: {session.get('duration_minutes') or 0} min",
+        f"Status      : {session.get('status') or 'draft'} | Generated: {generated_at}",
+        separator,
+        "",
+        "CLINICAL NOTES:",
+        notes_text if notes_text else "(No clinical notes recorded)",
+        "",
+    ]
+    if goals:
+        formatted_lines.append("GOALS ADDRESSED:")
+        goal_list = goals if isinstance(goals, list) else []
+        for g in goal_list:
+            formatted_lines.append(f"  \u2022 {g}")
+        formatted_lines.append("")
+    if photos:
+        formatted_lines.append(f"EVIDENCE: {len(photos)} photo(s) attached")
+        formatted_lines.append("")
+    if compliance_score is not None:
+        formatted_lines.append(f"COMPLIANCE SCORE: {compliance_score:.0f}% \u2014 {compliance_status.upper()}")
+        if compliance_issues:
+            formatted_lines.append("COMPLIANCE ISSUES:")
+            for issue in compliance_issues:
+                formatted_lines.append(f"  \u2022 {issue}")
+        formatted_lines.append("")
+    formatted_lines.extend([
+        separator,
+        'NDIS Principle: "If it cannot be evidenced, it cannot be claimed."',
+    ])
+    formatted_text = "\n".join(formatted_lines)
+
     audit = {
         "audit_version": "1.0",
         "ndis_principle": "If it cannot be evidenced, it cannot be claimed.",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": generated_at,
+        "formatted_text": formatted_text,
         "session": {
             "id": session.get("id"),
             "date": session.get("session_date"),
@@ -223,15 +274,20 @@ async def get_session_audit(session_id: str):
             "full_name": participant_name,
             "ndis_number": participant_ndis,
         },
-        "clinical_notes": session.get("notes"),
+        "clinical_notes": notes_text,
         "transcription": session.get("transcription"),
-        "goals_addressed": session.get("goals_addressed") or [],
-        "photo_urls": session.get("photo_urls") or [],
+        "goals_addressed": goals if isinstance(goals, list) else [],
+        "evidence_summary": {
+            "photo_count": len(photos),
+            "has_transcription": bool(session.get("transcription")),
+        },
+        "photo_urls": photos if isinstance(photos, list) else [],
         "compliance": {
-            "score": session.get("compliance_score"),
-            "status": session.get("compliance_status") or ai_insights.get("compliance_status"),
+            "score": compliance_score,
+            "status": compliance_status,
             "notes": session.get("compliance_notes"),
-            "rules_result": ai_insights.get("rules_result"),
+            "issues": compliance_issues,
+            "rules_result": rules_result,
         },
         "ai_insights": {
             "summary": ai_insights.get("summary"),

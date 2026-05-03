@@ -114,6 +114,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [notes, setNotes] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -223,15 +224,19 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   const handleExportAudit = async () => {
     if (!sessionId) return;
+    setIsExporting(true);
     try {
       const res = await fetch(`/api/sessions/${sessionId}/audit`);
       if (!res.ok) throw new Error("Failed to fetch audit record");
       const data = await res.json();
+      const participantName = (data.participant?.full_name || "unknown")
+        .toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      const date = data.session?.date || new Date().toISOString().slice(0, 10);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `audit-${sessionId}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `audit-${participantName}-${date}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -239,6 +244,8 @@ export default function SessionDetail({ id }: { id?: string }) {
       toast({ title: "Audit record exported", description: "JSON file downloaded." });
     } catch {
       toast({ title: "Export failed", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -343,10 +350,13 @@ export default function SessionDetail({ id }: { id?: string }) {
             variant="outline"
             size="sm"
             onClick={handleExportAudit}
+            disabled={isExporting}
             title="Export audit record as JSON"
           >
-            <Download className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">Export Audit</span>
+            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
+              {isExporting ? "Exporting…" : "Export Audit"}
+            </span>
           </Button>
           <Button
             variant="outline"

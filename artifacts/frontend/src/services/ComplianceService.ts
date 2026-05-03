@@ -5,109 +5,65 @@ export interface StructuredNotes {
   progressTowardGoals: string;
 }
 
-export interface ComplianceIssue {
-  field: string;
-  severity: "error" | "warning";
-  message: string;
-}
-
 export interface ComplianceResult {
   score: number;
-  issues: ComplianceIssue[];
+  issues: string[];
   blocking: boolean;
 }
-
-const OUTCOME_KEYWORDS = [
-  "achieved", "improved", "able to", "completed", "progressed",
-  "demonstrated", "engaged", "participated", "outcome", "result",
-  "progress", "responded", "showed", "increased", "reduced",
-];
 
 export function checkStructuredCompliance(
   notes: StructuredNotes,
   hasParticipant: boolean,
   durationMinutes: number,
   activitiesCount: number,
+  imageCount: number,
+  voiceNoteCount: number,
 ): ComplianceResult {
-  const issues: ComplianceIssue[] = [];
+  const issues: string[] = [];
   let score = 0;
 
+  // +20 participant linked
   if (hasParticipant) {
     score += 20;
   } else {
-    issues.push({
-      field: "participant",
-      severity: "error",
-      message: "Session must be linked to a participant",
-    });
+    issues.push("Session must be linked to a participant");
   }
 
+  // +20 duration > 0
   if (durationMinutes > 0) {
     score += 20;
   } else {
-    issues.push({
-      field: "duration",
-      severity: "error",
-      message: "Session duration must be recorded",
-    });
+    issues.push("Session duration must be recorded — start the timer before ending the session");
   }
 
+  // +20 at least one activity logged
   if (activitiesCount > 0) {
     score += 20;
   } else {
-    issues.push({
-      field: "activities",
-      severity: "warning",
-      message: "No activities were logged during the session",
-    });
+    issues.push("No activities were logged — tap activity buttons during the session to build evidence");
   }
 
-  const filled = [
-    notes.activitiesPerformed.trim().length >= 10,
-    notes.outcomes.trim().length >= 10,
-    notes.participantResponse.trim().length >= 10,
-    notes.progressTowardGoals.trim().length >= 10,
-  ].filter(Boolean).length;
+  // +20 structured note filled (at least one field with meaningful content)
+  const anyNoteFilled = [
+    notes.activitiesPerformed,
+    notes.outcomes,
+    notes.participantResponse,
+    notes.progressTowardGoals,
+  ].some((f) => f.trim().length >= 20);
 
-  if (filled >= 3) {
+  if (anyNoteFilled) {
     score += 20;
-  } else if (filled === 0) {
-    issues.push({
-      field: "notes",
-      severity: "error",
-      message: "Clinical note fields are required — complete at least 3 of 4 sections",
-    });
   } else {
-    issues.push({
-      field: "notes",
-      severity: "warning",
-      message: `${filled} of 4 note sections completed — aim for at least 3`,
-    });
+    issues.push("At least one clinical note field must be completed with meaningful content (20+ characters)");
   }
 
-  const evidenceText =
-    `${notes.outcomes} ${notes.participantResponse}`.toLowerCase();
-  const hasEvidence = OUTCOME_KEYWORDS.some((kw) => evidenceText.includes(kw));
-
-  if (hasEvidence) {
+  // +20 evidence captured (photos or voice notes)
+  if (imageCount > 0 || voiceNoteCount > 0) {
     score += 20;
-  } else if (
-    notes.outcomes.trim().length > 0 ||
-    notes.participantResponse.trim().length > 0
-  ) {
-    issues.push({
-      field: "outcomes",
-      severity: "warning",
-      message:
-        "Include measurable outcomes (e.g. 'participant achieved...', 'demonstrated...')",
-    });
   } else {
-    issues.push({
-      field: "outcomes",
-      severity: "error",
-      message:
-        "Outcomes and participant response are required for NDIS compliance",
-    });
+    issues.push(
+      "No evidence captured — add photos or voice dictation notes to support this claim",
+    );
   }
 
   return {
