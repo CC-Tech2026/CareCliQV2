@@ -1,9 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import {
-  useGetSession,
-  useUpdateSession,
-} from "@workspace/api-client-react";
+import { useGetSession } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SmartTextarea } from "@/components/SmartInput";
@@ -357,7 +354,6 @@ export default function SessionLive() {
   const { data: session, isLoading } = useGetSession(id as string, {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
-  const updateSession = useUpdateSession();
 
   // Session state
   const [isActive, setIsActive] = useState(false);
@@ -571,52 +567,42 @@ export default function SessionLive() {
       label: (a as unknown as Record<string, unknown>).label as string | undefined ?? a.type,
     }));
 
-    updateSession.mutate(
-      {
-        sessionId: id,
-        data: {
-          duration_minutes: durationMinutes,
-          notes: editableNotes.trim() || undefined,
-          transcription: transcription || undefined,
-          status: "in_progress",
-        },
-      },
-      {
-        onSuccess: async () => {
-          try {
-            // Pass structured notes and activity log to save-with-ai for audit persistence
-            const res = await fetch(`/api/sessions/${id}/save-with-ai`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                structured_notes: structuredNotes,
-                activity_log: activityLog,
-              }),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            setIsSaving(false);
-            setShowSummary(false);
-            toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
-            navigate(`/sessions/${id}`);
-          } catch (err) {
-            setIsSaving(false);
-            console.error("save-with-ai failed", err);
-            toast({
-              title: "AI analysis failed",
-              description: "Session data was saved but AI notes could not be generated.",
-              variant: "destructive",
-            });
-            navigate(`/sessions/${id}`);
-          }
-        },
-        onError: (err) => {
-          setIsSaving(false);
-          console.error("update-session failed", err);
-          toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
-        },
-      },
-    );
-  }, [id, elapsed, editableNotes, voiceNotes, updateSession, structuredNotes, activities, toast, navigate]);
+    try {
+      // Step 1: Save all audit-critical data in one PATCH call (not dependent on AI)
+      const patchBody: Record<string, unknown> = {
+        duration_minutes: durationMinutes,
+        notes: editableNotes.trim() || undefined,
+        transcription: transcription || undefined,
+        status: "in_progress",
+        photo_urls: images,
+        structured_notes: structuredNotes,
+        activity_log: activityLog,
+      };
+      // Remove undefined values
+      Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
+
+      const patchRes = await fetch(`/api/sessions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody),
+      });
+      if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
+
+      // Step 2: Fire AI analysis as best-effort (non-critical for audit completeness)
+      fetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" }).catch((err) => {
+        console.error("AI analysis failed (non-critical):", err);
+      });
+
+      setIsSaving(false);
+      setShowSummary(false);
+      toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
+      navigate(`/sessions/${id}`);
+    } catch (err) {
+      setIsSaving(false);
+      console.error("session save failed", err);
+      toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
+    }
+  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, toast, navigate]);
 
   // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {

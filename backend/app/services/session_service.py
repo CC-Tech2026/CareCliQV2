@@ -95,6 +95,34 @@ def _prepare_session_payload(data: dict) -> dict:
 
 async def update_session(session_id: str, data: dict) -> Optional[dict]:
     supabase = get_supabase_admin()
+
+    # Extract clinical data fields that are NOT direct DB columns.
+    # Merge them into ai_insights so audit records survive independently of AI calls.
+    clinical_structured_notes = data.pop("structured_notes", None)
+    clinical_activity_log = data.pop("activity_log", None)
+
+    if clinical_structured_notes is not None or clinical_activity_log is not None:
+        try:
+            existing_row = supabase.table("sessions").select("ai_insights").eq("id", session_id).single().execute()
+            existing_ai: dict = {}
+            if existing_row.data:
+                raw_ai = existing_row.data.get("ai_insights") or {}
+                if isinstance(raw_ai, str):
+                    try:
+                        raw_ai = json.loads(raw_ai)
+                    except Exception:
+                        raw_ai = {}
+                if isinstance(raw_ai, dict):
+                    existing_ai = raw_ai
+        except Exception:
+            existing_ai = {}
+
+        if clinical_structured_notes is not None:
+            existing_ai["structured_notes"] = clinical_structured_notes
+        if clinical_activity_log is not None:
+            existing_ai["activity_log"] = clinical_activity_log
+        data["ai_insights"] = json.dumps(existing_ai)
+
     payload = _prepare_session_payload(data)
 
     try:

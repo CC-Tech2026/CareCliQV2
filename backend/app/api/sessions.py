@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Request
-from typing import Optional, List, Any
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from typing import Optional
 from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
@@ -62,17 +62,7 @@ async def update_session(session_id: str, body: SessionUpdate):
 
 
 @router.post("/{session_id}/save-with-ai")
-async def save_session_with_ai(session_id: str, request: Request):
-    # Accept optional JSON body with structured_notes and activity_log for audit persistence
-    body_structured_notes = None
-    body_activity_log = None
-    try:
-        body = await request.json()
-        body_structured_notes = body.get("structured_notes")
-        body_activity_log = body.get("activity_log")
-    except Exception:
-        pass  # No body or non-JSON body — proceed without clinical data
-
+async def save_session_with_ai(session_id: str):
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -112,13 +102,17 @@ async def save_session_with_ai(session_id: str, request: Request):
         else:
             compliance_status = "non_compliant"
 
-        # Merge structured clinical data from the frontend (persisted in ai_insights
-        # to avoid requiring new DB columns at this stage)
-        clinical_data: dict = {}
-        if body_structured_notes and isinstance(body_structured_notes, dict):
-            clinical_data["structured_notes"] = body_structured_notes
-        if body_activity_log and isinstance(body_activity_log, list):
-            clinical_data["activity_log"] = body_activity_log
+        # Preserve audit-critical clinical data that was saved in the PATCH step.
+        # The PATCH merges structured_notes/activity_log into ai_insights; we must
+        # carry them forward so they survive this AI analysis overwrite.
+        existing_ai = session.get("ai_insights") or {}
+        if isinstance(existing_ai, str):
+            try:
+                existing_ai = json.loads(existing_ai)
+            except Exception:
+                existing_ai = {}
+        preserved_structured_notes = existing_ai.get("structured_notes", {}) if isinstance(existing_ai, dict) else {}
+        preserved_activity_log = existing_ai.get("activity_log", []) if isinstance(existing_ai, dict) else []
 
         updates = {
             "compliance_score": blended_score,
@@ -126,7 +120,8 @@ async def save_session_with_ai(session_id: str, request: Request):
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps({
                 **insights,
-                **clinical_data,
+                "structured_notes": preserved_structured_notes,
+                "activity_log": preserved_activity_log,
                 "rules_result": rules_result,
                 "compliance_status": compliance_status,
             }),
@@ -233,7 +228,7 @@ async def get_session_audit(session_id: str):
     compliance_score = session.get("compliance_score")
     compliance_status = session.get("compliance_status") or ai_insights.get("compliance_status") or "draft"
 
-    # Structured clinical data persisted during save-with-ai
+    # Structured clinical data — saved at PATCH time, preserved through AI overwrite
     structured_notes = ai_insights.get("structured_notes") or {}
     activity_log = ai_insights.get("activity_log") or []
 
@@ -243,6 +238,30 @@ async def get_session_audit(session_id: str):
     compliance_issues = [
         r.get("message") or r.get("rule", "Unknown rule") for r in failed_rules if isinstance(r, dict)
     ]
+
+    # Deterministic compliance re-computed from saved data (mirrors the frontend gate)
+    has_participant = bool(participant_id)
+    duration_minutes_val = session.get("duration_minutes") or 0
+    duration_ok = duration_minutes_val > 0
+    has_activities = len(activity_log) > 0 if isinstance(activity_log, list) else False
+    any_note_filled = any(
+        (structured_notes.get(k) or "").strip()
+        for k in ["activitiesPerformed", "outcomes", "participantResponse", "progressTowardGoals"]
+    ) if isinstance(structured_notes, dict) else False
+    has_photos = len(photos) > 0 if isinstance(photos, list) else False
+    det_score = sum([has_participant, duration_ok, has_activities, any_note_filled, has_photos]) * 20
+    det_issues: list = []
+    if not has_participant:
+        det_issues.append("Session not linked to a participant")
+    if not duration_ok:
+        det_issues.append("Session duration not recorded")
+    if not has_activities:
+        det_issues.append("No activities logged (activity log empty)")
+    if not any_note_filled:
+        det_issues.append("No clinical note fields completed")
+    if not has_photos:
+        det_issues.append("No photo evidence captured")
+    det_blocking = det_score < 50 or not (duration_ok and (has_activities or any_note_filled))
 
     # Human-readable formatted text for auditors
     separator = "=" * 50
@@ -336,6 +355,11 @@ async def get_session_audit(session_id: str):
             "notes": session.get("compliance_notes"),
             "issues": compliance_issues,
             "rules_result": rules_result,
+        },
+        "deterministic_compliance": {
+            "score": det_score,
+            "blocking": det_blocking,
+            "issues": det_issues,
         },
         "ai_insights": {
             "summary": ai_insights.get("summary"),
