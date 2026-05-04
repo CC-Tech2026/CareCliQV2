@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
 import {
   LayoutDashboard, Users, CalendarDays, ShieldCheck, Settings, Plus, Bell, Menu, X,
 } from "lucide-react";
@@ -16,6 +16,7 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [isSettings] = useRoute("/settings");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -59,13 +60,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="mt-auto p-6 border-t border-slate-200 dark:border-slate-800">
-          <Button
-            variant="outline"
-            className="w-full justify-start gap-2 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 shadow-none"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </Button>
+          <Link href="/settings">
+            <Button
+              variant="outline"
+              className={cn(
+                "w-full justify-start gap-2 border-slate-200 dark:border-slate-800 shadow-none",
+                isSettings
+                  ? "bg-primary/10 text-primary border-primary/20"
+                  : "text-slate-600 dark:text-slate-400"
+              )}
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Button>
+          </Link>
           <div className="flex items-center gap-3 mt-4 px-2">
             <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-800">
               <AvatarFallback className="bg-primary/5 text-primary">DR</AvatarFallback>
@@ -204,6 +212,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <Link
+            href="/settings"
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors",
+              isSettings
+                ? "text-primary"
+                : "text-slate-400 hover:text-slate-700"
+            )}
+          >
+            <Settings className={cn("h-5 w-5", isSettings && "text-primary")} />
+            <span>Settings</span>
+          </Link>
         </div>
       </nav>
     </div>

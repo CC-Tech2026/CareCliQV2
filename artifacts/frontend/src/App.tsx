@@ -11,6 +11,7 @@ import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
 import SessionLive from "@/pages/session-live";
 import Compliance from "@/pages/compliance";
+import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,11 @@ function Router() {
       <Route path="/compliance">
         <AppLayout>
           <Compliance />
+        </AppLayout>
+      </Route>
+      <Route path="/settings">
+        <AppLayout>
+          <Settings />
         </AppLayout>
       </Route>
       <Route component={NotFound} />

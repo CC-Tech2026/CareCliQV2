@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getStoredSignature } from "@/lib/signature-store";
 
 export interface AuditPayload {
   audit_version: string;
@@ -604,20 +605,35 @@ export function appendSessionToPDF(
   pdf.setLineWidth(0.4);
   pdf.roundedRect(sigBoxX, sigBoxY, sigBoxW, sigBoxH, 1.5, 1.5, "FD");
 
-  // Dashed signature line inside the box
-  pdf.setDrawColor("#cbd5e1");
-  pdf.setLineWidth(0.2);
-  const dashY = sigBoxY + sigBoxH - 3;
-  const dashStep = 3;
-  for (let dx = sigBoxX + 3; dx < sigBoxX + sigBoxW - 3; dx += dashStep * 2) {
-    pdf.line(dx, dashY, Math.min(dx + dashStep, sigBoxX + sigBoxW - 3), dashY);
-  }
+  // Embed real signature if one is stored, otherwise show placeholder
+  const storedSignature = getStoredSignature();
+  if (storedSignature) {
+    try {
+      const format = storedSignature.startsWith("data:image/png") ? "PNG" : "JPEG";
+      pdf.addImage(storedSignature, format, sigBoxX + 1, sigBoxY + 1, sigBoxW - 2, sigBoxH - 2);
+    } catch {
+      // fallback to placeholder on failure
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor("#cbd5e1");
+      pdf.text("Sign here", sigBoxX + sigBoxW / 2, sigBoxY + sigBoxH / 2 + 1.5, { align: "center" });
+    }
+  } else {
+    // Dashed signature line inside the box
+    pdf.setDrawColor("#cbd5e1");
+    pdf.setLineWidth(0.2);
+    const dashY = sigBoxY + sigBoxH - 3;
+    const dashStep = 3;
+    for (let dx = sigBoxX + 3; dx < sigBoxX + sigBoxW - 3; dx += dashStep * 2) {
+      pdf.line(dx, dashY, Math.min(dx + dashStep, sigBoxX + sigBoxW - 3), dashY);
+    }
 
-  // "Sign here" placeholder text inside box
-  pdf.setFontSize(7);
-  pdf.setFont("helvetica", "normal");
-  pdf.setTextColor("#cbd5e1");
-  pdf.text("Sign here", sigBoxX + sigBoxW / 2, sigBoxY + sigBoxH / 2 + 1.5, { align: "center" });
+    // "Sign here" placeholder text inside box
+    pdf.setFontSize(7);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor("#cbd5e1");
+    pdf.text("Sign here", sigBoxX + sigBoxW / 2, sigBoxY + sigBoxH / 2 + 1.5, { align: "center" });
+  }
 
   y += boxH + 6;
 
