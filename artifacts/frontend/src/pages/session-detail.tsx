@@ -3,6 +3,55 @@ import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useGetSession, useUpdateSession, useSaveSessionWithAI } from "@workspace/api-client-react";
 import type { Session } from "@workspace/api-client-react";
+import jsPDF from "jspdf";
+
+// ---------------------------------------------------------------------------
+// Audit payload type (mirrors GET /api/sessions/{id}/audit response shape)
+// ---------------------------------------------------------------------------
+
+interface AuditPayload {
+  audit_version: string;
+  ndis_principle: string;
+  generated_at: string;
+  session: {
+    id: string;
+    date: string;
+    type: string;
+    duration_minutes: number;
+    status: string;
+  };
+  participant: {
+    id: string;
+    full_name: string;
+    ndis_number?: string;
+    date_of_birth?: string;
+  };
+  clinical_notes: string;
+  structured_notes: Record<string, string>;
+  goals_addressed: string[];
+  compliance: {
+    score: number;
+    blocking: boolean;
+    issues: string[];
+    status: string;
+    ai_blended_score?: number;
+    ai_status?: string;
+    ai_notes?: string;
+  };
+  ai_insights?: {
+    summary?: string;
+    key_observations?: string[];
+    next_session_recommendations?: string[];
+    progress_trend?: string;
+  };
+  transcription?: string | null;
+  photo_urls?: string[];
+  evidence_summary?: {
+    photo_count: number;
+    has_transcription: boolean;
+    has_activity_log: boolean;
+  };
+}
 
 // Extended session type with new DB columns not yet in the OpenAPI spec
 type ExtendedSession = Session & {
@@ -115,6 +164,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [pendingSave, setPendingSave] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -249,6 +299,234 @@ export default function SessionDetail({ id }: { id?: string }) {
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!sessionId) return;
+    setIsExportingPDF(true);
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/audit`);
+      if (!res.ok) throw new Error(`Failed to fetch audit record (${res.status} ${res.statusText})`);
+      const data = await res.json() as AuditPayload;
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 18;
+      const contentW = pageW - margin * 2;
+      let y = margin;
+
+      const addPage = () => {
+        pdf.addPage();
+        y = margin;
+      };
+
+      const checkPageBreak = (neededH: number) => {
+        if (y + neededH > pageH - margin) addPage();
+      };
+
+      const drawHRule = (color = "#e2e8f0") => {
+        pdf.setDrawColor(color);
+        pdf.setLineWidth(0.3);
+        pdf.line(margin, y, pageW - margin, y);
+        y += 4;
+      };
+
+      const writeText = (text: string, opts: {
+        size?: number; bold?: boolean; color?: string;
+        align?: "left" | "center" | "right"; maxWidth?: number; lineGap?: number;
+      } = {}) => {
+        const { size = 10, bold = false, color = "#1e293b", align = "left", maxWidth = contentW, lineGap = 1.5 } = opts;
+        pdf.setFontSize(size);
+        pdf.setFont("helvetica", bold ? "bold" : "normal");
+        pdf.setTextColor(color);
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        const lineH = size * 0.352778 + lineGap;
+        checkPageBreak(lines.length * lineH + 2);
+        pdf.text(lines, align === "center" ? pageW / 2 : align === "right" ? pageW - margin : margin, y, { align });
+        y += lines.length * lineH + 1;
+      };
+
+      const writeLabelValue = (label: string, value: string) => {
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor("#64748b");
+        pdf.text(label.toUpperCase(), margin, y);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor("#1e293b");
+        const labelW = pdf.getTextWidth(label.toUpperCase()) + 3;
+        const valLines = pdf.splitTextToSize(value, contentW - labelW);
+        pdf.text(valLines, margin + labelW, y);
+        y += valLines.length * 5 + 1;
+      };
+
+      // ── Header band ──────────────────────────────────────────────────────
+      pdf.setFillColor("#1e3a5f");
+      pdf.rect(0, 0, pageW, 28, "F");
+
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor("#ffffff");
+      pdf.text("NDIS Session Audit Report", margin, 13);
+
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor("#94a3b8");
+      pdf.text("AI Clinical Companion — Confidential", margin, 20);
+      const nowStr = new Date().toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+      pdf.text(`Generated: ${nowStr}`, pageW - margin, 20, { align: "right" });
+
+      y = 36;
+
+      // ── Participant Details ───────────────────────────────────────────────
+      writeText("Participant Details", { size: 12, bold: true, color: "#1e3a5f" });
+      y += 1;
+      drawHRule("#bfdbfe");
+
+      const p = data.participant ?? {};
+      writeLabelValue("Name:", p.full_name ?? "—");
+      if (p.ndis_number) writeLabelValue("NDIS Number:", p.ndis_number);
+      if (p.date_of_birth) writeLabelValue("Date of Birth:", p.date_of_birth);
+      y += 3;
+
+      // ── Session Information ───────────────────────────────────────────────
+      checkPageBreak(40);
+      writeText("Session Information", { size: 12, bold: true, color: "#1e3a5f" });
+      y += 1;
+      drawHRule("#bfdbfe");
+
+      const s = data.session ?? {};
+      const sessionDate = s.date
+        ? new Date(s.date).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+        : "—";
+      writeLabelValue("Date:", sessionDate);
+      writeLabelValue("Type:", s.type ?? "—");
+      writeLabelValue("Duration:", s.duration_minutes ? `${s.duration_minutes} minutes` : "—");
+      if (s.status) writeLabelValue("Status:", s.status);
+      y += 3;
+
+      // ── Compliance Score ──────────────────────────────────────────────────
+      checkPageBreak(30);
+      writeText("Compliance Score", { size: 12, bold: true, color: "#1e3a5f" });
+      y += 1;
+      drawHRule("#bfdbfe");
+
+      const score = data.compliance?.score ?? null;
+      const scoreLabel = score == null ? "Not assessed"
+        : score >= 85 ? `${score.toFixed(0)}% — Compliant`
+        : score >= 60 ? `${score.toFixed(0)}% — At Risk`
+        : `${score.toFixed(0)}% — Non-Compliant`;
+
+      const scoreColor = score == null ? "#64748b" : score >= 85 ? "#059669" : score >= 60 ? "#d97706" : "#dc2626";
+      writeText(scoreLabel, { size: 13, bold: true, color: scoreColor });
+
+      if (data.compliance?.blocking) {
+        y += 1;
+        writeText("⚠ Documentation is insufficient to support a claim for this session.", { size: 9, color: "#dc2626" });
+      }
+      y += 3;
+
+      // ── Clinical Notes ────────────────────────────────────────────────────
+      checkPageBreak(20);
+      writeText("Clinical Notes", { size: 12, bold: true, color: "#1e3a5f" });
+      y += 1;
+      drawHRule("#bfdbfe");
+
+      const clinicalNotes: string = data.clinical_notes || "No clinical notes recorded.";
+      writeText(clinicalNotes, { size: 10, color: "#1e293b" });
+      y += 3;
+
+      // ── Structured Clinical Notes ─────────────────────────────────────────
+      const structuredNotes: Record<string, string> = data.structured_notes ?? {};
+      const structuredEntries = Object.entries(structuredNotes).filter(([, v]) => v && String(v).trim().length > 0);
+      if (structuredEntries.length > 0) {
+        checkPageBreak(20);
+        writeText("Structured Clinical Notes", { size: 12, bold: true, color: "#1e3a5f" });
+        y += 1;
+        drawHRule("#bfdbfe");
+        structuredEntries.forEach(([key, value]) => {
+          checkPageBreak(14);
+          const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+          writeText(label, { size: 9, bold: true, color: "#475569" });
+          writeText(String(value), { size: 10, color: "#1e293b" });
+          y += 1;
+        });
+        y += 2;
+      }
+
+      // ── NDIS Goals Addressed ──────────────────────────────────────────────
+      const goals: string[] = data.goals_addressed ?? [];
+      if (goals.length > 0) {
+        checkPageBreak(20);
+        writeText("NDIS Goals Addressed", { size: 12, bold: true, color: "#1e3a5f" });
+        y += 1;
+        drawHRule("#bfdbfe");
+        goals.forEach((goal: string) => {
+          checkPageBreak(8);
+          writeText(`• ${goal}`, { size: 10, color: "#334155" });
+        });
+        y += 3;
+      }
+
+      // ── Compliance Issues ─────────────────────────────────────────────────
+      const complianceIssues: string[] = data.compliance?.issues ?? [];
+      if (complianceIssues.length > 0) {
+        checkPageBreak(20);
+        writeText("Compliance Gaps", { size: 12, bold: true, color: "#1e3a5f" });
+        y += 1;
+        drawHRule("#bfdbfe");
+        complianceIssues.forEach((issue: string) => {
+          checkPageBreak(8);
+          writeText(`• ${issue}`, { size: 10, color: "#dc2626" });
+        });
+        y += 2;
+      }
+
+      // ── AI Assessment ─────────────────────────────────────────────────────
+      const aiNotes: string = data.compliance?.ai_notes ?? "";
+      if (aiNotes) {
+        checkPageBreak(20);
+        writeText("AI Assessment", { size: 12, bold: true, color: "#1e3a5f" });
+        y += 1;
+        drawHRule("#bfdbfe");
+        writeText(aiNotes, { size: 10, color: "#334155" });
+        y += 3;
+      }
+
+      // ── Footer on every page ──────────────────────────────────────────────
+      const ndisFooterPrinciple: string = data.ndis_principle ?? "If it cannot be evidenced, it cannot be claimed.";
+      const totalPages = (pdf.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
+      for (let pg = 1; pg <= totalPages; pg++) {
+        pdf.setPage(pg);
+        const footerY = pageH - 13;
+        pdf.setDrawColor("#e2e8f0");
+        pdf.setLineWidth(0.3);
+        pdf.line(margin, footerY - 2, pageW - margin, footerY - 2);
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor("#1e3a5f");
+        pdf.text(`NDIS: "${ndisFooterPrinciple}"`, pageW / 2, footerY + 2, { align: "center", maxWidth: contentW });
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor("#94a3b8");
+        pdf.text(
+          "AI Clinical Companion — Confidential. For NDIS audit and compliance use only.",
+          pageW / 2, footerY + 6.5, { align: "center", maxWidth: contentW }
+        );
+        pdf.text(`Page ${pg} of ${totalPages}`, pageW - margin, footerY + 6.5, { align: "right" });
+      }
+
+      // ── Save ──────────────────────────────────────────────────────────────
+      const participantName = (p.full_name || "unknown")
+        .toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      const dateStr = (s.date || new Date().toISOString().slice(0, 10)).replace(/-/g, "_");
+      pdf.save(`ndis_audit_${participantName}_${dateStr}.pdf`);
+      toast({ title: "PDF exported", description: "NDIS audit report downloaded." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "PDF export failed", description: msg, variant: "destructive" });
+    } finally {
+      setIsExportingPDF(false);
+    }
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -356,6 +634,19 @@ export default function SessionDetail({ id }: { id?: string }) {
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
               {isExporting ? "Exporting…" : "Export Audit"}
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportPDF}
+            disabled={isExportingPDF}
+            title="Export NDIS audit report as PDF"
+            className="gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+          >
+            {isExportingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            <span className="sr-only sm:not-sr-only sm:ml-0.5 text-xs">
+              {isExportingPDF ? "Generating…" : "Export PDF"}
             </span>
           </Button>
           <Button
