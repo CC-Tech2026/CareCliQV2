@@ -73,8 +73,9 @@ async def save_session_with_ai(session_id: str):
         participant = await participant_service.get_participant_by_id(participant_id)
 
     participant_data = {
-        "full_name": session.get("participant_name", ""),
-        "ndis_number": session.get("participant_ndis", ""),
+        "full_name": participant.get("full_name", "") if participant else session.get("participant_name", ""),
+        "ndis_number": participant.get("ndis_number", "") if participant else session.get("participant_ndis", ""),
+        "goals": participant.get("goals") if participant else [],
     }
 
     try:
@@ -262,7 +263,16 @@ async def get_session_audit(session_id: str):
         for k in ["activitiesPerformed", "outcomes", "participantResponse", "progressTowardGoals"]
     ) if isinstance(structured_notes, dict) else False
     has_photos = len(photos) > 0 if isinstance(photos, list) else False
-    det_score = sum([has_participant, duration_ok, has_activities, any_note_filled, has_photos]) * 20
+    has_goals = len(goals) > 0 if isinstance(goals, list) else False
+    # Mirror frontend ComplianceService weights: 20+20+20+20+10+10 = 100
+    det_score = (
+        (20 if has_participant else 0) +
+        (20 if duration_ok else 0) +
+        (20 if has_activities else 0) +
+        (20 if any_note_filled else 0) +
+        (10 if has_photos else 0) +
+        (10 if has_goals else 0)
+    )
     det_issues: list = []
     if not has_participant:
         det_issues.append("Session not linked to a participant")
@@ -274,7 +284,10 @@ async def get_session_audit(session_id: str):
         det_issues.append("No clinical note fields completed")
     if not has_photos:
         det_issues.append("No photo evidence captured")
-    det_blocking = det_score < 50 or not (duration_ok and (has_activities or any_note_filled))
+    if not has_goals:
+        det_issues.append("Non-compliant: No goals linked to this session.")
+    # Blocking: score too low, content gate not met, OR no goals linked (all are hard NDIS requirements)
+    det_blocking = det_score < 50 or not (duration_ok and (has_activities or any_note_filled)) or not has_goals
 
     # Human-readable formatted text for auditors
     separator = "=" * 50

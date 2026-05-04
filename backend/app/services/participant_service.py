@@ -118,17 +118,33 @@ async def get_dashboard_stats() -> dict:
     }
 
 
-def _coerce_goal(g) -> dict:
-    """Normalise a single goal value to {text, progress} dict."""
+def _coerce_goal(g, index: int = 0) -> dict:
+    """Normalise a single goal value to NDISGoal format: {id, title, status}.
+
+    Handles both:
+    - NDISGoal (new): {id, title, status}  — returned as-is
+    - Legacy: {text, progress} or plain string — auto-migrated to NDISGoal format
+    """
+    import hashlib as _hashlib
     if isinstance(g, dict):
-        try:
-            progress = max(0, min(100, int(g.get("progress") or 0)))
-        except (TypeError, ValueError):
-            progress = 0
-        return {"text": str(g.get("text") or ""), "progress": progress}
-    if isinstance(g, str):
-        return {"text": g, "progress": 0}
-    return {"text": str(g), "progress": 0}
+        # NDISGoal format — has id/title/status
+        if g.get("id") and g.get("title") and "status" in g:
+            return {
+                "id": str(g["id"]),
+                "title": str(g["title"]),
+                "status": str(g.get("status", "active")),
+            }
+        # Legacy format — has text/progress; auto-migrate to NDISGoal
+        text = str(g.get("text") or "").strip()
+        if not text:
+            return None  # skip empty legacy goals
+        stable_id = "legacy_" + _hashlib.md5(text.encode()).hexdigest()[:8]
+        return {"id": stable_id, "title": text, "status": "active"}
+    if isinstance(g, str) and g.strip():
+        text = g.strip()
+        stable_id = "legacy_" + _hashlib.md5(text.encode()).hexdigest()[:8]
+        return {"id": stable_id, "title": text, "status": "active"}
+    return None  # skip empty/null
 
 
 def _normalize(row: dict) -> dict:
@@ -145,9 +161,9 @@ def _normalize(row: dict) -> dict:
         except Exception:
             # Plain text fallback — split by newline or comma
             raw_list = [g.strip() for g in goals.replace("\n", ",").split(",") if g.strip()]
-        out["goals"] = [_coerce_goal(g) for g in raw_list]
+        out["goals"] = [r for r in (_coerce_goal(g, i) for i, g in enumerate(raw_list)) if r]
     elif isinstance(goals, list):
-        out["goals"] = [_coerce_goal(g) for g in goals]
+        out["goals"] = [r for r in (_coerce_goal(g, i) for i, g in enumerate(goals)) if r]
     else:
         out["goals"] = []
 

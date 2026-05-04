@@ -66,6 +66,40 @@ Be professional, factual, person-centred, and aligned with NDIS Active Support p
 
 
 async def generate_clinical_insights(session_data: dict, participant_data: dict) -> dict:
+    # Resolve goal IDs from session.goals_addressed against participant.goals to get titles
+    raw_goals_addressed = session_data.get('goals_addressed') or []
+    if isinstance(raw_goals_addressed, str):
+        try:
+            import json as _json
+            raw_goals_addressed = _json.loads(raw_goals_addressed)
+        except Exception:
+            raw_goals_addressed = []
+
+    participant_goals = participant_data.get('goals') or []
+    if isinstance(participant_goals, str):
+        try:
+            import json as _json
+            participant_goals = _json.loads(participant_goals)
+        except Exception:
+            participant_goals = []
+
+    # Build a map of goal id -> title from participant goals (NDISGoal format)
+    goal_title_map: dict = {}
+    for g in participant_goals:
+        if isinstance(g, dict) and g.get('id') and g.get('title'):
+            goal_title_map[g['id']] = g['title']
+
+    # Resolve addressed goal IDs to titles (fall back to the raw value if no map entry)
+    resolved_goal_titles = []
+    for gid in raw_goals_addressed:
+        if gid in goal_title_map:
+            resolved_goal_titles.append(goal_title_map[gid])
+        else:
+            resolved_goal_titles.append(str(gid))
+
+    goals_context = ', '.join(resolved_goal_titles) if resolved_goal_titles else 'None linked'
+    support_focused_line = f"Support focused on: {', '.join(resolved_goal_titles)}" if resolved_goal_titles else ""
+
     prompt = f"""You are a clinical assistant for an NDIS provider in Australia. Analyse this session and provide structured insights.
 
 Participant: {participant_data.get('full_name', 'Unknown')}
@@ -73,8 +107,9 @@ Primary Disability: {participant_data.get('primary_disability', 'Not specified')
 Session Type: {session_data.get('session_type', 'Unknown')}
 Duration: {session_data.get('duration_minutes', 0)} minutes
 Session Notes: {session_data.get('notes', 'No notes provided')}
-Tags: {', '.join(session_data.get('tags', []))}
-Goals Addressed: {', '.join(session_data.get('goals_addressed', []))}
+{f"Support focused on: {goals_context}" if resolved_goal_titles else "No goals linked to this session."}
+Tags: {', '.join(session_data.get('tags', []) or [])}
+Goals Addressed: {goals_context}
 
 Provide a JSON response with:
 {{

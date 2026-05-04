@@ -35,6 +35,7 @@ import type {
   SavePractitionerSettingsBody,
   Session,
   UpdateParticipantBody,
+  UpdateParticipantGoalsBody,
   UpdateSessionBody,
 } from "./api.schemas";
 
@@ -531,6 +532,94 @@ export const useUpdateParticipant = <
   TContext
 > => {
   return useMutation(getUpdateParticipantMutationOptions(options));
+};
+
+/**
+ * @summary Update the NDIS goals for a participant
+ */
+export const getUpdateParticipantGoalsUrl = (participantId: string) => {
+  return `/api/participants/${participantId}/goals`;
+};
+
+export const updateParticipantGoals = async (
+  participantId: string,
+  updateParticipantGoalsBody: UpdateParticipantGoalsBody,
+  options?: RequestInit,
+): Promise<Participant> => {
+  return customFetch<Participant>(getUpdateParticipantGoalsUrl(participantId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateParticipantGoalsBody),
+  });
+};
+
+export const getUpdateParticipantGoalsMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateParticipantGoals>>,
+    TError,
+    { participantId: string; data: BodyType<UpdateParticipantGoalsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateParticipantGoals>>,
+  TError,
+  { participantId: string; data: BodyType<UpdateParticipantGoalsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateParticipantGoals"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateParticipantGoals>>,
+    { participantId: string; data: BodyType<UpdateParticipantGoalsBody> }
+  > = (props) => {
+    const { participantId, data } = props ?? {};
+
+    return updateParticipantGoals(participantId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateParticipantGoalsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateParticipantGoals>>
+>;
+export type UpdateParticipantGoalsMutationBody =
+  BodyType<UpdateParticipantGoalsBody>;
+export type UpdateParticipantGoalsMutationError = ErrorType<void>;
+
+/**
+ * @summary Update the NDIS goals for a participant
+ */
+export const useUpdateParticipantGoals = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateParticipantGoals>>,
+    TError,
+    { participantId: string; data: BodyType<UpdateParticipantGoalsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateParticipantGoals>>,
+  TError,
+  { participantId: string; data: BodyType<UpdateParticipantGoalsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateParticipantGoalsMutationOptions(options));
 };
 
 /**

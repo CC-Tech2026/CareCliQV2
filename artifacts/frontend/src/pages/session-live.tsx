@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { useGetSession } from "@workspace/api-client-react";
+import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
 import { useSettings } from "@/lib/use-settings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -357,6 +357,27 @@ export default function SessionLive() {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
 
+  const participantId = session?.participant_id ?? "";
+  const { data: participant } = useGetParticipant(participantId, {
+    query: { enabled: !!participantId, queryKey: ["getParticipant", participantId] },
+  });
+
+  // Resolve goals_addressed IDs to titles using participant's goals array
+  const resolvedGoalTitles: string[] = (() => {
+    const addressed = session?.goals_addressed ?? [];
+    if (!addressed.length) return [];
+    const participantGoals = participant?.goals ?? [];
+    // Build id->title map from participant's NDISGoal list
+    const goalMap: Record<string, string> = {};
+    for (const g of participantGoals) {
+      if (typeof g === "object" && g !== null) {
+        const gObj = g as { id?: unknown; title?: unknown };
+        if (gObj.id && gObj.title) goalMap[String(gObj.id)] = String(gObj.title);
+      }
+    }
+    return addressed.map((gid) => goalMap[gid] ?? gid);
+  })();
+
   const { settings } = useSettings();
 
   // Session state
@@ -411,27 +432,32 @@ export default function SessionLive() {
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
 
-  // Populate goals from session participant goals
+  // Populate goals from session.goals_addressed, resolved against participant's goal titles
   useEffect(() => {
     if (session && goals.length === 0) {
-      const participantGoals = session.goals_addressed as string[] | null;
-      if (participantGoals && participantGoals.length > 0) {
+      const addressed = session.goals_addressed ?? [];
+      if (addressed.length > 0 && resolvedGoalTitles.length > 0) {
         setGoals(
-          participantGoals.map((g, i) => ({
-            id: String(i),
-            name: g,
+          addressed.map((gid, i) => ({
+            id: gid,
+            name: resolvedGoalTitles[i] ?? gid,
             status: "not_started" as const,
           })),
         );
-      } else {
-        setGoals([
-          { id: "1", name: "Improve independent mobility", status: "not_started" },
-          { id: "2", name: "Community participation skills", status: "not_started" },
-          { id: "3", name: "Daily living tasks", status: "not_started" },
-        ]);
+      } else if (addressed.length > 0) {
+        // Goals addressed but participant data not yet loaded — use IDs as placeholder
+        setGoals(
+          addressed.map((gid) => ({
+            id: gid,
+            name: gid,
+            status: "not_started" as const,
+          })),
+        );
       }
+      // If no goals addressed, leave goals empty — no defaults
     }
-  }, [session, goals.length]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, resolvedGoalTitles.join(",")]);
 
   // Timer
   useEffect(() => {
@@ -845,12 +871,14 @@ export default function SessionLive() {
   const participantName = session.participants?.full_name ?? "Session";
 
   // Live compliance for review modal (cheap pure fn — recomputes on every render)
+  const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
   const liveCompliance = checkStructuredCompliance(
     structuredNotes,
     !!(session?.participant_id),
     elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
     activities.length,
     images.length,
+    goalsAddressedCount,
   );
 
   // Live compliance banner — derived from settings.compliance + current session state
@@ -1004,6 +1032,26 @@ export default function SessionLive() {
         </div>
       </div>
 
+      {/* ── Working Toward: goal strip ── */}
+      {resolvedGoalTitles.length > 0 && (
+        <div className="shrink-0 bg-indigo-50 border-b border-indigo-100 px-4 py-1.5">
+          <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600 shrink-0">
+              <Target className="h-3 w-3" />
+              Working toward:
+            </span>
+            {resolvedGoalTitles.map((title, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200"
+              >
+                {title}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Compliance Status Banner ── */}
       {bannerVisible && (
         <div
@@ -1152,9 +1200,10 @@ export default function SessionLive() {
                 );
               })}
               {goals.length === 0 && (
-                <div className="text-center py-6 text-slate-400 border border-dashed border-slate-100 rounded-xl">
-                  <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">No goals linked</p>
+                <div className="text-center py-6 text-amber-700 bg-amber-50 border border-amber-200 rounded-xl">
+                  <AlertTriangle className="h-6 w-6 mx-auto mb-2 opacity-60" />
+                  <p className="text-xs font-semibold">Non-compliant: No goals linked to this session.</p>
+                  <p className="text-xs mt-1 text-amber-600">NDIS requires every session to be linked to at least one funded support goal.</p>
                 </div>
               )}
             </div>

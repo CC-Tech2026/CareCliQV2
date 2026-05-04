@@ -8,6 +8,16 @@ class ParticipantGoal(BaseModel):
     progress: int = 0
 
 
+class NDISGoal(BaseModel):
+    id: str
+    title: str
+    status: str = "active"
+
+
+class GoalsUpdateBody(BaseModel):
+    goals: List[NDISGoal]
+
+
 class ParticipantCreate(BaseModel):
     full_name: str
     ndis_number: str

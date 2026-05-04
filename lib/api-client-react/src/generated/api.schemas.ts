@@ -18,6 +18,20 @@ export interface ParticipantGoal {
   progress: number;
 }
 
+export type NDISGoalStatus =
+  (typeof NDISGoalStatus)[keyof typeof NDISGoalStatus];
+
+export const NDISGoalStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface NDISGoal {
+  id: string;
+  title: string;
+  status: NDISGoalStatus;
+}
+
 export interface Participant {
   id: string;
   full_name: string;
@@ -32,7 +46,7 @@ export interface Participant {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  goals?: ParticipantGoal[] | null;
+  goals?: (NDISGoal | ParticipantGoal)[] | null;
   created_at?: string | null;
 }
 
@@ -52,6 +66,10 @@ export interface CreateParticipantBody {
   goals?: ParticipantGoal[] | null;
 }
 
+export interface UpdateParticipantGoalsBody {
+  goals: NDISGoal[];
+}
+
 export interface UpdateParticipantBody {
   full_name?: string | null;
   email?: string | null;
@@ -61,7 +79,7 @@ export interface UpdateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  goals?: ParticipantGoal[] | null;
+  goals?: (NDISGoal | ParticipantGoal)[] | null;
 }
 
 export type SessionParticipants = {

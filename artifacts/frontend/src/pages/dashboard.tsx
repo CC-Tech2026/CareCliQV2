@@ -6,7 +6,7 @@ import {
   useGetParticipants,
   useGetDashboardStats,
 } from "@workspace/api-client-react";
-import type { Session, Participant, ParticipantGoal } from "@workspace/api-client-react";
+import type { Session, Participant, NDISGoal, ParticipantGoal } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -582,6 +582,10 @@ function ReadinessCard({
   );
 }
 
+function isNDISGoal(g: NDISGoal | ParticipantGoal): g is NDISGoal {
+  return "id" in g && "title" in g && "status" in g;
+}
+
 function NextPatientPanel({
   session,
   name,
@@ -591,13 +595,16 @@ function NextPatientPanel({
   session: Session;
   name: string;
   ndis: string;
-  goals?: ParticipantGoal[];
+  goals?: (NDISGoal | ParticipantGoal)[];
 }) {
   const isResume = session.status === "in_progress";
   const initials = getInitials(name);
   const colorCls = avatarColor(name);
   const light = getTrafficLight(session);
-  const topGoals = (goals ?? []).slice(0, 3);
+  const topGoals = (goals ?? [])
+    .filter(isNDISGoal)
+    .filter((g) => g.status === "active")
+    .slice(0, 3);
 
   return (
     <section className="rounded-2xl border bg-gradient-to-br from-primary to-primary/80 text-white p-6 shadow-md">
@@ -643,28 +650,16 @@ function NextPatientPanel({
         </div>
       </div>
 
-      {/* Participant Goal Progress */}
+      {/* Participant Goal Focus */}
       {topGoals.length > 0 && (
-        <div className="mt-5 p-3 rounded-xl bg-white/10 space-y-2.5">
+        <div className="mt-5 p-3 rounded-xl bg-white/10 space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-1">
             Today's Focus
           </p>
-          {topGoals.map((goal, i) => (
-            <div key={i}>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs opacity-90 leading-tight line-clamp-1 flex-1 mr-2">
-                  {goal.text}
-                </span>
-                <span className="text-xs font-semibold opacity-80 shrink-0">
-                  {goal.progress}%
-                </span>
-              </div>
-              <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-white/70 transition-all"
-                  style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }}
-                />
-              </div>
+          {topGoals.map((goal) => (
+            <div key={goal.id} className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-white/60 shrink-0" />
+              <span className="text-xs opacity-90 leading-tight line-clamp-1">{goal.title}</span>
             </div>
           ))}
         </div>

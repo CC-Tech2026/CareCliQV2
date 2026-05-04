@@ -125,6 +125,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Participant"
 
+  /participants/{participantId}/goals:
+    patch:
+      operationId: updateParticipantGoals
+      tags: [participants]
+      summary: Update the NDIS goals for a participant
+      parameters:
+        - name: participantId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateParticipantGoalsBody"
+      responses:
+        "200":
+          description: Updated participant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Participant"
+        "404":
+          description: Not found
+
   /sessions:
     get:
       operationId: getSessions
@@ -434,6 +461,18 @@ components:
           maximum: 100
       required: [text, progress]
 
+    NDISGoal:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [active, archived]
+      required: [id, title, status]
+
     Participant:
       type: object
       properties:
@@ -475,7 +514,9 @@ components:
         goals:
           type: array
           items:
-            $ref: "#/components/schemas/ParticipantGoal"
+            anyOf:
+              - $ref: "#/components/schemas/NDISGoal"
+              - $ref: "#/components/schemas/ParticipantGoal"
           nullable: true
         created_at:
           type: string
@@ -527,6 +568,15 @@ components:
           nullable: true
       required: [full_name, ndis_number]
 
+    UpdateParticipantGoalsBody:
+      type: object
+      properties:
+        goals:
+          type: array
+          items:
+            $ref: "#/components/schemas/NDISGoal"
+      required: [goals]
+
     UpdateParticipantBody:
       type: object
       properties:
@@ -557,7 +607,9 @@ components:
         goals:
           type: array
           items:
-            $ref: "#/components/schemas/ParticipantGoal"
+            anyOf:
+              - $ref: "#/components/schemas/NDISGoal"
+              - $ref: "#/components/schemas/ParticipantGoal"
           nullable: true
 
     Session:

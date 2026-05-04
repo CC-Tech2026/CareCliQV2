@@ -8,7 +8,7 @@ import {
   useCreateParticipant,
   useUpdateParticipant,
   type CreateParticipantBody,
-  type ParticipantGoal,
+  type NDISGoal,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Search, UserPlus, Calendar, Activity, Target, ShieldCheck, Clock,
   FileText, Loader2, Users, Edit, DollarSign, BarChart3, History,
-  CheckCircle2, XCircle, AlertTriangle, TrendingUp, PlusCircle,
+  CheckCircle2, XCircle, AlertTriangle, TrendingUp, PlusCircle, Archive,
+  ChevronDown, ChevronUp, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -618,137 +619,246 @@ function RuleBadge({ status }: { status: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Goal Progress Panel
+// Goals Management Card (NDIS goal linking)
 // ---------------------------------------------------------------------------
 
-function GoalProgressPanel({
+function GoalsManagementCard({
   participantId,
-  goals: goalsProp,
+  goals,
   onUpdated,
 }: {
   participantId: string;
-  goals: ParticipantGoal[];
+  goals: NDISGoal[];
   onUpdated: () => void;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [goals, setGoals] = useState<ParticipantGoal[]>(goalsProp);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [draftProgress, setDraftProgress] = useState<number>(0);
+  const [showArchived, setShowArchived] = useState(false);
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
-  // Sync when parent data changes (e.g. after query refetch)
-  useEffect(() => {
-    setGoals(goalsProp);
-  }, [goalsProp]);
-
-  const updateParticipant = useUpdateParticipant({
-    mutation: {
-      onSuccess: () => {
-        setEditingIndex(null);
-        queryClient.invalidateQueries({ queryKey: ["getParticipant", participantId] });
-        queryClient.invalidateQueries({ queryKey: ["getParticipants"] });
-        onUpdated();
-        toast({ title: "Goal progress updated" });
-      },
-      onError: () => {
-        toast({ title: "Failed to update goal", variant: "destructive" });
-      },
+  const updateGoals = useMutation({
+    mutationFn: async (updatedGoals: NDISGoal[]) => {
+      const res = await fetch(`/api/participants/${participantId}/goals`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goals: updatedGoals }),
+      });
+      if (!res.ok) throw new Error("Failed to update goals");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["getParticipant", participantId] });
+      queryClient.invalidateQueries({ queryKey: ["getParticipants"] });
+      onUpdated();
+    },
+    onError: () => {
+      toast({ title: "Failed to update goals", variant: "destructive" });
     },
   });
 
-  function startEdit(index: number) {
-    setEditingIndex(index);
-    setDraftProgress(goals[index]?.progress ?? 0);
+  function addGoal() {
+    const trimmed = newGoalTitle.trim();
+    if (!trimmed) return;
+    const newGoal: NDISGoal = {
+      id: `goal_${Date.now()}`,
+      title: trimmed,
+      status: "active",
+    };
+    updateGoals.mutate([...goals, newGoal], {
+      onSuccess: () => {
+        setNewGoalTitle("");
+        setIsAdding(false);
+        toast({ title: "Goal added" });
+      },
+    });
   }
 
-  function cancelEdit() {
-    setEditingIndex(null);
+  function startEditing(goal: NDISGoal) {
+    setEditingId(goal.id);
+    setEditingTitle(goal.title);
   }
 
-  function saveProgress(index: number) {
-    const newProgress = Math.min(100, Math.max(0, draftProgress));
-    const snapshot = goals; // capture pre-edit snapshot for rollback
-    const updated = goals.map((g, i) =>
-      i === index ? { ...g, progress: newProgress } : g,
-    );
-    // Optimistic update
-    setGoals(updated);
-    updateParticipant.mutate(
-      { participantId, data: { goals: updated } },
+  function saveEdit() {
+    const trimmed = editingTitle.trim();
+    if (!trimmed || !editingId) { setEditingId(null); return; }
+    updateGoals.mutate(
+      goals.map((g) => (g.id === editingId ? { ...g, title: trimmed } : g)),
       {
-        onError: () => {
-          setGoals(snapshot); // restore pre-edit state on failure
+        onSuccess: () => {
+          setEditingId(null);
+          toast({ title: "Goal updated" });
         },
       },
     );
   }
 
-  if (goals.length === 0 && goalsProp.length === 0) {
-    return (
-      <span className="text-slate-400 italic text-sm">
-        No goals documented — edit participant to add goals
-      </span>
+  function archiveGoal(id: string) {
+    updateGoals.mutate(
+      goals.map((g) => (g.id === id ? { ...g, status: "archived" as const } : g)),
+      { onSuccess: () => toast({ title: "Goal archived" }) },
     );
   }
 
+  function restoreGoal(id: string) {
+    updateGoals.mutate(
+      goals.map((g) => (g.id === id ? { ...g, status: "active" as const } : g)),
+      { onSuccess: () => toast({ title: "Goal restored" }) },
+    );
+  }
+
+  const activeGoals = goals.filter((g) => g.status === "active");
+  const archivedGoals = goals.filter((g) => g.status === "archived");
+
   return (
-    <ul className="space-y-3">
-      {goals.map((goal, i) => (
-        <li key={i} className="space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-slate-700 dark:text-slate-300 leading-snug flex-1">
-              {goal.text}
-            </span>
-            <span className="text-xs font-semibold text-slate-600 shrink-0 w-9 text-right">
-              {goal.progress}%
-            </span>
-            {editingIndex !== i && (
-              <button
-                className="text-xs text-primary hover:underline shrink-0"
-                onClick={() => startEdit(i)}
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <Target className="h-4 w-4" /> NDIS Goals
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-xs"
+            onClick={() => setIsAdding(true)}
+            disabled={isAdding}
+            data-testid="button-add-goal"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Goal
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isAdding && (
+          <div className="flex gap-2">
+            <Input
+              autoFocus
+              placeholder="e.g. Improve independent mobility"
+              value={newGoalTitle}
+              onChange={(e) => setNewGoalTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addGoal();
+                if (e.key === "Escape") { setIsAdding(false); setNewGoalTitle(""); }
+              }}
+              data-testid="input-goal-title"
+              className="flex-1 text-sm"
+            />
+            <Button
+              size="sm"
+              onClick={addGoal}
+              disabled={updateGoals.isPending || !newGoalTitle.trim()}
+              data-testid="button-save-goal"
+            >
+              {updateGoals.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setIsAdding(false); setNewGoalTitle(""); }}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {activeGoals.length === 0 && !isAdding ? (
+          <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg text-slate-400">
+            <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
+            <p className="text-xs">No active goals — click "Add Goal" to add funded support goals</p>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {activeGoals.map((goal) => (
+              <li
+                key={goal.id}
+                className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 group"
+                data-testid={`goal-item-${goal.id}`}
               >
-                Edit
-              </button>
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                {editingId === goal.id ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <Input
+                      autoFocus
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEdit();
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="flex-1 text-sm h-7 py-1"
+                      data-testid={`input-edit-goal-${goal.id}`}
+                    />
+                    <Button size="sm" className="h-6 text-xs px-2" onClick={saveEdit} disabled={updateGoals.isPending}>
+                      {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-sm flex-1 text-slate-800 dark:text-slate-200">{goal.title}</span>
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition-all">
+                      <button
+                        className="text-slate-400 hover:text-indigo-600 text-xs"
+                        onClick={() => startEditing(goal)}
+                        title="Edit goal"
+                        data-testid={`button-edit-goal-${goal.id}`}
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        className="text-slate-400 hover:text-amber-600 text-xs flex items-center gap-1"
+                        onClick={() => archiveGoal(goal.id)}
+                        disabled={updateGoals.isPending}
+                        data-testid={`button-archive-goal-${goal.id}`}
+                        title="Archive goal"
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {archivedGoals.length > 0 && (
+          <div>
+            <button
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 mt-1 mb-2"
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              {showArchived ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {showArchived ? "Hide" : "Show"} archived ({archivedGoals.length})
+            </button>
+            {showArchived && (
+              <ul className="space-y-2">
+                {archivedGoals.map((goal) => (
+                  <li
+                    key={goal.id}
+                    className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50/50 border border-dashed border-slate-200 group"
+                  >
+                    <XCircle className="h-4 w-4 text-slate-300 shrink-0" />
+                    <span className="text-sm flex-1 text-slate-400 line-through">{goal.title}</span>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-emerald-600 transition-all text-xs"
+                      onClick={() => restoreGoal(goal.id)}
+                      disabled={updateGoals.isPending}
+                      title="Restore goal"
+                    >
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary/70 transition-all"
-              style={{ width: `${Math.min(100, Math.max(0, goal.progress))}%` }}
-            />
-          </div>
-          {editingIndex === i && (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={5}
-                value={draftProgress}
-                onChange={(e) => setDraftProgress(Number(e.target.value))}
-                className="flex-1 accent-primary"
-              />
-              <span className="text-xs font-semibold text-slate-700 w-9 text-right">
-                {draftProgress}%
-              </span>
-              <button
-                className="text-xs text-emerald-600 font-medium hover:underline shrink-0"
-                onClick={() => saveProgress(i)}
-                disabled={updateParticipant.isPending}
-              >
-                {updateParticipant.isPending ? "Saving…" : "Save"}
-              </button>
-              <button
-                className="text-xs text-slate-500 hover:underline shrink-0"
-                onClick={cancelEdit}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </li>
-      ))}
-    </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -921,19 +1031,15 @@ function ParticipantDetail({
                   <span className="text-slate-500 block mb-1">Primary Disability</span>
                   <span className="font-medium">{String(participant.primary_disability || "Not specified")}</span>
                 </div>
-                <div>
-                  <span className="text-slate-500 flex items-center gap-1 mb-2">
-                    <Target className="h-3.5 w-3.5" /> Goals
-                  </span>
-                  <GoalProgressPanel
-                    participantId={id}
-                    goals={(participant.goals as ParticipantGoal[]) ?? []}
-                    onUpdated={handleSaved}
-                  />
-                </div>
               </CardContent>
             </Card>
           </div>
+
+          <GoalsManagementCard
+            participantId={id}
+            goals={(participant.goals as NDISGoal[]) ?? []}
+            onUpdated={handleSaved}
+          />
 
           {aiSummary?.summary && (
             <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30">
@@ -1098,21 +1204,6 @@ function ParticipantDetail({
             </div>
           )}
 
-          {/* Goals from participant profile */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                <Target className="h-4 w-4" /> NDIS Goals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <GoalProgressPanel
-                participantId={id}
-                goals={(participant.goals as ParticipantGoal[]) ?? []}
-                onUpdated={handleSaved}
-              />
-            </CardContent>
-          </Card>
         </TabsContent>
 
         {/* ── Client History Tab ── */}

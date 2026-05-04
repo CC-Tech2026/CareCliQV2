@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from ..schemas.participant import ParticipantCreate, ParticipantUpdate, NDISPlanCreate
+from ..schemas.participant import ParticipantCreate, ParticipantUpdate, NDISPlanCreate, GoalsUpdateBody
 from ..services import participant_service
 from ..services import funding_service
 import logging
@@ -119,6 +119,22 @@ async def get_budget_summary(participant_id: str):
 async def get_budget_usage(participant_id: str):
     """Get budget usage history."""
     return await funding_service.get_budget_usage_history(participant_id)
+
+
+@router.patch("/{participant_id}/goals")
+async def update_participant_goals(participant_id: str, body: GoalsUpdateBody):
+    """Update NDIS goals for a participant (add/archive goals)."""
+    participant = await participant_service.get_participant_by_id(participant_id)
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    goals_data = [g.model_dump() for g in body.goals]
+    import json
+    from ..services.supabase_client import get_supabase_admin
+    supabase = get_supabase_admin()
+    result = supabase.table("patients").update({"goals": json.dumps(goals_data)}).eq("id", participant_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return await participant_service.get_participant_by_id(participant_id)
 
 
 @router.get("/{participant_id}/compliance-history")

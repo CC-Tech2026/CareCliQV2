@@ -1,10 +1,13 @@
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import {
   useGetParticipants,
+  useGetParticipant,
   useCreateSession,
+  type NDISGoal,
 } from "@workspace/api-client-react";
 import { format } from "date-fns";
 
@@ -36,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput, SmartTextarea } from "@/components/SmartInput";
 
@@ -45,6 +49,8 @@ import {
   Activity,
   Loader2,
   Zap,
+  Target,
+  AlertCircle,
 } from "lucide-react";
 
 import {
@@ -103,6 +109,25 @@ export default function SessionNew() {
   const { data: participants, isLoading } = useGetParticipants();
   const createSessionMutation = useCreateSession();
 
+  // Track selected participant's ID for goal fetching
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>("");
+  const [selectedGoalIds, setSelectedGoalIds] = useState<string[]>([]);
+
+  // Fetch selected participant's goals
+  const { data: selectedParticipant } = useGetParticipant(selectedParticipantId, {
+    query: { enabled: !!selectedParticipantId, queryKey: ["getParticipant", selectedParticipantId] },
+  });
+
+  // Parse active goals from participant data (backend always normalises to NDISGoal format)
+  const participantGoals: NDISGoal[] = (
+    (selectedParticipant?.goals as NDISGoal[] | null | undefined) ?? []
+  ).filter((g) => g.status === "active");
+
+  // Reset goal selection when participant changes
+  useEffect(() => {
+    setSelectedGoalIds([]);
+  }, [selectedParticipantId]);
+
   const form = useForm<SessionFormValues>({
     resolver: zodResolver(sessionSchema),
     defaultValues: {
@@ -117,6 +142,12 @@ export default function SessionNew() {
     form.setValue(name, value);
   };
 
+  const toggleGoal = (goalId: string) => {
+    setSelectedGoalIds((prev) =>
+      prev.includes(goalId) ? prev.filter((id) => id !== goalId) : [...prev, goalId],
+    );
+  };
+
   /* ---------------- SUBMIT ---------------- */
 
   const handleSubmit = (data: SessionFormValues, startNow: boolean) => {
@@ -129,6 +160,7 @@ export default function SessionNew() {
           session_type: data.session_type,
           notes: data.pre_session_notes ?? "",
           status: "draft",
+          goals_addressed: selectedGoalIds,
         },
       },
       {
@@ -147,6 +179,10 @@ export default function SessionNew() {
       },
     );
   };
+
+  // "Start Session" is disabled whenever a participant is selected and no goals are chosen.
+  // Participants with no active goals must add goals on the profile before starting a session.
+  const startDisabled = !!selectedParticipantId && selectedGoalIds.length === 0;
 
   /* ---------------- UI ---------------- */
 
@@ -179,7 +215,7 @@ export default function SessionNew() {
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
                     <FormLabel>Participant</FormLabel>
-                    <Select onValueChange={field.onChange}>
+                    <Select onValueChange={(val) => { field.onChange(val); setSelectedParticipantId(val); }}>
                       <SelectTrigger disabled={isLoading}>
                         <SelectValue placeholder="Select participant" />
                       </SelectTrigger>
@@ -256,6 +292,56 @@ export default function SessionNew() {
               />
             </CardContent>
           </Card>
+
+          {/* GOALS SELECTION — shown after participant is selected */}
+          {selectedParticipantId && (
+            <Card className={selectedGoalIds.length === 0 ? "border-amber-300" : ""}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Target className="h-4 w-4 text-indigo-500" />
+                  NDIS Goals for This Session
+                  {selectedGoalIds.length === 0 && (
+                    <Badge variant="outline" className="ml-auto text-amber-700 border-amber-300 bg-amber-50 text-[10px]">
+                      Required
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {participantGoals.length === 0 ? (
+                  <div className="flex items-start gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 text-sm text-slate-600">
+                    <AlertCircle className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <span>
+                      This participant has no active goals. Add goals on the participant profile before starting a session.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {participantGoals.map((goal) => (
+                      <label
+                        key={goal.id}
+                        className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                        data-testid={`goal-checkbox-${goal.id}`}
+                      >
+                        <Checkbox
+                          checked={selectedGoalIds.includes(goal.id)}
+                          onCheckedChange={() => toggleGoal(goal.id)}
+                          id={`goal-${goal.id}`}
+                        />
+                        <span className="text-sm text-slate-800">{goal.title}</span>
+                      </label>
+                    ))}
+                    {selectedGoalIds.length === 0 && (
+                      <p className="text-xs text-amber-700 flex items-center gap-1.5 mt-2">
+                        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                        Select at least one participant goal before starting the session to meet NDIS documentation requirements.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* SMART LAYER */}
           <Card>
@@ -349,7 +435,11 @@ export default function SessionNew() {
 
                 <Button
                   onClick={form.handleSubmit((d) => handleSubmit(d, true))}
+                  disabled={startDisabled || createSessionMutation.isPending}
+                  title={startDisabled ? "Select at least one participant goal before starting the session to meet NDIS documentation requirements." : undefined}
+                  data-testid="button-start-session"
                 >
+                  {createSessionMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Start Session
                 </Button>
               </div>
