@@ -59,6 +59,22 @@ export async function fetchAuditData(sessionId: string): Promise<AuditPayload> {
   return res.json() as Promise<AuditPayload>;
 }
 
+export interface ProviderInfo {
+  businessName?: string | null;
+  abn?: string | null;
+}
+
+async function fetchProviderSettings(): Promise<ProviderInfo> {
+  try {
+    const res = await fetch("/api/settings/practitioner");
+    if (!res.ok) return {};
+    const data = (await res.json()) as { provider?: ProviderInfo | null };
+    return (data.provider as ProviderInfo) ?? {};
+  } catch {
+    return {};
+  }
+}
+
 async function fetchLogoDataUrl(): Promise<string | null> {
   try {
     const res = await fetch("/opengraph.jpg");
@@ -105,7 +121,8 @@ export function appendSessionToPDF(
   pdf: jsPDF,
   data: AuditPayload,
   isFirstSession = true,
-  logoDataUrl: string | null = null
+  logoDataUrl: string | null = null,
+  providerInfo: ProviderInfo = {}
 ) {
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
@@ -264,6 +281,19 @@ export function appendSessionToPDF(
   pdf.setFont("helvetica", "bold");
   pdf.setTextColor("#ffffff");
   pdf.text("NDIS Session Audit Report", margin, 20);
+
+  // Provider business name and ABN in header (if set)
+  const providerBusinessName = providerInfo.businessName?.trim() || null;
+  const providerABN = providerInfo.abn?.trim() || null;
+  const providerParts: string[] = [];
+  if (providerBusinessName) providerParts.push(providerBusinessName);
+  if (providerABN) providerParts.push(`ABN: ${providerABN}`);
+  if (providerParts.length > 0) {
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor("#cbd5e1");
+    pdf.text(providerParts.join("  |  "), margin, 28);
+  }
 
   const nowStr = new Date().toLocaleString("en-AU", {
     dateStyle: "medium",
@@ -534,7 +564,7 @@ export function appendSessionToPDF(
   }
 
   // ── Practitioner Sign-Off ─────────────────────────────────────────────────
-  const signOffBlockH = 52;
+  const signOffBlockH = 60;
   checkPageBreak(signOffBlockH);
 
   const prac = data.practitioner ?? {};
@@ -544,10 +574,14 @@ export function appendSessionToPDF(
     day: "numeric", month: "long", year: "numeric",
   });
 
+  const signOffProviderName = providerInfo.businessName?.trim() || null;
+  const signOffABN = providerInfo.abn?.trim() || null;
+
   writeSectionHeading("Practitioner Sign-Off");
 
-  // Outer rounded container
-  const boxH = 38;
+  // Outer rounded container — taller if provider info is present
+  const hasProviderInfo = !!(signOffProviderName || signOffABN);
+  const boxH = hasProviderInfo ? 46 : 38;
   pdf.setFillColor("#f0f9ff");
   pdf.setDrawColor("#bfdbfe");
   pdf.setLineWidth(0.4);
@@ -570,6 +604,17 @@ export function appendSessionToPDF(
   pdf.setFont("helvetica", "normal");
   pdf.setTextColor(SLATE_500);
   pdf.text(pracCreds, margin + 5, y + 20);
+
+  // Provider info below credentials (if set)
+  if (hasProviderInfo) {
+    const providerLineParts: string[] = [];
+    if (signOffProviderName) providerLineParts.push(signOffProviderName);
+    if (signOffABN) providerLineParts.push(`ABN: ${signOffABN}`);
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(SLATE_500);
+    pdf.text(providerLineParts.join("  |  "), margin + 5, y + 27);
+  }
 
   // Divider between left info and right signature area
   const dividerX = margin + contentW * 0.55;
@@ -693,14 +738,15 @@ export function addPDFFooters(pdf: jsPDF, ndisFooterPrinciple: string) {
 }
 
 export async function exportSingleSessionPDF(sessionId: string): Promise<void> {
-  const [data, logoDataUrl] = await Promise.all([
+  const [data, logoDataUrl, providerInfo] = await Promise.all([
     fetchAuditData(sessionId),
     fetchLogoDataUrl(),
+    fetchProviderSettings(),
   ]);
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  appendSessionToPDF(pdf, data, true, logoDataUrl);
+  appendSessionToPDF(pdf, data, true, logoDataUrl, providerInfo);
   addPDFFooters(pdf, data.ndis_principle ?? "If it cannot be evidenced, it cannot be claimed.");
 
   const p = data.participant ?? {};
@@ -719,7 +765,10 @@ export async function exportBulkSessionsPDF(
 ): Promise<void> {
   if (sessionIds.length === 0) return;
 
-  const [logoDataUrl] = await Promise.all([fetchLogoDataUrl()]);
+  const [logoDataUrl, providerInfo] = await Promise.all([
+    fetchLogoDataUrl(),
+    fetchProviderSettings(),
+  ]);
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   let ndisFooterPrinciple = "If it cannot be evidenced, it cannot be claimed.";
@@ -728,7 +777,7 @@ export async function exportBulkSessionsPDF(
 
   for (let i = 0; i < sessionIds.length; i++) {
     const data = await fetchAuditData(sessionIds[i]);
-    appendSessionToPDF(pdf, data, i === 0, logoDataUrl);
+    appendSessionToPDF(pdf, data, i === 0, logoDataUrl, providerInfo);
     if (data.ndis_principle) ndisFooterPrinciple = data.ndis_principle;
     const sessionDate = data.session?.date ?? "";
     if (sessionDate) {
