@@ -853,6 +853,25 @@ export default function SessionLive() {
     images.length,
   );
 
+  // Live compliance banner — derived from settings.compliance + current session state
+  const compSettings = settings?.compliance;
+  const bannerItems: { label: string; met: boolean }[] = [];
+  if (compSettings?.requireActivity) {
+    bannerItems.push({ label: "Activity required", met: activities.length > 0 });
+  }
+  if (compSettings?.requireNotes) {
+    // Mirrors the approval gate: structured notes auto-populate from activities or voice notes,
+    // so either source satisfies the clinical notes requirement.
+    const hasNotes = activities.length > 0 || voiceNotes.length > 0;
+    bannerItems.push({ label: "Clinical notes required", met: hasNotes });
+  }
+  if (compSettings?.requireDuration) {
+    bannerItems.push({ label: "Timer required", met: elapsed > 0 });
+  }
+  const bannerVisible = bannerItems.length > 0;
+  const bannerAllMet = bannerItems.every((i) => i.met);
+  const bannerAnyMet = bannerItems.some((i) => i.met);
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
@@ -984,6 +1003,59 @@ export default function SessionLive() {
           </div>
         </div>
       </div>
+
+      {/* ── Compliance Status Banner ── */}
+      {bannerVisible && (
+        <div
+          className={cn(
+            "shrink-0 border-b px-4 py-2 transition-colors duration-300",
+            bannerAllMet
+              ? "bg-emerald-50 border-emerald-200"
+              : bannerAnyMet
+                ? "bg-amber-50 border-amber-200"
+                : "bg-red-50 border-red-200",
+          )}
+        >
+          <div className="max-w-7xl mx-auto flex items-center gap-3 flex-wrap">
+            <span
+              className={cn(
+                "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider shrink-0",
+                bannerAllMet ? "text-emerald-700" : bannerAnyMet ? "text-amber-700" : "text-red-700",
+              )}
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Compliance
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {bannerAllMet ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" />
+                  All requirements met
+                </span>
+              ) : (
+                bannerItems.map((item) => (
+                  <span
+                    key={item.label}
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border",
+                      item.met
+                        ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        : "bg-white text-red-700 border-red-300",
+                    )}
+                  >
+                    {item.met ? (
+                      <CheckCircle2 className="h-3 w-3" />
+                    ) : (
+                      <AlertCircle className="h-3 w-3" />
+                    )}
+                    {item.label}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Main Grid ── */}
       <div className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
