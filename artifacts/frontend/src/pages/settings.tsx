@@ -60,7 +60,6 @@ export default function Settings() {
   // ── Provider Information state ─────────────────────────────────────────────
   const [businessName, setBusinessName] = useState("");
   const [abn, setAbn] = useState("");
-  const [abnTouched, setAbnTouched] = useState(false);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
 
   // ── Session Defaults state ─────────────────────────────────────────────────
@@ -291,8 +290,11 @@ export default function Settings() {
     }
   };
 
-  const abnValid = abn.replace(/\s/g, "") === "" || isValidABN(abn);
-  const abnError = abnTouched && abn.replace(/\s/g, "") !== "" && !isValidABN(abn);
+  const abnDigits = abn.replace(/\s/g, "");
+  const abnValid = abnDigits === "" || isValidABN(abn);
+  const abnHas11Digits = abnDigits.length === 11;
+  const abnError = abnHas11Digits && !isValidABN(abn);
+  const abnShowValid = abnHas11Digits && isValidABN(abn);
 
   const handleSaveProvider = async () => {
     if (!abnValid) {
@@ -632,11 +634,7 @@ export default function Settings() {
                 <Input
                   id="abn"
                   value={abn}
-                  onChange={(e) => {
-                    setAbn(e.target.value);
-                    setAbnTouched(true);
-                  }}
-                  onBlur={() => setAbnTouched(true)}
+                  onChange={(e) => setAbn(e.target.value)}
                   placeholder="e.g. 51 824 753 556"
                   className={cn(abnError && "border-red-400 focus-visible:ring-red-400")}
                   maxLength={14}
@@ -646,7 +644,7 @@ export default function Settings() {
                     Please enter a valid 11-digit ABN.
                   </p>
                 )}
-                {!abnError && abnTouched && abn.replace(/\s/g, "").length === 11 && isValidABN(abn) && (
+                {!abnError && abnShowValid && (
                   <p className="text-xs text-emerald-600 flex items-center gap-1">
                     <Check className="h-3 w-3" /> Valid ABN
                   </p>
