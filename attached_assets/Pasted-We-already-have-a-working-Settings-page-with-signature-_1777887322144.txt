@@ -1,0 +1,185 @@
+We already have a working Settings page with signature management (draw + upload + server sync).
+
+Your task is to extend this into a professional, compliance-focused settings system without breaking existing functionality.
+
+🔷 CONTEXT
+
+The platform is an NDIS-compliant system where:
+
+Sessions → generate notes → become invoices → must be audit-ready
+If data is missing → compliance risk
+Settings must control system behaviour, not just store preferences
+🔷 GOAL
+
+Upgrade the existing Settings page into a professional control panel that:
+
+Standardises practitioner identity
+Reduces manual input during sessions
+Enforces compliance rules
+Keeps everything audit-ready
+🔷 IMPORTANT RULES
+DO NOT rewrite the existing signature system
+DO NOT break current API hooks
+EXTEND the current structure cleanly
+Keep UI minimal and professional (no emojis)
+🔷 1. EXTEND SETTINGS DATA MODEL
+
+Update backend + frontend to support:
+
+type PractitionerSettings = {
+  signature?: string | null;
+
+  name?: string | null;
+  credentials?: string | null;
+
+  provider?: {
+    businessName: string;
+    abn: string;
+  };
+
+  sessionDefaults?: {
+    defaultDuration: number;
+    autoStartTimer: boolean;
+    enableVoice: boolean;
+  };
+
+  compliance?: {
+    requireActivity: boolean;
+    requireNotes: boolean;
+    requireDuration: boolean;
+  };
+};
+🔷 2. ADD NEW SECTIONS TO SETTINGS PAGE
+
+Below the existing Signature card, add the following:
+
+✅ Practitioner Identity
+
+Card title: Practitioner Details
+
+Fields:
+
+Full Name
+Credentials
+
+Bind to:
+
+name
+credentials
+✅ Provider Details (Compliance Critical)
+
+Card title: Provider Information
+
+Fields:
+
+Business Name
+ABN
+
+Validation:
+
+ABN must be exactly 11 digits
+Show inline error if invalid
+Prevent saving if invalid
+✅ Session Defaults
+
+Card title: Session Defaults
+
+Fields:
+
+Default session duration (number input)
+Auto-start session timer (toggle)
+Enable voice dictation (toggle)
+✅ Compliance Rules (Core Feature)
+
+Card title: Compliance Requirements
+
+Toggles:
+
+Require at least one activity log
+Require clinical notes
+Require session duration
+🔷 3. SAVE LOGIC (IMPORTANT)
+
+Reuse existing:
+
+useSavePractitionerSettings
+
+When saving:
+
+Always merge with existing settings
+Never overwrite unrelated fields
+
+Example:
+
+await saveToServer({
+  data: {
+    ...serverSettings,
+    provider: updatedProvider,
+  },
+});
+🔷 4. INTEGRATE WITH LIVE SESSION
+
+Update the SessionLive page:
+
+Auto Apply Settings
+If autoStartTimer → start session automatically
+If enableVoice → enable recording by default
+Enforce Compliance Before Save
+
+Before calling:
+
+handleApproveAndSave()
+
+Add:
+
+if (settings.compliance.requireActivity && activities.length === 0) {
+  show toast error and block save;
+}
+
+if (settings.compliance.requireNotes && notes is empty) {
+  block save;
+}
+
+if (settings.compliance.requireDuration && elapsed === 0) {
+  block save;
+}
+Error UX
+Use toast
+Keep messages clear and professional
+No emojis
+
+Example:
+
+“Session cannot be approved: no activity logged”
+🔷 5. UI/UX REQUIREMENTS
+Use existing components:
+Card
+Input
+Switch
+Button
+Maintain:
+clean spacing
+small text
+professional tone
+No visual clutter
+No emojis anywhere
+🔷 6. MVP PRIORITY
+
+Focus on:
+
+Practitioner + Provider info
+Compliance toggles
+Save + persistence
+Session enforcement
+🔷 7. SUCCESS CRITERIA
+
+The feature is complete when:
+
+Settings persist correctly (server + local)
+Session behaviour changes based on settings
+Invalid sessions cannot be approved
+Provider info appears in reports (future-ready)
+Signature system still works perfectly
+🔥 OPTIONAL (IF TIME)
+Create a useSettings() hook for global access
+Cache settings locally for performance
