@@ -204,6 +204,23 @@ export interface ComplianceOverview {
   sessions?: ComplianceReportItem[];
 }
 
+export interface ProviderInfo {
+  businessName?: string | null;
+  abn?: string | null;
+}
+
+export interface SessionDefaults {
+  defaultDuration?: number | null;
+  autoStartTimer?: boolean | null;
+  enableVoice?: boolean | null;
+}
+
+export interface ComplianceSettings {
+  requireActivity?: boolean | null;
+  requireNotes?: boolean | null;
+  requireDuration?: boolean | null;
+}
+
 export interface PractitionerSettings {
   id: string;
   /** Base64-encoded data URL of the practitioner signature */
@@ -212,6 +229,9 @@ export interface PractitionerSettings {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
+  provider?: ProviderInfo | null;
+  sessionDefaults?: SessionDefaults | null;
+  compliance?: ComplianceSettings | null;
   updated_at?: string | null;
 }
 
@@ -222,6 +242,9 @@ export interface SavePractitionerSettingsBody {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
+  provider?: ProviderInfo | null;
+  sessionDefaults?: SessionDefaults | null;
+  compliance?: ComplianceSettings | null;
 }
 
 export type GetSessionsParams = {

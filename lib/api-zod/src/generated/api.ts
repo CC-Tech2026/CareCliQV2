@@ -735,6 +735,26 @@ export const GetPractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  provider: zod
+    .object({
+      businessName: zod.string().nullish(),
+      abn: zod.string().nullish(),
+    })
+    .nullish(),
+  sessionDefaults: zod
+    .object({
+      defaultDuration: zod.number().nullish(),
+      autoStartTimer: zod.boolean().nullish(),
+      enableVoice: zod.boolean().nullish(),
+    })
+    .nullish(),
+  compliance: zod
+    .object({
+      requireActivity: zod.boolean().nullish(),
+      requireNotes: zod.boolean().nullish(),
+      requireDuration: zod.boolean().nullish(),
+    })
+    .nullish(),
   updated_at: zod.string().nullish(),
 });
 
@@ -751,6 +771,26 @@ export const SavePractitionerSettingsBody = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  provider: zod
+    .object({
+      businessName: zod.string().nullish(),
+      abn: zod.string().nullish(),
+    })
+    .nullish(),
+  sessionDefaults: zod
+    .object({
+      defaultDuration: zod.number().nullish(),
+      autoStartTimer: zod.boolean().nullish(),
+      enableVoice: zod.boolean().nullish(),
+    })
+    .nullish(),
+  compliance: zod
+    .object({
+      requireActivity: zod.boolean().nullish(),
+      requireNotes: zod.boolean().nullish(),
+      requireDuration: zod.boolean().nullish(),
+    })
+    .nullish(),
 });
 
 export const SavePractitionerSettingsResponse = zod.object({
@@ -764,5 +804,25 @@ export const SavePractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  provider: zod
+    .object({
+      businessName: zod.string().nullish(),
+      abn: zod.string().nullish(),
+    })
+    .nullish(),
+  sessionDefaults: zod
+    .object({
+      defaultDuration: zod.number().nullish(),
+      autoStartTimer: zod.boolean().nullish(),
+      enableVoice: zod.boolean().nullish(),
+    })
+    .nullish(),
+  compliance: zod
+    .object({
+      requireActivity: zod.boolean().nullish(),
+      requireNotes: zod.boolean().nullish(),
+      requireDuration: zod.boolean().nullish(),
+    })
+    .nullish(),
   updated_at: zod.string().nullish(),
 });

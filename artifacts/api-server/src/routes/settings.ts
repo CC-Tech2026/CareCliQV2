@@ -22,6 +22,9 @@ router.get("/settings/practitioner", async (req, res) => {
     signature: row.signature ?? null,
     name: row.name ?? null,
     credentials: row.credentials ?? null,
+    provider: row.provider ?? null,
+    sessionDefaults: row.sessionDefaults ?? null,
+    compliance: row.compliance ?? null,
     updated_at: row.updatedAt?.toISOString() ?? null,
   });
   res.json(data);
@@ -39,6 +42,9 @@ router.put("/settings/practitioner", async (req, res) => {
     signature: null,
     name: null,
     credentials: null,
+    provider: null,
+    sessionDefaults: null,
+    compliance: null,
   };
 
   const merged = {
@@ -48,6 +54,18 @@ router.put("/settings/practitioner", async (req, res) => {
       body.credentials !== undefined
         ? (body.credentials ?? null)
         : current.credentials,
+    provider:
+      body.provider !== undefined
+        ? (body.provider ?? null)
+        : (current.provider as typeof body.provider ?? null),
+    sessionDefaults:
+      body.sessionDefaults !== undefined
+        ? (body.sessionDefaults ?? null)
+        : (current.sessionDefaults as typeof body.sessionDefaults ?? null),
+    compliance:
+      body.compliance !== undefined
+        ? (body.compliance ?? null)
+        : (current.compliance as typeof body.compliance ?? null),
   };
 
   const upserted = await db
@@ -65,6 +83,9 @@ router.put("/settings/practitioner", async (req, res) => {
     signature: row.signature ?? null,
     name: row.name ?? null,
     credentials: row.credentials ?? null,
+    provider: row.provider ?? null,
+    sessionDefaults: row.sessionDefaults ?? null,
+    compliance: row.compliance ?? null,
     updated_at: row.updatedAt?.toISOString() ?? null,
   });
   res.json(data);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useGetSession } from "@workspace/api-client-react";
+import { useSettings } from "@/lib/use-settings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SmartTextarea } from "@/components/SmartInput";
@@ -356,11 +357,14 @@ export default function SessionLive() {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
 
+  const { settings } = useSettings();
+
   // Session state
   const [isActive, setIsActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef<Date | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoStartAppliedRef = useRef(false);
 
   // Content state
   const [activities, setActivities] = useState<ActivityLog[]>([]);
@@ -441,6 +445,20 @@ export default function SessionLive() {
     };
   }, [isActive]);
 
+  // Auto-start timer when settings say so — runs once after both session and settings load
+  useEffect(() => {
+    if (!session || !settings || autoStartAppliedRef.current || isActive) return;
+    if (settings.sessionDefaults?.autoStartTimer) {
+      autoStartAppliedRef.current = true;
+      startTimeRef.current = new Date();
+      setIsActive(true);
+      setElapsed(0);
+      setReminderDismissed(true);
+      toast({ title: "Session started", description: "Timer started automatically based on your settings." });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, settings]);
+
   // Session start reminder — fires 5s after page load if not yet started
   useEffect(() => {
     if (!session || isActive || reminderDismissed) return;
@@ -477,6 +495,11 @@ export default function SessionLive() {
     setReminderDismissed(true);
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
     toast({ title: "Session started", description: "Timer is running. Start documenting." });
+    // Auto-start voice recording if enabled in settings
+    if (settings?.sessionDefaults?.enableVoice) {
+      // Delay slightly so state updates settle before starting
+      setTimeout(() => startRecording(), 300);
+    }
   };
 
   const handleStop = useCallback(async () => {
@@ -571,6 +594,38 @@ export default function SessionLive() {
   // Approve & save — two-step pipeline
   const handleApproveAndSave = useCallback(async () => {
     if (!id) { navigate("/sessions"); return; }
+
+    // Settings-based compliance gate
+    const compSettings = settings?.compliance;
+    if (compSettings?.requireActivity && activities.length === 0) {
+      toast({
+        title: "Session cannot be approved: no activity logged",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (compSettings?.requireNotes) {
+      const hasNotes = [
+        structuredNotes.activitiesPerformed,
+        structuredNotes.outcomes,
+        structuredNotes.participantResponse,
+      ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
+      if (!hasNotes) {
+        toast({
+          title: "Session cannot be approved: clinical notes are required",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    if (compSettings?.requireDuration && elapsed === 0) {
+      toast({
+        title: "Session cannot be approved: session duration has not been recorded",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     const transcription = voiceNotes
@@ -627,7 +682,7 @@ export default function SessionLive() {
       console.error("session save failed", err);
       toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
     }
-  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, toast, navigate]);
+  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, settings, toast, navigate]);
 
   // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {

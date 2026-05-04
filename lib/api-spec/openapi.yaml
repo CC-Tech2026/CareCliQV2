@@ -852,6 +852,42 @@ components:
             $ref: "#/components/schemas/ComplianceReportItem"
       required: [average_score, total_sessions, compliant, non_compliant]
 
+    ProviderInfo:
+      type: object
+      properties:
+        businessName:
+          type: string
+          nullable: true
+        abn:
+          type: string
+          nullable: true
+
+    SessionDefaults:
+      type: object
+      properties:
+        defaultDuration:
+          type: number
+          nullable: true
+        autoStartTimer:
+          type: boolean
+          nullable: true
+        enableVoice:
+          type: boolean
+          nullable: true
+
+    ComplianceSettings:
+      type: object
+      properties:
+        requireActivity:
+          type: boolean
+          nullable: true
+        requireNotes:
+          type: boolean
+          nullable: true
+        requireDuration:
+          type: boolean
+          nullable: true
+
     PractitionerSettings:
       type: object
       properties:
@@ -869,6 +905,15 @@ components:
           type: string
           nullable: true
           description: Practitioner credentials or title
+        provider:
+          $ref: "#/components/schemas/ProviderInfo"
+          nullable: true
+        sessionDefaults:
+          $ref: "#/components/schemas/SessionDefaults"
+          nullable: true
+        compliance:
+          $ref: "#/components/schemas/ComplianceSettings"
+          nullable: true
         updated_at:
           type: string
           nullable: true
@@ -889,3 +934,12 @@ components:
           type: string
           nullable: true
           description: Practitioner credentials or title
+        provider:
+          $ref: "#/components/schemas/ProviderInfo"
+          nullable: true
+        sessionDefaults:
+          $ref: "#/components/schemas/SessionDefaults"
+          nullable: true
+        compliance:
+          $ref: "#/components/schemas/ComplianceSettings"
+          nullable: true

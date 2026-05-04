@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -7,6 +7,9 @@ export const practitionerSettingsTable = pgTable("practitioner_settings", {
   signature: text("signature"),
   name: text("name"),
   credentials: text("credentials"),
+  provider: jsonb("provider"),
+  sessionDefaults: jsonb("session_defaults"),
+  compliance: jsonb("compliance"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
