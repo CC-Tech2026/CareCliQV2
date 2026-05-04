@@ -1,0 +1,104 @@
+Refactor the existing Settings page UI into a modern, professional SaaS-grade dashboard while keeping ALL existing functionality, state management, API calls, and business logic unchanged.
+
+GOAL
+
+Make the Settings page feel like a high-end product dashboard (Stripe / Linear / Notion level):
+
+clean layout
+structured hierarchy
+interactive feel
+reduced visual clutter
+better UX flow for practitioners
+DESIGN SYSTEM REQUIREMENTS
+1. Layout Structure
+Convert page into a two-column layout
+Left: sticky vertical navigation sidebar
+Right: dynamic settings content panel
+Sidebar should include:
+Account
+Provider
+Session Defaults
+Compliance
+Active section must be visually highlighted with:
+subtle background
+left accent indicator
+icon + label
+2. Visual Style (IMPORTANT)
+
+Make UI modern and professional:
+
+Use more whitespace and spacing (8px / 12px rhythm)
+Replace heavy borders with:
+soft dividers
+subtle shadows
+Use:
+rounded-lg or rounded-xl
+light background surfaces (not harsh white blocks)
+Avoid dense “form stack” layouts
+3. Component Styling Improvements
+Cards
+Turn all sections into clean grouped cards
+Add:
+soft shadow (not heavy)
+hover lift effect (subtle translate-y)
+better padding (p-5 or p-6)
+Inputs
+Improve input fields:
+slightly rounded
+soft border
+focus glow ring (primary color)
+better spacing between label and input
+Toggles (Switches)
+Convert switch rows into:
+“setting rows” with title + description + toggle aligned right
+Add hover background highlight for each row
+4. Interaction Enhancements
+
+Add subtle UX improvements:
+
+Sidebar navigation transitions (smooth active change)
+Hover states on all clickable elements
+Button loading states already exist — enhance visually (spinner + disabled fade)
+Add micro-interactions:
+hover scale 1.01 on cards
+soft shadow increase on hover
+5. Section Layout Behavior
+
+Each section should behave like:
+
+Title header (large + bold)
+Short description under title (muted text)
+Content grouped in clean blocks
+
+Avoid long vertical form stacks.
+
+6. Signature Section Upgrade (IMPORTANT)
+
+Improve signature UX:
+
+Make it feel like a dedicated tool panel
+Add:
+bordered drawing canvas container
+soft dashed outline when empty
+“Saved signature preview” card styled like a file attachment
+Upload and draw tabs should feel like segmented tool modes
+7. Overall Feel
+
+The final UI should feel:
+
+modern SaaS dashboard
+clinical/professional (NDIS compliance context)
+clean and distraction-free
+optimized for real practitioners using it during work
+
+NOT:
+
+generic form page
+plain settings list
+overly boxed UI
+CONSTRAINTS
+DO NOT remove or break existing logic
+DO NOT change API calls
+DO NOT remove validation rules
+Only refactor UI/structure/styling
+Keep all functionality identical

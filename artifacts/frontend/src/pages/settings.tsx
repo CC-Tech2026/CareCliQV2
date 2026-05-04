@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,9 @@ import {
   useSavePractitionerSettings,
 } from "@workspace/api-client-react";
 
-// ABN validation: 11 digits, passes the ABN checksum algorithm
+// ---------------------------------------------------------------------------
+// ABN validation
+// ---------------------------------------------------------------------------
 function isValidABN(abn: string): boolean {
   const digits = abn.replace(/\s/g, "");
   if (!/^\d{11}$/.test(digits)) return false;
@@ -37,8 +39,101 @@ function isValidABN(abn: string): boolean {
   return sum % 89 === 0;
 }
 
+// ---------------------------------------------------------------------------
+// Sidebar nav items
+// ---------------------------------------------------------------------------
+type SectionId = "account" | "provider" | "defaults" | "compliance";
+
+const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "account",    label: "Account",          icon: User        },
+  { id: "provider",   label: "Provider",          icon: Building2   },
+  { id: "defaults",   label: "Session Defaults",  icon: Settings2   },
+  { id: "compliance", label: "Compliance",        icon: ShieldCheck },
+];
+
+// ---------------------------------------------------------------------------
+// Reusable setting row (toggle + title + description)
+// ---------------------------------------------------------------------------
+function SettingRow({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5 hover:bg-slate-50 transition-colors group">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-800">{title}</p>
+        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section wrapper
+// ---------------------------------------------------------------------------
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
+        <p className="text-sm text-slate-500 mt-1 leading-relaxed">{description}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Panel card
+// ---------------------------------------------------------------------------
+function PanelCard({
+  label,
+  children,
+  className,
+}: {
+  label?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card
+      className={cn(
+        "shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 border-slate-200/80",
+        className,
+      )}
+    >
+      {label && (
+        <div className="px-5 pt-5 pb-0">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
+        </div>
+      )}
+      <CardContent className={cn("p-5", label && "pt-3")}>{children}</CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export default function Settings() {
   const { toast } = useToast();
+  const [activeSection, setActiveSection] = useState<SectionId>("account");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
 
@@ -85,7 +180,6 @@ export default function Settings() {
   useEffect(() => {
     if (isLoadingSettings || !serverSettings) return;
 
-    // Signature
     if (serverSettings.signature) {
       setSavedSignature(serverSettings.signature);
       saveSignature(serverSettings.signature);
@@ -94,16 +188,13 @@ export default function Settings() {
       if (local) setSavedSignature(local);
     }
 
-    // Practitioner Details
     if (serverSettings.name) setPractName(serverSettings.name);
     if (serverSettings.credentials) setPractCredentials(serverSettings.credentials);
 
-    // Provider
     const provider = serverSettings.provider as { businessName?: string | null; abn?: string | null } | null;
     if (provider?.businessName) setBusinessName(provider.businessName);
     if (provider?.abn) setAbn(provider.abn);
 
-    // Session Defaults
     const sd = serverSettings.sessionDefaults as {
       defaultDuration?: number | null;
       autoStartTimer?: boolean | null;
@@ -113,7 +204,6 @@ export default function Settings() {
     if (sd?.autoStartTimer != null) setAutoStartTimer(sd.autoStartTimer);
     if (sd?.enableVoice != null) setEnableVoice(sd.enableVoice);
 
-    // Compliance
     const comp = serverSettings.compliance as {
       requireActivity?: boolean | null;
       requireNotes?: boolean | null;
@@ -132,18 +222,11 @@ export default function Settings() {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-
     if ("touches" in e) {
       const touch = e.touches[0];
-      return {
-        x: (touch.clientX - rect.left) * scaleX,
-        y: (touch.clientY - rect.top) * scaleY,
-      };
+      return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
     }
-    return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
-    };
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
   };
 
   const startDrawing = useCallback(
@@ -159,11 +242,9 @@ export default function Settings() {
     (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
       e.preventDefault();
       if (!isDrawingRef.current || !lastPosRef.current) return;
-
       const canvas = canvasRef.current!;
       const ctx = canvas.getContext("2d")!;
       const pos = getCanvasPos(e);
-
       ctx.beginPath();
       ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
       ctx.lineTo(pos.x, pos.y);
@@ -172,7 +253,6 @@ export default function Settings() {
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.stroke();
-
       lastPosRef.current = pos;
       setHasDrawing(true);
     },
@@ -254,21 +334,16 @@ export default function Settings() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.type !== "image/png" && file.type !== "image/jpeg") {
       toast({ title: "Invalid file type", description: "Please upload a PNG or JPG image.", variant: "destructive" });
       return;
     }
-
     if (file.size > 2 * 1024 * 1024) {
       toast({ title: "File too large", description: "Please upload an image smaller than 2 MB.", variant: "destructive" });
       return;
     }
-
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setUploadPreview(reader.result as string);
-    };
+    reader.onloadend = () => { setUploadPreview(reader.result as string); };
     reader.readAsDataURL(file);
   };
 
@@ -276,12 +351,7 @@ export default function Settings() {
   const handleSavePractitioner = async () => {
     setIsSavingPract(true);
     try {
-      await saveToServer({
-        data: {
-          name: practName.trim() || null,
-          credentials: practCredentials.trim() || null,
-        },
-      });
+      await saveToServer({ data: { name: practName.trim() || null, credentials: practCredentials.trim() || null } });
       toast({ title: "Practitioner details saved" });
     } catch {
       toast({ title: "Save failed", description: "Could not save practitioner details.", variant: "destructive" });
@@ -303,14 +373,7 @@ export default function Settings() {
     }
     setIsSavingProvider(true);
     try {
-      await saveToServer({
-        data: {
-          provider: {
-            businessName: businessName.trim() || null,
-            abn: abn.replace(/\s/g, "") || null,
-          },
-        },
-      });
+      await saveToServer({ data: { provider: { businessName: businessName.trim() || null, abn: abn.replace(/\s/g, "") || null } } });
       toast({ title: "Provider information saved" });
     } catch {
       toast({ title: "Save failed", description: "Could not save provider information.", variant: "destructive" });
@@ -322,15 +385,7 @@ export default function Settings() {
   const handleSaveDefaults = async () => {
     setIsSavingDefaults(true);
     try {
-      await saveToServer({
-        data: {
-          sessionDefaults: {
-            defaultDuration: defaultDuration ? Number(defaultDuration) : null,
-            autoStartTimer,
-            enableVoice,
-          },
-        },
-      });
+      await saveToServer({ data: { sessionDefaults: { defaultDuration: defaultDuration ? Number(defaultDuration) : null, autoStartTimer, enableVoice } } });
       toast({ title: "Session defaults saved" });
     } catch {
       toast({ title: "Save failed", description: "Could not save session defaults.", variant: "destructive" });
@@ -342,15 +397,7 @@ export default function Settings() {
   const handleSaveCompliance = async () => {
     setIsSavingCompliance(true);
     try {
-      await saveToServer({
-        data: {
-          compliance: {
-            requireActivity,
-            requireNotes,
-            requireDuration,
-          },
-        },
-      });
+      await saveToServer({ data: { compliance: { requireActivity, requireNotes, requireDuration } } });
       toast({ title: "Compliance requirements saved" });
     } catch {
       toast({ title: "Save failed", description: "Could not save compliance requirements.", variant: "destructive" });
@@ -359,476 +406,406 @@ export default function Settings() {
     }
   };
 
+  // ── Loading overlay ────────────────────────────────────────────────────────
+  const LoadingRow = () => (
+    <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      <span>Loading settings…</span>
+    </div>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-slate-500 dark:text-slate-400">
-          Manage your practitioner profile, provider details, session defaults, and compliance requirements.
-        </p>
+    <div className="flex gap-8 min-h-full">
+
+      {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
+      <aside className="hidden md:flex flex-col w-52 shrink-0">
+        <div className="sticky top-0 space-y-1 pt-1">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 px-3 pb-2">
+            Settings
+          </p>
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveSection(id)}
+              className={cn(
+                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 text-left",
+                activeSection === id
+                  ? "bg-primary/8 text-primary border-l-2 border-primary pl-[10px]"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-l-2 border-transparent pl-[10px]"
+              )}
+            >
+              <Icon className={cn("h-4 w-4 shrink-0", activeSection === id ? "text-primary" : "text-slate-400")} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      {/* ── Mobile nav ──────────────────────────────────────────────────────── */}
+      <div className="md:hidden flex gap-1 overflow-x-auto pb-1 w-full">
+        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveSection(id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0",
+              activeSection === id
+                ? "bg-primary text-white"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* ── Signature section ──────────────────────────────────────────────── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <PenLine className="h-4 w-4 text-primary" />
-            Practitioner Signature
-          </CardTitle>
-          <CardDescription>
-            Your signature will be embedded into the sign-off section of all PDF audit reports.
-            Draw it with your mouse or touchscreen, or upload an image of your existing signature.
-          </CardDescription>
-        </CardHeader>
+      {/* ── Content panel ───────────────────────────────────────────────────── */}
+      <main className="flex-1 min-w-0 space-y-8 pb-12">
 
-        <CardContent className="space-y-5">
-          {isLoadingSettings && (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading saved signature…
-            </div>
-          )}
-
-          {!isLoadingSettings && savedSignature && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5" /> Saved signature
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
-                  onClick={handleClear}
-                  disabled={isSaving}
-                >
-                  <Trash2 className="h-3 w-3" /> Remove
-                </Button>
-              </div>
-              <div className="bg-white border border-emerald-100 rounded-md p-2 flex items-center justify-center h-20">
-                <img
-                  src={savedSignature}
-                  alt="Saved signature"
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
-            </div>
-          )}
-
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "draw" | "upload")}>
-            <TabsList className="w-full">
-              <TabsTrigger value="draw" className="flex-1 gap-1.5">
-                <PenLine className="h-3.5 w-3.5" /> Draw
-              </TabsTrigger>
-              <TabsTrigger value="upload" className="flex-1 gap-1.5">
-                <Upload className="h-3.5 w-3.5" /> Upload Image
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="draw" className="space-y-3 mt-4">
-              <p className="text-xs text-slate-500">
-                Draw your signature below using your mouse, stylus, or finger on a touchscreen.
-              </p>
-
-              <div
-                className={cn(
-                  "rounded-lg border-2 border-dashed overflow-hidden cursor-crosshair",
-                  hasDrawing ? "border-slate-300" : "border-slate-200"
-                )}
-                style={{ touchAction: "none" }}
-              >
-                <canvas
-                  ref={canvasRef}
-                  width={560}
-                  height={160}
-                  className="w-full block bg-white"
-                  style={{ touchAction: "none" }}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={clearCanvas}
-                  disabled={!hasDrawing}
-                >
-                  <RotateCcw className="h-3.5 w-3.5" /> Clear
-                </Button>
-                <Button
-                  size="sm"
-                  className="gap-1.5 ml-auto"
-                  onClick={saveDrawn}
-                  disabled={!hasDrawing || isSaving || isLoadingSettings}
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
+        {/* ── Account section ─────────────────────────────────────────────── */}
+        {activeSection === "account" && (
+          <Section
+            title="Account"
+            description="Your practitioner identity and digital signature for NDIS audit reports."
+          >
+            {/* Signature card */}
+            <PanelCard label="Digital Signature">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-5">
+                  {savedSignature && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                          <Check className="h-3.5 w-3.5" /> Signature saved
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
+                          onClick={handleClear}
+                          disabled={isSaving}
+                        >
+                          <Trash2 className="h-3 w-3" /> Remove
+                        </Button>
+                      </div>
+                      <div className="bg-white border border-emerald-100 rounded-lg p-3 flex items-center justify-center h-20 shadow-inner">
+                        <img src={savedSignature} alt="Saved signature" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    </div>
                   )}
-                  Save Signature
-                </Button>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="upload" className="space-y-3 mt-4">
-              <p className="text-xs text-slate-500">
-                Upload a PNG or JPG image of your handwritten signature. For best results, scan or
-                photograph your signature on a white background. Max 2 MB.
-              </p>
+                  <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "draw" | "upload")}>
+                    <TabsList className="w-full rounded-lg h-9">
+                      <TabsTrigger value="draw" className="flex-1 gap-1.5 text-xs">
+                        <PenLine className="h-3.5 w-3.5" /> Draw
+                      </TabsTrigger>
+                      <TabsTrigger value="upload" className="flex-1 gap-1.5 text-xs">
+                        <Upload className="h-3.5 w-3.5" /> Upload Image
+                      </TabsTrigger>
+                    </TabsList>
 
-              <div
-                className={cn(
-                  "rounded-lg border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors hover:bg-slate-50",
-                  uploadPreview ? "border-slate-300" : "border-slate-200"
-                )}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploadPreview ? (
-                  <img
-                    src={uploadPreview}
-                    alt="Signature preview"
-                    className="max-h-24 max-w-full object-contain"
+                    <TabsContent value="draw" className="space-y-3 mt-4">
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Draw your signature using your mouse, stylus, or finger on a touchscreen.
+                      </p>
+                      <div
+                        className={cn(
+                          "rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors",
+                          hasDrawing ? "border-slate-300" : "border-slate-200 hover:border-slate-300"
+                        )}
+                        style={{ touchAction: "none" }}
+                      >
+                        <canvas
+                          ref={canvasRef}
+                          width={560}
+                          height={160}
+                          className="w-full block"
+                          style={{ touchAction: "none" }}
+                          onMouseDown={startDrawing}
+                          onMouseMove={draw}
+                          onMouseUp={stopDrawing}
+                          onMouseLeave={stopDrawing}
+                          onTouchStart={startDrawing}
+                          onTouchMove={draw}
+                          onTouchEnd={stopDrawing}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="gap-1.5" onClick={clearCanvas} disabled={!hasDrawing}>
+                          <RotateCcw className="h-3.5 w-3.5" /> Clear
+                        </Button>
+                        <Button size="sm" className="gap-1.5 ml-auto" onClick={saveDrawn} disabled={!hasDrawing || isSaving || isLoadingSettings}>
+                          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          Save Signature
+                        </Button>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="upload" className="space-y-3 mt-4">
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Upload a PNG or JPG of your handwritten signature. Scan on a white background for best results. Max 2 MB.
+                      </p>
+                      <div
+                        className={cn(
+                          "rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white",
+                          uploadPreview ? "border-slate-300" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                        )}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {uploadPreview ? (
+                          <img src={uploadPreview} alt="Signature preview" className="max-h-24 max-w-full object-contain" />
+                        ) : (
+                          <>
+                            <ImageIcon className="h-8 w-8 text-slate-300 mb-2" />
+                            <span className="text-sm text-slate-500">Click to upload a signature image</span>
+                            <span className="text-xs text-slate-400 mt-1">PNG or JPG — max 2 MB</span>
+                          </>
+                        )}
+                      </div>
+                      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
+                      <div className="flex gap-2">
+                        {uploadPreview && (
+                          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setUploadPreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                            <RotateCcw className="h-3.5 w-3.5" /> Reset
+                          </Button>
+                        )}
+                        <Button size="sm" className="gap-1.5 ml-auto" onClick={saveUploaded} disabled={!uploadPreview || isSaving || isLoadingSettings}>
+                          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          Save Signature
+                        </Button>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
+                  <div className="pt-2 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
+                    Signatures are synced to the server and cached locally for offline access. They appear in the sign-off block of every exported PDF audit report.
+                  </div>
+                </div>
+              )}
+            </PanelCard>
+
+            {/* Practitioner details card */}
+            <PanelCard label="Practitioner Details">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pract-name" className="text-xs font-medium text-slate-600">Full Name</Label>
+                      <Input
+                        id="pract-name"
+                        value={practName}
+                        onChange={(e) => setPractName(e.target.value)}
+                        placeholder="e.g. Jane Smith"
+                        className="rounded-lg"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="pract-credentials" className="text-xs font-medium text-slate-600">Credentials</Label>
+                      <Input
+                        id="pract-credentials"
+                        value={practCredentials}
+                        onChange={(e) => setPractCredentials(e.target.value)}
+                        placeholder="e.g. RN, B.Sc. Nursing"
+                        className="rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={handleSavePractitioner} disabled={isSavingPract} className="gap-1.5 min-w-[110px]">
+                      {isSavingPract ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      Save Details
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </PanelCard>
+          </Section>
+        )}
+
+        {/* ── Provider section ─────────────────────────────────────────────── */}
+        {activeSection === "provider" && (
+          <Section
+            title="Provider"
+            description="Your registered NDIS provider business details. These appear on PDF audit reports and invoices."
+          >
+            <PanelCard label="Business Information">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="business-name" className="text-xs font-medium text-slate-600">Business Name</Label>
+                    <Input
+                      id="business-name"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="e.g. Sunshine Support Services Pty Ltd"
+                      className="rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="abn" className="text-xs font-medium text-slate-600">
+                      ABN <span className="text-slate-400 font-normal">(Australian Business Number)</span>
+                    </Label>
+                    <Input
+                      id="abn"
+                      value={abn}
+                      onChange={(e) => setAbn(e.target.value)}
+                      placeholder="e.g. 51 824 753 556"
+                      className={cn("rounded-lg max-w-[220px]", abnError && "border-red-400 focus-visible:ring-red-400")}
+                      maxLength={14}
+                    />
+                    {abnError && (
+                      <p className="text-xs text-red-500">Please enter a valid 11-digit ABN.</p>
+                    )}
+                    {!abnError && abnShowValid && (
+                      <p className="text-xs text-emerald-600 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> Valid ABN
+                      </p>
+                    )}
+                    {!abnError && !abnShowValid && abnDigits.length > 0 && (
+                      <p className="text-xs text-slate-400">{11 - abnDigits.length} more digit{11 - abnDigits.length !== 1 ? "s" : ""} needed</p>
+                    )}
+                  </div>
+                  <div className="flex justify-end pt-1">
+                    <Button size="sm" onClick={handleSaveProvider} disabled={isSavingProvider || abnError} className="gap-1.5 min-w-[130px]">
+                      {isSavingProvider ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      Save Provider Info
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </PanelCard>
+          </Section>
+        )}
+
+        {/* ── Session Defaults section ─────────────────────────────────────── */}
+        {activeSection === "defaults" && (
+          <Section
+            title="Session Defaults"
+            description="Default settings applied automatically when you start a new live session."
+          >
+            <PanelCard label="Duration">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="default-duration" className="text-xs font-medium text-slate-600">
+                    Default Duration <span className="text-slate-400 font-normal">(minutes)</span>
+                  </Label>
+                  <Input
+                    id="default-duration"
+                    type="number"
+                    min={1}
+                    max={480}
+                    value={defaultDuration}
+                    onChange={(e) => setDefaultDuration(e.target.value)}
+                    placeholder="60"
+                    className="max-w-[120px] rounded-lg"
                   />
-                ) : (
-                  <>
-                    <ImageIcon className="h-8 w-8 text-slate-300 mb-2" />
-                    <span className="text-sm text-slate-500">Click to upload a signature image</span>
-                    <span className="text-xs text-slate-400 mt-1">PNG or JPG — max 2 MB</span>
-                  </>
-                )}
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-
-              <div className="flex gap-2">
-                {uploadPreview && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => {
-                      setUploadPreview(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" /> Reset
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  className="gap-1.5 ml-auto"
-                  onClick={saveUploaded}
-                  disabled={!uploadPreview || isSaving || isLoadingSettings}
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Check className="h-3.5 w-3.5" />
-                  )}
-                  Save Signature
-                </Button>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* ── Practitioner Details ───────────────────────────────────────────── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="h-4 w-4 text-primary" />
-            Practitioner Details
-          </CardTitle>
-          <CardDescription>
-            Your name and credentials appear on PDF audit reports and clinical records.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingSettings ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="pract-name">Full Name</Label>
-                <Input
-                  id="pract-name"
-                  value={practName}
-                  onChange={(e) => setPractName(e.target.value)}
-                  placeholder="e.g. Jane Smith"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="pract-credentials">Credentials</Label>
-                <Input
-                  id="pract-credentials"
-                  value={practCredentials}
-                  onChange={(e) => setPractCredentials(e.target.value)}
-                  placeholder="e.g. RN, B.Sc. Nursing, NDIS Support Worker"
-                />
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSavePractitioner}
-                  disabled={isSavingPract}
-                  className="gap-1.5"
-                >
-                  {isSavingPract ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Details
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Provider Information ───────────────────────────────────────────── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            Provider Information
-          </CardTitle>
-          <CardDescription>
-            Business name and ABN for this NDIS provider. The ABN must be a valid 11-digit Australian Business Number.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingSettings ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="business-name">Business Name</Label>
-                <Input
-                  id="business-name"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="e.g. Sunshine Support Services Pty Ltd"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="abn">ABN</Label>
-                <Input
-                  id="abn"
-                  value={abn}
-                  onChange={(e) => setAbn(e.target.value)}
-                  placeholder="e.g. 51 824 753 556"
-                  className={cn(abnError && "border-red-400 focus-visible:ring-red-400")}
-                  maxLength={14}
-                />
-                {abnError && (
-                  <p className="text-xs text-red-500">
-                    Please enter a valid 11-digit ABN.
-                  </p>
-                )}
-                {!abnError && abnShowValid && (
-                  <p className="text-xs text-emerald-600 flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Valid ABN
-                  </p>
-                )}
-              </div>
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSaveProvider}
-                  disabled={isSavingProvider || abnError}
-                  className="gap-1.5"
-                >
-                  {isSavingProvider ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Provider Info
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Session Defaults ───────────────────────────────────────────────── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Settings2 className="h-4 w-4 text-primary" />
-            Session Defaults
-          </CardTitle>
-          <CardDescription>
-            Default settings applied when you open a new live session.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingSettings ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label htmlFor="default-duration">Default Duration (minutes)</Label>
-                <Input
-                  id="default-duration"
-                  type="number"
-                  min={1}
-                  max={480}
-                  value={defaultDuration}
-                  onChange={(e) => setDefaultDuration(e.target.value)}
-                  placeholder="60"
-                  className="max-w-[120px]"
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Auto-start timer</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Timer starts automatically when you open the session page
-                  </p>
+                  <p className="text-xs text-slate-400">Used as the planned duration when creating sessions</p>
                 </div>
-                <Switch
-                  checked={autoStartTimer}
-                  onCheckedChange={setAutoStartTimer}
-                />
-              </div>
+              )}
+            </PanelCard>
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Enable voice dictation</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Voice recording is enabled by default when sessions start
-                  </p>
+            <PanelCard label="Automation">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  <SettingRow
+                    title="Auto-start timer"
+                    description="Timer starts automatically when you open the session page, so you never forget to start it."
+                    checked={autoStartTimer}
+                    onCheckedChange={setAutoStartTimer}
+                  />
+                  <SettingRow
+                    title="Enable voice dictation"
+                    description="Voice recording is activated by default when a session starts, ready to capture notes hands-free."
+                    checked={enableVoice}
+                    onCheckedChange={setEnableVoice}
+                  />
                 </div>
-                <Switch
-                  checked={enableVoice}
-                  onCheckedChange={setEnableVoice}
-                />
-              </div>
+              )}
+            </PanelCard>
 
+            {!isLoadingSettings && (
               <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSaveDefaults}
-                  disabled={isSavingDefaults}
-                  className="gap-1.5"
-                >
+                <Button size="sm" onClick={handleSaveDefaults} disabled={isSavingDefaults} className="gap-1.5 min-w-[120px]">
                   {isSavingDefaults ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                   Save Defaults
                 </Button>
               </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </Section>
+        )}
 
-      {/* ── Compliance Requirements ────────────────────────────────────────── */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-primary" />
-            Compliance Requirements
-          </CardTitle>
-          <CardDescription>
-            When enabled, these checks must be satisfied before a session can be approved and saved.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingSettings ? (
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading…
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Require activity log</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    At least one activity must be logged before approval
+        {/* ── Compliance section ───────────────────────────────────────────── */}
+        {activeSection === "compliance" && (
+          <Section
+            title="Compliance"
+            description="Enforce documentation standards before a session can be approved. These checks run alongside the built-in NDIS compliance engine."
+          >
+            <PanelCard label="Required Before Approval">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  <SettingRow
+                    title="Require activity log"
+                    description="At least one support activity must be logged during the session before it can be approved."
+                    checked={requireActivity}
+                    onCheckedChange={setRequireActivity}
+                  />
+                  <SettingRow
+                    title="Require clinical notes"
+                    description="Clinical notes must be completed and contain substantive content before the session can be approved."
+                    checked={requireNotes}
+                    onCheckedChange={setRequireNotes}
+                  />
+                  <SettingRow
+                    title="Require session duration"
+                    description="The session timer must have been run and record a duration greater than zero before approval."
+                    checked={requireDuration}
+                    onCheckedChange={setRequireDuration}
+                  />
+                </div>
+              )}
+            </PanelCard>
+
+            {!isLoadingSettings && (
+              <>
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={handleSaveCompliance} disabled={isSavingCompliance} className="gap-1.5 min-w-[140px]">
+                    {isSavingCompliance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    Save Requirements
+                  </Button>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed space-y-1.5">
+                  <p className="font-semibold text-slate-600 text-sm">How compliance requirements work</p>
+                  <p>
+                    These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
+                    Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session
+                    review modal opens, so practitioners are prompted to complete the missing documentation immediately.
+                  </p>
+                  <p>
+                    The built-in engine always runs regardless of these toggles and tracks participant linkage, duration, activities, clinical notes,
+                    photo evidence, and goal linkage.
                   </p>
                 </div>
-                <Switch
-                  checked={requireActivity}
-                  onCheckedChange={setRequireActivity}
-                />
-              </div>
+              </>
+            )}
+          </Section>
+        )}
 
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Require clinical notes</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Clinical notes must be completed before approval
-                  </p>
-                </div>
-                <Switch
-                  checked={requireNotes}
-                  onCheckedChange={setRequireNotes}
-                />
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-800">Require session duration</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Session timer must have been run before approval
-                  </p>
-                </div>
-                <Switch
-                  checked={requireDuration}
-                  onCheckedChange={setRequireDuration}
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  onClick={handleSaveCompliance}
-                  disabled={isSavingCompliance}
-                  className="gap-1.5"
-                >
-                  {isSavingCompliance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Requirements
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Info card ─────────────────────────────────────────────────────────── */}
-      <Card className="shadow-sm bg-slate-50 border-slate-200">
-        <CardContent className="p-4 text-xs text-slate-500 space-y-1">
-          <p className="font-medium text-slate-700">About signature storage</p>
-          <p>
-            Your signature is securely saved to the server so it is available on any device you log
-            in from. It is also cached locally for offline access and automatically embedded into the
-            sign-off block whenever you export a PDF audit report.
-          </p>
-          <p>
-            Clearing your signature will remove it from both the server and this device.
-          </p>
-        </CardContent>
-      </Card>
+      </main>
     </div>
   );
 }
