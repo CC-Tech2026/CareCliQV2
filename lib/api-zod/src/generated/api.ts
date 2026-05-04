@@ -720,3 +720,49 @@ export const GetComplianceOverviewResponse = zod.object({
     )
     .optional(),
 });
+
+/**
+ * @summary Get practitioner settings (signature, name, credentials)
+ */
+export const GetPractitionerSettingsResponse = zod.object({
+  id: zod.string(),
+  signature: zod
+    .string()
+    .nullish()
+    .describe("Base64-encoded data URL of the practitioner signature"),
+  name: zod.string().nullish().describe("Practitioner display name"),
+  credentials: zod
+    .string()
+    .nullish()
+    .describe("Practitioner credentials or title"),
+  updated_at: zod.string().nullish(),
+});
+
+/**
+ * @summary Save practitioner settings (signature, name, credentials)
+ */
+export const SavePractitionerSettingsBody = zod.object({
+  signature: zod
+    .string()
+    .nullish()
+    .describe("Base64-encoded data URL of the practitioner signature"),
+  name: zod.string().nullish().describe("Practitioner display name"),
+  credentials: zod
+    .string()
+    .nullish()
+    .describe("Practitioner credentials or title"),
+});
+
+export const SavePractitionerSettingsResponse = zod.object({
+  id: zod.string(),
+  signature: zod
+    .string()
+    .nullish()
+    .describe("Base64-encoded data URL of the practitioner signature"),
+  name: zod.string().nullish().describe("Practitioner display name"),
+  credentials: zod
+    .string()
+    .nullish()
+    .describe("Practitioner credentials or title"),
+  updated_at: zod.string().nullish(),
+});

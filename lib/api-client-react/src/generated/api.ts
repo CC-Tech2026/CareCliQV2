@@ -31,6 +31,8 @@ import type {
   HealthStatus,
   MarkAllAlertsRead200,
   Participant,
+  PractitionerSettings,
+  SavePractitionerSettingsBody,
   Session,
   UpdateParticipantBody,
   UpdateSessionBody,
@@ -1729,3 +1731,166 @@ export function useGetComplianceOverview<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get practitioner settings (signature, name, credentials)
+ */
+export const getGetPractitionerSettingsUrl = () => {
+  return `/api/settings/practitioner`;
+};
+
+export const getPractitionerSettings = async (
+  options?: RequestInit,
+): Promise<PractitionerSettings> => {
+  return customFetch<PractitionerSettings>(getGetPractitionerSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPractitionerSettingsQueryKey = () => {
+  return [`/api/settings/practitioner`] as const;
+};
+
+export const getGetPractitionerSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPractitionerSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPractitionerSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPractitionerSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPractitionerSettings>>
+  > = ({ signal }) => getPractitionerSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPractitionerSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPractitionerSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPractitionerSettings>>
+>;
+export type GetPractitionerSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get practitioner settings (signature, name, credentials)
+ */
+
+export function useGetPractitionerSettings<
+  TData = Awaited<ReturnType<typeof getPractitionerSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPractitionerSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPractitionerSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save practitioner settings (signature, name, credentials)
+ */
+export const getSavePractitionerSettingsUrl = () => {
+  return `/api/settings/practitioner`;
+};
+
+export const savePractitionerSettings = async (
+  savePractitionerSettingsBody: SavePractitionerSettingsBody,
+  options?: RequestInit,
+): Promise<PractitionerSettings> => {
+  return customFetch<PractitionerSettings>(getSavePractitionerSettingsUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(savePractitionerSettingsBody),
+  });
+};
+
+export const getSavePractitionerSettingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savePractitionerSettings>>,
+    TError,
+    { data: BodyType<SavePractitionerSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof savePractitionerSettings>>,
+  TError,
+  { data: BodyType<SavePractitionerSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["savePractitionerSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof savePractitionerSettings>>,
+    { data: BodyType<SavePractitionerSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return savePractitionerSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SavePractitionerSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof savePractitionerSettings>>
+>;
+export type SavePractitionerSettingsMutationBody =
+  BodyType<SavePractitionerSettingsBody>;
+export type SavePractitionerSettingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save practitioner settings (signature, name, credentials)
+ */
+export const useSavePractitionerSettings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof savePractitionerSettings>>,
+    TError,
+    { data: BodyType<SavePractitionerSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof savePractitionerSettings>>,
+  TError,
+  { data: BodyType<SavePractitionerSettingsBody> },
+  TContext
+> => {
+  return useMutation(getSavePractitionerSettingsMutationOptions(options));
+};

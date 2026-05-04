@@ -204,6 +204,26 @@ export interface ComplianceOverview {
   sessions?: ComplianceReportItem[];
 }
 
+export interface PractitionerSettings {
+  id: string;
+  /** Base64-encoded data URL of the practitioner signature */
+  signature?: string | null;
+  /** Practitioner display name */
+  name?: string | null;
+  /** Practitioner credentials or title */
+  credentials?: string | null;
+  updated_at?: string | null;
+}
+
+export interface SavePractitionerSettingsBody {
+  /** Base64-encoded data URL of the practitioner signature */
+  signature?: string | null;
+  /** Practitioner display name */
+  name?: string | null;
+  /** Practitioner credentials or title */
+  credentials?: string | null;
+}
+
 export type GetSessionsParams = {
   limit?: number;
 };

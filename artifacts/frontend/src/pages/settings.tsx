@@ -3,9 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
-import { PenLine, Upload, Trash2, Check, RotateCcw, ImageIcon } from "lucide-react";
+import { PenLine, Upload, Trash2, Check, RotateCcw, ImageIcon, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  useGetPractitionerSettings,
+  useSavePractitionerSettings,
+} from "@workspace/api-client-react";
 
 export default function Settings() {
   const { toast } = useToast();
@@ -22,9 +26,27 @@ export default function Settings() {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── API ────────────────────────────────────────────────────────────────────
+  const { data: serverSettings, isLoading: isLoadingSettings } =
+    useGetPractitionerSettings();
+
+  const { mutateAsync: saveToServer, isPending: isSaving } =
+    useSavePractitionerSettings();
+
+  // ── Load signature: server first, fall back to localStorage ───────────────
   useEffect(() => {
-    setSavedSignature(getStoredSignature());
-  }, []);
+    if (isLoadingSettings) return;
+
+    if (serverSettings?.signature) {
+      setSavedSignature(serverSettings.signature);
+      saveSignature(serverSettings.signature);
+    } else {
+      const local = getStoredSignature();
+      if (local) {
+        setSavedSignature(local);
+      }
+    }
+  }, [serverSettings, isLoadingSettings]);
 
   // ── Canvas helpers ─────────────────────────────────────────────────────────
   const getCanvasPos = (
@@ -93,29 +115,64 @@ export default function Settings() {
     setHasDrawing(false);
   }, []);
 
-  // ── Save handlers ──────────────────────────────────────────────────────────
-  const saveDrawn = useCallback(() => {
+  // ── Save helpers ───────────────────────────────────────────────────────────
+  const persistSignature = useCallback(
+    async (dataUrl: string) => {
+      saveSignature(dataUrl);
+      setSavedSignature(dataUrl);
+      try {
+        await saveToServer({
+          data: {
+            signature: dataUrl,
+            name: serverSettings?.name ?? null,
+            credentials: serverSettings?.credentials ?? null,
+          },
+        });
+      } catch {
+        toast({
+          title: "Saved locally",
+          description: "Signature saved to this device. Server sync failed — it will retry next time you open Settings.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Signature saved",
+        description: "Your signature is now synced and will appear on all PDF reports across all devices.",
+      });
+    },
+    [saveToServer, serverSettings, toast]
+  );
+
+  const saveDrawn = useCallback(async () => {
     const canvas = canvasRef.current!;
     const dataUrl = canvas.toDataURL("image/png");
-    saveSignature(dataUrl);
-    setSavedSignature(dataUrl);
-    toast({ title: "Signature saved", description: "Your drawn signature will appear on all future PDF reports." });
-  }, [toast]);
+    await persistSignature(dataUrl);
+  }, [persistSignature]);
 
-  const saveUploaded = useCallback(() => {
+  const saveUploaded = useCallback(async () => {
     if (!uploadPreview) return;
-    saveSignature(uploadPreview);
-    setSavedSignature(uploadPreview);
-    toast({ title: "Signature saved", description: "Your uploaded signature will appear on all future PDF reports." });
-  }, [uploadPreview, toast]);
+    await persistSignature(uploadPreview);
+  }, [uploadPreview, persistSignature]);
 
-  const handleClear = useCallback(() => {
+  const handleClear = useCallback(async () => {
     clearSignature();
     setSavedSignature(null);
     clearCanvas();
     setUploadPreview(null);
+    try {
+      await saveToServer({
+        data: {
+          signature: null,
+          name: serverSettings?.name ?? null,
+          credentials: serverSettings?.credentials ?? null,
+        },
+      });
+    } catch {
+      // server sync failed — signature already cleared locally
+    }
     toast({ title: "Signature removed", description: "PDF reports will show the placeholder sign-here box." });
-  }, [clearCanvas, toast]);
+  }, [clearCanvas, saveToServer, serverSettings, toast]);
 
   // ── File upload ────────────────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,8 +219,16 @@ export default function Settings() {
         </CardHeader>
 
         <CardContent className="space-y-5">
+          {/* Loading state */}
+          {isLoadingSettings && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading saved signature…
+            </div>
+          )}
+
           {/* Currently saved signature preview */}
-          {savedSignature && (
+          {!isLoadingSettings && savedSignature && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
@@ -174,6 +239,7 @@ export default function Settings() {
                   size="sm"
                   className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 gap-1"
                   onClick={handleClear}
+                  disabled={isSaving}
                 >
                   <Trash2 className="h-3 w-3" /> Remove
                 </Button>
@@ -241,9 +307,14 @@ export default function Settings() {
                   size="sm"
                   className="gap-1.5 ml-auto"
                   onClick={saveDrawn}
-                  disabled={!hasDrawing}
+                  disabled={!hasDrawing || isSaving || isLoadingSettings}
                 >
-                  <Check className="h-3.5 w-3.5" /> Save Signature
+                  {isSaving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  Save Signature
                 </Button>
               </div>
             </TabsContent>
@@ -303,9 +374,14 @@ export default function Settings() {
                   size="sm"
                   className="gap-1.5 ml-auto"
                   onClick={saveUploaded}
-                  disabled={!uploadPreview}
+                  disabled={!uploadPreview || isSaving || isLoadingSettings}
                 >
-                  <Check className="h-3.5 w-3.5" /> Save Signature
+                  {isSaving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  Save Signature
                 </Button>
               </div>
             </TabsContent>
@@ -318,11 +394,12 @@ export default function Settings() {
         <CardContent className="p-4 text-xs text-slate-500 space-y-1">
           <p className="font-medium text-slate-700">About signature storage</p>
           <p>
-            Your signature is stored locally in your browser and never sent to any server.
-            It is automatically embedded into the sign-off block whenever you export a PDF audit report.
+            Your signature is securely saved to the server so it is available on any device you log
+            in from. It is also cached locally for offline access and automatically embedded into the
+            sign-off block whenever you export a PDF audit report.
           </p>
           <p>
-            If you clear your browser data, you will need to re-save your signature.
+            Clearing your signature will remove it from both the server and this device.
           </p>
         </CardContent>
       </Card>

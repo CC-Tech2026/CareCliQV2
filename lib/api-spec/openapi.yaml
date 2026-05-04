@@ -20,6 +20,8 @@ tags:
     description: Dashboard statistics
   - name: ai
     description: AI features
+  - name: settings
+    description: Practitioner settings
 paths:
   /healthz:
     get:
@@ -381,6 +383,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ComplianceOverview"
+
+  /settings/practitioner:
+    get:
+      operationId: getPractitionerSettings
+      tags: [settings]
+      summary: Get practitioner settings (signature, name, credentials)
+      responses:
+        "200":
+          description: Practitioner settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PractitionerSettings"
+    put:
+      operationId: savePractitionerSettings
+      tags: [settings]
+      summary: Save practitioner settings (signature, name, credentials)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavePractitionerSettingsBody"
+      responses:
+        "200":
+          description: Saved practitioner settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PractitionerSettings"
 
 components:
   schemas:
@@ -819,3 +851,41 @@ components:
           items:
             $ref: "#/components/schemas/ComplianceReportItem"
       required: [average_score, total_sessions, compliant, non_compliant]
+
+    PractitionerSettings:
+      type: object
+      properties:
+        id:
+          type: string
+        signature:
+          type: string
+          nullable: true
+          description: Base64-encoded data URL of the practitioner signature
+        name:
+          type: string
+          nullable: true
+          description: Practitioner display name
+        credentials:
+          type: string
+          nullable: true
+          description: Practitioner credentials or title
+        updated_at:
+          type: string
+          nullable: true
+      required: [id]
+
+    SavePractitionerSettingsBody:
+      type: object
+      properties:
+        signature:
+          type: string
+          nullable: true
+          description: Base64-encoded data URL of the practitioner signature
+        name:
+          type: string
+          nullable: true
+          description: Practitioner display name
+        credentials:
+          type: string
+          nullable: true
+          description: Practitioner credentials or title
