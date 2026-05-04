@@ -225,6 +225,24 @@ export const GetSessionsResponseItem = zod.object({
   audio_url: zod.string().nullish(),
   status: zod.string(),
   created_at: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Activities completed during the session (searchable\/reportable)",
+    ),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -248,6 +266,10 @@ export const CreateSessionBody = zod.object({
   tags: zod.array(zod.string()).nullish(),
   goals_addressed: zod.array(zod.string()).nullish(),
   status: zod.string().default(createSessionBodyStatusDefault),
+  activities_performed: zod.string().nullish(),
+  outcomes: zod.string().nullish(),
+  participant_response: zod.string().nullish(),
+  progress_toward_goals: zod.string().nullish(),
 });
 
 /**
@@ -277,6 +299,24 @@ export const GetRecentSessionsResponseItem = zod.object({
   audio_url: zod.string().nullish(),
   status: zod.string(),
   created_at: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Activities completed during the session (searchable\/reportable)",
+    ),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -336,6 +376,24 @@ export const GetParticipantSessionsResponseItem = zod.object({
   audio_url: zod.string().nullish(),
   status: zod.string(),
   created_at: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Activities completed during the session (searchable\/reportable)",
+    ),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -372,6 +430,24 @@ export const GetSessionResponse = zod.object({
   audio_url: zod.string().nullish(),
   status: zod.string(),
   created_at: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Activities completed during the session (searchable\/reportable)",
+    ),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -395,6 +471,22 @@ export const UpdateSessionBody = zod.object({
   tags: zod.array(zod.string()).nullish(),
   goals_addressed: zod.array(zod.string()).nullish(),
   status: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe("Activities completed during the session"),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
 });
 
 export const UpdateSessionResponse = zod.object({
@@ -415,6 +507,24 @@ export const UpdateSessionResponse = zod.object({
   audio_url: zod.string().nullish(),
   status: zod.string(),
   created_at: zod.string().nullish(),
+  activities_performed: zod
+    .string()
+    .nullish()
+    .describe(
+      "Activities completed during the session (searchable\/reportable)",
+    ),
+  outcomes: zod
+    .string()
+    .nullish()
+    .describe("Measurable outcomes achieved during the session"),
+  participant_response: zod
+    .string()
+    .nullish()
+    .describe("How the participant responded during the session"),
+  progress_toward_goals: zod
+    .string()
+    .nullish()
+    .describe("Progress made toward NDIS goals during the session"),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -449,6 +559,24 @@ export const SaveSessionWithAIResponse = zod.object({
     audio_url: zod.string().nullish(),
     status: zod.string(),
     created_at: zod.string().nullish(),
+    activities_performed: zod
+      .string()
+      .nullish()
+      .describe(
+        "Activities completed during the session (searchable\/reportable)",
+      ),
+    outcomes: zod
+      .string()
+      .nullish()
+      .describe("Measurable outcomes achieved during the session"),
+    participant_response: zod
+      .string()
+      .nullish()
+      .describe("How the participant responded during the session"),
+    progress_toward_goals: zod
+      .string()
+      .nullish()
+      .describe("Progress made toward NDIS goals during the session"),
     participants: zod
       .object({
         full_name: zod.string().optional(),

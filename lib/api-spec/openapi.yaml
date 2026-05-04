@@ -582,6 +582,22 @@ components:
         created_at:
           type: string
           nullable: true
+        activities_performed:
+          type: string
+          nullable: true
+          description: Activities completed during the session (searchable/reportable)
+        outcomes:
+          type: string
+          nullable: true
+          description: Measurable outcomes achieved during the session
+        participant_response:
+          type: string
+          nullable: true
+          description: How the participant responded during the session
+        progress_toward_goals:
+          type: string
+          nullable: true
+          description: Progress made toward NDIS goals during the session
         participants:
           nullable: true
           type: object
@@ -619,6 +635,18 @@ components:
         status:
           type: string
           default: draft
+        activities_performed:
+          type: string
+          nullable: true
+        outcomes:
+          type: string
+          nullable: true
+        participant_response:
+          type: string
+          nullable: true
+        progress_toward_goals:
+          type: string
+          nullable: true
       required: [participant_id, session_date, duration_minutes, session_type]
 
     UpdateSessionBody:
@@ -649,6 +677,22 @@ components:
         status:
           type: string
           nullable: true
+        activities_performed:
+          type: string
+          nullable: true
+          description: Activities completed during the session
+        outcomes:
+          type: string
+          nullable: true
+          description: Measurable outcomes achieved during the session
+        participant_response:
+          type: string
+          nullable: true
+          description: How the participant responded during the session
+        progress_toward_goals:
+          type: string
+          nullable: true
+          description: Progress made toward NDIS goals during the session
 
     Alert:
       type: object

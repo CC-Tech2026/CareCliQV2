@@ -96,10 +96,24 @@ def _prepare_session_payload(data: dict) -> dict:
 async def update_session(session_id: str, data: dict) -> Optional[dict]:
     supabase = get_supabase_admin()
 
-    # Extract clinical data fields that are NOT direct DB columns.
-    # Merge them into ai_insights so audit records survive independently of AI calls.
+    # Extract clinical data fields.
+    # structured_notes dict → also expand into individual DB columns for search/reporting.
+    # activity_log → merged into ai_insights for audit persistence.
     clinical_structured_notes = data.pop("structured_notes", None)
     clinical_activity_log = data.pop("activity_log", None)
+
+    # Expand camelCase structured_notes dict into snake_case DB columns
+    if isinstance(clinical_structured_notes, dict):
+        mapping = {
+            "activitiesPerformed": "activities_performed",
+            "outcomes": "outcomes",
+            "participantResponse": "participant_response",
+            "progressTowardGoals": "progress_toward_goals",
+        }
+        for camel, snake in mapping.items():
+            val = clinical_structured_notes.get(camel)
+            if val is not None and snake not in data:
+                data[snake] = val
 
     if clinical_structured_notes is not None or clinical_activity_log is not None:
         try:
@@ -125,6 +139,10 @@ async def update_session(session_id: str, data: dict) -> Optional[dict]:
 
     payload = _prepare_session_payload(data)
 
+    # Structured note columns — strip from payload if they are not yet in the DB
+    # (migration not yet applied). Data is still preserved in ai_insights.
+    _STRUCTURED_COLS = {"activities_performed", "outcomes", "participant_response", "progress_toward_goals"}
+
     try:
         result = supabase.table("sessions").update(payload).eq("id", session_id).execute()
         if result.data:
@@ -133,6 +151,38 @@ async def update_session(session_id: str, data: dict) -> Optional[dict]:
         return None
     except Exception as e:
         err_str = str(e)
+        # If the error is about our new structured note columns not existing,
+        # retry without them — data is already preserved in ai_insights.
+        # PostgREST returns PGRST204 when a column is missing from its schema cache;
+        # PostgreSQL itself returns 42703 for "column does not exist".
+        if any(col in err_str for col in _STRUCTURED_COLS) and (
+            "42703" in err_str or "does not exist" in err_str or "PGRST204" in err_str
+        ):
+            logger.warning(
+                "Structured note columns not yet in DB schema — retrying without them. "
+                "Run backend/supabase_setup.sql in your Supabase SQL editor to add them."
+            )
+            fallback_payload = {k: v for k, v in payload.items() if k not in _STRUCTURED_COLS}
+            try:
+                result = supabase.table("sessions").update(fallback_payload).eq("id", session_id).execute()
+                if result.data:
+                    return _normalize(result.data[0])
+                # If update returned no rows, fall through to delete-insert below
+            except Exception as retry_e:
+                retry_str = str(retry_e)
+                if "updated_at" in retry_str or "42703" in retry_str:
+                    # Trigger workaround for the fallback path too
+                    logger.warning(f"UPDATE trigger error on fallback for session {session_id}. Using delete-insert.")
+                    existing_result = supabase.table("sessions").select("*").eq("id", session_id).execute()
+                    if not existing_result.data:
+                        return None
+                    existing = existing_result.data[0]
+                    merged = {k: v for k, v in {**existing, **fallback_payload}.items() if k != "created_at"}
+                    supabase.table("sessions").delete().eq("id", session_id).execute()
+                    insert_result = supabase.table("sessions").insert(merged).execute()
+                    return _normalize(insert_result.data[0]) if insert_result.data else None
+                raise retry_e
+            return None
         # Workaround: a Postgres trigger on sessions references NEW.updated_at which
         # does not exist as a column.  We cannot DROP the trigger via PostgREST, so
         # fall back to a READ → MERGE → DELETE → INSERT approach that avoids any

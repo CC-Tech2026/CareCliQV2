@@ -87,6 +87,14 @@ export interface Session {
   audio_url?: string | null;
   status: string;
   created_at?: string | null;
+  /** Activities completed during the session (searchable/reportable) */
+  activities_performed?: string | null;
+  /** Measurable outcomes achieved during the session */
+  outcomes?: string | null;
+  /** How the participant responded during the session */
+  participant_response?: string | null;
+  /** Progress made toward NDIS goals during the session */
+  progress_toward_goals?: string | null;
   participants?: SessionParticipants;
 }
 
@@ -99,6 +107,10 @@ export interface CreateSessionBody {
   tags?: string[] | null;
   goals_addressed?: string[] | null;
   status?: string;
+  activities_performed?: string | null;
+  outcomes?: string | null;
+  participant_response?: string | null;
+  progress_toward_goals?: string | null;
 }
 
 export interface UpdateSessionBody {
@@ -109,6 +121,14 @@ export interface UpdateSessionBody {
   tags?: string[] | null;
   goals_addressed?: string[] | null;
   status?: string | null;
+  /** Activities completed during the session */
+  activities_performed?: string | null;
+  /** Measurable outcomes achieved during the session */
+  outcomes?: string | null;
+  /** How the participant responded during the session */
+  participant_response?: string | null;
+  /** Progress made toward NDIS goals during the session */
+  progress_toward_goals?: string | null;
 }
 
 export type AlertParticipants = {

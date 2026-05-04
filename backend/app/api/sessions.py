@@ -230,8 +230,26 @@ async def get_session_audit(session_id: str):
     compliance_score = session.get("compliance_score")
     compliance_status = session.get("compliance_status") or ai_insights.get("compliance_status") or "draft"
 
-    # Structured clinical data — saved at PATCH time, preserved through AI overwrite
-    structured_notes = ai_insights.get("structured_notes") or {}
+    # Structured clinical data — prefer dedicated DB columns, fall back to ai_insights
+    db_activities_performed = session.get("activities_performed") or ""
+    db_outcomes = session.get("outcomes") or ""
+    db_participant_response = session.get("participant_response") or ""
+    db_progress_toward_goals = session.get("progress_toward_goals") or ""
+    has_db_structured = any([
+        db_activities_performed.strip(),
+        db_outcomes.strip(),
+        db_participant_response.strip(),
+        db_progress_toward_goals.strip(),
+    ])
+    if has_db_structured:
+        structured_notes = {
+            "activitiesPerformed": db_activities_performed,
+            "outcomes": db_outcomes,
+            "participantResponse": db_participant_response,
+            "progressTowardGoals": db_progress_toward_goals,
+        }
+    else:
+        structured_notes = ai_insights.get("structured_notes") or {}
     activity_log = ai_insights.get("activity_log") or []
 
     # Deterministic compliance re-computed from saved data (mirrors the frontend gate)
@@ -239,7 +257,7 @@ async def get_session_audit(session_id: str):
     duration_minutes_val = session.get("duration_minutes") or 0
     duration_ok = duration_minutes_val > 0
     has_activities = len(activity_log) > 0 if isinstance(activity_log, list) else False
-    any_note_filled = any(
+    any_note_filled = has_db_structured or any(
         (structured_notes.get(k) or "").strip()
         for k in ["activitiesPerformed", "outcomes", "participantResponse", "progressTowardGoals"]
     ) if isinstance(structured_notes, dict) else False

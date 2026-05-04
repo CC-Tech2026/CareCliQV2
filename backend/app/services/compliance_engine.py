@@ -67,21 +67,36 @@ def check_duration_present(session: dict) -> dict:
     }
 
 
+def _structured_fields_text(session: dict) -> str:
+    """Concatenate the 4 structured note columns into a single string for length/keyword checks."""
+    parts = [
+        session.get("activities_performed") or "",
+        session.get("outcomes") or "",
+        session.get("participant_response") or "",
+        session.get("progress_toward_goals") or "",
+    ]
+    return " ".join(p.strip() for p in parts if p.strip())
+
+
 def check_notes_not_empty(session: dict) -> dict:
     notes = (session.get("notes") or "").strip()
-    length = len(notes)
+    structured_text = _structured_fields_text(session)
+    # Use whichever is longer — structured fields count as documentation
+    effective_text = structured_text if len(structured_text) > len(notes) else notes
+    length = len(effective_text)
+    source = "structured note fields" if len(structured_text) > len(notes) else "session notes"
     if length >= 50:
         return {
             "rule": "notes_not_empty",
             "status": "pass",
-            "message": f"Session notes present ({length} chars)",
+            "message": f"Clinical documentation present via {source} ({length} chars)",
             "severity": "high",
         }
     if length >= 20:
         return {
             "rule": "notes_not_empty",
             "status": "warning",
-            "message": "Session notes are brief — add more detail for NDIS compliance",
+            "message": "Clinical notes are brief — add more detail for NDIS compliance",
             "severity": "medium",
         }
     return {
@@ -128,19 +143,33 @@ def check_service_type_set(session: dict) -> dict:
 
 def check_outcome_described(session: dict) -> dict:
     notes = (session.get("notes") or "").lower()
+    structured_text = _structured_fields_text(session).lower()
+    # Outcomes and participant_response columns are the most relevant for this rule
+    outcomes_col = (session.get("outcomes") or "").strip()
+    participant_response_col = (session.get("participant_response") or "").strip()
+    # Use structured fields first when they have content
+    if outcomes_col or participant_response_col:
+        return {
+            "rule": "outcome_described",
+            "status": "pass",
+            "message": "Outcomes and participant response documented in structured fields",
+            "severity": "medium",
+        }
     outcome_keywords = [
         "outcome", "achieved", "progress", "improvement", "goal", "result",
         "completed", "participant", "demonstrated", "able to", "successfully",
         "worked on", "supported", "assisted", "practiced", "developed",
     ]
-    if not notes or len(notes) < 20:
+    # Check both combined notes and structured text
+    combined_text = (notes + " " + structured_text).strip()
+    if not combined_text or len(combined_text) < 20:
         return {
             "rule": "outcome_described",
             "status": "fail",
             "message": "No outcome or session result described in notes",
             "severity": "medium",
         }
-    if any(kw in notes for kw in outcome_keywords):
+    if any(kw in combined_text for kw in outcome_keywords):
         return {
             "rule": "outcome_described",
             "status": "pass",

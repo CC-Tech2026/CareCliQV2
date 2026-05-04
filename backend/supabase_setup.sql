@@ -95,6 +95,23 @@ BEGIN
     END IF;
 END $$;
 
+-- Add structured case note fields as separate searchable columns
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='activities_performed') THEN
+        ALTER TABLE sessions ADD COLUMN activities_performed TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='outcomes') THEN
+        ALTER TABLE sessions ADD COLUMN outcomes TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='participant_response') THEN
+        ALTER TABLE sessions ADD COLUMN participant_response TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='progress_toward_goals') THEN
+        ALTER TABLE sessions ADD COLUMN progress_toward_goals TEXT;
+    END IF;
+END $$;
+
 -- Add ndis_plan_id to patients
 DO $$
 BEGIN

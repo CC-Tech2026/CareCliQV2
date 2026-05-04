@@ -594,6 +594,12 @@ export default function SessionLive() {
         transcription: transcription || undefined,
         status: "completed",
         photo_urls: images,
+        // Individual structured note DB columns for search/reporting
+        activities_performed: structuredNotes.activitiesPerformed || undefined,
+        outcomes: structuredNotes.outcomes || undefined,
+        participant_response: structuredNotes.participantResponse || undefined,
+        progress_toward_goals: structuredNotes.progressTowardGoals || undefined,
+        // Also keep legacy structured_notes dict for backward-compat (ai_insights merge)
         structured_notes: structuredNotes,
         activity_log: activityLog,
       };

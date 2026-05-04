@@ -12,6 +12,10 @@ class SessionCreate(BaseModel):
     tags: Optional[List[str]] = []
     goals_addressed: Optional[List[str]] = []
     status: str = "draft"
+    activities_performed: Optional[str] = None
+    outcomes: Optional[str] = None
+    participant_response: Optional[str] = None
+    progress_toward_goals: Optional[str] = None
 
 
 class SessionUpdate(BaseModel):
@@ -24,6 +28,11 @@ class SessionUpdate(BaseModel):
     goals_addressed: Optional[List[str]] = None
     photo_urls: Optional[List[str]] = None
     status: Optional[str] = None
-    # Audit-critical clinical data — merged into ai_insights at service layer
+    # Structured note fields — persisted as individual DB columns for search/reporting
+    activities_performed: Optional[str] = None
+    outcomes: Optional[str] = None
+    participant_response: Optional[str] = None
+    progress_toward_goals: Optional[str] = None
+    # Legacy: merged into ai_insights for backward compatibility
     structured_notes: Optional[Dict[str, str]] = None
     activity_log: Optional[List[Dict[str, str]]] = None

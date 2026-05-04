@@ -53,7 +53,7 @@ interface AuditPayload {
   };
 }
 
-// Extended session type with new DB columns not yet in the OpenAPI spec
+// Extended session type with extra DB columns not yet in the OpenAPI spec
 type ExtendedSession = Session & {
   cost?: number | null;
   support_category?: string | null;
@@ -751,6 +751,40 @@ export default function SessionDetail({ id }: { id?: string }) {
               )}
             </CardContent>
           </Card>
+
+          {/* Structured Clinical Note Fields */}
+          {(() => {
+            const sections: { label: string; icon: typeof FileText; value: string | null | undefined; color: string }[] = [
+              { label: "Activities Performed", icon: Activity, value: session.activities_performed, color: "text-teal-700" },
+              { label: "Outcomes", icon: CheckCircle2, value: session.outcomes, color: "text-emerald-700" },
+              { label: "Participant Response", icon: Brain, value: session.participant_response, color: "text-indigo-700" },
+              { label: "Progress Toward Goals", icon: TrendingUp, value: session.progress_toward_goals, color: "text-blue-700" },
+            ];
+            const filledSections = sections.filter((sec) => sec.value && sec.value.trim());
+            if (filledSections.length === 0) return null;
+            return (
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-3 flex flex-row items-center border-b border-slate-100 dark:border-slate-800">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-slate-500" /> Structured Clinical Notes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-5">
+                  {filledSections.map(({ label, icon: Icon, value, color }) => (
+                    <div key={label}>
+                      <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${color}`}>
+                        <Icon className="h-3.5 w-3.5" />
+                        {label}
+                      </p>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                        {value}
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {session.transcription && (
             <Card className="border-slate-200 shadow-sm bg-slate-50 dark:bg-slate-900/50">
