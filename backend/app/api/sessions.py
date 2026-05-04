@@ -336,6 +336,11 @@ async def get_session_audit(session_id: str):
     ])
     formatted_text = "\n".join(formatted_lines)
 
+    import os
+    practitioner_name = session.get("practitioner_name") or os.environ.get("PRACTITIONER_NAME", "NDIS Support Practitioner")
+    practitioner_credentials = session.get("practitioner_credentials") or os.environ.get("PRACTITIONER_CREDENTIALS", "Support Worker")
+    sign_off_date = datetime.now(timezone.utc).strftime("%d %B %Y")
+
     audit = {
         "audit_version": "1.0",
         "ndis_principle": "If it cannot be evidenced, it cannot be claimed.",
@@ -352,6 +357,11 @@ async def get_session_audit(session_id: str):
             "id": participant_id,
             "full_name": participant_name,
             "ndis_number": participant_ndis,
+        },
+        "practitioner": {
+            "name": practitioner_name,
+            "credentials": practitioner_credentials,
+            "sign_off_date": sign_off_date,
         },
         "structured_notes": structured_notes,
         "clinical_notes": notes_text,

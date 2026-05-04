@@ -18,6 +18,11 @@ export interface AuditPayload {
     ndis_number?: string;
     date_of_birth?: string;
   };
+  practitioner?: {
+    name?: string;
+    credentials?: string;
+    sign_off_date?: string;
+  };
   clinical_notes: string;
   structured_notes: Record<string, string>;
   goals_addressed: string[];
@@ -526,6 +531,105 @@ export function appendSessionToPDF(
     writeWrappedText(aiNotes, { size: 10, color: SLATE_700 });
     y += 4;
   }
+
+  // ── Practitioner Sign-Off ─────────────────────────────────────────────────
+  const signOffBlockH = 52;
+  checkPageBreak(signOffBlockH);
+
+  const prac = data.practitioner ?? {};
+  const pracName = prac.name || "NDIS Support Practitioner";
+  const pracCreds = prac.credentials || "Support Worker";
+  const pracDate = prac.sign_off_date || new Date().toLocaleDateString("en-AU", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+
+  writeSectionHeading("Practitioner Sign-Off");
+
+  // Outer rounded container
+  const boxH = 38;
+  pdf.setFillColor("#f0f9ff");
+  pdf.setDrawColor("#bfdbfe");
+  pdf.setLineWidth(0.4);
+  pdf.roundedRect(margin, y, contentW, boxH, 3, 3, "FD");
+
+  // "Prepared by" label
+  pdf.setFontSize(7.5);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(BRAND_BLUE);
+  pdf.text("PREPARED BY", margin + 5, y + 6.5);
+
+  // Practitioner name
+  pdf.setFontSize(12);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(BRAND_DARK);
+  pdf.text(pracName, margin + 5, y + 14);
+
+  // Credentials
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(SLATE_500);
+  pdf.text(pracCreds, margin + 5, y + 20);
+
+  // Divider between left info and right signature area
+  const dividerX = margin + contentW * 0.55;
+  pdf.setDrawColor("#bfdbfe");
+  pdf.setLineWidth(0.3);
+  pdf.line(dividerX, y + 4, dividerX, y + boxH - 4);
+
+  // Right: "Sign-off Date" label
+  const rightX = dividerX + 6;
+  pdf.setFontSize(7.5);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(BRAND_BLUE);
+  pdf.text("SIGN-OFF DATE", rightX, y + 6.5);
+
+  pdf.setFontSize(10);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(BRAND_DARK);
+  pdf.text(pracDate, rightX, y + 14);
+
+  // Signature line label
+  pdf.setFontSize(7.5);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(BRAND_BLUE);
+  pdf.text("SIGNATURE", rightX, y + 22);
+
+  // Signature box drawn with jsPDF primitives
+  const sigBoxX = rightX;
+  const sigBoxY = y + 24;
+  const sigBoxW = contentW - (dividerX - margin) - 12;
+  const sigBoxH = 10;
+  pdf.setFillColor("#ffffff");
+  pdf.setDrawColor("#94a3b8");
+  pdf.setLineWidth(0.4);
+  pdf.roundedRect(sigBoxX, sigBoxY, sigBoxW, sigBoxH, 1.5, 1.5, "FD");
+
+  // Dashed signature line inside the box
+  pdf.setDrawColor("#cbd5e1");
+  pdf.setLineWidth(0.2);
+  const dashY = sigBoxY + sigBoxH - 3;
+  const dashStep = 3;
+  for (let dx = sigBoxX + 3; dx < sigBoxX + sigBoxW - 3; dx += dashStep * 2) {
+    pdf.line(dx, dashY, Math.min(dx + dashStep, sigBoxX + sigBoxW - 3), dashY);
+  }
+
+  // "Sign here" placeholder text inside box
+  pdf.setFontSize(7);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor("#cbd5e1");
+  pdf.text("Sign here", sigBoxX + sigBoxW / 2, sigBoxY + sigBoxH / 2 + 1.5, { align: "center" });
+
+  y += boxH + 6;
+
+  // Acknowledgement line
+  checkPageBreak(10);
+  pdf.setFontSize(7.5);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(SLATE_500);
+  const ackText = "I confirm that the information in this session record is accurate and complete to the best of my knowledge.";
+  const ackLines = pdf.splitTextToSize(ackText, contentW);
+  pdf.text(ackLines, margin, y);
+  y += ackLines.length * 4 + 2;
 
   return pdf;
 }
