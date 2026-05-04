@@ -1,0 +1,202 @@
+You are working on an existing production MVP for an NDIS reporting and live session platform.
+
+IMPORTANT CONSTRAINT:
+
+* DO NOT modify or refactor existing database tables
+* DO NOT break current session or participant structures
+* ONLY extend existing models safely
+
+The goal is to implement a safe, incremental “Goal Linking System” that improves compliance without disrupting current functionality.
+
+---
+
+1. UNDERSTANDING OF CURRENT SYSTEM
+
+---
+
+Assume the system already has:
+
+* Participants table (existing)
+* Sessions table (existing)
+* Clinical notes + AI summaries (existing)
+* Possibly a goals field inside participant or session (unclear / inconsistent usage)
+
+We are NOT changing this foundation.
+
+---
+
+2. SAFE GOAL SYSTEM DESIGN (NO BREAKING CHANGES)
+
+---
+
+Instead of introducing complex schema changes, implement ONE of the following safe approaches:
+
+OPTION A (Preferred MVP Approach):
+Use existing fields + lightweight JSON structure
+
+If Participants already exist:
+
+* Add a field (if not present already):
+  participant.goals = JSON array
+
+Example:
+[
+{
+"id": "g1",
+"title": "Improve independent mobility",
+"status": "active"
+}
+]
+
+If Sessions already exist:
+
+* Add:
+  session.goal_ids = string[] OR JSON array
+
+This avoids new tables entirely.
+
+OPTION B (If backend supports relations already):
+
+* Use existing relation system if available
+* Only add a join mapping in API layer, not DB redesign
+
+---
+
+3. GOAL CREATION (NO DATABASE RESTRUCTURE)
+
+---
+
+In UI (Settings or Participant Profile):
+
+Allow practitioner to:
+
+* Add goal (stored in participant.goals JSON or existing field)
+* Edit goal text
+* Archive goal (soft flag inside JSON object)
+
+RULES:
+
+* Goals belong ONLY to participant
+* Goals are NOT tied to sessions directly in storage yet
+
+---
+
+4. SESSION GOAL LINKING (CRITICAL FEATURE)
+
+---
+
+At session start:
+
+DO NOT create new tables.
+
+Instead:
+
+* Store selected goal IDs inside session record:
+
+session.goal_ids = ["g1", "g2"]
+
+UI REQUIREMENT:
+
+* Must select at least 1 goal before session can start
+* If not selected → block session start
+
+Message:
+"Select at least one participant goal before starting the session to meet NDIS documentation requirements."
+
+---
+
+5. LIVE SESSION BEHAVIOUR
+
+---
+
+During session:
+
+* Show selected goals at top of screen
+* Example:
+
+Working toward:
+
+* Improve independent mobility
+* Daily living tasks
+
+Activities, notes, voice logs automatically inherit this context (no tagging needed in MVP)
+
+---
+
+6. CLINICAL NOTES GENERATION (UPDATE ONLY)
+
+---
+
+Modify AI summary logic ONLY:
+
+When generating notes:
+
+* Pull session.goal_ids
+* Match them to participant.goals
+* Inject into output
+
+Example:
+"Support focused on: Improve independent mobility, Daily living tasks"
+
+DO NOT change database schema — only enrich output layer.
+
+---
+
+7. COMPLIANCE CHECK (NO DB CHANGES)
+
+---
+
+Add runtime validation only:
+
+If session.goal_ids is empty:
+
+* complianceScore -= penalty
+* flag:
+  "Non-compliant: No goals linked"
+
+This is a logical validation layer, NOT a schema constraint.
+
+---
+
+8. UI FIX (IMPORTANT)
+
+---
+
+Replace confusing UI text:
+
+OLD:
+"No goals linked"
+
+NEW:
+"This session is not linked to participant goals. Select at least one goal to proceed."
+
+Make goal selection:
+
+* Required step before session start
+* Persistent display during session
+
+---
+
+9. PRINCIPLE OF THIS IMPLEMENTATION
+
+---
+
+This system must:
+
+* Extend, not replace
+* Store goals minimally (JSON or existing fields)
+* Avoid migrations
+* Avoid breaking existing API contracts
+* Improve compliance visibility without architectural risk
+
+---
+
+## EXPECTED RESULT
+
+After implementation:
+
+* Participants have structured goals (lightweight)
+* Sessions reference goals safely via IDs/JSON
+* AI notes reflect goal linkage
+* Compliance engine can validate goal presence
+* No database refactor required
