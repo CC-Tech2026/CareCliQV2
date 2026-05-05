@@ -1,11 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional, List, Union
+from typing import Optional, List
 from datetime import date
-
-
-class ParticipantGoal(BaseModel):
-    text: str
-    progress: int = 0
 
 
 class NDISGoal(BaseModel):
@@ -30,7 +25,7 @@ class ParticipantCreate(BaseModel):
     total_budget: Optional[float] = 0.0
     used_budget: Optional[float] = 0.0
     primary_disability: Optional[str] = None
-    goals: Optional[List[Union[ParticipantGoal, str]]] = []
+    goals: Optional[List[NDISGoal]] = []
 
 
 class ParticipantUpdate(BaseModel):
@@ -44,7 +39,7 @@ class ParticipantUpdate(BaseModel):
     total_budget: Optional[float] = None
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
-    goals: Optional[List[Union[ParticipantGoal, str]]] = None
+    goals: Optional[List[NDISGoal]] = None
 
 
 class NDISPlanCreate(BaseModel):

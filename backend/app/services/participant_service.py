@@ -41,12 +41,10 @@ async def create_participant(data: ParticipantCreate) -> dict:
         if date_field in payload and payload[date_field]:
             payload[date_field] = str(payload[date_field])
 
-    # goals is TEXT in DB — store as JSON string so we can parse it back as a list
-    if "goals" in payload:
-        if isinstance(payload["goals"], list):
-            payload["goals"] = json.dumps(payload["goals"])
-        elif payload["goals"] is None:
-            payload.pop("goals")
+    # goals is JSONB — pass the list directly so PostgREST stores it as a proper
+    # JSONB array, not as a quoted JSON string.
+    if "goals" in payload and payload["goals"] is None:
+        payload.pop("goals")
 
     result = supabase.table(TABLE).insert(payload).execute()
     return _normalize(result.data[0]) if result.data else {}
@@ -59,9 +57,8 @@ async def update_participant(participant_id: str, data: ParticipantUpdate) -> Op
     for date_field in ("date_of_birth", "plan_start_date", "plan_end_date"):
         if date_field in payload and payload[date_field]:
             payload[date_field] = str(payload[date_field])
-    if "goals" in payload:
-        if isinstance(payload["goals"], list):
-            payload["goals"] = json.dumps(payload["goals"])
+    # goals is JSONB — pass the list directly so PostgREST stores it as a proper
+    # JSONB array, not as a quoted JSON string.
     result = supabase.table(TABLE).update(payload).eq("id", participant_id).execute()
     return _normalize(result.data[0]) if result.data else None
 
@@ -118,53 +115,26 @@ async def get_dashboard_stats() -> dict:
     }
 
 
-def _coerce_goal(g, index: int = 0) -> dict:
-    """Normalise a single goal value to NDISGoal format: {id, title, status}.
-
-    Handles both:
-    - NDISGoal (new): {id, title, status}  — returned as-is
-    - Legacy: {text, progress} or plain string — auto-migrated to NDISGoal format
-    """
-    import hashlib as _hashlib
-    if isinstance(g, dict):
-        # NDISGoal format — has id/title/status
-        if g.get("id") and g.get("title") and "status" in g:
-            return {
-                "id": str(g["id"]),
-                "title": str(g["title"]),
-                "status": str(g.get("status", "active")),
-            }
-        # Legacy format — has text/progress; auto-migrate to NDISGoal
-        text = str(g.get("text") or "").strip()
-        if not text:
-            return None  # skip empty legacy goals
-        stable_id = "legacy_" + _hashlib.md5(text.encode()).hexdigest()[:8]
-        return {"id": stable_id, "title": text, "status": "active"}
-    if isinstance(g, str) and g.strip():
-        text = g.strip()
-        stable_id = "legacy_" + _hashlib.md5(text.encode()).hexdigest()[:8]
-        return {"id": stable_id, "title": text, "status": "active"}
-    return None  # skip empty/null
-
-
 def _normalize(row: dict) -> dict:
+    """Normalise a patients row for API responses.
+
+    After the NDISGoal migration all goals are stored as {id, title, status}
+    objects in the JSONB column. This function only needs to parse the value if
+    it arrives as a raw JSON string (defensive fallback) and fill in default
+    values for nullable numeric/status fields.
+    """
     if not row:
         return row
     out = dict(row)
 
-    # goals may be stored as a JSON string (TEXT column) or already parsed (JSONB)
     goals = out.get("goals")
     if isinstance(goals, str) and goals:
         try:
             parsed = json.loads(goals)
-            raw_list = parsed if isinstance(parsed, list) else [goals]
+            out["goals"] = parsed if isinstance(parsed, list) else []
         except Exception:
-            # Plain text fallback — split by newline or comma
-            raw_list = [g.strip() for g in goals.replace("\n", ",").split(",") if g.strip()]
-        out["goals"] = [r for r in (_coerce_goal(g, i) for i, g in enumerate(raw_list)) if r]
-    elif isinstance(goals, list):
-        out["goals"] = [r for r in (_coerce_goal(g, i) for i, g in enumerate(goals)) if r]
-    else:
+            out["goals"] = []
+    elif not isinstance(goals, list):
         out["goals"] = []
 
     if out.get("total_budget") is None:

@@ -202,7 +202,7 @@ UPDATE patients SET
     total_budget = 45000.00,
     used_budget = 18200.00,
     primary_disability = 'Physical Disability',
-    goals = '["Improve mobility", "Reduce pain", "Increase independence"]',
+    goals = '[{"id":"legacy_a1b2c3d4","title":"Improve mobility","status":"active"},{"id":"legacy_b2c3d4e5","title":"Reduce pain","status":"active"},{"id":"legacy_c3d4e5f6","title":"Increase independence","status":"active"}]',
     plan_start_date = '2024-07-01',
     plan_end_date = '2025-06-30'
 WHERE ndis_number = '430012345' AND plan_status IS NULL;
@@ -337,9 +337,9 @@ UPDATE sessions SET status = 'completed' WHERE status IS NULL;
 -- Insert seed participants if none exist beyond the initial one
 INSERT INTO patients (full_name, ndis_number, date_of_birth, email, phone, plan_status, plan_start_date, plan_end_date, total_budget, used_budget, primary_disability, goals)
 VALUES 
-    ('Sarah Mitchell', 'NDIS43821094', '1988-03-15', 'sarah.m@email.com', '0412 345 678', 'active', '2024-07-01', '2025-06-30', 45000.00, 18200.00, 'Autism Spectrum Disorder', '["Improve social communication", "Develop independent living skills", "Increase community participation"]'),
-    ('James Chen', 'NDIS71204856', '1995-08-22', 'james.c@email.com', '0423 456 789', 'active', '2024-09-01', '2025-08-31', 38000.00, 12400.00, 'Cerebral Palsy', '["Enhance mobility and coordination", "Improve speech clarity", "Gain employment skills"]'),
-    ('Emma Thompson', 'NDIS29384756', '1979-11-30', 'emma.t@email.com', '0434 567 890', 'review', '2023-12-01', '2024-11-30', 52000.00, 47800.00, 'Acquired Brain Injury', '["Cognitive rehabilitation", "Return to community activities", "Memory strategies"]')
+    ('Sarah Mitchell', 'NDIS43821094', '1988-03-15', 'sarah.m@email.com', '0412 345 678', 'active', '2024-07-01', '2025-06-30', 45000.00, 18200.00, 'Autism Spectrum Disorder', '[{"id":"legacy_d4e5f6a7","title":"Improve social communication","status":"active"},{"id":"legacy_e5f6a7b8","title":"Develop independent living skills","status":"active"},{"id":"legacy_f6a7b8c9","title":"Increase community participation","status":"active"}]'),
+    ('James Chen', 'NDIS71204856', '1995-08-22', 'james.c@email.com', '0423 456 789', 'active', '2024-09-01', '2025-08-31', 38000.00, 12400.00, 'Cerebral Palsy', '[{"id":"legacy_a7b8c9d0","title":"Enhance mobility and coordination","status":"active"},{"id":"legacy_b8c9d0e1","title":"Improve speech clarity","status":"active"},{"id":"legacy_c9d0e1f2","title":"Gain employment skills","status":"active"}]'),
+    ('Emma Thompson', 'NDIS29384756', '1979-11-30', 'emma.t@email.com', '0434 567 890', 'review', '2023-12-01', '2024-11-30', 52000.00, 47800.00, 'Acquired Brain Injury', '[{"id":"legacy_d0e1f2a3","title":"Cognitive rehabilitation","status":"active"},{"id":"legacy_e1f2a3b4","title":"Return to community activities","status":"active"},{"id":"legacy_f2a3b4c5","title":"Memory strategies","status":"active"}]')
 ON CONFLICT (ndis_number) DO NOTHING;
 
 -- Insert seed alerts
@@ -364,3 +364,63 @@ SELECT
     false
 FROM patients p WHERE p.ndis_number = 'NDIS29384756'
 ON CONFLICT DO NOTHING;
+
+-- ============================================================
+-- MIGRATE patients.goals TO NDISGoal FORMAT
+-- Runs last so it covers all seed and update data written above.
+-- Converts legacy {text, progress} objects and plain string goals
+-- to the canonical NDISGoal format: {id, title, status}.
+-- Already-migrated goals (with id/title/status) pass through unchanged.
+-- Safe to run multiple times (idempotent).
+-- ============================================================
+UPDATE patients
+SET goals = (
+    SELECT COALESCE(
+        jsonb_agg(migrated) FILTER (WHERE migrated IS NOT NULL),
+        '[]'::jsonb
+    )
+    FROM (
+        SELECT
+            CASE
+                -- Already in NDISGoal format: has id, title and status
+                WHEN jsonb_typeof(elem) = 'object'
+                     AND (elem->>'id') IS NOT NULL
+                     AND (elem->>'title') IS NOT NULL
+                     AND (elem->>'status') IS NOT NULL
+                    THEN elem
+                -- Legacy {text, progress} format
+                WHEN jsonb_typeof(elem) = 'object'
+                     AND (elem->>'text') IS NOT NULL
+                     AND trim(elem->>'text') != ''
+                    THEN jsonb_build_object(
+                        'id',     'legacy_' || left(md5(trim(elem->>'text')), 8),
+                        'title',  trim(elem->>'text'),
+                        'status', 'active'
+                    )
+                -- Plain string element
+                WHEN jsonb_typeof(elem) = 'string'
+                     AND trim(elem #>> '{}') != ''
+                    THEN jsonb_build_object(
+                        'id',     'legacy_' || left(md5(trim(elem #>> '{}')), 8),
+                        'title',  trim(elem #>> '{}'),
+                        'status', 'active'
+                    )
+                ELSE NULL
+            END AS migrated
+        FROM jsonb_array_elements(
+            CASE
+                -- Stored as a proper JSONB array (ideal case)
+                WHEN jsonb_typeof(goals) = 'array' THEN goals
+                -- Stored as a JSONB string containing an encoded JSON array
+                -- (produced when the Supabase client received json.dumps() output).
+                -- Regex pre-check prevents a cast error on non-JSON scalar strings.
+                WHEN jsonb_typeof(goals) = 'string'
+                     AND (goals #>> '{}') ~ '^\s*\[.*\]\s*$'
+                     AND jsonb_typeof((goals #>> '{}')::jsonb) = 'array'
+                    THEN (goals #>> '{}')::jsonb
+                ELSE '[]'::jsonb
+            END
+        ) AS elem
+    ) sub
+)
+WHERE goals IS NOT NULL;

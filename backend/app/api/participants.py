@@ -128,10 +128,11 @@ async def update_participant_goals(participant_id: str, body: GoalsUpdateBody):
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     goals_data = [g.model_dump() for g in body.goals]
-    import json
     from ..services.supabase_client import get_supabase_admin
     supabase = get_supabase_admin()
-    result = supabase.table("patients").update({"goals": json.dumps(goals_data)}).eq("id", participant_id).execute()
+    # Pass goals_data as a plain list — PostgREST will store it as a proper JSONB
+    # array, not as a quoted JSON string.
+    result = supabase.table("patients").update({"goals": goals_data}).eq("id", participant_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Participant not found")
     return await participant_service.get_participant_by_id(participant_id)
