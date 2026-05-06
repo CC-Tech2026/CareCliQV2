@@ -29,12 +29,28 @@ async def get_participant_by_id(participant_id: str) -> Optional[dict]:
         return None
 
 
+def _strip_missing_columns(payload: dict) -> dict:
+    """Remove fields that don't yet exist in the DB so saves never fail silently.
+
+    biological_sex is guarded here because the column requires a manual
+    ALTER TABLE migration that may not have been run yet.  When the column is
+    absent PostgREST returns 42703; we detect that at startup and set
+    migration_state.biological_sex_column_missing so we can skip the field
+    proactively.
+    """
+    from . import migration_state
+    if migration_state.biological_sex_column_missing:
+        payload.pop("biological_sex", None)
+    return payload
+
+
 async def create_participant(data: ParticipantCreate) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
 
     # Remove fields that don't exist in the actual DB table
     payload.pop("address", None)
+    payload = _strip_missing_columns(payload)
 
     # Date fields must be ISO strings
     for date_field in ("date_of_birth", "plan_start_date", "plan_end_date"):
@@ -54,6 +70,7 @@ async def update_participant(participant_id: str, data: ParticipantUpdate) -> Op
     supabase = get_supabase_admin()
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
     payload.pop("address", None)
+    payload = _strip_missing_columns(payload)
     for date_field in ("date_of_birth", "plan_start_date", "plan_end_date"):
         if date_field in payload and payload[date_field]:
             payload[date_field] = str(payload[date_field])
