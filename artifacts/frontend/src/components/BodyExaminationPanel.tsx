@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { BodyMap, BodyMarker, BodyView, BodyType, MarkerColor, MARKER_COLORS, getZoneLabel, ALL_ZONES } from "@/components/BodyMap";
 import { cn } from "@/lib/utils";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface BodyExaminationPanelProps {
@@ -13,10 +13,13 @@ interface BodyExaminationPanelProps {
   bodyType?: BodyType;
 }
 
-interface PopoverAnchor {
-  x: number;
-  y: number;
-}
+interface PopoverAnchor { x: number; y: number }
+
+const BODY_TYPE_LABELS: Record<BodyType, string> = {
+  male: "Male",
+  female: "Female",
+  unspecified: "Unspecified",
+};
 
 export function BodyExaminationPanel({
   markers,
@@ -25,16 +28,14 @@ export function BodyExaminationPanel({
   className,
   bodyType = "unspecified",
 }: BodyExaminationPanelProps) {
-  const [view, setView] = useState<BodyView>("front");
-  const [selectedZone, setSelectedZone] = useState<string | null>(null);
-  const [draftColor, setDraftColor] = useState<MarkerColor>("red");
-  const [draftNote, setDraftNote] = useState("");
-  const [popoverAnchor, setPopoverAnchor] = useState<PopoverAnchor | null>(null);
+  const [view, setView]                     = useState<BodyView>("front");
+  const [selectedZone, setSelectedZone]     = useState<string | null>(null);
+  const [draftColor, setDraftColor]         = useState<MarkerColor>("red");
+  const [draftNote, setDraftNote]           = useState("");
+  const [popoverAnchor, setPopoverAnchor]   = useState<PopoverAnchor | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const existingMarker = selectedZone
-    ? markers.find((m) => m.zone === selectedZone)
-    : null;
+  const existingMarker = selectedZone ? markers.find((m) => m.zone === selectedZone) : null;
 
   const closePopover = useCallback(() => {
     setSelectedZone(null);
@@ -43,25 +44,19 @@ export function BodyExaminationPanel({
 
   const handleZoneClick = useCallback((zoneId: string, centroid: [number, number]) => {
     if (readOnly) return;
-
-    if (selectedZone === zoneId) {
-      closePopover();
-      return;
-    }
-
+    if (selectedZone === zoneId) { closePopover(); return; }
     const existing = markers.find((m) => m.zone === zoneId);
     setDraftColor(existing?.color ?? "red");
     setDraftNote(existing?.note ?? "");
     setSelectedZone(zoneId);
-
     const svgEl = svgRef.current;
     if (svgEl) {
       const rect = svgEl.getBoundingClientRect();
-      const scaleX = rect.width / 200;
-      const scaleY = rect.height / 380;
+      const scaleX = rect.width  / 200;
+      const scaleY = rect.height / 430;
       setPopoverAnchor({
         x: rect.left + centroid[0] * scaleX,
-        y: rect.top + centroid[1] * scaleY,
+        y: rect.top  + centroid[1] * scaleY,
       });
     }
   }, [readOnly, selectedZone, markers, closePopover]);
@@ -80,7 +75,6 @@ export function BodyExaminationPanel({
     closePopover();
   }, [selectedZone, onChange, markers, closePopover]);
 
-  /* Close popover when clicking outside */
   useEffect(() => {
     if (!selectedZone) return;
     const handler = (e: MouseEvent) => {
@@ -95,7 +89,6 @@ export function BodyExaminationPanel({
     return () => document.removeEventListener("mousedown", handler);
   }, [selectedZone, closePopover]);
 
-  /* Zone-anchored popover rendered into document.body via portal */
   const popoverContent = selectedZone && popoverAnchor && !readOnly
     ? createPortal(
         <div
@@ -107,48 +100,25 @@ export function BodyExaminationPanel({
             transform: "translate(-50%, calc(-100% - 10px))",
             zIndex: 9999,
           }}
-          className="bg-white rounded-xl border border-slate-200 shadow-2xl p-4 w-[230px] space-y-3"
+          className="bg-white rounded-xl border border-slate-200 shadow-2xl p-4 w-[240px] space-y-3"
         >
-          {/* Arrow */}
-          <div
-            style={{
-              position: "absolute",
-              bottom: -6,
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: 12,
-              height: 12,
-              background: "white",
-              border: "1px solid #e2e8f0",
-              borderTop: "none",
-              borderLeft: "none",
-              rotate: "45deg",
-            }}
-          />
-
-          {/* Header */}
+          <div style={{ position: "absolute", bottom: -6, left: "50%", transform: "translateX(-50%)",
+            width: 12, height: 12, background: "white", border: "1px solid #e2e8f0",
+            borderTop: "none", borderLeft: "none", rotate: "45deg" }} />
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-800 leading-tight">
               {getZoneLabel(selectedZone)}
             </p>
-            <button
-              onClick={closePopover}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-            >
+            <button onClick={closePopover}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-
-          {/* Color swatches */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Finding Type
-            </p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Finding Type</p>
             <div className="grid grid-cols-2 gap-1.5">
               {(Object.entries(MARKER_COLORS) as [MarkerColor, typeof MARKER_COLORS[MarkerColor]][]).map(([key, cfg]) => (
-                <button
-                  key={key}
-                  onClick={() => setDraftColor(key)}
+                <button key={key} onClick={() => setDraftColor(key)}
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-[11px] font-semibold transition-all",
                     draftColor === key
@@ -158,20 +128,15 @@ export function BodyExaminationPanel({
                     draftColor === key && key === "yellow" && "ring-amber-400",
                     draftColor === key && key === "blue"   && "ring-blue-400",
                     draftColor === key && key === "green"  && "ring-emerald-400",
-                  )}
-                >
+                  )}>
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.hex }} />
                   {cfg.label}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Note */}
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-              Clinical Note
-            </p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Clinical Note</p>
             <textarea
               value={draftNote}
               onChange={(e) => setDraftNote(e.target.value.slice(0, 200))}
@@ -182,25 +147,16 @@ export function BodyExaminationPanel({
             />
             <p className="text-[9px] text-slate-400 text-right -mt-0.5">{draftNote.length}/200</p>
           </div>
-
-          {/* Actions */}
           <div className="flex gap-2 pt-0.5">
             {existingMarker && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRemove}
-                className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-3"
-              >
+              <Button variant="outline" size="sm" onClick={handleRemove}
+                className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-7 px-3">
                 Remove
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={handleSave}
-              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-7"
-            >
-              {existingMarker ? "Update" : "Save"}
+            <Button size="sm" onClick={handleSave}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-7">
+              {existingMarker ? "Update" : "Save Finding"}
             </Button>
           </div>
         </div>,
@@ -209,40 +165,43 @@ export function BodyExaminationPanel({
     : null;
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-3", className)}>
 
-      {/* Header: Front / Back toggle */}
-      <div className="flex items-center justify-between">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        {/* Front / Back toggle */}
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs font-semibold">
           <button
             onClick={() => { setView("front"); closePopover(); }}
             className={cn(
-              "px-3 py-1.5 transition-colors",
-              view === "front"
-                ? "bg-indigo-600 text-white"
-                : "bg-white text-slate-500 hover:bg-slate-50",
+              "px-3 py-1.5 transition-colors flex items-center gap-1",
+              view === "front" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50",
             )}
           >
-            <ChevronLeft className="h-3 w-3 inline mr-0.5 -mt-0.5" />
+            <ChevronLeft className="h-3 w-3 -mt-0.5" />
             Front
           </button>
           <button
             onClick={() => { setView("back"); closePopover(); }}
             className={cn(
-              "px-3 py-1.5 transition-colors border-l border-slate-200",
-              view === "back"
-                ? "bg-indigo-600 text-white"
-                : "bg-white text-slate-500 hover:bg-slate-50",
+              "px-3 py-1.5 transition-colors border-l border-slate-200 flex items-center gap-1",
+              view === "back" ? "bg-indigo-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50",
             )}
           >
             Back
-            <ChevronRight className="h-3 w-3 inline ml-0.5 -mt-0.5" />
+            <ChevronRight className="h-3 w-3 -mt-0.5" />
           </button>
         </div>
 
         <div className="flex items-center gap-2">
+          {bodyType !== "unspecified" && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+              <User className="h-2.5 w-2.5" />
+              {BODY_TYPE_LABELS[bodyType]}
+            </span>
+          )}
           {markers.length > 0 && (
-            <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
               {markers.length} finding{markers.length !== 1 ? "s" : ""}
             </span>
           )}
@@ -255,8 +214,8 @@ export function BodyExaminationPanel({
       {/* Body map + summary list */}
       <div className="flex flex-col sm:flex-row gap-4">
 
-        {/* SVG body map */}
-        <div className="flex-shrink-0 sm:w-[180px]">
+        {/* SVG body map — wider slot to show realistic diagram */}
+        <div className="flex-shrink-0 sm:w-[200px]">
           <BodyMap
             view={view}
             markers={markers}
@@ -273,12 +232,10 @@ export function BodyExaminationPanel({
         <div className="flex-1 min-w-0">
           <div className="space-y-2">
             {markers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-[140px] text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+              <div className="flex flex-col items-center justify-center h-[160px] text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
                 <p className="text-xs font-medium">No findings recorded</p>
                 {!readOnly && (
-                  <p className="text-[10px] mt-1 text-slate-400">
-                    Tap a body zone to add a finding
-                  </p>
+                  <p className="text-[10px] mt-1 text-slate-400">Tap any body zone to add a finding</p>
                 )}
               </div>
             ) : (
@@ -291,7 +248,7 @@ export function BodyExaminationPanel({
                     onClick={() => {
                       if (!readOnly) {
                         const zone = ALL_ZONES.find((z) => z.id === marker.zone);
-                        handleZoneClick(marker.zone, zone?.centroid ?? [100, 190]);
+                        handleZoneClick(marker.zone, zone?.centroid ?? [100, 215]);
                       }
                     }}
                     className={cn(
@@ -308,9 +265,7 @@ export function BodyExaminationPanel({
                       <p className="text-xs font-semibold text-slate-700 leading-none">
                         {getZoneLabel(marker.zone)}
                       </p>
-                      <p className={cn("text-[10px] mt-0.5", cfg.text, "font-medium")}>
-                        {cfg.label}
-                      </p>
+                      <p className={cn("text-[10px] mt-0.5", cfg.text, "font-medium")}>{cfg.label}</p>
                       {marker.note && (
                         <p className="text-[10px] text-slate-500 mt-0.5 leading-snug line-clamp-2">
                           {marker.note}
@@ -338,7 +293,6 @@ export function BodyExaminationPanel({
         ))}
       </div>
 
-      {/* Zone-anchored popover (portal) */}
       {popoverContent}
     </div>
   );

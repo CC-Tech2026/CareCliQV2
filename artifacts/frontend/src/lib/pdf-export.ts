@@ -574,101 +574,122 @@ export function appendSessionToPDF(
     const COLOR_HEX: Record<string, string> = {
       red: "#ef4444", yellow: "#f59e0b", blue: "#3b82f6", green: "#10b981",
     };
+    // Zone centroids aligned with new 200×430 body diagram
     const CENTROIDS: Record<string, [number, number]> = {
-      head: [100,38], neck: [100,72], left_shoulder: [60,96], right_shoulder: [140,96],
-      chest: [100,106], abdomen: [100,156], left_hip: [87,198], right_hip: [113,198],
-      left_upper_arm: [49,113], right_upper_arm: [152,113],
-      left_forearm: [42,168], right_forearm: [158,168],
-      left_hand: [41,210], right_hand: [159,210],
-      left_thigh: [87,249], right_thigh: [113,249],
-      left_shin: [87,313], right_shin: [113,313],
-      left_foot: [85,357], right_foot: [113,357],
-      head_back: [100,38], neck_back: [100,72],
-      left_shoulder_back: [60,96], right_shoulder_back: [140,96],
-      upper_back: [100,106], lower_back: [100,156],
-      left_gluteal: [87,198], right_gluteal: [113,198],
-      left_upper_arm_back: [49,113], right_upper_arm_back: [152,113],
-      left_forearm_back: [42,168], right_forearm_back: [158,168],
-      left_hand_back: [41,210], right_hand_back: [159,210],
-      left_thigh_back: [87,249], right_thigh_back: [113,249],
-      left_calf: [87,313], right_calf: [113,313],
-      left_foot_back: [85,357], right_foot_back: [113,357],
+      // Front zones
+      head: [100,31], neck: [100,69], left_shoulder: [22,106], right_shoulder: [178,106],
+      left_chest: [76,118], right_chest: [124,118],
+      left_breast: [80,118], right_breast: [120,118],
+      abdomen: [100,162], left_hip: [70,200], right_hip: [130,200],
+      left_groin: [76,220], right_groin: [124,220],
+      left_upper_arm: [25,137], right_upper_arm: [175,137],
+      left_elbow: [25,172], right_elbow: [175,172],
+      left_forearm: [25,202], right_forearm: [175,202],
+      left_wrist: [25,236], right_wrist: [175,236],
+      left_hand: [25,259], right_hand: [175,259],
+      left_thigh: [77,256], right_thigh: [123,256],
+      left_knee: [77,298], right_knee: [123,298],
+      left_shin: [77,340], right_shin: [123,340],
+      left_ankle: [77,378], right_ankle: [123,378],
+      left_foot: [72,406], right_foot: [128,406],
+      // Back zones
+      head_back: [100,31], neck_back: [100,69],
+      left_shoulder_back: [22,106], right_shoulder_back: [178,106],
+      left_scapula: [75,107], right_scapula: [125,107],
+      upper_back: [100,110], mid_back: [100,155], lower_back: [100,184],
+      sacrum: [100,206], left_gluteal: [74,219], right_gluteal: [126,219],
+      left_upper_arm_back: [25,137], right_upper_arm_back: [175,137],
+      left_elbow_back: [25,172], right_elbow_back: [175,172],
+      left_forearm_back: [25,202], right_forearm_back: [175,202],
+      left_hand_back: [25,259], right_hand_back: [175,259],
+      left_hamstring: [77,282], right_hamstring: [123,282],
+      left_popliteal: [77,323], right_popliteal: [123,323],
+      left_calf: [77,361], right_calf: [123,361],
+      left_achilles: [76,394], right_achilles: [124,394],
+      left_heel: [71,416], right_heel: [129,416],
     };
 
     const canvas = document.createElement("canvas");
-    canvas.width = 200;
-    canvas.height = 380;
+    const CW = 200, CH = 430;
+    canvas.width = CW;
+    canvas.height = CH;
     const ctx = canvas.getContext("2d")!;
 
-    // White background
     ctx.fillStyle = "#f8fafc";
-    ctx.fillRect(0, 0, 200, 380);
+    ctx.fillRect(0, 0, CW, CH);
 
-    // Body silhouette
-    ctx.fillStyle = "#e2e8f0";
+    const SILL = "#e8d0b8";  // skin-tone silhouette fill
+    const SILO = "#c4906a";  // silhouette outline stroke
+
     const fillEllipse = (cx: number, cy: number, rx: number, ry: number) => {
-      ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     };
-    const fillRoundRect = (x: number, y: number, w: number, h: number, r = 4) => {
-      ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+    const fillRR = (x: number, y: number, w: number, h: number, r = 6) => {
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); ctx.stroke();
     };
+
+    ctx.fillStyle = SILL;
+    ctx.strokeStyle = SILO;
+    ctx.lineWidth = 1.2;
 
     const participantSex = data.participant?.biological_sex ?? "unspecified";
 
     if (participantSex === "male") {
-      // Male: broader shoulders, wider chest, narrower hips
-      fillEllipse(100, 38, 26, 28);
-      fillRoundRect(91, 64, 18, 17, 3);
-      fillEllipse(56, 95, 23, 16); fillEllipse(144, 95, 23, 16);
-      fillRoundRect(67, 78, 66, 56, 5);
-      fillRoundRect(71, 133, 58, 48, 4);
-      fillRoundRect(77, 180, 46, 40, 4);
-      fillRoundRect(34, 82, 25, 59, 9); fillRoundRect(141, 82, 25, 59, 9);
-      fillRoundRect(31, 139, 21, 57, 9); fillRoundRect(148, 139, 21, 57, 9);
-      fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
-      fillRoundRect(76, 219, 23, 66, 7); fillRoundRect(101, 219, 23, 66, 7);
-      fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
-      fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+      fillEllipse(100, 31, 24, 27);
+      fillEllipse(75, 34, 4, 7); fillEllipse(125, 34, 4, 7);
+      fillRR(90, 57, 20, 23, 5);
+      fillEllipse(22, 106, 21, 14); fillEllipse(178, 106, 21, 14);
+      fillRR(44, 82, 112, 139, 6);
+      fillRR(10, 106, 30, 60, 10); fillRR(160, 106, 30, 60, 10);
+      fillEllipse(26, 166, 17, 9); fillEllipse(174, 166, 17, 9);
+      fillRR(12, 164, 28, 70, 10); fillRR(160, 164, 28, 70, 10);
+      fillRR(10, 234, 30, 46, 10); fillRR(160, 234, 30, 46, 10);
+      fillRR(62, 218, 30, 80, 8); fillRR(108, 218, 30, 80, 8);
+      fillEllipse(78, 300, 20, 10); fillEllipse(122, 300, 20, 10);
+      fillRR(61, 298, 32, 80, 8); fillRR(107, 298, 32, 80, 8);
+      fillEllipse(78, 380, 18, 8); fillEllipse(122, 380, 18, 8);
+      fillRR(50, 378, 50, 44, 6); fillRR(100, 378, 50, 44, 6);
     } else if (participantSex === "female") {
-      // Female: narrower shoulders, breast contours, wider hips
-      fillEllipse(100, 38, 24, 27);
-      fillRoundRect(92, 64, 16, 16, 5);
-      fillEllipse(63, 95, 16, 13); fillEllipse(137, 95, 16, 13);
-      fillRoundRect(73, 78, 54, 52, 5);
-      // Breast contours (slightly darker)
-      ctx.fillStyle = "#cbd5e1";
-      fillEllipse(89, 100, 11, 12); fillEllipse(111, 100, 11, 12);
-      ctx.fillStyle = "#e2e8f0";
-      fillRoundRect(76, 129, 48, 40, 5);
-      fillRoundRect(70, 168, 60, 44, 8);
-      fillRoundRect(40, 82, 20, 57, 8); fillRoundRect(140, 82, 20, 57, 8);
-      fillRoundRect(34, 138, 18, 55, 8); fillRoundRect(148, 138, 18, 55, 8);
-      fillEllipse(42, 208, 12, 10); fillEllipse(158, 208, 12, 10);
-      fillRoundRect(74, 212, 24, 68, 7); fillRoundRect(102, 212, 24, 68, 7);
-      fillRoundRect(76, 278, 20, 67, 7); fillRoundRect(104, 278, 20, 67, 7);
-      fillEllipse(85, 357, 17, 10); fillEllipse(114, 357, 17, 10);
+      fillEllipse(100, 30, 23, 25);
+      fillEllipse(76, 33, 3.5, 6); fillEllipse(124, 33, 3.5, 6);
+      fillRR(91, 54, 18, 26, 5);
+      fillEllipse(32, 103, 18, 12); fillEllipse(168, 103, 18, 12);
+      fillRR(50, 82, 100, 131, 6);
+      ctx.fillStyle = "#d4b89a"; ctx.strokeStyle = SILO;
+      fillEllipse(82, 114, 18, 20); fillEllipse(118, 114, 18, 20);
+      ctx.fillStyle = SILL;
+      fillRR(22, 93, 24, 70, 8); fillRR(154, 93, 24, 70, 8);
+      fillEllipse(34, 164, 15, 8); fillEllipse(166, 164, 15, 8);
+      fillRR(22, 162, 26, 70, 8); fillRR(152, 162, 26, 70, 8);
+      fillRR(22, 230, 26, 48, 8); fillRR(152, 230, 26, 48, 8);
+      fillRR(63, 256, 29, 78, 8); fillRR(108, 256, 29, 78, 8);
+      fillEllipse(78, 336, 18, 10); fillEllipse(122, 336, 18, 10);
+      fillRR(61, 334, 32, 72, 8); fillRR(107, 334, 32, 72, 8);
+      fillEllipse(78, 406, 16, 7); fillEllipse(122, 406, 16, 7);
+      fillRR(50, 404, 50, 26, 6); fillRR(100, 404, 50, 26, 6);
     } else {
-      // Neutral / unspecified
-      fillEllipse(100, 38, 26, 28);
-      fillRoundRect(91, 64, 18, 17, 3);
-      fillEllipse(60, 96, 20, 15); fillEllipse(140, 96, 20, 15);
-      fillRoundRect(71, 78, 58, 56, 5);
-      fillRoundRect(73, 133, 54, 48, 4);
-      fillRoundRect(73, 180, 54, 40, 4);
-      fillRoundRect(37, 83, 23, 59, 9); fillRoundRect(140, 83, 23, 59, 9);
-      fillRoundRect(32, 140, 20, 56, 9); fillRoundRect(148, 140, 20, 56, 9);
-      fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
-      fillRoundRect(75, 219, 24, 66, 7); fillRoundRect(101, 219, 24, 66, 7);
-      fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
-      fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+      fillEllipse(100, 31, 24, 27);
+      fillEllipse(75, 34, 4, 7); fillEllipse(125, 34, 4, 7);
+      fillRR(90, 57, 20, 23, 5);
+      fillEllipse(28, 106, 20, 13); fillEllipse(172, 106, 20, 13);
+      fillRR(48, 82, 104, 134, 6);
+      fillRR(16, 106, 28, 60, 10); fillRR(156, 106, 28, 60, 10);
+      fillEllipse(30, 166, 16, 9); fillEllipse(170, 166, 16, 9);
+      fillRR(14, 164, 28, 70, 10); fillRR(158, 164, 28, 70, 10);
+      fillRR(14, 234, 28, 46, 10); fillRR(158, 234, 28, 46, 10);
+      fillRR(64, 214, 30, 82, 8); fillRR(106, 214, 30, 82, 8);
+      fillEllipse(79, 298, 19, 10); fillEllipse(121, 298, 19, 10);
+      fillRR(62, 296, 32, 80, 8); fillRR(106, 296, 32, 80, 8);
+      fillEllipse(79, 378, 18, 8); fillEllipse(121, 378, 18, 8);
+      fillRR(50, 376, 50, 44, 6); fillRR(100, 376, 50, 44, 6);
     }
 
-    // Marker dots
+    // Marker dots with labels
     for (const m of bodyMarkers) {
       const c = CENTROIDS[m.zone];
       if (!c) continue;
       ctx.beginPath();
-      ctx.arc(c[0], c[1], 8, 0, Math.PI * 2);
+      ctx.arc(c[0], c[1], 7, 0, Math.PI * 2);
       ctx.fillStyle = COLOR_HEX[m.color] ?? "#6b7280";
       ctx.fill();
       ctx.strokeStyle = "white";
@@ -677,9 +698,9 @@ export function appendSessionToPDF(
     }
 
     const imgData = canvas.toDataURL("image/png");
-    // Embed at 50mm wide (preserving 200:380 ratio → height = 95mm) beside the table
+    // Embed at 45mm wide, preserving 200:430 ratio
     const imgWidthMm = 45;
-    const imgHeightMm = (380 / 200) * imgWidthMm;
+    const imgHeightMm = (CH / CW) * imgWidthMm;
     checkPageBreak(imgHeightMm + 10);
     pdf.addImage(imgData, "PNG", margin, y, imgWidthMm, imgHeightMm);
 

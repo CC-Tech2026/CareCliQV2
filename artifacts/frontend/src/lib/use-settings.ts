@@ -18,6 +18,7 @@ export interface ComplianceSettings {
   requireActivity?: boolean | null;
   requireNotes?: boolean | null;
   requireDuration?: boolean | null;
+  physicalExamSessionTypes?: string[] | null;
 }
 
 export interface PractitionerSettingsFull {
