@@ -5,11 +5,15 @@ import { useGetSession, useUpdateSession, useSaveSessionWithAI } from "@workspac
 import type { Session } from "@workspace/api-client-react";
 import { exportSingleSessionPDF } from "@/lib/pdf-export";
 
+import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
+import type { BodyMarker } from "@/components/BodyMap";
+
 // Extended session type with extra DB columns not yet in the OpenAPI spec
 type ExtendedSession = Session & {
   cost?: number | null;
   support_category?: string | null;
   compliance_status?: string | null;
+  body_markers?: BodyMarker[] | null;
 };
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -580,6 +584,24 @@ export default function SessionDetail({ id }: { id?: string }) {
               </CardContent>
             </Card>
           )}
+
+          {/* Physical Examination — shown when body markers are recorded */}
+          {(() => {
+            const markers = (session as ExtendedSession).body_markers;
+            if (!markers || markers.length === 0) return null;
+            return (
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-3 border-b border-slate-100">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-slate-500" /> Physical Examination
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <BodyExaminationPanel markers={markers} readOnly />
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
 
         {/* Right column — compliance + tags/goals + photos */}

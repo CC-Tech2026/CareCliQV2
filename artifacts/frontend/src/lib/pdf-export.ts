@@ -49,6 +49,7 @@ export interface AuditPayload {
     has_transcription: boolean;
     has_activity_log: boolean;
   };
+  body_markers?: Array<{ zone: string; color: string; note?: string }>;
 }
 
 export async function fetchAuditData(sessionId: string): Promise<AuditPayload> {
@@ -561,6 +562,56 @@ export function appendSessionToPDF(
     writeSectionHeading("AI Assessment");
     writeWrappedText(aiNotes, { size: 10, color: SLATE_700 });
     y += 4;
+  }
+
+  // ── Physical Examination ──────────────────────────────────────────────────
+  const bodyMarkers = data.body_markers ?? [];
+  if (bodyMarkers.length > 0) {
+    writeSectionHeading("Physical Examination");
+
+    const COLOR_LABELS: Record<string, string> = {
+      red: "Pain",
+      yellow: "Discomfort",
+      blue: "Treatment Area",
+      green: "Resolved",
+    };
+
+    const markerRows: [string, string, string][] = bodyMarkers.map((m) => [
+      m.zone.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      COLOR_LABELS[m.color] ?? m.color,
+      m.note?.trim() || "—",
+    ]);
+
+    autoTable(pdf, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      tableWidth: contentW,
+      head: [["Zone", "Finding Type", "Clinical Note"]],
+      body: markerRows,
+      headStyles: {
+        fillColor: BRAND_DARK,
+        textColor: "#ffffff",
+        fontSize: 8,
+        fontStyle: "bold",
+        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+      },
+      columnStyles: {
+        0: { cellWidth: 50, fontStyle: "bold", textColor: SLATE_700, fontSize: 9 },
+        1: { cellWidth: 38, textColor: SLATE_700, fontSize: 9 },
+        2: { textColor: SLATE_900, fontSize: 9 },
+      },
+      styles: {
+        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+        lineColor: RULE_COLOR,
+        lineWidth: 0.2,
+        overflow: "linebreak",
+      },
+      alternateRowStyles: { fillColor: "#f8fafc" },
+      theme: "plain",
+      pageBreak: "avoid",
+    });
+
+    y = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
   }
 
   // ── Practitioner Sign-Off ─────────────────────────────────────────────────

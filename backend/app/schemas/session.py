@@ -36,3 +36,5 @@ class SessionUpdate(BaseModel):
     # Legacy: merged into ai_insights for backward compatibility
     structured_notes: Optional[Dict[str, str]] = None
     activity_log: Optional[List[Dict[str, str]]] = None
+    # Physical examination body markers — list of {zone, color, note} dicts
+    body_markers: Optional[List[Dict]] = None

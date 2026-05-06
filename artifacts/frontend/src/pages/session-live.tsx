@@ -56,6 +56,8 @@ import {
   combineStructuredNotes,
   type StructuredNotes,
 } from "@/services/ComplianceService";
+import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
+import type { BodyMarker } from "@/components/BodyMap";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -392,6 +394,7 @@ export default function SessionLive() {
   const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [images, setImages] = useState<string[]>([]);
+  const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
   const [translationView, setTranslationView] =
     useState<TranslationView>("original");
 
@@ -683,6 +686,7 @@ export default function SessionLive() {
         // Also keep legacy structured_notes dict for backward-compat (ai_insights merge)
         structured_notes: structuredNotes,
         activity_log: activityLog,
+        body_markers: bodyMarkers.length > 0 ? bodyMarkers : undefined,
       };
       // Remove undefined values
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
@@ -719,6 +723,7 @@ export default function SessionLive() {
     setVoiceNotes([]);
     setImages([]);
     setGoals((prev) => prev.map((g) => ({ ...g, status: "not_started" as const })));
+    setBodyMarkers([]);
     setShowRestartConfirm(false);
     setShowSummary(false);
     setSummary(null);
@@ -1438,6 +1443,17 @@ export default function SessionLive() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Body Examination */}
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <HeartPulse className="h-4 w-4 text-indigo-500" /> Physical Examination
+            </h2>
+            <BodyExaminationPanel
+              markers={bodyMarkers}
+              onChange={setBodyMarkers}
+            />
           </div>
         </div>
       </div>

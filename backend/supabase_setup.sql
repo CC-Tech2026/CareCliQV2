@@ -110,6 +110,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='progress_toward_goals') THEN
         ALTER TABLE sessions ADD COLUMN progress_toward_goals TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='body_markers') THEN
+        ALTER TABLE sessions ADD COLUMN body_markers JSONB DEFAULT '[]';
+    END IF;
 END $$;
 
 -- Add ndis_plan_id to patients

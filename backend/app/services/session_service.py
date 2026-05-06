@@ -85,7 +85,7 @@ def _prepare_session_payload(data: dict) -> dict:
     out = dict(data)
     if "session_date" in out and out["session_date"]:
         out["session_date"] = str(out["session_date"])
-    for list_field in ("tags", "goals_addressed", "photo_urls"):
+    for list_field in ("tags", "goals_addressed", "photo_urls", "body_markers"):
         if list_field in out and isinstance(out[list_field], list):
             out[list_field] = json.dumps(out[list_field])
     if "participant_id" in out:
@@ -286,7 +286,7 @@ def _normalize(row: dict) -> dict:
     out = dict(row)
     if "patient_id" in out and "participant_id" not in out:
         out["participant_id"] = out.get("patient_id")
-    for field in ["tags", "goals_addressed", "photo_urls", "ai_insights"]:
+    for field in ["tags", "goals_addressed", "photo_urls", "ai_insights", "body_markers"]:
         val = out.get(field)
         if isinstance(val, str):
             try:
