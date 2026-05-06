@@ -215,9 +215,13 @@ async def get_session_audit(session_id: str):
 
     participant_name = None
     participant_ndis = None
+    participant_dob = None
+    participant_sex = None
     if participant:
         participant_name = participant.get("full_name")
         participant_ndis = participant.get("ndis_number")
+        participant_dob = participant.get("date_of_birth")
+        participant_sex = participant.get("biological_sex")
     else:
         participants_obj = session.get("participants") or {}
         if isinstance(participants_obj, dict):
@@ -370,6 +374,8 @@ async def get_session_audit(session_id: str):
             "id": participant_id,
             "full_name": participant_name,
             "ndis_number": participant_ndis,
+            "date_of_birth": str(participant_dob) if participant_dob else None,
+            "biological_sex": participant_sex or "unspecified",
         },
         "practitioner": {
             "name": practitioner_name,
