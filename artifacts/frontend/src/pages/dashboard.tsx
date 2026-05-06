@@ -1,12 +1,25 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import { format, isBefore, startOfDay, parseISO, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
+import {
+  format,
+  isBefore,
+  startOfDay,
+  parseISO,
+  startOfWeek,
+  endOfWeek,
+  isWithinInterval,
+} from "date-fns";
 import {
   useGetSessions,
   useGetParticipants,
   useGetDashboardStats,
 } from "@workspace/api-client-react";
-import type { Session, Participant, NDISGoal, ParticipantGoal } from "@workspace/api-client-react";
+import type {
+  Session,
+  Participant,
+  NDISGoal,
+  ParticipantGoal,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -34,9 +47,9 @@ import {
 // ---------------------------------------------------------------------------
 // Brand colours
 // ---------------------------------------------------------------------------
-const LIME  = "#D1E13D";
-const PINK  = "#F58BCD";
-const BLUE  = "#5F79EE";
+const LIME = "#D1E13D";
+const PINK = "#F58BCD";
+const BLUE = "#5F79EE";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,14 +111,15 @@ interface TrafficLight {
 function getTrafficLight(session: Session): TrafficLight {
   const hasNotes = !!(session.notes && session.notes.trim().length > 10);
   const hasGoals =
-    Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0;
+    Array.isArray(session.goals_addressed) &&
+    session.goals_addressed.length > 0;
   const score = session.compliance_score;
   const claimReady =
     session.status === "completed" && score !== null && score !== undefined
       ? score >= 70
       : session.status === "completed"
-      ? false
-      : null;
+        ? false
+        : null;
   return { notes: hasNotes, goals: hasGoals, claim: claimReady };
 }
 
@@ -165,16 +179,25 @@ function DonutChart({
   return (
     <div className="relative flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="14" />
-        {arc(compliant,  0,                      LIME,    "c")}
-        {arc(atRisk,     compliant / total,       PINK,    "a")}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke="hsl(var(--muted))"
+          strokeWidth="14"
+        />
+        {arc(compliant, 0, LIME, "c")}
+        {arc(atRisk, compliant / total, PINK, "a")}
         {arc(nonCompliant, (compliant + atRisk) / total, "#ef4444", "n")}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold text-foreground">
           {total > 0 ? Math.round(pct * 100) : "--"}%
         </span>
-        <span className="text-[10px] text-muted-foreground font-medium">Compliant</span>
+        <span className="text-[10px] text-muted-foreground font-medium">
+          Compliant
+        </span>
       </div>
     </div>
   );
@@ -195,7 +218,11 @@ function SessionStatusBadge({
     return (
       <Badge
         className="font-medium text-xs gap-1 border"
-        style={{ background: `${LIME}30`, color: "#3d4700", borderColor: `${LIME}60` }}
+        style={{
+          background: `${LIME}30`,
+          color: "#3d4700",
+          borderColor: `${LIME}60`,
+        }}
       >
         <CheckCircle2 className="h-3 w-3" /> Completed
       </Badge>
@@ -204,7 +231,11 @@ function SessionStatusBadge({
     return (
       <Badge
         className="font-medium text-xs gap-1 border"
-        style={{ background: `${BLUE}20`, color: "#2d45b0", borderColor: `${BLUE}40` }}
+        style={{
+          background: `${BLUE}20`,
+          color: "#2d45b0",
+          borderColor: `${BLUE}40`,
+        }}
       >
         <Clock className="h-3 w-3" /> In Progress
       </Badge>
@@ -213,7 +244,11 @@ function SessionStatusBadge({
     return (
       <Badge
         className="font-medium text-xs gap-1 border"
-        style={{ background: `${PINK}25`, color: "#7a1850", borderColor: `${PINK}50` }}
+        style={{
+          background: `${PINK}25`,
+          color: "#7a1850",
+          borderColor: `${PINK}50`,
+        }}
       >
         <Play className="h-3 w-3" /> Next
       </Badge>
@@ -230,9 +265,9 @@ function SessionStatusBadge({
 // ---------------------------------------------------------------------------
 
 export default function Dashboard() {
-  const { data: sessions = [], isLoading: sessionsLoading } = useGetSessions(
-    { limit: 200 },
-  );
+  const { data: sessions = [], isLoading: sessionsLoading } = useGetSessions({
+    limit: 200,
+  });
   const { data: participants = [] } = useGetParticipants();
   const { data: stats } = useGetDashboardStats();
 
@@ -295,7 +330,10 @@ export default function Dashboard() {
     const seen = new Set<string>();
     const combined: Session[] = [];
     for (const s of [...pastIncomplete, ...lowQuality]) {
-      if (!seen.has(s.id)) { seen.add(s.id); combined.push(s); }
+      if (!seen.has(s.id)) {
+        seen.add(s.id);
+        combined.push(s);
+      }
     }
     return combined.slice(0, 5);
   }, [pastIncomplete, lowQuality]);
@@ -328,9 +366,7 @@ export default function Dashboard() {
       (s.compliance_score ?? 0) < 85,
   ).length;
   const nonCompliantCount = weekSessions.filter(
-    (s) =>
-      s.status === "completed" &&
-      (s.compliance_score ?? 0) < 60,
+    (s) => s.status === "completed" && (s.compliance_score ?? 0) < 60,
   ).length;
 
   const hour = new Date().getHours();
@@ -346,8 +382,12 @@ export default function Dashboard() {
           style={{ background: `linear-gradient(to bottom, ${LIME}, ${PINK})` }}
         />
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{greeting}, Dr. Provider!</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Here's what's happening today.</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {greeting}, Dr. Provider!
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Here's what's happening today.
+          </p>
         </div>
       </div>
 
@@ -363,14 +403,18 @@ export default function Dashboard() {
         <ReadinessCard
           label="Ready"
           value={readyCount}
-          icon={<CheckCircle2 className="h-4 w-4" style={{ color: "#4e5700" }} />}
+          icon={
+            <CheckCircle2 className="h-4 w-4" style={{ color: "#4e5700" }} />
+          }
           iconBg={`${LIME}40`}
           textColor="text-foreground"
         />
         <ReadinessCard
           label="Need attention"
           value={needsAttentionCount}
-          icon={<AlertCircle className="h-4 w-4" style={{ color: "#8f1f61" }} />}
+          icon={
+            <AlertCircle className="h-4 w-4" style={{ color: "#8f1f61" }} />
+          }
           iconBg={`${PINK}35`}
           textColor="text-foreground"
         />
@@ -379,7 +423,11 @@ export default function Dashboard() {
           value={pastIncomplete.length}
           icon={<Clock className="h-4 w-4 text-destructive" />}
           iconBg="hsl(var(--destructive) / 0.1)"
-          textColor={pastIncomplete.length > 0 ? "text-destructive" : "text-muted-foreground"}
+          textColor={
+            pastIncomplete.length > 0
+              ? "text-destructive"
+              : "text-muted-foreground"
+          }
         />
       </div>
 
@@ -409,7 +457,9 @@ export default function Dashboard() {
           {todaySessions.length > 0 && (
             <section className="rounded-2xl border bg-card overflow-hidden shadow-sm">
               <div className="px-5 py-4 border-b flex items-center justify-between">
-                <h2 className="font-semibold text-foreground">Today's Sessions</h2>
+                <h2 className="font-semibold text-foreground">
+                  Today's Sessions
+                </h2>
                 <Link href="/sessions">
                   <span className="text-xs text-primary font-medium flex items-center gap-1 hover:underline cursor-pointer">
                     View all <ChevronRight className="h-3.5 w-3.5" />
@@ -476,7 +526,9 @@ export default function Dashboard() {
           {/* Compliance Overview */}
           <section className="rounded-2xl border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-foreground">Compliance Overview</h2>
+              <h2 className="font-semibold text-foreground">
+                Compliance Overview
+              </h2>
               <span className="text-xs text-muted-foreground">This week</span>
             </div>
 
@@ -489,16 +541,34 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-2">
-              <LegendRow color={LIME}    label="Compliant"       count={compliantCount} />
-              <LegendRow color={PINK}    label="Needs Attention" count={atRiskCount} />
-              <LegendRow color="#ef4444" label="At Risk"         count={nonCompliantCount} />
+              <LegendRow
+                color={LIME}
+                label="Compliant"
+                count={compliantCount}
+              />
+              <LegendRow
+                color={PINK}
+                label="Needs Attention"
+                count={atRiskCount}
+              />
+              <LegendRow
+                color="#ef4444"
+                label="At Risk"
+                count={nonCompliantCount}
+              />
             </div>
 
             {stats && (
               <div className="mt-4 pt-4 border-t text-xs text-muted-foreground">
-                <span className="text-foreground font-medium">{stats.sessions_this_week}</span> sessions this week
+                <span className="text-foreground font-medium">
+                  {stats.sessions_this_week}
+                </span>{" "}
+                sessions this week
                 {stats.notes_missing > 0 && (
-                  <span className="ml-2 font-medium" style={{ color: "#8f1f61" }}>
+                  <span
+                    className="ml-2 font-medium"
+                    style={{ color: "#8f1f61" }}
+                  >
                     · {stats.notes_missing} notes missing
                   </span>
                 )}
@@ -520,28 +590,39 @@ export default function Dashboard() {
             <div className="divide-y divide-border">
               <QuickAction
                 iconBg={`${BLUE}18`}
-                icon={<UploadCloud className="h-4 w-4" style={{ color: BLUE }} />}
+                icon={
+                  <UploadCloud className="h-4 w-4" style={{ color: BLUE }} />
+                }
                 label="Upload Document / Evidence"
                 sub="Add photos, files or signed documents"
                 href="/sessions"
               />
               <QuickAction
                 iconBg={`${LIME}35`}
-                icon={<Package className="h-4 w-4" style={{ color: "#4e5700" }} />}
+                icon={
+                  <Package className="h-4 w-4" style={{ color: "#4e5700" }} />
+                }
                 label="Generate Audit Pack"
                 sub="Export all records for a participant"
                 href="/compliance"
               />
               <QuickAction
                 iconBg={`${PINK}25`}
-                icon={<ClipboardList className="h-4 w-4" style={{ color: "#8f1f61" }} />}
+                icon={
+                  <ClipboardList
+                    className="h-4 w-4"
+                    style={{ color: "#8f1f61" }}
+                  />
+                }
                 label="Check Incomplete Records"
                 sub="See records that need your attention"
                 href="/sessions"
               />
               <QuickAction
                 iconBg={`${BLUE}12`}
-                icon={<ShieldCheck className="h-4 w-4" style={{ color: BLUE }} />}
+                icon={
+                  <ShieldCheck className="h-4 w-4" style={{ color: BLUE }} />
+                }
                 label="Provider Payment Assurance"
                 sub="Stay compliant and get paid on time"
                 href="/compliance"
@@ -580,8 +661,12 @@ function ReadinessCard({
         {icon}
       </div>
       <div className="min-w-0">
-        <p className={cn("text-xl font-bold leading-none", textColor)}>{value}</p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">{label}</p>
+        <p className={cn("text-xl font-bold leading-none", textColor)}>
+          {value}
+        </p>
+        <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
+          {label}
+        </p>
       </div>
     </div>
   );
@@ -634,9 +719,7 @@ function NextPatientPanel({
 
         <div className="flex-1 min-w-0">
           <h2 className="text-xl font-bold leading-tight">{name}</h2>
-          {ndis && (
-            <p className="text-sm opacity-70 mt-0.5">NDIS: {ndis}</p>
-          )}
+          {ndis && <p className="text-sm opacity-70 mt-0.5">NDIS: {ndis}</p>}
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             <Badge className="bg-white/20 border-white/30 text-white border text-xs">
               {session.session_type}
@@ -667,7 +750,9 @@ function NextPatientPanel({
           {topGoals.map((goal) => (
             <div key={goal.id} className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-white/60 shrink-0" />
-              <span className="text-xs opacity-90 leading-tight line-clamp-1">{goal.title}</span>
+              <span className="text-xs opacity-90 leading-tight line-clamp-1">
+                {goal.title}
+              </span>
             </div>
           ))}
         </div>
@@ -681,10 +766,10 @@ function NextPatientPanel({
         const label = session.compliance_notes
           ? "Last session assessment"
           : session.ai_summary
-          ? "AI summary"
-          : session.notes
-          ? "Pre-session note"
-          : null;
+            ? "AI summary"
+            : session.notes
+              ? "Pre-session note"
+              : null;
         return noteText ? (
           <div className="mt-4 p-3 rounded-xl bg-white/10 text-sm opacity-90">
             {label && (
@@ -735,8 +820,8 @@ function TrafficItem({
     value === null
       ? { background: "rgba(255,255,255,0.3)" }
       : value
-      ? { background: LIME }
-      : { background: "#ef4444" };
+        ? { background: LIME }
+        : { background: "#ef4444" };
   return (
     <span className="flex items-center gap-1.5 text-xs opacity-90">
       <span className="h-2 w-2 rounded-full" style={dotStyle} />
@@ -787,8 +872,12 @@ function SessionRow({
           )}
         </div>
         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-          <span className="text-xs text-muted-foreground font-medium sm:hidden">{timeStr}</span>
-          <span className="text-xs text-muted-foreground">{session.session_type}</span>
+          <span className="text-xs text-muted-foreground font-medium sm:hidden">
+            {timeStr}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {session.session_type}
+          </span>
           <span className="text-muted-foreground/40 text-xs">·</span>
           <span className="text-xs text-muted-foreground">
             {session.duration_minutes} min
@@ -805,7 +894,11 @@ function SessionRow({
         <SessionStatusBadge session={session} isNext={isNext} />
         {session.status === "completed" ? (
           <Link href={`/sessions/${session.id}`}>
-            <Button size="sm" variant="outline" className="h-8 text-xs gap-1 px-3">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs gap-1 px-3"
+            >
               <Eye className="h-3.5 w-3.5" /> View
             </Button>
           </Link>
@@ -817,9 +910,13 @@ function SessionRow({
               style={{ background: BLUE, color: "#fff" }}
             >
               {isResume ? (
-                <><RotateCcw className="h-3.5 w-3.5" /> Resume</>
+                <>
+                  <RotateCcw className="h-3.5 w-3.5" /> Resume
+                </>
               ) : (
-                <><Play className="h-3.5 w-3.5" /> Start</>
+                <>
+                  <Play className="h-3.5 w-3.5" /> Start
+                </>
               )}
             </Button>
           </Link>
@@ -839,8 +936,10 @@ function AtRiskRow({
   isPast: boolean;
 }) {
   const issues: string[] = [];
-  if (isPast && session.status !== "completed") issues.push("session not ended");
-  if (!(session.notes && session.notes.trim().length > 10)) issues.push("notes missing");
+  if (isPast && session.status !== "completed")
+    issues.push("session not ended");
+  if (!(session.notes && session.notes.trim().length > 10))
+    issues.push("notes missing");
   if (
     session.compliance_score !== null &&
     session.compliance_score !== undefined &&
@@ -861,7 +960,8 @@ function AtRiskRow({
         <p className="text-sm font-medium text-foreground truncate">{name}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
           <span>
-            {format(parseISO(session.session_date), "d MMM")} · {session.session_type}
+            {format(parseISO(session.session_date), "d MMM")} ·{" "}
+            {session.session_type}
           </span>{" "}
           &mdash; {issueText}
         </p>
@@ -890,7 +990,10 @@ function LegendRow({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+      <span
+        className="h-2.5 w-2.5 rounded-full shrink-0"
+        style={{ background: color }}
+      />
       <span className="text-sm text-muted-foreground flex-1">{label}</span>
       <span className="text-sm font-semibold text-foreground">{count}</span>
     </div>
@@ -938,7 +1041,9 @@ function EmptyToday() {
       >
         <Calendar className="h-7 w-7" style={{ color: BLUE }} />
       </div>
-      <p className="font-semibold text-foreground">No sessions scheduled for today</p>
+      <p className="font-semibold text-foreground">
+        No sessions scheduled for today
+      </p>
       <p className="text-sm text-muted-foreground mt-1 mb-4">
         Start by creating a new session for a participant.
       </p>
@@ -964,7 +1069,9 @@ function AllDonePanel() {
         <CheckCircle2 className="h-6 w-6" style={{ color: "#3d4700" }} />
       </div>
       <div>
-        <p className="font-semibold" style={{ color: "#3d4700" }}>All sessions completed!</p>
+        <p className="font-semibold" style={{ color: "#3d4700" }}>
+          All sessions completed!
+        </p>
         <p className="text-sm mt-0.5" style={{ color: "#4e5900" }}>
           Great work — all of today's sessions are done.
         </p>

@@ -97,14 +97,14 @@
   --card-foreground: 229 45% 13%;
   --card-border: 229 18% 90%;
 
-  /* ── Deep navy sidebar ── */
-  --sidebar: 229 55% 11%;
-  --sidebar-foreground: 0 0% 95%;
-  --sidebar-border: 229 45% 18%;
-  --sidebar-primary: 66 73% 56%;           /* LIME active items */
-  --sidebar-primary-foreground: 229 60% 10%;
-  --sidebar-accent: 229 45% 19%;           /* hover bg */
-  --sidebar-accent-foreground: 0 0% 96%;
+  /* ── Pink sidebar (#F58BCD) ── */
+  --sidebar: 323 84% 75%;
+  --sidebar-foreground: 323 60% 18%;
+  --sidebar-border: 323 55% 65%;
+  --sidebar-primary: 229 55% 15%;          /* navy active pill */
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 323 70% 68%;           /* slightly deeper pink hover */
+  --sidebar-accent-foreground: 323 60% 12%;
   --sidebar-ring: 229 81% 65%;
 
   /* Popovers */
