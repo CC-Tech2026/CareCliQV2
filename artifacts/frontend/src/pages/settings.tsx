@@ -28,6 +28,7 @@ import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
 } from "@workspace/api-client-react";
+import { AvatarPicker, AvatarDisplay } from "@/components/AvatarPicker";
 
 // ---------------------------------------------------------------------------
 // ABN validation
@@ -150,6 +151,9 @@ export default function Settings() {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── Avatar state ───────────────────────────────────────────────────────────
+  const [avatarId, setAvatarId] = useState<string | null>(null);
+
   // ── Practitioner Details state ─────────────────────────────────────────────
   const [practName, setPractName] = useState("");
   const [practCredentials, setPractCredentials] = useState("");
@@ -202,6 +206,7 @@ export default function Settings() {
 
     if (serverSettings.name) setPractName(serverSettings.name);
     if (serverSettings.credentials) setPractCredentials(serverSettings.credentials);
+    if (serverSettings.avatarId) setAvatarId(serverSettings.avatarId);
 
     const provider = serverSettings.provider as { businessName?: string | null; abn?: string | null } | null;
     if (provider?.businessName) setBusinessName(provider.businessName);
@@ -361,6 +366,16 @@ export default function Settings() {
     const reader = new FileReader();
     reader.onloadend = () => { setUploadPreview(reader.result as string); };
     reader.readAsDataURL(file);
+  };
+
+  // ── Avatar auto-save ───────────────────────────────────────────────────────
+  const handleAvatarChange = async (newId: string | null) => {
+    setAvatarId(newId);
+    try {
+      await saveToServer({ data: { avatarId: newId ?? null } });
+    } catch {
+      toast({ title: "Could not save avatar", variant: "destructive" });
+    }
   };
 
   // ── Section save handlers ──────────────────────────────────────────────────
@@ -669,6 +684,36 @@ export default function Settings() {
                       Save Details
                     </Button>
                   </div>
+                </div>
+              )}
+            </PanelCard>
+
+            {/* Avatar picker card */}
+            <PanelCard label="Profile Avatar">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <AvatarDisplay
+                      avatarId={avatarId}
+                      sizePx={56}
+                      fallback={
+                        <div className="h-14 w-14 rounded-full bg-indigo-50 border-2 border-dashed border-indigo-200 flex items-center justify-center text-indigo-300">
+                          <User className="h-6 w-6" />
+                        </div>
+                      }
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-slate-700">
+                        {avatarId ? "Avatar selected" : "No avatar chosen"}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                        Choose a character below. It appears in your sidebar instead of your initials. Saves automatically.
+                      </p>
+                    </div>
+                  </div>
+                  <AvatarPicker value={avatarId} onChange={handleAvatarChange} />
                 </div>
               )}
             </PanelCard>

@@ -22,6 +22,7 @@ router.get("/settings/practitioner", async (req, res) => {
     signature: row.signature ?? null,
     name: row.name ?? null,
     credentials: row.credentials ?? null,
+    avatarId: row.avatarId ?? null,
     provider: row.provider ?? null,
     sessionDefaults: row.sessionDefaults ?? null,
     compliance: row.compliance ?? null,
@@ -42,6 +43,7 @@ router.put("/settings/practitioner", async (req, res) => {
     signature: null,
     name: null,
     credentials: null,
+    avatarId: null,
     provider: null,
     sessionDefaults: null,
     compliance: null,
@@ -54,6 +56,10 @@ router.put("/settings/practitioner", async (req, res) => {
       body.credentials !== undefined
         ? (body.credentials ?? null)
         : current.credentials,
+    avatarId:
+      body.avatarId !== undefined
+        ? (body.avatarId ?? null)
+        : current.avatarId,
     provider:
       body.provider !== undefined
         ? (body.provider ?? null)
@@ -83,6 +89,7 @@ router.put("/settings/practitioner", async (req, res) => {
     signature: row.signature ?? null,
     name: row.name ?? null,
     credentials: row.credentials ?? null,
+    avatarId: row.avatarId ?? null,
     provider: row.provider ?? null,
     sessionDefaults: row.sessionDefaults ?? null,
     compliance: row.compliance ?? null,

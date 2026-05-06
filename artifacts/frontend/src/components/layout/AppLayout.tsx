@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/lib/use-settings";
+import { AvatarDisplay } from "@/components/AvatarPicker";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -21,6 +23,42 @@ const navItems = [
   { href: "/sessions", label: "Sessions", icon: CalendarDays },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
 ];
+
+function SidebarUserBlock() {
+  const { settings } = useSettings();
+  const displayName = settings?.name || "Dr. Provider";
+  const displayCreds = settings?.credentials || "Solo Practitioner";
+  const initials = displayName
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="flex items-center gap-3 mt-4 px-2">
+      <AvatarDisplay
+        avatarId={settings?.avatarId}
+        sizePx={36}
+        fallback={
+          <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-800">
+            <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+        }
+      />
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm font-medium leading-none truncate">
+          {displayName}
+        </span>
+        <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+          {displayCreds}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -83,21 +121,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               Settings
             </Button>
           </Link>
-          <div className="flex items-center gap-3 mt-4 px-2">
-            <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-800">
-              <AvatarFallback className="bg-primary/5 text-primary">
-                DR
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium leading-none">
-                Dr. Provider
-              </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                Solo Practitioner
-              </span>
-            </div>
-          </div>
+          <SidebarUserBlock />
         </div>
       </aside>
 
@@ -152,17 +176,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-3 px-2">
-            <Avatar className="h-9 w-9 border border-slate-200 dark:border-slate-800">
-              <AvatarFallback className="bg-primary/5 text-primary">
-                DR
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-sm font-medium">Dr. Provider</p>
-              <p className="text-xs text-slate-500">Solo Practitioner</p>
-            </div>
-          </div>
+          <SidebarUserBlock />
         </div>
       </div>
 

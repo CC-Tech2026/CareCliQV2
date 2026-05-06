@@ -824,6 +824,7 @@ export const GetPractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),
@@ -866,6 +867,7 @@ export const SavePractitionerSettingsBody = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),
@@ -905,6 +907,7 @@ export const SavePractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
+  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),

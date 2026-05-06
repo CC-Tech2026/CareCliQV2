@@ -260,6 +260,8 @@ export interface ProviderInfo {
   abn?: string | null;
 }
 
+export interface PractitionerSettingsResponse extends PractitionerSettings {}
+
 export interface SessionDefaults {
   defaultDuration?: number | null;
   autoStartTimer?: boolean | null;
@@ -282,6 +284,8 @@ export interface PractitionerSettings {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
+  /** Selected cartoon avatar identifier */
+  avatarId?: string | null;
   provider?: ProviderInfo | null;
   sessionDefaults?: SessionDefaults | null;
   compliance?: ComplianceSettings | null;
@@ -295,6 +299,8 @@ export interface SavePractitionerSettingsBody {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
+  /** Selected cartoon avatar identifier */
+  avatarId?: string | null;
   provider?: ProviderInfo | null;
   sessionDefaults?: SessionDefaults | null;
   compliance?: ComplianceSettings | null;

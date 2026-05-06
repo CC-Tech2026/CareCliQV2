@@ -7,6 +7,7 @@ export const practitionerSettingsTable = pgTable("practitioner_settings", {
   signature: text("signature"),
   name: text("name"),
   credentials: text("credentials"),
+  avatarId: text("avatar_id"),
   provider: jsonb("provider"),
   sessionDefaults: jsonb("session_defaults"),
   compliance: jsonb("compliance"),

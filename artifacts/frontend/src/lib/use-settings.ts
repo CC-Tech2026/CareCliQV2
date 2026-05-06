@@ -25,6 +25,7 @@ export interface PractitionerSettingsFull {
   name?: string | null;
   credentials?: string | null;
   signature?: string | null;
+  avatarId?: string | null;
   provider?: ProviderInfo | null;
   sessionDefaults?: SessionDefaults | null;
   compliance?: ComplianceSettings | null;
@@ -65,6 +66,7 @@ export function useSettings(): {
       name: serverSettings.name ?? null,
       credentials: serverSettings.credentials ?? null,
       signature: serverSettings.signature ?? null,
+      avatarId: serverSettings.avatarId ?? null,
       provider: (serverSettings.provider as ProviderInfo | null) ?? null,
       sessionDefaults: (serverSettings.sessionDefaults as SessionDefaults | null) ?? null,
       compliance: (serverSettings.compliance as ComplianceSettings | null) ?? null,
