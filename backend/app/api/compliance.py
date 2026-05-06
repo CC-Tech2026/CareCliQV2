@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from ..services import session_service, participant_service, funding_service, ai_service
 from ..services.compliance_engine import run_compliance_check
+from ..services.settings_service import get_physical_exam_session_types
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,8 @@ async def run_compliance(session_id: str):
         participant = await participant_service.get_participant_by_id(participant_id)
         existing_sessions = await session_service.get_sessions_by_participant(participant_id)
 
-    rules_result = run_compliance_check(session, participant, existing_sessions)
+    custom_physical_types = await get_physical_exam_session_types()
+    rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
     score = rules_result["score"]
     status = _derive_status(score)
 

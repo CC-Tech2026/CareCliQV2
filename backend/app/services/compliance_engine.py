@@ -269,22 +269,36 @@ PHYSICAL_SESSION_TYPES = {
 }
 
 
-def _requires_physical_assessment(session: dict) -> bool:
+def _requires_physical_assessment(
+    session: dict,
+    custom_physical_types: Optional[List[str]] = None,
+) -> bool:
     """Return True when the session type implies a physical/body examination.
 
     Uses whole-word / whole-phrase matching (regex word boundaries) to avoid
     false positives from short tokens like 'ot' matching 'remote' or 'root'.
+
+    If ``custom_physical_types`` is supplied (from practitioner settings), those
+    terms are checked *instead of* the built-in ``PHYSICAL_SESSION_TYPES`` set.
     """
     session_type = (session.get("session_type") or "").lower().strip()
+    types_to_check = (
+        [t.lower().strip() for t in custom_physical_types if t and t.strip()]
+        if custom_physical_types is not None
+        else PHYSICAL_SESSION_TYPES
+    )
     return any(
         re.search(r"\b" + re.escape(term) + r"\b", session_type)
-        for term in PHYSICAL_SESSION_TYPES
+        for term in types_to_check
     )
 
 
-def check_body_examination_documented(session: dict) -> dict:
+def check_body_examination_documented(
+    session: dict,
+    custom_physical_types: Optional[List[str]] = None,
+) -> dict:
     """Warn when a physical-assessment session has no body markers recorded."""
-    if not _requires_physical_assessment(session):
+    if not _requires_physical_assessment(session, custom_physical_types):
         return {
             "rule": "body_examination_documented",
             "status": "pass",
@@ -417,6 +431,7 @@ def run_compliance_check(
     session: dict,
     participant: Optional[dict] = None,
     existing_sessions: Optional[List[dict]] = None,
+    custom_physical_types: Optional[List[str]] = None,
 ) -> dict:
     """
     Run all compliance rules against a session and return a full report.
@@ -444,7 +459,7 @@ def run_compliance_check(
         check_within_plan_dates(session, plan_start, plan_end),
         check_no_duplicate_timestamp(session, existing_sessions or []),
         check_budget_not_exceeded(session, participant),
-        check_body_examination_documented(session),
+        check_body_examination_documented(session, custom_physical_types),
         check_pain_markers_have_notes(session),
     ]
 

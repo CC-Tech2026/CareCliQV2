@@ -18,6 +18,9 @@ import {
   Settings2,
   ShieldCheck,
   User,
+  Plus,
+  X,
+  Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -167,7 +170,16 @@ export default function Settings() {
   const [requireActivity, setRequireActivity] = useState(false);
   const [requireNotes, setRequireNotes] = useState(false);
   const [requireDuration, setRequireDuration] = useState(false);
+  const [physicalExamSessionTypes, setPhysicalExamSessionTypes] = useState<string[]>([]);
+  const [newSessionType, setNewSessionType] = useState("");
   const [isSavingCompliance, setIsSavingCompliance] = useState(false);
+
+  const DEFAULT_PHYSICAL_TYPES = [
+    "physiotherapy", "physio", "occupational therapy", "OT",
+    "physical therapy", "therapy", "exercise physiology",
+    "hydrotherapy", "rehabilitation", "rehab", "massage",
+    "manual therapy", "sports therapy",
+  ];
 
   // ── API ────────────────────────────────────────────────────────────────────
   const { data: serverSettings, isLoading: isLoadingSettings } =
@@ -208,10 +220,14 @@ export default function Settings() {
       requireActivity?: boolean | null;
       requireNotes?: boolean | null;
       requireDuration?: boolean | null;
+      physicalExamSessionTypes?: string[] | null;
     } | null;
     if (comp?.requireActivity != null) setRequireActivity(comp.requireActivity);
     if (comp?.requireNotes != null) setRequireNotes(comp.requireNotes);
     if (comp?.requireDuration != null) setRequireDuration(comp.requireDuration);
+    if (comp?.physicalExamSessionTypes != null) {
+      setPhysicalExamSessionTypes(comp.physicalExamSessionTypes);
+    }
   }, [serverSettings, isLoadingSettings]);
 
   // ── Canvas helpers ─────────────────────────────────────────────────────────
@@ -397,13 +413,44 @@ export default function Settings() {
   const handleSaveCompliance = async () => {
     setIsSavingCompliance(true);
     try {
-      await saveToServer({ data: { compliance: { requireActivity, requireNotes, requireDuration } } });
+      await saveToServer({
+        data: {
+          compliance: {
+            requireActivity,
+            requireNotes,
+            requireDuration,
+            // Send null when list is empty so the backend falls back to built-in
+            // defaults rather than treating an empty array as "no types required".
+            physicalExamSessionTypes: physicalExamSessionTypes.length > 0 ? physicalExamSessionTypes : null,
+          },
+        },
+      });
       toast({ title: "Compliance requirements saved" });
     } catch {
       toast({ title: "Save failed", description: "Could not save compliance requirements.", variant: "destructive" });
     } finally {
       setIsSavingCompliance(false);
     }
+  };
+
+  const handleAddSessionType = () => {
+    const trimmed = newSessionType.trim();
+    if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
+    if (physicalExamSessionTypes.some((t) => t.toLowerCase() === lower)) {
+      toast({ title: "Already in the list", description: `"${trimmed}" is already configured.` });
+      return;
+    }
+    setPhysicalExamSessionTypes((prev) => [...prev, trimmed]);
+    setNewSessionType("");
+  };
+
+  const handleRemoveSessionType = (index: number) => {
+    setPhysicalExamSessionTypes((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleResetToDefaults = () => {
+    setPhysicalExamSessionTypes(DEFAULT_PHYSICAL_TYPES);
   };
 
   // ── Loading overlay ────────────────────────────────────────────────────────
@@ -775,6 +822,83 @@ export default function Settings() {
                     checked={requireDuration}
                     onCheckedChange={setRequireDuration}
                   />
+                </div>
+              )}
+            </PanelCard>
+
+            <PanelCard label="Session Types Requiring Physical Examination">
+              {isLoadingSettings ? (
+                <LoadingRow />
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    When a session's type matches one of the names below, the compliance engine will warn if no body examination markers have been recorded.
+                    Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults — leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
+                  </p>
+
+                  {/* Current list */}
+                  {physicalExamSessionTypes.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {physicalExamSessionTypes.map((type, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 rounded-full bg-primary/8 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20"
+                        >
+                          {type}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSessionType(i)}
+                            className="ml-0.5 text-primary/60 hover:text-red-500 transition-colors"
+                            aria-label={`Remove ${type}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-slate-400 rounded-lg bg-slate-50 border border-dashed border-slate-200 px-3 py-2.5">
+                      <Info className="h-3.5 w-3.5 shrink-0" />
+                      <span>No custom types saved — the built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
+                    </div>
+                  )}
+
+                  {/* Add new type */}
+                  <div className="flex gap-2">
+                    <Input
+                      value={newSessionType}
+                      onChange={(e) => setNewSessionType(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); handleAddSessionType(); }
+                      }}
+                      placeholder="e.g. hydrotherapy, support coordination…"
+                      className="rounded-lg text-sm flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 shrink-0"
+                      onClick={handleAddSessionType}
+                      disabled={!newSessionType.trim()}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add
+                    </Button>
+                  </div>
+
+                  {/* Reset to defaults helper */}
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                    <p className="text-xs text-slate-400">
+                      Reset to restore the standard built-in list
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-slate-500 hover:text-slate-700 gap-1"
+                      onClick={handleResetToDefaults}
+                    >
+                      <RotateCcw className="h-3 w-3" /> Reset to defaults
+                    </Button>
+                  </div>
                 </div>
               )}
             </PanelCard>

@@ -951,6 +951,12 @@ components:
         requireDuration:
           type: boolean
           nullable: true
+        physicalExamSessionTypes:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Session type names that require a physical body examination to be documented
 
     PractitionerSettings:
       type: object

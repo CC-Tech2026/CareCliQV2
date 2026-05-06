@@ -4,6 +4,7 @@ from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
 from ..services import participant_service
+from ..services.settings_service import get_physical_exam_session_types
 from ..schemas.alert import AlertCreate
 import logging
 import json
@@ -84,7 +85,8 @@ async def save_session_with_ai(session_id: str):
         if participant_id:
             existing_sessions = await session_service.get_sessions_by_participant(participant_id)
 
-        rules_result = run_compliance_check(session, participant, existing_sessions)
+        custom_physical_types = await get_physical_exam_session_types()
+        rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
 
         # 2. Run AI compliance check for narrative assessment
         ai_compliance = await ai_service.check_compliance(session)

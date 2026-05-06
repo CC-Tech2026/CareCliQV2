@@ -32,6 +32,16 @@ export interface NDISGoal {
   status: NDISGoalStatus;
 }
 
+export type ParticipantBiologicalSex =
+  | (typeof ParticipantBiologicalSex)[keyof typeof ParticipantBiologicalSex]
+  | null;
+
+export const ParticipantBiologicalSex = {
+  male: "male",
+  female: "female",
+  unspecified: "unspecified",
+} as const;
+
 export interface Participant {
   id: string;
   full_name: string;
@@ -46,10 +56,20 @@ export interface Participant {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  biological_sex?: 'male' | 'female' | 'unspecified' | null;
+  biological_sex?: ParticipantBiologicalSex;
   goals?: (NDISGoal | ParticipantGoal)[] | null;
   created_at?: string | null;
 }
+
+export type CreateParticipantBodyBiologicalSex =
+  | (typeof CreateParticipantBodyBiologicalSex)[keyof typeof CreateParticipantBodyBiologicalSex]
+  | null;
+
+export const CreateParticipantBodyBiologicalSex = {
+  male: "male",
+  female: "female",
+  unspecified: "unspecified",
+} as const;
 
 export interface CreateParticipantBody {
   full_name: string;
@@ -64,13 +84,23 @@ export interface CreateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  biological_sex?: 'male' | 'female' | 'unspecified' | null;
+  biological_sex?: CreateParticipantBodyBiologicalSex;
   goals?: ParticipantGoal[] | null;
 }
 
 export interface UpdateParticipantGoalsBody {
   goals: NDISGoal[];
 }
+
+export type UpdateParticipantBodyBiologicalSex =
+  | (typeof UpdateParticipantBodyBiologicalSex)[keyof typeof UpdateParticipantBodyBiologicalSex]
+  | null;
+
+export const UpdateParticipantBodyBiologicalSex = {
+  male: "male",
+  female: "female",
+  unspecified: "unspecified",
+} as const;
 
 export interface UpdateParticipantBody {
   full_name?: string | null;
@@ -81,7 +111,7 @@ export interface UpdateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
-  biological_sex?: 'male' | 'female' | 'unspecified' | null;
+  biological_sex?: UpdateParticipantBodyBiologicalSex;
   goals?: (NDISGoal | ParticipantGoal)[] | null;
 }
 
@@ -240,6 +270,8 @@ export interface ComplianceSettings {
   requireActivity?: boolean | null;
   requireNotes?: boolean | null;
   requireDuration?: boolean | null;
+  /** Session type names that require a physical body examination to be documented */
+  physicalExamSessionTypes?: string[] | null;
 }
 
 export interface PractitionerSettings {

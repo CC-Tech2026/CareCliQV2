@@ -34,6 +34,7 @@ export const GetParticipantsResponseItem = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.union([
@@ -80,6 +81,7 @@ export const CreateParticipantBody = zod.object({
     .nullish()
     .default(createParticipantBodyUsedBudgetDefault),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.object({
@@ -128,6 +130,7 @@ export const GetParticipantResponse = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.union([
@@ -168,6 +171,7 @@ export const UpdateParticipantBody = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.union([
@@ -205,6 +209,7 @@ export const UpdateParticipantResponse = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.union([
@@ -260,6 +265,7 @@ export const UpdateParticipantGoalsResponse = zod.object({
   total_budget: zod.number().nullish(),
   used_budget: zod.number().nullish(),
   primary_disability: zod.string().nullish(),
+  biological_sex: zod.enum(["male", "female", "unspecified"]).nullish(),
   goals: zod
     .array(
       zod.union([
@@ -836,6 +842,12 @@ export const GetPractitionerSettingsResponse = zod.object({
       requireActivity: zod.boolean().nullish(),
       requireNotes: zod.boolean().nullish(),
       requireDuration: zod.boolean().nullish(),
+      physicalExamSessionTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Session type names that require a physical body examination to be documented",
+        ),
     })
     .nullish(),
   updated_at: zod.string().nullish(),
@@ -872,6 +884,12 @@ export const SavePractitionerSettingsBody = zod.object({
       requireActivity: zod.boolean().nullish(),
       requireNotes: zod.boolean().nullish(),
       requireDuration: zod.boolean().nullish(),
+      physicalExamSessionTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Session type names that require a physical body examination to be documented",
+        ),
     })
     .nullish(),
 });
@@ -905,6 +923,12 @@ export const SavePractitionerSettingsResponse = zod.object({
       requireActivity: zod.boolean().nullish(),
       requireNotes: zod.boolean().nullish(),
       requireDuration: zod.boolean().nullish(),
+      physicalExamSessionTypes: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Session type names that require a physical body examination to be documented",
+        ),
     })
     .nullish(),
   updated_at: zod.string().nullish(),
