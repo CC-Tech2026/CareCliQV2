@@ -1,0 +1,147 @@
+Design a modern, structured, and highly usable Church Management System dashboard for PMCC 4th Watch. The system must prioritize clarity, accessibility, and efficient data management across all devices (desktop, tablet, mobile).
+
+1. Overall Design Principles
+Clean, minimal, and professional layout (no playful or distracting elements)
+No emojis or decorative icons (e.g., remove water drop icon for “Newly Baptized”)
+Strong visual hierarchy using spacing, typography, and card grouping
+Consistent alignment and grid system across all pages
+Fully responsive design (mobile-first but optimized for desktop workflows)
+Accessibility-first:
+Ensure all text has strong contrast (fix “Youth Officer” color issue)
+Use readable font sizes and spacing
+Avoid color-only indicators (add labels or tags)
+2. Layout Structure
+Sidebar Navigation (Left)
+
+Group items logically:
+
+Main
+
+Dashboard
+Member Directory
+Attendance
+Guest Management
+
+Operations
+
+Cadets
+Print Attendance
+Import / Export
+
+Account
+
+Settings
+Change Password
+Logout
+3. Member Directory Redesign
+Top Section
+Page title: “Member Directory”
+Search bar (prominent, full-width on mobile)
+Action button: “+ Add Member”
+Stats Cards (Clean, No Icons)
+
+Display as simple cards:
+
+Total Members
+Newly Baptized
+Inactive / Inconsistent
+
+No icons, just numbers + labels.
+
+Filters Section (Horizontal Bar)
+Kawan (dropdown)
+Designation (dropdown)
+Status (dropdown)
+Birth Month (dropdown)
+
+Make filters collapsible on mobile.
+
+Table Design Improvements
+Sticky header for columns
+Proper column spacing and alignment
+Improve readability:
+Name (bold)
+Secondary info (lighter tone)
+Replace “--” with:
+“Not set” (more human-readable)
+
+Columns:
+
+Name
+Kawan
+Designation (as label/tag)
+Contact
+Birthday
+Address
+Designation Tags (Fix Visibility Issue)
+Use soft background + dark text
+Example:
+Youth → light blue bg, dark blue text
+Adult → light gray bg, dark text
+Officer → light green bg, dark green text
+Youth Officer → ensure contrast (NO light text on bright bg)
+4. Cadet Identification (Important Requirement)
+Do NOT mix directly into Directory columns visually
+Instead:
+Add a “Cadet” toggle/tag inside member profile
+Or subtle badge next to name (small, neutral style)
+Add filter:
+“Show Cadets Only”
+5. Settings Page (Major Fix Required)
+Problem:
+
+Settings currently mixes unrelated features (Bookings, Pricing Rules, etc.)
+
+Solution:
+
+Redesign Settings into structured tabs:
+
+Account
+
+Profile
+Password
+
+System
+
+User Roles / Permissions
+Kawan Management
+Designation Management
+
+Data
+
+Import
+Export
+
+Preferences
+
+Light Mode / Dark Mode toggle
+Table density (compact / comfortable)
+Default filters
+6. Light Mode / Dark Mode
+Add toggle in top-right or settings
+Ensure both modes:
+Maintain readability
+Avoid overly dark backgrounds
+Keep contrast consistent
+7. Interaction Improvements
+Row hover effect for tables
+Click row → opens member profile drawer or page
+Smooth transitions (subtle, not excessive)
+Save states (e.g., “Last saved” should actually function)
+8. Data Clarity Improvements
+Standardize date formats:
+e.g., “05 Jul 2009” (consistent everywhere)
+Fix inconsistent entries:
+“Jan. 28” → must include year or show as incomplete
+Address formatting consistency
+9. Performance + UX
+Fast search (instant filtering)
+Pagination OR infinite scroll (choose one, not both cluttered)
+Clear empty states:
+“No members found”
+10. What to Avoid
+No emojis
+No inconsistent colors
+No overcrowded settings
+No low-contrast text
+No mixing unrelated features in one tab
