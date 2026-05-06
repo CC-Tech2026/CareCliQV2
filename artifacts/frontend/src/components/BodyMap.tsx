@@ -237,6 +237,8 @@ interface BodyMapProps {
   className?: string;
   svgRef?: React.RefObject<SVGSVGElement | null>;
   bodyType?: BodyType;
+  /** Optional per-zone session count badge (for history overlay mode) */
+  markerCounts?: Record<string, number>;
 }
 
 export function BodyMap({
@@ -248,6 +250,7 @@ export function BodyMap({
   className,
   svgRef,
   bodyType = "unspecified",
+  markerCounts,
 }: BodyMapProps) {
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   const zones = view === "front" ? FRONT_ZONES : BACK_ZONES;
@@ -323,6 +326,8 @@ export function BodyMap({
           const [cx, cy] = zone.centroid;
           const col = MARKER_COLORS[marker.color];
           const isSelected = selectedZone === marker.zone;
+          const count = markerCounts?.[marker.zone] ?? 0;
+          const showCount = count > 1;
           return (
             <g
               key={marker.zone}
@@ -340,6 +345,22 @@ export function BodyMap({
                 strokeWidth={isSelected ? 2 : 1.5}
                 style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))" }}
               />
+              {showCount && (
+                <>
+                  <circle cx={cx + 5} cy={cy - 5} r={4.5} fill="#1e293b" stroke="white" strokeWidth={1} />
+                  <text
+                    x={cx + 5}
+                    y={cy - 5}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="4.5"
+                    fontWeight="bold"
+                    fill="white"
+                  >
+                    {count > 9 ? "9+" : count}
+                  </text>
+                </>
+              )}
             </g>
           );
         })}

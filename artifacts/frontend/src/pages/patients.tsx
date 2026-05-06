@@ -40,6 +40,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
+import { BodyMarkerHistory } from "@/components/BodyMarkerHistory";
+import { type BodyMarker } from "@/components/BodyMap";
+import { MapPin } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -888,6 +891,24 @@ function GoalsManagementCard({
 // Participant Detail (tabbed)
 // ---------------------------------------------------------------------------
 
+interface SessionRecord {
+  id: string;
+  session_date?: string | null;
+  session_type?: string | null;
+  duration_minutes?: number | null;
+  notes?: string | null;
+  status?: string | null;
+  compliance_score?: number | null;
+  tags?: string[];
+  body_markers?: BodyMarker[];
+}
+
+interface ParticipantRecord {
+  full_name?: string;
+  biological_sex?: "male" | "female" | "unspecified";
+  [key: string]: unknown;
+}
+
 function ParticipantDetail({
   id,
   onRefreshList,
@@ -932,6 +953,9 @@ function ParticipantDetail({
     enabled: !!id,
   });
 
+  const typedSessions = (sessions as unknown as SessionRecord[] | undefined);
+  const typedParticipant = (participant as unknown as ParticipantRecord | undefined);
+
   const [historySearch, setHistorySearch] = useState("");
 
   const handleSaved = () => {
@@ -953,7 +977,7 @@ function ParticipantDetail({
     ? Math.min(100, Math.round((participant.used_budget / participant.total_budget) * 100))
     : 0;
 
-  const filteredHistory = sessions?.filter(s =>
+  const filteredHistory = typedSessions?.filter(s =>
     !historySearch ||
     s.session_type?.toLowerCase().includes(historySearch.toLowerCase()) ||
     s.notes?.toLowerCase().includes(historySearch.toLowerCase())
@@ -1230,10 +1254,22 @@ function ParticipantDetail({
 
         {/* ── Client History Tab ── */}
         <TabsContent value="history" className="flex-1 overflow-y-auto p-6 space-y-4 mt-0">
+          {typedSessions && typedSessions.length > 0 && (
+            <BodyMarkerHistory
+              sessions={typedSessions.map((s) => ({
+                id: s.id,
+                session_date: s.session_date,
+                session_type: s.session_type,
+                body_markers: Array.isArray(s.body_markers) ? s.body_markers : [],
+              }))}
+              bodyType={typedParticipant?.biological_sex}
+            />
+          )}
+
           <div className="flex items-center justify-between gap-4">
             <h3 className="font-semibold text-base flex items-center gap-2 shrink-0">
               <History className="h-4 w-4 text-primary" /> Session History
-              {sessions && <span className="text-slate-400 font-normal text-sm">({sessions.length})</span>}
+              {typedSessions && <span className="text-slate-400 font-normal text-sm">({typedSessions.length})</span>}
             </h3>
             <div className="relative max-w-xs w-full">
               <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
@@ -1283,6 +1319,14 @@ function ParticipantDetail({
                                 {t}
                               </span>
                             ))}
+                          </div>
+                        )}
+                        {Array.isArray(s.body_markers) && s.body_markers.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <MapPin className="h-2.5 w-2.5 text-indigo-500" />
+                            <span className="text-[10px] text-indigo-600 font-medium">
+                              {s.body_markers.length} body finding{s.body_markers.length !== 1 ? "s" : ""} recorded
+                            </span>
                           </div>
                         )}
                       </div>
