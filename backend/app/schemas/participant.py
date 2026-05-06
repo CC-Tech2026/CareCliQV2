@@ -1,6 +1,8 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, field_validator
+from typing import Optional, List, Literal
 from datetime import date
+
+VALID_BIOLOGICAL_SEX = ("male", "female", "unspecified")
 
 
 class NDISGoal(BaseModel):
@@ -25,7 +27,7 @@ class ParticipantCreate(BaseModel):
     total_budget: Optional[float] = 0.0
     used_budget: Optional[float] = 0.0
     primary_disability: Optional[str] = None
-    biological_sex: Optional[str] = None
+    biological_sex: Optional[Literal["male", "female", "unspecified"]] = "unspecified"
     goals: Optional[List[NDISGoal]] = []
 
 
@@ -40,7 +42,7 @@ class ParticipantUpdate(BaseModel):
     total_budget: Optional[float] = None
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
-    biological_sex: Optional[str] = None
+    biological_sex: Optional[Literal["male", "female", "unspecified"]] = None
     goals: Optional[List[NDISGoal]] = None
 
 

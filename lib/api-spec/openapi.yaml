@@ -511,6 +511,10 @@ components:
         primary_disability:
           type: string
           nullable: true
+        biological_sex:
+          type: string
+          enum: [male, female, unspecified]
+          nullable: true
         goals:
           type: array
           items:
@@ -561,6 +565,10 @@ components:
         primary_disability:
           type: string
           nullable: true
+        biological_sex:
+          type: string
+          enum: [male, female, unspecified]
+          nullable: true
         goals:
           type: array
           items:
@@ -603,6 +611,10 @@ components:
           nullable: true
         primary_disability:
           type: string
+          nullable: true
+        biological_sex:
+          type: string
+          enum: [male, female, unspecified]
           nullable: true
         goals:
           type: array

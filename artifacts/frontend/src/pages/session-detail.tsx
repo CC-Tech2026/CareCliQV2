@@ -606,7 +606,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     markers={markers}
                     readOnly
                     bodyType={
-                      ((participant as unknown as Record<string, unknown>)?.biological_sex as "male" | "female" | "unspecified" | undefined) ?? "unspecified"
+                      participant?.biological_sex ?? "unspecified"
                     }
                   />
                 </CardContent>

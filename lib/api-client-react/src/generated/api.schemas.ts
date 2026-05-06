@@ -46,6 +46,7 @@ export interface Participant {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
+  biological_sex?: 'male' | 'female' | 'unspecified' | null;
   goals?: (NDISGoal | ParticipantGoal)[] | null;
   created_at?: string | null;
 }
@@ -63,6 +64,7 @@ export interface CreateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
+  biological_sex?: 'male' | 'female' | 'unspecified' | null;
   goals?: ParticipantGoal[] | null;
 }
 
@@ -79,6 +81,7 @@ export interface UpdateParticipantBody {
   total_budget?: number | null;
   used_budget?: number | null;
   primary_disability?: string | null;
+  biological_sex?: 'male' | 'female' | 'unspecified' | null;
   goals?: (NDISGoal | ParticipantGoal)[] | null;
 }
 
