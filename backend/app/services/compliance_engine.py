@@ -15,6 +15,7 @@ from datetime import date
 from typing import Optional, List
 import json
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,108 @@ def check_no_duplicate_timestamp(
     }
 
 
+PHYSICAL_SESSION_TYPES = {
+    "physiotherapy", "physio", "occupational therapy", "ot",
+    "physical therapy", "therapy", "exercise physiology",
+    "hydrotherapy", "rehabilitation", "rehab", "massage",
+    "manual therapy", "sports therapy",
+}
+
+
+def _requires_physical_assessment(session: dict) -> bool:
+    """Return True when the session type implies a physical/body examination.
+
+    Uses whole-word / whole-phrase matching (regex word boundaries) to avoid
+    false positives from short tokens like 'ot' matching 'remote' or 'root'.
+    """
+    session_type = (session.get("session_type") or "").lower().strip()
+    return any(
+        re.search(r"\b" + re.escape(term) + r"\b", session_type)
+        for term in PHYSICAL_SESSION_TYPES
+    )
+
+
+def check_body_examination_documented(session: dict) -> dict:
+    """Warn when a physical-assessment session has no body markers recorded."""
+    if not _requires_physical_assessment(session):
+        return {
+            "rule": "body_examination_documented",
+            "status": "pass",
+            "message": "Physical examination not required for this session type",
+            "severity": "low",
+        }
+
+    markers = _parse_list(session.get("body_markers"))
+    if markers:
+        return {
+            "rule": "body_examination_documented",
+            "status": "pass",
+            "message": f"Physical examination recorded with {len(markers)} body marker(s)",
+            "severity": "medium",
+        }
+
+    session_type = (session.get("session_type") or "this session type").strip()
+    return {
+        "rule": "body_examination_documented",
+        "status": "warning",
+        "message": (
+            f"No body markers recorded for a {session_type} session — "
+            "document physical findings on the body map"
+        ),
+        "severity": "medium",
+    }
+
+
+def check_pain_markers_have_notes(session: dict) -> dict:
+    """Warn when any red (pain) body marker has no accompanying clinical note."""
+    markers = _parse_list(session.get("body_markers"))
+
+    if not markers:
+        return {
+            "rule": "pain_markers_have_notes",
+            "status": "pass",
+            "message": "No body markers recorded",
+            "severity": "medium",
+        }
+
+    pain_markers = [
+        m for m in markers
+        if isinstance(m, dict) and m.get("color") == "red"
+    ]
+
+    if not pain_markers:
+        return {
+            "rule": "pain_markers_have_notes",
+            "status": "pass",
+            "message": "No pain markers recorded",
+            "severity": "medium",
+        }
+
+    undocumented = [
+        m for m in pain_markers
+        if not (m.get("note") or "").strip()
+    ]
+
+    if undocumented:
+        zones = [m.get("zone", "unknown") for m in undocumented]
+        return {
+            "rule": "pain_markers_have_notes",
+            "status": "warning",
+            "message": (
+                f"{len(undocumented)} pain marker(s) have no clinical note — "
+                f"add notes for: {', '.join(zones)}"
+            ),
+            "severity": "medium",
+        }
+
+    return {
+        "rule": "pain_markers_have_notes",
+        "status": "pass",
+        "message": f"All {len(pain_markers)} pain marker(s) have clinical notes",
+        "severity": "medium",
+    }
+
+
 def check_budget_not_exceeded(
     session: dict, participant: Optional[dict] = None
 ) -> dict:
@@ -341,6 +444,8 @@ def run_compliance_check(
         check_within_plan_dates(session, plan_start, plan_end),
         check_no_duplicate_timestamp(session, existing_sessions or []),
         check_budget_not_exceeded(session, participant),
+        check_body_examination_documented(session),
+        check_pain_markers_have_notes(session),
     ]
 
     total = len(rules)
