@@ -18,6 +18,7 @@ export interface AuditPayload {
     full_name: string;
     ndis_number?: string;
     date_of_birth?: string;
+    biological_sex?: string;
   };
   practitioner?: {
     name?: string;
@@ -611,18 +612,56 @@ export function appendSessionToPDF(
     const fillRoundRect = (x: number, y: number, w: number, h: number, r = 4) => {
       ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
     };
-    fillEllipse(100, 38, 26, 28);
-    fillRoundRect(91, 64, 18, 17, 3);
-    fillEllipse(60, 96, 20, 15); fillEllipse(140, 96, 20, 15);
-    fillRoundRect(71, 78, 58, 56, 5);
-    fillRoundRect(73, 133, 54, 48, 4);
-    fillRoundRect(73, 180, 54, 40, 4);
-    fillRoundRect(37, 83, 23, 59, 9); fillRoundRect(140, 83, 23, 59, 9);
-    fillRoundRect(32, 140, 20, 56, 9); fillRoundRect(148, 140, 20, 56, 9);
-    fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
-    fillRoundRect(75, 219, 24, 66, 7); fillRoundRect(101, 219, 24, 66, 7);
-    fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
-    fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+
+    const participantSex = data.participant?.biological_sex ?? "unspecified";
+
+    if (participantSex === "male") {
+      // Male: broader shoulders, wider chest, narrower hips
+      fillEllipse(100, 38, 26, 28);
+      fillRoundRect(91, 64, 18, 17, 3);
+      fillEllipse(56, 95, 23, 16); fillEllipse(144, 95, 23, 16);
+      fillRoundRect(67, 78, 66, 56, 5);
+      fillRoundRect(71, 133, 58, 48, 4);
+      fillRoundRect(77, 180, 46, 40, 4);
+      fillRoundRect(34, 82, 25, 59, 9); fillRoundRect(141, 82, 25, 59, 9);
+      fillRoundRect(31, 139, 21, 57, 9); fillRoundRect(148, 139, 21, 57, 9);
+      fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
+      fillRoundRect(76, 219, 23, 66, 7); fillRoundRect(101, 219, 23, 66, 7);
+      fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
+      fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+    } else if (participantSex === "female") {
+      // Female: narrower shoulders, breast contours, wider hips
+      fillEllipse(100, 38, 24, 27);
+      fillRoundRect(92, 64, 16, 16, 5);
+      fillEllipse(63, 95, 16, 13); fillEllipse(137, 95, 16, 13);
+      fillRoundRect(73, 78, 54, 52, 5);
+      // Breast contours (slightly darker)
+      ctx.fillStyle = "#cbd5e1";
+      fillEllipse(89, 100, 11, 12); fillEllipse(111, 100, 11, 12);
+      ctx.fillStyle = "#e2e8f0";
+      fillRoundRect(76, 129, 48, 40, 5);
+      fillRoundRect(70, 168, 60, 44, 8);
+      fillRoundRect(40, 82, 20, 57, 8); fillRoundRect(140, 82, 20, 57, 8);
+      fillRoundRect(34, 138, 18, 55, 8); fillRoundRect(148, 138, 18, 55, 8);
+      fillEllipse(42, 208, 12, 10); fillEllipse(158, 208, 12, 10);
+      fillRoundRect(74, 212, 24, 68, 7); fillRoundRect(102, 212, 24, 68, 7);
+      fillRoundRect(76, 278, 20, 67, 7); fillRoundRect(104, 278, 20, 67, 7);
+      fillEllipse(85, 357, 17, 10); fillEllipse(114, 357, 17, 10);
+    } else {
+      // Neutral / unspecified
+      fillEllipse(100, 38, 26, 28);
+      fillRoundRect(91, 64, 18, 17, 3);
+      fillEllipse(60, 96, 20, 15); fillEllipse(140, 96, 20, 15);
+      fillRoundRect(71, 78, 58, 56, 5);
+      fillRoundRect(73, 133, 54, 48, 4);
+      fillRoundRect(73, 180, 54, 40, 4);
+      fillRoundRect(37, 83, 23, 59, 9); fillRoundRect(140, 83, 23, 59, 9);
+      fillRoundRect(32, 140, 20, 56, 9); fillRoundRect(148, 140, 20, 56, 9);
+      fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
+      fillRoundRect(75, 219, 24, 66, 7); fillRoundRect(101, 219, 24, 66, 7);
+      fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
+      fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+    }
 
     // Marker dots
     for (const m of bodyMarkers) {

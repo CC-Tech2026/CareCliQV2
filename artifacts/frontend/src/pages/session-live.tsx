@@ -1492,6 +1492,9 @@ export default function SessionLive() {
             <BodyExaminationPanel
               markers={bodyMarkers}
               onChange={setBodyMarkers}
+              bodyType={
+                ((participant as unknown as Record<string, unknown>)?.biological_sex as "male" | "female" | "unspecified" | undefined) ?? "unspecified"
+              }
             />
           </div>
         </div>

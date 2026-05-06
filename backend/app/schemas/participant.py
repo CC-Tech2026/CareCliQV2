@@ -25,6 +25,7 @@ class ParticipantCreate(BaseModel):
     total_budget: Optional[float] = 0.0
     used_budget: Optional[float] = 0.0
     primary_disability: Optional[str] = None
+    biological_sex: Optional[str] = None
     goals: Optional[List[NDISGoal]] = []
 
 
@@ -39,6 +40,7 @@ class ParticipantUpdate(BaseModel):
     total_budget: Optional[float] = None
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
+    biological_sex: Optional[str] = None
     goals: Optional[List[NDISGoal]] = None
 
 

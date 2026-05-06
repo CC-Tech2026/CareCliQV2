@@ -115,11 +115,14 @@ BEGIN
     END IF;
 END $$;
 
--- Add ndis_plan_id to patients
+-- Add ndis_plan_id and biological_sex to patients
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='ndis_plan_id') THEN
         ALTER TABLE patients ADD COLUMN ndis_plan_id UUID;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='biological_sex') THEN
+        ALTER TABLE patients ADD COLUMN biological_sex TEXT DEFAULT 'unspecified';
     END IF;
 END $$;
 

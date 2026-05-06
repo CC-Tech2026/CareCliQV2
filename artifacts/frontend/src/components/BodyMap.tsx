@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 export type BodyView = "front" | "back";
 export type MarkerColor = "red" | "yellow" | "blue" | "green";
+export type BodyType = "male" | "female" | "unspecified";
 
 export interface BodyMarker {
   zone: string;
@@ -112,6 +113,120 @@ function ZoneShapeEl({
   );
 }
 
+/** Neutral / unspecified silhouette shapes */
+function SilhouetteNeutral() {
+  return (
+    <>
+      <ellipse cx="100" cy="38" rx="26" ry="28" />
+      <rect x="91" y="64" width="18" height="17" rx="3" />
+      <ellipse cx="60" cy="96" rx="20" ry="15" />
+      <ellipse cx="140" cy="96" rx="20" ry="15" />
+      <rect x="71" y="78" width="58" height="56" rx="5" />
+      <rect x="73" y="133" width="54" height="48" rx="4" />
+      <rect x="73" y="180" width="54" height="40" rx="4" />
+      <rect x="37" y="83" width="23" height="59" rx="9" />
+      <rect x="140" y="83" width="23" height="59" rx="9" />
+      <rect x="32" y="140" width="20" height="56" rx="9" />
+      <rect x="148" y="140" width="20" height="56" rx="9" />
+      <ellipse cx="41" cy="210" rx="13" ry="10" />
+      <ellipse cx="159" cy="210" rx="13" ry="10" />
+      <rect x="75" y="219" width="24" height="66" rx="7" />
+      <rect x="101" y="219" width="24" height="66" rx="7" />
+      <rect x="77" y="283" width="20" height="66" rx="7" />
+      <rect x="103" y="283" width="20" height="66" rx="7" />
+      <ellipse cx="86" cy="358" rx="17" ry="10" />
+      <ellipse cx="113" cy="358" rx="17" ry="10" />
+    </>
+  );
+}
+
+/**
+ * Male silhouette — broader shoulders (rx=23), wider chest (w=66),
+ * straighter waist, narrower hips (w=46).
+ */
+function SilhouetteMale() {
+  return (
+    <>
+      {/* Head */}
+      <ellipse cx="100" cy="38" rx="26" ry="28" />
+      {/* Neck */}
+      <rect x="91" y="64" width="18" height="17" rx="3" />
+      {/* Shoulders — wider */}
+      <ellipse cx="56" cy="95" rx="23" ry="16" />
+      <ellipse cx="144" cy="95" rx="23" ry="16" />
+      {/* Chest — broader */}
+      <rect x="67" y="78" width="66" height="56" rx="5" />
+      {/* Abdomen — moderate width */}
+      <rect x="71" y="133" width="58" height="48" rx="4" />
+      {/* Hips — narrower */}
+      <rect x="77" y="180" width="46" height="40" rx="4" />
+      {/* Upper arms — bulkier */}
+      <rect x="34" y="82" width="25" height="59" rx="9" />
+      <rect x="141" y="82" width="25" height="59" rx="9" />
+      {/* Forearms */}
+      <rect x="31" y="139" width="21" height="57" rx="9" />
+      <rect x="148" y="139" width="21" height="57" rx="9" />
+      {/* Hands */}
+      <ellipse cx="41" cy="210" rx="13" ry="10" />
+      <ellipse cx="159" cy="210" rx="13" ry="10" />
+      {/* Thighs */}
+      <rect x="76" y="219" width="23" height="66" rx="7" />
+      <rect x="101" y="219" width="23" height="66" rx="7" />
+      {/* Shins */}
+      <rect x="77" y="283" width="20" height="66" rx="7" />
+      <rect x="103" y="283" width="20" height="66" rx="7" />
+      {/* Feet */}
+      <ellipse cx="86" cy="358" rx="17" ry="10" />
+      <ellipse cx="113" cy="358" rx="17" ry="10" />
+    </>
+  );
+}
+
+/**
+ * Female silhouette — narrower shoulders (rx=16), chest contour ellipses,
+ * narrowed waist, wider hips (w=60).
+ */
+function SilhouetteFemale() {
+  return (
+    <>
+      {/* Head — slightly smaller */}
+      <ellipse cx="100" cy="38" rx="24" ry="27" />
+      {/* Neck — narrower */}
+      <rect x="92" y="64" width="16" height="16" rx="5" />
+      {/* Shoulders — narrower */}
+      <ellipse cx="63" cy="95" rx="16" ry="13" />
+      <ellipse cx="137" cy="95" rx="16" ry="13" />
+      {/* Chest/torso */}
+      <rect x="73" y="78" width="54" height="52" rx="5" />
+      {/* Breast contours */}
+      <ellipse cx="89" cy="100" rx="11" ry="12" />
+      <ellipse cx="111" cy="100" rx="11" ry="12" />
+      {/* Abdomen — narrowed waist */}
+      <rect x="76" y="129" width="48" height="40" rx="5" />
+      {/* Hips — wider */}
+      <rect x="70" y="168" width="60" height="44" rx="8" />
+      {/* Upper arms — slimmer */}
+      <rect x="40" y="82" width="20" height="57" rx="8" />
+      <rect x="140" y="82" width="20" height="57" rx="8" />
+      {/* Forearms */}
+      <rect x="34" y="138" width="18" height="55" rx="8" />
+      <rect x="148" y="138" width="18" height="55" rx="8" />
+      {/* Hands */}
+      <ellipse cx="42" cy="208" rx="12" ry="10" />
+      <ellipse cx="158" cy="208" rx="12" ry="10" />
+      {/* Thighs */}
+      <rect x="74" y="212" width="24" height="68" rx="7" />
+      <rect x="102" y="212" width="24" height="68" rx="7" />
+      {/* Shins */}
+      <rect x="76" y="278" width="20" height="67" rx="7" />
+      <rect x="104" y="278" width="20" height="67" rx="7" />
+      {/* Feet */}
+      <ellipse cx="85" cy="357" rx="17" ry="10" />
+      <ellipse cx="114" cy="357" rx="17" ry="10" />
+    </>
+  );
+}
+
 interface BodyMapProps {
   view: BodyView;
   markers: BodyMarker[];
@@ -121,6 +236,7 @@ interface BodyMapProps {
   readOnly?: boolean;
   className?: string;
   svgRef?: React.RefObject<SVGSVGElement | null>;
+  bodyType?: BodyType;
 }
 
 export function BodyMap({
@@ -131,6 +247,7 @@ export function BodyMap({
   readOnly = false,
   className,
   svgRef,
+  bodyType = "unspecified",
 }: BodyMapProps) {
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   const zones = view === "front" ? FRONT_ZONES : BACK_ZONES;
@@ -148,27 +265,15 @@ export function BodyMap({
         className="w-full max-w-[200px] mx-auto block"
         style={{ height: "auto" }}
       >
-        {/* Background silhouette — purely decorative */}
-        <g opacity="0.07" fill="#334155">
-          <ellipse cx="100" cy="38" rx="26" ry="28" />
-          <rect x="91" y="64" width="18" height="17" rx="3" />
-          <ellipse cx="60" cy="96" rx="20" ry="15" />
-          <ellipse cx="140" cy="96" rx="20" ry="15" />
-          <rect x="71" y="78" width="58" height="56" rx="5" />
-          <rect x="73" y="133" width="54" height="48" rx="4" />
-          <rect x="73" y="180" width="54" height="40" rx="4" />
-          <rect x="37" y="83" width="23" height="59" rx="9" />
-          <rect x="140" y="83" width="23" height="59" rx="9" />
-          <rect x="32" y="140" width="20" height="56" rx="9" />
-          <rect x="148" y="140" width="20" height="56" rx="9" />
-          <ellipse cx="41" cy="210" rx="13" ry="10" />
-          <ellipse cx="159" cy="210" rx="13" ry="10" />
-          <rect x="75" y="219" width="24" height="66" rx="7" />
-          <rect x="101" y="219" width="24" height="66" rx="7" />
-          <rect x="77" y="283" width="20" height="66" rx="7" />
-          <rect x="103" y="283" width="20" height="66" rx="7" />
-          <ellipse cx="86" cy="358" rx="17" ry="10" />
-          <ellipse cx="113" cy="358" rx="17" ry="10" />
+        {/* Background silhouette — purely decorative, sex-specific */}
+        <g opacity="0.08" fill="#334155">
+          {bodyType === "male" ? (
+            <SilhouetteMale />
+          ) : bodyType === "female" ? (
+            <SilhouetteFemale />
+          ) : (
+            <SilhouetteNeutral />
+          )}
         </g>
 
         {/* Clickable zones */}

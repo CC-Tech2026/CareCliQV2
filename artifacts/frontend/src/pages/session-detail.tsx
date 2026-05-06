@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useGetSession, useUpdateSession, useSaveSessionWithAI } from "@workspace/api-client-react";
+import { useGetSession, useUpdateSession, useSaveSessionWithAI, useGetParticipant } from "@workspace/api-client-react";
 import type { Session } from "@workspace/api-client-react";
 import { exportSingleSessionPDF } from "@/lib/pdf-export";
 
@@ -111,6 +111,11 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   const { data: session, isLoading, refetch } = useGetSession(sessionId as string, {
     query: { enabled: !!sessionId, queryKey: ["getSession", sessionId] },
+  });
+
+  const participantId = (session as ExtendedSession & { participant_id?: string })?.participant_id ?? "";
+  const { data: participant } = useGetParticipant(participantId, {
+    query: { enabled: !!participantId, queryKey: ["getParticipant", participantId] },
   });
 
   const updateSession = useUpdateSession();
@@ -597,7 +602,13 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <BodyExaminationPanel markers={markers} readOnly />
+                  <BodyExaminationPanel
+                    markers={markers}
+                    readOnly
+                    bodyType={
+                      ((participant as unknown as Record<string, unknown>)?.biological_sex as "male" | "female" | "unspecified" | undefined) ?? "unspecified"
+                    }
+                  />
                 </CardContent>
               </Card>
             );

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { BodyMap, BodyMarker, BodyView, MarkerColor, MARKER_COLORS, getZoneLabel, ALL_ZONES } from "@/components/BodyMap";
+import { BodyMap, BodyMarker, BodyView, BodyType, MarkerColor, MARKER_COLORS, getZoneLabel, ALL_ZONES } from "@/components/BodyMap";
 import { cn } from "@/lib/utils";
 import { X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ interface BodyExaminationPanelProps {
   onChange?: (markers: BodyMarker[]) => void;
   readOnly?: boolean;
   className?: string;
+  bodyType?: BodyType;
 }
 
 interface PopoverAnchor {
@@ -22,6 +23,7 @@ export function BodyExaminationPanel({
   onChange,
   readOnly = false,
   className,
+  bodyType = "unspecified",
 }: BodyExaminationPanelProps) {
   const [view, setView] = useState<BodyView>("front");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
@@ -263,6 +265,7 @@ export function BodyExaminationPanel({
             readOnly={readOnly}
             className="w-full"
             svgRef={svgRef}
+            bodyType={bodyType}
           />
         </div>
 

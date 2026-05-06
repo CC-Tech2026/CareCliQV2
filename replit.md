@@ -28,6 +28,16 @@ The Replit preview proxy (`localhost:80`) routes to the `api-server` (port 8080)
 
 The frontend Vite dev server (port 18130) also proxies `/api` directly to port 8000 for local development.
 
+## Gendered Body Avatars (Task #45)
+
+The Physical Examination body map now renders sex-specific silhouettes:
+- **`biological_sex`** field added to `patients` table (`"male" | "female" | "unspecified"`), `ParticipantCreate` / `ParticipantUpdate` schemas, and participant Add/Edit forms
+- **`BodyMap.tsx`** exports `BodyType` and three distinct SVG silhouette groups: `SilhouetteMale` (broader shoulders, wider chest, narrower hips), `SilhouetteFemale` (narrower shoulders, breast contours, wider hips), `SilhouetteNeutral`
+- **`BodyExaminationPanel.tsx`** accepts `bodyType?: BodyType` and passes it through to BodyMap
+- **Session live/detail pages** read `participant.biological_sex` and pass it as `bodyType`
+- **PDF export** draws the gendered silhouette on the canvas body diagram using the same three branches
+- **DB migration**: idempotent `ALTER TABLE patients ADD COLUMN biological_sex TEXT DEFAULT 'unspecified'` added to `backend/supabase_setup.sql` — run this in Supabase SQL editor to activate
+
 ## Input Intelligence Layer
 
 A system-wide voice + AI input component available on all clinical text fields.

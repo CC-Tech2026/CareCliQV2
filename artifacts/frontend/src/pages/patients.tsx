@@ -52,6 +52,7 @@ const participantSchema = z.object({
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional(),
   primary_disability: z.string().optional(),
+  biological_sex: z.string().optional(),
   plan_status: z.string().min(1, "Plan status is required"),
   plan_start_date: z.string().optional(),
   plan_end_date: z.string().optional(),
@@ -164,6 +165,24 @@ function ParticipantForm({
               <FormMessage />
             </FormItem>
           )} />
+          <FormField control={form.control} name="biological_sex" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Biological Sex</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
+                <FormControl>
+                  <SelectTrigger data-testid="select-biological-sex">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="unspecified">Prefer not to say</SelectItem>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )} />
           <FormField control={form.control} name="plan_status" render={({ field }) => (
             <FormItem>
               <FormLabel>Plan Status</FormLabel>
@@ -236,8 +255,8 @@ export default function Patients() {
     resolver: zodResolver(participantSchema),
     defaultValues: {
       full_name: "", ndis_number: "", date_of_birth: "", email: "",
-      phone: "", primary_disability: "", plan_status: "active",
-      plan_start_date: "", plan_end_date: "", total_budget: 0,
+      phone: "", primary_disability: "", biological_sex: "unspecified",
+      plan_status: "active", plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
   });
 
@@ -251,6 +270,7 @@ export default function Patients() {
     if (data.email) payload.email = data.email;
     if (data.phone) payload.phone = data.phone;
     if (data.primary_disability) payload.primary_disability = data.primary_disability;
+    if (data.biological_sex) payload.biological_sex = data.biological_sex;
     if (data.plan_start_date) payload.plan_start_date = data.plan_start_date;
     if (data.plan_end_date) payload.plan_end_date = data.plan_end_date;
     if (data.total_budget !== undefined) payload.total_budget = data.total_budget;
@@ -413,6 +433,7 @@ function EditParticipantDialog({
       email: String(participant.email ?? ""),
       phone: String(participant.phone ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
+      biological_sex: String(participant.biological_sex ?? "unspecified"),
       plan_status: String(participant.plan_status ?? "active"),
       plan_start_date: participant.plan_start_date
         ? String(participant.plan_start_date).slice(0, 10)
@@ -465,6 +486,7 @@ function EditParticipantDialog({
           email: String(participant.email ?? ""),
           phone: String(participant.phone ?? ""),
           primary_disability: String(participant.primary_disability ?? ""),
+          biological_sex: String(participant.biological_sex ?? "unspecified"),
           plan_status: String(participant.plan_status ?? "active"),
           plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
           plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
