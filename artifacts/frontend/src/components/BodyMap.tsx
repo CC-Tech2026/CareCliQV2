@@ -80,6 +80,11 @@ export function getZoneLabel(zoneId: string): string {
   return ALL_ZONES.find((z) => z.id === zoneId)?.label ?? zoneId.replace(/_/g, " ");
 }
 
+/** Map from zone ID to its SVG centroid [x, y] — used by PDF export */
+export const ZONE_CENTROIDS: Record<string, [number, number]> = Object.fromEntries(
+  ALL_ZONES.map((z) => [z.id, z.centroid]),
+);
+
 function ZoneShapeEl({
   shape,
   ...svgProps
@@ -111,9 +116,11 @@ interface BodyMapProps {
   view: BodyView;
   markers: BodyMarker[];
   selectedZone: string | null;
-  onZoneClick?: (zoneId: string) => void;
+  /** Called with zone id AND the zone's SVG-space centroid [x, y] */
+  onZoneClick?: (zoneId: string, centroid: [number, number]) => void;
   readOnly?: boolean;
   className?: string;
+  svgRef?: React.RefObject<SVGSVGElement | null>;
 }
 
 export function BodyMap({
@@ -123,6 +130,7 @@ export function BodyMap({
   onZoneClick,
   readOnly = false,
   className,
+  svgRef,
 }: BodyMapProps) {
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
   const zones = view === "front" ? FRONT_ZONES : BACK_ZONES;
@@ -135,6 +143,7 @@ export function BodyMap({
   return (
     <div className={cn("relative select-none", className)}>
       <svg
+        ref={svgRef}
         viewBox="0 0 200 380"
         className="w-full max-w-[200px] mx-auto block"
         style={{ height: "auto" }}
@@ -195,7 +204,7 @@ export function BodyMap({
               stroke={stroke}
               strokeWidth={strokeWidth}
               style={{ cursor: readOnly ? "default" : "pointer", transition: "fill 0.12s, stroke 0.12s" }}
-              onClick={() => !readOnly && onZoneClick?.(zone.id)}
+              onClick={() => !readOnly && onZoneClick?.(zone.id, zone.centroid)}
               onMouseEnter={() => setHoveredZone(zone.id)}
               onMouseLeave={() => setHoveredZone(null)}
             />
@@ -213,7 +222,7 @@ export function BodyMap({
             <g
               key={marker.zone}
               style={{ cursor: readOnly ? "default" : "pointer" }}
-              onClick={() => !readOnly && onZoneClick?.(marker.zone)}
+              onClick={() => !readOnly && onZoneClick?.(marker.zone, zone.centroid)}
               onMouseEnter={() => setHoveredZone(marker.zone)}
               onMouseLeave={() => setHoveredZone(null)}
             >

@@ -569,39 +569,114 @@ export function appendSessionToPDF(
   if (bodyMarkers.length > 0) {
     writeSectionHeading("Physical Examination");
 
-    const COLOR_LABELS: Record<string, string> = {
-      red: "Pain",
-      yellow: "Discomfort",
-      blue: "Treatment Area",
-      green: "Resolved",
+    // --- Mini body diagram (canvas → PNG) ---
+    const COLOR_HEX: Record<string, string> = {
+      red: "#ef4444", yellow: "#f59e0b", blue: "#3b82f6", green: "#10b981",
+    };
+    const CENTROIDS: Record<string, [number, number]> = {
+      head: [100,38], neck: [100,72], left_shoulder: [60,96], right_shoulder: [140,96],
+      chest: [100,106], abdomen: [100,156], left_hip: [87,198], right_hip: [113,198],
+      left_upper_arm: [49,113], right_upper_arm: [152,113],
+      left_forearm: [42,168], right_forearm: [158,168],
+      left_hand: [41,210], right_hand: [159,210],
+      left_thigh: [87,249], right_thigh: [113,249],
+      left_shin: [87,313], right_shin: [113,313],
+      left_foot: [85,357], right_foot: [113,357],
+      head_back: [100,38], neck_back: [100,72],
+      left_shoulder_back: [60,96], right_shoulder_back: [140,96],
+      upper_back: [100,106], lower_back: [100,156],
+      left_gluteal: [87,198], right_gluteal: [113,198],
+      left_upper_arm_back: [49,113], right_upper_arm_back: [152,113],
+      left_forearm_back: [42,168], right_forearm_back: [158,168],
+      left_hand_back: [41,210], right_hand_back: [159,210],
+      left_thigh_back: [87,249], right_thigh_back: [113,249],
+      left_calf: [87,313], right_calf: [113,313],
+      left_foot_back: [85,357], right_foot_back: [113,357],
     };
 
+    const canvas = document.createElement("canvas");
+    canvas.width = 200;
+    canvas.height = 380;
+    const ctx = canvas.getContext("2d")!;
+
+    // White background
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(0, 0, 200, 380);
+
+    // Body silhouette
+    ctx.fillStyle = "#e2e8f0";
+    const fillEllipse = (cx: number, cy: number, rx: number, ry: number) => {
+      ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    };
+    const fillRoundRect = (x: number, y: number, w: number, h: number, r = 4) => {
+      ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+    };
+    fillEllipse(100, 38, 26, 28);
+    fillRoundRect(91, 64, 18, 17, 3);
+    fillEllipse(60, 96, 20, 15); fillEllipse(140, 96, 20, 15);
+    fillRoundRect(71, 78, 58, 56, 5);
+    fillRoundRect(73, 133, 54, 48, 4);
+    fillRoundRect(73, 180, 54, 40, 4);
+    fillRoundRect(37, 83, 23, 59, 9); fillRoundRect(140, 83, 23, 59, 9);
+    fillRoundRect(32, 140, 20, 56, 9); fillRoundRect(148, 140, 20, 56, 9);
+    fillEllipse(41, 210, 13, 10); fillEllipse(159, 210, 13, 10);
+    fillRoundRect(75, 219, 24, 66, 7); fillRoundRect(101, 219, 24, 66, 7);
+    fillRoundRect(77, 283, 20, 66, 7); fillRoundRect(103, 283, 20, 66, 7);
+    fillEllipse(86, 358, 17, 10); fillEllipse(113, 358, 17, 10);
+
+    // Marker dots
+    for (const m of bodyMarkers) {
+      const c = CENTROIDS[m.zone];
+      if (!c) continue;
+      ctx.beginPath();
+      ctx.arc(c[0], c[1], 8, 0, Math.PI * 2);
+      ctx.fillStyle = COLOR_HEX[m.color] ?? "#6b7280";
+      ctx.fill();
+      ctx.strokeStyle = "white";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    const imgData = canvas.toDataURL("image/png");
+    // Embed at 50mm wide (preserving 200:380 ratio → height = 95mm) beside the table
+    const imgWidthMm = 45;
+    const imgHeightMm = (380 / 200) * imgWidthMm;
+    checkPageBreak(imgHeightMm + 10);
+    pdf.addImage(imgData, "PNG", margin, y, imgWidthMm, imgHeightMm);
+
+    // --- Findings table beside the diagram ---
+    const COLOR_LABELS: Record<string, string> = {
+      red: "Pain", yellow: "Discomfort", blue: "Treatment Area", green: "Resolved",
+    };
     const markerRows: [string, string, string][] = bodyMarkers.map((m) => [
       m.zone.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       COLOR_LABELS[m.color] ?? m.color,
       m.note?.trim() || "—",
     ]);
 
+    const tableX = margin + imgWidthMm + 4;
+    const tableW = contentW - imgWidthMm - 4;
+
     autoTable(pdf, {
       startY: y,
-      margin: { left: margin, right: margin },
-      tableWidth: contentW,
-      head: [["Zone", "Finding Type", "Clinical Note"]],
+      margin: { left: tableX, right: margin },
+      tableWidth: tableW,
+      head: [["Zone", "Finding", "Note"]],
       body: markerRows,
       headStyles: {
         fillColor: BRAND_DARK,
         textColor: "#ffffff",
-        fontSize: 8,
+        fontSize: 7,
         fontStyle: "bold",
-        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+        cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
       },
       columnStyles: {
-        0: { cellWidth: 50, fontStyle: "bold", textColor: SLATE_700, fontSize: 9 },
-        1: { cellWidth: 38, textColor: SLATE_700, fontSize: 9 },
-        2: { textColor: SLATE_900, fontSize: 9 },
+        0: { cellWidth: 32, fontStyle: "bold", textColor: SLATE_700, fontSize: 8 },
+        1: { cellWidth: 26, textColor: SLATE_700, fontSize: 8 },
+        2: { textColor: SLATE_900, fontSize: 8 },
       },
       styles: {
-        cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
+        cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
         lineColor: RULE_COLOR,
         lineWidth: 0.2,
         overflow: "linebreak",
@@ -611,7 +686,8 @@ export function appendSessionToPDF(
       pageBreak: "avoid",
     });
 
-    y = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    const tableBottom = (pdf as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    y = Math.max(y + imgHeightMm, tableBottom) + 8;
   }
 
   // ── Practitioner Sign-Off ─────────────────────────────────────────────────

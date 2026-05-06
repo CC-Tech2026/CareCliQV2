@@ -395,6 +395,8 @@ export default function SessionLive() {
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
+  const bodyMarkersInitRef = useRef(false);
+  const bodyMarkersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [translationView, setTranslationView] =
     useState<TranslationView>("original");
 
@@ -434,6 +436,43 @@ export default function SessionLive() {
   // Session start reminder
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
+
+  // Initialise body markers from saved session data (once, when session first loads)
+  useEffect(() => {
+    if (!session || bodyMarkersInitRef.current) return;
+    bodyMarkersInitRef.current = true;
+    const raw = (session as unknown as { body_markers?: unknown }).body_markers;
+    if (Array.isArray(raw) && raw.length > 0) {
+      setBodyMarkers(raw as BodyMarker[]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  // Debounced auto-save whenever markers change (skip on initial mount)
+  const bodyMarkersAutoSaveSkipRef = useRef(true);
+  useEffect(() => {
+    if (bodyMarkersAutoSaveSkipRef.current) {
+      bodyMarkersAutoSaveSkipRef.current = false;
+      return;
+    }
+    if (!id) return;
+    if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current);
+    bodyMarkersDebounceRef.current = setTimeout(async () => {
+      try {
+        await fetch(`/api/sessions/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body_markers: bodyMarkers }),
+        });
+      } catch {
+        // silent — markers are also sent in final Approve & Save
+      }
+    }, 1500);
+    return () => {
+      if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyMarkers]);
 
   // Populate goals from session.goals_addressed, resolved against participant's goal titles
   useEffect(() => {
@@ -686,7 +725,7 @@ export default function SessionLive() {
         // Also keep legacy structured_notes dict for backward-compat (ai_insights merge)
         structured_notes: structuredNotes,
         activity_log: activityLog,
-        body_markers: bodyMarkers.length > 0 ? bodyMarkers : undefined,
+        body_markers: bodyMarkers,
       };
       // Remove undefined values
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);

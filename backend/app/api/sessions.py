@@ -387,6 +387,7 @@ async def get_session_audit(session_id: str):
             "has_activity_log": bool(activity_log),
         },
         "photo_urls": photos if isinstance(photos, list) else [],
+        "body_markers": session.get("body_markers") or [],
         "compliance": {
             "score": det_score,
             "blocking": det_blocking,
