@@ -129,10 +129,10 @@ export default function Sessions() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Clinical Sessions
           </h1>
-          <p className="text-slate-500 dark:text-slate-400">
+          <p className="text-muted-foreground">
             Manage your clinical notes and compliance records.
           </p>
         </div>
@@ -143,15 +143,15 @@ export default function Sessions() {
         </Link>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+      <div className="bg-card border rounded-xl shadow-sm">
         {/* Filter bar */}
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3">
+        <div className="p-4 border-b flex flex-col gap-3">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search participant or session type..."
-                className="pl-9 bg-slate-50 dark:bg-slate-950"
+                className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -173,21 +173,21 @@ export default function Sessions() {
           {/* Date range filter */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
-              <span className="text-sm text-slate-500 whitespace-nowrap">Date range:</span>
+              <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Date range:</span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Input
                 type="date"
-                className="w-36 bg-slate-50 dark:bg-slate-950 text-sm"
+                className="w-36 text-sm"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
                 aria-label="From date"
               />
-              <span className="text-slate-400 text-sm">to</span>
+              <span className="text-muted-foreground text-sm">to</span>
               <Input
                 type="date"
-                className="w-36 bg-slate-50 dark:bg-slate-950 text-sm"
+                className="w-36 text-sm"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
                 aria-label="To date"
@@ -196,7 +196,7 @@ export default function Sessions() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 px-2 text-slate-500"
+                  className="h-8 px-2 text-muted-foreground"
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
                 >
                   <X className="h-3.5 w-3.5 mr-1" /> Clear
@@ -208,13 +208,13 @@ export default function Sessions() {
 
         {/* Bulk action bar */}
         {someSelected && (
-          <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-indigo-50 dark:bg-indigo-950/30 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="px-4 py-2.5 border-b bg-primary/5 flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+              <span className="text-sm font-medium text-primary">
                 {selectedIds.size} session{selectedIds.size !== 1 ? "s" : ""} selected
               </span>
               {exportProgress && (
-                <span className="text-xs text-indigo-500">
+                <span className="text-xs text-primary/70">
                   — generating {exportProgress.done}/{exportProgress.total}...
                 </span>
               )}
@@ -223,7 +223,7 @@ export default function Sessions() {
               <Button
                 size="sm"
                 variant="outline"
-                className="gap-1.5 text-indigo-700 border-indigo-300 hover:bg-indigo-100 font-medium"
+                className="gap-1.5 text-primary border-primary/30 hover:bg-primary/10 font-medium"
                 onClick={handleBulkExportPDF}
                 disabled={isBulkExporting}
                 data-testid="button-bulk-export-pdf"
@@ -238,7 +238,7 @@ export default function Sessions() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-slate-500 hover:text-slate-700"
+                className="text-muted-foreground hover:text-foreground"
                 onClick={clearSelection}
               >
                 <X className="h-3.5 w-3.5 mr-1" />
@@ -248,17 +248,17 @@ export default function Sessions() {
           </div>
         )}
 
-        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+        <div className="divide-y divide-border">
           {/* Select-all header row */}
           {!isLoading && filteredSessions.length > 0 && (
-            <div className="px-4 py-2 flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50">
+            <div className="px-4 py-2 flex items-center gap-3 bg-muted/40">
               <Checkbox
                 checked={allSelected ? true : someSelected ? "indeterminate" : false}
                 onCheckedChange={toggleSelectAll}
                 aria-label="Select all sessions"
                 data-testid="checkbox-select-all"
               />
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-muted-foreground font-medium">
                 {allSelected ? "Deselect all" : `Select all ${filteredSessions.length} session${filteredSessions.length !== 1 ? "s" : ""}`}
               </span>
             </div>
@@ -277,9 +277,9 @@ export default function Sessions() {
                 </div>
               ))
           ) : filteredSessions.length === 0 ? (
-            <div className="text-center py-12 text-slate-500">
-              <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20 text-slate-400" />
-              <p className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">
+            <div className="text-center py-12 text-muted-foreground">
+              <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p className="text-lg font-medium text-foreground mb-1">
                 No sessions found
               </p>
               <p className="text-sm">
@@ -290,13 +290,10 @@ export default function Sessions() {
             filteredSessions.map((session) => (
               <div
                 key={session.id}
-                className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
-                  selectedIds.has(session.id)
-                    ? "bg-indigo-50/60 dark:bg-indigo-950/20"
-                    : ""
+                className={`p-4 hover:bg-muted/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
+                  selectedIds.has(session.id) ? "bg-primary/5" : ""
                 }`}
               >
-                {/* Checkbox */}
                 <div
                   className="flex items-start sm:items-center gap-3 flex-1 min-w-0 cursor-pointer"
                   onClick={() => navigate(`/sessions/${session.id}`)}
@@ -313,15 +310,15 @@ export default function Sessions() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors truncate">
+                      <span className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
                         {session.participants?.full_name || "Unknown Participant"}
                       </span>
-                      <span className="text-slate-300 dark:text-slate-700">•</span>
-                      <span className="text-sm font-medium text-slate-600 dark:text-slate-400 truncate">
+                      <span className="text-border">•</span>
+                      <span className="text-sm font-medium text-muted-foreground truncate">
                         {session.session_type}
                       </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1.5 whitespace-nowrap">
                         <Calendar className="h-3.5 w-3.5" />
                         {format(parseISO(session.session_date), "MMM d, yyyy")}
@@ -332,8 +329,8 @@ export default function Sessions() {
                       </span>
                       {session.tags && session.tags.length > 0 && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
-                          <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                          <span className="text-border hidden sm:inline">•</span>
+                          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                             {session.tags[0]}{session.tags.length > 1 && ` +${session.tags.length - 1}`}
                           </span>
                         </div>
@@ -344,15 +341,15 @@ export default function Sessions() {
 
                 <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 pl-7 sm:pl-0" onClick={e => e.stopPropagation()}>
                   {session.status === "draft" ? (
-                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Draft</Badge>
+                    <Badge variant="outline" className="bg-secondary text-secondary-foreground border-secondary-foreground/20">Draft</Badge>
                   ) : session.compliance_score ? (
                     <Badge
                       variant="outline"
                       className={`flex items-center gap-1 border-transparent ${
                         session.compliance_score >= 80
-                          ? "bg-emerald-100 text-emerald-800"
+                          ? "bg-[#D1E13D]/25 text-[#3d4700]"
                           : session.compliance_score >= 60
-                            ? "bg-amber-100 text-amber-800"
+                            ? "bg-[#F58BCD]/20 text-[#7a1850]"
                             : "bg-destructive/10 text-destructive"
                       }`}
                     >
@@ -363,14 +360,14 @@ export default function Sessions() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 font-medium"
+                    className="gap-1.5 text-primary border-primary/30 hover:bg-primary/10 hover:border-primary/50 font-medium"
                     onClick={() => navigate(`/sessions/${session.id}/live`)}
                   >
-                    <Play className="h-3.5 w-3.5 fill-indigo-600" />
+                    <Play className="h-3.5 w-3.5 fill-primary" />
                     Start Live
                   </Button>
                   <ChevronRight
-                    className="h-5 w-5 text-slate-300 group-hover:text-primary transition-colors cursor-pointer"
+                    className="h-5 w-5 text-muted-foreground/40 group-hover:text-primary transition-colors cursor-pointer"
                     onClick={() => navigate(`/sessions/${session.id}`)}
                   />
                 </div>
