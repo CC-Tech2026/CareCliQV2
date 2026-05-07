@@ -68,11 +68,11 @@ function LogoMark({ size = 7 }: { size?: number }) {
         "rounded-lg flex items-center justify-center shrink-0",
         `h-${size} w-${size}`,
       )}
-      style={{ background: "#D9F103" }}
+      style={{ background: "#0D0D55" }}
     >
       <ShieldCheck
         className={cn(`h-${size - 3} w-${size - 3}`)}
-        style={{ color: "#0D0D55" }}
+        style={{ color: "#D9F103" }}
         strokeWidth={2.5}
       />
     </div>
