@@ -347,9 +347,9 @@ export default function Sessions() {
                       variant="outline"
                       className={`flex items-center gap-1 border-transparent ${
                         session.compliance_score >= 80
-                          ? "bg-[#D1E13D]/25 text-[#3d4700]"
+                          ? "bg-[#D9F103]/25 text-[#3a4800]"
                           : session.compliance_score >= 60
-                            ? "bg-[#F58BCD]/20 text-[#7a1850]"
+                            ? "bg-[#FA879F]/20 text-[#6b0020]"
                             : "bg-destructive/10 text-destructive"
                       }`}
                     >

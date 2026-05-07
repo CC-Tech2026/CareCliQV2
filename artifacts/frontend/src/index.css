@@ -67,11 +67,32 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   BRAND PALETTE
-   • Blue  #5F79EE  →  hsl(229 81% 65%)   — primary actions, links, rings
-   • Lime  #D1E13D  →  hsl(66  73% 56%)   — sidebar active, success states
-   • Pink  #F58BCD  →  hsl(323 84% 75%)   — accent, badges, chart-3
+   BRAND PALETTE  (from palette image)
+   • Lime  #D9F103  →  hsl(66  97% 48%)   — positive, success, CTA bg
+   • Pink  #FA879F  →  hsl(348 92% 75%)   — sidebar, accent, feminine warmth
+   • Navy  #0D0D55  →  hsl(240 73% 19%)   — headings, active pill, hero bg
+   • Blue  #5271FF  →  hsl(229 100% 66%)  — primary actions, links, ring
    ───────────────────────────────────────────────────────────────────────── */
+
+/* ── Floating-blob animations used in the dashboard hero ── */
+@keyframes blob-drift-a {
+  0%, 100% { transform: translate(0,   0)   scale(1);    }
+  30%       { transform: translate(18px,-22px) scale(1.06); }
+  65%       { transform: translate(-12px,14px) scale(0.94); }
+}
+@keyframes blob-drift-b {
+  0%, 100% { transform: translate(0,   0)   scale(1);    }
+  35%       { transform: translate(-14px,18px) scale(0.95); }
+  70%       { transform: translate(20px,-10px) scale(1.05); }
+}
+@keyframes blob-drift-c {
+  0%, 100% { transform: translate(0,   0);   }
+  50%       { transform: translate(10px,14px); }
+}
+
+.brand-blob-a { animation: blob-drift-a 9s ease-in-out infinite; }
+.brand-blob-b { animation: blob-drift-b 11s ease-in-out infinite; }
+.brand-blob-c { animation: blob-drift-c 7s ease-in-out infinite; }
 
 /* LIGHT MODE */
 :root {
@@ -83,61 +104,61 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Page surface — barely-there lime warmth */
-  --background: 70 30% 97%;
-  --foreground: 229 45% 13%;
+  /* Page surface — clean white */
+  --background: 0 0% 100%;
+  --foreground: 240 73% 19%;   /* navy text */
 
   /* Borders & inputs */
-  --border: 229 20% 88%;
-  --input: 229 20% 88%;
-  --ring: 229 81% 65%;
+  --border: 240 15% 88%;
+  --input: 240 15% 88%;
+  --ring: 229 100% 66%;        /* blue ring */
 
   /* Cards — crisp white */
   --card: 0 0% 100%;
-  --card-foreground: 229 45% 13%;
-  --card-border: 229 18% 90%;
+  --card-foreground: 240 73% 19%;
+  --card-border: 240 12% 90%;
 
-  /* ── Pink sidebar (#F58BCD) ── */
-  --sidebar: 323 84% 75%;
-  --sidebar-foreground: 323 60% 18%;
-  --sidebar-border: 323 55% 65%;
-  --sidebar-primary: 229 55% 15%;          /* navy active pill */
+  /* ── Pink sidebar (#FA879F) ── */
+  --sidebar: 348 92% 75%;
+  --sidebar-foreground: 240 73% 15%;       /* navy text on pink */
+  --sidebar-border: 348 60% 65%;
+  --sidebar-primary: 240 73% 19%;          /* navy active pill */
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 323 70% 68%;           /* slightly deeper pink hover */
-  --sidebar-accent-foreground: 323 60% 12%;
-  --sidebar-ring: 229 81% 65%;
+  --sidebar-accent: 348 75% 68%;           /* deeper pink hover */
+  --sidebar-accent-foreground: 240 73% 12%;
+  --sidebar-ring: 229 100% 66%;
 
   /* Popovers */
   --popover: 0 0% 100%;
-  --popover-foreground: 229 45% 13%;
-  --popover-border: 229 20% 88%;
+  --popover-foreground: 240 73% 19%;
+  --popover-border: 240 15% 88%;
 
-  /* Primary — blue */
-  --primary: 229 81% 65%;
+  /* Primary — blue #5271FF */
+  --primary: 229 100% 66%;
   --primary-foreground: 0 0% 100%;
 
   /* Secondary — soft lime tint */
-  --secondary: 66 55% 91%;
-  --secondary-foreground: 66 60% 20%;
+  --secondary: 66 80% 90%;
+  --secondary-foreground: 66 70% 18%;
 
-  /* Muted — cool blue-grey */
-  --muted: 229 20% 94%;
-  --muted-foreground: 229 22% 46%;
+  /* Muted — cool grey */
+  --muted: 240 12% 94%;
+  --muted-foreground: 240 18% 50%;
 
-  /* Accent — light pink */
-  --accent: 323 70% 94%;
-  --accent-foreground: 323 60% 28%;
+  /* Accent — light pink tint */
+  --accent: 348 70% 93%;
+  --accent-foreground: 348 60% 28%;
 
   /* Destructive — stays red */
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 100%;
 
-  /* Charts — full palette */
-  --chart-1: 229 81% 65%;   /* blue  */
-  --chart-2: 66  73% 50%;   /* lime  */
-  --chart-3: 323 84% 72%;   /* pink  */
-  --chart-4: 280 65% 60%;   /* violet */
-  --chart-5: 25  90% 58%;   /* amber  */
+  /* Charts — brand palette */
+  --chart-1: 229 100% 66%;  /* blue  */
+  --chart-2: 66  97%  48%;  /* lime  */
+  --chart-3: 348 92%  75%;  /* pink  */
+  --chart-4: 280 65%  60%;  /* violet */
+  --chart-5: 25  90%  58%;  /* amber  */
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;

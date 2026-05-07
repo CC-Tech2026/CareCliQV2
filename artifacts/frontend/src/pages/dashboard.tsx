@@ -45,11 +45,12 @@ import {
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
-// Brand colours
+// Brand colours  (#D9F103 lime · #FA879F pink · #0D0D55 navy · #5271FF blue)
 // ---------------------------------------------------------------------------
-const LIME = "#D1E13D";
-const PINK = "#F58BCD";
-const BLUE = "#5F79EE";
+const LIME  = "#D9F103";
+const PINK  = "#FA879F";
+const BLUE  = "#5271FF";
+const NAVY  = "#0D0D55";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,13 +80,13 @@ function getInitials(name: string): string {
 
 function avatarColor(name: string): string {
   const colors = [
-    "bg-[#5F79EE]/15 text-[#3548b8]",
-    "bg-[#D1E13D]/25 text-[#4e5700]",
-    "bg-[#F58BCD]/20 text-[#8f1f61]",
-    "bg-[#5F79EE]/10 text-[#2d45b0]",
-    "bg-[#D1E13D]/20 text-[#3d4500]",
-    "bg-[#F58BCD]/15 text-[#7a1850]",
-    "bg-violet-100 text-violet-700",
+    "bg-[#5271FF]/15 text-[#0D0D55]",
+    "bg-[#D9F103]/25 text-[#3a4800]",
+    "bg-[#FA879F]/20 text-[#6b0020]",
+    "bg-[#5271FF]/10 text-[#0D0D55]",
+    "bg-[#D9F103]/20 text-[#3a4800]",
+    "bg-[#FA879F]/15 text-[#6b0020]",
+    "bg-[#0D0D55]/10 text-[#0D0D55]",
   ];
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % colors.length;
@@ -375,19 +376,77 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* ── Page title with lime accent ── */}
-      <div className="flex items-start gap-4">
+      {/* ── Animated welcome hero ── */}
+      <div
+        className="relative rounded-2xl overflow-hidden"
+        style={{ background: NAVY, minHeight: 160 }}
+      >
+        {/* floating blobs */}
         <div
-          className="mt-1 h-10 w-1.5 rounded-full shrink-0"
-          style={{ background: `linear-gradient(to bottom, ${LIME}, ${PINK})` }}
+          className="brand-blob-a absolute -top-10 -left-10 h-48 w-48 rounded-full opacity-30 blur-2xl pointer-events-none"
+          style={{ background: LIME }}
         />
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {greeting}, Dr. Provider!
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Here's what's happening today.
-          </p>
+        <div
+          className="brand-blob-b absolute -bottom-12 right-10 h-56 w-56 rounded-full opacity-25 blur-3xl pointer-events-none"
+          style={{ background: PINK }}
+        />
+        <div
+          className="brand-blob-c absolute top-4 right-1/3 h-32 w-32 rounded-full opacity-20 blur-2xl pointer-events-none"
+          style={{ background: BLUE }}
+        />
+
+        {/* decorative half-circle top-right (like palette image) */}
+        <div
+          className="absolute -top-16 -right-16 h-52 w-52 rounded-full opacity-15 pointer-events-none"
+          style={{ background: PINK, border: `3px solid ${PINK}` }}
+        />
+        <div
+          className="absolute top-8 right-4 h-20 w-20 rounded-full opacity-20 pointer-events-none"
+          style={{ background: LIME }}
+        />
+
+        {/* content */}
+        <div className="relative z-10 px-7 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
+          <div>
+            <div
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold mb-3 tracking-wide uppercase"
+              style={{ background: `${LIME}22`, color: LIME, border: `1px solid ${LIME}40` }}
+            >
+              <Sparkles className="h-3 w-3" />
+              Today's Overview
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-white leading-tight">
+              {greeting},<br />
+              <span style={{ color: LIME }}>Dr. Provider!</span>
+            </h1>
+            <p className="text-sm mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>
+              Here's everything you need to know right now.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3 shrink-0">
+            <Link href="/sessions/new">
+              <button
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-105 active:scale-95"
+                style={{ background: LIME, color: NAVY }}
+              >
+                <Play className="h-4 w-4 fill-current" />
+                Start Session
+              </button>
+            </Link>
+            <Link href="/sessions">
+              <button
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all hover:bg-white/10 active:scale-95"
+                style={{
+                  border: `1.5px solid rgba(255,255,255,0.25)`,
+                  color: "rgba(255,255,255,0.85)",
+                }}
+              >
+                <Eye className="h-4 w-4" />
+                View Sessions
+              </button>
+            </Link>
+          </div>
         </div>
       </div>
 

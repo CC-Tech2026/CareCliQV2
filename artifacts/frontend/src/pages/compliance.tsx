@@ -53,26 +53,27 @@ interface ExtendedReportItem {
 
 type ClaimStatus = "all" | "compliant" | "at_risk" | "non_compliant" | "draft";
 
-const LIME  = "#D1E13D";
-const PINK  = "#F58BCD";
-const BLUE  = "#5F79EE";
+const LIME  = "#D9F103";
+const PINK  = "#FA879F";
+const BLUE  = "#5271FF";
+const NAVY  = "#0D0D55";
 
 const STATUS_CONFIG: Record<string, { label: string; badgeCls: string; icon: typeof ShieldCheck }> = {
-  compliant:     { label: "Compliant",     badgeCls: "bg-[#D1E13D]/25 text-[#3d4700] border-[#D1E13D]/50", icon: CheckCircle2 },
-  at_risk:       { label: "At Risk",       badgeCls: "bg-[#F58BCD]/20 text-[#7a1850] border-[#F58BCD]/40", icon: AlertTriangle },
+  compliant:     { label: "Compliant",     badgeCls: "bg-[#D9F103]/20 text-[#3a4800] border-[#D9F103]/50", icon: CheckCircle2 },
+  at_risk:       { label: "At Risk",       badgeCls: "bg-[#FA879F]/20 text-[#6b0020] border-[#FA879F]/40", icon: AlertTriangle },
   non_compliant: { label: "Non-Compliant", badgeCls: "bg-red-100 text-red-800 border-red-200",              icon: XCircle },
   draft:         { label: "Draft",         badgeCls: "bg-muted text-muted-foreground border-border",         icon: ShieldAlert },
 };
 
 function getScoreColor(score: number) {
-  if (score >= 85) return "text-[#4e5700]";
-  if (score >= 60) return "text-[#8f1f61]";
+  if (score >= 85) return "text-[#3a4800]";
+  if (score >= 60) return "text-[#6b0020]";
   return "text-red-500";
 }
 
 function getScoreProgressCls(score: number) {
-  if (score >= 85) return `[&>div]:bg-[${LIME}]`;
-  if (score >= 60) return `[&>div]:bg-[${PINK}]`;
+  if (score >= 85) return "[&>div]:bg-[#D9F103]";
+  if (score >= 60) return "[&>div]:bg-[#FA879F]";
   return "[&>div]:bg-red-500";
 }
 
