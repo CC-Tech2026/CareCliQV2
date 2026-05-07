@@ -68,11 +68,11 @@ function LogoMark({ size = 7 }: { size?: number }) {
         "rounded-lg flex items-center justify-center shrink-0",
         `h-${size} w-${size}`,
       )}
-      style={{ background: "#FA879F" }}
+      style={{ background: "#0D0D55" }}
     >
       <ShieldCheck
         className={cn(`h-${size - 3} w-${size - 3}`)}
-        style={{ color: "#0D0D55" }}
+        style={{ color: "#D9F103" }}
         strokeWidth={2.5}
       />
     </div>
@@ -87,7 +87,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen w-full bg-background">
       {/* ── Desktop sidebar ── */}
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border flex-col shrink-0 sticky top-0 h-screen hidden md:flex">
+      <aside
+        className="w-64 border-r border-sidebar-border flex-col shrink-0 sticky top-0 h-screen hidden md:flex"
+        style={{ background: "linear-gradient(160deg, #D9F103 0%, #FA879F 100%)" }}
+      >
         {/* Brand */}
         <div className="p-6 pb-4">
           <div className="flex items-center gap-2.5 mb-8">
@@ -156,9 +159,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       )}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-72 bg-sidebar shadow-2xl flex flex-col transition-transform duration-200 ease-in-out md:hidden",
+          "fixed inset-y-0 left-0 z-50 w-72 shadow-2xl flex flex-col transition-transform duration-200 ease-in-out md:hidden",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
+        style={{ background: "linear-gradient(160deg, #D9F103 0%, #FA879F 100%)" }}
       >
         <div className="p-5 border-b border-sidebar-border flex items-center justify-between">
           <div className="flex items-center gap-2.5">
