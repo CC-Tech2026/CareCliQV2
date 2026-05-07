@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   Search,
+  Sparkles,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,11 +36,11 @@ const navItems = [
 function LogoMark({ size = 34 }: { size?: number }) {
   return (
     <div
-      className="rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+      className="rounded-2xl flex items-center justify-center shrink-0 shadow-[0_12px_30px_rgba(13,13,85,0.18)] ring-1 ring-white/60"
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg, #D9F103 0%, #C8EB00 100%)",
+        background: "linear-gradient(135deg, #D9F103 0%, #FA879F 55%, #5271FF 100%)",
       }}
     >
       <ShieldCheck size={size * 0.6} color="#0D0D55" strokeWidth={2.5} />
@@ -166,22 +167,33 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ──────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* HEADER */}
-        <header className="h-24 flex items-center justify-between px-8">
-          <div className="flex-1 max-w-md relative">
+        <header className="h-24 flex items-center justify-between px-8 gap-6">
+          <div className="flex flex-1 max-w-xl items-center gap-3 rounded-2xl border border-[#FFD6EC] bg-white/75 px-4 py-2.5 shadow-sm backdrop-blur-sm">
             <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-[#0D0D55]/30"
+              className="text-[#0D0D55]/30 shrink-0"
               size={18}
             />
             <input
               type="text"
               placeholder="Search participants..."
-              className="w-full bg-white/60 border border-[#FFD6EC] rounded-2xl py-2.5 pl-12 pr-4 focus:ring-2 focus:ring-[#FF99DC]/20 transition-all outline-none text-sm"
+              className="w-full bg-transparent outline-none text-sm placeholder:text-[#0D0D55]/35"
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="rounded-xl">
-              <Bell size={20} />
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-2xl border border-[#FFD6EC] bg-white/70 text-[#0D0D55] hover:bg-[#FF99DC]/15 hover:text-[#0D0D55] shadow-sm"
+            >
+              <Bell size={18} />
+            </Button>
+            <Button
+              variant="ghost"
+              className="hidden sm:inline-flex rounded-2xl border border-[#FFD6EC] bg-white/70 text-[#0D0D55] hover:bg-[#FF99DC]/15 hover:text-[#0D0D55] shadow-sm gap-2"
+            >
+              <Sparkles size={16} />
+              Quick Actions
             </Button>
           </div>
         </header>
