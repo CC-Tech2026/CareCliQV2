@@ -47,10 +47,10 @@ import {
 // ---------------------------------------------------------------------------
 // Brand colours  (#D9F103 lime · #FA879F pink · #0D0D55 navy · #5271FF blue)
 // ---------------------------------------------------------------------------
-const LIME  = "#D9F103";
-const PINK  = "#FA879F";
-const BLUE  = "#5271FF";
-const NAVY  = "#0D0D55";
+const LIME = "#D9F103";
+const PINK = "#FA879F";
+const BLUE = "#5271FF";
+const NAVY = "#0D0D55";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -408,18 +408,14 @@ export default function Dashboard() {
         {/* content */}
         <div className="relative z-10 px-7 py-7 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5">
           <div>
-            <div
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold mb-3 tracking-wide uppercase"
-              style={{ background: `${LIME}22`, color: LIME, border: `1px solid ${LIME}40` }}
-            >
-              <Sparkles className="h-3 w-3" />
-              Today's Overview
-            </div>
             <h1 className="text-3xl font-bold tracking-tight text-white leading-tight">
               {greeting},<br />
               <span style={{ color: LIME }}>Dr. Provider!</span>
             </h1>
-            <p className="text-sm mt-2" style={{ color: "rgba(255,255,255,0.55)" }}>
+            <p
+              className="text-sm mt-2"
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
               Here's everything you need to know right now.
             </p>
           </div>
