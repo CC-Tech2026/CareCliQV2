@@ -146,6 +146,8 @@ export interface Session {
   participant_response?: string | null;
   /** Progress made toward NDIS goals during the session */
   progress_toward_goals?: string | null;
+  /** Whether restrictive practice language was detected in this session */
+  restrictive_practice_detected?: boolean | null;
   participants?: SessionParticipants;
 }
 
@@ -260,8 +262,6 @@ export interface ProviderInfo {
   abn?: string | null;
 }
 
-export interface PractitionerSettingsResponse extends PractitionerSettings {}
-
 export interface SessionDefaults {
   defaultDuration?: number | null;
   autoStartTimer?: boolean | null;
@@ -284,12 +284,12 @@ export interface PractitionerSettings {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
-  /** Selected cartoon avatar identifier */
-  avatarId?: string | null;
   provider?: ProviderInfo | null;
   sessionDefaults?: SessionDefaults | null;
   compliance?: ComplianceSettings | null;
   updated_at?: string | null;
+  /** Avatar identifier for the practitioner profile picture */
+  avatarId?: string | null;
 }
 
 export interface SavePractitionerSettingsBody {
@@ -299,11 +299,11 @@ export interface SavePractitionerSettingsBody {
   name?: string | null;
   /** Practitioner credentials or title */
   credentials?: string | null;
-  /** Selected cartoon avatar identifier */
-  avatarId?: string | null;
   provider?: ProviderInfo | null;
   sessionDefaults?: SessionDefaults | null;
   compliance?: ComplianceSettings | null;
+  /** Avatar identifier for the practitioner profile picture */
+  avatarId?: string | null;
 }
 
 export type GetSessionsParams = {

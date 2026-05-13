@@ -694,6 +694,10 @@ components:
           type: string
           nullable: true
           description: Progress made toward NDIS goals during the session
+        restrictive_practice_detected:
+          type: boolean
+          nullable: true
+          description: Whether restrictive practice language was detected in this session
         participants:
           nullable: true
           type: object
@@ -987,6 +991,10 @@ components:
         updated_at:
           type: string
           nullable: true
+        avatarId:
+          type: string
+          nullable: true
+          description: Avatar identifier for the practitioner profile picture
       required: [id]
 
     SavePractitionerSettingsBody:
@@ -1013,3 +1021,7 @@ components:
         compliance:
           $ref: "#/components/schemas/ComplianceSettings"
           nullable: true
+        avatarId:
+          type: string
+          nullable: true
+          description: Avatar identifier for the practitioner profile picture

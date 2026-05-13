@@ -46,10 +46,12 @@ import {
   BookOpen,
   ShieldCheck,
   Radio,
+  ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 import { translateToEnglish } from "@/services/translationService";
 import {
   checkStructuredCompliance,
@@ -58,6 +60,12 @@ import {
 } from "@/services/ComplianceService";
 import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
+import {
+  detectRestrictivePracticesAll,
+  type RPFlag,
+  RP_CATEGORY_LABELS,
+} from "@/lib/rp-detector";
+import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -433,6 +441,51 @@ export default function SessionLive() {
   // Restart confirmation modal
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
+  // Body map mobile collapse state (collapsed by default on mobile)
+  const [bodyMapOpen, setBodyMapOpen] = useState(false);
+
+  // RP detection state
+  const [rpFlags, setRpFlags] = useState<RPFlag[]>([]);
+  const [showRpBottomSheet, setShowRpBottomSheet] = useState(false);
+  const [rpAcknowledged, setRpAcknowledged] = useState(false);
+  const rpDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Post-save compliance result state
+  interface PostSaveResult {
+    score: number;
+    status: string;
+    rules?: Array<{ label: string; pass: boolean; note?: string }>;
+    rpFlags?: RPFlag[];
+  }
+  const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
+
+  // Debounced RP detection — runs on any note text change
+  useEffect(() => {
+    if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
+    rpDebounceRef.current = setTimeout(() => {
+      const flags = detectRestrictivePracticesAll([
+        structuredNotes.activitiesPerformed,
+        structuredNotes.outcomes,
+        structuredNotes.participantResponse,
+        structuredNotes.progressTowardGoals,
+        editableNotes,
+        recordingText,
+      ]);
+      setRpFlags(flags);
+    }, 600);
+    return () => {
+      if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    structuredNotes.activitiesPerformed,
+    structuredNotes.outcomes,
+    structuredNotes.participantResponse,
+    structuredNotes.progressTowardGoals,
+    editableNotes,
+    recordingText,
+  ]);
+
   // Session start reminder
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
@@ -659,8 +712,9 @@ export default function SessionLive() {
     setSummaryLoading(false);
   }, [session, activities, voiceNotes, goals, images, elapsed, translationView, isRecording]);
 
-  // Approve & save — two-step pipeline
+  // Approve & save — two-step pipeline (with RP gate)
   const handleApproveAndSave = useCallback(async () => {
+    setShowRpBottomSheet(false);
     if (!id) { navigate("/sessions"); return; }
 
     // Settings-based compliance gate
@@ -737,24 +791,75 @@ export default function SessionLive() {
       });
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
 
-      // Step 2: Fire AI analysis as best-effort (non-critical for audit completeness)
-      fetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" }).catch((err) => {
-        console.error("AI analysis failed (non-critical):", err);
-      });
+      // Step 2: Await AI analysis (best-effort, 12s timeout) then show ComplianceResultPanel
+      const localResult: PostSaveResult = {
+        score: liveCompliance.score,
+        status: liveCompliance.score >= 85 ? "Compliant" : liveCompliance.score >= 60 ? "At Risk" : "Non-Compliant",
+        rules: liveCompliance.checks.map((c) => ({ label: c.label, pass: c.pass, note: c.note })),
+        rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
+      };
+
+      try {
+        const aiRes = await Promise.race<Response | null>([
+          fetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+        ]);
+        if (aiRes) {
+          const aiData = await aiRes.json().catch(() => ({}));
+          if (typeof aiData?.compliance?.score === "number") {
+            localResult.score = aiData.compliance.score;
+            localResult.status = aiData.compliance.assessment ?? localResult.status;
+          }
+          const rules = aiData?.session?.ai_insights?.rules_result;
+          if (Array.isArray(rules)) localResult.rules = rules;
+          const rpFlagsFromAI = aiData?.session?.ai_insights?.rp_flags;
+          if (Array.isArray(rpFlagsFromAI) && rpFlagsFromAI.length > 0) {
+            localResult.rpFlags = rpFlagsFromAI.map((f: Record<string, unknown>) => ({
+              category: String(f.category ?? ""),
+              phrase: String(f.phrase ?? ""),
+              index: Number(f.index ?? 0),
+              suggested_rewrite: (f.suggested_rewrite as string | undefined) ?? (f.suggestion as string | undefined),
+            }));
+          }
+        }
+      } catch {
+        // timeout/error — use local compliance data
+      }
 
       setIsSaving(false);
-      setShowSummary(false);
+      setPostSaveResult(localResult);
       toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
-      navigate(`/sessions/${id}`);
     } catch (err) {
       setIsSaving(false);
       console.error("session save failed", err);
       toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
     }
-  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, settings, toast, navigate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, settings, rpFlags, toast, navigate]);
+
+  const handleInitiateApprove = useCallback(() => {
+    // Synchronous scan at click time — catches RP typed within debounce window
+    const freshFlags = detectRestrictivePracticesAll([
+      editableNotes,
+      structuredNotes.activitiesPerformed,
+      structuredNotes.outcomes,
+      structuredNotes.participantResponse,
+      structuredNotes.progressTowardGoals,
+      ...voiceNotes.map((n) => n.text),
+    ]);
+    const flagsToUse = freshFlags.length > 0 ? freshFlags : rpFlags;
+    if (flagsToUse.length > 0) {
+      if (freshFlags.length > 0) setRpFlags(freshFlags);
+      setRpAcknowledged(false);
+      setShowRpBottomSheet(true);
+    } else {
+      void handleApproveAndSave();
+    }
+  }, [rpFlags, editableNotes, structuredNotes, voiceNotes, handleApproveAndSave]);
 
   // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {
+    setPostSaveResult(null);
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     setElapsed(0);
@@ -1150,10 +1255,10 @@ export default function SessionLive() {
       )}
 
       {/* ── Main Grid ── */}
-      <div className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 py-4 lg:py-6 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
 
-        {/* Left column: Activity Log + Goals + Insights */}
-        <div className="space-y-6 md:col-span-1">
+        {/* Left column: Activity Log + Goals + Insights — pushed below notes on mobile */}
+        <div className="order-2 lg:order-1 space-y-4 lg:space-y-6 lg:col-span-1">
 
           {/* Activity Log (was: Quick Actions) */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
@@ -1270,8 +1375,8 @@ export default function SessionLive() {
           </div>
         </div>
 
-        {/* Right column: Dictation + Audit log + Evidence */}
-        <div className="md:col-span-2 space-y-6">
+        {/* Right column: Dictation + Audit log + Evidence — first on mobile */}
+        <div className="order-1 lg:order-2 lg:col-span-2 space-y-4 lg:space-y-6">
 
           {/* Clinical Dictation */}
           <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
@@ -1295,6 +1400,19 @@ export default function SessionLive() {
                 )}
               </button>
             </div>
+
+            {/* RP Warning Banner — live detection */}
+            {rpFlags.length > 0 && (
+              <div className="animate-in slide-in-from-top-2 duration-200 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mb-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                <div>
+                  <span className="font-semibold">Possible restrictive practice language detected</span>
+                  <span className="text-xs text-red-600 ml-1">
+                    ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""} — first: {RP_CATEGORY_LABELS[rpFlags[0].category] ?? rpFlags[0].category})
+                  </span>
+                </div>
+              </div>
+            )}
 
             {isRecording && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
@@ -1386,7 +1504,7 @@ export default function SessionLive() {
           </div>
 
           {/* Audit log + Evidence */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
 
             {/* Activities — audit-style log */}
             <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
@@ -1484,18 +1602,30 @@ export default function SessionLive() {
             </div>
           </div>
 
-          {/* Body Examination */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <HeartPulse className="h-4 w-4 text-indigo-500" /> Physical Examination
-            </h2>
-            <BodyExaminationPanel
-              markers={bodyMarkers}
-              onChange={setBodyMarkers}
-              bodyType={
-                participant?.biological_sex ?? "unspecified"
-              }
-            />
+          {/* Body Examination — collapsible on mobile */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <button
+              type="button"
+              className="w-full flex items-center justify-between px-5 py-4"
+              onClick={() => setBodyMapOpen((o) => !o)}
+            >
+              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-indigo-500" /> Physical Examination
+              </h2>
+              <span className={cn(
+                "text-slate-400 transition-transform duration-200 lg:hidden",
+                bodyMapOpen ? "rotate-180" : "rotate-0",
+              )}>
+                <ChevronDown className="h-4 w-4" />
+              </span>
+            </button>
+            <div className={cn("px-5 pb-5", bodyMapOpen ? "block" : "hidden lg:block")}>
+              <BodyExaminationPanel
+                markers={bodyMarkers}
+                onChange={setBodyMarkers}
+                bodyType={participant?.biological_sex ?? "unspecified"}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1516,7 +1646,23 @@ export default function SessionLive() {
             </DialogDescription>
           </div>
 
-          {summaryLoading ? (
+          {postSaveResult ? (
+            <div className="p-6 space-y-5">
+              <ComplianceResultPanel
+                score={postSaveResult.score}
+                status={postSaveResult.status}
+                rules={postSaveResult.rules}
+                rpFlags={postSaveResult.rpFlags}
+              />
+              <Button
+                onClick={() => navigate(`/sessions/${id}`)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 min-h-[44px]"
+              >
+                <FileText className="h-4 w-4" />
+                View Session Record
+              </Button>
+            </div>
+          ) : summaryLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
             </div>
@@ -1549,6 +1695,27 @@ export default function SessionLive() {
                   <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Compliance</p>
                 </div>
               </div>
+
+              {/* RP Warning in modal */}
+              {rpFlags.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-700">Possible restrictive practice language detected</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {rpFlags.map((f, i) => (
+                        <li key={i} className="text-xs text-red-600">
+                          <span className="font-medium">{RP_CATEGORY_LABELS[f.category] ?? f.category}:</span>{" "}
+                          <span className="italic">"{f.phrase}"</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-red-600 mt-1.5">
+                      You will be asked to review and acknowledge this before saving.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Structured Case Notes */}
               <div className="space-y-3">
@@ -1596,9 +1763,9 @@ export default function SessionLive() {
                       onChange={(val) =>
                         setStructuredNotes((prev) => ({ ...prev, [key]: val }))
                       }
-                      rows={2}
+                      rows={4}
                       placeholder={placeholder}
-                      className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed"
+                      className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed min-h-[120px]"
                     />
                   </div>
                 ))}
@@ -1661,7 +1828,7 @@ export default function SessionLive() {
                   onChange={(v) => { hasManuallyEditedNotesRef.current = true; setEditableNotes(v); }}
                   rows={6}
                   placeholder="Combined clinical record will appear here as you fill the fields above..."
-                  className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed"
+                  className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed min-h-[120px]"
                 />
               </div>
 
@@ -1715,20 +1882,20 @@ export default function SessionLive() {
                 )}
               </div>
 
-              {/* Approval actions — sticky feel */}
-              <div className="flex gap-3 pt-2 border-t border-slate-100">
+              {/* Approval actions — stacked on mobile, side-by-side on sm+ */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-slate-100">
                 <Button
                   variant="outline"
                   onClick={() => { setShowSummary(false); setElapsed(0); setIsActive(false); }}
                   disabled={isSaving}
-                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                  className="flex-1 min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 order-2 sm:order-1"
                 >
                   Discard Session
                 </Button>
                 <Button
-                  onClick={handleApproveAndSave}
+                  onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 disabled:opacity-50"
+                  className="flex-1 min-h-[44px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2"
                   title={liveCompliance.blocking ? "Resolve compliance issues before approving" : undefined}
                 >
                   {isSaving ? (
@@ -1743,6 +1910,67 @@ export default function SessionLive() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* ── RP Acknowledgment Bottom Sheet ── */}
+      {showRpBottomSheet && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowRpBottomSheet(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-2xl shadow-2xl px-5 pt-5 pb-8 animate-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+              <h3 className="text-base font-bold text-slate-900">
+                Restrictive Practice Review Required
+              </h3>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-3">
+              The following restrictive practice language was detected in your notes. Please review carefully before saving.
+            </p>
+
+            <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+              {rpFlags.map((f, i) => (
+                <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
+                  <span className="font-semibold text-red-800">{RP_CATEGORY_LABELS[f.category] ?? f.category}</span>
+                  <span className="text-red-700 ml-2 italic">"{f.phrase}"</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
+              <Checkbox
+                id="rp-acknowledge"
+                checked={rpAcknowledged}
+                onCheckedChange={(v) => setRpAcknowledged(!!v)}
+                className="mt-0.5 shrink-0"
+              />
+              <label htmlFor="rp-acknowledge" className="text-sm text-amber-800 cursor-pointer leading-snug">
+                I have reviewed the compliance warning and confirm that any restrictive practices are covered under an approved Behaviour Support Plan.
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowRpBottomSheet(false)}
+              >
+                Go Back
+              </Button>
+              <Button
+                disabled={!rpAcknowledged || isSaving}
+                onClick={() => void handleApproveAndSave()}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                {isSaving ? "Saving…" : "Confirm & Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Restart Confirmation Modal ── */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>

@@ -332,6 +332,12 @@ export const GetSessionsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Progress made toward NDIS goals during the session"),
+  restrictive_practice_detected: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether restrictive practice language was detected in this session",
+    ),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -406,6 +412,12 @@ export const GetRecentSessionsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Progress made toward NDIS goals during the session"),
+  restrictive_practice_detected: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether restrictive practice language was detected in this session",
+    ),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -483,6 +495,12 @@ export const GetParticipantSessionsResponseItem = zod.object({
     .string()
     .nullish()
     .describe("Progress made toward NDIS goals during the session"),
+  restrictive_practice_detected: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether restrictive practice language was detected in this session",
+    ),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -537,6 +555,12 @@ export const GetSessionResponse = zod.object({
     .string()
     .nullish()
     .describe("Progress made toward NDIS goals during the session"),
+  restrictive_practice_detected: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether restrictive practice language was detected in this session",
+    ),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -614,6 +638,12 @@ export const UpdateSessionResponse = zod.object({
     .string()
     .nullish()
     .describe("Progress made toward NDIS goals during the session"),
+  restrictive_practice_detected: zod
+    .boolean()
+    .nullish()
+    .describe(
+      "Whether restrictive practice language was detected in this session",
+    ),
   participants: zod
     .object({
       full_name: zod.string().optional(),
@@ -666,6 +696,12 @@ export const SaveSessionWithAIResponse = zod.object({
       .string()
       .nullish()
       .describe("Progress made toward NDIS goals during the session"),
+    restrictive_practice_detected: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether restrictive practice language was detected in this session",
+      ),
     participants: zod
       .object({
         full_name: zod.string().optional(),
@@ -824,7 +860,6 @@ export const GetPractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
-  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),
@@ -852,6 +887,10 @@ export const GetPractitionerSettingsResponse = zod.object({
     })
     .nullish(),
   updated_at: zod.string().nullish(),
+  avatarId: zod
+    .string()
+    .nullish()
+    .describe("Avatar identifier for the practitioner profile picture"),
 });
 
 /**
@@ -867,7 +906,6 @@ export const SavePractitionerSettingsBody = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
-  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),
@@ -894,6 +932,10 @@ export const SavePractitionerSettingsBody = zod.object({
         ),
     })
     .nullish(),
+  avatarId: zod
+    .string()
+    .nullish()
+    .describe("Avatar identifier for the practitioner profile picture"),
 });
 
 export const SavePractitionerSettingsResponse = zod.object({
@@ -907,7 +949,6 @@ export const SavePractitionerSettingsResponse = zod.object({
     .string()
     .nullish()
     .describe("Practitioner credentials or title"),
-  avatarId: zod.string().nullish().describe("Selected cartoon avatar identifier"),
   provider: zod
     .object({
       businessName: zod.string().nullish(),
@@ -935,4 +976,8 @@ export const SavePractitionerSettingsResponse = zod.object({
     })
     .nullish(),
   updated_at: zod.string().nullish(),
+  avatarId: zod
+    .string()
+    .nullish()
+    .describe("Avatar identifier for the practitioner profile picture"),
 });

@@ -287,11 +287,12 @@ export default function Sessions() {
               </p>
             </div>
           ) : (
-            filteredSessions.map((session) => (
+            <div className="flex flex-col gap-2 sm:gap-0 p-2 sm:p-0">
+            {filteredSessions.map((session) => (
               <div
                 key={session.id}
-                className={`p-4 hover:bg-muted/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
-                  selectedIds.has(session.id) ? "bg-primary/5" : ""
+                className={`px-4 py-3 min-h-[44px] rounded-xl sm:rounded-none border sm:border-0 sm:border-b shadow-sm sm:shadow-none hover:bg-muted/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 group ${
+                  selectedIds.has(session.id) ? "bg-primary/5" : "bg-card sm:bg-transparent"
                 }`}
               >
                 <div
@@ -321,7 +322,7 @@ export default function Sessions() {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1.5 whitespace-nowrap">
                         <Calendar className="h-3.5 w-3.5" />
-                        {format(parseISO(session.session_date), "MMM d, yyyy")}
+                        {format(parseISO(session.session_date), "MMM d, yyyy · h:mm a")}
                       </span>
                       <span className="flex items-center gap-1.5 whitespace-nowrap">
                         <Clock className="h-3.5 w-3.5" />
@@ -341,22 +342,35 @@ export default function Sessions() {
 
                 <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 pl-7 sm:pl-0" onClick={e => e.stopPropagation()}>
                   {session.status === "draft" ? (
-                    <Badge variant="outline" className="bg-secondary text-secondary-foreground border-secondary-foreground/20">Draft</Badge>
-                  ) : session.compliance_score ? (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300">Draft</Badge>
+                  ) : session.compliance_score != null ? (
                     <Badge
                       variant="outline"
-                      className={`flex items-center gap-1 border-transparent ${
-                        session.compliance_score >= 80
-                          ? "bg-[#D9F103]/25 text-[#3a4800]"
+                      className={`flex items-center gap-1 border ${
+                        session.compliance_score >= 85
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300"
                           : session.compliance_score >= 60
-                            ? "bg-[#FA879F]/20 text-[#6b0020]"
-                            : "bg-destructive/10 text-destructive"
+                            ? "bg-orange-100 text-orange-700 border-orange-300"
+                            : "bg-red-100 text-red-700 border-red-300"
                       }`}
                     >
                       <ShieldCheck className="h-3 w-3" />
-                      {session.compliance_score}%
+                      {session.compliance_score >= 85
+                        ? "Compliant"
+                        : session.compliance_score >= 60
+                          ? "At Risk"
+                          : "Non-Compliant"}{" "}
+                      <span className="opacity-70">· {session.compliance_score}%</span>
                     </Badge>
                   ) : null}
+                  {session.restrictive_practice_detected && (
+                    <Badge
+                      variant="outline"
+                      className="flex items-center gap-1 bg-red-100 text-red-700 border-red-300 font-semibold"
+                    >
+                      ⚠ RP
+                    </Badge>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -372,7 +386,8 @@ export default function Sessions() {
                   />
                 </div>
               </div>
-            ))
+            ))}
+            </div>
           )}
         </div>
       </div>

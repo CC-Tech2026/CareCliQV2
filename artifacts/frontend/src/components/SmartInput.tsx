@@ -1,6 +1,7 @@
 import React, {
   useRef,
   useCallback,
+  useEffect,
   useState,
   forwardRef,
   TextareaHTMLAttributes,
@@ -364,12 +365,31 @@ export interface SmartTextareaProps extends Omit<TextareaHTMLAttributes<HTMLText
 export const SmartTextarea = forwardRef<HTMLTextAreaElement, SmartTextareaProps>(
   ({ value, onChange, className, containerClassName, rows = 4, disabled, ...rest }, ref) => {
     const { st, toggleListening, handleModeClick } = useDictation(onChange);
+    const innerRef = useRef<HTMLTextAreaElement>(null);
+
+    const setRefs = useCallback(
+      (el: HTMLTextAreaElement | null) => {
+        (innerRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+        if (typeof ref === "function") ref(el);
+        else if (ref) (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = el;
+      },
+      [ref],
+    );
+
+    const autoGrow = useCallback(() => {
+      const el = innerRef.current;
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }, []);
+
+    useEffect(() => { autoGrow(); }, [value, autoGrow]);
 
     return (
       <div className={cn("w-full", containerClassName)}>
         <div className="relative">
           <textarea
-            ref={ref}
+            ref={setRefs}
             value={value}
             rows={rows}
             onChange={(e) => onChange(e.target.value)}
@@ -377,7 +397,7 @@ export const SmartTextarea = forwardRef<HTMLTextAreaElement, SmartTextareaProps>
             className={cn(
               "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm",
               "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1",
-              "focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none",
+              "focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none overflow-hidden",
               speechSupported() ? "pr-10 pb-8" : "",
               className,
             )}
