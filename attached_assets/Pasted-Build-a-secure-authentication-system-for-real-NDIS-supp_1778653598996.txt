@@ -1,0 +1,133 @@
+Build a secure authentication system for real NDIS support workers to safely access session documentation and compliance tools.
+
+This system must support:
+
+Secure login
+Role-based access control (RBAC)
+Protected APIs for NDIS session data
+Mobile-first authentication flow
+👤 USER ROLES (NDIS CONTEXT)
+1. Admin (System Operator)
+Manages users and system access
+Views all sessions and compliance data
+System maintenance access
+2. Support Worker (PRIMARY NDIS USER)
+Creates and manages session notes
+Uses compliance engine
+Writes NDIS documentation
+No admin access
+3. Allied Health Professional
+Read-only access to relevant participant sessions
+Can view compliance results
+Cannot manage system settings
+⚠️ BACKEND RULES
+Python FastAPI ONLY
+Use supabase-py
+No Node.js / Express backend code
+Do NOT modify participant system or invoicing
+Keep existing working systems intact
+🧱 IMPLEMENTATION REQUIREMENTS
+1. Auth Endpoints
+
+Create:
+
+POST /auth/login
+Returns JWT + user role
+POST /auth/logout
+Ends session
+GET /auth/me
+Returns current authenticated user
+Response format:
+{
+  "access_token": "string",
+  "user": {
+    "id": "uuid",
+    "email": "string",
+    "role": "admin | support_worker | allied_health"
+  }
+}
+2. Role-Based Access Control (CRITICAL)
+
+Create FastAPI dependency:
+
+def require_role(allowed_roles: list[str]):
+    ...
+Must:
+Decode JWT token
+Validate user role
+Block unauthorized access (403)
+Enforce role checks on backend ONLY
+3. Protected Routes
+
+All NDIS-sensitive endpoints must use:
+
+Depends(require_role([...]))
+
+Example:
+
+sessions
+compliance engine
+session notes
+🗄 DATABASE REQUIREMENTS
+
+Users table must include:
+
+id (UUID)
+email
+role (admin | support_worker | allied_health)
+is_active (boolean)
+created_at
+last_login
+🔐 SECURITY REQUIREMENTS
+
+Must include:
+
+Secure password handling (Supabase Auth preferred)
+JWT validation
+Token expiration
+Backend-only role enforcement
+Input validation on login
+Basic rate limiting on login endpoint
+📱 MOBILE-FIRST AUTH UI
+
+Authentication must be optimized for NDIS support workers using mobile devices in the field.
+
+Login Screen:
+Large input fields
+Simple vertical layout
+Fast login flow
+CareScribe
+
+Email
+[ input ]
+
+Password
+[ input ]
+
+[ Login ]
+
+Forgot password?
+🔁 AUTH FLOW
+User logs in
+JWT token issued
+/auth/me returns role
+App loads role-based UI:
+Support Worker → Sessions + Notes
+Admin → System oversight
+Allied Health → Read-only view
+🚫 DO NOT BUILD
+Participant portals
+Billing/invoicing changes
+Complex enterprise SSO
+Social login (Google, Apple, etc.)
+Any non-NDIS features
+✅ SUCCESS CRITERIA
+
+System is complete when:
+
+Users can securely log in
+/auth/me returns correct role
+Backend blocks unauthorized access
+Support workers can access session tools only
+Mobile login screen is clean and usable
+System is safe for real NDIS user testing

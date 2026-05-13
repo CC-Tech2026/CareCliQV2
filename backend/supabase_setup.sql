@@ -507,3 +507,55 @@ SET goals = (
     ) sub
 )
 WHERE goals IS NOT NULL;
+
+-- ============================================================
+-- AUTH: users table (role-based access control)
+-- Run this in Supabase SQL editor to enable authentication
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.users (
+    id           UUID PRIMARY KEY,          -- matches auth.users.id from Supabase Auth
+    email        TEXT NOT NULL,
+    full_name    TEXT DEFAULT '',
+    role         TEXT NOT NULL DEFAULT 'support_worker'
+                   CHECK (role IN ('admin', 'support_worker', 'allied_health')),
+    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login   TIMESTAMPTZ
+);
+
+-- Index for fast role lookups
+CREATE INDEX IF NOT EXISTS users_role_idx ON public.users (role);
+CREATE INDEX IF NOT EXISTS users_email_idx ON public.users (email);
+
+-- Enable RLS
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+
+-- Service role can read/write all rows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'users' AND policyname = 'service_role_all'
+    ) THEN
+        CREATE POLICY service_role_all ON public.users
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- Users can read their own row
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'users' AND policyname = 'users_self_read'
+    ) THEN
+        CREATE POLICY users_self_read ON public.users
+            FOR SELECT TO authenticated USING (id = auth.uid());
+    END IF;
+END $$;
+
+-- NOTE: After running this SQL, create your first admin user:
+--   1. Sign up via POST /api/auth/register with role="admin"
+--   OR manually insert:
+--   INSERT INTO public.users (id, email, role) VALUES ('<auth_user_id>', 'you@example.com', 'admin');

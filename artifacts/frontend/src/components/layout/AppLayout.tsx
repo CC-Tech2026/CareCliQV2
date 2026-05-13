@@ -11,6 +11,7 @@ import {
   X,
   Search,
   Sparkles,
+  LogOut,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -46,6 +48,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSettings] = useRoute("/settings");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { settings } = useSettings();
+  const { user, logout } = useAuth();
 
   return (
     <div className="flex min-h-screen w-full bg-[#FFF0F8] text-[#0D0D55] overflow-hidden">
@@ -124,20 +127,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </Button>
               </Link>
 
-              <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3 border border-white/10">
-                <Avatar className="h-9 w-9 border border-white/20">
+              <div className="flex items-center gap-2 rounded-2xl bg-white/5 p-3 border border-white/10">
+                <Avatar className="h-9 w-9 border border-white/20 shrink-0">
                   <AvatarFallback className="bg-[#FA879F] text-[#0D0D55] text-xs font-bold">
-                    {settings?.name?.slice(0, 2).toUpperCase() ?? "CP"}
+                    {(user?.full_name || user?.email || settings?.name || "CS")
+                      .slice(0, 2)
+                      .toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="min-w-0 flex flex-col">
+                <div className="min-w-0 flex flex-col flex-1">
                   <span className="truncate text-xs font-bold text-white">
-                    {settings?.name ?? "Dr. Provider"}
+                    {user?.full_name || settings?.name || user?.email || "Support Worker"}
                   </span>
                   <span className="truncate text-[10px] text-[#D2C7FF]/60 uppercase tracking-wider">
-                    {settings?.credentials ?? "Solo Practitioner"}
+                    {user?.role?.replace("_", " ") ?? settings?.credentials ?? "Support Worker"}
                   </span>
                 </div>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <LogOut size={14} />
+                </button>
               </div>
             </div>
           </div>

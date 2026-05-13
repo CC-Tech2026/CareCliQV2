@@ -31,6 +31,7 @@ app.use(cors());
 const PYTHON_BACKEND = "http://localhost:8000";
 
 const PYTHON_PREFIXES = [
+  "/api/auth",
   "/api/participants",
   "/api/sessions",
   "/api/alerts",
