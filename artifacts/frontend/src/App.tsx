@@ -10,12 +10,16 @@ import Signup from "@/pages/signup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
+import ParticipantNew from "@/pages/participant-new";
+import ParticipantEdit from "@/pages/participant-edit";
 import Sessions from "@/pages/sessions";
 import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
 import SessionLive from "@/pages/session-live";
-import Compliance from "@/pages/compliance";
 import Incidents from "@/pages/incidents";
+import IncidentNew from "@/pages/incident-new";
+import IncidentDetail from "@/pages/incident-detail";
+import Compliance from "@/pages/compliance";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -49,12 +53,28 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* Participants — /new must come before /:id */}
       <Route path="/patients">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
 
+      <Route path="/participants/new">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><ParticipantNew /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/participants/:id/edit">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+            <AppLayout><ParticipantEdit id={params.id} /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Sessions */}
       <Route path="/sessions">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Sessions /></AppLayout>
@@ -83,12 +103,28 @@ function Router() {
         )}
       </Route>
 
+      {/* Incidents — /new must come before /:id */}
       <Route path="/incidents">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Incidents /></AppLayout>
         </ProtectedRoute>
       </Route>
 
+      <Route path="/incidents/new">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><IncidentNew /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/incidents/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+            <AppLayout><IncidentDetail id={params.id} /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      {/* Compliance */}
       <Route path="/compliance">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Compliance /></AppLayout>

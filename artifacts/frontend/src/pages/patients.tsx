@@ -5,9 +5,7 @@ import {
   useGetParticipant,
   useGetParticipantSessions,
   useGetAISummary,
-  useCreateParticipant,
   useUpdateParticipant,
-  type CreateParticipantBody,
   type NDISGoal,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -392,7 +390,6 @@ export default function Patients() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
-  const [isAddOpen, setIsAddOpen] = useState(false);
   const { toast } = useToast();
 
   const {
@@ -400,58 +397,6 @@ export default function Patients() {
     isLoading: participantsLoading,
     refetch,
   } = useGetParticipants();
-  const createParticipant = useCreateParticipant();
-
-  const form = useForm<ParticipantFormValues>({
-    resolver: zodResolver(participantSchema),
-    defaultValues: {
-      full_name: "",
-      ndis_number: "",
-      date_of_birth: "",
-      email: "",
-      phone: "",
-      primary_disability: "",
-      biological_sex: "unspecified",
-      plan_status: "active",
-      plan_start_date: "",
-      plan_end_date: "",
-      total_budget: 0,
-    },
-  });
-
-  const onSubmit = (data: ParticipantFormValues) => {
-    const payload: Record<string, unknown> = {
-      full_name: data.full_name,
-      ndis_number: data.ndis_number,
-      date_of_birth: data.date_of_birth,
-      plan_status: data.plan_status,
-    };
-    if (data.email) payload.email = data.email;
-    if (data.phone) payload.phone = data.phone;
-    if (data.primary_disability)
-      payload.primary_disability = data.primary_disability;
-    if (data.biological_sex) payload.biological_sex = data.biological_sex;
-    if (data.plan_start_date) payload.plan_start_date = data.plan_start_date;
-    if (data.plan_end_date) payload.plan_end_date = data.plan_end_date;
-    if (data.total_budget !== undefined)
-      payload.total_budget = data.total_budget;
-
-    createParticipant.mutate(
-      { data: payload as unknown as CreateParticipantBody },
-      {
-        onSuccess: (newParticipant) => {
-          toast({ title: "Participant added successfully" });
-          setIsAddOpen(false);
-          form.reset();
-          refetch();
-          setSelectedId(newParticipant.id);
-        },
-        onError: () => {
-          toast({ title: "Error adding participant", variant: "destructive" });
-        },
-      },
-    );
-  };
 
   const filteredParticipants =
     participants?.filter((p) => {
@@ -472,26 +417,12 @@ export default function Patients() {
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg">Participants</h2>
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 gap-1">
-                  <UserPlus className="h-3.5 w-3.5" />
-                  <span>Add</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add New Participant</DialogTitle>
-                </DialogHeader>
-                <ParticipantForm
-                  form={form}
-                  onSubmit={onSubmit}
-                  isPending={createParticipant.isPending}
-                  onCancel={() => setIsAddOpen(false)}
-                  submitLabel="Add Participant"
-                />
-              </DialogContent>
-            </Dialog>
+            <Link href="/participants/new">
+              <Button size="sm" variant="outline" className="h-8 gap-1">
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Add</span>
+              </Button>
+            </Link>
           </div>
           <div className="space-y-3">
             <div className="relative">
@@ -1349,10 +1280,11 @@ function ParticipantDetail({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <EditParticipantDialog
-              participant={participant as unknown as Record<string, unknown>}
-              onSaved={handleSaved}
-            />
+            <Link href={`/participants/${id}/edit`}>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <Edit className="h-3.5 w-3.5" /> Edit
+              </Button>
+            </Link>
             <Link href={`/sessions/new?participantId=${id}`}>
               <Button size="sm">New Session</Button>
             </Link>

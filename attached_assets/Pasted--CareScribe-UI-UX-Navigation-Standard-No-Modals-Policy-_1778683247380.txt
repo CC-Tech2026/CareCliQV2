@@ -1,0 +1,151 @@
+# CareScribe — UI/UX Navigation Standard (No Modals Policy)
+
+You are working on an existing CareScribe production UI built with React/Next.js.
+
+## 🚫 Hard UI Constraint: NO MODALS
+
+The platform must NOT use modal popups for any core workflows.
+
+This includes (but is not limited to):
+
+* creating a participant
+* editing participant details
+* creating sessions / notes
+* adding incidents
+* editing budgets or plans
+* viewing detailed records
+* compliance review screens
+
+---
+
+# ✅ Required Navigation Pattern
+
+All interactions must follow a **full-page navigation model**:
+
+## 1. Dedicated Pages for All Actions
+
+Instead of modals, use routes such as:
+
+* `/participants/new`
+* `/participants/[id]/edit`
+* `/sessions/new`
+* `/sessions/[id]`
+* `/incidents/new`
+* `/incidents/[id]`
+
+Every create/edit/view action must be its own page.
+
+---
+
+## 2. Back Navigation Requirement
+
+Every page must include:
+
+* a visible “Back” button
+* browser history support (`router.back()`)
+* fallback navigation (e.g. return to list page if history is empty)
+
+Example behavior:
+
+* User clicks “Create Participant”
+* Goes to `/participants/new`
+* User clicks “Back”
+* Returns to `/participants`
+
+---
+
+## 3. Preserve Context Awareness
+
+When navigating away from a list page, preserve context using:
+
+* query params (filters, search state)
+* optional return URLs (`?returnTo=/participants?tab=active`)
+* breadcrumb navigation where appropriate
+
+---
+
+## 4. Replace ALL Existing Modals
+
+Audit existing UI and refactor:
+
+### Replace:
+
+* modal forms → full pages
+* modal detail views → route-based detail pages
+* modal confirmations → inline confirmation pages or dedicated screens
+
+### Exception:
+
+Only allow small UI overlays for:
+
+* tooltips
+* dropdown menus
+* lightweight menus
+  NOT for workflows or data entry.
+
+---
+
+## 5. UX Requirements
+
+All pages must feel:
+
+* fast
+* clean
+* navigable
+* audit-friendly
+* mobile-safe
+
+Each page should clearly show:
+
+* title (e.g. “Create Participant”)
+* back button
+* primary form content
+* save/submit actions
+* validation feedback
+
+---
+
+## 6. Form Behaviour Standard
+
+All forms must support:
+
+* autosave drafts (optional but preferred)
+* clear submit state
+* loading indicators
+* error recovery
+* success redirect to detail page
+
+After submit:
+
+* redirect user to the created record page (not modal close)
+
+---
+
+## 7. Why This Change Matters (Design Principle)
+
+CareScribe is an NDIS compliance platform, not a consumer app.
+
+Therefore:
+
+* workflows must be traceable
+* navigation must be explicit
+* actions must be auditable
+* user context must not disappear behind modals
+
+Full-page flows ensure:
+
+* better audit traceability
+* clearer user journey
+* reduced cognitive load
+* improved accessibility
+* safer data handling
+
+---
+
+## 8. Final Rule
+
+If a feature requires user input or data viewing:
+👉 it MUST be a route/page
+👉 NOT a modal
+
+No exceptions unless explicitly approved for UI micro-interactions.
