@@ -638,3 +638,39 @@ BEGIN
             FOR SELECT TO authenticated USING (owner_user_id = auth.uid());
     END IF;
 END $$;
+
+-- ─────────────────────────────────────────────
+-- Incident Management (NDIS Practice Standard 2.3)
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS incidents (
+    id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    participant_id      UUID        REFERENCES patients(id) ON DELETE SET NULL,
+    session_id          UUID        REFERENCES sessions(id) ON DELETE SET NULL,
+    title               TEXT        NOT NULL,
+    description         TEXT        NOT NULL,
+    incident_type       TEXT        NOT NULL DEFAULT 'other',
+    severity            TEXT        NOT NULL DEFAULT 'medium',
+    status              TEXT        NOT NULL DEFAULT 'reported',
+    incident_date       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reported_date       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_date       TIMESTAMPTZ,
+    location            TEXT,
+    witnesses           TEXT,
+    ndis_reportable     BOOLEAN     NOT NULL DEFAULT FALSE,
+    ndis_reported_at    TIMESTAMPTZ,
+    practice_standard   TEXT,
+    participant_impact  TEXT,
+    worker_actions      TEXT,
+    investigation_notes TEXT,
+    corrective_actions  TEXT,
+    follow_up_required  BOOLEAN     DEFAULT FALSE,
+    follow_up_date      DATE,
+    created_by          UUID,
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant_id);
+CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
+CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
+CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);

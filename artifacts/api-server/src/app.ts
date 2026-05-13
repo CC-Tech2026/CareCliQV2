@@ -40,6 +40,7 @@ const PYTHON_PREFIXES = [
   "/api/reports",
   "/api/budget",
   "/api/admin",
+  "/api/incidents",
 ];
 
 // Proxy must be registered BEFORE body-parsing middleware so that

@@ -15,6 +15,7 @@ import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
 import SessionLive from "@/pages/session-live";
 import Compliance from "@/pages/compliance";
+import Incidents from "@/pages/incidents";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -80,6 +81,12 @@ function Router() {
             <AppLayout><SessionDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
+      </Route>
+
+      <Route path="/incidents">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><Incidents /></AppLayout>
+        </ProtectedRoute>
       </Route>
 
       <Route path="/compliance">

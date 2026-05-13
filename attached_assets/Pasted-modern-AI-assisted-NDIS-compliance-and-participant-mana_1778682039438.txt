@@ -1,0 +1,307 @@
+modern AI-assisted NDIS compliance and participant management platform designed specifically for Australian disability support providers.
+
+This is NOT a generic CRM.
+
+CareScribe should function as:
+
+compliance workflow system
+participant-centred documentation engine
+audit evidence generator
+operational governance platform
+multilingual AI-assisted support documentation platform
+
+The platform must align with:
+
+NDIS Practice Standards
+NDIS Quality Audit requirements
+NDIS incident management expectations
+participant-centred support delivery
+audit-ready evidence generation
+Core Product Philosophy
+
+Every feature must map to:
+
+an NDIS Practice Standard
+a Quality Indicator
+audit evidence requirements
+
+The system should help providers:
+
+maintain compliance
+generate structured evidence
+prepare for audits
+improve participant outcomes
+reduce admin burden
+standardise documentation
+manage operational risk
+System Architecture Requirements
+
+Design the system using:
+
+scalable modular architecture
+RBAC permission system
+audit logging
+version-controlled records
+secure participant data management
+AI-assisted workflows
+multilingual support
+mobile-first field usability
+
+Tech stack preference:
+
+React / Next.js frontend
+Supabase backend
+PostgreSQL
+Row-level security
+Real-time updates
+AI transcription + structured summarisation
+Offline-capable mobile workflows if possible
+Core Platform Modules
+1. Participant Management
+
+Participants must include:
+
+personal profile
+NDIS number
+plan dates
+funding categories
+goals
+support plans
+risk profiles
+communication preferences
+consent records
+incident history
+behaviour support requirements
+support network contacts
+
+Must support:
+
+participant-centred workflows
+timeline history
+linked documentation
+audit traceability
+2. AI-Assisted Progress Notes
+
+Create structured compliant documentation workflows.
+
+Notes must include:
+
+support delivered
+participant response
+goal progress
+risks/incidents
+escalation actions
+follow-up actions
+worker observations
+
+Features:
+
+voice-to-text
+multilingual speech input
+AI-assisted structuring
+compliance language suggestions
+mandatory field validation
+timestamping
+worker attribution
+digital approvals
+
+IMPORTANT:
+Position AI as:
+
+AI-assisted documentation
+workflow acceleration
+compliance support
+
+NOT:
+“AI replaces support workers.”
+
+Human review and approval is mandatory before finalising records.
+
+3. Incident Management System
+
+Build compliant incident workflows:
+
+incident creation
+severity classification
+escalation workflows
+investigation tracking
+corrective actions
+participant impact logging
+notification workflows
+audit trails
+
+Include:
+
+overdue incident alerts
+unresolved incident tracking
+incident analytics dashboard
+4. Risk Management
+
+Risk module should support:
+
+participant risks
+environmental risks
+worker safety risks
+restrictive practices
+hazard tracking
+mitigation plans
+scheduled reviews
+escalation workflows
+5. Complaints Management
+
+Support:
+
+participant complaints
+anonymous complaints
+investigation workflow
+resolution tracking
+corrective actions
+audit-ready evidence
+6. Governance & Workforce Module
+
+Track:
+
+worker onboarding
+qualifications
+training
+worker screening
+certifications
+policy acknowledgements
+competency reviews
+expiry alerts
+
+Create compliance reminders for:
+
+expired screening
+missing qualifications
+overdue training
+7. Audit Dashboard
+
+This is a critical differentiator.
+
+Create a full audit mode including:
+
+participant records
+support logs
+incidents
+complaints
+risk assessments
+worker qualifications
+policy acknowledgements
+corrective actions
+compliance scoring
+exportable audit packages
+
+Features:
+
+one-click audit export
+evidence filtering
+audit readiness indicators
+missing evidence alerts
+8. Compliance Intelligence Engine
+
+Implement proactive compliance detection.
+
+Examples:
+
+missing mandatory documentation
+incomplete participant records
+overdue risk reviews
+unsigned notes
+incident escalation failures
+inconsistent goal tracking
+expired worker documents
+missing consent
+funding inconsistencies
+
+System should proactively alert providers.
+
+9. NDIS Compliance Matrix
+
+Internally create:
+feature → practice standard → evidence mapping
+
+Every module should connect to:
+
+relevant NDIS Practice Standards
+Quality Indicators
+audit evidence requirements
+
+This matrix should power:
+
+audit readiness
+reporting
+compliance scoring
+future AI recommendations
+10. Multilingual Compliance Support
+
+Support workers should be able to:
+
+speak in their native language
+have AI convert content into compliant structured English documentation
+preserve participant context and terminology
+
+This is a major product differentiator.
+
+UI/UX Requirements
+
+The platform should feel:
+
+modern
+professional
+minimal
+trustworthy
+healthcare-grade
+operationally efficient
+
+Focus heavily on:
+
+fast mobile documentation
+low admin friction
+accessibility
+clean dashboards
+workflow automation
+participant-centred design
+
+Avoid:
+
+cluttered CRM-style interfaces
+generic templates
+overcomplicated navigation
+Security & Compliance
+
+Must include:
+
+encrypted data storage
+audit logs
+access control
+secure authentication
+role permissions
+data retention policies
+version history
+activity tracking
+
+Ensure architecture supports:
+
+Australian privacy expectations
+defensible audit evidence
+operational accountability
+Long-Term Vision
+
+CareScribe should evolve into:
+
+compliance infrastructure for the NDIS sector
+operational intelligence platform
+participant outcome tracking system
+AI-assisted disability support workflow engine
+
+The goal is to help providers:
+
+pass audits
+improve care quality
+reduce compliance risk
+standardise documentation
+save administrative time
+improve participant outcomes
+
+This platform should feel purpose-built for NDIS providers — not adapted from a generic CRM.

@@ -12,6 +12,7 @@ import {
   Search,
   Sparkles,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/patients", label: "Participants", icon: Users },
   { href: "/sessions", label: "Sessions", icon: CalendarDays },
+  { href: "/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
 ];
 
