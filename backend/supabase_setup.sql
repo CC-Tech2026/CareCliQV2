@@ -115,6 +115,83 @@ BEGIN
     END IF;
 END $$;
 
+-- ============================================================
+-- RESTRICTIVE PRACTICE DETECTION + COMPLIANCE PIPELINE COLUMNS
+-- (Sprint 0 — Task #56)
+-- Run this section in Supabase SQL editor if it has not been applied yet.
+-- All statements are idempotent.
+-- ============================================================
+
+-- Add RP detection and compliance tracking columns to sessions
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='restrictive_practice_detected') THEN
+        ALTER TABLE sessions ADD COLUMN restrictive_practice_detected BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='restrictive_practice_types') THEN
+        ALTER TABLE sessions ADD COLUMN restrictive_practice_types JSONB;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='compliance_flags') THEN
+        ALTER TABLE sessions ADD COLUMN compliance_flags JSONB;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='compliance_checked_at') THEN
+        ALTER TABLE sessions ADD COLUMN compliance_checked_at TIMESTAMPTZ;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='input_language') THEN
+        ALTER TABLE sessions ADD COLUMN input_language TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='voice_input') THEN
+        ALTER TABLE sessions ADD COLUMN voice_input TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='incident_language_detected') THEN
+        ALTER TABLE sessions ADD COLUMN incident_language_detected BOOLEAN DEFAULT FALSE;
+    END IF;
+END $$;
+
+-- Per-session compliance rule results table (upsert target: session_id + rule_id)
+CREATE TABLE IF NOT EXISTS public.compliance_rule_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES public.sessions(id) ON DELETE CASCADE,
+    rule_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    severity TEXT,
+    checked_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (session_id, rule_id)
+);
+
+-- Restrictive practice flags table (upsert target: session_id + phrase)
+CREATE TABLE IF NOT EXISTS public.restrictive_practice_flags (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID REFERENCES public.sessions(id) ON DELETE CASCADE,
+    category TEXT NOT NULL,
+    phrase TEXT NOT NULL,
+    context TEXT,
+    severity TEXT,
+    suggestion TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (session_id, phrase)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_compliance_rule_results_session_id ON compliance_rule_results(session_id);
+CREATE INDEX IF NOT EXISTS idx_rp_flags_session_id ON restrictive_practice_flags(session_id);
+
+-- Enable RLS
+ALTER TABLE compliance_rule_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE restrictive_practice_flags ENABLE ROW LEVEL SECURITY;
+
+-- Service role policies
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'compliance_rule_results' AND policyname = 'service_role_all_compliance_rule_results') THEN
+        CREATE POLICY "service_role_all_compliance_rule_results" ON compliance_rule_results FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'restrictive_practice_flags' AND policyname = 'service_role_all_rp_flags') THEN
+        CREATE POLICY "service_role_all_rp_flags" ON restrictive_practice_flags FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
 -- Add ndis_plan_id and biological_sex to patients
 DO $$
 BEGIN

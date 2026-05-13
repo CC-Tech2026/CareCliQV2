@@ -4,10 +4,91 @@ import json
 import os
 import urllib.request
 import urllib.error
+import logging
+
+logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=settings.openai_api_key)
 
+
+def get_anthropic_client():
+    """Return an Anthropic client if ANTHROPIC_API_KEY is configured, else None."""
+    api_key = settings.anthropic_api_key
+    if not api_key:
+        return None
+    try:
+        import anthropic
+        return anthropic.Anthropic(api_key=api_key)
+    except Exception as e:
+        logger.warning(f"Failed to create Anthropic client: {e}")
+        return None
+
 _LIBRETRANSLATE_URL = os.getenv("LIBRETRANSLATE_URL", "").rstrip("/")
+
+
+async def enrich_rp_suggestions(rp_flags: list[dict], anthropic_client) -> list[dict]:
+    """Call Claude to add NDIS-compliant rewrite suggestions for each RP flag.
+
+    All flags are batched into a single Claude call to minimise latency.
+    If Claude is unavailable or fails, the original flags are returned
+    with ``suggestion = None`` (graceful degradation).
+    """
+    if not rp_flags or anthropic_client is None:
+        return rp_flags
+
+    try:
+        flags_text = "\n".join(
+            f"{i + 1}. Category: {f['category']} | Flagged phrase: \"{f['phrase']}\" | Context: \"{f['context']}\""
+            for i, f in enumerate(rp_flags)
+        )
+
+        prompt = f"""You are an NDIS compliance specialist helping support workers rewrite documentation that contains language indicating restrictive practices.
+
+For each flagged phrase below, provide a single concise NDIS-compliant rewrite sentence that:
+- Uses person-centred, strengths-based language
+- Replaces restrictive language with positive behaviour support terminology
+- Meets NDIS Quality and Safeguards Commission documentation standards
+- Is professional and factual in tone
+
+Flagged phrases:
+{flags_text}
+
+Respond with a JSON object in this exact format:
+{{
+  "rewrites": [
+    {{"index": 1, "suggestion": "NDIS-compliant rewrite sentence here"}},
+    {{"index": 2, "suggestion": "NDIS-compliant rewrite sentence here"}}
+  ]
+}}
+
+Provide one rewrite per flagged phrase, matching the index number."""
+
+        message = anthropic_client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        raw = message.content[0].text if message.content else ""
+        # Strip markdown code fences if present
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        result = json.loads(raw)
+        rewrites = {item["index"]: item.get("suggestion") for item in result.get("rewrites", [])}
+
+        enriched = []
+        for i, flag in enumerate(rp_flags):
+            enriched.append({**flag, "suggestion": rewrites.get(i + 1)})
+        return enriched
+
+    except Exception as e:
+        logger.warning(f"Claude RP enrichment failed (non-critical): {e}")
+        return rp_flags
 
 
 def _libretranslate_sync(text: str) -> dict:

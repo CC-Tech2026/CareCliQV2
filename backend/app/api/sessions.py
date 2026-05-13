@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import Optional
+from datetime import datetime, timezone
 from ..schemas.session import SessionCreate, SessionUpdate
 from ..services import session_service, ai_service, alert_service, funding_service
 from ..services.compliance_engine import run_compliance_check
@@ -105,6 +106,22 @@ async def save_session_with_ai(session_id: str):
         else:
             compliance_status = "non_compliant"
 
+        # 2b. RP enrichment — flags already detected inside run_compliance_check;
+        #     now enrich with Claude rewrite suggestions (non-blocking)
+        rp_flags: list[dict] = rules_result.get("rp_flags", [])
+        try:
+            if rp_flags:
+                anthropic_client = ai_service.get_anthropic_client()
+                rp_flags = await ai_service.enrich_rp_suggestions(rp_flags, anthropic_client)
+                # Write enriched suggestions back into rules_result for consistency
+                rules_result["rp_flags"] = rp_flags
+        except Exception as rp_err:
+            logger.warning(f"RP Claude enrichment failed (non-critical): {rp_err}")
+
+        rp_detected = rules_result.get("restrictive_practice_detected", len(rp_flags) > 0)
+        rp_categories = rules_result.get("restrictive_practice_types", [])
+        compliance_checked_at = datetime.now(timezone.utc).isoformat()
+
         # Preserve audit-critical clinical data that was saved in the PATCH step.
         # The PATCH merges structured_notes/activity_log into ai_insights; we must
         # carry them forward so they survive this AI analysis overwrite.
@@ -117,6 +134,12 @@ async def save_session_with_ai(session_id: str):
         preserved_structured_notes = existing_ai.get("structured_notes", {}) if isinstance(existing_ai, dict) else {}
         preserved_activity_log = existing_ai.get("activity_log", []) if isinstance(existing_ai, dict) else []
 
+        # Derive input_language / voice_input / incident_language_detected from session data
+        raw_transcription = session.get("transcription") or ""
+        input_language = session.get("input_language") or "en"
+        voice_input = raw_transcription or session.get("voice_input") or ""
+        incident_language_detected = session.get("incident_language_detected") or False
+
         updates = {
             "compliance_score": blended_score,
             "compliance_notes": ai_compliance.get("assessment", ""),
@@ -127,10 +150,53 @@ async def save_session_with_ai(session_id: str):
                 "activity_log": preserved_activity_log,
                 "rules_result": rules_result,
                 "compliance_status": compliance_status,
+                "rp_flags": rp_flags,
             }),
             "status": "completed",
+            "restrictive_practice_detected": rp_detected,
+            "restrictive_practice_types": json.dumps(rp_categories),
+            "compliance_flags": json.dumps({"rp_flags": rp_flags}),
+            "compliance_checked_at": compliance_checked_at,
+            "input_language": input_language,
+            "voice_input": voice_input,
+            "incident_language_detected": incident_language_detected,
         }
         updated = await session_service.update_session(session_id, updates)
+
+        # 2c. Persist RP flags + per-rule results (non-critical)
+        try:
+            from ..services.supabase_client import get_supabase_admin
+            supabase = get_supabase_admin()
+
+            # Upsert RP flags (idempotent via UNIQUE(session_id, phrase))
+            for flag in rp_flags:
+                supabase.table("restrictive_practice_flags").upsert(
+                    {
+                        "session_id": session_id,
+                        "category": flag.get("category"),
+                        "phrase": flag.get("phrase"),
+                        "context": flag.get("context"),
+                        "severity": flag.get("severity"),
+                        "suggestion": flag.get("suggestion"),
+                    },
+                    on_conflict="session_id,phrase",
+                ).execute()
+
+            # Upsert per-rule rows into compliance_rule_results (idempotent via UNIQUE(session_id, rule_id))
+            for rule in rules_result.get("rules", []):
+                supabase.table("compliance_rule_results").upsert(
+                    {
+                        "session_id": session_id,
+                        "rule_id": rule.get("rule"),
+                        "status": rule.get("status"),
+                        "message": rule.get("message"),
+                        "severity": rule.get("severity"),
+                        "checked_at": compliance_checked_at,
+                    },
+                    on_conflict="session_id,rule_id",
+                ).execute()
+        except Exception as rp_persist_err:
+            logger.warning(f"Compliance rule/RP flag persistence failed (non-critical): {rp_persist_err}")
 
         # 3. Store compliance audit log (non-critical — do not fail the response)
         try:
@@ -183,12 +249,69 @@ async def save_session_with_ai(session_id: str):
 
         return {
             "session": updated,
-            "compliance": {**ai_compliance, "score": blended_score, "rules_result": rules_result},
+            "compliance": {
+                **ai_compliance,
+                "score": blended_score,
+                "rules_result": rules_result,
+                "rp_flags": rp_flags,
+                "restrictive_practice_detected": rp_detected,
+                "restrictive_practice_types": rp_categories,
+                "checked_at": compliance_checked_at,
+            },
             "insights": insights,
         }
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{session_id}/compliance")
+async def get_session_compliance(session_id: str):
+    """Return stored compliance results for a session — no recalculation."""
+    session = await session_service.get_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ai_insights = session.get("ai_insights") or {}
+    if isinstance(ai_insights, str):
+        try:
+            ai_insights = json.loads(ai_insights)
+        except Exception:
+            ai_insights = {}
+    if not isinstance(ai_insights, dict):
+        ai_insights = {}
+
+    rules_result = ai_insights.get("rules_result")
+
+    # Fetch stored RP flags from the dedicated table
+    stored_rp_flags: list[dict] = []
+    try:
+        from ..services.supabase_client import get_supabase_admin
+        supabase = get_supabase_admin()
+        rp_resp = supabase.table("restrictive_practice_flags").select("*").eq("session_id", session_id).execute()
+        stored_rp_flags = rp_resp.data or []
+    except Exception:
+        # Fall back to ai_insights if table doesn't exist yet
+        stored_rp_flags = ai_insights.get("rp_flags", [])
+
+    # Parse restrictive_practice_types (stored as JSON string)
+    rp_types = session.get("restrictive_practice_types") or []
+    if isinstance(rp_types, str):
+        try:
+            rp_types = json.loads(rp_types)
+        except Exception:
+            rp_types = []
+
+    return {
+        "session_id": session_id,
+        "score": session.get("compliance_score"),
+        "status": session.get("compliance_status") or ai_insights.get("compliance_status") or "draft",
+        "rules": rules_result.get("rules", []) if rules_result else [],
+        "rp_flags": stored_rp_flags,
+        "restrictive_practice_detected": session.get("restrictive_practice_detected", False),
+        "restrictive_practice_types": rp_types,
+        "checked_at": session.get("compliance_checked_at"),
+    }
 
 
 @router.get("/{session_id}/audit")

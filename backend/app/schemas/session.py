@@ -38,3 +38,11 @@ class SessionUpdate(BaseModel):
     activity_log: Optional[List[Dict[str, str]]] = None
     # Physical examination body markers — list of {zone, color, note} dicts
     body_markers: Optional[List[Dict]] = None
+    # Restrictive practice detection fields
+    restrictive_practice_detected: Optional[bool] = None
+    restrictive_practice_types: Optional[List[str]] = None
+    compliance_flags: Optional[Dict] = None
+    compliance_checked_at: Optional[str] = None
+    input_language: Optional[str] = None
+    voice_input: Optional[str] = None
+    incident_language_detected: Optional[bool] = None

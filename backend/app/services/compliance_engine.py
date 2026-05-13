@@ -424,6 +424,124 @@ def check_budget_not_exceeded(
 
 
 # ---------------------------------------------------------------------------
+# Restrictive Practice (RP) Detection
+# ---------------------------------------------------------------------------
+
+RESTRICTIVE_PRACTICE_PHRASES: dict[str, list[str]] = {
+    "chemical_restraint": [
+        r"given\s+sedative",
+        r"administered\s+sedative",
+        r"chemical\s+calm",
+        r"chemical\s+restraint",
+        r"sedated\s+to\s+calm",
+        r"medication\s+to\s+restrain",
+        r"PRN\s+for\s+behaviour",
+        r"calming\s+medication",
+        r"chemical\s+control",
+        r"medicated\s+for\s+behaviour",
+    ],
+    "physical_restraint": [
+        r"held\s+down",
+        r"physically\s+restrained",
+        r"physical\s+restraint",
+        r"pinned\s+down",
+        r"grabbed\s+and\s+held",
+        r"forced\s+to\s+stay",
+        r"arm\s+held",
+        r"restrained\s+by\s+staff",
+        r"manual\s+restraint",
+        r"staff\s+held",
+        r"body\s+hold",
+        r"crisis\s+hold",
+        r"prone\s+restraint",
+    ],
+    "mechanical_restraint": [
+        r"tied\s+to\s+chair",
+        r"strapped\s+to",
+        r"mechanical\s+restraint",
+        r"wrist\s+restraint",
+        r"lap\s+belt",
+        r"safety\s+strap",
+        r"restrained\s+with",
+        r"wheelchair\s+strap",
+        r"body\s+suit",
+        r"restraint\s+device",
+    ],
+    "environmental_restraint": [
+        r"locked\s+in\s+room",
+        r"environmental\s+restraint",
+        r"confined\s+to",
+        r"restricted\s+to\s+room",
+        r"door\s+locked",
+        r"prevented\s+from\s+leaving",
+        r"access\s+denied",
+        r"not\s+allowed\s+to\s+leave",
+        r"restricted\s+access",
+        r"room\s+locked",
+    ],
+    "seclusion": [
+        r"placed\s+in\s+seclusion",
+        r"seclusion\s+room",
+        r"isolated\s+in",
+        r"secluded",
+        r"time[\s-]out\s+room",
+        r"placed\s+alone\s+in",
+        r"removed\s+and\s+isolated",
+        r"solitary",
+        r"seclusion\s+used",
+    ],
+}
+
+
+def detect_restrictive_practices(session: dict) -> list[dict]:
+    """Scan session text fields for restrictive practice indicators.
+
+    Returns a list of flag dicts:
+        {category, phrase, context, severity, suggestion}
+    where ``suggestion`` is None (filled later by Claude via enrich_rp_suggestions).
+    """
+    # Build the full text corpus from all relevant session fields
+    fields_to_scan = [
+        session.get("notes") or "",
+        session.get("activities_performed") or "",
+        session.get("outcomes") or "",
+        session.get("participant_response") or "",
+        session.get("progress_toward_goals") or "",
+    ]
+    full_text = "\n".join(f.strip() for f in fields_to_scan if f.strip())
+
+    if not full_text:
+        return []
+
+    flags: list[dict] = []
+    seen_phrases: set[str] = set()
+
+    for category, patterns in RESTRICTIVE_PRACTICE_PHRASES.items():
+        severity = "critical" if category in ("chemical_restraint", "physical_restraint") else "high"
+        for pattern in patterns:
+            for match in re.finditer(pattern, full_text, re.IGNORECASE):
+                matched_phrase = match.group(0)
+                key = f"{category}:{matched_phrase.lower()}"
+                if key in seen_phrases:
+                    continue
+                seen_phrases.add(key)
+
+                start = max(0, match.start() - 30)
+                end = min(len(full_text), match.end() + 30)
+                context = full_text[start:end].strip()
+
+                flags.append({
+                    "category": category,
+                    "phrase": matched_phrase,
+                    "context": context,
+                    "severity": severity,
+                    "suggestion": None,
+                })
+
+    return flags
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -434,17 +552,20 @@ def run_compliance_check(
     custom_physical_types: Optional[List[str]] = None,
 ) -> dict:
     """
-    Run all compliance rules against a session and return a full report.
+    Run all compliance rules and RP detection against a session.
 
     Returns:
         {
-            "rules": [...],       # individual rule results
-            "score": float,       # 0–100
+            "rules": [...],           # individual rule results
+            "score": float,           # 0–100
             "passed": int,
             "warnings": int,
             "failed": int,
             "total_rules": int,
             "failed_rules": [...],
+            "rp_flags": [...],        # restrictive practice flags (suggestion=None until enriched)
+            "restrictive_practice_detected": bool,
+            "restrictive_practice_types": [...],
         }
     """
     plan_start = participant.get("plan_start_date") if participant else None
@@ -471,6 +592,10 @@ def run_compliance_check(
     # Warnings earn half credit
     score = round((passed + warnings * 0.5) / total * 100, 1)
 
+    # RP detection — runs synchronously; suggestions are populated later by Claude
+    rp_flags = detect_restrictive_practices(session)
+    rp_categories = list({f["category"] for f in rp_flags}) if rp_flags else []
+
     return {
         "rules": rules,
         "total_rules": total,
@@ -479,4 +604,7 @@ def run_compliance_check(
         "failed": failed,
         "score": score,
         "failed_rules": [r for r in rules if r["status"] == "fail"],
+        "rp_flags": rp_flags,
+        "restrictive_practice_detected": len(rp_flags) > 0,
+        "restrictive_practice_types": rp_categories,
     }
