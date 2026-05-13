@@ -89,14 +89,33 @@ async def save_session_with_ai(session_id: str):
         custom_physical_types = await get_physical_exam_session_types()
         rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
 
-        # 2. Run AI compliance check for narrative assessment
-        ai_compliance = await ai_service.check_compliance(session)
-        insights = await ai_service.generate_clinical_insights(session, participant_data)
-
-        # Use rules engine score blended with AI score (70/30 weight)
-        blended_score = round(
-            rules_result["score"] * 0.7 + ai_compliance["score"] * 0.3, 1
+        # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
+        #    Pass RP flags already detected by the rules engine so the AI is aware
+        rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
+        analysis = await ai_service.generate_session_analysis(
+            session, participant_data, rp_flags=rp_flags_for_ai
         )
+
+        # AI spec compliance score (from weighted 5-dimension breakdown)
+        ai_spec_score = float((analysis.get("compliance") or {}).get("score") or 0)
+
+        # Use rules engine score blended with AI spec score (70/30 weight)
+        blended_score = round(
+            rules_result["score"] * 0.7 + ai_spec_score * 0.3, 1
+        )
+
+        # Keep backward-compat alias objects
+        insights = {
+            "summary": analysis.get("session_summary") or analysis.get("summary", ""),
+            "key_observations": analysis.get("key_observations", []),
+            "concerns": analysis.get("concerns", []),
+            "next_session_recommendations": analysis.get("next_session_recommendations", []),
+            "progress_trend": analysis.get("progress_trend", "stable"),
+        }
+        ai_compliance = {
+            "score": ai_spec_score,
+            "assessment": (analysis.get("compliance") or {}).get("recommendations", []),
+        }
 
         # Derive claim readiness status from score
         if blended_score >= 85:
@@ -140,18 +159,34 @@ async def save_session_with_ai(session_id: str):
         voice_input = raw_transcription or session.get("voice_input") or ""
         incident_language_detected = session.get("incident_language_detected") or False
 
+        # Build the enriched ai_insights payload (spec fields + backward-compat fields)
+        ai_insights_payload = {
+            # Backward-compatible insight fields (used by session detail UI)
+            **insights,
+            # Full CareScribe spec output
+            "session_summary": analysis.get("session_summary", ""),
+            "ndis_mapping": analysis.get("ndis_mapping", {}),
+            "compliance_spec": analysis.get("compliance", {}),
+            "budget_insights": analysis.get("budget_insights", {}),
+            "score_breakdown": (analysis.get("compliance") or {}).get("score_breakdown", {}),
+            "ai_flags": (analysis.get("compliance") or {}).get("flags", []),
+            "ai_recommendations": (analysis.get("compliance") or {}).get("recommendations", []),
+            # Structured notes: prefer existing (user-entered) over AI-generated
+            "structured_notes": preserved_structured_notes or analysis.get("structured_notes", {}),
+            "activity_log": preserved_activity_log,
+            # Rules engine result
+            "rules_result": rules_result,
+            "compliance_status": compliance_status,
+            "rp_flags": rp_flags,
+        }
+
         updates = {
             "compliance_score": blended_score,
-            "compliance_notes": ai_compliance.get("assessment", ""),
+            "compliance_notes": " | ".join(
+                (analysis.get("compliance") or {}).get("recommendations", [])
+            ) or ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
-            "ai_insights": json.dumps({
-                **insights,
-                "structured_notes": preserved_structured_notes,
-                "activity_log": preserved_activity_log,
-                "rules_result": rules_result,
-                "compliance_status": compliance_status,
-                "rp_flags": rp_flags,
-            }),
+            "ai_insights": json.dumps(ai_insights_payload),
             "status": "completed",
             "restrictive_practice_detected": rp_detected,
             "restrictive_practice_types": json.dumps(rp_categories),

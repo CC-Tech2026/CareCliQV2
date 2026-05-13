@@ -576,6 +576,36 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </ul>
                   </div>
                 )}
+                {Array.isArray(aiInsights.concerns) && aiInsights.concerns.length > 0 && (
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-red-500 font-semibold mb-1.5">Concerns</p>
+                    <ul className="space-y-1">
+                      {aiInsights.concerns.map((c: string, i: number) => (
+                        <li key={i} className="text-sm text-red-700 dark:text-red-400 flex gap-2"><span>⚠</span>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {Array.isArray(aiInsights.ai_recommendations) && aiInsights.ai_recommendations.length > 0 && (
+                  <div className="pt-2 border-t border-indigo-100">
+                    <p className="text-xs uppercase tracking-wide text-indigo-600 font-semibold mb-1.5">AI Recommendations</p>
+                    <ul className="space-y-1">
+                      {aiInsights.ai_recommendations.map((r: string, i: number) => (
+                        <li key={i} className="text-sm text-slate-700 dark:text-slate-300 flex gap-2"><span className="text-indigo-400">→</span>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {Array.isArray(aiInsights.ai_flags) && aiInsights.ai_flags.length > 0 && (
+                  <div className="pt-2 border-t border-amber-100">
+                    <p className="text-xs uppercase tracking-wide text-amber-600 font-semibold mb-1.5">Compliance Flags</p>
+                    <ul className="space-y-1">
+                      {aiInsights.ai_flags.map((f: string, i: number) => (
+                        <li key={i} className="text-xs text-amber-700 dark:text-amber-400 flex gap-2 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1"><span>⚑</span>{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {aiInsights.progress_trend && (
                   <div className="flex items-center gap-2 text-xs">
                     <TrendingUp className="h-3.5 w-3.5 text-indigo-400" />
@@ -686,6 +716,43 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
 
+                  {/* Spec score breakdown (5 weighted dimensions) */}
+                  {aiInsights?.score_breakdown && Object.keys(aiInsights.score_breakdown).length > 0 && (() => {
+                    const bd = aiInsights.score_breakdown as Record<string, number>;
+                    const dims: { key: string; label: string; max: number }[] = [
+                      { key: "documentation_completeness", label: "Documentation", max: 30 },
+                      { key: "goal_alignment",             label: "Goal Alignment", max: 25 },
+                      { key: "ndis_language_compliance",   label: "NDIS Language",  max: 20 },
+                      { key: "risk_detection",             label: "Risk Detection", max: 15 },
+                      { key: "audit_readiness",            label: "Audit Readiness",max: 10 },
+                    ];
+                    return (
+                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">Score Breakdown</p>
+                        <div className="space-y-2">
+                          {dims.map(({ key, label, max }) => {
+                            const val = bd[key] ?? 0;
+                            const pct = max > 0 ? Math.round((val / max) * 100) : 0;
+                            return (
+                              <div key={key}>
+                                <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
+                                  <span>{label}</span>
+                                  <span className="font-medium">{val}/{max}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Compliance notes from AI */}
                   {session.compliance_notes && (
                     <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -775,7 +842,60 @@ export default function SessionDetail({ id }: { id?: string }) {
             </CardContent>
           </Card>
 
-          {/* Cost & Category */}
+          {/* NDIS Mapping & Budget Insights (from AI spec analysis) */}
+          {aiInsights?.ndis_mapping && (aiInsights.ndis_mapping.support_category || (aiInsights.ndis_mapping.support_items?.length > 0)) && (
+            <Card className="shadow-sm border-blue-100 bg-blue-50/30 dark:bg-blue-900/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-blue-900 dark:text-blue-200">
+                  <Activity className="h-4 w-4" /> NDIS Funding Mapping
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {aiInsights.ndis_mapping.support_category && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500 font-medium">Support Category</span>
+                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 bg-blue-50">
+                      {aiInsights.ndis_mapping.support_category}
+                    </Badge>
+                  </div>
+                )}
+                {Array.isArray(aiInsights.ndis_mapping.support_items) && aiInsights.ndis_mapping.support_items.length > 0 && (
+                  <div>
+                    <p className="text-xs text-slate-500 font-medium mb-1.5">Support Items</p>
+                    <ul className="space-y-1">
+                      {aiInsights.ndis_mapping.support_items.map((item: string, i: number) => (
+                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex gap-1.5">
+                          <span className="text-blue-400 mt-0.5">•</span>{item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {aiInsights.budget_insights && (
+                  <div className="pt-2 border-t border-blue-100 space-y-1.5">
+                    {aiInsights.budget_insights.estimated_cost > 0 && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 text-xs">AI Est. Cost</span>
+                        <span className="font-semibold text-slate-700">${Number(aiInsights.budget_insights.estimated_cost).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {aiInsights.budget_insights.budget_status && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Budget Status</span>
+                        <span className={`font-medium capitalize ${
+                          aiInsights.budget_insights.budget_status === "exceeded" ? "text-red-600" :
+                          aiInsights.budget_insights.budget_status === "nearing limit" ? "text-amber-600" :
+                          "text-emerald-600"
+                        }`}>{aiInsights.budget_insights.budget_status}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Cost & Category (from DB — shown when billing is recorded) */}
           {((session as ExtendedSession).cost || (session as ExtendedSession).support_category) && (
             <Card className="shadow-sm border-slate-200">
               <CardHeader className="pb-2">
