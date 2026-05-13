@@ -1,4 +1,4 @@
-import { Link, useLocation, useRoute } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard,
   Users,
@@ -10,245 +10,244 @@ import {
   Menu,
   X,
   Search,
-  Sparkles,
-  LogOut,
   AlertTriangle,
+  FileBarChart2,
+  FolderOpen,
+  LogOut,
+  ChevronDown,
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/patients", label: "Participants", icon: Users },
-  { href: "/sessions", label: "Sessions", icon: CalendarDays },
-  { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-  { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+const NAV_GROUPS = [
+  {
+    label: "Operations",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/patients", label: "Participants", icon: Users },
+      { href: "/sessions", label: "Sessions", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Clinical",
+    items: [
+      { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { href: "/reports", label: "Reports", icon: FileBarChart2 },
+      { href: "/documents", label: "Documents", icon: FolderOpen },
+      { href: "/settings", label: "Settings", icon: Settings },
+    ],
+  },
 ];
 
-function LogoMark({ size = 34 }: { size?: number }) {
+function LogoMark({ size = 32 }: { size?: number }) {
   return (
     <div
-      className="rounded-2xl flex items-center justify-center shrink-0 shadow-[0_12px_30px_rgba(13,13,85,0.18)] ring-1 ring-white/60"
+      className="rounded-xl flex items-center justify-center shrink-0 shadow-sm"
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg, #D9F103 0%, #FA879F 55%, #5271FF 100%)",
+        background: "linear-gradient(135deg, #FA879F 0%, #5271FF 100%)",
       }}
     >
-      <ShieldCheck size={size * 0.6} color="#0D0D55" strokeWidth={2.5} />
+      <ShieldCheck size={size * 0.56} color="white" strokeWidth={2.5} />
     </div>
   );
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const [isSettings] = useRoute("/settings");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { settings } = useSettings();
   const { user, logout } = useAuth();
 
-  return (
-    <div className="flex min-h-screen w-full bg-[#FFF0F8] text-[#0D0D55] overflow-hidden">
-      {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex w-72 flex-col h-screen sticky top-0">
-        {/* Logo area — sits on pink background */}
-        <div className="h-24 flex items-center px-8 gap-3 shrink-0 bg-sidebar">
-          <LogoMark size={34} />
-          <div className="leading-tight">
-            <div className="font-bold text-[16px] tracking-tight text-sidebar-foreground">
+  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
+  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
+  const initials = displayName.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
+
+  function SidebarContent({ onNav }: { onNav?: () => void }) {
+    return (
+      <div className="flex flex-col h-full">
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
+          <LogoMark size={36} />
+          <div>
+            <p className="font-bold text-[15px] tracking-tight text-[#0D0D55] leading-tight">
               Clinical Companion
-            </div>
-            <div className="text-[9px] uppercase tracking-widest text-sidebar-foreground/50 font-bold">
+            </p>
+            <p className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">
               Healthcare
-            </div>
+            </p>
           </div>
         </div>
 
-        {/* Nav body — navy panel */}
-        <div className="flex-1 bg-[#0D0D55] rounded-tr-[45px] flex flex-col overflow-hidden relative">
-          {/* Scoop cutout */}
-          <div className="absolute -top-[45px] left-0 w-[45px] h-[45px] bg-[#0D0D55] pointer-events-none">
-            <div className="w-full h-full bg-sidebar rounded-bl-[45px]" />
-          </div>
-
-          <div className="flex flex-col h-full">
-            {/* New Session CTA */}
-            <div className="px-6 pt-10 shrink-0">
-              <Link href="/sessions/new">
-                <Button className="w-full bg-[#D9F103] text-[#0D0D55] hover:opacity-90 rounded-2xl py-6 shadow-lg font-bold gap-2 border-none">
-                  <Plus size={18} strokeWidth={3} />
-                  New Session
-                </Button>
-              </Link>
-            </div>
-
-            {/* Nav links */}
-            <nav className="mt-8 px-4 flex-1 min-h-0 overflow-y-auto space-y-2">
-              {navItems.map((item) => {
-                const isActive = location.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-4 px-4 py-3 text-sm font-medium transition-all rounded-2xl",
-                      isActive
-                        ? "bg-[#FA879F] text-[#0D0D55] shadow-md"
-                        : "text-[#D2C7FF]/70 hover:text-white hover:bg-white/5",
-                    )}
-                  >
-                    <item.icon
-                      size={18}
-                      className={isActive ? "text-[#0D0D55]" : "text-[#D2C7FF]/50"}
-                    />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-
-            {/* Bottom — Settings + Profile */}
-            <div className="shrink-0 px-6 pb-8 space-y-4 border-t border-white/10 pt-6">
-              <Link href="/settings">
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start gap-3 rounded-2xl h-12 text-sm font-medium transition-all",
-                    isSettings
-                      ? "bg-[#5271FF] text-white"
-                      : "text-[#D2C7FF]/70 hover:bg-white/5 hover:text-white",
-                  )}
-                >
-                  <Settings size={18} />
-                  Settings
-                </Button>
-              </Link>
-
-              <div className="flex items-center gap-2 rounded-2xl bg-white/5 p-3 border border-white/10">
-                <Avatar className="h-9 w-9 border border-white/20 shrink-0">
-                  <AvatarFallback className="bg-[#FA879F] text-[#0D0D55] text-xs font-bold">
-                    {(user?.full_name || user?.email || settings?.name || "CS")
-                      .slice(0, 2)
-                      .toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex flex-col flex-1">
-                  <span className="truncate text-xs font-bold text-white">
-                    {user?.full_name || settings?.name || user?.email || "Support Worker"}
-                  </span>
-                  <span className="truncate text-[10px] text-[#D2C7FF]/60 uppercase tracking-wider">
-                    {user?.role?.replace("_", " ") ?? settings?.credentials ?? "Support Worker"}
-                  </span>
-                </div>
-                <button
-                  onClick={logout}
-                  title="Sign out"
-                  className="shrink-0 p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  <LogOut size={14} />
-                </button>
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-5">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = location === item.href || location.startsWith(item.href + "/") ||
+                    (item.href === "/patients" && (location.startsWith("/patients") || location.startsWith("/participants")));
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={onNav}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
+                        isActive
+                          ? "bg-[#FA879F]/12 text-[#0D0D55]"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-[#0D0D55]",
+                      )}
+                    >
+                      <item.icon
+                        size={17}
+                        className={isActive ? "text-[#FA879F]" : "text-slate-400"}
+                        strokeWidth={isActive ? 2.5 : 2}
+                      />
+                      <span>{item.label}</span>
+                      {item.href === "/incidents" && (
+                        <span className="ml-auto h-4.5 min-w-[18px] px-1 rounded-full bg-[#FA879F] text-white text-[10px] font-bold flex items-center justify-center">
+                          2
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
+          ))}
+        </nav>
+
+        {/* Profile */}
+        <div className="px-4 py-4 border-t border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-slate-50 transition-colors cursor-default">
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarFallback className="bg-[#FA879F]/20 text-[#FA879F] text-xs font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-[#0D0D55] truncate">{displayName}</p>
+              <p className="text-[10px] text-slate-400 capitalize truncate">{displayRole}</p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition-colors"
+            >
+              <LogOut size={13} />
+            </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen w-full bg-[#F7F8FC] text-[#0D0D55] overflow-hidden">
+      {/* ── Desktop Sidebar ── */}
+      <aside className="hidden md:flex w-56 flex-col h-screen sticky top-0 bg-white border-r border-slate-100 shrink-0">
+        <SidebarContent />
       </aside>
 
-      {/* ── Main content area ── */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top header bar */}
-        <header className="h-24 flex items-center justify-between px-8 gap-6 shrink-0">
-          <div className="flex flex-1 max-w-xl items-center gap-3 rounded-2xl border border-[#FFD6EC] bg-white/75 px-4 py-2.5 shadow-sm backdrop-blur-sm">
-            <Search className="text-[#0D0D55]/30 shrink-0" size={18} />
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top header */}
+        <header className="h-16 flex items-center gap-4 px-6 bg-white border-b border-slate-100 shrink-0">
+          {/* Mobile menu toggle */}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="md:hidden p-2 rounded-xl text-slate-400 hover:bg-slate-50"
+          >
+            <Menu size={20} />
+          </button>
+
+          {/* Search */}
+          <div className="flex flex-1 max-w-md items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2">
+            <Search size={15} className="text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Search participants, sessions..."
-              className="w-full bg-transparent outline-none text-sm placeholder:text-[#0D0D55]/35"
+              placeholder="Search participants, sessions, incidents..."
+              className="w-full bg-transparent outline-none text-sm placeholder:text-slate-400 text-[#0D0D55]"
             />
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-2xl border border-[#FFD6EC] bg-white/70 text-[#0D0D55] hover:bg-[#FA879F]/15 shadow-sm"
-            >
-              <Bell size={18} />
-            </Button>
-            <Button
-              variant="ghost"
-              className="hidden sm:inline-flex rounded-2xl border border-[#FFD6EC] bg-white/70 text-[#0D0D55] hover:bg-[#FA879F]/15 shadow-sm gap-2"
-            >
-              <Sparkles size={16} />
-              Quick Actions
-            </Button>
+          <div className="flex items-center gap-2 ml-auto shrink-0">
+            {/* Bell */}
+            <button className="relative p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
+              <Bell size={17} className="text-slate-500" />
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-[#FA879F]" />
+            </button>
+
+            {/* New session CTA */}
+            <Link href="/sessions/new">
+              <button className="hidden sm:flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D0D55] text-white text-sm font-semibold hover:bg-[#1a1a77] transition-colors">
+                <Plus size={15} strokeWidth={2.5} />
+                New Session
+              </button>
+            </Link>
+
+            {/* User chip */}
+            <div className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white cursor-default">
+              <Avatar className="h-7 w-7">
+                <AvatarFallback className="bg-[#FA879F]/20 text-[#FA879F] text-[11px] font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="hidden sm:block text-left">
+                <p className="text-[12px] font-semibold text-[#0D0D55] leading-tight">{displayName.split(" ")[0]}</p>
+                <p className="text-[10px] text-slate-400 capitalize leading-tight">{displayRole}</p>
+              </div>
+              <ChevronDown size={13} className="text-slate-400" />
+            </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 px-8 pb-8 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex-1 bg-white/80 backdrop-blur-sm rounded-[40px] border border-[#FFD6EC] shadow-[0_20px_50px_rgba(250,135,159,0.08)] p-8 overflow-y-auto">
-            {children}
-          </div>
+        <main className="flex-1 overflow-y-auto px-6 py-6">
+          {children}
         </main>
       </div>
 
-      {/* ── Mobile menu toggle ── */}
-      <button
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="md:hidden fixed bottom-6 right-6 z-50 bg-[#0D0D55] text-white p-4 rounded-full shadow-2xl"
-      >
-        {mobileMenuOpen ? <X /> : <Menu />}
-      </button>
-
-      {/* ── Mobile slide-out drawer ── */}
+      {/* ── Mobile overlay ── */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
-      <nav
+
+      {/* ── Mobile drawer ── */}
+      <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-[#0D0D55] flex flex-col transition-transform duration-300",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-56 bg-white flex flex-col shadow-2xl transition-transform duration-300",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex items-center justify-between px-6 py-6 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <LogoMark size={30} />
-            <span className="font-bold text-white text-sm">Clinical Companion</span>
-          </div>
-          <button onClick={() => setMobileMenuOpen(false)} className="text-white/60 hover:text-white">
-            <X size={20} />
+        <div className="absolute top-4 right-4">
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="p-2 rounded-xl text-slate-400 hover:bg-slate-50"
+          >
+            <X size={18} />
           </button>
         </div>
-        <div className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map((item) => {
-            const isActive = location.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-4 px-4 py-3 text-sm font-medium rounded-2xl transition-all",
-                  isActive
-                    ? "bg-[#FA879F] text-[#0D0D55]"
-                    : "text-[#D2C7FF]/70 hover:text-white hover:bg-white/5",
-                )}
-              >
-                <item.icon size={18} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+        <SidebarContent onNav={() => setMobileMenuOpen(false)} />
+      </aside>
     </div>
   );
 }
