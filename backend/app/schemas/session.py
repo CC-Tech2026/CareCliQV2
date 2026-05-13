@@ -3,6 +3,14 @@ from typing import Optional, List, Dict
 from datetime import date
 
 
+class MessageCreate(BaseModel):
+    message_type: str = "text"
+    content: str = ""
+    media_url: Optional[str] = None
+    sender_role: str = "worker"
+    created_at: Optional[str] = None
+
+
 class SessionCreate(BaseModel):
     participant_id: str
     session_date: date

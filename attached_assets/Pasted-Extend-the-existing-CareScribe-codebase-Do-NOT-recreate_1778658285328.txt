@@ -1,0 +1,159 @@
+Extend the existing CareScribe codebase. Do NOT recreate the project. Improve and complete Sprint 0 MVP while upgrading the session input experience.
+
+🧠 Core Objective (UNCHANGED)
+
+Build a working NDIS MVP where support workers can:
+
+Manage participants
+Run sessions
+Record multilingual notes
+Convert notes into AI-structured NDIS documentation
+Save compliant session records
+
+BUT upgrade all note-taking UX into a chat-based clinical documentation system.
+
+💬 1. CRITICAL UX CHANGE — CHAT-BASED SESSION SYSTEM
+❌ REMOVE / AVOID:
+Traditional text areas
+Simple form-based session notes
+Static input fields for session documentation
+✅ REPLACE WITH:
+WhatsApp-style Session Interface
+
+Each session must behave like a chat thread per participant session.
+
+📱 Chat Features (MANDATORY)
+
+Inside session screen:
+
+1. Message-based notes input
+Every note is a chat message bubble
+System stores messages chronologically
+2. Input bar must include:
+🎤 Microphone button
+Voice-to-text dictation (speech → text)
+Used for real-time note capture during session
+📎 Attachment button
+Upload files (PDF, docs, notes)
+📷 Camera button
+Take photos during session (e.g. environment, proof of support, incidents)
+⌨️ Text input
+Quick manual typing (still supported)
+3. Chat behavior
+Messages grouped by time
+Editable messages (optional)
+Each message tagged with:
+timestamp
+participant_id
+session_id
+message_type (text, voice, image, file)
+4. Storage model update
+
+Add new table:
+
+session_messages
+- id uuid
+- session_id uuid
+- sender_role (worker/system)
+- message_type (text | voice | image | file)
+- content text
+- media_url text
+- created_at timestamp
+🎯 Outcome
+
+Support worker can document a session like chatting in WhatsApp:
+
+speak notes
+upload evidence
+take photos
+type quick notes
+
+Everything is captured automatically.
+
+🧾 2. SESSION MODULE (UPDATED LOGIC)
+
+Sessions now include:
+
+Chat-based message stream
+AI-generated structured summary from chat history
+Final compliance report
+Flow:
+Start Session
+   ↓
+Chat-style note taking (text/voice/photo)
+   ↓
+End Session
+   ↓
+AI processes full chat history
+   ↓
+Generate structured NDIS documentation
+   ↓
+Save session report
+🧠 3. COMPLIANCE ENGINE (UPDATED INPUT)
+
+Instead of raw text input only:
+
+Input:
+{
+  "messages": [
+    {
+      "type": "text | voice | image",
+      "content": "",
+      "timestamp": ""
+    }
+  ],
+  "participant_context": {},
+  "goals": []
+}
+Output remains:
+{
+  "summary": "",
+  "activities": "",
+  "outcomes": "",
+  "progress_toward_goals": "",
+  "risk_flags": [],
+  "compliance_score": 0
+}
+🧱 4. FRONTEND REQUIREMENTS (IMPORTANT)
+Session Screen UI must include:
+Chat UI layout:
+Message bubbles (like WhatsApp)
+Bottom input bar fixed
+Floating scrollable chat history
+Input bar:
+🎤 Microphone (voice input)
+📎 Attachment upload
+📷 Camera capture
+⌨️ Text input field
+Send button
+UX Rules:
+NO traditional textarea for sessions
+Everything is message-based
+Must feel like real-time documentation
+🔐 5. AUTH + BACKEND RULES (UNCHANGED BUT CRITICAL)
+Fix Supabase auth login issues
+Ensure user exists in auth.users
+Ensure /api/auth/register correctly creates:
+auth user
+profile user
+role assignment
+🔄 6. END-TO-END WORKFLOW (UPDATED CORE FLOW)
+1. Create Participant
+2. Start Session
+3. Chat-based documentation (voice/text/photo)
+4. End Session
+5. AI processes full chat history
+6. Generate structured NDIS-compliant report
+7. Save session + messages
+8. View full session timeline
+🎯 SPRINT 0 SUCCESS CRITERIA
+
+System is complete when:
+
+Participants CRUD works
+Sessions CRUD works
+Chat-based session UI works (WhatsApp style)
+Voice + image + file inputs work
+AI generates structured NDIS report from chat
+Auth works correctly (no login failures)
+End-to-end workflow runs without errors

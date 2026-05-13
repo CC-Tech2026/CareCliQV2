@@ -3,7 +3,6 @@ import { useParams, useLocation } from "wouter";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
 import { useSettings } from "@/lib/use-settings";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { SmartTextarea } from "@/components/SmartInput";
 import {
   Dialog,
@@ -28,14 +27,12 @@ import {
   FileText,
   Target,
   Image as ImageIcon,
-  Plus,
   Clock,
   Loader2,
   Globe,
   Shield,
   X,
   XCircle,
-  Sparkles,
   User,
   MapPin,
   HeartPulse,
@@ -46,7 +43,8 @@ import {
   BookOpen,
   ShieldCheck,
   Radio,
-  ChevronDown,
+  Send,
+  Paperclip,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -73,20 +71,18 @@ import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 
 type TranslationView = "original" | "translated" | "both";
 
-interface ActivityLog {
+interface ChatMessage {
   id: string;
-  type: string;
-  label?: string;
+  type: "text" | "voice" | "image" | "file" | "activity" | "goal_update" | "system";
+  content: string;
   timestamp: Date;
-}
-
-interface VoiceNote {
-  id: string;
-  text: string;
-  timestamp: Date;
+  mediaUrl?: string;
   translated?: string;
   detectedLanguage?: string;
   isTranslating?: boolean;
+  activityType?: string;
+  goalId?: string;
+  goalStatus?: string;
 }
 
 interface GoalItem {
@@ -107,7 +103,7 @@ interface LiveSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Activity category definitions (no emojis — Lucide icons only)
+// Activity category definitions
 // ---------------------------------------------------------------------------
 
 type LucideIcon = React.ComponentType<{ className?: string }>;
@@ -128,76 +124,35 @@ const ACTIVITY_CATEGORIES: ActivityCategory[] = [
   {
     label: "Personal Care",
     icon: User,
-    items: [
-      {
-        type: "Personal Care",
-        icon: User,
-        color: "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100",
-      },
-    ],
+    items: [{ type: "Personal Care", icon: User, color: "bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100" }],
   },
   {
     label: "Community Access",
     icon: MapPin,
-    items: [
-      {
-        type: "Community Access",
-        icon: MapPin,
-        color:
-          "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100",
-      },
-    ],
+    items: [{ type: "Community Access", icon: MapPin, color: "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100" }],
   },
   {
     label: "Therapy Support",
     icon: HeartPulse,
     items: [
-      {
-        type: "Mobility Support",
-        icon: Activity,
-        color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100",
-      },
-      {
-        type: "Behaviour Support",
-        icon: ShieldCheck,
-        color:
-          "bg-green-50 text-green-700 border-green-200 hover:bg-green-100",
-      },
+      { type: "Mobility Support", icon: Activity, color: "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100" },
+      { type: "Behaviour Support", icon: ShieldCheck, color: "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" },
     ],
   },
   {
     label: "Communication",
     icon: MessageSquare,
     items: [
-      {
-        type: "Communication",
-        icon: MessageSquare,
-        color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100",
-      },
-      {
-        type: "Social Skills",
-        icon: Users,
-        color:
-          "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
-      },
+      { type: "Communication", icon: MessageSquare, color: "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100" },
+      { type: "Social Skills", icon: Users, color: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100" },
     ],
   },
   {
     label: "Daily Living",
     icon: Home,
     items: [
-      {
-        type: "Meal Preparation",
-        icon: Utensils,
-        color:
-          "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100",
-      },
-      {
-        type: "Life Skills",
-        icon: BookOpen,
-        color:
-          "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100",
-      },
+      { type: "Meal Preparation", icon: Utensils, color: "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100" },
+      { type: "Life Skills", icon: BookOpen, color: "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100" },
     ],
   },
 ];
@@ -215,30 +170,14 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: {
-    label: "Not Started",
-    cls: "bg-slate-100 text-slate-600 border-slate-300",
-    icon: Circle,
-  },
-  in_progress: {
-    label: "In Progress",
-    cls: "bg-blue-50 text-blue-700 border-blue-300",
-    icon: Activity,
-  },
-  achieved: {
-    label: "Achieved",
-    cls: "bg-emerald-50 text-emerald-700 border-emerald-300",
-    icon: CheckCircle2,
-  },
-  needs_review: {
-    label: "Needs Review",
-    cls: "bg-amber-50 text-amber-700 border-amber-300",
-    icon: AlertCircle,
-  },
+  not_started: { label: "Not Started", cls: "bg-slate-700 text-white/50 border-slate-600", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Activity },
+  achieved: { label: "Achieved", cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
+  needs_review: { label: "Needs Review", cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
 };
 
 // ---------------------------------------------------------------------------
-// Timer helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
 function formatDuration(totalSeconds: number): string {
@@ -248,110 +187,203 @@ function formatDuration(totalSeconds: number): string {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-// ---------------------------------------------------------------------------
-// Clinical summary builder
-// ---------------------------------------------------------------------------
-
-function buildSummary(
-  session: {
-    session_type: string;
-    duration_minutes: number;
-    notes?: string | null;
-  },
-  activities: ActivityLog[],
-  voiceNotes: VoiceNote[],
+function buildSummaryFromMessages(
+  session: { session_type: string; duration_minutes: number; notes?: string | null },
+  messages: ChatMessage[],
   goals: GoalItem[],
-  images: string[],
   elapsed: number,
   translationView: TranslationView,
 ): LiveSummary {
   const durationMins = Math.max(Math.round(elapsed / 60), 1);
-  const activityTypes = [...new Set(activities.map((a) => a.type))];
+  const activityMsgs = messages.filter((m) => m.type === "activity");
+  const voiceMsgs = messages.filter((m) => m.type === "voice");
+  const imageMsgs = messages.filter((m) => m.type === "image");
+  const textMsgs = messages.filter((m) => m.type === "text");
+
+  const activityTypes = [...new Set(activityMsgs.map((m) => m.activityType || m.content))];
   const achievedGoals = goals.filter((g) => g.status === "achieved");
   const inProgressGoals = goals.filter((g) => g.status === "in_progress");
-
   const goalProgress = goals
     .filter((g) => g.status !== "not_started")
     .map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`);
 
-  const voiceTexts = voiceNotes
-    .map((v) =>
-      translationView !== "original" && v.translated ? v.translated : v.text,
-    )
+  const voiceTexts = voiceMsgs
+    .map((v) => (translationView !== "original" && v.translated ? v.translated : v.content))
     .filter(Boolean);
-
-  const activitiesFormatted = activities.map(
-    (a) => `${a.type} (${format(a.timestamp, "HH:mm")})`,
-  );
+  const allTexts = [...textMsgs.map((m) => m.content), ...voiceTexts];
 
   const lines: string[] = [];
-  lines.push(`SESSION RECORD`);
+  lines.push("SESSION RECORD");
   lines.push(`Type: ${session.session_type} | Duration: ${durationMins} minutes`);
   lines.push("");
-
   if (activityTypes.length > 0) {
     lines.push(`Support provided: ${activityTypes.join(", ")}.`);
   } else {
     lines.push("Support provided: General assistance and supervision.");
   }
-
   if (achievedGoals.length > 0) {
-    lines.push(
-      `Goals achieved during this session: ${achievedGoals.map((g) => g.name).join(", ")}.`,
-    );
+    lines.push(`Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`);
   }
   if (inProgressGoals.length > 0) {
-    lines.push(
-      `Goals actively worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`,
-    );
+    lines.push(`Goals worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`);
   }
-
-  if (voiceTexts.length > 0) {
+  if (allTexts.length > 0) {
     lines.push("");
     lines.push("Practitioner observations:");
-    voiceTexts.forEach((t, i) => lines.push(`  ${i + 1}. ${t}`));
+    allTexts.forEach((t, i) => lines.push(`  ${i + 1}. ${t}`));
   }
-
-  if (images.length > 0) {
+  if (imageMsgs.length > 0) {
     lines.push("");
-    lines.push(
-      `Evidence: ${images.length} photo${images.length > 1 ? "s" : ""} captured as session evidence.`,
-    );
+    lines.push(`Evidence: ${imageMsgs.length} photo${imageMsgs.length > 1 ? "s" : ""} captured.`);
   }
-
   if (session.notes) {
     lines.push("");
     lines.push(`Pre-session notes: ${session.notes}`);
   }
-
   if (translationView !== "original") {
     lines.unshift("[Observations translated to English]\n");
   }
 
-  let clinicalNotes = lines.join("\n");
-
+  const clinicalNotes = lines.join("\n");
   let score = 0;
   if (clinicalNotes.length > 30) score += 30;
-  if (activities.length > 0) score += 30;
+  if (activityMsgs.length > 0) score += 30;
   if (durationMins > 0) score += 20;
   if (session.session_type) score += 20;
   score = Math.min(score, 100);
 
-  const evidenceSummary =
-    images.length > 0
-      ? `${images.length} photo${images.length > 1 ? "s" : ""} captured during session`
-      : "No photos captured";
-
   return {
     clinicalNotes,
-    activities: activitiesFormatted,
+    activities: activityMsgs.map((a) => `${a.activityType || a.content} (${format(a.timestamp, "HH:mm")})`),
     goalProgress,
     complianceScore: score,
     duration: formatDuration(elapsed),
-    voiceNoteCount: voiceNotes.length,
-    imageCount: images.length,
-    evidenceSummary,
+    voiceNoteCount: voiceMsgs.length,
+    imageCount: imageMsgs.length,
+    evidenceSummary:
+      imageMsgs.length > 0
+        ? `${imageMsgs.length} photo${imageMsgs.length > 1 ? "s" : ""} captured`
+        : "No photos captured",
   };
+}
+
+// ---------------------------------------------------------------------------
+// MessageBubble
+// ---------------------------------------------------------------------------
+
+function MessageBubble({
+  msg,
+  translationView,
+}: {
+  msg: ChatMessage;
+  translationView: TranslationView;
+}) {
+  if (msg.type === "system") {
+    return (
+      <div className="flex justify-center my-2 px-4">
+        <span className="text-[10px] text-white/25 italic">{msg.content}</span>
+      </div>
+    );
+  }
+
+  if (msg.type === "activity") {
+    const def = findActivityDef(msg.activityType || msg.content);
+    const AIcon = def?.icon ?? Activity;
+    return (
+      <div className="flex justify-center my-1.5">
+        <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1">
+          <AIcon className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <span className="text-[10px] text-white/60 font-medium">{msg.activityType || msg.content}</span>
+          <span className="text-[9px] text-white/25">• {format(msg.timestamp, "HH:mm")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (msg.type === "goal_update") {
+    return (
+      <div className="flex justify-center my-1.5">
+        <div className="flex items-center gap-1.5 bg-[#D9F103]/8 border border-[#D9F103]/15 rounded-full px-3 py-1">
+          <Target className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <span className="text-[10px] text-[#D9F103]/70 font-medium">{msg.content}</span>
+          <span className="text-[9px] text-[#D9F103]/30">• {format(msg.timestamp, "HH:mm")}</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Worker messages: text, voice, image, file — right aligned
+  return (
+    <div className="flex justify-end px-1 my-0.5">
+      <div className="max-w-[82%] min-w-[60px]">
+        <div className="bg-[#1a1a6e] border border-[#5271FF]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+          {msg.type === "image" && msg.mediaUrl && (
+            <div className="relative">
+              <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
+                <div className="flex items-center gap-1 text-white/60 text-[9px]">
+                  <Camera className="h-2.5 w-2.5" />
+                  <span>Photo evidence • {format(msg.timestamp, "HH:mm")}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          {msg.type === "file" && (
+            <div className="px-4 py-3 flex items-center gap-3">
+              <div className="h-9 w-9 bg-[#5271FF]/20 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#5271FF]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-white text-sm font-medium leading-tight truncate">{msg.content}</p>
+                <p className="text-white/35 text-[10px]">Document attached</p>
+              </div>
+            </div>
+          )}
+          {(msg.type === "text" || msg.type === "voice") && (
+            <div className="px-4 py-3">
+              {msg.type === "voice" && (
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  <div className="flex items-center gap-1 text-[#D9F103]">
+                    <Mic className="h-3 w-3" />
+                    <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
+                  </div>
+                  {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
+                    <span className="text-[9px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full">
+                      {msg.detectedLanguage.toUpperCase()}
+                    </span>
+                  )}
+                  {msg.isTranslating && (
+                    <div className="flex items-center gap-1 text-white/35">
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                      <span className="text-[9px]">Translating…</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(translationView === "original" || translationView === "both" || msg.type === "text") && (
+                <p className="text-white text-sm leading-relaxed">{msg.content}</p>
+              )}
+              {msg.type === "voice" && translationView !== "original" && (
+                <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-white/10")}>
+                  {msg.translated ? (
+                    <>
+                      {translationView === "both" && (
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103] mb-0.5">EN</p>
+                      )}
+                      <p className="text-white/80 text-sm leading-relaxed">{msg.translated}</p>
+                    </>
+                  ) : !msg.isTranslating ? (
+                    <p className="text-white/30 text-xs italic">Translation unavailable</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <p className="text-white/20 text-[9px] text-right mt-0.5 pr-1">{format(msg.timestamp, "HH:mm")}</p>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -366,18 +398,15 @@ export default function SessionLive() {
   const { data: session, isLoading } = useGetSession(id as string, {
     query: { enabled: !!id, queryKey: ["getSession", id] },
   });
-
   const participantId = session?.participant_id ?? "";
   const { data: participant } = useGetParticipant(participantId, {
     query: { enabled: !!participantId, queryKey: ["getParticipant", participantId] },
   });
 
-  // Resolve goals_addressed IDs to titles using participant's goals array
   const resolvedGoalTitles: string[] = (() => {
     const addressed = session?.goals_addressed ?? [];
     if (!addressed.length) return [];
     const participantGoals = participant?.goals ?? [];
-    // Build id->title map from participant's NDISGoal list
     const goalMap: Record<string, string> = {};
     for (const g of participantGoals) {
       if (typeof g === "object" && g !== null) {
@@ -390,33 +419,38 @@ export default function SessionLive() {
 
   const { settings } = useSettings();
 
-  // Session state
+  // ── Primary state ──
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [goals, setGoals] = useState<GoalItem[]>([]);
+  const [inputText, setInputText] = useState("");
+
+  // ── Timer ──
   const [isActive, setIsActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startTimeRef = useRef<Date | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const autoStartAppliedRef = useRef(false);
 
-  // Content state
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [voiceNotes, setVoiceNotes] = useState<VoiceNote[]>([]);
-  const [goals, setGoals] = useState<GoalItem[]>([]);
-  const [images, setImages] = useState<string[]>([]);
-  const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
-  const bodyMarkersInitRef = useRef(false);
-  const bodyMarkersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [translationView, setTranslationView] =
-    useState<TranslationView>("original");
-
-  // Voice recording state
+  // ── Voice ──
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const stopIntentRef = useRef(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Summary / approval modal
+  // ── Body markers ──
+  const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
+  const bodyMarkersInitRef = useRef(false);
+  const bodyMarkersDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Translation ──
+  const [translationView, setTranslationView] = useState<TranslationView>("original");
+
+  // ── UI panels ──
+  const [showActivitySheet, setShowActivitySheet] = useState(false);
+  const [bodyMapOpen, setBodyMapOpen] = useState(false);
+
+  // ── Approval modal ──
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState<LiveSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -430,27 +464,16 @@ export default function SessionLive() {
     progressTowardGoals: "",
   });
 
-  // Keep editable combined preview in sync with structured fields.
-  // Stop syncing once the user manually edits the final clinical record.
-  // Always sync (even to empty string) to avoid stale combined note when fields are cleared.
-  useEffect(() => {
-    if (hasManuallyEditedNotesRef.current) return;
-    setEditableNotes(combineStructuredNotes(structuredNotes));
-  }, [structuredNotes]);
-
-  // Restart confirmation modal
+  // ── Modals ──
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
-  // Body map mobile collapse state (collapsed by default on mobile)
-  const [bodyMapOpen, setBodyMapOpen] = useState(false);
-
-  // RP detection state
+  // ── RP detection ──
   const [rpFlags, setRpFlags] = useState<RPFlag[]>([]);
   const [showRpBottomSheet, setShowRpBottomSheet] = useState(false);
   const [rpAcknowledged, setRpAcknowledged] = useState(false);
   const rpDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Post-save compliance result state
+  // ── Post-save result ──
   interface PostSaveResult {
     score: number;
     status: string;
@@ -459,38 +482,110 @@ export default function SessionLive() {
   }
   const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
 
-  // Debounced RP detection — runs on any note text change
-  useEffect(() => {
-    if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
-    rpDebounceRef.current = setTimeout(() => {
-      const flags = detectRestrictivePracticesAll([
-        structuredNotes.activitiesPerformed,
-        structuredNotes.outcomes,
-        structuredNotes.participantResponse,
-        structuredNotes.progressTowardGoals,
-        editableNotes,
-        recordingText,
-      ]);
-      setRpFlags(flags);
-    }, 600);
-    return () => {
-      if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    structuredNotes.activitiesPerformed,
-    structuredNotes.outcomes,
-    structuredNotes.participantResponse,
-    structuredNotes.progressTowardGoals,
-    editableNotes,
-    recordingText,
-  ]);
-
-  // Session start reminder
+  // ── Reminder ──
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
 
-  // Initialise body markers from saved session data (once, when session first loads)
+  // ── Refs ──
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileAttachRef = useRef<HTMLInputElement>(null);
+  const messagesInitRef = useRef(false);
+
+  // ── Derived ──
+  const activityMessages = messages.filter((m) => m.type === "activity");
+  const voiceMessages = messages.filter((m) => m.type === "voice");
+  const imageMessages = messages.filter((m) => m.type === "image");
+  const imageUrls = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
+
+  // ── addMessage helper ──
+  const addMessage = useCallback(
+    (msg: Omit<ChatMessage, "id">): ChatMessage => {
+      const newMsg: ChatMessage = { ...msg, id: crypto.randomUUID() };
+      setMessages((prev) => [...prev, newMsg]);
+      if (id) {
+        fetch(`/api/sessions/${id}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message_type: msg.type,
+            content: msg.content,
+            media_url: (msg as ChatMessage).mediaUrl ?? null,
+            sender_role: ["activity", "goal_update", "system"].includes(msg.type) ? "system" : "worker",
+            created_at: msg.timestamp.toISOString(),
+          }),
+        }).catch(() => {});
+      }
+      return newMsg;
+    },
+    [id],
+  );
+
+  const updateMessage = useCallback((msgId: string, updates: Partial<ChatMessage>) => {
+    setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, ...updates } : m)));
+  }, []);
+
+  // ── Auto-scroll ──
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, isRecording]);
+
+  // ── Keep combined notes in sync ──
+  useEffect(() => {
+    if (hasManuallyEditedNotesRef.current) return;
+    setEditableNotes(combineStructuredNotes(structuredNotes));
+  }, [structuredNotes]);
+
+  // ── Load existing messages ──
+  useEffect(() => {
+    if (!session?.id || messagesInitRef.current) return;
+    messagesInitRef.current = true;
+    fetch(`/api/sessions/${session.id}/messages`)
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setMessages(
+            (
+              data as Array<{
+                id: string;
+                message_type: string;
+                content: string;
+                created_at: string;
+                media_url?: string;
+              }>
+            ).map((m) => ({
+              id: m.id,
+              type: m.message_type as ChatMessage["type"],
+              content: m.content || "",
+              timestamp: new Date(m.created_at),
+              mediaUrl: m.media_url || undefined,
+            })),
+          );
+        } else {
+          setMessages([
+            {
+              id: crypto.randomUUID(),
+              type: "system",
+              content: `${session.session_type} session`,
+              timestamp: new Date(),
+            },
+          ]);
+        }
+      })
+      .catch(() => {
+        setMessages([
+          {
+            id: crypto.randomUUID(),
+            type: "system",
+            content: `${session.session_type} session`,
+            timestamp: new Date(),
+          },
+        ]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  // ── Init body markers ──
   useEffect(() => {
     if (!session || bodyMarkersInitRef.current) return;
     bodyMarkersInitRef.current = true;
@@ -498,10 +593,10 @@ export default function SessionLive() {
     if (Array.isArray(raw) && raw.length > 0) {
       setBodyMarkers(raw as BodyMarker[]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
-  // Debounced auto-save whenever markers change (skip on initial mount)
+  // ── Body markers debounced save ──
   const bodyMarkersAutoSaveSkipRef = useRef(true);
   useEffect(() => {
     if (bodyMarkersAutoSaveSkipRef.current) {
@@ -518,16 +613,16 @@ export default function SessionLive() {
           body: JSON.stringify({ body_markers: bodyMarkers }),
         });
       } catch {
-        // silent — markers are also sent in final Approve & Save
+        // silent
       }
     }, 1500);
     return () => {
       if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyMarkers]);
 
-  // Populate goals from session.goals_addressed, resolved against participant's goal titles
+  // ── Init goals ──
   useEffect(() => {
     if (session && goals.length === 0) {
       const addressed = session.goals_addressed ?? [];
@@ -540,21 +635,15 @@ export default function SessionLive() {
           })),
         );
       } else if (addressed.length > 0) {
-        // Goals addressed but participant data not yet loaded — use IDs as placeholder
         setGoals(
-          addressed.map((gid) => ({
-            id: gid,
-            name: gid,
-            status: "not_started" as const,
-          })),
+          addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })),
         );
       }
-      // If no goals addressed, leave goals empty — no defaults
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, resolvedGoalTitles.join(",")]);
 
-  // Timer
+  // ── Timer ──
   useEffect(() => {
     if (isActive) {
       timerRef.current = setInterval(() => setElapsed((e) => e + 1), 1000);
@@ -566,7 +655,7 @@ export default function SessionLive() {
     };
   }, [isActive]);
 
-  // Auto-start timer when settings say so — runs once after both session and settings load
+  // ── Auto-start from settings ──
   useEffect(() => {
     if (!session || !settings || autoStartAppliedRef.current || isActive) return;
     if (settings.sessionDefaults?.autoStartTimer) {
@@ -575,18 +664,18 @@ export default function SessionLive() {
       setIsActive(true);
       setElapsed(0);
       setReminderDismissed(true);
-      toast({ title: "Session started", description: "Timer started automatically based on your settings." });
+      toast({ title: "Session started", description: "Timer started automatically." });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, settings]);
 
-  // Session start reminder — fires 5s after page load if not yet started
+  // ── Start reminder ──
   useEffect(() => {
     if (!session || isActive || reminderDismissed) return;
     reminderTimerRef.current = setTimeout(() => {
       toast({
         title: "Session scheduled",
-        description: `Ready to begin: ${session.session_type}. Click "Start" to begin recording.`,
+        description: `Ready: ${session.session_type}`,
         duration: 30000,
         action: (
           <ToastAction
@@ -609,129 +698,282 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isActive]);
 
+  // ── RP detection ──
+  useEffect(() => {
+    if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
+    rpDebounceRef.current = setTimeout(() => {
+      const flags = detectRestrictivePracticesAll([
+        ...messages.filter((m) => ["text", "voice"].includes(m.type)).map((m) => m.content),
+        recordingText,
+        editableNotes,
+        structuredNotes.activitiesPerformed,
+        structuredNotes.outcomes,
+        structuredNotes.participantResponse,
+        structuredNotes.progressTowardGoals,
+      ]);
+      setRpFlags(flags);
+    }, 600);
+    return () => {
+      if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    messages.length,
+    recordingText,
+    editableNotes,
+    structuredNotes.activitiesPerformed,
+    structuredNotes.outcomes,
+    structuredNotes.participantResponse,
+    structuredNotes.progressTowardGoals,
+  ]);
+
+  // ---------------------------------------------------------------------------
+  // Handlers
+  // ---------------------------------------------------------------------------
+
   const handleStart = () => {
     startTimeRef.current = new Date();
     setIsActive(true);
     setElapsed(0);
     setReminderDismissed(true);
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
-    toast({ title: "Session started", description: "Timer is running. Start documenting." });
-    // Auto-start voice recording if enabled in settings
+    addMessage({ type: "system", content: "Session started", timestamp: new Date() });
+    toast({ title: "Session started", description: "Start documenting below." });
     if (settings?.sessionDefaults?.enableVoice) {
-      // Delay slightly so state updates settle before starting
       setTimeout(() => startRecording(), 300);
     }
   };
 
+  const sendTextMessage = () => {
+    if (!inputText.trim()) return;
+    if (!isActive) {
+      toast({ title: "Start the session first", variant: "destructive" });
+      return;
+    }
+    addMessage({ type: "text", content: inputText.trim(), timestamp: new Date() });
+    setInputText("");
+  };
+
+  const logActivity = (type: string) => {
+    if (!isActive) {
+      toast({ title: "Start the session first", variant: "destructive" });
+      setShowActivitySheet(false);
+      return;
+    }
+    addMessage({ type: "activity", content: type, timestamp: new Date(), activityType: type });
+    setShowActivitySheet(false);
+    toast({ title: `${type} logged` });
+  };
+
+  const cycleGoalStatus = (goalId: string) => {
+    const cycle: GoalItem["status"][] = ["not_started", "in_progress", "achieved", "needs_review"];
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return;
+    const idx = cycle.indexOf(goal.status);
+    const newStatus = cycle[(idx + 1) % cycle.length];
+    setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: newStatus } : g)));
+    addMessage({
+      type: "goal_update",
+      content: `${goal.name} → ${GOAL_STATUS_CONFIG[newStatus].label}`,
+      timestamp: new Date(),
+      goalId,
+      goalStatus: newStatus,
+    });
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    addMessage({ type: "image", content: "Photo evidence", timestamp: new Date(), mediaUrl: url });
+    toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
+    e.target.value = "";
+  };
+
+  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    addMessage({ type: "file", content: file.name, timestamp: new Date() });
+    toast({ title: "File attached", description: file.name });
+    e.target.value = "";
+  };
+
+  const startRecording = () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) {
+      toast({
+        title: "Voice not supported",
+        description: "Use Chrome for voice notes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition: any = new SpeechRecognitionClass();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-AU";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let transcript = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setRecordingText(transcript);
+    };
+    recognition.onerror = () => {
+      setIsRecording(false);
+      setRecordingText("");
+    };
+    recognition.onend = () => {
+      if (!stopIntentRef.current) recognition.start();
+    };
+    stopIntentRef.current = false;
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  };
+
+  const stopRecording = async () => {
+    stopIntentRef.current = true;
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+    const text = recordingText.trim();
+    if (!text) return;
+
+    const needsTranslation = translationView !== "original";
+    const newMsg = addMessage({
+      type: "voice",
+      content: text,
+      timestamp: new Date(),
+      isTranslating: needsTranslation,
+    });
+    setRecordingText("");
+    toast({ title: "Voice note saved" });
+
+    if (needsTranslation) {
+      try {
+        const result = await translateToEnglish(text);
+        updateMessage(newMsg.id, {
+          isTranslating: false,
+          translated: result.translated,
+          detectedLanguage: result.detectedLanguage,
+        });
+      } catch {
+        updateMessage(newMsg.id, { isTranslating: false });
+        toast({
+          title: "Translation unavailable",
+          description: "Original text preserved.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const handleStop = useCallback(async () => {
-    // Pre-modal blocking: timer must have been started
     if (elapsed === 0) {
       toast({
         title: "Session not started",
-        description: "Click \"Start\" to begin the timer before ending the session.",
+        description: 'Click "Start" to begin the timer before ending.',
         variant: "destructive",
       });
       return;
     }
-    // Compute pre-filled structured notes from live session data.
-    // Evaluate the content gate AGAINST these values (not the current empty state)
-    // so that voice-notes-only and activity-based workflows both pass correctly.
-    const activityTypes = [...new Set(activities.map((a) => a.type))];
+
+    const actMsgs = messages.filter((m) => m.type === "activity");
+    const vMsgs = messages.filter((m) => m.type === "voice");
+    const tMsgs = messages.filter((m) => m.type === "text");
+    const activityTypes = [...new Set(actMsgs.map((m) => m.activityType || m.content))];
     const achievedGoals = goals.filter((g) => g.status === "achieved");
     const inProgressGoals = goals.filter((g) => g.status === "in_progress");
-    const voiceTexts = voiceNotes
-      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.text))
+    const voiceTexts = vMsgs
+      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.content))
       .filter(Boolean);
+    const textContent = tMsgs.map((m) => m.content);
+    const allObs = [...voiceTexts, ...textContent];
 
-    const prefilled: StructuredNotes = {
-      activitiesPerformed: activityTypes.length > 0
-        ? activityTypes.join(", ")
-        : activities.map((a) => `${a.type} (${format(a.timestamp, "HH:mm")})`).join("\n"),
-      outcomes: [
-        achievedGoals.length > 0
-          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
-          : "",
-        voiceTexts.length > 0
-          ? `Observations: ${voiceTexts.slice(0, 2).join(" ")}`
-          : "",
-      ].filter(Boolean).join("\n"),
-      participantResponse: "",
-      progressTowardGoals: inProgressGoals.length > 0
-        ? inProgressGoals.map((g) => `${g.name}: In Progress`).join("\n")
-        : goals.filter((g) => g.status !== "not_started").map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`).join("\n"),
-    };
-
-    // Pre-modal gate: block if nothing would populate the review modal.
-    // Uses prefilled values (from activities + voice notes + goals) to determine
-    // whether there is anything to document — aligns with the compliance content gate.
-    const prefilledHasContent = [
-      prefilled.activitiesPerformed,
-      prefilled.outcomes,
-      prefilled.progressTowardGoals,
-    ].some((f) => f.trim().length > 0);
-
+    const prefilledHasContent =
+      activityTypes.length > 0 || voiceTexts.length > 0 || textContent.length > 0;
     if (!prefilledHasContent && !session?.notes?.trim()) {
       toast({
         title: "Nothing to document yet",
-        description: "Log at least one activity or record a voice note before reviewing the session.",
+        description: "Log an activity or add a note before reviewing.",
         variant: "destructive",
       });
       return;
     }
 
-    // Reset manual-edit flag so the auto-generated notes are shown fresh each time
     hasManuallyEditedNotesRef.current = false;
-
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    // Stop any active recording cleanly
     if (isRecording) {
       stopIntentRef.current = true;
       recognitionRef.current?.stop();
       setIsRecording(false);
     }
+
     setSummaryLoading(true);
     setShowSummary(true);
 
-    const localSummary = buildSummary(
+    const prefilled: StructuredNotes = {
+      activitiesPerformed: activityTypes.join(", "),
+      outcomes: [
+        achievedGoals.length > 0
+          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
+          : "",
+        allObs.length > 0 ? `Observations: ${allObs.slice(0, 2).join(" ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      participantResponse: "",
+      progressTowardGoals: goals
+        .filter((g) => g.status !== "not_started")
+        .map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`)
+        .join("\n"),
+    };
+
+    const s = buildSummaryFromMessages(
       {
         session_type: session?.session_type ?? "Session",
         duration_minutes: session?.duration_minutes ?? 0,
         notes: session?.notes,
       },
-      activities,
-      voiceNotes,
+      messages,
       goals,
-      images,
       elapsed,
       translationView,
     );
-    setSummary(localSummary);
+    setSummary(s);
     setStructuredNotes(prefilled);
-
     setSummaryLoading(false);
-  }, [session, activities, voiceNotes, goals, images, elapsed, translationView, isRecording]);
+  }, [session, messages, goals, elapsed, translationView, isRecording, toast]);
 
-  // Approve & save — two-step pipeline (with RP gate)
   const handleApproveAndSave = useCallback(async () => {
     setShowRpBottomSheet(false);
-    if (!id) { navigate("/sessions"); return; }
+    if (!id) {
+      navigate("/sessions");
+      return;
+    }
 
-    // Settings-based compliance gate
     const compSettings = settings?.compliance;
-    if (compSettings?.requireActivity && activities.length === 0) {
-      toast({
-        title: "Session cannot be approved: no activity logged",
-        variant: "destructive",
-      });
+    const actMsgs = messages.filter((m) => m.type === "activity");
+    const vMsgs = messages.filter((m) => m.type === "voice");
+    const iMsgs = messages.filter((m) => m.type === "image");
+    const iUrls = iMsgs.map((m) => m.mediaUrl!).filter(Boolean);
+
+    if (compSettings?.requireActivity && actMsgs.length === 0) {
+      toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
       return;
     }
     if (compSettings?.requireNotes) {
-      const hasNotes = [
-        structuredNotes.activitiesPerformed,
-        structuredNotes.outcomes,
-        structuredNotes.participantResponse,
-      ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
+      const hasNotes =
+        [
+          structuredNotes.activitiesPerformed,
+          structuredNotes.outcomes,
+          structuredNotes.participantResponse,
+        ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
       if (!hasNotes) {
         toast({
           title: "Session cannot be approved: clinical notes are required",
@@ -742,7 +984,7 @@ export default function SessionLive() {
     }
     if (compSettings?.requireDuration && elapsed === 0) {
       toast({
-        title: "Session cannot be approved: session duration has not been recorded",
+        title: "Session cannot be approved: session duration not recorded",
         variant: "destructive",
       });
       return;
@@ -750,38 +992,35 @@ export default function SessionLive() {
 
     setIsSaving(true);
 
-    const transcription = voiceNotes
-      .map((n) => `[${format(n.timestamp, "HH:mm")}] ${n.text}${n.translated && n.translated !== n.text ? ` [EN: ${n.translated}]` : ""}`)
+    const transcription = vMsgs
+      .map(
+        (n) =>
+          `[${format(n.timestamp, "HH:mm")}] ${n.content}${n.translated && n.translated !== n.content ? ` [EN: ${n.translated}]` : ""}`,
+      )
       .join("\n");
 
     const durationMinutes = Math.max(1, Math.round(elapsed / 60));
-
-    // Build the timestamped activity log for audit persistence
-    const activityLog = activities.map((a) => ({
+    const activityLog = actMsgs.map((a) => ({
       timestamp: format(a.timestamp, "HH:mm"),
-      type: a.type,
-      label: a.label ?? a.type,
+      type: a.activityType || a.content,
+      label: a.activityType || a.content,
     }));
 
     try {
-      // Step 1: Save all audit-critical data in one PATCH call (not dependent on AI)
       const patchBody: Record<string, unknown> = {
         duration_minutes: durationMinutes,
         notes: editableNotes.trim() || undefined,
         transcription: transcription || undefined,
         status: "completed",
-        photo_urls: images,
-        // Individual structured note DB columns for search/reporting
+        photo_urls: iUrls,
         activities_performed: structuredNotes.activitiesPerformed || undefined,
         outcomes: structuredNotes.outcomes || undefined,
         participant_response: structuredNotes.participantResponse || undefined,
         progress_toward_goals: structuredNotes.progressTowardGoals || undefined,
-        // Also keep legacy structured_notes dict for backward-compat (ai_insights merge)
         structured_notes: structuredNotes,
         activity_log: activityLog,
         body_markers: bodyMarkers,
       };
-      // Remove undefined values
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
 
       const patchRes = await fetch(`/api/sessions/${id}`, {
@@ -791,11 +1030,25 @@ export default function SessionLive() {
       });
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
 
-      // Step 2: Await AI analysis (best-effort, 12s timeout) then show ComplianceResultPanel
+      const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
+      const liveComplianceLocal = checkStructuredCompliance(
+        structuredNotes,
+        !!(session?.participant_id),
+        durationMinutes,
+        actMsgs.length,
+        iUrls.length,
+        goalsAddressedCount,
+      );
+
       const localResult: PostSaveResult = {
-        score: liveCompliance.score,
-        status: liveCompliance.score >= 85 ? "Compliant" : liveCompliance.score >= 60 ? "At Risk" : "Non-Compliant",
-        rules: liveCompliance.checks.map((c) => ({ label: c.label, pass: c.pass, note: c.note })),
+        score: liveComplianceLocal.score,
+        status:
+          liveComplianceLocal.score >= 85
+            ? "Compliant"
+            : liveComplianceLocal.score >= 60
+              ? "At Risk"
+              : "Non-Compliant",
+        rules: liveComplianceLocal.checks.map((c) => ({ label: c.label, pass: c.pass, note: c.note })),
         rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
       };
 
@@ -818,12 +1071,14 @@ export default function SessionLive() {
               category: String(f.category ?? ""),
               phrase: String(f.phrase ?? ""),
               index: Number(f.index ?? 0),
-              suggested_rewrite: (f.suggested_rewrite as string | undefined) ?? (f.suggestion as string | undefined),
+              suggested_rewrite:
+                (f.suggested_rewrite as string | undefined) ??
+                (f.suggestion as string | undefined),
             }));
           }
         }
       } catch {
-        // timeout/error — use local compliance data
+        // timeout/error — use local
       }
 
       setIsSaving(false);
@@ -832,20 +1087,35 @@ export default function SessionLive() {
     } catch (err) {
       setIsSaving(false);
       console.error("session save failed", err);
-      toast({ title: "Save failed", description: "Could not save session data. Please try again.", variant: "destructive" });
+      toast({
+        title: "Save failed",
+        description: "Could not save. Please try again.",
+        variant: "destructive",
+      });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, elapsed, editableNotes, voiceNotes, structuredNotes, activities, settings, rpFlags, toast, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    id,
+    elapsed,
+    editableNotes,
+    messages,
+    structuredNotes,
+    settings,
+    rpFlags,
+    bodyMarkers,
+    session,
+    toast,
+    navigate,
+  ]);
 
   const handleInitiateApprove = useCallback(() => {
-    // Synchronous scan at click time — catches RP typed within debounce window
     const freshFlags = detectRestrictivePracticesAll([
       editableNotes,
       structuredNotes.activitiesPerformed,
       structuredNotes.outcomes,
       structuredNotes.participantResponse,
       structuredNotes.progressTowardGoals,
-      ...voiceNotes.map((n) => n.text),
+      ...voiceMessages.map((n) => n.content),
     ]);
     const flagsToUse = freshFlags.length > 0 ? freshFlags : rpFlags;
     if (flagsToUse.length > 0) {
@@ -855,17 +1125,21 @@ export default function SessionLive() {
     } else {
       void handleApproveAndSave();
     }
-  }, [rpFlags, editableNotes, structuredNotes, voiceNotes, handleApproveAndSave]);
+  }, [rpFlags, editableNotes, structuredNotes, voiceMessages, handleApproveAndSave]);
 
-  // Restart — clears all state and restarts timer
   const handleConfirmRestart = () => {
     setPostSaveResult(null);
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     setElapsed(0);
-    setActivities([]);
-    setVoiceNotes([]);
-    setImages([]);
+    setMessages([
+      {
+        id: crypto.randomUUID(),
+        type: "system",
+        content: `${session?.session_type ?? "Session"} restarted`,
+        timestamp: new Date(),
+      },
+    ]);
     setGoals((prev) => prev.map((g) => ({ ...g, status: "not_started" as const })));
     setBodyMarkers([]);
     setShowRestartConfirm(false);
@@ -873,143 +1147,34 @@ export default function SessionLive() {
     setSummary(null);
     hasManuallyEditedNotesRef.current = false;
     setEditableNotes("");
-    setStructuredNotes({ activitiesPerformed: "", outcomes: "", participantResponse: "", progressTowardGoals: "" });
+    setStructuredNotes({
+      activitiesPerformed: "",
+      outcomes: "",
+      participantResponse: "",
+      progressTowardGoals: "",
+    });
     stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
-    toast({ title: "Session restarted", description: "All logs cleared. Ready to begin." });
+    toast({ title: "Session restarted", description: "All logs cleared." });
   };
 
-  // Voice recording
-  const startRecording = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SpeechRecognitionClass) {
-      toast({ title: "Voice not supported", description: "Use Chrome for voice notes.", variant: "destructive" });
-      return;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const recognition: any = new SpeechRecognitionClass();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-AU";
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    recognition.onresult = (event: any) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      setRecordingText(transcript);
-    };
-
-    recognition.onerror = () => {
-      setIsRecording(false);
-      setRecordingText("");
-    };
-
-    recognition.onend = () => {
-      if (!stopIntentRef.current) recognition.start();
-    };
-
-    stopIntentRef.current = false;
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsRecording(true);
-  };
-
-  const stopRecording = async () => {
-    stopIntentRef.current = true;
-    recognitionRef.current?.stop();
-    setIsRecording(false);
-    const text = recordingText.trim();
-    if (!text) return;
-
-    const noteId = Date.now().toString();
-    const needsTranslation = translationView !== "original";
-
-    const note: VoiceNote = {
-      id: noteId,
-      text,
-      timestamp: new Date(),
-      isTranslating: needsTranslation,
-    };
-    setVoiceNotes((prev) => [note, ...prev]);
-    setRecordingText("");
-    toast({ title: "Voice note saved" });
-
-    if (needsTranslation) {
-      try {
-        const result = await translateToEnglish(text);
-        setVoiceNotes((prev) =>
-          prev.map((n) =>
-            n.id === noteId
-              ? {
-                  ...n,
-                  isTranslating: false,
-                  translated: result.translated,
-                  detectedLanguage: result.detectedLanguage,
-                }
-              : n,
-          ),
-        );
-      } catch {
-        setVoiceNotes((prev) =>
-          prev.map((n) => (n.id === noteId ? { ...n, isTranslating: false } : n)),
-        );
-        toast({ title: "Translation unavailable", description: "Original text preserved.", variant: "destructive" });
-      }
-    }
-  };
-
-  const logActivity = (type: string) => {
-    if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
-      return;
-    }
-    setActivities((prev) => [
-      { id: Date.now().toString(), type, timestamp: new Date() },
-      ...prev,
-    ]);
-  };
-
-  const cycleGoalStatus = (goalId: string) => {
-    const cycle: GoalItem["status"][] = [
-      "not_started",
-      "in_progress",
-      "achieved",
-      "needs_review",
-    ];
-    setGoals((prev) =>
-      prev.map((g) => {
-        if (g.id !== goalId) return g;
-        const idx = cycle.indexOf(g.status);
-        return { ...g, status: cycle[(idx + 1) % cycle.length] };
-      }),
-    );
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setImages((prev) => [...prev, url]);
-    toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
-  };
+  // ---------------------------------------------------------------------------
+  // Render guards
+  // ---------------------------------------------------------------------------
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      <div className="h-screen flex items-center justify-center bg-[#0D0D55]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#D9F103]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-slate-500">Session not found</p>
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#0D0D55]">
+        <p className="text-white/50">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
         </Button>
@@ -1018,28 +1183,26 @@ export default function SessionLive() {
   }
 
   const participantName = session.participants?.full_name ?? "Session";
-
-  // Live compliance for review modal (cheap pure fn — recomputes on every render)
   const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
   const liveCompliance = checkStructuredCompliance(
     structuredNotes,
     !!(session?.participant_id),
     elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
-    activities.length,
-    images.length,
+    activityMessages.length,
+    imageUrls.length,
     goalsAddressedCount,
   );
 
-  // Live compliance banner — derived from settings.compliance + current session state
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
   if (compSettings?.requireActivity) {
-    bannerItems.push({ label: "Activity required", met: activities.length > 0 });
+    bannerItems.push({ label: "Activity required", met: activityMessages.length > 0 });
   }
   if (compSettings?.requireNotes) {
-    // Mirrors the approval gate: structured notes auto-populate from activities or voice notes,
-    // so either source satisfies the clinical notes requirement.
-    const hasNotes = activities.length > 0 || voiceNotes.length > 0;
+    const hasNotes =
+      activityMessages.length > 0 ||
+      voiceMessages.length > 0 ||
+      messages.filter((m) => m.type === "text").length > 0;
     bannerItems.push({ label: "Clinical notes required", met: hasNotes });
   }
   if (compSettings?.requireDuration) {
@@ -1054,16 +1217,16 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#050520] overflow-hidden">
 
       {/* ── Top control bar ── */}
       <div
         className={cn(
-          "transition-colors duration-300 shrink-0 border-b border-white/10",
-          isActive ? "bg-indigo-900" : "bg-slate-900",
+          "shrink-0 border-b border-white/10 transition-colors duration-300",
+          isActive ? "bg-[#0D0D55]" : "bg-slate-900",
         )}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
             className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm transition-colors font-medium"
@@ -1071,27 +1234,26 @@ export default function SessionLive() {
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
-          <div className="text-center">
-            <h1 className="text-white font-bold text-sm tracking-tight leading-tight">
+          <div className="text-center min-w-0 flex-1 px-3">
+            <h1 className="text-white font-bold text-sm tracking-tight leading-tight truncate">
               {participantName}
             </h1>
-            <p className="text-white/60 text-xs">{session.session_type}</p>
+            <p className="text-white/50 text-[10px]">{session.session_type}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Translation 3-way toggle */}
-            <div className="flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5 text-white/50 shrink-0" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1">
+              <Globe className="h-3 w-3 text-white/35 shrink-0" />
               <div className="flex rounded-md border border-white/20 overflow-hidden">
                 {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => setTranslationView(v)}
                     className={cn(
-                      "px-2 py-1 text-[10px] font-medium transition-colors leading-none",
+                      "px-1.5 py-0.5 text-[9px] font-medium transition-colors",
                       translationView === v
                         ? "bg-white/20 text-white"
-                        : "text-white/40 hover:text-white/70",
+                        : "text-white/35 hover:text-white/60",
                     )}
                   >
                     {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
@@ -1100,49 +1262,44 @@ export default function SessionLive() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {elapsed > 0 && (
-                <Button
-                  onClick={() => setShowRestartConfirm(true)}
-                  variant="ghost"
-                  className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10 font-medium px-3 py-1.5 h-auto text-xs"
-                >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Restart
-                </Button>
-              )}
-              {!isActive ? (
-                <Button
-                  onClick={handleStart}
-                  className="gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-2 h-auto shadow-sm text-xs"
-                >
-                  <Play className="h-3.5 w-3.5 fill-white" />
-                  {elapsed > 0 ? "Resume" : "Start"}
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleStop}
-                  className="gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 h-auto shadow-sm text-xs"
-                >
-                  <Square className="h-3.5 w-3.5 fill-white" />
-                  End Session
-                </Button>
-              )}
-            </div>
+            {elapsed > 0 && (
+              <button
+                onClick={() => setShowRestartConfirm(true)}
+                className="text-white/40 hover:text-white/70 text-[10px] px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                Restart
+              </button>
+            )}
+
+            {!isActive ? (
+              <Button
+                onClick={handleStart}
+                className="gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-3 py-1.5 h-auto text-xs"
+              >
+                <Play className="h-3 w-3 fill-white" />
+                {elapsed > 0 ? "Resume" : "Start"}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleStop}
+                className="gap-1 bg-red-500 hover:bg-red-600 text-white font-semibold px-3 py-1.5 h-auto text-xs"
+              >
+                <Square className="h-3 w-3 fill-white" />
+                End
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Timer + status bar */}
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 pb-3 text-xs text-white/70 flex-wrap gap-2 border-t border-white/10 pt-2.5">
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-2xl font-bold text-white tracking-tight leading-none">
+        {/* Timer bar */}
+        <div className="flex items-center justify-between px-4 pb-2 border-t border-white/10 pt-2">
+          <div className="flex items-center gap-2.5">
+            <span className="font-mono text-xl font-bold text-white tracking-tight">
               {formatDuration(elapsed)}
             </span>
             <span
               className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide border",
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border",
                 isActive
                   ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
                   : "bg-slate-700 text-slate-300 border-slate-600",
@@ -1154,129 +1311,304 @@ export default function SessionLive() {
                   isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-400",
                 )}
               />
-              {isActive ? "In Progress" : elapsed > 0 ? "Paused" : "Ready to Start"}
+              {isActive ? "In Progress" : elapsed > 0 ? "Paused" : "Ready"}
             </span>
-
-            {/* Recording active pill */}
             {isRecording && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
-                <Radio className="h-2.5 w-2.5 animate-pulse" />
-                Recording Active
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
+                <Radio className="h-2.5 w-2.5 animate-pulse" /> Listening
               </span>
             )}
           </div>
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5 text-white/40" />
-              <span>{session.duration_minutes} min planned</span>
-            </div>
+          <div className="flex items-center gap-3 text-[10px] text-white/35">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {session.duration_minutes}m planned
+            </span>
             {session.session_date && (
-              <div className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5 text-white/40" />
-                <span>{format(new Date(session.session_date), "MMM d, yyyy")}</span>
-              </div>
+              <span>{format(new Date(session.session_date), "MMM d")}</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Working Toward: goal strip ── */}
-      {resolvedGoalTitles.length > 0 && (
-        <div className="shrink-0 bg-indigo-50 border-b border-indigo-100 px-4 py-1.5">
-          <div className="max-w-7xl mx-auto flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600 shrink-0">
-              <Target className="h-3 w-3" />
-              Working toward:
+      {/* ── Goals strip (tap chips to cycle status) ── */}
+      {goals.length > 0 ? (
+        <div className="shrink-0 bg-indigo-950/60 border-b border-indigo-900/30 px-3 py-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-indigo-400/70 shrink-0">
+              <Target className="h-3 w-3" /> Goals:
             </span>
-            {resolvedGoalTitles.map((title, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200"
+            {goals.map((goal) => (
+              <button
+                key={goal.id}
+                onClick={() => cycleGoalStatus(goal.id)}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border transition-all active:scale-95",
+                  GOAL_STATUS_CONFIG[goal.status].cls,
+                )}
               >
-                {title}
-              </span>
+                {goal.name.length > 22 ? goal.name.slice(0, 22) + "…" : goal.name}
+              </button>
             ))}
+            <button
+              onClick={() => setBodyMapOpen((o) => !o)}
+              className="ml-auto flex items-center gap-1 text-[9px] text-white/25 hover:text-white/50 transition-colors"
+            >
+              <HeartPulse className="h-3 w-3" />
+              {bodyMapOpen ? "Hide" : "Body Map"}
+            </button>
           </div>
+        </div>
+      ) : (
+        <div className="shrink-0 bg-amber-950/30 border-b border-amber-800/20 px-3 py-1.5 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />
+          <p className="text-amber-300/70 text-[10px]">
+            No goals linked — non-compliant. Add goals in session setup.
+          </p>
         </div>
       )}
 
-      {/* ── Compliance Status Banner ── */}
+      {/* ── Compliance banner ── */}
       {bannerVisible && (
         <div
           className={cn(
-            "shrink-0 border-b px-4 py-2 transition-colors duration-300",
+            "shrink-0 border-b px-3 py-1.5 transition-colors",
             bannerAllMet
-              ? "bg-emerald-50 border-emerald-200"
+              ? "bg-emerald-950/30 border-emerald-900/20"
               : bannerAnyMet
-                ? "bg-amber-50 border-amber-200"
-                : "bg-red-50 border-red-200",
+                ? "bg-amber-950/30 border-amber-900/20"
+                : "bg-red-950/30 border-red-900/20",
           )}
         >
-          <div className="max-w-7xl mx-auto flex items-center gap-3 flex-wrap">
-            <span
+          <div className="flex items-center gap-2 flex-wrap">
+            <ShieldCheck
               className={cn(
-                "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider shrink-0",
-                bannerAllMet ? "text-emerald-700" : bannerAnyMet ? "text-amber-700" : "text-red-700",
+                "h-3 w-3 shrink-0",
+                bannerAllMet ? "text-emerald-400" : "text-amber-400",
               )}
-            >
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Compliance
-            </span>
-            <div className="flex items-center gap-2 flex-wrap">
-              {bannerAllMet ? (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-700 border border-emerald-300">
-                  <CheckCircle2 className="h-3 w-3" />
-                  All requirements met
+            />
+            {bannerAllMet ? (
+              <span className="text-[10px] text-emerald-400 font-medium">
+                All compliance requirements met
+              </span>
+            ) : (
+              bannerItems.map((item) => (
+                <span
+                  key={item.label}
+                  className={cn(
+                    "text-[10px] font-medium flex items-center gap-1",
+                    item.met ? "text-emerald-400" : "text-red-400",
+                  )}
+                >
+                  {item.met ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3" />
+                  )}
+                  {item.label}
                 </span>
-              ) : (
-                bannerItems.map((item) => (
-                  <span
-                    key={item.label}
-                    className={cn(
-                      "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border",
-                      item.met
-                        ? "bg-emerald-100 text-emerald-700 border-emerald-300"
-                        : "bg-white text-red-700 border-red-300",
-                    )}
-                  >
-                    {item.met ? (
-                      <CheckCircle2 className="h-3 w-3" />
-                    ) : (
-                      <AlertCircle className="h-3 w-3" />
-                    )}
-                    {item.label}
-                  </span>
-                ))
-              )}
-            </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Main Grid ── */}
-      <div className="flex-1 overflow-y-auto max-w-7xl w-full mx-auto px-4 py-4 lg:py-6 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+      {/* ── Body map (collapsible) ── */}
+      {bodyMapOpen && (
+        <div className="shrink-0 bg-slate-900/80 border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+              <HeartPulse className="h-3.5 w-3.5 text-indigo-400" /> Physical Examination
+            </h3>
+            <button
+              onClick={() => setBodyMapOpen(false)}
+              className="text-white/35 hover:text-white/60"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <BodyExaminationPanel
+            markers={bodyMarkers}
+            onChange={setBodyMarkers}
+            bodyType={participant?.biological_sex ?? "unspecified"}
+          />
+        </div>
+      )}
 
-        {/* Left column: Activity Log + Goals + Insights — pushed below notes on mobile */}
-        <div className="order-2 lg:order-1 space-y-4 lg:space-y-6 lg:col-span-1">
+      {/* ── Chat feed ── */}
+      <div className="flex-1 overflow-y-auto px-2 py-3">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center py-20">
+            <MessageSquare className="h-12 w-12 text-white/8 mb-3" />
+            <p className="text-white/25 text-sm font-medium">No messages yet</p>
+            <p className="text-white/15 text-xs mt-1">Start the session and document below</p>
+          </div>
+        )}
 
-          {/* Activity Log (was: Quick Actions) */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Activity className="h-4 w-4 text-indigo-500" /> Activity Log
-            </h2>
-            <div className="space-y-3">
+        <div className="space-y-0.5">
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} msg={msg} translationView={translationView} />
+          ))}
+        </div>
+
+        {/* Live recording bubble */}
+        {isRecording && (
+          <div className="flex justify-end px-1 mt-1">
+            <div className="max-w-[82%] bg-red-950/50 border border-red-800/40 rounded-2xl rounded-tr-sm px-4 py-3">
+              <div className="flex items-center gap-2 mb-1.5 text-red-400">
+                <Radio className="h-3 w-3 animate-pulse" />
+                <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
+              </div>
+              <p className="text-white/60 text-sm italic">
+                {recordingText || "Speak clearly…"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div ref={chatBottomRef} className="h-2" />
+      </div>
+
+      {/* ── RP warning (above input) ── */}
+      {rpFlags.length > 0 && !showSummary && (
+        <div className="shrink-0 bg-red-950/50 border-t border-red-800/30 px-3 py-2 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+          <p className="text-red-300 text-xs flex-1">
+            <span className="font-semibold">Possible RP language detected</span>
+            <span className="text-red-400/70 ml-1">
+              ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
+            </span>
+          </p>
+          <button
+            onClick={() => setShowRpBottomSheet(true)}
+            className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0"
+          >
+            Review
+          </button>
+        </div>
+      )}
+
+      {/* ── Bottom input bar ── */}
+      <div className="shrink-0 bg-[#0D0D55] border-t border-white/10 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          {/* Activity picker */}
+          <button
+            onClick={() => setShowActivitySheet(true)}
+            title="Log activity"
+            className="h-9 w-9 rounded-full flex items-center justify-center bg-[#D9F103]/15 text-[#D9F103] hover:bg-[#D9F103]/25 transition-all shrink-0"
+          >
+            <Activity className="h-4 w-4" />
+          </button>
+
+          {/* Camera */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Take photo"
+            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
+          >
+            <Camera className="h-4 w-4" />
+          </button>
+
+          {/* Attachment */}
+          <button
+            onClick={() => fileAttachRef.current?.click()}
+            title="Attach file"
+            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+
+          {/* Text input */}
+          <div className="flex-1 bg-white/8 border border-white/10 rounded-2xl px-4 py-2 min-h-[36px] flex items-center">
+            <input
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendTextMessage();
+                }
+              }}
+              placeholder={isActive ? "Type a note…" : "Start session to add notes"}
+              disabled={!isActive}
+              className="w-full bg-transparent text-white text-sm placeholder-white/20 outline-none disabled:opacity-30"
+            />
+          </div>
+
+          {/* Mic */}
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={!isActive}
+            title={isRecording ? "Stop recording" : "Start voice note"}
+            className={cn(
+              "h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
+              isRecording
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
+            )}
+          >
+            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </button>
+
+          {/* Send */}
+          <button
+            onClick={sendTextMessage}
+            disabled={!inputText.trim() || !isActive}
+            className="h-9 w-9 bg-[#D9F103] rounded-full flex items-center justify-center disabled:opacity-20 hover:bg-[#D9F103]/90 transition-all shrink-0"
+          >
+            <Send className="h-4 w-4 text-[#0D0D55]" />
+          </button>
+        </div>
+      </div>
+
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handlePhotoUpload}
+      />
+      <input
+        ref={fileAttachRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.txt"
+        className="hidden"
+        onChange={handleFileAttach}
+      />
+
+      {/* ── Activity sheet ── */}
+      {showActivitySheet && (
+        <div
+          className="fixed inset-0 z-40 flex items-end"
+          onClick={() => setShowActivitySheet(false)}
+        >
+          <div
+            className="w-full bg-[#0D0D55] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-sm">Log Activity</h3>
+              <button
+                onClick={() => setShowActivitySheet(false)}
+                className="text-white/40 hover:text-white/70"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
               {ACTIVITY_CATEGORIES.map((cat) => {
                 const CatIcon = cat.icon;
                 return (
                   <div key={cat.label}>
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <CatIcon className="h-3 w-3 text-slate-400" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <CatIcon className="h-3 w-3 text-white/30" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/30">
                         {cat.label}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-2">
                       {cat.items.map((a) => {
                         const AIcon = a.icon;
                         return (
@@ -1284,12 +1616,12 @@ export default function SessionLive() {
                             key={a.type}
                             onClick={() => logActivity(a.type)}
                             className={cn(
-                              "flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium text-left transition-all active:scale-95 shadow-sm",
+                              "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all active:scale-95",
                               a.color,
                             )}
                           >
-                            <AIcon className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate leading-none">{a.type}</span>
+                            <AIcon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{a.type}</span>
                           </button>
                         );
                       })}
@@ -1299,341 +1631,15 @@ export default function SessionLive() {
               })}
             </div>
           </div>
-
-          {/* Goals Addressed */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center gap-2 justify-between">
-              <span className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-indigo-500" /> Goals Addressed
-              </span>
-              <Badge variant="secondary" className="text-[10px] bg-slate-50">
-                {goals.length}
-              </Badge>
-            </h2>
-            <div className="space-y-2">
-              {goals.map((goal) => {
-                const cfg = GOAL_STATUS_CONFIG[goal.status];
-                const Icon = cfg.icon;
-                return (
-                  <button
-                    key={goal.id}
-                    onClick={() => cycleGoalStatus(goal.id)}
-                    className="w-full flex items-center gap-3 bg-slate-50/50 hover:bg-slate-50 rounded-xl border border-slate-100/70 p-3 text-left transition-all"
-                  >
-                    <Icon
-                      className={cn(
-                        "h-4 w-4 shrink-0",
-                        goal.status === "achieved"
-                          ? "text-emerald-500"
-                          : goal.status === "in_progress"
-                            ? "text-blue-500"
-                            : goal.status === "needs_review"
-                              ? "text-amber-500"
-                              : "text-slate-400",
-                      )}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-slate-800 truncate leading-snug">
-                        {goal.name}
-                      </p>
-                      <span
-                        className={cn(
-                          "inline-block mt-1 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border",
-                          cfg.cls,
-                        )}
-                      >
-                        {cfg.label}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-              {goals.length === 0 && (
-                <div className="text-center py-6 text-amber-700 bg-amber-50 border border-amber-200 rounded-xl">
-                  <AlertTriangle className="h-6 w-6 mx-auto mb-2 opacity-60" />
-                  <p className="text-xs font-semibold">Non-compliant: No goals linked to this session.</p>
-                  <p className="text-xs mt-1 text-amber-600">NDIS requires every session to be linked to at least one funded support goal.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Summary Insights */}
-          <div className="bg-indigo-950/10 border border-indigo-500/10 rounded-2xl p-5 shadow-sm">
-            <h2 className="text-xs font-bold text-indigo-950 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-indigo-600" /> Summary Insights
-            </h2>
-            <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              {activities.length} activities logged. {voiceNotes.length} voice note{voiceNotes.length !== 1 ? "s" : ""} captured.
-            </p>
-            <Button
-              onClick={handleStop}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded-xl h-auto"
-            >
-              View Clinical Notes
-            </Button>
-          </div>
         </div>
+      )}
 
-        {/* Right column: Dictation + Audit log + Evidence — first on mobile */}
-        <div className="order-1 lg:order-2 lg:col-span-2 space-y-4 lg:space-y-6">
-
-          {/* Clinical Dictation */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <Mic className="h-4 w-4 text-indigo-500" /> Clinical Dictation &amp; Observations
-              </h2>
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm transition-all",
-                  isRecording
-                    ? "bg-red-500 text-white animate-pulse"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white",
-                )}
-              >
-                {isRecording ? (
-                  <><MicOff className="h-3.5 w-3.5" /> Stop Recording</>
-                ) : (
-                  <><Mic className="h-3.5 w-3.5" /> Start Dictation</>
-                )}
-              </button>
-            </div>
-
-            {/* RP Warning Banner — live detection */}
-            {rpFlags.length > 0 && (
-              <div className="animate-in slide-in-from-top-2 duration-200 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mb-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
-                <div>
-                  <span className="font-semibold">Possible restrictive practice language detected</span>
-                  <span className="text-xs text-red-600 ml-1">
-                    ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""} — first: {RP_CATEGORY_LABELS[rpFlags[0].category] ?? rpFlags[0].category})
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {isRecording && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">
-                    Listening
-                  </span>
-                  {translationView !== "original" && (
-                    <span className="text-[10px] text-emerald-600 font-medium ml-auto">
-                      Auto-translate on save
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-slate-700 italic">
-                  {recordingText ? `"${recordingText}"` : "Dictation initialized. Speak clearly…"}
-                </p>
-              </div>
-            )}
-
-            <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-              {voiceNotes.map((note) => (
-                <div
-                  key={note.id}
-                  className="bg-slate-50 rounded-xl border border-slate-100 p-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono text-[10px] text-slate-400">
-                      {format(note.timestamp, "HH:mm:ss")}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {note.detectedLanguage && note.detectedLanguage !== "en" && (
-                        <Badge
-                          variant="outline"
-                          className="text-[9px] text-slate-500 border-slate-200 bg-slate-50"
-                        >
-                          {note.detectedLanguage.toUpperCase()}
-                        </Badge>
-                      )}
-                      <Badge
-                        variant="outline"
-                        className="text-[9px] text-indigo-500 border-indigo-200 bg-indigo-50/50"
-                      >
-                        Dictated
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Original text */}
-                  {(translationView === "original" || translationView === "both") && (
-                    <p className="text-sm text-slate-700 leading-relaxed">{note.text}</p>
-                  )}
-
-                  {/* Translation */}
-                  {translationView !== "original" && (
-                    <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-slate-200/50")}>
-                      {note.isTranslating ? (
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 py-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          Translating…
-                        </div>
-                      ) : note.translated ? (
-                        <>
-                          {translationView === "both" && (
-                            <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 mb-0.5">
-                              EN
-                            </p>
-                          )}
-                          <p className="text-sm text-slate-700 leading-relaxed">
-                            {note.translated}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-xs text-slate-400 italic">Translation unavailable</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {voiceNotes.length === 0 && !isRecording && (
-                <div className="text-center py-10 text-slate-300 border border-dashed border-slate-200 rounded-xl">
-                  <FileText className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs text-slate-400 font-medium">No dictations added yet</p>
-                  <p className="text-[10px] text-slate-400">Record observations during the session.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Audit log + Evidence */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
-
-            {/* Activities — audit-style log */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Activity className="h-4 w-4 text-indigo-500" /> Activities Logged
-              </h2>
-              <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
-                {activities.map((a) => {
-                  const def = findActivityDef(a.type);
-                  const AIcon = def?.icon ?? Activity;
-                  return (
-                    <div
-                      key={a.id}
-                      className="flex items-center gap-3 bg-slate-50/70 border border-slate-100 rounded-lg px-3 py-2"
-                    >
-                      <span className="font-mono text-[10px] text-slate-400 shrink-0 w-10">
-                        [{format(a.timestamp, "HH:mm")}]
-                      </span>
-                      <AIcon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                      <span className="text-xs font-medium text-slate-800 flex-1 truncate">
-                        {a.type}
-                      </span>
-                      <span className="text-[10px] text-slate-400 shrink-0">Logged</span>
-                    </div>
-                  );
-                })}
-                {activities.length === 0 && (
-                  <div className="text-center py-10 text-slate-400">
-                    <p className="text-xs">No activities logged yet.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Session Evidence */}
-            <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                    <ImageIcon className="h-4 w-4 text-indigo-500" /> Session Evidence
-                  </h2>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="text-indigo-600 hover:text-indigo-700 font-bold text-[10px] flex items-center gap-1"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add
-                  </button>
-                </div>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-
-                {images.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1">
-                    {images.map((url, i) => (
-                      <div
-                        key={i}
-                        className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm"
-                      >
-                        <img src={url} alt={`Evidence ${i + 1}`} className="w-full h-full object-cover" />
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-0.5">
-                          <p className="text-[9px] text-white font-mono">{format(new Date(), "HH:mm:ss")}</p>
-                        </div>
-                        <button
-                          onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
-                          className="absolute top-1.5 right-1.5 bg-black/60 rounded-full p-1 hover:bg-black/80"
-                        >
-                          <X className="h-3 w-3 text-white" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center gap-2 text-slate-400 hover:border-indigo-400 hover:bg-indigo-50/20 cursor-pointer transition-all h-[150px] justify-center"
-                  >
-                    <Camera className="h-6 w-6 text-slate-300" />
-                    <p className="text-[10px] font-semibold">Capture Evidence</p>
-                    <p className="text-[9px] text-slate-400">Timestamped photos</p>
-                  </div>
-                )}
-              </div>
-              {images.length > 0 && (
-                <div className="text-[10px] text-slate-400 mt-3 pt-3 border-t border-slate-100 text-center">
-                  {images.length} photo{images.length !== 1 ? "s" : ""} captured.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Body Examination — collapsible on mobile */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between px-5 py-4"
-              onClick={() => setBodyMapOpen((o) => !o)}
-            >
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <HeartPulse className="h-4 w-4 text-indigo-500" /> Physical Examination
-              </h2>
-              <span className={cn(
-                "text-slate-400 transition-transform duration-200 lg:hidden",
-                bodyMapOpen ? "rotate-180" : "rotate-0",
-              )}>
-                <ChevronDown className="h-4 w-4" />
-              </span>
-            </button>
-            <div className={cn("px-5 pb-5", bodyMapOpen ? "block" : "hidden lg:block")}>
-              <BodyExaminationPanel
-                markers={bodyMarkers}
-                onChange={setBodyMarkers}
-                bodyType={participant?.biological_sex ?? "unspecified"}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Practitioner Approval & Save Modal ── */}
+      {/* ── Practitioner Approval Modal ── */}
       <Dialog
         open={showSummary}
-        onOpenChange={(open) => { if (!isSaving) setShowSummary(open); }}
+        onOpenChange={(open) => {
+          if (!isSaving) setShowSummary(open);
+        }}
       >
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-100 shadow-2xl p-0 bg-white">
           <div className="px-6 pt-6 pb-4 border-b border-slate-100">
@@ -1642,7 +1648,8 @@ export default function SessionLive() {
               Review &amp; Approve Session Notes
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500 mt-1">
-              Review the auto-generated notes below. Edit anything before approving — data is only saved on your explicit approval.
+              Review the auto-generated notes below. Edit anything before approving — data is only
+              saved on your explicit approval.
             </DialogDescription>
           </div>
 
@@ -1668,44 +1675,62 @@ export default function SessionLive() {
             </div>
           ) : summary ? (
             <div className="p-6 space-y-5">
-
               {/* Stat row */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
                   <p className="text-xl font-bold text-slate-800 font-mono">{summary.duration}</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Duration</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                    Duration
+                  </p>
                 </div>
                 <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
                   <p className="text-xl font-bold text-slate-800">{summary.activities.length}</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Activities</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                    Activities
+                  </p>
                 </div>
-                <div className={cn(
-                  "rounded-xl p-3 text-center border",
-                  liveCompliance.score >= 80 ? "bg-emerald-50 border-emerald-200" :
-                  liveCompliance.score >= 60 ? "bg-amber-50 border-amber-200" :
-                  "bg-red-50 border-red-200",
-                )}>
-                  <p className={cn(
-                    "text-xl font-bold",
-                    liveCompliance.score >= 80 ? "text-emerald-600" :
-                    liveCompliance.score >= 60 ? "text-amber-600" : "text-red-600",
-                  )}>
+                <div
+                  className={cn(
+                    "rounded-xl p-3 text-center border",
+                    liveCompliance.score >= 80
+                      ? "bg-emerald-50 border-emerald-200"
+                      : liveCompliance.score >= 60
+                        ? "bg-amber-50 border-amber-200"
+                        : "bg-red-50 border-red-200",
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "text-xl font-bold",
+                      liveCompliance.score >= 80
+                        ? "text-emerald-600"
+                        : liveCompliance.score >= 60
+                          ? "text-amber-600"
+                          : "text-red-600",
+                    )}
+                  >
                     {liveCompliance.score}%
                   </p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">Compliance</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                    Compliance
+                  </p>
                 </div>
               </div>
 
-              {/* RP Warning in modal */}
+              {/* RP Warning */}
               {rpFlags.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
                   <div>
-                    <p className="text-sm font-semibold text-red-700">Possible restrictive practice language detected</p>
+                    <p className="text-sm font-semibold text-red-700">
+                      Possible restrictive practice language detected
+                    </p>
                     <ul className="mt-1 space-y-0.5">
                       {rpFlags.map((f, i) => (
                         <li key={i} className="text-xs text-red-600">
-                          <span className="font-medium">{RP_CATEGORY_LABELS[f.category] ?? f.category}:</span>{" "}
+                          <span className="font-medium">
+                            {RP_CATEGORY_LABELS[f.category] ?? f.category}:
+                          </span>{" "}
                           <span className="italic">"{f.phrase}"</span>
                         </li>
                       ))}
@@ -1722,7 +1747,7 @@ export default function SessionLive() {
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5" /> Structured Case Notes
                   <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
-                    — mic available · required for NDIS compliance
+                    — required for NDIS compliance
                   </span>
                 </p>
                 {(
@@ -1730,25 +1755,25 @@ export default function SessionLive() {
                     {
                       key: "activitiesPerformed" as keyof StructuredNotes,
                       label: "Activities Performed",
-                      placeholder: "Describe the specific support activities provided during this session...",
+                      placeholder: "Describe the specific support activities provided…",
                       required: true,
                     },
                     {
                       key: "outcomes" as keyof StructuredNotes,
                       label: "Outcomes",
-                      placeholder: "Measurable outcomes achieved (e.g. participant demonstrated, achieved, progressed toward...)",
+                      placeholder: "Measurable outcomes achieved…",
                       required: true,
                     },
                     {
                       key: "participantResponse" as keyof StructuredNotes,
                       label: "Participant Response",
-                      placeholder: "How did the participant engage and respond during the session?",
+                      placeholder: "How did the participant engage and respond?",
                       required: true,
                     },
                     {
                       key: "progressTowardGoals" as keyof StructuredNotes,
                       label: "Progress Toward NDIS Goals",
-                      placeholder: "Link outcomes to specific NDIS goals addressed in this session...",
+                      placeholder: "Link outcomes to specific NDIS goals…",
                       required: false,
                     },
                   ] as const
@@ -1771,38 +1796,60 @@ export default function SessionLive() {
                 ))}
               </div>
 
-              {/* Compliance Gate — all 5 checks with pass/fail from ComplianceService */}
-              <div className={cn(
-                "rounded-xl border p-3 space-y-2",
-                liveCompliance.blocking
-                  ? "bg-red-50 border-red-200"
-                  : liveCompliance.score >= 80
-                    ? "bg-emerald-50 border-emerald-200"
-                    : "bg-amber-50 border-amber-200",
-              )}>
+              {/* Compliance gate */}
+              <div
+                className={cn(
+                  "rounded-xl border p-3 space-y-2",
+                  liveCompliance.blocking
+                    ? "bg-red-50 border-red-200"
+                    : liveCompliance.score >= 80
+                      ? "bg-emerald-50 border-emerald-200"
+                      : "bg-amber-50 border-amber-200",
+                )}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Shield className="h-3.5 w-3.5 text-slate-400" />
-                    Compliance Check
+                    <Shield className="h-3.5 w-3.5 text-slate-400" /> Compliance Check
                   </span>
-                  <span className={cn(
-                    "text-sm font-bold",
-                    liveCompliance.score >= 80 ? "text-emerald-700" :
-                    liveCompliance.score >= 60 ? "text-amber-700" : "text-red-700",
-                  )}>
+                  <span
+                    className={cn(
+                      "text-sm font-bold",
+                      liveCompliance.score >= 80
+                        ? "text-emerald-700"
+                        : liveCompliance.score >= 60
+                          ? "text-amber-700"
+                          : "text-red-700",
+                    )}
+                  >
                     {liveCompliance.score}/100
                   </span>
                 </div>
                 <ul className="space-y-1">
                   {liveCompliance.checks.map((c, i) => (
-                    <li key={i} className={cn("text-xs flex items-center gap-1.5", c.pass ? "text-emerald-700" : liveCompliance.blocking ? "text-red-700" : "text-amber-700")}>
-                      {c.pass
-                        ? <CheckCircle2 className="h-3 w-3 shrink-0" />
-                        : liveCompliance.blocking
-                          ? <XCircle className="h-3 w-3 shrink-0" />
-                          : <AlertTriangle className="h-3 w-3 shrink-0" />
-                      }
-                      <span>{c.label}{c.note ? <span className="text-slate-500 font-normal ml-1">({c.note})</span> : null}</span>
+                    <li
+                      key={i}
+                      className={cn(
+                        "text-xs flex items-center gap-1.5",
+                        c.pass
+                          ? "text-emerald-700"
+                          : liveCompliance.blocking
+                            ? "text-red-700"
+                            : "text-amber-700",
+                      )}
+                    >
+                      {c.pass ? (
+                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                      ) : liveCompliance.blocking ? (
+                        <XCircle className="h-3 w-3 shrink-0" />
+                      ) : (
+                        <AlertTriangle className="h-3 w-3 shrink-0" />
+                      )}
+                      <span>
+                        {c.label}
+                        {c.note ? (
+                          <span className="text-slate-500 font-normal ml-1">({c.note})</span>
+                        ) : null}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -1814,20 +1861,22 @@ export default function SessionLive() {
                 )}
               </div>
 
-
-              {/* Combined Clinical Record — editable final version */}
+              {/* Clinical record */}
               <div>
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
                   <FileText className="h-3.5 w-3.5" /> Clinical Record
                   <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
-                    — auto-generated from fields above · editable before saving
+                    — auto-generated · editable
                   </span>
                 </label>
                 <SmartTextarea
                   value={editableNotes}
-                  onChange={(v) => { hasManuallyEditedNotesRef.current = true; setEditableNotes(v); }}
+                  onChange={(v) => {
+                    hasManuallyEditedNotesRef.current = true;
+                    setEditableNotes(v);
+                  }}
                   rows={6}
-                  placeholder="Combined clinical record will appear here as you fill the fields above..."
+                  placeholder="Combined clinical record…"
                   className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed min-h-[120px]"
                 />
               </div>
@@ -1868,7 +1917,7 @@ export default function SessionLive() {
                 </div>
               )}
 
-              {/* Evidence + voice count */}
+              {/* Evidence */}
               <div className="flex gap-3">
                 <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
                   <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
@@ -1877,16 +1926,21 @@ export default function SessionLive() {
                 {summary.voiceNoteCount > 0 && (
                   <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
                     <Mic className="h-4 w-4 text-slate-400 shrink-0" />
-                    {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""} captured
+                    {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""}{" "}
+                    captured
                   </div>
                 )}
               </div>
 
-              {/* Approval actions — stacked on mobile, side-by-side on sm+ */}
+              {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-slate-100">
                 <Button
                   variant="outline"
-                  onClick={() => { setShowSummary(false); setElapsed(0); setIsActive(false); }}
+                  onClick={() => {
+                    setShowSummary(false);
+                    setElapsed(0);
+                    setIsActive(false);
+                  }}
                   disabled={isSaving}
                   className="flex-1 min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 order-2 sm:order-1"
                 >
@@ -1896,14 +1950,17 @@ export default function SessionLive() {
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
                   className="flex-1 min-h-[44px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2"
-                  title={liveCompliance.blocking ? "Resolve compliance issues before approving" : undefined}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Shield className="h-4 w-4" />
                   )}
-                  {isSaving ? "Saving…" : liveCompliance.blocking ? "Fix Issues to Approve" : "Approve & Save"}
+                  {isSaving
+                    ? "Saving…"
+                    : liveCompliance.blocking
+                      ? "Fix Issues to Approve"
+                      : "Approve & Save"}
                 </Button>
               </div>
             </div>
@@ -1911,7 +1968,7 @@ export default function SessionLive() {
         </DialogContent>
       </Dialog>
 
-      {/* ── RP Acknowledgment Bottom Sheet ── */}
+      {/* ── RP Bottom Sheet ── */}
       {showRpBottomSheet && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center">
           <div
@@ -1925,32 +1982,35 @@ export default function SessionLive() {
                 Restrictive Practice Review Required
               </h3>
             </div>
-
             <p className="text-sm text-slate-600 mb-3">
-              The following restrictive practice language was detected in your notes. Please review carefully before saving.
+              The following restrictive practice language was detected in your notes. Please review
+              carefully before saving.
             </p>
-
             <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
               {rpFlags.map((f, i) => (
                 <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
-                  <span className="font-semibold text-red-800">{RP_CATEGORY_LABELS[f.category] ?? f.category}</span>
+                  <span className="font-semibold text-red-800">
+                    {RP_CATEGORY_LABELS[f.category] ?? f.category}
+                  </span>
                   <span className="text-red-700 ml-2 italic">"{f.phrase}"</span>
                 </div>
               ))}
             </div>
-
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
               <Checkbox
-                id="rp-acknowledge"
+                id="rp-ack"
                 checked={rpAcknowledged}
                 onCheckedChange={(v) => setRpAcknowledged(!!v)}
                 className="mt-0.5 shrink-0"
               />
-              <label htmlFor="rp-acknowledge" className="text-sm text-amber-800 cursor-pointer leading-snug">
-                I have reviewed the compliance warning and confirm that any restrictive practices are covered under an approved Behaviour Support Plan.
+              <label
+                htmlFor="rp-ack"
+                className="text-sm text-amber-800 cursor-pointer leading-snug"
+              >
+                I have reviewed the compliance warning and confirm that any restrictive practices
+                are covered under an approved Behaviour Support Plan.
               </label>
             </div>
-
             <div className="flex gap-3">
               <Button
                 variant="outline"
@@ -1964,7 +2024,11 @@ export default function SessionLive() {
                 onClick={() => void handleApproveAndSave()}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2"
               >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Shield className="h-4 w-4" />
+                )}
                 {isSaving ? "Saving…" : "Confirm & Save"}
               </Button>
             </div>
@@ -1972,27 +2036,32 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Restart Confirmation Modal ── */}
+      {/* ── Restart Confirm ── */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-500" />
-              Restart Session?
+              <AlertCircle className="h-5 w-5 text-amber-500" /> Restart Session?
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 leading-relaxed mt-2">
-              This will clear all current logs — activities, voice notes, and photos captured so far will be lost. The timer will reset to zero.
-              <br /><br />
+              This will clear all current messages, voice notes, and photos. The timer will reset
+              to zero.
+              <br />
+              <br />
               <span className="font-medium text-slate-700">This action cannot be undone.</span>
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowRestartConfirm(false)} className="flex-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowRestartConfirm(false)}
+            >
               Keep Going
             </Button>
             <Button
               onClick={handleConfirmRestart}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               Yes, Restart
             </Button>

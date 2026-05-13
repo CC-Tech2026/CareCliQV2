@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from typing import Optional
 from datetime import datetime, timezone
-from ..schemas.session import SessionCreate, SessionUpdate
-from ..services import session_service, ai_service, alert_service, funding_service
+from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
+from ..services import session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
@@ -575,4 +575,31 @@ async def transcribe_audio(session_id: str, file: UploadFile = File(...)):
         return {"transcription": text}
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Session messages — chat-based documentation endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{session_id}/messages")
+async def get_session_messages(session_id: str):
+    """Return all chat messages for a session, ordered by created_at ascending."""
+    return await message_service.get_session_messages(session_id)
+
+
+@router.post("/{session_id}/messages", status_code=201)
+async def create_session_message(session_id: str, body: MessageCreate):
+    """Persist a single chat message for a session."""
+    try:
+        result = await message_service.create_session_message(
+            session_id, body.model_dump(exclude_none=True)
+        )
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to create message")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"create_session_message error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

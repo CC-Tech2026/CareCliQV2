@@ -559,3 +559,33 @@ END $$;
 --   1. Sign up via POST /api/auth/register with role="admin"
 --   OR manually insert:
 --   INSERT INTO public.users (id, email, role) VALUES ('<auth_user_id>', 'you@example.com', 'admin');
+
+-- ============================================================
+-- Session Messages — chat-based session documentation (Sprint 1)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS session_messages (
+    id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id  UUID        NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    sender_role TEXT        NOT NULL DEFAULT 'worker',   -- 'worker' | 'system'
+    message_type TEXT       NOT NULL DEFAULT 'text',     -- 'text' | 'voice' | 'image' | 'file' | 'activity' | 'goal_update' | 'system'
+    content     TEXT,
+    media_url   TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_messages_session_id
+    ON session_messages(session_id);
+
+-- RLS
+ALTER TABLE session_messages ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'session_messages' AND policyname = 'session_messages_service_all'
+    ) THEN
+        CREATE POLICY session_messages_service_all ON session_messages
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
