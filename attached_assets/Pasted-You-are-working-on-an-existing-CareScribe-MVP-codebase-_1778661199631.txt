@@ -1,0 +1,230 @@
+You are working on an existing CareScribe MVP codebase. DO NOT rebuild the project.
+
+Your task is to ALIGN the entire platform (frontend + backend + API layer) with the updated Supabase schema and Sprint 0 architecture.
+
+The system is an NDIS-focused AI clinical companion for:
+
+Independent support workers
+Allied health professionals
+Small NDIS providers / small care teams
+
+NOT enterprise systems.
+
+🧠 CORE OBJECTIVE
+
+Ensure full consistency across:
+
+Dashboard
+Participants (Patients)
+Sessions
+Session Chat (session_messages)
+Compliance Engine
+Auth / Users / Onboarding
+Organisations (small providers only)
+
+Everything must use the CURRENT database schema (Supabase).
+
+⚠️ CRITICAL RULE
+
+Do NOT:
+
+Recreate tables
+Overwrite schema
+Introduce new competing models (e.g. duplicate “goals”, “plans”, etc.)
+
+Do:
+
+Fix mismatches
+Align API fields
+Update UI bindings
+Ensure end-to-end workflow works
+🧭 1. DASHBOARD ALIGNMENT
+
+Update dashboard to correctly pull from:
+
+Patients
+full_name
+plan_status
+used_budget / total_budget
+goals (JSONB)
+primary_disability
+Sessions
+session_date
+status
+compliance_score
+cost
+created_at
+Alerts
+alert_type
+severity
+is_read
+FIX REQUIRED:
+Remove any hardcoded mock stats
+Replace with Supabase queries
+Ensure all widgets reflect real DB values
+👥 2. PARTICIPANTS (PATIENTS MODULE)
+
+Align participant module with schema:
+
+MUST SUPPORT:
+Create / edit / delete patient
+NDIS number (unique)
+DOB, email, phone
+Plan status
+Budget tracking
+Goals (JSONB array of {id, title, status})
+FIX UI:
+Remove duplicate goal systems
+Use ONLY patients.goals (JSONB)
+Ensure goals render properly as structured objects
+🧾 3. SESSIONS MODULE (CRITICAL)
+
+Sessions must align fully with DB:
+
+REQUIRED FIELDS:
+session_date
+duration_minutes
+session_type
+status (draft/completed)
+activities_performed
+outcomes
+participant_response
+progress_toward_goals
+compliance_score
+cost
+💬 SESSION UX (IMPORTANT UPGRADE)
+
+Replace ALL textareas with chat-style input system:
+
+Each session must behave like WhatsApp-style chat:
+
+Messages stored in:
+👉 session_messages table
+
+Each message supports:
+text input
+voice input (microphone UI)
+image upload (camera support)
+file upload
+Message types:
+text
+voice
+image
+file
+system
+goal_update
+🧠 4. AI COMPLIANCE ENGINE
+
+Ensure backend uses:
+
+sessions + compliance tables:
+compliance_score
+compliance_flags
+compliance_audit_logs
+restrictive_practice_detected
+MUST:
+Generate structured NDIS notes
+Detect missing compliance fields
+Flag risks automatically
+Store results in DB
+🏢 5. ORGANISATIONS (SMALL PROVIDERS ONLY)
+
+Align organisation system:
+
+IMPORTANT RULE:
+
+Only support SMALL providers:
+
+Solo operators
+2–15 staff teams
+Small care organisations
+MUST:
+Link users → organizations
+Link patients → organizations
+Keep onboarding lightweight
+🔐 6. AUTH SYSTEM ALIGNMENT
+
+Fix authentication flow:
+
+MUST WORK:
+Supabase Auth sign up
+public.users row creation
+role assignment:
+admin
+support_worker
+allied_health
+ON SIGNUP:
+Create user in auth
+Create profile in public.users
+Assign account_type:
+independent_worker
+allied_health
+small_provider
+📱 7. ONBOARDING FLOW
+
+Ensure onboarding is consistent:
+
+Sign up
+→ Choose account type
+→ Enter details
+→ If organisation → create org
+→ Link user to org
+→ Mark onboarding_complete = true
+→ Redirect to dashboard
+🔄 8. BACKEND API ALIGNMENT
+
+Update all API endpoints to:
+
+Match Supabase schema exactly
+Remove deprecated fields
+Ensure no mismatched column names
+Fix broken auth routes (login/register/me)
+⚡ 9. CRITICAL BUG FIXES
+
+Fix current issues:
+
+Invalid login credentials (auth linking issue)
+Missing session columns errors
+Dashboard showing stale/incorrect data
+Goals duplication logic issues
+Session API 400 errors from invalid selects
+🎯 10. FINAL EXPECTED RESULT
+
+After alignment:
+
+Dashboard:
+
+✔ Fully dynamic (no mock data)
+
+Participants:
+
+✔ Clean CRUD + correct goals system
+
+Sessions:
+
+✔ Chat-based documentation system fully working
+
+Compliance:
+
+✔ AI scoring + flags stored correctly
+
+Auth:
+
+✔ Signup/login fully stable
+
+Organisations:
+
+✔ Lightweight small-provider model only
+
+🧠 SUCCESS CRITERIA (SPRINT 0 COMPLETE WHEN):
+
+✔ End-to-end flow works:
+Sign up → onboarding → participant → session → AI notes → compliance saved
+
+✔ No schema mismatches
+
+✔ No duplicate data models
+
+✔ Mobile-friendly session chat works
+
+✔ Supabase fully synced with frontend

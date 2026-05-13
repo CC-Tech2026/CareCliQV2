@@ -8,62 +8,124 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_MIGRATION_URL = "https://supabase.com/dashboard/project/_/sql/new"
 
-_MIGRATION_BANNER = """
+_USERS_COLUMNS_BANNER = """
+╔═══════════════════════════════════════════════════════════════════════════╗
+║  MIGRATION REQUIRED — onboarding columns missing from public.users        ║
+║                                                                           ║
+║  Run the complete backend/supabase_setup.sql in your Supabase SQL editor  ║
+║  to add: account_type, onboarding_data, onboarding_complete,             ║
+║           organization_id, and the organizations table.                   ║
+║                                                                           ║
+║  Auth registration and onboarding will still work but account_type       ║
+║  and onboarding_complete will not be persisted until columns exist.       ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+"""
+
+_BIOLOGICAL_SEX_BANNER = """
 ╔══════════════════════════════════════════════════════════════════════════╗
-║  DATABASE MIGRATION REQUIRED — biological_sex column missing             ║
-║                                                                          ║
-║  Run this SQL in your Supabase SQL editor:                               ║
-║  https://supabase.com/dashboard/project/_/sql/new                        ║
-║                                                                          ║
-║  ALTER TABLE patients                                                    ║
-║    ADD COLUMN IF NOT EXISTS biological_sex TEXT DEFAULT 'unspecified';   ║
-║                                                                          ║
-║  Biological sex selection on participant forms will be silently skipped  ║
-║  until the column exists.                                                ║
+║  MIGRATION REQUIRED — patients.biological_sex column missing             ║
+║  Run backend/supabase_setup.sql in your Supabase SQL editor.            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+"""
+
+_SESSION_MESSAGES_BANNER = """
+╔══════════════════════════════════════════════════════════════════════════╗
+║  MIGRATION REQUIRED — session_messages table missing                     ║
+║  Run backend/supabase_setup.sql in your Supabase SQL editor.            ║
+║  Chat-style session messages will not be persisted until created.        ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 """
 
 
-async def _apply_startup_migrations():
-    """Verify schema columns on startup and log actionable warnings when missing.
+async def _check_column(supabase, table: str, columns: str, label: str) -> bool:
+    """Probe a table select.  Returns True if columns exist, False otherwise."""
+    try:
+        supabase.table(table).select(columns).limit(1).execute()
+        return True
+    except Exception as e:
+        err = str(e)
+        if "does not exist" in err or "42703" in err or "PGRST" in err:
+            return False
+        logger.warning(f"Could not verify {label}: {e}")
+        return True   # assume OK on unknown errors
 
-    Supabase/PostgREST does not support raw DDL via its REST API, so this
-    function detects missing columns and prints clear instructions rather than
-    attempting to alter the table automatically.
-    """
+
+async def _apply_startup_migrations():
+    """Verify schema on startup, set migration_state flags, print banners for missing pieces."""
     try:
         from .services.supabase_client import get_supabase_admin
         supabase = get_supabase_admin()
 
         # --- sessions structured note columns ---
-        try:
-            supabase.table("sessions").select(
-                "activities_performed, outcomes, participant_response, progress_toward_goals"
-            ).limit(1).execute()
-            logger.info("Structured note columns verified in sessions table.")
-        except Exception as col_err:
-            err_str = str(col_err)
-            if "does not exist" in err_str or "42703" in err_str:
-                logger.warning(
-                    "Structured note columns are missing from the sessions table. "
-                    "Run backend/supabase_setup.sql in your Supabase SQL editor."
-                )
-            else:
-                logger.warning(f"Could not verify structured note columns: {col_err}")
+        ok = await _check_column(
+            supabase, "sessions",
+            "activities_performed, outcomes, participant_response, progress_toward_goals",
+            "sessions structured note columns",
+        )
+        if ok:
+            logger.info("sessions: structured note columns OK")
+        else:
+            logger.warning(
+                "sessions: structured note columns missing — "
+                "run backend/supabase_setup.sql to add them."
+            )
 
-        # --- patients.biological_sex column ---
-        try:
-            supabase.table("patients").select("biological_sex").limit(1).execute()
-            logger.info("patients.biological_sex column verified.")
+        # --- sessions RP + compliance columns ---
+        await _check_column(
+            supabase, "sessions",
+            "restrictive_practice_detected, compliance_flags",
+            "sessions compliance columns",
+        )
+
+        # --- patients.biological_sex ---
+        ok = await _check_column(supabase, "patients", "biological_sex", "patients.biological_sex")
+        if ok:
+            logger.info("patients.biological_sex column OK")
             migration_state.biological_sex_column_missing = False
-        except Exception as bio_err:
-            err_str = str(bio_err)
-            if "does not exist" in err_str or "42703" in err_str:
-                migration_state.biological_sex_column_missing = True
-                logger.warning(_MIGRATION_BANNER)
-            else:
-                logger.warning(f"Could not verify biological_sex column: {bio_err}")
+        else:
+            migration_state.biological_sex_column_missing = True
+            logger.warning(_BIOLOGICAL_SEX_BANNER)
+
+        # --- users onboarding columns ---
+        ok = await _check_column(
+            supabase, "users",
+            "account_type, onboarding_complete, organization_id",
+            "users onboarding columns",
+        )
+        if ok:
+            logger.info("users: onboarding columns OK")
+            migration_state.users_onboarding_columns_missing = False
+        else:
+            migration_state.users_onboarding_columns_missing = True
+            logger.warning(_USERS_COLUMNS_BANNER)
+
+        # --- session_messages table ---
+        ok = await _check_column(
+            supabase, "session_messages",
+            "id, session_id, message_type, content",
+            "session_messages table",
+        )
+        if ok:
+            logger.info("session_messages table OK")
+            migration_state.session_messages_table_missing = False
+        else:
+            migration_state.session_messages_table_missing = True
+            logger.warning(_SESSION_MESSAGES_BANNER)
+
+        # --- organizations table ---
+        ok = await _check_column(
+            supabase, "organizations",
+            "id, owner_user_id, organization_name",
+            "organizations table",
+        )
+        if ok:
+            logger.info("organizations table OK")
+            migration_state.organizations_table_missing = False
+        else:
+            migration_state.organizations_table_missing = True
+            logger.warning("organizations table missing — run backend/supabase_setup.sql")
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -108,15 +170,20 @@ async def health_check():
 
 @app.get("/api/admin/migration-status")
 async def migration_status_endpoint():
-    """Return current migration status so operators can check schema readiness."""
-    missing = migration_state.biological_sex_column_missing
+    """Return current migration state so operators can verify schema readiness."""
     return {
-        "biological_sex_column_missing": missing,
-        "migration_sql": (
-            "ALTER TABLE patients ADD COLUMN IF NOT EXISTS biological_sex TEXT DEFAULT 'unspecified';"
-            if missing else None
-        ),
-        "supabase_sql_editor": "https://supabase.com/dashboard/project/_/sql/new",
+        "biological_sex_column_missing":     migration_state.biological_sex_column_missing,
+        "users_onboarding_columns_missing":  migration_state.users_onboarding_columns_missing,
+        "organizations_table_missing":       migration_state.organizations_table_missing,
+        "session_messages_table_missing":    migration_state.session_messages_table_missing,
+        "migration_sql_file":                "backend/supabase_setup.sql",
+        "supabase_sql_editor":               _MIGRATION_URL,
+        "all_ok": not any([
+            migration_state.biological_sex_column_missing,
+            migration_state.users_onboarding_columns_missing,
+            migration_state.organizations_table_missing,
+            migration_state.session_messages_table_missing,
+        ]),
     }
 
 

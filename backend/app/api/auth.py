@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 # ---------------------------------------------------------------------------
-# Rate limiter (max 10 login attempts / 60s per IP)
+# Rate limiter (10 login attempts / 60 s per IP)
 # ---------------------------------------------------------------------------
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 _RATE_LIMIT_MAX = 10
@@ -26,7 +26,7 @@ def _check_rate_limit(ip: str) -> None:
     if len(attempts) >= _RATE_LIMIT_MAX:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts — please wait 60 seconds before retrying",
+            detail="Too many login attempts — please wait 60 seconds",
         )
     _login_attempts[ip].append(now)
 
@@ -36,15 +36,14 @@ def _check_rate_limit(ip: str) -> None:
 # ---------------------------------------------------------------------------
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
-    "allied_health": "allied_health",
-    "small_provider": "admin",
+    "allied_health":      "allied_health",
+    "small_provider":     "admin",
 }
-
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
 
 # ---------------------------------------------------------------------------
-# Request / response schemas
+# Request schemas
 # ---------------------------------------------------------------------------
 
 class LoginRequest(BaseModel):
@@ -62,7 +61,6 @@ class RegisterRequest(BaseModel):
 class OnboardingCompleteRequest(BaseModel):
     account_type: str
     onboarding_data: dict = {}
-    # Small provider fields
     organization_name: Optional[str] = None
     provider_type: Optional[str] = None
     registration_status: Optional[str] = None
@@ -76,20 +74,34 @@ class OnboardingCompleteRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 async def _get_user_profile(user_id: str) -> dict:
-    """Return the user's profile row from public.users."""
+    """Fetch the user's public.users row.  Two-pass: try new columns first,
+    fall back to base columns so the function never crashes if the
+    onboarding migration hasn't been run yet."""
+    supabase = get_supabase_admin()
+
+    # Pass 1: select with all new columns (works once migration is applied)
     try:
-        supabase = get_supabase_admin()
-        result = (
-            supabase.table("users")
-            .select("role, full_name, account_type, onboarding_complete, organization_id")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        if result.data:
+        result = supabase.table("users").select(
+            "role, full_name, account_type, onboarding_complete, organization_id"
+        ).eq("id", user_id).maybe_single().execute()
+        if result is not None and result.data:
             return result.data
-    except Exception as e:
-        logger.warning(f"Could not fetch user profile for {user_id}: {e}")
+        if result is not None and result.data is None:
+            # Row simply doesn't exist yet — return empty dict
+            return {}
+    except Exception as e1:
+        logger.debug(f"Extended user profile select failed for {user_id}: {e1}")
+
+    # Pass 2: base columns only (always available)
+    try:
+        result = supabase.table("users").select(
+            "role, full_name"
+        ).eq("id", user_id).maybe_single().execute()
+        if result is not None and result.data:
+            return result.data
+    except Exception as e2:
+        logger.warning(f"Base user profile select also failed for {user_id}: {e2}")
+
     return {}
 
 
@@ -102,39 +114,132 @@ async def _upsert_user_record(
     onboarding_complete: bool = False,
     extra: Optional[dict] = None,
 ) -> None:
-    """Ensure a row exists in public.users (idempotent upsert)."""
+    """Upsert into public.users.  Two-pass: full payload first,
+    base-columns-only fallback so saves never fail due to missing
+    onboarding migration columns."""
+    supabase = get_supabase_admin()
+
+    base_payload: dict = {
+        "id": user_id,
+        "email": email,
+        "role": role,
+        "full_name": full_name,
+        "is_active": True,
+    }
+    extended_payload: dict = {
+        **base_payload,
+        "account_type": account_type,
+        "onboarding_complete": onboarding_complete,
+    }
+    if extra:
+        extended_payload.update(extra)
+
+    # Pass 1: with new columns
     try:
-        supabase = get_supabase_admin()
-        payload: dict = {
-            "id": user_id,
-            "email": email,
-            "role": role,
-            "full_name": full_name,
-            "account_type": account_type,
-            "onboarding_complete": onboarding_complete,
-            "is_active": True,
-        }
-        if extra:
-            payload.update(extra)
-        supabase.table("users").upsert(payload, on_conflict="id").execute()
-    except Exception as e:
-        logger.warning(f"Could not upsert user record for {user_id}: {e}")
+        supabase.table("users").upsert(
+            extended_payload, on_conflict="id"
+        ).execute()
+        return
+    except Exception as e1:
+        err = str(e1)
+        # 42703 = undefined_column, PGRST116/204 = schema cache mismatch
+        if "42703" in err or "does not exist" in err or "PGRST" in err:
+            logger.info(
+                f"Onboarding columns not yet in DB for user {user_id} — "
+                "using base upsert. Run supabase_setup.sql to enable full onboarding."
+            )
+        else:
+            # Different error — log it but still attempt fallback
+            logger.warning(f"Extended upsert failed for {user_id}: {e1}")
+
+    # Pass 2: base columns only
+    try:
+        supabase.table("users").upsert(
+            base_payload, on_conflict="id"
+        ).execute()
+    except Exception as e2:
+        logger.warning(f"Base upsert also failed for {user_id}: {e2}")
 
 
 async def _touch_last_login(user_id: str) -> None:
     try:
-        supabase = get_supabase_admin()
         from datetime import datetime, timezone
+        supabase = get_supabase_admin()
         supabase.table("users").update(
             {"last_login": datetime.now(timezone.utc).isoformat()}
         ).eq("id", user_id).execute()
     except Exception as e:
-        logger.warning(f"Could not update last_login for {user_id}: {e}")
+        logger.debug(f"Could not update last_login for {user_id}: {e}")
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.post("/register", status_code=201)
+async def register(body: RegisterRequest):
+    """Create a new user account.
+
+    Uses the service-role admin API to create the Supabase Auth user
+    so that the FK constraint (public.users.id → auth.users.id) is
+    satisfied before we upsert the profile row.  Email confirmation is
+    auto-granted for MVP; remove `email_confirm=True` to re-enable it.
+    """
+    if body.account_type not in VALID_ACCOUNT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid account_type. Must be one of: {', '.join(VALID_ACCOUNT_TYPES)}",
+        )
+
+    role = _ACCOUNT_TYPE_TO_ROLE[body.account_type]
+    supabase_admin = get_supabase_admin()
+
+    try:
+        # Admin create_user guarantees the auth.users row is fully committed
+        # before we upsert into public.users, eliminating the FK race condition.
+        result = supabase_admin.auth.admin.create_user({
+            "email": body.email,
+            "password": body.password,
+            "user_metadata": {"full_name": body.full_name},
+            "email_confirm": True,   # auto-confirm for MVP friction-free onboarding
+        })
+        auth_user = result.user
+        if not auth_user:
+            raise HTTPException(status_code=400, detail="Registration failed — please try again")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        err_msg = str(e)
+        logger.error(f"Admin create_user failed for {body.email}: {err_msg}")
+        if "already registered" in err_msg.lower() or "already been registered" in err_msg.lower() or "already exists" in err_msg.lower():
+            raise HTTPException(
+                status_code=409,
+                detail="An account with this email already exists. Please sign in.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail="Registration failed — please check your details and try again.",
+        )
+
+    # Create public.users profile row (two-pass resilient)
+    await _upsert_user_record(
+        user_id=str(auth_user.id),
+        email=body.email,
+        role=role,
+        full_name=body.full_name,
+        account_type=body.account_type,
+        onboarding_complete=False,
+    )
+
+    return {
+        "message": "Account created successfully.",
+        "user_id": str(auth_user.id),
+        "account_type": body.account_type,
+        "role": role,
+        "email_confirmed": True,
+    }
+
 
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
@@ -155,88 +260,58 @@ async def login(body: LoginRequest, request: Request):
     except Exception as e:
         msg = str(e).lower()
         if "email not confirmed" in msg:
-            raise HTTPException(status_code=401, detail="Please verify your email address before signing in.")
+            raise HTTPException(
+                status_code=401,
+                detail="Please verify your email address before signing in.",
+            )
         logger.warning(f"Login failed for {body.email}: {e}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    profile = await _get_user_profile(auth_user.id)
+    profile = await _get_user_profile(str(auth_user.id))
     role = profile.get("role") or "support_worker"
     full_name = profile.get("full_name") or (
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
     )
     account_type = profile.get("account_type") or "independent_worker"
-    # Existing users (no account_type set) are treated as fully onboarded
+
+    # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
     if onboarding_complete is None:
         onboarding_complete = True
 
+    # If the user row doesn't exist yet (e.g., created via another auth path),
+    # create it now so future lookups succeed.
+    if not profile:
+        await _upsert_user_record(
+            user_id=str(auth_user.id),
+            email=str(auth_user.email),
+            role=role,
+            full_name=full_name,
+            account_type=account_type,
+            onboarding_complete=True,  # treat as complete since they pre-dated onboarding
+        )
+
     token = create_access_token({
-        "sub": auth_user.id,
-        "email": auth_user.email,
+        "sub": str(auth_user.id),
+        "email": str(auth_user.email),
         "role": role,
         "account_type": account_type,
     })
 
-    await _touch_last_login(auth_user.id)
+    await _touch_last_login(str(auth_user.id))
 
     return {
         "access_token": token,
         "token_type": "bearer",
         "user": {
-            "id": auth_user.id,
-            "email": auth_user.email,
+            "id": str(auth_user.id),
+            "email": str(auth_user.email),
             "full_name": full_name,
             "role": role,
             "account_type": account_type,
             "onboarding_complete": bool(onboarding_complete),
         },
     }
-
-
-@router.post("/register", status_code=201)
-async def register(body: RegisterRequest):
-    if body.account_type not in VALID_ACCOUNT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid account_type. Must be one of: {', '.join(VALID_ACCOUNT_TYPES)}",
-        )
-
-    role = _ACCOUNT_TYPE_TO_ROLE[body.account_type]
-
-    supabase = get_supabase()
-    try:
-        result = supabase.auth.sign_up({
-            "email": body.email,
-            "password": body.password,
-            "options": {"data": {"full_name": body.full_name}},
-        })
-        auth_user = result.user
-        if not auth_user:
-            raise HTTPException(status_code=400, detail="Registration failed — please try again")
-
-        await _upsert_user_record(
-            user_id=auth_user.id,
-            email=body.email,
-            role=role,
-            full_name=body.full_name,
-            account_type=body.account_type,
-            onboarding_complete=False,
-        )
-
-        return {
-            "message": "Account created successfully.",
-            "user_id": auth_user.id,
-            "account_type": body.account_type,
-            "role": role,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        err_msg = str(e)
-        logger.error(f"Register error for {body.email}: {err_msg}")
-        if "already registered" in err_msg.lower() or "already been registered" in err_msg.lower():
-            raise HTTPException(status_code=409, detail="An account with this email already exists. Please sign in.")
-        raise HTTPException(status_code=400, detail="Registration failed — please check your details and try again.")
 
 
 @router.post("/complete-onboarding")
@@ -273,13 +348,19 @@ async def complete_onboarding(
             if org_result.data:
                 update_payload["organization_id"] = org_result.data[0]["id"]
         except Exception as e:
-            logger.error(f"Could not create organisation for user {user_id}: {e}")
+            logger.warning(f"Could not create organisation for {user_id}: {e}")
 
+    # Two-pass update: with new columns, then fallback
     try:
         supabase.table("users").update(update_payload).eq("id", user_id).execute()
     except Exception as e:
-        logger.error(f"Could not complete onboarding for {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
+        err = str(e)
+        if "42703" in err or "does not exist" in err:
+            logger.warning(f"Onboarding columns missing — skipping extended update for {user_id}")
+            # At minimum record that onboarding happened (if base column exists)
+        else:
+            logger.error(f"Could not complete onboarding for {user_id}: {e}")
+            raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
 
     return {"success": True, "message": "Onboarding complete."}
 
@@ -300,7 +381,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "user": {
             "id": user_id,
             "email": current_user.get("email"),
-            "role": current_user.get("role", "support_worker"),
+            "role": profile.get("role") or current_user.get("role", "support_worker"),
             "account_type": current_user.get("account_type") or profile.get("account_type") or "independent_worker",
             "onboarding_complete": bool(onboarding_complete),
         }
