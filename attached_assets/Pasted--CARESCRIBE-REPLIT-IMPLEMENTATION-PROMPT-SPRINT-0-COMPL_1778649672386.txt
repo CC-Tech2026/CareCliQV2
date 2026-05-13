@@ -1,0 +1,246 @@
+🚀 CARESCRIBE — REPLIT IMPLEMENTATION PROMPT (SPRINT 0 COMPLIANCE ENGINE)
+
+You are working inside an existing production codebase for a product called:
+
+CareScribe
+
+This is an NDIS-focused AI documentation system for support workers.
+
+⚠️ CRITICAL CONSTRAINTS (DO NOT BREAK THESE)
+Backend rules
+Backend is Python FastAPI ONLY
+Do NOT write Node.js, Express, or any JavaScript backend logic
+Use existing:
+supabase-py for database
+Anthropic Python SDK for AI calls
+Do NOT modify:
+participant accounts system
+participant portal / invites
+invoicing system
+live timer or voice transcription pipeline
+AI Insights panel (GPT-4o-mini summary)
+🎯 SPRINT 0 FOCUS (ONLY THESE ARE IN SCOPE)
+
+We are ONLY building:
+
+1. Session Note-Taking Enhancement
+Improve structured session note capture
+Ensure notes are stored cleanly and consistently
+Support multilingual raw input
+2. NDIS Compliance Engine (CORE FEATURE)
+
+Build a full compliance validation system that runs after session save:
+
+Must include:
+8-rule NDIS compliance checker (R1–R8)
+Objective language detection
+Goal referencing validation
+Scope-of-practice checks
+Incident language detection
+Scoring system (0–100)
+Status classification:
+compliant
+at_risk
+non_compliant
+3. Restrictive Practice Detection (HIGH PRIORITY)
+
+Detect and flag:
+
+Chemical restraint
+Physical restraint
+Mechanical restraint
+Environmental restraint
+Seclusion
+
+For each detection:
+
+store detected phrase
+store context snippet
+assign severity
+generate suggested rewrite
+4. AI Assistance Layer (Claude ONLY)
+
+Use Anthropic Claude (Python SDK) to:
+
+generate improved wording suggestions
+rewrite compliance failures
+NOT to calculate scores (rules remain deterministic)
+🧠 BACKEND REQUIREMENTS
+File to create:
+
+backend/compliance_engine.py
+
+Must include:
+
+run_full_check(session_id, supabase_client, anthropic_client)
+8 rule functions (R1–R8)
+restrictive practice detection engine
+scoring function
+AI suggestion function
+Database updates (safe migrations)
+
+Extend sessions table:
+
+input_language
+voice_input
+activities_performed
+outcomes
+participant_response
+progress_toward_goals
+compliance_score
+compliance_status
+compliance_flags
+compliance_checked_at
+restrictive_practice_detected
+restrictive_practice_types
+incident_language_detected
+
+Add tables:
+
+compliance_rule_results
+restrictive_practice_flags
+
+Use:
+
+IF NOT EXISTS
+safe re-runnable migrations
+API endpoints
+Existing endpoint enhancement:
+
+POST /api/sessions/{id}/save-with-ai
+
+After saving session:
+
+run compliance engine
+return:
+{
+  "...existing_response": {},
+  "compliance": {
+    "score": 0-100,
+    "status": "compliant | at_risk | non_compliant",
+    "rules": [],
+    "rp_flags": []
+  }
+}
+New endpoint:
+
+GET /api/sessions/{id}/compliance
+
+Returns stored compliance results only (NO recalculation).
+
+📱 FRONTEND REQUIREMENTS (CRITICAL: MOBILE-FIRST)
+
+CareScribe MUST be fully mobile-friendly and support workers on phones first.
+
+NON-NEGOTIABLE UI REQUIREMENTS
+1. Mobile-first layout
+All screens must be:
+responsive
+touch-friendly
+optimized for small screens (360–430px width baseline)
+No desktop-only layouts
+2. Session Note Screen (CORE UX)
+
+Must include:
+
+✍️ Mobile textarea experience
+large touch-friendly input
+auto-expand textarea
+no clutter
+⚠️ Real-time RP warning (lightweight)
+
+On mobile typing:
+
+detect restrictive phrases locally
+
+show subtle red banner:
+
+“Possible restrictive practice language detected”
+
+NO heavy overlays on mobile
+
+3. Save confirmation UX (mobile optimized)
+
+If RP detected:
+
+show simple bottom sheet:
+checkbox:
+“I acknowledge review of compliance warning”
+disabled Save button until checked
+4. Compliance Result UI (mobile-friendly)
+
+After save:
+Show compact stacked cards:
+
+Score card (large number)
+Status badge
+Collapsible rule breakdown
+RP warnings in red expandable section
+
+NO dense tables on mobile
+
+5. Session list UI (mobile-first)
+
+Each session card shows:
+
+participant name
+time
+compliance badge:
+Compliant (blue)
+At Risk (orange)
+Non-Compliant (red)
+Draft (grey)
+RP badge if detected (⚠ red pill)
+🎨 CARESCRIBE BRANDING UPDATE
+
+Rename system branding everywhere:
+
+CareScribe (NOT old name)
+clean medical SaaS aesthetic
+calm colors:
+green = compliant
+orange = at risk
+red = non-compliant
+blue = neutral/system
+⚡ PERFORMANCE REQUIREMENTS
+Compliance engine must run asynchronously
+No blocking UI
+AI calls must be wrapped in try/catch fallback
+System must degrade gracefully if AI fails
+🛑 DO NOT IMPLEMENT
+participant portals
+billing/invoicing changes
+analytics dashboards
+external integrations
+advanced AI features beyond rewriting
+complex reporting systems
+✅ SUCCESS CRITERIA
+
+The system is complete when:
+
+Backend:
+session saves trigger compliance engine
+8 rules evaluate correctly
+RP detection works
+scores + status stored in DB
+AI suggestions optionally enrich output
+API:
+save-with-ai returns compliance object
+compliance GET endpoint returns stored data
+Mobile frontend:
+fully usable on phone screen
+no layout breaking
+session note flow is fast and simple
+compliance warnings are visible but not intrusive
+🚀 FINAL INTENT
+
+CareScribe is becoming:
+
+A mobile-first AI compliance documentation assistant for NDIS support workers
+
+Focus on:
+
+speed
+clarity
+compliance accuracy
+mobile usability above everything else
