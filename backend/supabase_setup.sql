@@ -589,3 +589,52 @@ BEGIN
             FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 END $$;
+
+-- ============================================================
+-- Sprint 0: Auth & Onboarding schema additions
+-- ============================================================
+
+-- Extend public.users with onboarding fields
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS account_type TEXT DEFAULT 'independent_worker';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS onboarding_data JSONB DEFAULT '{}';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS onboarding_complete BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS organization_id UUID;
+
+-- Lightweight organisations table (small providers only)
+CREATE TABLE IF NOT EXISTS organizations (
+    id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    owner_user_id       UUID        NOT NULL,
+    organization_name   TEXT        NOT NULL,
+    provider_type       TEXT,
+    registration_status TEXT,
+    team_size           TEXT,
+    participant_volume  TEXT,
+    contact_number      TEXT,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS on organizations
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'organizations' AND policyname = 'organizations_service_all'
+    ) THEN
+        CREATE POLICY organizations_service_all ON organizations
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- Owners can read their own organisation
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'organizations' AND policyname = 'organizations_owner_read'
+    ) THEN
+        CREATE POLICY organizations_owner_read ON organizations
+            FOR SELECT TO authenticated USING (owner_user_id = auth.uid());
+    END IF;
+END $$;

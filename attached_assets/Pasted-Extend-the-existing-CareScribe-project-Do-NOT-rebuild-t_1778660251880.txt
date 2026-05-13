@@ -1,0 +1,199 @@
+Extend the existing CareScribe project. Do NOT rebuild the application. Improve the authentication and onboarding system for Sprint 0 MVP validation.
+
+The platform is designed specifically for:
+
+Independent support workers
+Sole traders
+Small NDIS providers
+Small care teams
+Allied health professionals
+
+DO NOT design for large enterprise organisations.
+
+Keep workflows lightweight, modern, and operationally simple.
+
+🧠 Core Objective
+
+Implement a clean onboarding and account setup system that supports:
+
+Independent support workers
+Allied health professionals
+Small provider organisations / small care teams
+
+The onboarding flow must align users correctly with the CareScribe workflow and existing participant/session system.
+
+🔐 1. AUTH SYSTEM REQUIREMENTS
+
+Fix and complete the current authentication system.
+
+Ensure:
+
+Sign up works correctly
+Login works correctly
+Supabase auth users are created correctly
+public.users profile rows are linked properly
+No “Invalid login credentials” issues
+🧱 Required Auth Flow
+
+When a user signs up:
+
+Step 1
+
+Create user in Supabase Auth
+
+Step 2
+
+Create matching user profile in public.users
+
+Step 3
+
+Create onboarding metadata based on account type
+
+👥 2. ACCOUNT TYPES
+
+Users must choose ONE onboarding path:
+
+A. Independent Support Worker
+
+Examples:
+
+Sole trader
+Independent disability support worker
+Unregistered support worker
+Registered independent provider
+Collect:
+full_name
+registration_status
+support_specialties
+years_experience (optional)
+mobile_number
+B. Allied Health Professional
+
+Examples:
+
+Occupational therapist
+Speech therapist
+Physiotherapist
+Behaviour support practitioner
+Collect:
+profession_type
+registration_status
+provider_number (optional)
+specialties
+clinic_name (optional)
+C. Small Provider / Small Care Team
+
+IMPORTANT:
+This is ONLY for small organisations.
+
+DO NOT build enterprise or corporate-level architecture.
+
+Target:
+small care companies
+small provider teams
+growing providers with small staff count
+Collect:
+organisation_name
+provider_type
+registration_status
+team_size
+participant_volume
+contact_number
+⚠️ Small Organisation Rules
+
+Keep organisation support lightweight.
+
+Maximum focus:
+
+small teams
+operational simplicity
+fast onboarding
+Suggested team size options:
+Solo
+2–5 staff
+6–15 staff
+15+ staff
+
+No enterprise features required.
+
+🧠 3. USER PROFILE SYSTEM
+
+Update existing users table to support:
+
+id uuid
+email text
+role text
+account_type text
+organization_id uuid nullable
+full_name text
+created_at timestamp
+🏢 4. SMALL ORGANISATION TABLE
+
+Create lightweight organization support.
+
+Table:
+
+organizations
+- id uuid
+- owner_user_id uuid
+- organization_name text
+- registration_status text
+- team_size text
+- participant_volume text
+- created_at timestamp
+📱 5. ONBOARDING EXPERIENCE
+
+The onboarding UI must:
+
+feel modern
+feel lightweight
+not feel corporate
+be mobile responsive
+use guided multi-step onboarding
+🔄 Required Flow
+Welcome
+   ↓
+Choose account type
+   ↓
+Create account
+   ↓
+Enter professional/business details
+   ↓
+Complete onboarding
+   ↓
+Open dashboard
+💬 6. SESSION EXPERIENCE (KEEP EXISTING REQUIREMENT)
+
+Maintain the CareScribe chat-style documentation system.
+
+Session management must NOT use traditional textareas.
+
+Use a WhatsApp-style session interface with:
+
+🎤 Voice dictation
+📎 File upload
+📷 Camera/photo support
+⌨️ Chat-style text input
+
+Each note/message must save chronologically inside session history.
+
+🧠 7. AI COMPLIANCE ENGINE
+
+Maintain and improve the AI compliance workflow.
+
+The system must:
+
+convert multilingual notes into structured English
+generate NDIS-compliant documentation
+identify missing information
+generate compliance warnings
+🔐 8. SECURITY REQUIREMENTS
+
+Backend must securely:
+
+create users
+assign account types
+link organizations properly
+protect authenticated endpoints
+
+Do NOT trust frontend role assignment.

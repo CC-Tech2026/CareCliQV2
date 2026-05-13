@@ -1,13 +1,16 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 export type UserRole = "admin" | "support_worker" | "allied_health";
+export type AccountType = "independent_worker" | "allied_health" | "small_provider";
 
 export interface AuthUser {
   id: string;
   email: string;
   full_name?: string;
   role: UserRole;
+  account_type: AccountType;
+  onboarding_complete: boolean;
 }
 
 interface AuthContextType {
@@ -15,30 +18,34 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
+  updateUser: (updates: Partial<AuthUser>) => void;
 }
 
 const TOKEN_KEY = "carescribe_token";
 const USER_KEY = "carescribe_user";
 
+// Wire the token getter immediately on module load so API calls always have the latest token
+let _currentToken: string | null = null;
+setAuthTokenGetter(() => _currentToken);
+
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => {
+    const t = localStorage.getItem(TOKEN_KEY);
+    _currentToken = t;
+    return t;
+  });
   const [user, setUser] = useState<AuthUser | null>(() => {
     const stored = localStorage.getItem(USER_KEY);
     try { return stored ? JSON.parse(stored) : null; } catch { return null; }
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Wire the token into every API call made via customFetch
-  useEffect(() => {
-    setAuthTokenGetter(() => token);
-    return () => setAuthTokenGetter(null);
-  }, [token]);
-
   const persistSession = useCallback((newToken: string, newUser: AuthUser) => {
+    _currentToken = newToken;
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USER_KEY, JSON.stringify(newUser));
     setToken(newToken);
@@ -46,13 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearSession = useCallback(() => {
+    _currentToken = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
     setIsLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -65,7 +73,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error(err.detail || "Login failed");
       }
       const data = await res.json();
-      persistSession(data.access_token, data.user);
+      const authUser: AuthUser = {
+        id: data.user.id,
+        email: data.user.email,
+        full_name: data.user.full_name || "",
+        role: data.user.role || "support_worker",
+        account_type: data.user.account_type || "independent_worker",
+        onboarding_complete: data.user.onboarding_complete ?? true,
+      };
+      persistSession(data.access_token, authUser);
+      return authUser;
     } finally {
       setIsLoading(false);
     }
@@ -76,6 +93,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearSession();
   }, [clearSession]);
 
+  const updateUser = useCallback((updates: Partial<AuthUser>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...updates };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -85,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!token && !!user,
         login,
         logout,
+        updateUser,
       }}
     >
       {children}

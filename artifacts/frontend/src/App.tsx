@@ -6,6 +6,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
@@ -20,10 +21,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error: unknown) => {
-        // Don't retry on 401/403 — user needs to log in
         if (error && typeof error === "object" && "status" in error) {
-          const status = (error as { status: number }).status;
-          if (status === 401 || status === 403) return false;
+          const s = (error as { status: number }).status;
+          if (s === 401 || s === 403) return false;
         }
         return failureCount < 2;
       },
@@ -31,56 +31,59 @@ const queryClient = new QueryClient({
   },
 });
 
+const ALL_ROLES = ["admin", "support_worker", "allied_health"] as const;
+
 function Router() {
   return (
     <Switch>
       {/* Public */}
       <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
-      {/* Protected — support workers and admins */}
+      {/* Protected */}
       <Route path="/dashboard">
-        <ProtectedRoute allowedRoles={["admin", "support_worker"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Dashboard /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={["admin", "support_worker", "allied_health"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={["admin", "support_worker"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Sessions /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={["admin", "support_worker"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><SessionNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/:id/live">
         {() => (
-          <ProtectedRoute allowedRoles={["admin", "support_worker"]}>
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
             <SessionLive />
           </ProtectedRoute>
         )}
       </Route>
 
       <Route path="/sessions/:id">
-        {params => (
-          <ProtectedRoute allowedRoles={["admin", "support_worker", "allied_health"]}>
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
             <AppLayout><SessionDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
       </Route>
 
       <Route path="/compliance">
-        <ProtectedRoute allowedRoles={["admin", "support_worker", "allied_health"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
