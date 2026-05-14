@@ -420,7 +420,10 @@ Participant: {participant_data.get('full_name', 'Unknown')}
 NDIS Number: {participant_data.get('ndis_number', 'N/A')}
 Primary Disability / Support Needs: {participant_data.get('primary_disability', 'Not specified')}
 Plan Status: {participant_data.get('plan_status', 'active')}
-Goals: {', '.join(participant_data.get('goals', [])) or 'None specified'}
+Goals: {', '.join(
+        (g.get('title') or g.get('description') or str(g)) if isinstance(g, dict) else str(g)
+        for g in (participant_data.get('goals') or [])
+    ) or 'None specified'}
 
 Recent Sessions:
 {sessions_text or 'No sessions recorded yet'}

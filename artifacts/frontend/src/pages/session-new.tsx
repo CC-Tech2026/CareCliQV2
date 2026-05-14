@@ -8,7 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { format } from "date-fns";
 import {
-  Form, FormControl, FormField, FormItem, FormLabel,
+  Form, FormField, FormItem, FormLabel,
 } from "@/components/ui/form";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -377,28 +377,24 @@ export default function SessionNew() {
               {/* Session focus */}
               <div>
                 <FieldLabel>Session Focus</FieldLabel>
-                <FormControl>
-                  <SmartInput
-                    id="session_focus"
-                    placeholder="e.g. improve mobility — or tap the mic to speak"
-                    value={form.watch("session_focus") ?? ""}
-                    onChange={v => form.setValue("session_focus", v)}
-                  />
-                </FormControl>
+                <SmartInput
+                  id="session_focus"
+                  placeholder="e.g. improve mobility — or tap the mic to speak"
+                  value={form.watch("session_focus") ?? ""}
+                  onChange={v => form.setValue("session_focus", v)}
+                />
               </div>
 
               {/* Pre-session notes */}
               <div>
                 <FieldLabel>Pre-session Notes</FieldLabel>
-                <FormControl>
-                  <SmartTextarea
-                    id="pre_session_notes"
-                    placeholder="Anything important to know before starting — or tap the mic to dictate in any language"
-                    rows={3}
-                    value={form.watch("pre_session_notes") ?? ""}
-                    onChange={v => form.setValue("pre_session_notes", v)}
-                  />
-                </FormControl>
+                <SmartTextarea
+                  id="pre_session_notes"
+                  placeholder="Anything important to know before starting — or tap the mic to dictate in any language"
+                  rows={3}
+                  value={form.watch("pre_session_notes") ?? ""}
+                  onChange={v => form.setValue("pre_session_notes", v)}
+                />
               </div>
 
               {/* Tags */}
