@@ -1,90 +1,60 @@
 import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertTriangle,
-  Plus,
-  Search,
-  Clock,
-  Activity,
-  ClipboardList,
-  Siren,
-  AlertCircle,
-  ChevronRight,
-  Loader2,
+  AlertTriangle, Plus, Search, Clock, Activity,
+  ClipboardList, Siren, AlertCircle, ChevronRight, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const PLUM  = "#542269";
+const CORAL = "#F1738A";
+const T1    = "#1C1626";
+const T2    = "#4A3D5A";
+const T3    = "#7A6A8A";
+const BORDER = "rgba(232,213,232,0.5)";
+const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const INCIDENT_TYPES: Record<string, string> = {
-  injury: "Injury",
-  medication_error: "Medication Error",
-  behaviour_of_concern: "Behaviour of Concern",
-  property_damage: "Property Damage",
-  abuse_neglect: "Abuse / Neglect",
-  restrictive_practice: "Restrictive Practice",
-  environmental: "Environmental Hazard",
-  elopement: "Elopement",
-  near_miss: "Near Miss",
-  other: "Other",
+  injury: "Injury", medication_error: "Medication Error",
+  behaviour_of_concern: "Behaviour of Concern", property_damage: "Property Damage",
+  abuse_neglect: "Abuse / Neglect", restrictive_practice: "Restrictive Practice",
+  environmental: "Environmental Hazard", elopement: "Elopement",
+  near_miss: "Near Miss", other: "Other",
 };
 
 const SEVERITIES = [
-  { value: "low", label: "Low", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { value: "medium", label: "Medium", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  { value: "high", label: "High", color: "bg-orange-100 text-orange-700 border-orange-200" },
-  { value: "critical", label: "Critical", color: "bg-red-100 text-red-700 border-red-200" },
+  { value: "low",      label: "Low",      color: "#16A34A", bg: "rgba(22,163,74,0.08)",   border: "rgba(22,163,74,0.2)",   leftBorder: "#16A34A" },
+  { value: "medium",   label: "Medium",   color: "#D97706", bg: "rgba(245,158,11,0.08)",  border: "rgba(245,158,11,0.2)",  leftBorder: "#D97706" },
+  { value: "high",     label: "High",     color: "#EA580C", bg: "rgba(234,88,12,0.08)",   border: "rgba(234,88,12,0.2)",   leftBorder: "#EA580C" },
+  { value: "critical", label: "Critical", color: "#DC2626", bg: "rgba(239,68,68,0.08)",   border: "rgba(239,68,68,0.2)",   leftBorder: "#DC2626" },
 ] as const;
 
 const STATUSES = [
-  { value: "reported", label: "Reported", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "under_investigation", label: "Under Investigation", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  { value: "resolved", label: "Resolved", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { value: "closed", label: "Closed", color: "bg-slate-100 text-slate-600 border-slate-200" },
+  { value: "reported",             label: "Reported",             color: "#2563EB", bg: "rgba(37,99,235,0.08)"   },
+  { value: "under_investigation",  label: "Under Investigation",  color: "#D97706", bg: "rgba(245,158,11,0.08)"  },
+  { value: "resolved",             label: "Resolved",             color: "#16A34A", bg: "rgba(22,163,74,0.08)"   },
+  { value: "closed",               label: "Closed",               color: T3,        bg: `rgba(84,34,105,0.06)`   },
 ] as const;
 
-function severityBorderColor(sev: string) {
-  return sev === "critical" ? "border-l-red-500" :
-    sev === "high" ? "border-l-orange-500" :
-    sev === "medium" ? "border-l-amber-400" : "border-l-emerald-400";
-}
+function getSeverityConfig(sev: string) { return SEVERITIES.find(s => s.value === sev) ?? SEVERITIES[1]; }
+function getStatusConfig(st: string)    { return STATUSES.find(s => s.value === st)    ?? STATUSES[0];   }
 
-function getSeverityConfig(sev: string) {
-  return SEVERITIES.find((s) => s.value === sev) ?? SEVERITIES[1];
-}
-
-function getStatusConfig(st: string) {
-  return STATUSES.find((s) => s.value === st) ?? STATUSES[0];
-}
-
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface Incident {
-  id: string;
-  title: string;
-  incident_type: string;
-  severity: string;
-  status: string;
-  incident_date: string;
-  ndis_pending: boolean;
-  overdue: boolean;
-  participant_name?: string;
+  id: string; title: string; incident_type: string; severity: string;
+  status: string; incident_date: string; ndis_pending: boolean;
+  overdue: boolean; participant_name?: string;
 }
-
 interface IncidentStats {
-  total: number;
-  open: number;
-  ndis_pending: number;
-  overdue: number;
-  critical: number;
+  total: number; open: number; ndis_pending: number; overdue: number; critical: number;
 }
 
 async function apiFetch(path: string) {
@@ -93,188 +63,193 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function Incidents() {
   const [, navigate] = useLocation();
-  useQueryClient();
-
-  const [search, setSearch] = useState("");
+  const [search,         setSearch        ] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus,   setFilterStatus  ] = useState("all");
 
   const { data: incidents = [], isLoading } = useQuery<Incident[]>({
     queryKey: ["incidents"],
     queryFn: () => apiFetch("/incidents"),
   });
-
   const { data: stats } = useQuery<IncidentStats>({
     queryKey: ["incident-stats"],
     queryFn: () => apiFetch("/incidents/stats"),
   });
 
-  const filtered = useMemo(() => {
-    return incidents.filter((i) => {
-      if (filterSeverity !== "all" && i.severity !== filterSeverity) return false;
-      if (filterStatus !== "all" && i.status !== filterStatus) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return (
-          i.title.toLowerCase().includes(q) ||
-          (i.participant_name ?? "").toLowerCase().includes(q) ||
-          (INCIDENT_TYPES[i.incident_type] ?? "").toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [incidents, filterSeverity, filterStatus, search]);
+  const filtered = useMemo(() => incidents.filter(i => {
+    if (filterSeverity !== "all" && i.severity !== filterSeverity) return false;
+    if (filterStatus   !== "all" && i.status   !== filterStatus  ) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return i.title.toLowerCase().includes(q) ||
+        (i.participant_name ?? "").toLowerCase().includes(q) ||
+        (INCIDENT_TYPES[i.incident_type] ?? "").toLowerCase().includes(q);
+    }
+    return true;
+  }), [incidents, filterSeverity, filterStatus, search]);
 
   return (
-    <div className="flex flex-col gap-6 h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+    <div className="flex flex-col gap-6 h-full max-w-5xl">
+
+      {/* ── Header ── */}
+      <div className="flex items-end justify-between shrink-0 gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#0D0D55] flex items-center gap-2">
-            <AlertTriangle className="text-orange-500" size={22} />
+          <h1 className="text-[24px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
             Incident Management
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <p className="text-[14px] mt-1" style={{ color: T2 }}>
             NDIS Practice Standard 2.3 — Incident management &amp; notification
           </p>
         </div>
-        <Button
+        <button
           onClick={() => navigate("/incidents/new")}
-          className="bg-[#0D0D55] hover:bg-[#1a1a77] text-white rounded-2xl gap-2"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 shrink-0"
+          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
         >
-          <Plus size={16} />
-          Log Incident
-        </Button>
+          <Plus size={14} strokeWidth={2.5} /> Log Incident
+        </button>
       </div>
 
-      {/* Stats bar */}
+      {/* ── Stat pills ── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
         {[
-          { label: "Total", value: stats?.total ?? 0, icon: ClipboardList, color: "text-[#5271FF]", bg: "bg-blue-50" },
-          { label: "Open", value: stats?.open ?? 0, icon: Activity, color: "text-amber-600", bg: "bg-amber-50" },
-          { label: "NDIS Pending", value: stats?.ndis_pending ?? 0, icon: Siren, color: "text-red-600", bg: "bg-red-50" },
-          { label: "Overdue", value: stats?.overdue ?? 0, icon: Clock, color: "text-orange-600", bg: "bg-orange-50" },
-          { label: "Critical", value: stats?.critical ?? 0, icon: AlertCircle, color: "text-rose-700", bg: "bg-rose-50" },
+          { label: "Total",        value: stats?.total        ?? 0, icon: ClipboardList, color: PLUM,      bg: `${PLUM}0A`               },
+          { label: "Open",         value: stats?.open         ?? 0, icon: Activity,      color: "#D97706", bg: "rgba(245,158,11,0.08)"   },
+          { label: "NDIS Pending", value: stats?.ndis_pending ?? 0, icon: Siren,         color: "#DC2626", bg: "rgba(239,68,68,0.08)"    },
+          { label: "Overdue",      value: stats?.overdue      ?? 0, icon: Clock,         color: "#EA580C", bg: "rgba(234,88,12,0.08)"    },
+          { label: "Critical",     value: stats?.critical     ?? 0, icon: AlertCircle,   color: "#DC2626", bg: "rgba(239,68,68,0.07)"    },
         ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className={cn("rounded-2xl p-4 flex items-center gap-3", bg)}>
-            <Icon size={20} className={color} />
+          <div key={label}
+            className="flex items-center gap-3 rounded-2xl px-4 py-3.5"
+            style={{ background: bg, border: `1px solid rgba(232,213,232,0.4)` }}>
+            <Icon size={18} style={{ color }} />
             <div>
-              <p className="text-xs text-slate-500 font-medium">{label}</p>
-              <p className={cn("text-2xl font-bold", color)}>{value}</p>
+              <p className="text-[11px] font-medium" style={{ color: T3 }}>{label}</p>
+              <p className="text-[22px] font-bold leading-none mt-0.5" style={{ color }}>{value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* NDIS urgent banner */}
+      {/* ── NDIS urgent banner ── */}
       {(stats?.ndis_pending ?? 0) > 0 && (
-        <div className="shrink-0 flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-5 py-3">
-          <Siren size={18} className="text-red-600 shrink-0" />
-          <p className="text-sm text-red-800 font-medium">
-            <strong>{stats?.ndis_pending}</strong> incident{(stats?.ndis_pending ?? 0) > 1 ? "s" : ""} require NDIS Quality &amp; Safeguards Commission notification. Critical incidents must be reported within 24 hours.
+        <div className="shrink-0 flex items-center gap-3 rounded-2xl px-5 py-3.5"
+          style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.18)" }}>
+          <Siren size={16} className="shrink-0" style={{ color: "#DC2626" }} />
+          <p className="text-[13px] leading-relaxed" style={{ color: "#991B1B" }}>
+            <strong>{stats?.ndis_pending}</strong> incident{(stats?.ndis_pending ?? 0) > 1 ? "s" : ""} require
+            NDIS Quality &amp; Safeguards Commission notification. Critical incidents must be reported within 24 hours.
           </p>
         </div>
       )}
 
-      {/* Filters */}
+      {/* ── Filters ── */}
       <div className="flex gap-2 shrink-0 flex-wrap">
         <div className="relative flex-1 min-w-[180px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: T3 }} />
           <Input
             placeholder="Search incidents…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 text-sm rounded-xl border-slate-200 h-9"
+            onChange={e => setSearch(e.target.value)}
+            className="pl-8 h-9 text-[13px] rounded-xl"
+            style={{ borderColor: BORDER }}
           />
         </div>
         <Select value={filterSeverity} onValueChange={setFilterSeverity}>
-          <SelectTrigger className="w-32 h-9 text-xs rounded-xl border-slate-200">
+          <SelectTrigger className="w-32 h-9 text-[12px] rounded-xl" style={{ borderColor: BORDER }}>
             <SelectValue placeholder="Severity" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All severity</SelectItem>
-            {SEVERITIES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            {SEVERITIES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-9 text-xs rounded-xl border-slate-200">
+          <SelectTrigger className="w-40 h-9 text-[12px] rounded-xl" style={{ borderColor: BORDER }}>
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All status</SelectItem>
-            {STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Incident list */}
+      {/* ── Incident grid ── */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            <Loader2 size={24} className="animate-spin" />
+          <div className="flex items-center justify-center py-20" style={{ color: T3 }}>
+            <Loader2 size={22} className="animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-            <AlertTriangle size={32} className="text-slate-200" />
-            <p className="text-sm font-medium">No incidents found</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <AlertTriangle size={28} style={{ color: "rgba(232,213,232,0.8)" }} />
+            <p className="text-[14px] font-medium" style={{ color: T2 }}>No incidents found</p>
             {incidents.length === 0 && (
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => navigate("/incidents/new")}
-                className="mt-1 rounded-xl border-slate-200 gap-1.5"
+                className="mt-1 flex items-center gap-1.5 px-4 py-2 rounded-xl border text-[13px] font-semibold transition-colors duration-150 hover:bg-[#F6F4FB]"
+                style={{ borderColor: BORDER, color: T2 }}
               >
-                <Plus size={14} /> Log your first incident
-              </Button>
+                <Plus size={13} /> Log your first incident
+              </button>
             )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtered.map((incident) => {
+            {filtered.map(incident => {
               const sev = getSeverityConfig(incident.severity);
-              const st = getStatusConfig(incident.status);
+              const st  = getStatusConfig(incident.status);
               return (
                 <button
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
-                  className={cn(
-                    "text-left w-full rounded-2xl border-l-4 border border-slate-100 bg-white p-4 shadow-sm hover:shadow-md transition-all group",
-                    severityBorderColor(incident.severity),
-                  )}
+                  className="text-left w-full rounded-2xl bg-white p-4 border-l-4 transition-all duration-200 hover:-translate-y-0.5 group"
+                  style={{
+                    boxShadow: CARD_SHADOW,
+                    borderLeftColor: sev.leftBorder,
+                    borderTopColor: BORDER, borderRightColor: BORDER, borderBottomColor: BORDER,
+                  }}
                 >
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <p className="text-sm font-semibold text-[#0D0D55] line-clamp-2 flex-1 group-hover:text-[#5271FF] transition-colors">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <p className="text-[14px] font-semibold line-clamp-2 flex-1 transition-colors duration-150 group-hover:text-[#542269]"
+                      style={{ color: T1 }}>
                       {incident.title}
                     </p>
-                    <ChevronRight size={14} className="text-slate-300 group-hover:text-[#5271FF] shrink-0 mt-0.5 transition-colors" />
+                    <ChevronRight size={13} className="shrink-0 mt-0.5 transition-colors duration-150" style={{ color: T3 }} />
                   </div>
 
-                  <p className="text-xs text-slate-500 mb-2 line-clamp-1">
+                  <p className="text-[12px] mb-3 line-clamp-1" style={{ color: T3 }}>
                     {incident.participant_name || "No participant linked"} · {INCIDENT_TYPES[incident.incident_type] ?? incident.incident_type}
                   </p>
 
-                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", sev.color)}>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={{ background: sev.bg, color: sev.color }}>
                       {sev.label}
-                    </Badge>
-                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", st.color)}>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={{ background: st.bg, color: st.color }}>
                       {st.label}
-                    </Badge>
+                    </span>
                     {incident.ndis_pending && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-600 border-red-200">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                        style={{ background: "rgba(239,68,68,0.08)", color: "#DC2626" }}>
                         NDIS Alert
-                      </Badge>
+                      </span>
                     )}
                     {incident.overdue && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-600 border-orange-200">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                        style={{ background: "rgba(234,88,12,0.08)", color: "#EA580C" }}>
                         Overdue
-                      </Badge>
+                      </span>
                     )}
                   </div>
 
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[11px]" style={{ color: T3 }}>
                     {incident.incident_date
                       ? formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })
                       : ""}
@@ -286,9 +261,8 @@ export default function Incidents() {
         )}
       </div>
 
-      {/* Footer count */}
       {filtered.length > 0 && (
-        <p className="shrink-0 text-xs text-slate-400 text-right">
+        <p className="shrink-0 text-[11px] text-right" style={{ color: T3 }}>
           Showing {filtered.length} of {incidents.length} incidents
         </p>
       )}

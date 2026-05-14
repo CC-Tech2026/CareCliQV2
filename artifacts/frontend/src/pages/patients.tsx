@@ -412,13 +412,14 @@ export default function Patients() {
     <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
       {/* Left panel — participant list */}
       <div
-        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm`}
+        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden`}
+        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
       >
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="p-4 border-b space-y-4" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-lg">Participants</h2>
+            <h2 className="font-semibold text-[16px]" style={{ color: "#1C1626" }}>Participants</h2>
             <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1">
+              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl" style={{ borderColor: "rgba(232,213,232,0.7)" }}>
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Add</span>
               </Button>
@@ -426,17 +427,18 @@ export default function Patients() {
           </div>
           <div className="space-y-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4" style={{ color: "#7A6A8A" }} />
               <Input
                 placeholder="Search name or NDIS..."
-                className="pl-9 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                className="pl-9 rounded-xl"
+                style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 data-testid="input-search-participants"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-slate-50 dark:bg-slate-950 h-9">
+              <SelectTrigger className="h-9 rounded-xl" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -461,7 +463,7 @@ export default function Patients() {
                 </div>
               ))
           ) : filteredParticipants.length === 0 ? (
-            <div className="text-center py-8 text-slate-500">
+            <div className="text-center py-8 text-[13px]" style={{ color: "#7A6A8A" }}>
               No participants found
             </div>
           ) : (
@@ -473,21 +475,19 @@ export default function Patients() {
                   setShowMobileDetail(true);
                 }}
                 data-testid={`button-participant-${p.id}`}
-                className={`w-full text-left p-3 rounded-lg transition-colors flex flex-col gap-1.5 ${
-                  selectedId === p.id
-                    ? "bg-primary/10 border-primary/20 border"
-                    : "hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent"
-                }`}
+                className="w-full text-left p-3 rounded-xl transition-all duration-150 flex flex-col gap-1.5 border"
+                style={{
+                  background: selectedId === p.id ? "rgba(84,34,105,0.07)" : "transparent",
+                  borderColor: selectedId === p.id ? "rgba(84,34,105,0.20)" : "transparent",
+                }}
               >
                 <div className="flex justify-between items-start w-full">
-                  <span className="font-medium text-sm">{p.full_name}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${statusBadge(p.plan_status)}`}
-                  >
+                  <span className="font-medium text-[13px]" style={{ color: selectedId === p.id ? "#542269" : "#1C1626" }}>{p.full_name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${statusBadge(p.plan_status)}`}>
                     {p.plan_status}
                   </span>
                 </div>
-                <span className="text-xs text-slate-500 font-mono">
+                <span className="text-[11px] font-mono" style={{ color: "#7A6A8A" }}>
                   {p.ndis_number}
                 </span>
               </button>
@@ -498,12 +498,14 @@ export default function Patients() {
 
       {/* Right panel — participant detail */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-y-auto shadow-sm`}
+        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto`}
+        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
       >
         {selectedId ? (
           <>
             <button
-              className="md:hidden flex items-center gap-2 text-sm text-indigo-600 font-medium px-4 py-3 border-b border-slate-100 hover:bg-slate-50 shrink-0"
+              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b hover:bg-[#F6F4FB] shrink-0 transition-colors"
+              style={{ color: "#542269", borderColor: "rgba(232,213,232,0.5)" }}
               onClick={() => {
                 setShowMobileDetail(false);
               }}
@@ -528,9 +530,9 @@ export default function Patients() {
             </div>
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+          <div className="h-full flex flex-col items-center justify-center gap-3" style={{ color: "#7A6A8A" }}>
             <Users className="h-12 w-12 opacity-20" />
-            <p>Select a participant to view details</p>
+            <p className="text-[13px]">Select a participant to view details</p>
           </div>
         )}
       </div>
@@ -1017,9 +1019,9 @@ function GoalsManagementCard({
         )}
 
         {activeGoals.length === 0 && !isAdding ? (
-          <div className="text-center py-6 border border-dashed border-slate-200 rounded-lg text-slate-400">
+          <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "rgba(232,213,232,0.7)", color: "#7A6A8A" }}>
             <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
-            <p className="text-xs">
+            <p className="text-[12px]">
               No active goals — click "Add Goal" to add funded support goals
             </p>
           </div>
@@ -1028,7 +1030,8 @@ function GoalsManagementCard({
             {activeGoals.map((goal) => (
               <li
                 key={goal.id}
-                className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 group"
+                className="flex items-center gap-2 p-2.5 rounded-xl border group"
+                style={{ background: "rgba(246,244,251,0.6)", borderColor: "rgba(232,213,232,0.5)" }}
                 data-testid={`goal-item-${goal.id}`}
               >
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -1068,12 +1071,12 @@ function GoalsManagementCard({
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm flex-1 text-slate-800 dark:text-slate-200">
+                    <span className="text-[13px] flex-1" style={{ color: "#1C1626" }}>
                       {goal.title}
                     </span>
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition-all">
                       <button
-                        className="text-slate-400 hover:text-indigo-600 text-xs"
+                        className="hover:text-[#542269] text-[12px] transition-colors" style={{ color: "#7A6A8A" }}
                         onClick={() => startEditing(goal)}
                         title="Edit goal"
                         data-testid={`button-edit-goal-${goal.id}`}
@@ -1081,7 +1084,7 @@ function GoalsManagementCard({
                         <Edit className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        className="text-slate-400 hover:text-amber-600 text-xs flex items-center gap-1"
+                        className="hover:text-amber-600 text-[12px] flex items-center gap-1 transition-colors" style={{ color: "#7A6A8A" }}
                         onClick={() => archiveGoal(goal.id)}
                         disabled={updateGoals.isPending}
                         data-testid={`button-archive-goal-${goal.id}`}
@@ -1100,7 +1103,7 @@ function GoalsManagementCard({
         {archivedGoals.length > 0 && (
           <div>
             <button
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 mt-1 mb-2"
+              className="flex items-center gap-1 text-[12px] mt-1 mb-2 hover:opacity-70 transition-opacity" style={{ color: "#7A6A8A" }}
               onClick={() => setShowArchived((v) => !v)}
             >
               {showArchived ? (
@@ -1115,14 +1118,15 @@ function GoalsManagementCard({
                 {archivedGoals.map((goal) => (
                   <li
                     key={goal.id}
-                    className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50/50 border border-dashed border-slate-200 group"
+                    className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed group"
+                    style={{ borderColor: "rgba(232,213,232,0.6)" }}
                   >
-                    <XCircle className="h-4 w-4 text-slate-300 shrink-0" />
-                    <span className="text-sm flex-1 text-slate-400 line-through">
+                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "rgba(232,213,232,0.9)" }} />
+                    <span className="text-[13px] flex-1 line-through" style={{ color: "#7A6A8A" }}>
                       {goal.title}
                     </span>
                     <button
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-emerald-600 transition-all text-xs"
+                      className="opacity-0 group-hover:opacity-100 hover:text-emerald-600 transition-all text-[12px]" style={{ color: "#7A6A8A" }}
                       onClick={() => restoreGoal(goal.id)}
                       disabled={updateGoals.isPending}
                       title="Restore goal"
@@ -1256,14 +1260,15 @@ function ParticipantDetail({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+      <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
         <div className="flex justify-between items-start gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight mb-1">
+            <h2 className="text-[22px] font-bold tracking-tight mb-1" style={{ color: "#1C1626" }}>
               {participant.full_name}
             </h2>
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-slate-500">
-              <span className="font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-xs">
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[13px]" style={{ color: "#4A3D5A" }}>
+              <span className="font-mono px-2 py-0.5 rounded text-[11px]"
+                style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
                 {participant.ndis_number}
               </span>
               <span className="hidden sm:inline">•</span>
@@ -1297,23 +1302,23 @@ function ParticipantDetail({
         defaultValue="overview"
         className="flex-1 flex flex-col overflow-hidden"
       >
-        <div className="px-6 pt-3 border-b border-slate-200 dark:border-slate-800">
+        <div className="px-6 pt-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
           <TabsList className="h-9 bg-transparent gap-1 p-0">
             <TabsTrigger
               value="overview"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 px-3 text-sm font-medium"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
             >
               Overview
             </TabsTrigger>
             <TabsTrigger
               value="ndis-plan"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 px-3 text-sm font-medium"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
             >
               NDIS Plan
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none pb-2 px-3 text-sm font-medium"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
             >
               Client History
             </TabsTrigger>
@@ -1404,21 +1409,18 @@ function ParticipantDetail({
           />
 
           {aiSummary?.summary && (
-            <Card className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-800 dark:text-blue-300">
-                  <ShieldCheck className="h-4 w-4" /> AI Clinical Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
-                  {aiSummary.summary}
-                </p>
-                <p className="text-xs text-blue-600/70 dark:text-blue-400/70 mt-3 font-medium">
-                  Based on {aiSummary.sessions_count} recent sessions
-                </p>
-              </CardContent>
-            </Card>
+            <div className="rounded-2xl p-5" style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(84,34,105,0.12)" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck className="h-4 w-4" style={{ color: "#542269" }} />
+                <p className="text-[13px] font-semibold" style={{ color: "#542269" }}>AI Clinical Summary</p>
+              </div>
+              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                {aiSummary.summary}
+              </p>
+              <p className="text-[11px] font-medium mt-3" style={{ color: "#7A6A8A" }}>
+                Based on {aiSummary.sessions_count} recent sessions
+              </p>
+            </div>
           )}
 
           <div>
@@ -1426,48 +1428,42 @@ function ParticipantDetail({
             {sessionsLoading ? (
               <Skeleton className="h-32 w-full" />
             ) : !sessions?.length ? (
-              <div className="text-center p-8 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-500 bg-slate-50 dark:bg-slate-900/50">
+              <div className="text-center p-8 rounded-2xl text-[13px]"
+                style={{ border: "1px solid rgba(232,213,232,0.5)", background: "#F6F4FB", color: "#7A6A8A" }}>
                 No sessions recorded yet
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {sessions.slice(0, 5).map((s) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
-                    <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:border-primary/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
+                    <div className="rounded-xl p-4 cursor-pointer transition-all duration-150 border hover:border-[rgba(84,34,105,0.20)]"
+                      style={{ borderColor: "rgba(232,213,232,0.5)" }}>
                       <div className="flex justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm group-hover:text-primary transition-colors">
+                          <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
                             {s.session_type}
                           </span>
-                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <span className="text-[11px] flex items-center gap-1" style={{ color: "#7A6A8A" }}>
                             <Clock className="h-3 w-3" />
                             {s.duration_minutes} min
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           {s.status === "draft" && (
-                            <Badge
-                              variant="outline"
-                              className="text-amber-600 bg-amber-50 text-[10px]"
-                            >
-                              Draft
-                            </Badge>
+                            <Badge variant="outline" className="text-amber-600 bg-amber-50 text-[10px]">Draft</Badge>
                           )}
                           {s.compliance_score != null && (
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] ${Number(s.compliance_score) >= 80 ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"}`}
-                            >
+                            <Badge variant="outline" className={`text-[10px] ${Number(s.compliance_score) >= 80 ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"}`}>
                               {Number(s.compliance_score).toFixed(0)}%
                             </Badge>
                           )}
-                          <span className="text-xs text-slate-500">
+                          <span className="text-[11px]" style={{ color: "#7A6A8A" }}>
                             {safeFormat(s.session_date)}
                           </span>
                         </div>
                       </div>
                       {s.notes && (
-                        <p className="text-xs text-slate-500 line-clamp-1 mt-1">
+                        <p className="text-[12px] line-clamp-1 mt-1" style={{ color: "#7A6A8A" }}>
                           {s.notes}
                         </p>
                       )}

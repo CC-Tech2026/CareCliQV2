@@ -70,10 +70,10 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5 hover:bg-slate-50 transition-colors group">
+    <div className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5 hover:bg-[#F6F4FB] transition-colors">
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800">{title}</p>
-        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>{title}</p>
+        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -93,10 +93,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
-        <p className="text-sm text-slate-500 mt-1 leading-relaxed">{description}</p>
+        <h2 className="text-[20px] font-bold tracking-tight" style={{ color: "#1C1626" }}>{title}</h2>
+        <p className="text-[14px] mt-1 leading-relaxed" style={{ color: "#4A3D5A" }}>{description}</p>
       </div>
       {children}
     </div>
@@ -116,19 +116,17 @@ function PanelCard({
   className?: string;
 }) {
   return (
-    <Card
-      className={cn(
-        "shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 border-slate-200/80",
-        className,
-      )}
+    <div
+      className={cn("bg-white rounded-2xl overflow-hidden", className)}
+      style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
     >
       {label && (
         <div className="px-5 pt-5 pb-0">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#7A6A8A" }}>{label}</p>
         </div>
       )}
-      <CardContent className={cn("p-5", label && "pt-3")}>{children}</CardContent>
-    </Card>
+      <div className={cn("p-5", label && "pt-3")}>{children}</div>
+    </div>
   );
 }
 
@@ -470,7 +468,7 @@ export default function Settings() {
 
   // ── Loading overlay ────────────────────────────────────────────────────────
   const LoadingRow = () => (
-    <div className="flex items-center gap-2 text-sm text-slate-400 py-4">
+    <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
       <Loader2 className="h-4 w-4 animate-spin" />
       <span>Loading settings…</span>
     </div>
@@ -482,22 +480,28 @@ export default function Settings() {
 
       {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-52 shrink-0">
-        <div className="sticky top-0 space-y-1 pt-1">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 px-3 pb-2">
+        <div className="sticky top-0 space-y-0.5 pt-1">
+          <p className="text-[11px] font-semibold uppercase tracking-widest px-3 pb-2" style={{ color: "#7A6A8A" }}>
             Settings
           </p>
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 text-left",
-                activeSection === id
-                  ? "bg-primary/8 text-primary border-l-2 border-primary pl-[10px]"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-l-2 border-transparent pl-[10px]"
-              )}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-150 text-left border-l-2"
+              style={{
+                background: activeSection === id ? "rgba(84,34,105,0.07)" : "transparent",
+                color:      activeSection === id ? "#542269" : "#4A3D5A",
+                borderLeftColor: activeSection === id ? "#542269" : "transparent",
+                paddingLeft: 10,
+              }}
             >
-              <Icon className={cn("h-4 w-4 shrink-0", activeSection === id ? "text-primary" : "text-slate-400")} />
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0",
+                  activeSection === id ? "text-[#542269]" : "text-[#7A6A8A]"
+                )}
+              />
               {label}
             </button>
           ))}
@@ -510,12 +514,11 @@ export default function Settings() {
           <button
             key={id}
             onClick={() => setActiveSection(id)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors shrink-0",
-              activeSection === id
-                ? "bg-primary text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            )}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors shrink-0"
+            style={{
+              background: activeSection === id ? "#542269" : "rgba(84,34,105,0.06)",
+              color:      activeSection === id ? "white" : "#4A3D5A",
+            }}
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
@@ -539,9 +542,9 @@ export default function Settings() {
               ) : (
                 <div className="space-y-5">
                   {savedSignature && (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <div className="rounded-xl p-4" style={{ background: "rgba(22,163,74,0.07)", border: "1px solid rgba(22,163,74,0.2)" }}>
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                        <span className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "#16A34A" }}>
                           <Check className="h-3.5 w-3.5" /> Signature saved
                         </span>
                         <Button
@@ -554,7 +557,7 @@ export default function Settings() {
                           <Trash2 className="h-3 w-3" /> Remove
                         </Button>
                       </div>
-                      <div className="bg-white border border-emerald-100 rounded-lg p-3 flex items-center justify-center h-20 shadow-inner">
+                      <div className="bg-white rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
                         <img src={savedSignature} alt="Saved signature" className="max-h-full max-w-full object-contain" />
                       </div>
                     </div>
@@ -571,15 +574,12 @@ export default function Settings() {
                     </TabsList>
 
                     <TabsContent value="draw" className="space-y-3 mt-4">
-                      <p className="text-xs text-slate-400 leading-relaxed">
+                      <p className="text-[12px] leading-relaxed" style={{ color: "#7A6A8A" }}>
                         Draw your signature using your mouse, stylus, or finger on a touchscreen.
                       </p>
                       <div
-                        className={cn(
-                          "rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors",
-                          hasDrawing ? "border-slate-300" : "border-slate-200 hover:border-slate-300"
-                        )}
-                        style={{ touchAction: "none" }}
+                        className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors")}
+                        style={{ borderColor: hasDrawing ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
                       >
                         <canvas
                           ref={canvasRef}
@@ -608,23 +608,21 @@ export default function Settings() {
                     </TabsContent>
 
                     <TabsContent value="upload" className="space-y-3 mt-4">
-                      <p className="text-xs text-slate-400 leading-relaxed">
+                      <p className="text-[12px] leading-relaxed" style={{ color: "#7A6A8A" }}>
                         Upload a PNG or JPG of your handwritten signature. Scan on a white background for best results. Max 2 MB.
                       </p>
                       <div
-                        className={cn(
-                          "rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white",
-                          uploadPreview ? "border-slate-300" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                        )}
+                        className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white hover:bg-[#F6F4FB]"
+                        style={{ borderColor: uploadPreview ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)" }}
                         onClick={() => fileInputRef.current?.click()}
                       >
                         {uploadPreview ? (
                           <img src={uploadPreview} alt="Signature preview" className="max-h-24 max-w-full object-contain" />
                         ) : (
                           <>
-                            <ImageIcon className="h-8 w-8 text-slate-300 mb-2" />
-                            <span className="text-sm text-slate-500">Click to upload a signature image</span>
-                            <span className="text-xs text-slate-400 mt-1">PNG or JPG — max 2 MB</span>
+                            <ImageIcon className="h-8 w-8 mb-2" style={{ color: "rgba(232,213,232,0.9)" }} />
+                            <span className="text-[13px]" style={{ color: "#7A6A8A" }}>Click to upload a signature image</span>
+                            <span className="text-[11px] mt-1" style={{ color: "#7A6A8A" }}>PNG or JPG — max 2 MB</span>
                           </>
                         )}
                       </div>
@@ -643,7 +641,7 @@ export default function Settings() {
                     </TabsContent>
                   </Tabs>
 
-                  <div className="pt-2 border-t border-slate-100 text-xs text-slate-400 leading-relaxed">
+                  <div className="pt-2 border-t text-[11px] leading-relaxed" style={{ borderColor: "rgba(232,213,232,0.5)", color: "#7A6A8A" }}>
                     Signatures are synced to the server and cached locally for offline access. They appear in the sign-off block of every exported PDF audit report.
                   </div>
                 </div>
@@ -658,7 +656,7 @@ export default function Settings() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-name" className="text-xs font-medium text-slate-600">Full Name</Label>
+                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Full Name</Label>
                       <Input
                         id="pract-name"
                         value={practName}
@@ -668,7 +666,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-credentials" className="text-xs font-medium text-slate-600">Credentials</Label>
+                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Credentials</Label>
                       <Input
                         id="pract-credentials"
                         value={practCredentials}
@@ -699,16 +697,17 @@ export default function Settings() {
                       avatarId={avatarId}
                       sizePx={56}
                       fallback={
-                        <div className="h-14 w-14 rounded-full bg-indigo-50 border-2 border-dashed border-indigo-200 flex items-center justify-center text-indigo-300">
+                        <div className="h-14 w-14 rounded-full flex items-center justify-center border-2 border-dashed"
+                          style={{ background: "rgba(84,34,105,0.06)", borderColor: "rgba(84,34,105,0.2)", color: "rgba(84,34,105,0.3)" }}>
                           <User className="h-6 w-6" />
                         </div>
                       }
                     />
                     <div>
-                      <p className="text-sm font-medium text-slate-700">
+                      <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>
                         {avatarId ? "Avatar selected" : "No avatar chosen"}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                      <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
                         Choose a character below. It appears in your sidebar instead of your initials. Saves automatically.
                       </p>
                     </div>
@@ -732,7 +731,7 @@ export default function Settings() {
               ) : (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="business-name" className="text-xs font-medium text-slate-600">Business Name</Label>
+                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Business Name</Label>
                     <Input
                       id="business-name"
                       value={businessName}
@@ -742,8 +741,8 @@ export default function Settings() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="abn" className="text-xs font-medium text-slate-600">
-                      ABN <span className="text-slate-400 font-normal">(Australian Business Number)</span>
+                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                      ABN <span className="font-normal" style={{ color: "#7A6A8A" }}>(Australian Business Number)</span>
                     </Label>
                     <Input
                       id="abn"
@@ -762,7 +761,7 @@ export default function Settings() {
                       </p>
                     )}
                     {!abnError && !abnShowValid && abnDigits.length > 0 && (
-                      <p className="text-xs text-slate-400">{11 - abnDigits.length} more digit{11 - abnDigits.length !== 1 ? "s" : ""} needed</p>
+                      <p className="text-[11px]" style={{ color: "#7A6A8A" }}>{11 - abnDigits.length} more digit{11 - abnDigits.length !== 1 ? "s" : ""} needed</p>
                     )}
                   </div>
                   <div className="flex justify-end pt-1">
@@ -788,8 +787,8 @@ export default function Settings() {
                 <LoadingRow />
               ) : (
                 <div className="space-y-1.5">
-                  <Label htmlFor="default-duration" className="text-xs font-medium text-slate-600">
-                    Default Duration <span className="text-slate-400 font-normal">(minutes)</span>
+                  <Label htmlFor="default-duration" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                    Default Duration <span className="font-normal" style={{ color: "#7A6A8A" }}>(minutes)</span>
                   </Label>
                   <Input
                     id="default-duration"
@@ -801,7 +800,7 @@ export default function Settings() {
                     placeholder="60"
                     className="max-w-[120px] rounded-lg"
                   />
-                  <p className="text-xs text-slate-400">Used as the planned duration when creating sessions</p>
+                  <p className="text-[12px]" style={{ color: "#7A6A8A" }}>Used as the planned duration when creating sessions</p>
                 </div>
               )}
             </PanelCard>
@@ -810,7 +809,7 @@ export default function Settings() {
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <SettingRow
                     title="Auto-start timer"
                     description="Timer starts automatically when you open the session page, so you never forget to start it."
@@ -848,7 +847,7 @@ export default function Settings() {
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <SettingRow
                     title="Require activity log"
                     description="At least one support activity must be logged during the session before it can be approved."
@@ -876,7 +875,7 @@ export default function Settings() {
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <p className="text-[12px] leading-relaxed" style={{ color: "#4A3D5A" }}>
                     When a session's type matches one of the names below, the compliance engine will warn if no body examination markers have been recorded.
                     Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults — leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
                   </p>
@@ -887,13 +886,14 @@ export default function Settings() {
                       {physicalExamSessionTypes.map((type, i) => (
                         <span
                           key={i}
-                          className="inline-flex items-center gap-1 rounded-full bg-primary/8 text-primary text-xs font-medium px-2.5 py-1 border border-primary/20"
+                          className="inline-flex items-center gap-1 rounded-full text-[12px] font-medium px-2.5 py-1"
+                          style={{ background: "rgba(84,34,105,0.08)", color: "#542269", border: "1px solid rgba(84,34,105,0.2)" }}
                         >
                           {type}
                           <button
                             type="button"
                             onClick={() => handleRemoveSessionType(i)}
-                            className="ml-0.5 text-primary/60 hover:text-red-500 transition-colors"
+                            className="ml-0.5 hover:text-red-500 transition-colors" style={{ color: "rgba(84,34,105,0.5)" }}
                             aria-label={`Remove ${type}`}
                           >
                             <X className="h-3 w-3" />
@@ -902,7 +902,8 @@ export default function Settings() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-xs text-slate-400 rounded-lg bg-slate-50 border border-dashed border-slate-200 px-3 py-2.5">
+                    <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed"
+                      style={{ color: "#7A6A8A", background: "rgba(246,244,251,0.8)", borderColor: "rgba(232,213,232,0.7)" }}>
                       <Info className="h-3.5 w-3.5 shrink-0" />
                       <span>No custom types saved — the built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
                     </div>
@@ -931,14 +932,15 @@ export default function Settings() {
                   </div>
 
                   {/* Reset to defaults helper */}
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                    <p className="text-xs text-slate-400">
+                  <div className="flex items-center justify-between pt-1 border-t" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+                    <p className="text-[12px]" style={{ color: "#7A6A8A" }}>
                       Reset to restore the standard built-in list
                     </p>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-xs text-slate-500 hover:text-slate-700 gap-1"
+                      className="text-[12px] gap-1 hover:text-[#1C1626]"
+                      style={{ color: "#4A3D5A" }}
                       onClick={handleResetToDefaults}
                     >
                       <RotateCcw className="h-3 w-3" /> Reset to defaults
@@ -957,8 +959,9 @@ export default function Settings() {
                   </Button>
                 </div>
 
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed space-y-1.5">
-                  <p className="font-semibold text-slate-600 text-sm">How compliance requirements work</p>
+                <div className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-1.5"
+                  style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(232,213,232,0.6)", color: "#4A3D5A" }}>
+                  <p className="font-semibold text-[14px]" style={{ color: "#1C1626" }}>How compliance requirements work</p>
                   <p>
                     These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
                     Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session

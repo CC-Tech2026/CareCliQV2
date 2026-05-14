@@ -15,7 +15,6 @@ type ExtendedSession = Session & {
   compliance_status?: string | null;
   body_markers?: BodyMarker[] | null;
 };
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -352,7 +351,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               {statusCfg.label}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-sm text-slate-500 flex-wrap">
+          <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "#4A3D5A" }}>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4" />
               {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : ""}
@@ -366,8 +365,9 @@ export default function SessionDetail({ id }: { id?: string }) {
             <Button variant="outline" size="sm">View Participant</Button>
           </Link>
           <Link href={`/sessions/${sessionId}/live`}>
-            <Button variant="outline" size="sm" className="gap-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-              <Play className="h-3.5 w-3.5 fill-indigo-600" />
+            <Button variant="outline" size="sm" className="gap-1.5 rounded-xl"
+              style={{ color: "#542269", borderColor: "rgba(84,34,105,0.25)" }}>
+              <Play className="h-3.5 w-3.5" style={{ fill: "#542269" }} />
               Start Live
             </Button>
           </Link>
@@ -389,7 +389,8 @@ export default function SessionDetail({ id }: { id?: string }) {
             onClick={handleExportPDF}
             disabled={isExportingPDF}
             title="Export NDIS audit report as PDF"
-            className="gap-1.5 text-blue-700 border-blue-200 hover:bg-blue-50"
+            className="gap-1.5 rounded-xl"
+            style={{ color: "#542269", borderColor: "rgba(84,34,105,0.20)" }}
           >
             {isExportingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             <span className="sr-only sm:not-sr-only sm:ml-0.5 text-xs">
@@ -406,7 +407,8 @@ export default function SessionDetail({ id }: { id?: string }) {
             Re-check
           </Button>
           <Button
-            className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+            className="gap-2 text-white rounded-xl"
+            style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
             onClick={handleAIAnalysis}
             disabled={saveWithAI.isPending}
             data-testid="button-ai-analyze"
@@ -421,11 +423,11 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Left column — notes + transcription */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <FileText className="h-4 w-4 text-slate-500" /> Clinical Notes
-              </CardTitle>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
+                <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
+              </div>
               {!isEditing ? (
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
               ) : (
@@ -437,14 +439,15 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </Button>
                 </div>
               )}
-            </CardHeader>
-            <CardContent className="pt-4">
+            </div>
+            <div className="p-5">
               {isEditing ? (
                 <div className="space-y-3">
                   <Textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="min-h-[280px] text-sm leading-relaxed resize-y"
+                    className="min-h-[280px] text-[13px] leading-relaxed resize-y rounded-xl"
+                    style={{ borderColor: "rgba(232,213,232,0.5)" }}
                     placeholder="Enter clinical notes here. Include: what was done, participant response, measurable outcomes linked to NDIS goals..."
                   />
                   {/* Live compliance bar */}
@@ -480,7 +483,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     </div>
                   )}
                   {/* Character count */}
-                  <div className="flex justify-between text-xs text-slate-400">
+                  <div className="flex justify-between text-[11px]" style={{ color: "#7A6A8A" }}>
                     <span>{notes.length} characters</span>
                     <span className={notes.length < 50 ? "text-red-500" : notes.length < 200 ? "text-amber-500" : "text-emerald-500"}>
                       {notes.length < 50 ? "Too brief" : notes.length < 200 ? "Acceptable" : "Good length"}
@@ -488,16 +491,16 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </div>
                 </div>
               ) : (
-                <div className="prose prose-slate dark:prose-invert max-w-none text-sm leading-relaxed">
+                <div className="max-w-none text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
                   {session.notes ? (
                     <div className="whitespace-pre-wrap">{session.notes}</div>
                   ) : (
-                    <p className="text-slate-400 italic">No notes recorded yet. Click Edit to add clinical notes.</p>
+                    <p className="italic" style={{ color: "#7A6A8A" }}>No notes recorded yet. Click Edit to add clinical notes.</p>
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Structured Clinical Note Fields */}
           {(() => {
@@ -510,114 +513,114 @@ export default function SessionDetail({ id }: { id?: string }) {
             const filledSections = sections.filter((sec) => sec.value && sec.value.trim());
             if (filledSections.length === 0) return null;
             return (
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-3 flex flex-row items-center border-b border-slate-100 dark:border-slate-800">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-slate-500" /> Structured Clinical Notes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-5">
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+                <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                  <Shield className="h-4 w-4" style={{ color: "#7A6A8A" }} />
+                  <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Structured Clinical Notes</p>
+                </div>
+                <div className="p-5 space-y-5">
                   {filledSections.map(({ label, icon: Icon, value, color }) => (
                     <div key={label}>
-                      <p className={`text-xs font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-1.5 ${color}`}>
+                      <p className={`text-[11px] font-semibold uppercase tracking-widest mb-1.5 flex items-center gap-1.5 ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                         {label}
                       </p>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                      <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "#4A3D5A" }}>
                         {value}
                       </p>
                     </div>
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })()}
 
           {session.transcription && (
-            <Card className="border-slate-200 shadow-sm bg-slate-50 dark:bg-slate-900/50">
-              <CardHeader className="pb-3 border-b border-slate-200/50">
-                <CardTitle className="text-sm font-medium text-slate-600">Audio Transcription</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{session.transcription}</p>
-              </CardContent>
-            </Card>
+            <div className="rounded-2xl overflow-hidden" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)" }}>
+              <div className="px-5 py-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+                <p className="text-[13px] font-medium" style={{ color: "#4A3D5A" }}>Audio Transcription</p>
+              </div>
+              <div className="p-5">
+                <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "#4A3D5A" }}>{session.transcription}</p>
+              </div>
+            </div>
           )}
 
           {/* AI Insights panel */}
           {aiInsights && (
-            <Card className="border-indigo-100 shadow-sm bg-indigo-50/30 dark:bg-indigo-900/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-indigo-900 dark:text-indigo-300">
-                  <Brain className="h-4 w-4" /> AI Clinical Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(84,34,105,0.03)", border: "1px solid rgba(84,34,105,0.12)" }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
+                <Brain className="h-4 w-4" style={{ color: "#542269" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#542269" }}>AI Clinical Insights</p>
+              </div>
+              <div className="p-5 space-y-4">
                 {aiInsights.summary && (
-                  <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{aiInsights.summary}</p>
+                  <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{aiInsights.summary}</p>
                 )}
                 {Array.isArray(aiInsights.key_observations) && aiInsights.key_observations.length > 0 && (
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">Key Observations</p>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#7A6A8A" }}>Key Observations</p>
                     <ul className="space-y-1">
                       {aiInsights.key_observations.map((obs: string, i: number) => (
-                        <li key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-indigo-400">•</span>{obs}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#F1738A" }}>•</span>{obs}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {Array.isArray(aiInsights.next_session_recommendations) && aiInsights.next_session_recommendations.length > 0 && (
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-1.5">Next Session</p>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#7A6A8A" }}>Next Session</p>
                     <ul className="space-y-1">
                       {aiInsights.next_session_recommendations.map((rec: string, i: number) => (
-                        <li key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-indigo-400">→</span>{rec}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#542269" }}>→</span>{rec}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {Array.isArray(aiInsights.concerns) && aiInsights.concerns.length > 0 && (
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-red-500 font-semibold mb-1.5">Concerns</p>
+                    <p className="text-[11px] uppercase tracking-widest text-red-500 font-semibold mb-1.5">Concerns</p>
                     <ul className="space-y-1">
                       {aiInsights.concerns.map((c: string, i: number) => (
-                        <li key={i} className="text-sm text-red-700 dark:text-red-400 flex gap-2"><span>⚠</span>{c}</li>
+                        <li key={i} className="text-[13px] text-red-700 flex gap-2"><span>⚠</span>{c}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {Array.isArray(aiInsights.ai_recommendations) && aiInsights.ai_recommendations.length > 0 && (
-                  <div className="pt-2 border-t border-indigo-100">
-                    <p className="text-xs uppercase tracking-wide text-indigo-600 font-semibold mb-1.5">AI Recommendations</p>
+                  <div className="pt-3 border-t" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#542269" }}>AI Recommendations</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_recommendations.map((r: string, i: number) => (
-                        <li key={i} className="text-sm text-slate-700 dark:text-slate-300 flex gap-2"><span className="text-indigo-400">→</span>{r}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#542269" }}>→</span>{r}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {Array.isArray(aiInsights.ai_flags) && aiInsights.ai_flags.length > 0 && (
-                  <div className="pt-2 border-t border-amber-100">
-                    <p className="text-xs uppercase tracking-wide text-amber-600 font-semibold mb-1.5">Compliance Flags</p>
+                  <div className="pt-3 border-t border-amber-100">
+                    <p className="text-[11px] uppercase tracking-widest text-amber-600 font-semibold mb-1.5">Compliance Flags</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_flags.map((f: string, i: number) => (
-                        <li key={i} className="text-xs text-amber-700 dark:text-amber-400 flex gap-2 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1"><span>⚑</span>{f}</li>
+                        <li key={i} className="text-[12px] text-amber-700 flex gap-2 bg-amber-50 rounded px-2 py-1"><span>⚑</span>{f}</li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {aiInsights.progress_trend && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <TrendingUp className="h-3.5 w-3.5 text-indigo-400" />
-                    <span className="text-slate-500">Progress trend:</span>
+                  <div className="flex items-center gap-2 text-[12px]">
+                    <TrendingUp className="h-3.5 w-3.5" style={{ color: "#542269" }} />
+                    <span style={{ color: "#7A6A8A" }}>Progress trend:</span>
                     <span className={`font-semibold capitalize ${
                       aiInsights.progress_trend === "improving" ? "text-emerald-600" :
-                      aiInsights.progress_trend === "declining" ? "text-red-600" : "text-slate-600"
-                    }`}>{aiInsights.progress_trend}</span>
+                      aiInsights.progress_trend === "declining" ? "text-red-600" : ""
+                    }`} style={!["improving","declining"].includes(aiInsights.progress_trend) ? { color: "#4A3D5A" } : {}}>
+                      {aiInsights.progress_trend}
+                    </span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Physical Examination — shown when body markers are recorded */}
@@ -625,13 +628,12 @@ export default function SessionDetail({ id }: { id?: string }) {
             const markers = (session as ExtendedSession).body_markers;
             if (!markers || markers.length === 0) return null;
             return (
-              <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-3 border-b border-slate-100">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-slate-500" /> Physical Examination
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+                <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                  <Activity className="h-4 w-4" style={{ color: "#7A6A8A" }} />
+                  <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Physical Examination</p>
+                </div>
+                <div className="p-5">
                   <BodyExaminationPanel
                     markers={markers}
                     readOnly
@@ -639,8 +641,8 @@ export default function SessionDetail({ id }: { id?: string }) {
                       participant?.biological_sex ?? "unspecified"
                     }
                   />
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })()}
         </div>
@@ -649,32 +651,35 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
-          <Card className={`border-2 shadow-sm ${
-            !session.compliance_score ? "border-slate-200 dark:border-slate-800" :
-            claimStatus === "compliant" ? "border-emerald-200 bg-emerald-50/20" :
-            claimStatus === "at_risk" ? "border-amber-200 bg-amber-50/20" :
-            "border-red-200 bg-red-50/20"
-          }`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Shield className="h-4 w-4 text-slate-500" /> Compliance
+          <div className="rounded-2xl overflow-hidden bg-white" style={{
+            boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)",
+            ...(session.compliance_score
+              ? claimStatus === "compliant"
+                ? { borderLeft: "3px solid #10b981" }
+                : claimStatus === "at_risk"
+                ? { borderLeft: "3px solid #f59e0b" }
+                : { borderLeft: "3px solid #ef4444" }
+              : {}),
+          }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <div className="flex items-center gap-1.5">
+                <Shield className="h-4 w-4" style={{ color: "#7A6A8A" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Compliance</p>
+              </div>
+              {session.compliance_score != null && (
+                <span className={`text-[18px] font-bold ${
+                  claimStatus === "compliant" ? "text-emerald-700" :
+                  claimStatus === "at_risk" ? "text-amber-700" : "text-red-700"
+                }`}>
+                  {Number(session.compliance_score).toFixed(0)}%
                 </span>
-                {session.compliance_score != null && (
-                  <span className={`text-lg font-bold ${
-                    claimStatus === "compliant" ? "text-emerald-700" :
-                    claimStatus === "at_risk" ? "text-amber-700" : "text-red-700"
-                  }`}>
-                    {Number(session.compliance_score).toFixed(0)}%
-                  </span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              )}
+            </div>
+            <div className="p-5 space-y-4">
               {!session.compliance_score ? (
-                <div className="text-center py-4 text-slate-500">
+                <div className="text-center py-4" style={{ color: "#7A6A8A" }}>
                   <ShieldAlert className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm">Not yet analyzed</p>
+                  <p className="text-[13px]">Not yet analyzed</p>
                   <Button variant="link" size="sm" onClick={handleAIAnalysis} className="mt-1 h-auto py-0 text-xs">
                     Run AI Analysis
                   </Button>
@@ -804,85 +809,86 @@ export default function SessionDetail({ id }: { id?: string }) {
                   )}
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Tags & Goals */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Tags & Goals</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Tags &amp; Goals</p>
+            </div>
+            <div className="p-5 space-y-4">
               <div>
-                <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Tags</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Tags</p>
                 {session.tags && session.tags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {session.tags.map((tag: string) => (
-                      <Badge key={tag} variant="secondary" className="font-normal text-xs">{tag}</Badge>
+                      <span key={tag} className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
+                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>{tag}</span>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-400">No tags</p>
+                  <p className="text-[12px]" style={{ color: "#7A6A8A" }}>No tags</p>
                 )}
               </div>
               <div>
-                <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">NDIS Goals Addressed</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>NDIS Goals Addressed</p>
                 {session.goals_addressed && session.goals_addressed.length > 0 ? (
                   <ul className="space-y-1">
                     {(session.goals_addressed as string[]).map((goal, i) => (
-                      <li key={i} className="text-xs text-slate-700 flex gap-2">
-                        <span className="text-primary">•</span> {goal}
+                      <li key={i} className="text-[12px] flex gap-2" style={{ color: "#4A3D5A" }}>
+                        <span style={{ color: "#F1738A" }}>•</span> {goal}
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-slate-400">No goals linked — edit session to add goals</p>
+                  <p className="text-[12px]" style={{ color: "#7A6A8A" }}>No goals linked — edit session to add goals</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* NDIS Mapping & Budget Insights (from AI spec analysis) */}
           {aiInsights?.ndis_mapping && (aiInsights.ndis_mapping.support_category || (aiInsights.ndis_mapping.support_items?.length > 0)) && (
-            <Card className="shadow-sm border-blue-100 bg-blue-50/30 dark:bg-blue-900/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 text-blue-900 dark:text-blue-200">
-                  <Activity className="h-4 w-4" /> NDIS Funding Mapping
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ background: "rgba(84,34,105,0.03)", border: "1px solid rgba(84,34,105,0.12)" }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
+                <Activity className="h-4 w-4" style={{ color: "#542269" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Funding Mapping</p>
+              </div>
+              <div className="p-5 space-y-3">
                 {aiInsights.ndis_mapping.support_category && (
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500 font-medium">Support Category</span>
-                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 bg-blue-50">
+                    <span className="text-[12px] font-medium" style={{ color: "#7A6A8A" }}>Support Category</span>
+                    <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
+                      style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
                       {aiInsights.ndis_mapping.support_category}
-                    </Badge>
+                    </span>
                   </div>
                 )}
                 {Array.isArray(aiInsights.ndis_mapping.support_items) && aiInsights.ndis_mapping.support_items.length > 0 && (
                   <div>
-                    <p className="text-xs text-slate-500 font-medium mb-1.5">Support Items</p>
+                    <p className="text-[11px] font-medium mb-1.5" style={{ color: "#7A6A8A" }}>Support Items</p>
                     <ul className="space-y-1">
                       {aiInsights.ndis_mapping.support_items.map((item: string, i: number) => (
-                        <li key={i} className="text-xs text-slate-700 dark:text-slate-300 flex gap-1.5">
-                          <span className="text-blue-400 mt-0.5">•</span>{item}
+                        <li key={i} className="text-[12px] flex gap-1.5" style={{ color: "#4A3D5A" }}>
+                          <span style={{ color: "#F1738A" }}>•</span>{item}
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
                 {aiInsights.budget_insights && (
-                  <div className="pt-2 border-t border-blue-100 space-y-1.5">
+                  <div className="pt-3 border-t space-y-1.5" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
                     {aiInsights.budget_insights.estimated_cost > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-500 text-xs">AI Est. Cost</span>
-                        <span className="font-semibold text-slate-700">${Number(aiInsights.budget_insights.estimated_cost).toFixed(2)}</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px]" style={{ color: "#7A6A8A" }}>AI Est. Cost</span>
+                        <span className="text-[13px] font-semibold" style={{ color: "#1C1626" }}>${Number(aiInsights.budget_insights.estimated_cost).toFixed(2)}</span>
                       </div>
                     )}
                     {aiInsights.budget_insights.budget_status && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Budget Status</span>
-                        <span className={`font-medium capitalize ${
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px]" style={{ color: "#7A6A8A" }}>Budget Status</span>
+                        <span className={`text-[12px] font-medium capitalize ${
                           aiInsights.budget_insights.budget_status === "exceeded" ? "text-red-600" :
                           aiInsights.budget_insights.budget_status === "nearing limit" ? "text-amber-600" :
                           "text-emerald-600"
@@ -891,64 +897,64 @@ export default function SessionDetail({ id }: { id?: string }) {
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Cost & Category (from DB — shown when billing is recorded) */}
           {((session as ExtendedSession).cost || (session as ExtendedSession).support_category) && (
-            <Card className="shadow-sm border-slate-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-slate-400" /> Billing
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                <DollarSign className="h-4 w-4" style={{ color: "#7A6A8A" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Billing</p>
+              </div>
+              <div className="p-5 text-[13px] space-y-2">
                 {(session as ExtendedSession).support_category && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Category</span>
-                    <span className="font-medium capitalize">{String((session as ExtendedSession).support_category).replace("_", " ")}</span>
+                    <span style={{ color: "#7A6A8A" }}>Category</span>
+                    <span className="font-medium capitalize" style={{ color: "#1C1626" }}>{String((session as ExtendedSession).support_category).replace("_", " ")}</span>
                   </div>
                 )}
                 {(session as ExtendedSession).cost && (
                   <div className="flex justify-between">
-                    <span className="text-slate-500">Session Cost</span>
-                    <span className="font-semibold">${Number((session as ExtendedSession).cost).toFixed(2)}</span>
+                    <span style={{ color: "#7A6A8A" }}>Session Cost</span>
+                    <span className="font-semibold" style={{ color: "#1C1626" }}>${Number((session as ExtendedSession).cost).toFixed(2)}</span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Photos */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" /> Photos
-              </CardTitle>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4" style={{ color: "#7A6A8A" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Photos</p>
+              </div>
               <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                 {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 <span className="sr-only sm:not-sr-only sm:ml-2 text-xs">Upload</span>
               </Button>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
-            </CardHeader>
-            <CardContent>
+            </div>
+            <div className="p-5">
               {session.photo_urls && session.photo_urls.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {(session.photo_urls as string[]).map((url, i) => (
-                    <div key={i} className="aspect-square rounded-md bg-slate-100 overflow-hidden border border-slate-200">
+                    <div key={i} className="aspect-square rounded-xl overflow-hidden border" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
                       <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-6 text-slate-400 bg-slate-50 dark:bg-slate-900 rounded-md border border-dashed border-slate-200">
+                <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "rgba(232,213,232,0.7)", color: "#7A6A8A" }}>
                   <ImageIcon className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                  <p className="text-xs">No photos attached</p>
+                  <p className="text-[12px]">No photos attached</p>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

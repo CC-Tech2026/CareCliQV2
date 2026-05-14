@@ -1333,9 +1333,9 @@ export default function SessionLive() {
 
       {/* ── Goals strip (tap chips to cycle status) ── */}
       {goals.length > 0 ? (
-        <div className="shrink-0 bg-indigo-950/60 border-b border-indigo-900/30 px-3 py-1.5">
+        <div className="shrink-0 border-b border-white/10 bg-[#1A0D2E]/70 px-3 py-1.5">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-indigo-400/70 shrink-0">
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white/40 shrink-0">
               <Target className="h-3 w-3" /> Goals:
             </span>
             {goals.map((goal) => (
@@ -1415,10 +1415,10 @@ export default function SessionLive() {
 
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
-        <div className="shrink-0 bg-slate-900/80 border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
+        <div className="shrink-0 bg-[#050520] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
-              <HeartPulse className="h-3.5 w-3.5 text-indigo-400" /> Physical Examination
+            <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
+              <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
             </h3>
             <button
               onClick={() => setBodyMapOpen(false)}
@@ -1641,13 +1641,13 @@ export default function SessionLive() {
           if (!isSaving) setShowSummary(open);
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-slate-100 shadow-2xl p-0 bg-white">
-          <div className="px-6 pt-6 pb-4 border-b border-slate-100">
-            <DialogTitle className="text-slate-900 font-bold text-lg flex items-center gap-2">
-              <Shield className="h-5 w-5 text-indigo-500" />
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl p-0 bg-white" style={{ border: "1px solid rgba(232,213,232,0.5)" }}>
+          <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+            <DialogTitle className="font-bold text-[18px] flex items-center gap-2" style={{ color: "#1C1626" }}>
+              <Shield className="h-5 w-5" style={{ color: "#542269" }} />
               Review &amp; Approve Session Notes
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
+            <DialogDescription className="text-[12px] mt-1" style={{ color: "#7A6A8A" }}>
               Review the auto-generated notes below. Edit anything before approving — data is only
               saved on your explicit approval.
             </DialogDescription>
@@ -1663,7 +1663,8 @@ export default function SessionLive() {
               />
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 min-h-[44px]"
+                className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
+                style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
               >
                 <FileText className="h-4 w-4" />
                 View Session Record
@@ -1671,21 +1672,21 @@ export default function SessionLive() {
             </div>
           ) : summaryLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#542269" }} />
             </div>
           ) : summary ? (
             <div className="p-6 space-y-5">
               {/* Stat row */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                  <p className="text-xl font-bold text-slate-800 font-mono">{summary.duration}</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                  <p className="text-xl font-bold font-mono" style={{ color: "#1C1626" }}>{summary.duration}</p>
+                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Duration
                   </p>
                 </div>
-                <div className="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
-                  <p className="text-xl font-bold text-slate-800">{summary.activities.length}</p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                  <p className="text-xl font-bold" style={{ color: "#1C1626" }}>{summary.activities.length}</p>
+                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Activities
                   </p>
                 </div>
@@ -1711,7 +1712,7 @@ export default function SessionLive() {
                   >
                     {liveCompliance.score}%
                   </p>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wide mt-0.5">
+                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Compliance
                   </p>
                 </div>
@@ -1744,9 +1745,9 @@ export default function SessionLive() {
 
               {/* Structured Case Notes */}
               <div className="space-y-3">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A8A" }}>
                   <FileText className="h-3.5 w-3.5" /> Structured Case Notes
-                  <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
+                  <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
                     — required for NDIS compliance
                   </span>
                 </p>
@@ -1779,7 +1780,7 @@ export default function SessionLive() {
                   ] as const
                 ).map(({ key, label, placeholder, required }) => (
                   <div key={key}>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
                       {label}
                       {required && <span className="text-red-400 ml-0.5">*</span>}
                     </label>
@@ -1790,7 +1791,8 @@ export default function SessionLive() {
                       }
                       rows={4}
                       placeholder={placeholder}
-                      className="text-xs p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 leading-relaxed min-h-[120px]"
+                      className="text-[12px] p-3 rounded-xl leading-relaxed min-h-[120px]"
+                      style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
                     />
                   </div>
                 ))}
@@ -1808,8 +1810,8 @@ export default function SessionLive() {
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                    <Shield className="h-3.5 w-3.5 text-slate-400" /> Compliance Check
+                  <span className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "#1C1626" }}>
+                    <Shield className="h-3.5 w-3.5" style={{ color: "#7A6A8A" }} /> Compliance Check
                   </span>
                   <span
                     className={cn(
@@ -1847,7 +1849,7 @@ export default function SessionLive() {
                       <span>
                         {c.label}
                         {c.note ? (
-                          <span className="text-slate-500 font-normal ml-1">({c.note})</span>
+                          <span className="font-normal ml-1" style={{ color: "#7A6A8A" }}>({c.note})</span>
                         ) : null}
                       </span>
                     </li>
@@ -1863,9 +1865,9 @@ export default function SessionLive() {
 
               {/* Clinical record */}
               <div>
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5" style={{ color: "#7A6A8A" }}>
                   <FileText className="h-3.5 w-3.5" /> Clinical Record
-                  <span className="text-indigo-500 font-normal normal-case tracking-normal ml-1">
+                  <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
                     — auto-generated · editable
                   </span>
                 </label>
@@ -1877,21 +1879,23 @@ export default function SessionLive() {
                   }}
                   rows={6}
                   placeholder="Combined clinical record…"
-                  className="text-xs p-3 bg-white rounded-xl border border-slate-200 font-mono text-slate-700 leading-relaxed min-h-[120px]"
+                  className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
+                  style={{ background: "white", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
                 />
               </div>
 
               {/* Activities */}
               {summary.activities.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-widest mb-1.5 block" style={{ color: "#7A6A8A" }}>
                     Activities Logged
                   </label>
                   <div className="flex flex-wrap gap-1.5">
                     {summary.activities.map((a, i) => (
                       <span
                         key={i}
-                        className="text-[10px] px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full font-medium"
+                        className="text-[10px] px-2.5 py-1 rounded-full font-medium"
+                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}
                       >
                         {a}
                       </span>
@@ -1903,12 +1907,12 @@ export default function SessionLive() {
               {/* Goal progress */}
               {summary.goalProgress.length > 0 && (
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">
+                  <label className="text-[11px] font-bold uppercase tracking-widest mb-1.5 block" style={{ color: "#7A6A8A" }}>
                     Goal Progress
                   </label>
                   <div className="space-y-1">
                     {summary.goalProgress.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs text-slate-700">
+                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "#4A3D5A" }}>
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         {g}
                       </div>
@@ -1919,13 +1923,13 @@ export default function SessionLive() {
 
               {/* Evidence */}
               <div className="flex gap-3">
-                <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                  <ImageIcon className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                   {summary.evidenceSummary}
                 </div>
                 {summary.voiceNoteCount > 0 && (
-                  <div className="flex-1 bg-slate-50 rounded-xl border border-slate-100 p-3 text-xs text-slate-600 flex items-center gap-2">
-                    <Mic className="h-4 w-4 text-slate-400 shrink-0" />
+                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                    <Mic className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                     {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""}{" "}
                     captured
                   </div>
@@ -1933,7 +1937,7 @@ export default function SessionLive() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t border-slate-100">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -1942,14 +1946,15 @@ export default function SessionLive() {
                     setIsActive(false);
                   }}
                   disabled={isSaving}
-                  className="flex-1 min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 order-2 sm:order-1"
+                  className="flex-1 min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 order-2 sm:order-1 rounded-xl"
                 >
                   Discard Session
                 </Button>
                 <Button
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
-                  className="flex-1 min-h-[44px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2"
+                  className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
+                  style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

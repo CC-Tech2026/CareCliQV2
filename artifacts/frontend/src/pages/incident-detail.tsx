@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -143,9 +142,9 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   if (!incident) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-20 text-slate-500">
+      <div className="max-w-3xl mx-auto text-center py-20" style={{ color: "#4A3D5A" }}>
         Incident not found.{" "}
-        <button onClick={() => navigate("/incidents")} className="underline text-[#5271FF]">
+        <button onClick={() => navigate("/incidents")} className="underline" style={{ color: "#F1738A" }}>
           Back to Incidents
         </button>
       </div>
@@ -164,19 +163,17 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Back nav */}
-      <div className="flex items-center gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-[13px]">
+        <button
           onClick={() => navigate("/incidents")}
-          className="gap-1.5 text-slate-500 hover:text-[#0D0D55] -ml-2 rounded-xl"
+          className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
+          style={{ color: "#7A6A8A" }}
         >
-          <ArrowLeft size={15} />
-          Incidents
-        </Button>
-        <span className="text-slate-300">/</span>
-        <span className="text-sm font-medium text-[#0D0D55] truncate max-w-[260px]">{incident.title}</span>
+          <ArrowLeft size={14} /> Incidents
+        </button>
+        <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
+        <span className="font-medium truncate max-w-[260px]" style={{ color: "#1C1626" }}>{incident.title}</span>
       </div>
 
       {/* NDIS urgent banner */}
@@ -212,17 +209,17 @@ export default function IncidentDetail({ id }: { id: string }) {
       )}
 
       {/* Header card */}
-      <Card className="border-slate-100 shadow-sm">
-        <CardHeader className="pb-4">
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[#0D0D55] leading-snug">{incident.title}</h1>
+              <h1 className="text-[20px] font-bold leading-snug" style={{ color: "#1C1626" }}>{incident.title}</h1>
               {incident.participant_name && (
-                <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
+                <p className="text-[13px] mt-1 flex items-center gap-1.5" style={{ color: "#4A3D5A" }}>
                   <User size={13} />
                   {incident.participant_name}
                   {incident.participant_ndis && (
-                    <span className="text-slate-400">· NDIS {incident.participant_ndis}</span>
+                    <span style={{ color: "#7A6A8A" }}>· NDIS {incident.participant_ndis}</span>
                   )}
                 </p>
               )}
@@ -236,61 +233,61 @@ export default function IncidentDetail({ id }: { id: string }) {
               </Badge>
             </div>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-5">
+        <div className="px-6 pb-6 space-y-5">
           {/* Metadata */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-[13px]">
             <div>
-              <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1 mb-0.5">
+              <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
                 <Calendar size={11} /> Incident Date
               </p>
-              <p className="text-slate-700 font-medium">
+              <p className="font-medium" style={{ color: "#1C1626" }}>
                 {incident.incident_date
                   ? format(parseISO(incident.incident_date), "d MMM yyyy")
                   : "—"}
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] mt-0.5" style={{ color: "#7A6A8A" }}>
                 {incident.incident_date
                   ? formatDistanceToNow(parseISO(incident.incident_date), { addSuffix: true })
                   : ""}
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-slate-400 font-medium mb-0.5">Type</p>
-              <p className="text-slate-700 font-medium">
+              <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>Type</p>
+              <p className="font-medium" style={{ color: "#1C1626" }}>
                 {INCIDENT_TYPE_LABELS[incident.incident_type] ?? incident.incident_type}
               </p>
             </div>
             {incident.location && (
               <div>
-                <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1 mb-0.5">
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
                   <MapPin size={11} /> Location
                 </p>
-                <p className="text-slate-700">{incident.location}</p>
+                <p style={{ color: "#4A3D5A" }}>{incident.location}</p>
               </div>
             )}
             {incident.witnesses && (
               <div>
-                <p className="text-[11px] text-slate-400 font-medium flex items-center gap-1 mb-0.5">
+                <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
                   <Users size={11} /> Witnesses
                 </p>
-                <p className="text-slate-700">{incident.witnesses}</p>
+                <p style={{ color: "#4A3D5A" }}>{incident.witnesses}</p>
               </div>
             )}
             {incident.practice_standard && (
               <div className="col-span-2">
-                <p className="text-[11px] text-slate-400 font-medium mb-0.5">NDIS Practice Standard</p>
-                <p className="text-slate-700 flex items-center gap-1.5">
-                  <Shield size={12} className="text-[#5271FF]" />
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>NDIS Practice Standard</p>
+                <p className="flex items-center gap-1.5" style={{ color: "#4A3D5A" }}>
+                  <Shield size={12} style={{ color: "#542269" }} />
                   {incident.practice_standard}
                 </p>
               </div>
             )}
             {incident.ndis_reported_at && (
               <div className="col-span-2">
-                <p className="text-[11px] text-slate-400 font-medium mb-0.5">NDIS QSC Notified</p>
-                <p className="text-emerald-700 flex items-center gap-1.5 text-sm font-medium">
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>NDIS QSC Notified</p>
+                <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
                   <CheckCircle2 size={13} />
                   {format(parseISO(incident.ndis_reported_at), "d MMM yyyy, h:mm a")}
                 </p>
@@ -298,34 +295,34 @@ export default function IncidentDetail({ id }: { id: string }) {
             )}
             {incident.resolved_date && (
               <div>
-                <p className="text-[11px] text-slate-400 font-medium mb-0.5">Resolved</p>
-                <p className="text-slate-700">{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>Resolved</p>
+                <p style={{ color: "#4A3D5A" }}>{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
               </div>
             )}
           </div>
 
           {/* What happened */}
-          <div className="pt-2 border-t border-slate-100">
-            <p className="text-xs text-slate-400 font-medium mb-2">What happened</p>
-            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{incident.description}</p>
+          <div className="pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>What happened</p>
+            <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "#4A3D5A" }}>{incident.description}</p>
           </div>
 
           {incident.participant_impact && (
             <div>
-              <p className="text-xs text-slate-400 font-medium mb-2">Participant Impact</p>
-              <p className="text-sm text-slate-700 leading-relaxed">{incident.participant_impact}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Participant Impact</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{incident.participant_impact}</p>
             </div>
           )}
 
           {incident.worker_actions && (
             <div>
-              <p className="text-xs text-slate-400 font-medium mb-2">Immediate Actions Taken</p>
-              <p className="text-sm text-slate-700 leading-relaxed">{incident.worker_actions}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Immediate Actions Taken</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{incident.worker_actions}</p>
             </div>
           )}
 
           {/* Workflow action buttons */}
-          <div className="pt-3 border-t border-slate-100 flex flex-wrap gap-2">
+          <div className="pt-3 border-t flex flex-wrap gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             {canInvestigate && (
               <Button
                 size="sm"
@@ -354,7 +351,8 @@ export default function IncidentDetail({ id }: { id: string }) {
                 variant="outline"
                 onClick={() => handleStatusChange("closed")}
                 disabled={updateMutation.isPending}
-                className="rounded-xl h-9 text-xs border-slate-200"
+                className="rounded-xl h-9 text-xs"
+                style={{ borderColor: "rgba(232,213,232,0.7)" }}
               >
                 <XCircle size={13} className="mr-1.5" />
                 Close Incident
@@ -364,36 +362,38 @@ export default function IncidentDetail({ id }: { id: string }) {
               <Loader2 size={16} className="animate-spin text-slate-400 self-center" />
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Investigation & corrective actions */}
-      <Card className="border-slate-100 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <ClipboardList size={15} className="text-slate-400" />
-            Investigation &amp; Corrective Actions
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+          <div className="flex items-center gap-2">
+            <ClipboardList size={15} style={{ color: "#7A6A8A" }} />
+            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Investigation &amp; Corrective Actions</p>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
           <div>
-            <Label className="text-xs text-slate-500 mb-1.5 block">Investigation Notes</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "#4A3D5A" }}>Investigation Notes</Label>
             <Textarea
               rows={5}
               value={investigationNotes}
               onChange={(e) => setInvestigationNotes(e.target.value)}
               placeholder="Document the full investigation — root cause analysis, contributing factors, findings…"
-              className="text-sm resize-none rounded-xl border-slate-200"
+              className="text-[13px] resize-none rounded-xl"
+              style={{ borderColor: "rgba(232,213,232,0.5)" }}
             />
           </div>
           <div>
-            <Label className="text-xs text-slate-500 mb-1.5 block">Corrective Actions</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "#4A3D5A" }}>Corrective Actions</Label>
             <Textarea
               rows={3}
               value={correctiveActions}
               onChange={(e) => setCorrectiveActions(e.target.value)}
               placeholder="Actions taken or planned to prevent recurrence — training, process changes, equipment upgrades…"
-              className="text-sm resize-none rounded-xl border-slate-200"
+              className="text-[13px] resize-none rounded-xl"
+              style={{ borderColor: "rgba(232,213,232,0.5)" }}
             />
           </div>
           <div className="flex justify-end">
@@ -405,7 +405,8 @@ export default function IncidentDetail({ id }: { id: string }) {
                 })
               }
               disabled={updateMutation.isPending}
-              className="bg-[#5271FF] hover:bg-[#3d5bdd] text-white rounded-xl h-9 text-sm"
+              className="rounded-xl h-9 text-[13px] text-white"
+              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
             >
               {updateMutation.isPending
                 ? <Loader2 size={13} className="animate-spin mr-1.5" />
@@ -413,21 +414,22 @@ export default function IncidentDetail({ id }: { id: string }) {
               Save Notes
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Audit trail */}
-      <Card className="border-slate-100 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-500">
-            <Shield size={14} /> Audit Trail
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-xs text-slate-500">
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+          <div className="flex items-center gap-2">
+            <Shield size={14} style={{ color: "#7A6A8A" }} />
+            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Audit Trail</p>
+          </div>
+        </div>
+        <div className="p-6">
+          <div className="space-y-2 text-[12px]" style={{ color: "#7A6A8A" }}>
             <div className="flex justify-between">
               <span>Incident reported</span>
-              <span className="font-medium text-slate-700">
+              <span className="font-medium" style={{ color: "#1C1626" }}>
                 {incident.reported_date
                   ? format(parseISO(incident.reported_date), "d MMM yyyy, h:mm a")
                   : "—"}
@@ -452,14 +454,14 @@ export default function IncidentDetail({ id }: { id: string }) {
             {incident.resolved_date && (
               <div className="flex justify-between">
                 <span>Incident resolved</span>
-                <span className="font-medium text-slate-700">
+                <span className="font-medium" style={{ color: "#1C1626" }}>
                   {format(parseISO(incident.resolved_date), "d MMM yyyy")}
                 </span>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
