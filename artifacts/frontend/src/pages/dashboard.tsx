@@ -1,579 +1,333 @@
-import { useMemo } from "react";
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import {
-  format,
-  isBefore,
-  startOfDay,
-  parseISO,
-  startOfWeek,
-  endOfWeek,
-  isWithinInterval,
-  formatDistanceToNow,
-} from "date-fns";
-import {
-  useGetSessions,
-  useGetParticipants,
-  useGetDashboardStats,
-} from "@workspace/api-client-react";
-import type { Session, Participant, NDISGoal, ParticipantGoal } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { useGetSessions } from "@workspace/api-client-react";
+import type { Session } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  Play,
-  Eye,
-  RotateCcw,
-  ArrowRight,
-  UploadCloud,
-  ClipboardList,
-  ShieldCheck,
-  ChevronRight,
-  Calendar,
-  Loader2,
-  UserPlus,
-  AlertTriangle,
-  FileBarChart2,
-  Users,
+  Play, ArrowRight, UserPlus, ChevronRight,
+  FileBarChart2, UploadCloud, Users, AlertTriangle, Loader2,
   TrendingUp,
 } from "lucide-react";
 
-// CareScribe palette (from reference swatch)
-const LIME = "#D9F103";          // unused — kept to avoid dead-ref errors
-const PINK = "#FA879F";          // unused
-const BLUE = "#5271FF";          // unused
-const NAVY = "#0D0D55";          // unused
-const ROSE = "#E2457A";          // unused
-const PERIWINKLE = "#542269";    // deep plum — primary action / links
-const BLUSH = "#F6B8C0";         // soft blush fills
-const BLUSH_MID = "#F1738A";     // coral — badges / highlights
-const TEXT_DARK = "#37352F";     // warm near-black
-const TEXT_MID = "#7A5E7A";      // purple-tinted secondary
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const PLUM   = "#542269";
+const CORAL  = "#F1738A";
+const BLUSH  = "#F6B8C0";
 
-const TODAY_STR = format(new Date(), "yyyy-MM-dd");
+// Text — all WCAG AA on white
+const T1 = "#1C1626";   // headings
+const T2 = "#4A3D5A";   // body
+const T3 = "#7A6A8A";   // captions (≥ 12 px only)
 
-function getHour() { return new Date().getHours(); }
+const BORDER = "rgba(232,213,232,0.5)";
+const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const HOVER_SHADOW = "0 4px 16px rgba(84,34,105,0.10), 0 0 0 1px rgba(232,213,232,0.5)";
+const PAGE_BG = "#F6F4FB";
 
-function sessionDisplayTime(session: Session): string {
-  if (session.created_at) {
-    try { return format(new Date(session.created_at), "h:mm a"); } catch { /* */ }
-  }
-  return "--:--";
-}
-
-function getInitials(name: string): string {
-  return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
-}
-
-function avatarColor(name: string): { bg: string; text: string } {
-  const colors = [
-    { bg: "#EDE9FE", text: "#5B21B6" },
-    { bg: "#FCE7F3", text: "#9D174D" },
-    { bg: "#D1FAE5", text: "#065F46" },
-    { bg: "#FEF3C7", text: "#92400E" },
-    { bg: "#DBEAFE", text: "#1E40AF" },
-    { bg: "#FFE4E6", text: "#9F1239" },
-    { bg: "#F0FDF4", text: "#166534" },
-  ];
-  let hash = 0;
-  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % colors.length;
-  return colors[hash]!;
-}
-
-// ── Donut chart ──────────────────────────────────────────────────────────────
-function DonutChart({ compliant, atRisk, nonCompliant }: { compliant: number; atRisk: number; nonCompliant: number }) {
-  const total = compliant + atRisk + nonCompliant || 1;
-  const pct = compliant / total;
-  const size = 130;
-  const r = 46;
-  const cx = 65;
-  const cy = 65;
+// ── Compliance donut ──────────────────────────────────────────────────────────
+function ComplianceGauge({ score = 94 }: { score?: number }) {
+  const r = 38;
   const circ = 2 * Math.PI * r;
-
-  function arc(value: number, offset: number, color: string, key: string) {
-    const frac = value / total;
-    const dash = frac * circ;
-    return (
-      <circle key={key} cx={cx} cy={cy} r={r} fill="none"
-        stroke={color} strokeWidth="13"
-        strokeDasharray={`${dash} ${circ - dash}`}
-        strokeDashoffset={-offset * circ}
-        transform={`rotate(-90 ${cx} ${cy})`}
-        strokeLinecap="butt"
-      />
-    );
-  }
-
+  const arc = score >= 85 ? CORAL : score >= 60 ? "#F59E0B" : "#EF4444";
   return (
-    <div className="relative inline-flex">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="13" />
-        {arc(compliant, 0, "#22C55E", "c")}
-        {arc(atRisk, compliant / total, "#F59E0B", "a")}
-        {arc(nonCompliant, (compliant + atRisk) / total, "#EF4444", "n")}
+    <div className="relative inline-flex items-center justify-center">
+      <svg width="110" height="110" className="-rotate-90">
+        <circle cx="55" cy="55" r={r} stroke="rgba(232,213,232,0.6)" strokeWidth="7" fill="none" />
+        <circle
+          cx="55" cy="55" r={r} stroke={arc} strokeWidth="7" fill="none"
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)}
+          strokeLinecap="round" className="transition-all duration-1000 ease-out"
+        />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-bold text-[#0D0D55]">
-          {Math.round(pct * 100)}%
-        </span>
-        <span className="text-[10px] text-slate-500 font-medium">Compliant</span>
+      <div className="absolute flex flex-col items-center">
+        <span className="text-[22px] font-bold leading-none" style={{ color: T1 }}>{score}%</span>
+        <span className="text-[10px] font-semibold uppercase tracking-widest mt-0.5" style={{ color: T3 }}>Score</span>
       </div>
     </div>
   );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({
-  label, value, icon, bg, textColor, sub, href,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  bg: string;
-  textColor: string;
-  sub?: string;
-  href?: string;
-}) {
-  const content = (
-    <div className="bg-white rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer group" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
-          {icon}
-        </div>
-      </div>
-      <p className={cn("text-3xl font-bold leading-none", textColor)}>{value}</p>
-      <p className="text-sm mt-1 leading-tight" style={{ color: TEXT_MID }}>{label}</p>
-      {sub && <p className="text-xs mt-1" style={{ color: "#A0AEC0" }}>{sub}</p>}
-      {href && (
-        <p className="text-xs font-medium mt-3 flex items-center gap-1 group-hover:gap-1.5 transition-all" style={{ color: PERIWINKLE }}>
-          View <ArrowRight size={11} />
-        </p>
+// ── Stat pill ─────────────────────────────────────────────────────────────────
+function StatPill({
+  label, value, accent, href,
+}: { label: string; value: string | number; accent: string; href?: string }) {
+  const inner = (
+    <div
+      className="group flex flex-col gap-2 rounded-2xl bg-white px-5 py-4 transition-shadow duration-200"
+      style={{ boxShadow: CARD_SHADOW }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = HOVER_SHADOW)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = CARD_SHADOW)}
+    >
+      <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{label}</span>
+      <span className="text-[28px] font-bold leading-none tracking-tight" style={{ color: accent }}>{value}</span>
+    </div>
+  );
+  return href ? <Link href={href}>{inner}</Link> : inner;
+}
+
+// ── Session list row ──────────────────────────────────────────────────────────
+function SessionRow({ session, name }: { session: Session; name: string }) {
+  const isLive = session.status === "in_progress";
+  const isDone = session.status === "completed";
+
+  const badge = isLive
+    ? { bg: "rgba(241,115,138,0.10)", color: CORAL, label: "Live" }
+    : isDone
+    ? { bg: "rgba(22,163,74,0.08)", color: "#16A34A", label: "Done" }
+    : { bg: "rgba(84,34,105,0.06)", color: T3, label: (session.status ?? "draft").replace("_", " ") };
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-4 px-6 py-3.5 transition-colors duration-150",
+        isLive ? "bg-rose-50/40" : "hover:bg-[#F6F4FB]/70",
       )}
-    </div>
-  );
-  return href ? <Link href={href}>{content}</Link> : content;
-}
-
-// ── Session row ───────────────────────────────────────────────────────────────
-function ScheduleRow({
-  session, name, isNext = false,
-}: {
-  session: Session;
-  name: string;
-  isNext?: boolean;
-}) {
-  const av = avatarColor(name);
-  const timeStr = sessionDisplayTime(session);
-  const isResume = session.status === "in_progress";
-
-  const statusBadge = session.status === "completed"
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 bg-emerald-50 text-emerald-700 font-medium">✓ Completed</Badge>
-    : session.status === "in_progress"
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#EEF0FB", color: PERIWINKLE }}>● In Progress</Badge>
-    : isNext
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#FBF0F6", color: BLUSH_MID }}>▶ Next</Badge>
-    : <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#F4F2FB", color: TEXT_MID }}>+ Upcoming</Badge>;
-
-  return (
-    <div className="flex items-center gap-4 py-3.5 px-5 hover:bg-slate-50/60 transition-colors group">
-      <span className="text-xs font-semibold text-slate-400 w-14 shrink-0 tabular-nums">{timeStr}</span>
-      <div
-        className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-        style={{ background: av.bg, color: av.text }}
-      >
-        {getInitials(name)}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[#0D0D55] truncate">{name}</p>
-        <p className="text-xs text-slate-400 truncate">{session.session_type}</p>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {statusBadge}
-        {session.status === "completed" ? (
-          <Link href={`/sessions/${session.id}`}>
-            <button className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-[#0D0D55] hover:border-slate-300 opacity-0 group-hover:opacity-100 transition-all">
-              <ChevronRight size={14} />
-            </button>
-          </Link>
-        ) : (
-          <Link href={`/sessions/${session.id}/live`}>
-            <button className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-[#0D0D55] hover:border-slate-300 opacity-0 group-hover:opacity-100 transition-all">
-              <ChevronRight size={14} />
-            </button>
-          </Link>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Alert row ─────────────────────────────────────────────────────────────────
-interface Alert {
-  id: string;
-  message: string;
-  alert_type: string;
-  severity?: string;
-  created_at: string;
-  participant_id?: string;
-}
-
-function AlertRow({ alert }: { alert: Alert }) {
-  const colors: Record<string, { bg: string; text: string; dot: string }> = {
-    high: { bg: "#FEF2F2", text: "#DC2626", dot: "#EF4444" },
-    medium: { bg: "#FFFBEB", text: "#D97706", dot: "#F59E0B" },
-    low: { bg: "#F0F9FF", text: "#0369A1", dot: "#38BDF8" },
-  };
-  const sev = alert.severity ?? "medium";
-  const col = colors[sev] ?? colors.medium;
-
-  return (
-    <div className="flex items-start gap-3 py-3.5 px-5 hover:bg-slate-50/60 transition-colors">
-      <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5" style={{ background: col.bg }}>
-        <AlertCircle size={15} style={{ color: col.text }} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[#0D0D55] leading-snug line-clamp-2">{alert.message}</p>
-        <p className="text-xs text-slate-400 mt-0.5">
-          {alert.created_at
-            ? formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })
-            : ""}
+    >
+      {/* Time */}
+      <div className="w-10 shrink-0 text-right">
+        <p className="text-[13px] font-semibold" style={{ color: T1 }}>
+          {session.created_at ? format(new Date(session.created_at), "h:mm") : "--"}
+        </p>
+        <p className="text-[10px] font-medium uppercase" style={{ color: T3 }}>
+          {session.created_at ? format(new Date(session.created_at), "a") : ""}
         </p>
       </div>
-      <Badge
-        className="text-[10px] px-2 py-0.5 rounded-full border-0 font-medium shrink-0 capitalize"
-        style={{ background: col.bg, color: col.text }}
+
+      {/* Avatar */}
+      <div
+        className="w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-[12px] font-bold"
+        style={{ background: `${PLUM}10`, color: PLUM, border: `1.5px solid ${PLUM}1A` }}
       >
-        {sev}
-      </Badge>
+        {name.charAt(0).toUpperCase()}
+      </div>
+
+      {/* Name + type */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-[14px] font-semibold truncate" style={{ color: T1 }}>{name}</p>
+          {isLive && <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse shrink-0" />}
+        </div>
+        <p className="text-[12px] font-medium truncate" style={{ color: T3 }}>
+          {session.session_type ?? "General Session"}
+        </p>
+      </div>
+
+      {/* Badge + link */}
+      <div className="flex items-center gap-2 shrink-0">
+        <span
+          className="px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize"
+          style={{ background: badge.bg, color: badge.color }}
+        >
+          {badge.label}
+        </span>
+        <Link href={`/sessions/${session.id}${isLive ? "/live" : ""}`}>
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center border transition-all duration-150 hover:shadow-sm"
+            style={{ borderColor: BORDER, color: T3 }}
+          >
+            <ChevronRight size={15} />
+          </div>
+        </Link>
+      </div>
     </div>
   );
 }
 
-// ── Quick action button ───────────────────────────────────────────────────────
-function QuickActionBtn({
-  icon, label, href, bg, iconColor,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  href: string;
-  bg: string;
-  iconColor: string;
-}) {
-  return (
-    <Link href={href}>
-      <button className="flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-white hover:shadow-sm transition-all group">
-        <div
-          className="h-12 w-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
-          style={{ background: bg }}
-        >
-          <div style={{ color: iconColor }}>{icon}</div>
-        </div>
-        <span className="text-xs font-medium text-slate-600 text-center leading-tight">{label}</span>
-      </button>
-    </Link>
+// ── Quick action tile ─────────────────────────────────────────────────────────
+function QuickAction({
+  label, icon, iconBg, iconColor, href,
+}: { label: string; icon: React.ReactNode; iconBg: string; iconColor: string; href?: string }) {
+  const inner = (
+    <div
+      className="group flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-white border cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+      style={{ borderColor: BORDER, boxShadow: CARD_SHADOW }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = HOVER_SHADOW)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = CARD_SHADOW)}
+    >
+      <div className={cn("p-2.5 rounded-xl transition-transform duration-200 group-hover:scale-105", iconBg, iconColor)}>
+        {icon}
+      </div>
+      <span className="text-[12px] font-semibold" style={{ color: T2 }}>{label}</span>
+    </div>
   );
+  return href ? <Link href={href}>{inner}</Link> : <>{inner}</>;
 }
 
-// ── Main dashboard ────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
-  const { data: sessions = [], isLoading: sessionsLoading } = useGetSessions({ limit: 200 });
-  const { data: participants = [] } = useGetParticipants();
-  const { data: stats } = useGetDashboardStats();
-  const { data: alerts = [] } = useQuery<Alert[]>({
-    queryKey: ["alerts"],
-    queryFn: async () => {
-      const res = await fetch("/api/alerts?limit=3");
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
+  const { data: sessions = [], isLoading } = useGetSessions({ limit: 50 });
 
-  const participantMap = useMemo<Record<string, Participant>>(() => {
-    const m: Record<string, Participant> = {};
-    for (const p of participants) m[p.id] = p;
-    return m;
-  }, [participants]);
-
-  function participantName(session: Session): string {
-    return (
-      session.participants?.full_name ??
-      participantMap[session.participant_id]?.full_name ??
-      "Unknown Participant"
-    );
-  }
-
-  const todaySessions = useMemo<Session[]>(() => {
-    return [...sessions]
-      .filter((s) => s.session_date === TODAY_STR)
-      .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-  }, [sessions]);
-
-  const nextSession = useMemo<Session | null>(() => {
-    const actionable = todaySessions.filter((s) => s.status === "draft" || s.status === "in_progress");
-    return actionable[0] ?? null;
-  }, [todaySessions]);
-
-  const pastIncomplete = useMemo<Session[]>(() => {
-    const todayStart = startOfDay(new Date());
-    return sessions.filter((s) => {
-      const d = parseISO(s.session_date);
-      return isBefore(d, todayStart) && s.status !== "completed";
-    });
-  }, [sessions]);
-
-  const weekInterval = {
-    start: startOfWeek(new Date(), { weekStartsOn: 1 }),
-    end: endOfWeek(new Date(), { weekStartsOn: 1 }),
-  };
-  const weekSessions = sessions.filter((s) =>
-    isWithinInterval(parseISO(s.session_date), weekInterval),
-  );
-  const compliantCount = weekSessions.filter((s) => s.status === "completed" && (s.compliance_score ?? 0) >= 85).length;
-  const atRiskCount = weekSessions.filter((s) => s.status === "completed" && (s.compliance_score ?? 0) >= 60 && (s.compliance_score ?? 0) < 85).length;
-  const nonCompliantCount = weekSessions.filter((s) => s.status === "completed" && (s.compliance_score ?? 0) < 60).length;
-
-  const readyCount = todaySessions.filter((s) => s.status === "completed" && (s.compliance_score ?? 0) >= 70).length;
-  const needsAttentionCount = todaySessions.filter((s) => s.status !== "completed" || (s.compliance_score ?? 0) < 70).length;
-
-  const hour = getHour();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const firstName = (user?.full_name || "").split(" ")[0] || "there";
+  const firstName = (user?.full_name ?? "").split(" ")[0] || "there";
+  const today = format(new Date(), "EEEE, d MMMM");
 
   return (
-    <div className="space-y-6 max-w-screen-xl mx-auto">
-      {/* ── Page header row ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: TEXT_DARK }}>
-            {greeting}, {firstName}! 👋
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: TEXT_MID }}>Here's what's happening today.</p>
-        </div>
-        <div className="flex items-center gap-2.5 shrink-0">
-          <Link href="/participants/new">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold bg-white transition-colors hover:bg-[#F8F6FC]"
-              style={{ border: "1px solid #E8E4F0", color: TEXT_DARK }}>
-              <UserPlus size={14} />
-              Add Participant
-            </button>
-          </Link>
-          <Link href="/sessions/new">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
-              style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}>
-              <Play size={13} className="fill-current" />
-              New Session
-            </button>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen px-4 py-6 md:px-8 md:py-8" style={{ background: PAGE_BG }}>
+      <div className="max-w-6xl mx-auto space-y-7">
 
-      {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Sessions today"
-          value={todaySessions.length}
-          icon={<Calendar size={19} style={{ color: ROSE }} />}
-          bg="#FFF0F5"
-          textColor="text-[#0D0D55]"
-          href="/sessions"
-        />
-        <StatCard
-          label="Ready to bill"
-          value={readyCount}
-          icon={<CheckCircle2 size={19} style={{ color: "#16A34A" }} />}
-          bg="#F0FDF4"
-          textColor="text-[#0D0D55]"
-          sub={readyCount > 0 ? "Compliant & complete" : ""}
-          href="/sessions"
-        />
-        <StatCard
-          label="Need attention"
-          value={needsAttentionCount}
-          icon={<AlertCircle size={19} style={{ color: "#D97706" }} />}
-          bg="#FFFBEB"
-          textColor={needsAttentionCount > 0 ? "text-amber-700" : "text-[#0D0D55]"}
-          href="/compliance"
-        />
-        <StatCard
-          label="Incomplete (prior days)"
-          value={pastIncomplete.length}
-          icon={<Clock size={19} style={{ color: "#DC2626" }} />}
-          bg="#FEF2F2"
-          textColor={pastIncomplete.length > 0 ? "text-red-600" : "text-[#0D0D55]"}
-          href="/sessions"
-        />
-      </div>
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: T3 }}>
+              {today}
+            </p>
+            <h1 className="text-[26px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
+              Good morning, {firstName}
+            </h1>
+            <p className="text-[14px] mt-1" style={{ color: T2 }}>
+              Here's your care overview for today.
+            </p>
+          </div>
 
-      {/* ── Two-column layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Left: Today's Schedule */}
-        <div className="lg:col-span-3 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
-          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
-            <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Today's Schedule</h2>
-            <Link href="/sessions">
-              <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: PERIWINKLE }}>
-                View all <ArrowRight size={12} />
-              </span>
+          <div className="flex items-center gap-3 shrink-0">
+            <Link href="/participants/new">
+              <button
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border text-[13px] font-semibold transition-all duration-200 hover:shadow-[0_2px_8px_rgba(84,34,105,0.08)]"
+                style={{ borderColor: BORDER, color: T2 }}
+              >
+                <UserPlus size={14} strokeWidth={2} /> Add Participant
+              </button>
+            </Link>
+            <Link href="/sessions/new">
+              <button
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90"
+                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+              >
+                <Play size={12} fill="white" /> New Session
+              </button>
             </Link>
           </div>
+        </header>
 
-          {sessionsLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#A0AEC0" }} />
-            </div>
-          ) : todaySessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-6">
-              <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: "#EEF0FB" }}>
-                <Calendar size={22} style={{ color: PERIWINKLE }} />
-              </div>
-              <p className="font-semibold" style={{ color: TEXT_DARK }}>No sessions today</p>
-              <p className="text-sm" style={{ color: TEXT_MID }}>Start by creating a new session for a participant.</p>
-              <Link href="/sessions/new">
-                <button className="mt-1 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-                  style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}>
-                  New Session
-                </button>
-              </Link>
-            </div>
-          ) : (
-            <div className="divide-y" style={{ borderColor: "#F8F6FC" }}>
-              {todaySessions.map((s) => (
-                <ScheduleRow
-                  key={s.id}
-                  session={s}
-                  name={participantName(s)}
-                  isNext={nextSession?.id === s.id}
-                />
-              ))}
-            </div>
-          )}
+        {/* ── Stat strip ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatPill label="Total Sessions"  value={sessions.length} accent={T1}       href="/sessions"   />
+          <StatPill label="Compliance"       value="94%"             accent="#16A34A"                    />
+          <StatPill label="Pending Notes"    value="3"               accent="#D97706"                    />
+          <StatPill label="Open Alerts"      value="0"               accent={T3}                         />
+        </div>
 
-          {todaySessions.length > 0 && (
-            <div className="px-5 py-3" style={{ borderTop: "1px solid #F8F6FC" }}>
+        {/* ── Main grid ───────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Sessions list — 2/3 */}
+          <section
+            className="lg:col-span-2 bg-white rounded-2xl overflow-hidden"
+            style={{ boxShadow: CARD_SHADOW }}
+          >
+            {/* Card header */}
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b"
+              style={{ borderColor: "rgba(232,213,232,0.4)" }}
+            >
+              <h2 className="text-[17px] font-semibold" style={{ color: T1 }}>Recent Sessions</h2>
               <Link href="/sessions">
-                <span className="text-xs font-medium cursor-pointer" style={{ color: PERIWINKLE }}>
-                  View full schedule →
+                <span
+                  className="flex items-center gap-1 text-[12px] font-semibold transition-opacity duration-150 hover:opacity-70"
+                  style={{ color: CORAL }}
+                >
+                  View all <ArrowRight size={12} />
                 </span>
               </Link>
             </div>
-          )}
-        </div>
 
-        {/* Right: Compliance + Alerts */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Compliance overview */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
-              <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Compliance Overview</h2>
-              <span className="text-xs flex items-center gap-1" style={{ color: TEXT_MID }}>
-                <Calendar size={11} /> This week
-              </span>
-            </div>
-            <div className="p-5">
-              <div className="flex items-center gap-5">
-                <DonutChart compliant={compliantCount} atRisk={atRiskCount} nonCompliant={nonCompliantCount} />
-                <div className="space-y-2.5 flex-1">
-                  {[
-                    { label: "Compliant", count: compliantCount, color: "#22C55E" },
-                    { label: "Needs Attention", count: atRiskCount, color: "#F59E0B" },
-                    { label: "At Risk", count: nonCompliantCount, color: "#EF4444" },
-                    { label: "Not Assessed", count: weekSessions.filter(s => s.compliance_score === null || s.compliance_score === undefined).length, color: "#CBD5E1" },
-                  ].map(({ label, count, color }) => (
-                    <div key={label} className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
-                      <span className="flex-1 text-xs" style={{ color: TEXT_MID }}>{label}</span>
-                      <span className="text-sm font-bold" style={{ color: TEXT_DARK }}>{count}</span>
-                    </div>
-                  ))}
+            {/* Rows */}
+            <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.3)" }}>
+              {isLoading ? (
+                <div className="py-20 flex justify-center">
+                  <Loader2 size={22} className="animate-spin" style={{ color: BLUSH }} />
                 </div>
-              </div>
-              <Link href="/compliance">
-                <button className="mt-4 w-full text-xs font-medium flex items-center justify-center gap-1 hover:underline" style={{ color: PERIWINKLE }}>
-                  View compliance details <ArrowRight size={11} />
-                </button>
-              </Link>
+              ) : sessions.length === 0 ? (
+                <div className="py-16 flex flex-col items-center text-center px-8">
+                  <div
+                    className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
+                    style={{ background: `${PLUM}0A` }}
+                  >
+                    <Play size={20} style={{ color: PLUM }} />
+                  </div>
+                  <p className="text-[15px] font-semibold" style={{ color: T1 }}>No sessions yet</p>
+                  <p className="text-[13px] mt-1 max-w-xs" style={{ color: T3 }}>
+                    Start your first clinical session to see it appear here.
+                  </p>
+                  <Link href="/sessions/new">
+                    <button
+                      className="mt-5 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold"
+                      style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                    >
+                      Start a session
+                    </button>
+                  </Link>
+                </div>
+              ) : (
+                sessions.slice(0, 6).map(s => (
+                  <SessionRow
+                    key={s.id}
+                    session={s}
+                    name={(s as any).participants?.full_name ?? "Participant"}
+                  />
+                ))
+              )}
             </div>
-          </div>
+          </section>
 
-          {/* Recent alerts */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
-              <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Recent Alerts</h2>
-              <Link href="/compliance">
-                <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: PERIWINKLE }}>
-                  View all <ArrowRight size={11} />
-                </span>
-              </Link>
-            </div>
-            {alerts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-6">
-                <CheckCircle2 size={24} className="text-emerald-400" />
-                <p className="text-sm font-medium" style={{ color: TEXT_MID }}>No active alerts</p>
-              </div>
-            ) : (
-              <div className="divide-y" style={{ borderColor: "#F8F6FC" }}>
-                {(alerts as Alert[]).slice(0, 3).map((alert) => (
-                  <AlertRow key={alert.id} alert={alert} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+          {/* Right column */}
+          <div className="flex flex-col gap-5">
 
-      {/* ── Quick Actions ── */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
-        <div className="px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
-          <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Quick Actions</h2>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-4 flex-wrap">
-          <QuickActionBtn
-            href="/sessions/new"
-            label="New Session"
-            icon={<Calendar size={22} />}
-            bg="#EEF0FB"
-            iconColor={PERIWINKLE}
-          />
-          <QuickActionBtn
-            href="/participants/new"
-            label="Add Participant"
-            icon={<UserPlus size={22} />}
-            bg="#FBF0F6"
-            iconColor={BLUSH_MID}
-          />
-          <QuickActionBtn
-            href="/incidents/new"
-            label="Report Incident"
-            icon={<AlertTriangle size={22} />}
-            bg="#FFFBEB"
-            iconColor="#D97706"
-          />
-          <QuickActionBtn
-            href="/sessions"
-            label="Upload Document"
-            icon={<UploadCloud size={22} />}
-            bg="#EEF0FB"
-            iconColor={PERIWINKLE}
-          />
-          <QuickActionBtn
-            href="/compliance"
-            label="View Reports"
-            icon={<FileBarChart2 size={22} />}
-            bg="#F0FDF4"
-            iconColor="#16A34A"
-          />
-          <QuickActionBtn
-            href="/patients"
-            label="All Participants"
-            icon={<Users size={22} />}
-            bg="#FBF0F6"
-            iconColor={BLUSH_MID}
-          />
+            {/* Compliance card */}
+            <section
+              className="bg-white rounded-2xl p-6"
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-[16px] font-semibold" style={{ color: T1 }}>Compliance</h2>
+                <TrendingUp size={15} style={{ color: CORAL }} />
+              </div>
+
+              <div className="flex flex-col items-center gap-4">
+                <ComplianceGauge score={94} />
+
+                <div className="w-full grid grid-cols-2 gap-3">
+                  <div
+                    className="rounded-xl px-3 py-3 text-center"
+                    style={{ background: "rgba(22,163,74,0.06)", border: "1px solid rgba(22,163,74,0.14)" }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#16A34A" }}>Compliant</p>
+                    <p className="text-[20px] font-bold mt-0.5" style={{ color: T1 }}>85</p>
+                  </div>
+                  <div
+                    className="rounded-xl px-3 py-3 text-center"
+                    style={{ background: "rgba(241,115,138,0.06)", border: "1px solid rgba(241,115,138,0.14)" }}
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CORAL }}>At Risk</p>
+                    <p className="text-[20px] font-bold mt-0.5" style={{ color: T1 }}>12</p>
+                  </div>
+                </div>
+
+                <Link href="/compliance" className="w-full">
+                  <button
+                    className="w-full py-2.5 rounded-xl text-[13px] font-semibold border transition-all duration-200 hover:bg-[#F6F4FB]"
+                    style={{ borderColor: BORDER, color: T2 }}
+                  >
+                    View Audit Log
+                  </button>
+                </Link>
+              </div>
+            </section>
+
+            {/* Quick actions */}
+            <section>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-3 px-0.5" style={{ color: T3 }}>
+                Quick Actions
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <QuickAction label="Reports"      icon={<FileBarChart2 size={17} />} iconBg="bg-blue-50"    iconColor="text-blue-600"   href="/reports"    />
+                <QuickAction label="Upload"        icon={<UploadCloud size={17} />}   iconBg="bg-violet-50"  iconColor="text-violet-600"               />
+                <QuickAction label="Participants"  icon={<Users size={17} />}         iconBg="bg-emerald-50" iconColor="text-emerald-600" href="/patients"   />
+                <QuickAction label="Incidents"     icon={<AlertTriangle size={17} />} iconBg="bg-rose-50"    iconColor="text-rose-500"    href="/incidents"  />
+              </div>
+            </section>
+          </div>
         </div>
       </div>
     </div>

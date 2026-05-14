@@ -1,0 +1,139 @@
+Refine the entire CareScribe UI to production-grade, market-ready quality, ensuring:
+
+perfect text readability
+consistent spacing and alignment
+accessible contrast ratios
+professional visual hierarchy
+zero “unfinished UI” feel
+
+The UI must feel like a real shipped healthcare SaaS product, not a prototype.
+
+1. 🧠 TEXT READABILITY (CRITICAL)
+All text must follow these rules:
+Body text minimum contrast: WCAG AA compliant
+No low-contrast grey-on-white combinations
+Avoid purple/soft colors for small text unless high contrast is ensured
+Font sizes must follow a clear hierarchy:
+Typography scale:
+H1: 24–28px (600 weight)
+H2: 18–20px (600 weight)
+Body: 14–16px (400–500 weight)
+Caption: 12–13px (500 weight, never lighter than 400 if on colored background)
+Rules:
+Never use opacity < 70% for important text
+Never place text on busy gradients without overlay
+Avoid decorative text that reduces clarity
+2. 🎨 COLOR & CONTRAST SYSTEM
+Must enforce:
+Text on white: minimum #2E2E2E or darker
+Secondary text: must still be readable (#5A5A5A or darker equivalent)
+Disabled text must NOT drop below readability threshold
+Background rules:
+Avoid pure white (#FFFFFF)
+Use soft surfaces:
+#F6F5FB
+#FAFAFF
+rgba(255,255,255,0.6)
+Accent colors:
+Must never be used for body text
+Only for:
+buttons
+highlights
+indicators
+3. 📏 SPACING & ALIGNMENT SYSTEM (STRICT)
+Layout rules:
+Use 8pt spacing system only:
+4, 8, 12, 16, 24, 32, 40
+Alignment rules:
+All cards must align vertically across columns
+No misaligned baselines between sections
+All grids must use consistent column structure (no ad-hoc flex spacing)
+Card rules:
+Same padding across all cards in same hierarchy level
+No random padding differences (common “unfinished UI” issue)
+4. 🧱 COMPONENT CONSISTENCY
+
+Every UI element must belong to a system:
+
+Cards:
+Primary Card (important content)
+Soft Card (secondary content)
+Glass Card (background panels)
+Buttons:
+Primary (filled)
+Secondary (outline or soft fill)
+Action pills (rounded, minimal)
+Lists:
+Never use raw div lists without structure
+Always use:
+spacing rules
+separators OR card grouping
+5. 👁 VISUAL HIERARCHY RULES
+
+Each screen must clearly answer:
+
+1. What matters most?
+
+→ must be visually dominant (top section only)
+
+2. What is supporting context?
+
+→ medium emphasis
+
+3. What is optional info?
+
+→ minimized or collapsed
+
+❌ DO NOT:
+let stats dominate the screen
+use equal-sized competing sections
+overload dashboard with equal-weight cards
+6. 🧩 LAYOUT POLISH RULES
+All sections must align to grid
+No “floating misaligned boxes”
+No inconsistent corner radius usage
+Use only:
+16px
+20px
+24px radius system
+7. ✨ MICRO-POLISH (IMPORTANT FOR “MARKET READY” FEEL)
+Hover states:
+subtle lift: 2–4px max
+soft shadow increase only
+no harsh glow
+Transitions:
+150–250ms max
+ease-out only
+Borders:
+always subtle (5–15% opacity)
+avoid hard black/grey borders
+8. 🚫 REMOVE “DEVELOPMENT LOOK”
+
+Eliminate:
+
+inconsistent shadows
+random spacing differences
+overly bold icons next to text
+multiple competing colors in one section
+overly technical labels (“status_code”, “API result” feel)
+9. 🧘 FINAL PRODUCT STANDARD
+
+The UI must feel:
+
+calm, intentional, and polished enough to be used in real healthcare environments
+
+NOT:
+
+prototype
+internal admin tool
+AI dashboard
+engineering interface
+🌸 FINAL OUTPUT REQUIREMENT
+
+When applied, the UI should achieve:
+
+instant readability at first glance
+zero visual noise confusion
+clear hierarchy in under 2 seconds
+consistent spacing everywhere
+“finished product” perception
