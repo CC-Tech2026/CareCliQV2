@@ -105,8 +105,8 @@ function DonutChart({ compliant, atRisk, nonCompliant }: { compliant: number; at
   return (
     <div className="relative inline-flex">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="13" />
-        {arc(compliant, 0, "#4ADE80", "c")}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#FFF0F5" strokeWidth="13" />
+        {arc(compliant, 0, LIME, "c")}
         {arc(atRisk, compliant / total, PINK, "a")}
         {arc(nonCompliant, (compliant + atRisk) / total, "#F87171", "n")}
       </svg>
@@ -350,13 +350,15 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <Link href="/participants/new">
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-[#0D0D55] hover:bg-slate-50 transition-colors shadow-sm">
+            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm"
+              style={{ background: `${PINK}18`, color: PINK, border: `1px solid ${PINK}30` }}>
               <UserPlus size={15} />
               Create Participant
             </button>
           </Link>
           <Link href="/sessions/new">
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0D0D55] text-sm font-bold text-white hover:bg-[#1a1a77] transition-colors shadow-sm gap-2">
+            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#0D0D55] hover:opacity-90 transition-opacity shadow-sm"
+              style={{ background: "linear-gradient(90deg, #D9F103 0%, #c8de00 100%)" }}>
               <Play size={14} className="fill-current" />
               Start New Session
             </button>
@@ -369,16 +371,16 @@ export default function Dashboard() {
         <StatCard
           label="Sessions today"
           value={todaySessions.length}
-          icon={<Calendar size={20} style={{ color: BLUE }} />}
-          bg={`${BLUE}18`}
+          icon={<Calendar size={20} style={{ color: PINK }} />}
+          bg={`${PINK}18`}
           textColor="text-[#0D0D55]"
           href="/sessions"
         />
         <StatCard
           label="Ready to bill"
           value={readyCount}
-          icon={<CheckCircle2 size={20} style={{ color: "#16A34A" }} />}
-          bg="#DCFCE7"
+          icon={<CheckCircle2 size={20} style={{ color: "#5a7000" }} />}
+          bg={`${LIME}50`}
           textColor="text-[#0D0D55]"
           sub={readyCount > 0 ? "Compliant & complete" : ""}
           href="/sessions"
@@ -387,8 +389,8 @@ export default function Dashboard() {
           label="Need attention"
           value={needsAttentionCount}
           icon={<AlertCircle size={20} style={{ color: PINK }} />}
-          bg={`${PINK}20`}
-          textColor={needsAttentionCount > 0 ? "text-[#9D174D]" : "text-[#0D0D55]"}
+          bg={`${PINK}14`}
+          textColor={needsAttentionCount > 0 ? "text-[#c0415c]" : "text-[#0D0D55]"}
           href="/compliance"
         />
         <StatCard
@@ -470,7 +472,7 @@ export default function Dashboard() {
                 <DonutChart compliant={compliantCount} atRisk={atRiskCount} nonCompliant={nonCompliantCount} />
                 <div className="space-y-2.5 flex-1">
                   {[
-                    { label: "Compliant", count: compliantCount, color: "#4ADE80" },
+                    { label: "Compliant", count: compliantCount, color: LIME },
                     { label: "Needs Attention", count: atRiskCount, color: PINK },
                     { label: "At Risk", count: nonCompliantCount, color: "#F87171" },
                     { label: "Not Assessed", count: weekSessions.filter(s => s.compliance_score === null || s.compliance_score === undefined).length, color: "#CBD5E1" },
@@ -527,14 +529,14 @@ export default function Dashboard() {
             href="/sessions/new"
             label="New Session"
             icon={<Calendar size={22} />}
-            bg={`${BLUE}18`}
-            iconColor={BLUE}
+            bg={`${LIME}45`}
+            iconColor="#4d6000"
           />
           <QuickActionBtn
             href="/participants/new"
             label="Add Participant"
             icon={<UserPlus size={22} />}
-            bg={`${PINK}18`}
+            bg={`${PINK}20`}
             iconColor={PINK}
           />
           <QuickActionBtn
@@ -548,21 +550,21 @@ export default function Dashboard() {
             href="/sessions"
             label="Upload Document"
             icon={<UploadCloud size={22} />}
-            bg="#F0FDF4"
-            iconColor="#16A34A"
+            bg={`${BLUE}14`}
+            iconColor={BLUE}
           />
           <QuickActionBtn
             href="/compliance"
             label="View Reports"
             icon={<FileBarChart2 size={22} />}
-            bg="#F5F3FF"
-            iconColor="#7C3AED"
+            bg={`${PINK}12`}
+            iconColor={PINK}
           />
           <QuickActionBtn
             href="/patients"
             label="All Participants"
             icon={<Users size={22} />}
-            bg={`${LIME}30`}
+            bg={`${LIME}35`}
             iconColor="#4D5E00"
           />
         </div>
