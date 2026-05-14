@@ -47,15 +47,25 @@ export default function Login() {
      */
     <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)` }}>
 
-      {/* ── Top: brand + animated graphic ── */}
-      <div className="flex flex-col items-center justify-end flex-[0_0_46%] min-h-[260px] px-6 pb-4 pt-10 text-white text-center overflow-hidden">
-        <h1 className="text-[32px] font-black tracking-tight leading-none">
-          Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
-        </h1>
-        <p className="text-[10px] uppercase tracking-[0.18em] font-semibold mt-1.5 opacity-50">
-          NDIS Clinical
-        </p>
-        <LoginGraphic />
+      {/* ── Top: brand + illustrated character ── */}
+      <div
+        className="flex flex-col items-center flex-[0_0_52%] min-h-[300px] px-6 pt-10 pb-0 text-white text-center overflow-hidden"
+        style={{ position: "relative" }}
+      >
+        {/* Wordmark — top of gradient */}
+        <div className="w-full flex flex-col items-center">
+          <h1 className="text-[30px] font-black tracking-tight leading-none">
+            Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
+          </h1>
+          <p className="text-[12px] font-semibold mt-1.5 opacity-70">
+            Manage care, effortlessly.
+          </p>
+        </div>
+
+        {/* Care-worker illustration — fills rest of gradient area */}
+        <div className="flex-1 flex items-end w-full justify-center">
+          <LoginGraphic />
+        </div>
       </div>
 
       {/* ── Bottom: form card (slides up on mount) ── */}

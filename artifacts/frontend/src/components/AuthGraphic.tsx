@@ -1,234 +1,246 @@
 /**
- * Animated SVG illustration shown in the gradient top-section of login/signup.
- * Uses pure CSS keyframe animations (defined in index.css).
+ * Flat-design illustrated characters for auth pages.
+ * Inspired by consumer care-app UX (human figures, phone mockups, floating elements).
+ * All animations via CSS keyframes defined in index.css.
  */
 
-const CORAL = "#F1738A";
-const BLUSH = "#F6B8C0";
-const WHITE = "rgba(255,255,255,";
-
-// ── Small sparkle star ────────────────────────────────────────────────────────
-function Sparkle({
-  style,
-  delay,
-  size = 14,
-}: {
-  style: React.CSSProperties;
-  delay: string;
-  size?: number;
-}) {
+// ── Sparkle helper ────────────────────────────────────────────────────────────
+function Sparkle({ style, delay, size = 14 }: { style: React.CSSProperties; delay: string; size?: number }) {
   return (
     <span
       className="absolute select-none pointer-events-none font-bold"
-      style={{
-        ...style,
-        fontSize: size,
-        color: "rgba(255,255,255,0.75)",
-        animation: `cs-twinkle 2.8s ease-in-out infinite ${delay}`,
-      }}
+      style={{ ...style, fontSize: size, color: "rgba(255,255,255,0.78)", animation: `cs-twinkle 2.8s ease-in-out infinite ${delay}` }}
+    >✦</span>
+  );
+}
+
+// ── Care-worker SVG character + phone mockup ──────────────────────────────────
+function CareWorker({ scale = 1 }: { scale?: number }) {
+  const w = 240 * scale;
+  const h = 256 * scale;
+
+  return (
+    <svg
+      width={w} height={h}
+      viewBox="0 0 240 256"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ animation: "cs-float 4s ease-in-out infinite", overflow: "visible" }}
     >
-      ✦
-    </span>
+      {/* ── Platform shadow ── */}
+      <ellipse cx="100" cy="253" rx="56" ry="9" fill="rgba(0,0,0,0.10)" />
+
+      {/* ── Legs ── */}
+      <rect x="82" y="152" width="19" height="94" rx="9.5" fill="#DEB2E4" />
+      <rect x="102" y="152" width="19" height="94" rx="9.5" fill="#C9A0D4" />
+
+      {/* ── Shoes ── */}
+      <ellipse cx="91"  cy="248" rx="17" ry="6.5" fill="#F1738A" />
+      <ellipse cx="112" cy="248" rx="17" ry="6.5" fill="#D95C74" />
+
+      {/* ── Torso / shirt ── */}
+      <rect x="70" y="85" width="60" height="72" rx="16" fill="#542269" />
+      {/* Collar accent */}
+      <path d="M90 85 L100 97 L110 85 Z" fill="rgba(246,184,192,0.32)" />
+
+      {/* ── Neck ── */}
+      <rect x="94" y="71" width="12" height="17" rx="5" fill="#F8C4A3" />
+
+      {/* ── Hair (back layer) ── */}
+      <ellipse cx="100" cy="42" rx="28" ry="26" fill="#2D1810" />
+
+      {/* ── Head ── */}
+      <circle cx="100" cy="48" r="24" fill="#F8C4A3" />
+
+      {/* ── Ears ── */}
+      <circle cx="76"  cy="48" r="7.5" fill="#F8C4A3" />
+      <circle cx="124" cy="48" r="7.5" fill="#F8C4A3" />
+      <circle cx="76"  cy="48" r="5"   fill="#F0B890" />
+      <circle cx="124" cy="48" r="5"   fill="#F0B890" />
+
+      {/* ── Left arm ── */}
+      <rect x="40" y="87" width="28" height="64" rx="14" fill="#542269" transform="rotate(-8, 54, 119)" />
+      {/* ── Right arm ── */}
+      <rect x="132" y="87" width="28" height="64" rx="14" fill="#542269" transform="rotate(10, 146, 119)" />
+
+      {/* ── Hands ── */}
+      <circle cx="46"  cy="150" r="11.5" fill="#F8C4A3" />
+      <circle cx="155" cy="148" r="11.5" fill="#F8C4A3" />
+
+      {/* ── Hair fringe (front) ── */}
+      <path d="M74 36 Q82 22 100 20 Q118 22 126 36 Q118 30 100 32 Q82 30 74 36 Z" fill="#2D1810" />
+      {/* Side hair lock left */}
+      <path d="M74 36 Q66 52 68 70" stroke="#2D1810" strokeWidth="15" strokeLinecap="round" fill="none" />
+      {/* Side hair lock right */}
+      <path d="M126 36 Q134 52 132 70" stroke="#2D1810" strokeWidth="15" strokeLinecap="round" fill="none" />
+
+      {/* ── Face ── */}
+      {/* Eyes */}
+      <circle cx="91"  cy="46" r="3.5" fill="#2D1810" />
+      <circle cx="109" cy="46" r="3.5" fill="#2D1810" />
+      {/* Eye shine */}
+      <circle cx="92.5" cy="44.5" r="1.3" fill="white" />
+      <circle cx="110.5" cy="44.5" r="1.3" fill="white" />
+      {/* Blush */}
+      <ellipse cx="83"  cy="55" rx="8" ry="5" fill="#F1738A" opacity="0.2" />
+      <ellipse cx="117" cy="55" rx="8" ry="5" fill="#F1738A" opacity="0.2" />
+      {/* Smile */}
+      <path d="M91 60 Q100 69 109 60" stroke="#C07850" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      {/* ── Floating phone mockup (upper-right) ── */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+      <g style={{ animation: "cs-float 5s ease-in-out infinite 1.2s" }}>
+        {/* Phone drop shadow */}
+        <rect x="168" y="50" width="56" height="94" rx="13" fill="rgba(84,34,105,0.15)" transform="translate(3,3)" />
+        {/* Phone body */}
+        <rect x="164" y="44" width="56" height="94" rx="13" fill="white" opacity="0.96" />
+        {/* Screen bg */}
+        <rect x="168" y="48" width="48" height="86" rx="9" fill="#F5EEFF" />
+
+        {/* App header row */}
+        <rect x="168" y="48" width="48" height="24" rx="9" fill="rgba(84,34,105,0.09)" />
+        {/* Avatar in header */}
+        <circle cx="179" cy="60" r="7" fill="#F1738A" opacity="0.65" />
+        {/* Header text lines */}
+        <line x1="191" y1="56" x2="213" y2="56" stroke="#DEB2E4" strokeWidth="2" strokeLinecap="round" />
+        <line x1="191" y1="63" x2="207" y2="63" stroke="#DEB2E4" strokeWidth="1.5" strokeLinecap="round" />
+
+        {/* Card 1 */}
+        <rect x="170" y="76" width="44" height="24" rx="7" fill="white" />
+        <circle cx="181" cy="88" r="7" fill="#F1738A" opacity="0.55" />
+        <line x1="192" y1="85" x2="211" y2="85" stroke="#DEB2E4" strokeWidth="2" strokeLinecap="round" />
+        <line x1="192" y1="92" x2="207" y2="92" stroke="#DEB2E4" strokeWidth="1.5" strokeLinecap="round" />
+
+        {/* Card 2 */}
+        <rect x="170" y="104" width="44" height="24" rx="7" fill="white" />
+        <circle cx="181" cy="116" r="7" fill="#DEB2E4" opacity="0.9" />
+        <line x1="192" y1="113" x2="211" y2="113" stroke="#DEB2E4" strokeWidth="2" strokeLinecap="round" />
+        <line x1="192" y1="120" x2="207" y2="120" stroke="#DEB2E4" strokeWidth="1.5" strokeLinecap="round" />
+
+        {/* Bottom nav bar */}
+        <rect x="168" y="124" width="48" height="10" rx="0" fill="rgba(232,213,232,0.3)" />
+        <circle cx="180" cy="129" r="3.5" fill="#F1738A" opacity="0.7" />
+        <circle cx="192" cy="129" r="3.5" fill="#DEB2E4" opacity="0.5" />
+        <circle cx="204" cy="129" r="3.5" fill="#DEB2E4" opacity="0.5" />
+
+        {/* Notification badge */}
+        <circle cx="218" cy="46" r="8" fill="#F1738A" />
+        <text x="218" y="50" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold">3</text>
+      </g>
+
+      {/* ── Floating heart (top-left) ── */}
+      <path
+        d="M42 88 C42 88 35 81 28 85 C21 89 23 99 30 103 L42 115 L54 103 C61 99 63 89 56 85 C49 81 42 88 42 88 Z"
+        fill="#F1738A"
+        opacity="0.9"
+        style={{ animation: "cs-float 3.2s ease-in-out infinite 0.4s" }}
+      />
+
+      {/* ── Floating checkmark badge (lower left) ── */}
+      <g style={{ animation: "cs-float 4.5s ease-in-out infinite 0.8s" }}>
+        <circle cx="30" cy="170" r="16" fill="rgba(255,255,255,0.22)" />
+        <path d="M22 170 L27 176 L38 162" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </g>
+
+      {/* ── Rising hearts ── */}
+      <text
+        x="68" y="148"
+        fill="rgba(255,255,255,0.55)"
+        fontSize="14"
+        style={{ animation: "cs-rise-fade 3.1s ease-in-out infinite 0s" }}
+      >♥</text>
+      <text
+        x="140" y="142"
+        fill="rgba(255,255,255,0.45)"
+        fontSize="11"
+        style={{ animation: "cs-rise-fade 3.1s ease-in-out infinite 1.5s" }}
+      >♥</text>
+    </svg>
   );
 }
 
-// ── Background floating orbs ─────────────────────────────────────────────────
-function BgOrbs() {
+// ── Small signup character (upper-body only, welcoming pose) ──────────────────
+function CareWorkerBust() {
   return (
-    <>
-      {/* Large outer orb */}
-      <div
-        className="absolute rounded-full"
-        style={{
-          inset: "-10%",
-          background: `radial-gradient(circle, ${WHITE}0.15) 0%, ${WHITE}0) 70%)`,
-          animation: "cs-orb-pulse 5s ease-in-out infinite",
-        }}
-      />
-      {/* Medium orb top-right */}
-      <div
-        className="absolute -top-6 -right-8 w-28 h-28 rounded-full"
-        style={{
-          background: `radial-gradient(circle, ${WHITE}0.2) 0%, ${WHITE}0) 70%)`,
-          animation: "cs-float-slow 7s ease-in-out infinite 1s",
-        }}
-      />
-      {/* Small orb bottom-left */}
-      <div
-        className="absolute -bottom-4 -left-6 w-20 h-20 rounded-full"
-        style={{
-          background: `radial-gradient(circle, ${WHITE}0.15) 0%, ${WHITE}0) 70%)`,
-          animation: "cs-float-slow 6s ease-in-out infinite 0.5s",
-        }}
-      />
-    </>
-  );
-}
-
-// ── Clipboard + heart SVG illustration ───────────────────────────────────────
-function ClipboardIllustration() {
-  return (
-    <div
-      className="relative z-10"
+    <svg
+      width="180" height="130"
+      viewBox="0 0 240 170"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       style={{ animation: "cs-float 4s ease-in-out infinite" }}
     >
-      <svg width="110" height="120" viewBox="0 0 110 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Clipboard shadow */}
-        <ellipse cx="55" cy="116" rx="30" ry="5" fill="rgba(0,0,0,0.1)" />
+      {/* ── Torso ── */}
+      <rect x="70" y="88" width="60" height="75" rx="16" fill="#542269" />
+      <path d="M90 88 L100 100 L110 88 Z" fill="rgba(246,184,192,0.32)" />
+      <rect x="94" y="73" width="12" height="18" rx="5" fill="#F8C4A3" />
 
-        {/* Clipboard body */}
-        <rect x="12" y="22" width="74" height="86" rx="10" fill="white" opacity="0.95" />
+      {/* ── Left arm (raised slightly — welcoming gesture) ── */}
+      <rect x="36" y="78" width="28" height="60" rx="14" fill="#542269" transform="rotate(-18, 50, 108)" />
+      {/* ── Right arm ── */}
+      <rect x="136" y="88" width="28" height="58" rx="14" fill="#542269" transform="rotate(8, 150, 117)" />
 
-        {/* Clipboard clip top */}
-        <rect x="32" y="14" width="34" height="18" rx="6" fill="white" opacity="0.95" />
-        <rect x="38" y="18" width="22" height="10" rx="3" fill={BLUSH} opacity="0.4" />
-        <circle cx="49" cy="23" r="3" fill={BLUSH} opacity="0.6" />
+      {/* ── Hands ── */}
+      <circle cx="38"  cy="138" r="12" fill="#F8C4A3" />
+      {/* Wave fingers on raised hand */}
+      <circle cx="30"  cy="128" r="5"  fill="#F8C4A3" />
+      <circle cx="25"  cy="120" r="4.5" fill="#F8C4A3" />
+      <circle cx="155" cy="146" r="12" fill="#F8C4A3" />
 
-        {/* Heart (animated) */}
-        <path
-          d="M49 56 C49 56 38 47 31 52 C24 57 26 67 35 73 L49 84 L63 73 C72 67 74 57 67 52 C60 47 49 56 49 56Z"
-          fill={CORAL}
-          opacity="0.9"
-          style={{ animation: "cs-heartbeat 1.8s ease-in-out infinite", transformOrigin: "49px 65px" }}
-        />
+      {/* ── Hair (back) ── */}
+      <ellipse cx="100" cy="42" rx="28" ry="26" fill="#2D1810" />
+      {/* ── Head ── */}
+      <circle cx="100" cy="48" r="24" fill="#F8C4A3" />
+      {/* ── Ears ── */}
+      <circle cx="76"  cy="48" r="7.5" fill="#F8C4A3" />
+      <circle cx="124" cy="48" r="7.5" fill="#F8C4A3" />
+      <circle cx="76"  cy="48" r="5"   fill="#F0B890" />
+      <circle cx="124" cy="48" r="5"   fill="#F0B890" />
+      {/* ── Hair fringe ── */}
+      <path d="M74 36 Q82 22 100 20 Q118 22 126 36 Q118 30 100 32 Q82 30 74 36 Z" fill="#2D1810" />
+      <path d="M74 36 Q66 52 68 70" stroke="#2D1810" strokeWidth="15" strokeLinecap="round" fill="none" />
+      <path d="M126 36 Q134 52 132 70" stroke="#2D1810" strokeWidth="15" strokeLinecap="round" fill="none" />
+      {/* ── Face ── */}
+      <circle cx="91"  cy="46" r="3.5" fill="#2D1810" />
+      <circle cx="109" cy="46" r="3.5" fill="#2D1810" />
+      <circle cx="92.5" cy="44.5" r="1.3" fill="white" />
+      <circle cx="110.5" cy="44.5" r="1.3" fill="white" />
+      <ellipse cx="83"  cy="55" rx="8" ry="5" fill="#F1738A" opacity="0.2" />
+      <ellipse cx="117" cy="55" rx="8" ry="5" fill="#F1738A" opacity="0.2" />
+      <path d="M91 60 Q100 69 109 60" stroke="#C07850" strokeWidth="2.5" fill="none" strokeLinecap="round" />
 
-        {/* EKG line across clipboard */}
-        <polyline
-          points="18,98 28,98 32,88 37,108 42,88 47,98 58,98 62,92 66,104 70,98 80,98 90,98"
-          stroke={BLUSH}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-          strokeDasharray="200"
-          opacity="0.7"
-          style={{ animation: "cs-ekg 2.5s ease-in-out infinite" }}
-        />
-
-        {/* Horizontal lines (note lines) */}
-        <line x1="22" y1="42" x2="76" y2="42" stroke={BLUSH} strokeWidth="1.5" opacity="0.3" />
-        <line x1="22" y1="50" x2="60" y2="50" stroke={BLUSH} strokeWidth="1.5" opacity="0.3" />
-      </svg>
-    </div>
+      {/* ── Floating badge: "New" ── */}
+      <g style={{ animation: "cs-float 3.5s ease-in-out infinite 0.6s" }}>
+        <rect x="148" y="60" width="44" height="22" rx="11" fill="rgba(255,255,255,0.25)" />
+        <text x="170" y="75" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">Welcome!</text>
+      </g>
+    </svg>
   );
 }
 
-// ── Orbiting care dots ────────────────────────────────────────────────────────
-function OrbitDots() {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      {/* Orbit 1 — clockwise */}
-      <div
-        className="absolute w-3 h-3 rounded-full"
-        style={{
-          background: "rgba(255,255,255,0.5)",
-          animation: "cs-orbit 9s linear infinite",
-          transformOrigin: "0 0",
-        }}
-      />
-      {/* Orbit 2 — counter-clockwise, bigger radius */}
-      <div
-        className="absolute w-2 h-2 rounded-full"
-        style={{
-          background: BLUSH,
-          opacity: 0.7,
-          animation: "cs-orbit-rev 12s linear infinite 2s",
-          transformOrigin: "0 0",
-        }}
-      />
-      {/* Orbit 3 */}
-      <div
-        className="absolute w-2 h-2 rounded-full"
-        style={{
-          background: "rgba(255,255,255,0.4)",
-          animation: "cs-orbit 7s linear infinite 4s",
-          transformOrigin: "0 0",
-        }}
-      />
-    </div>
-  );
-}
+// ── Main exports ──────────────────────────────────────────────────────────────
 
-// ── Rising hearts ─────────────────────────────────────────────────────────────
-function RisingHeart({ delay, left }: { delay: string; left: string }) {
-  return (
-    <span
-      className="absolute bottom-2 text-base pointer-events-none select-none"
-      style={{
-        left,
-        color: "rgba(255,255,255,0.55)",
-        animation: `cs-rise-fade 3s ease-in-out infinite ${delay}`,
-      }}
-    >
-      ♥
-    </span>
-  );
-}
-
-// ── Main export — LOGIN graphic ───────────────────────────────────────────────
 export function LoginGraphic() {
   return (
-    <div className="relative flex items-center justify-center w-52 h-52 mx-auto mt-4 mb-2">
-      <BgOrbs />
-      <OrbitDots />
-      <ClipboardIllustration />
-
-      {/* Sparkles */}
-      <Sparkle style={{ top: "4%",  left: "6%"  }} delay="0s"    size={16} />
-      <Sparkle style={{ top: "8%",  right: "4%" }} delay="0.9s"  size={11} />
-      <Sparkle style={{ bottom: "8%", left: "4%" }} delay="1.6s" size={12} />
-      <Sparkle style={{ bottom: "12%", right: "6%" }} delay="0.5s" size={10} />
-      <Sparkle style={{ top: "40%", left: "0%"  }} delay="1.2s"  size={9}  />
-
-      {/* Rising hearts */}
-      <RisingHeart delay="0s"   left="28%" />
-      <RisingHeart delay="1.1s" left="60%" />
+    <div className="relative flex items-end justify-center w-full mt-2 mb-0" style={{ minHeight: 160 }}>
+      <CareWorker scale={0.88} />
+      {/* Sparkles around the composition */}
+      <Sparkle style={{ top: "4%",  left:  "6%"  }} delay="0s"   size={16} />
+      <Sparkle style={{ top: "10%", right: "8%"  }} delay="0.9s" size={11} />
+      <Sparkle style={{ top: "45%", left:  "2%"  }} delay="1.6s" size={10} />
+      <Sparkle style={{ bottom: "2%", right: "14%" }} delay="0.5s" size={9}  />
     </div>
   );
 }
 
-// ── SIGNUP graphic — lighter, leaves room for step bar ────────────────────────
 export function SignupGraphic() {
   return (
-    <div className="relative flex items-center justify-center w-36 h-36 mx-auto mt-2 mb-1">
-      {/* Morphing blob background */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "rgba(255,255,255,0.1)",
-          animation: "cs-blob-morph 6s ease-in-out infinite",
-        }}
-      />
-
-      {/* Central icon — a floating document with a checkmark */}
-      <div style={{ animation: "cs-float 3.5s ease-in-out infinite" }}>
-        <svg width="80" height="88" viewBox="0 0 80 88" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Doc body */}
-          <rect x="8" y="12" width="56" height="68" rx="8" fill="white" opacity="0.92" />
-          {/* Folded corner */}
-          <path d="M48 12 L64 28 L48 28 Z" fill={BLUSH} opacity="0.4" />
-          <path d="M48 12 L48 28 L64 28" stroke="white" strokeWidth="1.5" opacity="0.5" />
-          {/* Checkmark */}
-          <circle cx="36" cy="50" r="14" fill={CORAL} opacity="0.15" />
-          <path
-            d="M28 50 L33 56 L44 44"
-            stroke={CORAL}
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ animation: "cs-heartbeat 2.5s ease-in-out infinite" }}
-          />
-          {/* Lines */}
-          <line x1="16" y1="76" x2="56" y2="76" stroke={BLUSH} strokeWidth="1.5" opacity="0.35" />
-          <line x1="16" y1="82" x2="44" y2="82" stroke={BLUSH} strokeWidth="1.5" opacity="0.25" />
-        </svg>
-      </div>
-
-      {/* Sparkles */}
-      <Sparkle style={{ top: "0%",  left: "2%"   }} delay="0s"   size={13} />
-      <Sparkle style={{ top: "5%",  right: "0%"  }} delay="1.1s" size={9}  />
-      <Sparkle style={{ bottom: "4%", left: "0%" }} delay="0.6s" size={10} />
-      <Sparkle style={{ bottom: "0%", right: "2%" }} delay="1.7s" size={8} />
+    <div className="relative flex items-end justify-center w-full mt-1 mb-1" style={{ minHeight: 90 }}>
+      <CareWorkerBust />
+      <Sparkle style={{ top: "0%",  left:  "10%" }} delay="0s"   size={13} />
+      <Sparkle style={{ top: "4%",  right: "12%" }} delay="1.1s" size={10} />
+      <Sparkle style={{ bottom: "0%", left: "6%" }} delay="0.7s" size={9}  />
+      <Sparkle style={{ bottom: "8%", right: "8%" }} delay="1.5s" size={8}  />
     </div>
   );
 }
