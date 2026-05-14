@@ -16,32 +16,35 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  PenLine,
 } from "lucide-react";
+
+// ── CareScribe palette ────────────────────────────────────────────────────────
+const PLUM    = "#542269";
+const CORAL   = "#F1738A";
+const BLUSH   = "#F6B8C0";
+const PURPLE  = "#DEB2E4";
+const BORDER  = "#E8D5E8";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface FormData {
-  // Step 0
   account_type: AccountType | "";
-  // Step 1
   full_name: string;
   email: string;
   password: string;
   confirm_password: string;
-  // Step 2 — Independent Worker
   iw_registration_status: string;
   iw_support_specialties: string;
   iw_years_experience: string;
   iw_mobile: string;
-  // Step 2 — Allied Health
   ah_profession_type: string;
   ah_registration_status: string;
   ah_provider_number: string;
   ah_specialties: string;
   ah_clinic_name: string;
-  // Step 2 — Small Provider
   sp_organisation_name: string;
   sp_provider_type: string;
   sp_registration_status: string;
@@ -74,7 +77,7 @@ const INITIAL_FORM: FormData = {
 };
 
 // ---------------------------------------------------------------------------
-// Account type cards config
+// Account type cards
 // ---------------------------------------------------------------------------
 
 const ACCOUNT_TYPES = [
@@ -83,27 +86,30 @@ const ACCOUNT_TYPES = [
     icon: User,
     title: "Independent Support Worker",
     subtitle: "Sole trader, unregistered provider, or independent disability support worker",
-    color: "from-[#5271FF]/20 to-[#5271FF]/5",
-    border: "border-[#5271FF]",
-    iconBg: "bg-[#5271FF]/20 text-[#5271FF]",
+    selectedBg: "rgba(246,184,192,0.18)",
+    selectedBorder: BLUSH,
+    iconBgSelected: "rgba(241,115,138,0.22)",
+    iconColorSelected: CORAL,
   },
   {
     value: "allied_health" as AccountType,
     icon: Stethoscope,
     title: "Allied Health Professional",
     subtitle: "OT, Speech Pathologist, Physiotherapist, Behaviour Support Practitioner",
-    color: "from-[#FA879F]/20 to-[#FA879F]/5",
-    border: "border-[#FA879F]",
-    iconBg: "bg-[#FA879F]/20 text-[#FA879F]",
+    selectedBg: "rgba(222,178,228,0.18)",
+    selectedBorder: PURPLE,
+    iconBgSelected: "rgba(222,178,228,0.25)",
+    iconColorSelected: PURPLE,
   },
   {
     value: "small_provider" as AccountType,
     icon: Building2,
     title: "Small Provider / Care Team",
     subtitle: "Small care company, growing provider team, or NDIS provider organisation",
-    color: "from-[#D9F103]/20 to-[#D9F103]/5",
-    border: "border-[#D9F103]",
-    iconBg: "bg-[#D9F103]/20 text-[#0D0D55]",
+    selectedBg: "rgba(84,34,105,0.18)",
+    selectedBorder: "rgba(222,178,228,0.6)",
+    iconBgSelected: "rgba(84,34,105,0.22)",
+    iconColorSelected: PURPLE,
   },
 ] as const;
 
@@ -114,13 +120,14 @@ const ACCOUNT_TYPES = [
 function Logo() {
   return (
     <div className="flex flex-col items-center gap-2 mb-8">
-      <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg bg-[#D9F103]">
-        <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-          <rect x="3" y="3" width="10" height="10" rx="2" fill="#0D0D55" />
-          <rect x="15" y="3" width="10" height="10" rx="2" fill="#0D0D55" opacity="0.5" />
-          <rect x="3" y="15" width="10" height="10" rx="2" fill="#0D0D55" opacity="0.5" />
-          <rect x="15" y="15" width="10" height="10" rx="2" fill="#0D0D55" />
-        </svg>
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center"
+        style={{
+          background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+          boxShadow: `0 6px 20px rgba(241,115,138,0.35)`,
+        }}
+      >
+        <PenLine size={22} color="white" strokeWidth={2.3} />
       </div>
       <span className="text-xl font-bold text-white tracking-tight">CareScribe</span>
     </div>
@@ -137,14 +144,10 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
       {Array.from({ length: total }).map((_, i) => (
         <div
           key={i}
-          className={cn(
-            "h-1.5 flex-1 rounded-full transition-all duration-300",
-            i < current
-              ? "bg-[#D9F103]"
-              : i === current
-                ? "bg-white/60"
-                : "bg-white/15",
-          )}
+          className="h-1.5 flex-1 rounded-full transition-all duration-300"
+          style={{
+            background: i < current ? CORAL : i === current ? BLUSH : "rgba(255,255,255,0.2)",
+          }}
         />
       ))}
     </div>
@@ -168,12 +171,12 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-sm font-medium text-gray-700 flex gap-0.5">
+      <Label className="text-sm font-medium flex gap-0.5" style={{ color: "#37352F" }}>
         {label}
         {required && <span className="text-red-500 ml-0.5">*</span>}
       </Label>
       {children}
-      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="text-xs" style={{ color: "#9B6FAB" }}>{hint}</p>}
     </div>
   );
 }
@@ -196,7 +199,8 @@ function SelectField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full h-11 px-3 rounded-xl border border-gray-200 text-sm bg-white text-gray-900 focus:outline-none focus:border-[#5271FF] focus:ring-1 focus:ring-[#5271FF] disabled:opacity-50"
+      className="w-full h-11 px-3 rounded-xl text-sm bg-white disabled:opacity-50 outline-none"
+      style={{ border: `1px solid ${BORDER}`, color: "#37352F" }}
     >
       {placeholder && <option value="">{placeholder}</option>}
       {options.map((o) => (
@@ -226,16 +230,14 @@ export default function Signup() {
   const set = (field: keyof FormData, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // ---------------------------------------------------------------------------
-  // Step 0 — Choose account type
-  // ---------------------------------------------------------------------------
+  // ── Step 0: choose account type ──────────────────────────────────────────
 
   function renderStep0() {
     return (
       <div className="space-y-4">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-white">Welcome to CareScribe</h1>
-          <p className="text-white/55 text-sm mt-1">Choose how you'll be using the platform</p>
+          <p className="text-sm mt-1" style={{ color: PURPLE }}>Choose how you'll be using the platform</p>
         </div>
 
         <div className="space-y-3">
@@ -246,36 +248,32 @@ export default function Signup() {
               <button
                 key={type.value}
                 onClick={() => set("account_type", type.value)}
-                className={cn(
-                  "w-full text-left p-4 rounded-2xl border-2 transition-all duration-150 active:scale-[0.99]",
-                  selected
-                    ? `bg-gradient-to-br ${type.color} ${type.border}`
-                    : "bg-white/5 border-white/15 hover:border-white/35 hover:bg-white/8",
-                )}
+                className="w-full text-left p-4 rounded-2xl border-2 transition-all duration-150 active:scale-[0.99]"
+                style={{
+                  background: selected ? type.selectedBg : "rgba(255,255,255,0.06)",
+                  borderColor: selected ? type.selectedBorder : "rgba(255,255,255,0.12)",
+                }}
               >
                 <div className="flex items-start gap-3.5">
-                  <div className={cn(
-                    "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
-                    selected ? type.iconBg : "bg-white/10 text-white/60",
-                  )}>
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                    style={{
+                      background: selected ? type.iconBgSelected : "rgba(255,255,255,0.10)",
+                      color: selected ? type.iconColorSelected : "rgba(255,255,255,0.5)",
+                    }}
+                  >
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={cn(
-                      "font-semibold text-sm leading-tight",
-                      selected ? "text-white" : "text-white/80",
-                    )}>
+                    <p className="font-semibold text-sm leading-tight" style={{ color: selected ? "white" : "rgba(255,255,255,0.75)" }}>
                       {type.title}
                     </p>
-                    <p className={cn(
-                      "text-xs mt-1 leading-snug",
-                      selected ? "text-white/70" : "text-white/40",
-                    )}>
+                    <p className="text-xs mt-1 leading-snug" style={{ color: selected ? PURPLE : "rgba(255,255,255,0.35)" }}>
                       {type.subtitle}
                     </p>
                   </div>
                   {selected && (
-                    <CheckCircle2 className="h-5 w-5 text-[#D9F103] shrink-0 mt-0.5" />
+                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5" style={{ color: BLUSH }} />
                   )}
                 </div>
               </button>
@@ -286,17 +284,18 @@ export default function Signup() {
         <Button
           onClick={() => setStep(1)}
           disabled={!form.account_type}
-          className="w-full h-12 font-semibold rounded-xl gap-2 mt-2"
-          style={{ background: "#D9F103", color: "#0D0D55" }}
+          className="w-full h-12 font-semibold rounded-xl gap-2 mt-2 text-white border-0 hover:opacity-90 transition-opacity"
+          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
         >
           Continue <ArrowRight className="h-4 w-4" />
         </Button>
 
-        <p className="text-center text-sm text-white/40">
+        <p className="text-center text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
           Already have an account?{" "}
           <button
             onClick={() => navigate("/login")}
-            className="text-[#5271FF] hover:underline font-medium"
+            className="font-medium hover:underline"
+            style={{ color: BLUSH }}
           >
             Sign in
           </button>
@@ -305,9 +304,7 @@ export default function Signup() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Step 1 — Create account
-  // ---------------------------------------------------------------------------
+  // ── Step 1: create account ───────────────────────────────────────────────
 
   function step1Valid() {
     if (!form.full_name.trim() || !form.email.trim() || !form.password) return false;
@@ -324,16 +321,17 @@ export default function Signup() {
       <div className="space-y-4">
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-white">Create your account</h1>
-          <p className="text-white/50 text-sm mt-1">You'll use these to sign in every time</p>
+          <p className="text-sm mt-1" style={{ color: PURPLE }}>You'll use these to sign in every time</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 space-y-4 shadow-xl">
+        <div className="bg-white rounded-2xl p-5 space-y-4" style={{ boxShadow: `0 8px 32px rgba(84,34,105,0.20)` }}>
           <Field label="Full name" required>
             <Input
               value={form.full_name}
               onChange={(e) => set("full_name", e.target.value)}
               placeholder="Jane Smith"
-              className="h-11 rounded-xl border-gray-200"
+              className="h-11 rounded-xl"
+              style={{ borderColor: BORDER }}
               autoComplete="name"
             />
           </Field>
@@ -344,7 +342,8 @@ export default function Signup() {
               value={form.email}
               onChange={(e) => set("email", e.target.value)}
               placeholder="you@example.com"
-              className="h-11 rounded-xl border-gray-200"
+              className="h-11 rounded-xl"
+              style={{ borderColor: BORDER }}
               autoComplete="email"
             />
           </Field>
@@ -356,16 +355,15 @@ export default function Signup() {
                 value={form.password}
                 onChange={(e) => set("password", e.target.value)}
                 placeholder="Min. 8 characters"
-                className={cn(
-                  "h-11 rounded-xl border-gray-200 pr-10",
-                  passwordShort && "border-red-400 focus:border-red-400",
-                )}
+                className={cn("h-11 rounded-xl pr-10", passwordShort && "border-red-400")}
+                style={{ borderColor: passwordShort ? undefined : BORDER }}
                 autoComplete="new-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+                style={{ color: PURPLE }}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -378,10 +376,8 @@ export default function Signup() {
               value={form.confirm_password}
               onChange={(e) => set("confirm_password", e.target.value)}
               placeholder="Repeat your password"
-              className={cn(
-                "h-11 rounded-xl border-gray-200",
-                passwordMismatch && "border-red-400 focus:border-red-400",
-              )}
+              className={cn("h-11 rounded-xl", passwordMismatch && "border-red-400")}
+              style={{ borderColor: passwordMismatch ? undefined : BORDER }}
               autoComplete="new-password"
             />
             {passwordMismatch && (
@@ -394,15 +390,16 @@ export default function Signup() {
           <Button
             variant="ghost"
             onClick={() => setStep(0)}
-            className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10"
+            className="gap-1.5 hover:bg-white/10"
+            style={{ color: PURPLE }}
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
           <Button
             onClick={() => setStep(2)}
             disabled={!step1Valid()}
-            className="flex-1 h-12 font-semibold rounded-xl gap-2"
-            style={{ background: "#5271FF", color: "white" }}
+            className="flex-1 h-12 font-semibold rounded-xl gap-2 text-white border-0 hover:opacity-90 transition-opacity"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
           >
             Continue <ArrowRight className="h-4 w-4" />
           </Button>
@@ -411,19 +408,17 @@ export default function Signup() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Step 2 — Professional details
-  // ---------------------------------------------------------------------------
+  // ── Step 2: professional details ─────────────────────────────────────────
 
   function renderStep2() {
     return (
       <div className="space-y-4">
         <div className="mb-2">
           <h1 className="text-2xl font-bold text-white">Your professional details</h1>
-          <p className="text-white/50 text-sm mt-1">Help us tailor CareScribe to your practice</p>
+          <p className="text-sm mt-1" style={{ color: PURPLE }}>Help us tailor CareScribe to your practice</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 shadow-xl space-y-4">
+        <div className="bg-white rounded-2xl p-5 space-y-4" style={{ boxShadow: `0 8px 32px rgba(84,34,105,0.20)` }}>
           {form.account_type === "independent_worker" && <IndependentWorkerFields form={form} set={set} submitting={submitting} />}
           {form.account_type === "allied_health" && <AlliedHealthFields form={form} set={set} submitting={submitting} />}
           {form.account_type === "small_provider" && <SmallProviderFields form={form} set={set} submitting={submitting} />}
@@ -434,15 +429,16 @@ export default function Signup() {
             variant="ghost"
             onClick={() => setStep(1)}
             disabled={submitting}
-            className="gap-1.5 text-white/60 hover:text-white hover:bg-white/10"
+            className="gap-1.5 hover:bg-white/10"
+            style={{ color: PURPLE }}
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={submitting || (form.account_type === "small_provider" && !form.sp_organisation_name.trim())}
-            className="flex-1 h-12 font-semibold rounded-xl gap-2"
-            style={{ background: "#D9F103", color: "#0D0D55" }}
+            className="flex-1 h-12 font-semibold rounded-xl gap-2 text-white border-0 hover:opacity-90 transition-opacity"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
           >
             {submitting ? (
               <>
@@ -458,29 +454,32 @@ export default function Signup() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Step 3 — Success / email verification
-  // ---------------------------------------------------------------------------
+  // ── Step 3: success / email verification ─────────────────────────────────
 
   function renderStep3() {
     if (emailVerificationRequired) {
       return (
         <div className="text-center space-y-4">
-          <div className="h-20 w-20 rounded-full bg-[#5271FF]/20 flex items-center justify-center mx-auto">
-            <svg className="h-10 w-10 text-[#5271FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div
+            className="h-20 w-20 rounded-full flex items-center justify-center mx-auto"
+            style={{ background: "rgba(222,178,228,0.2)" }}
+          >
+            <svg className="h-10 w-10" style={{ color: BLUSH }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Check your email</h1>
-            <p className="text-white/55 text-sm mt-2 max-w-xs mx-auto">
-              We've sent a verification link to <span className="text-white font-medium">{form.email}</span>. Click the link to activate your account, then sign in.
+            <p className="text-sm mt-2 max-w-xs mx-auto" style={{ color: PURPLE }}>
+              We've sent a verification link to{" "}
+              <span className="text-white font-medium">{form.email}</span>.
+              Click the link to activate your account, then sign in.
             </p>
           </div>
           <Button
             onClick={() => navigate("/login")}
-            className="w-full h-12 font-semibold rounded-xl"
-            style={{ background: "#5271FF", color: "white" }}
+            className="w-full h-12 font-semibold rounded-xl text-white border-0 hover:opacity-90 transition-opacity"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
           >
             Go to Sign In
           </Button>
@@ -490,19 +489,24 @@ export default function Signup() {
 
     return (
       <div className="text-center space-y-5">
-        <div className="h-20 w-20 rounded-full bg-[#D9F103]/20 flex items-center justify-center mx-auto">
-          <CheckCircle2 className="h-10 w-10 text-[#D9F103]" />
+        <div
+          className="h-20 w-20 rounded-full flex items-center justify-center mx-auto"
+          style={{ background: "rgba(246,184,192,0.2)" }}
+        >
+          <CheckCircle2 className="h-10 w-10" style={{ color: BLUSH }} />
         </div>
         <div>
           <h1 className="text-2xl font-bold text-white">You're all set!</h1>
-          <p className="text-white/55 text-sm mt-2">
-            Welcome to CareScribe, <span className="text-white font-semibold">{form.full_name.split(" ")[0]}</span>. Your account is ready.
+          <p className="text-sm mt-2" style={{ color: PURPLE }}>
+            Welcome to CareScribe,{" "}
+            <span className="text-white font-semibold">{form.full_name.split(" ")[0]}</span>.
+            Your account is ready.
           </p>
         </div>
         <Button
           onClick={() => navigate("/dashboard")}
-          className="w-full h-12 font-semibold rounded-xl"
-          style={{ background: "#D9F103", color: "#0D0D55" }}
+          className="w-full h-12 font-semibold rounded-xl text-white border-0 hover:opacity-90 transition-opacity"
+          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
         >
           Go to Dashboard
         </Button>
@@ -510,14 +514,11 @@ export default function Signup() {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Submit handler
-  // ---------------------------------------------------------------------------
+  // ── Submit handler ───────────────────────────────────────────────────────
 
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      // 1. Register
       const regRes = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -533,7 +534,6 @@ export default function Signup() {
         throw new Error(err.detail || "Registration failed");
       }
 
-      // 2. Auto-login
       let token: string | null = null;
       try {
         const authUser = await login(form.email, form.password);
@@ -545,30 +545,21 @@ export default function Signup() {
           setStep(3);
           return;
         }
-        // Login failed for another reason — just go to login page
-        toast({
-          title: "Account created",
-          description: "Please sign in with your new credentials.",
-        });
+        toast({ title: "Account created", description: "Please sign in with your new credentials." });
         navigate("/login");
         return;
       }
 
-      // 3. Complete onboarding (best-effort)
       if (token) {
         try {
           const onboardingPayload = buildOnboardingPayload(form);
           await fetch("/api/auth/complete-onboarding", {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify(onboardingPayload),
           });
           updateUser({ onboarding_complete: true });
         } catch (e) {
-          // Non-fatal — user is logged in, onboarding data will be missing
           console.warn("Onboarding save failed", e);
         }
       }
@@ -585,14 +576,15 @@ export default function Signup() {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  // ── Render ───────────────────────────────────────────────────────────────
 
-  const TOTAL_STEPS = 3; // 0,1,2 — step 3 is result screen
+  const TOTAL_STEPS = 3;
 
   return (
-    <div className="min-h-screen bg-[#0D0D55] px-4 py-10 flex flex-col items-center">
+    <div
+      className="min-h-screen px-4 py-10 flex flex-col items-center"
+      style={{ background: `linear-gradient(160deg, ${PLUM} 0%, #3D1855 55%, #2A1040 100%)` }}
+    >
       <div className="w-full max-w-sm">
         <Logo />
         {step < TOTAL_STEPS && <StepIndicator current={step} total={TOTAL_STEPS} />}
@@ -686,17 +678,16 @@ function IndependentWorkerFields({
           ]}
         />
       </Field>
-
       <Field label="Types of support you provide" hint="e.g. Personal care, Community access, Life skills">
         <Input
           value={form.iw_support_specialties}
           onChange={(e) => set("iw_support_specialties", e.target.value)}
           placeholder="Personal care, Community access…"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
-
       <Field label="Years of experience" hint="Optional">
         <SelectField
           value={form.iw_years_experience}
@@ -712,7 +703,6 @@ function IndependentWorkerFields({
           ]}
         />
       </Field>
-
       <Field label="Mobile number" hint="For contact and scheduling">
         <Input
           type="tel"
@@ -720,7 +710,8 @@ function IndependentWorkerFields({
           onChange={(e) => set("iw_mobile", e.target.value)}
           placeholder="04xx xxx xxx"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
     </>
@@ -755,7 +746,6 @@ function AlliedHealthFields({
           ]}
         />
       </Field>
-
       <Field label="Registration status" required>
         <SelectField
           value={form.ah_registration_status}
@@ -770,34 +760,34 @@ function AlliedHealthFields({
           ]}
         />
       </Field>
-
       <Field label="Provider number" hint="NDIS or Medicare provider number (optional)">
         <Input
           value={form.ah_provider_number}
           onChange={(e) => set("ah_provider_number", e.target.value)}
           placeholder="e.g. 2123456A"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
-
       <Field label="Areas of speciality" hint="Optional — e.g. Autism, TBI, Mental health">
         <Input
           value={form.ah_specialties}
           onChange={(e) => set("ah_specialties", e.target.value)}
           placeholder="Autism, TBI, Mental health…"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
-
       <Field label="Clinic or practice name" hint="Optional">
         <Input
           value={form.ah_clinic_name}
           onChange={(e) => set("ah_clinic_name", e.target.value)}
           placeholder="Your practice name"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
     </>
@@ -821,10 +811,10 @@ function SmallProviderFields({
           onChange={(e) => set("sp_organisation_name", e.target.value)}
           placeholder="Your organisation name"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
-
       <Field label="Organisation type" required>
         <SelectField
           value={form.sp_provider_type}
@@ -840,7 +830,6 @@ function SmallProviderFields({
           ]}
         />
       </Field>
-
       <Field label="Registration status">
         <SelectField
           value={form.sp_registration_status}
@@ -854,7 +843,6 @@ function SmallProviderFields({
           ]}
         />
       </Field>
-
       <div className="grid grid-cols-2 gap-3">
         <Field label="Team size" required>
           <SelectField
@@ -870,7 +858,6 @@ function SmallProviderFields({
             ]}
           />
         </Field>
-
         <Field label="Participants" required>
           <SelectField
             value={form.sp_participant_volume}
@@ -886,7 +873,6 @@ function SmallProviderFields({
           />
         </Field>
       </div>
-
       <Field label="Contact number">
         <Input
           type="tel"
@@ -894,7 +880,8 @@ function SmallProviderFields({
           onChange={(e) => set("sp_contact_number", e.target.value)}
           placeholder="Organisation phone"
           disabled={submitting}
-          className="h-11 rounded-xl border-gray-200"
+          className="h-11 rounded-xl"
+          style={{ borderColor: BORDER }}
         />
       </Field>
     </>

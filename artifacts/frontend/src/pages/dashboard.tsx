@@ -42,17 +42,17 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-// Palette (matches reference images)
-const LIME = "#D9F103";          // unused now but kept to avoid dead-ref errors
-const PINK = "#FA879F";          // unused now
-const BLUE = "#5271FF";          // unused now
-const NAVY = "#0D0D55";          // unused now
-const ROSE = "#E2457A";          // unused now
-const PERIWINKLE = "#7B8FD4";    // primary action colour
-const BLUSH = "#F4C3D9";         // soft accent fill
-const BLUSH_MID = "#C084A0";     // medium blush (text on blush bg)
-const TEXT_DARK = "#37352F";     // primary text (warm near-black)
-const TEXT_MID = "#718096";      // secondary text
+// CareScribe palette (from reference swatch)
+const LIME = "#D9F103";          // unused — kept to avoid dead-ref errors
+const PINK = "#FA879F";          // unused
+const BLUE = "#5271FF";          // unused
+const NAVY = "#0D0D55";          // unused
+const ROSE = "#E2457A";          // unused
+const PERIWINKLE = "#542269";    // deep plum — primary action / links
+const BLUSH = "#F6B8C0";         // soft blush fills
+const BLUSH_MID = "#F1738A";     // coral — badges / highlights
+const TEXT_DARK = "#37352F";     // warm near-black
+const TEXT_MID = "#7A5E7A";      // purple-tinted secondary
 
 const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 

@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, PenLine } from "lucide-react";
+
+// CareScribe palette
+const PLUM   = "#542269";
+const CORAL  = "#F1738A";
+const BLUSH  = "#F6B8C0";
+const LILAC  = "#EFDCEF";
+const PURPLE = "#DEB2E4";
+const BORDER = "#E8D5E8";
 
 export default function Login() {
   const { login, isLoading } = useAuth();
@@ -42,82 +50,85 @@ export default function Login() {
   const busy = submitting || isLoading;
 
   return (
-    <div className="min-h-screen flex" style={{ background: "#F4F2FB" }}>
+    <div className="min-h-screen flex" style={{ background: LILAC }}>
       {/* ── Left brand panel ── */}
       <div
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between p-12"
-        style={{ background: "linear-gradient(155deg, #2E2A5C 0%, #3D3580 50%, #4A4A9C 100%)" }}
+        className="hidden lg:flex w-[420px] shrink-0 flex-col justify-between p-12"
+        style={{ background: `linear-gradient(160deg, ${PLUM} 0%, #3D1855 55%, #2A1040 100%)` }}
       >
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div
-            className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #F4C3D9 0%, #7B8FD4 100%)" }}
+            className="h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`, boxShadow: `0 4px 14px rgba(241,115,138,0.4)` }}
           >
-            <ShieldCheck size={22} color="white" strokeWidth={2.2} />
+            <PenLine size={20} color="white" strokeWidth={2.3} />
           </div>
           <div>
-            <p className="font-bold text-white text-[15px] leading-tight">Clinical Companion</p>
-            <p className="text-[9px] uppercase tracking-widest text-white/40 font-semibold mt-0.5">NDIS Healthcare</p>
+            <p className="font-bold text-white text-[16px] leading-tight tracking-tight">CareScribe</p>
+            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: PURPLE }}>NDIS Clinical</p>
           </div>
         </div>
 
         {/* Centre copy */}
-        <div className="space-y-5">
-          {/* Blush accent line */}
-          <div className="h-px w-10 rounded-full" style={{ background: "#F4C3D9" }} />
+        <div className="space-y-6">
+          <div className="h-px w-10 rounded-full" style={{ background: BLUSH }} />
 
-          <h2 className="text-[28px] font-bold text-white leading-snug">
+          <h2 className="text-[30px] font-bold text-white leading-snug">
             Compassionate care,{" "}
-            <span style={{ color: "#F4C3D9" }}>beautifully documented.</span>
+            <span style={{ color: BLUSH }}>beautifully documented.</span>
           </h2>
-          <p className="text-white/50 text-sm leading-relaxed max-w-xs">
-            Purpose-built for NDIS support workers and allied health professionals who put their participants first.
+          <p className="text-white/45 text-[14px] leading-relaxed max-w-xs">
+            Purpose-built for NDIS support workers and allied health professionals.
           </p>
 
-          <ul className="space-y-2.5 pt-1">
+          <ul className="space-y-3 pt-1">
             {[
               "AI-powered clinical notes",
               "Real-time compliance checking",
               "Instant audit-ready reports",
               "Voice dictation & translation",
             ].map((f) => (
-              <li key={f} className="flex items-center gap-2.5 text-sm text-white/60">
-                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "#F4C3D9" }} />
+              <li key={f} className="flex items-center gap-2.5 text-[13.5px] text-white/55">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: BLUSH }} />
                 {f}
               </li>
             ))}
           </ul>
+
+          {/* Decorative pill */}
+          <div className="inline-flex items-center gap-2 mt-2 px-3.5 py-2 rounded-full" style={{ background: "rgba(222,178,228,0.12)", border: "1px solid rgba(222,178,228,0.2)" }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: CORAL }} />
+            <span className="text-[11px] font-medium" style={{ color: PURPLE }}>Secure · Encrypted · NDIS-compliant</span>
+          </div>
         </div>
 
-        <p className="text-[11px] text-white/25">Secure, encrypted & NDIS-compliant</p>
+        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>© 2025 CareScribe</p>
       </div>
 
       {/* ── Right: form ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12" style={{ background: "#F4F2FB" }}>
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12" style={{ background: LILAC }}>
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-3 mb-10">
           <div
             className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #F4C3D9, #7B8FD4)" }}
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
           >
-            <ShieldCheck size={22} color="white" strokeWidth={2.2} />
+            <PenLine size={19} color="white" strokeWidth={2.3} />
           </div>
           <div>
-            <p className="font-bold text-[15px]" style={{ color: "#37352F" }}>Clinical Companion</p>
-            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: "#718096" }}>
-              NDIS Healthcare
-            </p>
+            <p className="font-bold text-[15px]" style={{ color: PLUM }}>CareScribe</p>
+            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: "#9B6FAB" }}>NDIS Clinical</p>
           </div>
         </div>
 
         <div
           className="w-full max-w-sm bg-white rounded-2xl px-8 py-10"
-          style={{ border: "1px solid #E8E4F0", boxShadow: "0 4px 24px rgba(123,143,212,0.08)" }}
+          style={{ border: `1px solid ${BORDER}`, boxShadow: `0 4px 28px rgba(84,34,105,0.10)` }}
         >
           <div className="mb-7">
             <h1 className="text-[22px] font-bold" style={{ color: "#37352F" }}>Welcome back</h1>
-            <p className="text-sm mt-1" style={{ color: "#718096" }}>Sign in to your clinical workspace</p>
+            <p className="text-sm mt-1" style={{ color: "#7A5E7A" }}>Sign in to your CareScribe workspace</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -134,8 +145,8 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={busy}
                 required
-                className="h-11 text-[13.5px] rounded-xl bg-white focus-visible:ring-[#7B8FD4]/25 focus-visible:border-[#7B8FD4]"
-                style={{ borderColor: "#E8E4F0" }}
+                className="h-11 text-[13.5px] rounded-xl bg-white"
+                style={{ borderColor: BORDER }}
               />
             </div>
 
@@ -147,7 +158,7 @@ export default function Login() {
                 <button
                   type="button"
                   className="text-[12px] font-medium hover:underline"
-                  style={{ color: "#7B8FD4" }}
+                  style={{ color: CORAL }}
                 >
                   Forgot password?
                 </button>
@@ -162,14 +173,14 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={busy}
                   required
-                  className="h-11 text-[13.5px] rounded-xl bg-white focus-visible:ring-[#7B8FD4]/25 focus-visible:border-[#7B8FD4] pr-11"
-                  style={{ borderColor: "#E8E4F0" }}
+                  className="h-11 text-[13.5px] rounded-xl bg-white pr-11"
+                  style={{ borderColor: BORDER }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-                  style={{ color: "#A0AEC0" }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: PURPLE }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -180,7 +191,7 @@ export default function Login() {
               type="submit"
               disabled={busy || !email || !password}
               className="w-full h-11 text-[13.5px] font-bold rounded-xl mt-1 border-0 text-white hover:opacity-90 transition-opacity"
-              style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}
+              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
               {busy ? (
                 <span className="flex items-center gap-2">
@@ -194,23 +205,25 @@ export default function Login() {
           </form>
 
           <div className="relative flex items-center gap-3 my-5">
-            <div className="flex-1 border-t" style={{ borderColor: "#E8E4F0" }} />
-            <span className="text-xs" style={{ color: "#A0AEC0" }}>or</span>
-            <div className="flex-1 border-t" style={{ borderColor: "#E8E4F0" }} />
+            <div className="flex-1 border-t" style={{ borderColor: BORDER }} />
+            <span className="text-xs" style={{ color: PURPLE }}>or</span>
+            <div className="flex-1 border-t" style={{ borderColor: BORDER }} />
           </div>
 
           <Button
             type="button"
             variant="outline"
-            className="w-full h-11 text-[13.5px] font-semibold rounded-xl bg-white hover:bg-[#F8F6FC]"
-            style={{ borderColor: "#E8E4F0", color: "#37352F" }}
+            className="w-full h-11 text-[13.5px] font-semibold rounded-xl bg-white"
+            style={{ borderColor: BORDER, color: PLUM }}
+            onMouseEnter={e => (e.currentTarget.style.background = "#FAF0FA")}
+            onMouseLeave={e => (e.currentTarget.style.background = "white")}
             onClick={() => navigate("/signup")}
           >
             Create a new account
           </Button>
         </div>
 
-        <p className="mt-6 text-xs text-center" style={{ color: "#A0AEC0" }}>
+        <p className="mt-6 text-xs text-center" style={{ color: "#9B6FAB" }}>
           Secure access for NDIS support workers and allied health professionals.
         </p>
       </div>
