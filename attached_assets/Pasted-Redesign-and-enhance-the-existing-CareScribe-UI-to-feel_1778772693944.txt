@@ -1,0 +1,207 @@
+Redesign and enhance the existing CareScribe UI to feel more visually engaging, modern, feminine, and emotionally welcoming — inspired by the soft illustrated onboarding/dashboard style shown in the reference image.
+
+The goal is NOT to copy the onboarding layout directly, but to bring the same:
+
+warmth
+visual friendliness
+soft gradients
+illustrated feel
+modern card styling
+inviting experience
+
+into a professional B2B NDIS provider platform.
+
+CareScribe is used daily by:
+
+NDIS providers
+support workers
+coordinators
+admins
+organisations with 50–70+ team members
+
+So the UI must remain:
+
+operationally efficient
+clinically trustworthy
+scalable for enterprise workflows
+easy to navigate during busy shifts
+
+while also feeling:
+
+modern
+calm
+soft
+welcoming
+less corporate
+less “generic admin dashboard”
+🎨 DESIGN DIRECTION
+
+Use the first reference image as inspiration for:
+
+soft gradients
+curved section transitions
+illustrated elements
+layered pastel colors
+modern feminine UI
+emotionally welcoming visuals
+
+But adapt it into a real healthcare SaaS workspace.
+
+🌸 VISUAL STYLE
+Introduce:
+soft illustrated healthcare/NDIS graphics
+friendly empty states
+supportive visual storytelling
+curved cards and panels
+layered backgrounds
+subtle decorative shapes
+rounded containers
+modern gradients
+Color Palette
+
+Use:
+
+blush pinks
+muted lavender
+periwinkle blue
+soft sage
+warm white backgrounds
+
+Avoid:
+
+harsh white backgrounds
+dark corporate greys
+overly technical UI colors
+🧠 UX GOAL
+
+The platform should feel like:
+
+“A supportive care workspace that helps teams stay organised and compliant.”
+
+NOT:
+
+“A cold enterprise admin dashboard.”
+
+📍DASHBOARD REDESIGN
+
+Refine the dashboard layout to feel more alive and visually balanced.
+
+Improve:
+section hierarchy
+spacing
+visual flow
+card depth
+whitespace usage
+responsiveness
+overall warmth
+Add:
+soft healthcare/NDIS illustrations
+welcoming banner sections
+supportive operational summaries
+visual cards with gradients/icons
+cleaner quick action layouts
+modern session timeline cards
+Dashboard Should Include:
+greeting section
+operational summary
+upcoming sessions
+care reminders
+compliance notices
+quick actions
+recent participant activity
+
+But present them in a softer and more modern way.
+
+✨ HERO / TOP SECTION
+
+Redesign the top dashboard section to feel premium and welcoming.
+
+Include:
+
+soft gradient background
+optional illustration of support workers/care interactions
+friendly operational messaging
+important actions (Start Session, Add Participant)
+modern rounded CTA buttons
+
+The top section should feel similar to a modern wellness or healthcare workspace.
+
+🧱 CARD REDESIGN
+
+Replace flat admin-style cards with:
+
+layered cards
+softer shadows
+rounded corners
+subtle gradients
+better spacing
+cleaner typography
+
+Cards should feel:
+
+modern
+touch-friendly
+visually engaging
+👥 PARTICIPANTS PAGE
+
+Make participant pages feel:
+
+more human-centered
+visually structured
+easier to scan
+
+Add:
+
+profile headers
+soft avatar styling
+timeline-style notes
+better tab hierarchy
+supportive empty states
+📝 SESSIONS & LIVE SESSION
+
+This is the core workflow.
+
+Redesign sessions to feel:
+
+calm
+guided
+focused
+low stress
+Improve:
+note-taking layout
+workflow progression
+session cards
+compliance prompts
+live indicators
+action placement
+
+Use:
+
+timeline layouts
+structured progress sections
+visual completion states
+⚠️ INCIDENTS & COMPLIANCE
+
+Keep these pages professional but softer visually.
+
+Improve:
+
+severity styling
+structured layouts
+readability
+spacing
+
+Avoid:
+
+overly harsh warning colors
+dense audit-style interfaces
+📱 RESPONSIVENESS
+
+Ensure all redesigned layouts work smoothly on:
+
+desktop
+laptop
+tablet
+mobile
+
+Buttons and cards should feel touch-friendly and modern.

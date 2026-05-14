@@ -166,8 +166,8 @@ export default function Dashboard() {
         <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full pointer-events-none"
           style={{ background: `${PLUM}08`, transform: "translate(-20%, 30%)", filter: "blur(24px)" }} />
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex-1">
             <div className="flex items-center gap-2 mb-1.5">
               <Sparkles size={14} style={{ color: CORAL }} />
               <span className="text-[12px] font-semibold" style={{ color: T3 }}>
@@ -182,24 +182,48 @@ export default function Dashboard() {
                 ? "Loading your sessions…"
                 : `${thisWeek.length} session${thisWeek.length !== 1 ? "s" : ""} this week · ${missingNotes > 0 ? `${missingNotes} note${missingNotes !== 1 ? "s" : ""} still needed` : "All notes complete"}`}
             </p>
+            <div className="flex items-center gap-2.5 mt-4">
+              <Link href="/sessions/new">
+                <button
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90"
+                  style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                >
+                  <Play size={13} fill="white" /> Start Session
+                </button>
+              </Link>
+              <Link href="/patients/new">
+                <button
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border bg-white/70 transition-all duration-150 hover:bg-white"
+                  style={{ borderColor: BORDER, color: T2 }}
+                >
+                  <Plus size={13} /> Add Participant
+                </button>
+              </Link>
+            </div>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            <Link href="/sessions/new">
-              <button
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-              >
-                <Play size={13} fill="white" /> Start Session
-              </button>
-            </Link>
-            <Link href="/patients/new">
-              <button
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border bg-white transition-all duration-150 hover:shadow-sm"
-                style={{ borderColor: BORDER, color: T2 }}
-              >
-                <Plus size={13} /> Add Participant
-              </button>
-            </Link>
+
+          {/* Soft care illustration — desktop only */}
+          <div className="hidden sm:flex items-center justify-center shrink-0 opacity-90">
+            <svg width="140" height="120" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              {/* Background circle */}
+              <circle cx="70" cy="60" r="52" fill="rgba(241,115,138,0.07)" />
+              <circle cx="70" cy="60" r="40" fill="rgba(84,34,105,0.05)" />
+              {/* Clipboard */}
+              <rect x="42" y="22" width="56" height="72" rx="10" fill="white" fillOpacity="0.9" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5"/>
+              {/* Clip */}
+              <rect x="55" y="16" width="30" height="14" rx="7" fill="rgba(241,115,138,0.18)" stroke="rgba(241,115,138,0.5)" strokeWidth="1.5"/>
+              {/* Heart */}
+              <path d="M70 72 C70 72 56 63 56 54 C56 49 59.5 46 63 48.5 C66.5 46 70 46 70 46 C70 46 73.5 46 77 48.5 C80.5 46 84 49 84 54 C84 63 70 72 70 72Z" fill="rgba(241,115,138,0.25)" stroke="#F1738A" strokeWidth="1.5" strokeLinejoin="round"/>
+              {/* Check in heart */}
+              <path d="M63 56 L67 61 L77 52" stroke="#F1738A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              {/* Lines */}
+              <line x1="50" y1="84" x2="90" y2="84" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="50" y1="90" x2="78" y2="90" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
+              {/* Sparkle top right */}
+              <circle cx="104" cy="28" r="3" fill="rgba(241,115,138,0.4)"/>
+              <circle cx="110" cy="48" r="2" fill="rgba(84,34,105,0.25)"/>
+              <circle cx="32" cy="72" r="2.5" fill="rgba(241,115,138,0.3)"/>
+            </svg>
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ import {
   useUpdateParticipant,
   type NDISGoal,
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -463,35 +463,59 @@ export default function Patients() {
                 </div>
               ))
           ) : filteredParticipants.length === 0 ? (
-            <div className="text-center py-8 text-[13px]" style={{ color: "#7A6A8A" }}>
-              No participants found
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ background: "rgba(84,34,105,0.07)" }}>
+                <Users className="h-5 w-5" style={{ color: "#542269", opacity: 0.5 }} />
+              </div>
+              <p className="text-[13px] font-medium" style={{ color: "#4A3D5A" }}>No participants found</p>
+              <p className="text-[12px] text-center leading-relaxed" style={{ color: "#7A6A8A" }}>
+                Try adjusting your search or add a new participant
+              </p>
             </div>
           ) : (
-            filteredParticipants.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => {
-                  setSelectedId(p.id);
-                  setShowMobileDetail(true);
-                }}
-                data-testid={`button-participant-${p.id}`}
-                className="w-full text-left p-3 rounded-xl transition-all duration-150 flex flex-col gap-1.5 border"
-                style={{
-                  background: selectedId === p.id ? "rgba(84,34,105,0.07)" : "transparent",
-                  borderColor: selectedId === p.id ? "rgba(84,34,105,0.20)" : "transparent",
-                }}
-              >
-                <div className="flex justify-between items-start w-full">
-                  <span className="font-medium text-[13px]" style={{ color: selectedId === p.id ? "#542269" : "#1C1626" }}>{p.full_name}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${statusBadge(p.plan_status)}`}>
-                    {p.plan_status}
-                  </span>
-                </div>
-                <span className="text-[11px] font-mono" style={{ color: "#7A6A8A" }}>
-                  {p.ndis_number}
-                </span>
-              </button>
-            ))
+            filteredParticipants.map((p) => {
+              const initials = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
+                  data-testid={`button-participant-${p.id}`}
+                  className="w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border"
+                  style={{
+                    background: selectedId === p.id ? "rgba(84,34,105,0.07)" : "transparent",
+                    borderColor: selectedId === p.id ? "rgba(84,34,105,0.20)" : "transparent",
+                  }}
+                >
+                  {/* Avatar */}
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
+                    style={{
+                      background: selectedId === p.id
+                        ? "linear-gradient(135deg, #F1738A, #542269)"
+                        : "rgba(84,34,105,0.09)",
+                      color: selectedId === p.id ? "white" : "#542269",
+                    }}
+                  >
+                    {initials}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-1">
+                      <span className="font-semibold text-[13px] truncate" style={{ color: selectedId === p.id ? "#542269" : "#1C1626" }}>
+                        {p.full_name}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${statusBadge(p.plan_status)}`}>
+                        {p.plan_status}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono block mt-0.5" style={{ color: "#7A6A8A" }}>
+                      {p.ndis_number}
+                    </span>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       </div>
@@ -530,9 +554,17 @@ export default function Patients() {
             </div>
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-3" style={{ color: "#7A6A8A" }}>
-            <Users className="h-12 w-12 opacity-20" />
-            <p className="text-[13px]">Select a participant to view details</p>
+          <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
+              style={{ background: "rgba(84,34,105,0.07)" }}>
+              <Users className="h-7 w-7" style={{ color: "#542269", opacity: 0.4 }} />
+            </div>
+            <div>
+              <p className="text-[15px] font-semibold" style={{ color: "#4A3D5A" }}>Select a participant</p>
+              <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
+                Choose someone from the list to view their clinical profile, NDIS plan, and session history.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -957,25 +989,27 @@ function GoalsManagementCard({
   const archivedGoals = goals.filter((g) => g.status === "archived");
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-            <Target className="h-4 w-4" /> NDIS Goals
-          </CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 text-xs"
-            onClick={() => setIsAdding(true)}
-            disabled={isAdding}
-            data-testid="button-add-goal"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add Goal
-          </Button>
+    <div className="rounded-2xl overflow-hidden bg-white"
+      style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="flex items-center justify-between px-5 py-4 border-b"
+        style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+        <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: "#1C1626" }}>
+          <Target className="h-4 w-4" style={{ color: "#542269" }} />
+          NDIS Goals
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1 text-xs rounded-lg"
+          style={{ borderColor: "rgba(232,213,232,0.7)" }}
+          onClick={() => setIsAdding(true)}
+          disabled={isAdding}
+          data-testid="button-add-goal"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Goal
+        </Button>
+      </div>
+      <div className="p-5 space-y-3">
         {isAdding && (
           <div className="flex gap-2">
             <Input
@@ -1139,8 +1173,8 @@ function GoalsManagementCard({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1260,38 +1294,51 @@ function ParticipantDetail({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+      <div className="px-6 pt-5 pb-5 border-b shrink-0"
+        style={{ borderColor: "rgba(232,213,232,0.5)", background: "linear-gradient(to bottom, rgba(246,244,251,0.6), white)" }}>
         <div className="flex justify-between items-start gap-4">
-          <div>
-            <h2 className="text-[22px] font-bold tracking-tight mb-1" style={{ color: "#1C1626" }}>
-              {participant.full_name}
-            </h2>
-            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[13px]" style={{ color: "#4A3D5A" }}>
-              <span className="font-mono px-2 py-0.5 rounded text-[11px]"
-                style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
-                {participant.ndis_number}
-              </span>
-              <span className="hidden sm:inline">•</span>
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" /> DOB:{" "}
-                {safeFormat(participant.date_of_birth)}
-              </span>
-              {participant.email && (
-                <span className="text-xs">{String(participant.email)}</span>
-              )}
-              {participant.phone && (
-                <span className="text-xs">{String(participant.phone)}</span>
-              )}
+          <div className="flex items-center gap-4 min-w-0">
+            {/* Participant avatar */}
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-[20px] font-bold shrink-0 text-white"
+              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+            >
+              {String(participant.full_name ?? "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[20px] font-bold tracking-tight leading-tight truncate" style={{ color: "#1C1626" }}>
+                {participant.full_name}
+              </h2>
+              <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 mt-1.5 text-[12px]" style={{ color: "#4A3D5A" }}>
+                <span className="font-mono px-2 py-0.5 rounded text-[11px]"
+                  style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
+                  {participant.ndis_number}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  DOB: {safeFormat(participant.date_of_birth)}
+                </span>
+                {participant.email && (
+                  <span className="hidden sm:inline truncate max-w-[160px]">{String(participant.email)}</span>
+                )}
+                {participant.phone && (
+                  <span>{String(participant.phone)}</span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link href={`/participants/${id}/edit`}>
-              <Button size="sm" variant="outline" className="gap-1.5">
+              <Button size="sm" variant="outline" className="gap-1.5 rounded-xl"
+                style={{ borderColor: "rgba(232,213,232,0.8)" }}>
                 <Edit className="h-3.5 w-3.5" /> Edit
               </Button>
             </Link>
             <Link href={`/sessions/new?participantId=${id}`}>
-              <Button size="sm">New Session</Button>
+              <Button size="sm" className="rounded-xl"
+                style={{ background: "linear-gradient(135deg, #F1738A, #542269)", border: "none" }}>
+                New Session
+              </Button>
             </Link>
           </div>
         </div>
@@ -1331,75 +1378,59 @@ function ParticipantDetail({
           className="flex-1 overflow-y-auto p-6 space-y-6 mt-0"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <FileText className="h-4 w-4" /> Plan Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Status</span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded border font-medium ${statusBadge(participant.plan_status ?? "")}`}
-                  >
-                    {String(participant.plan_status ?? "")
-                      .charAt(0)
-                      .toUpperCase() +
-                      String(participant.plan_status ?? "").slice(1)}
+            {/* Plan Details card */}
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                <FileText className="h-4 w-4" style={{ color: "#542269" }} /> Plan Details
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="flex justify-between items-center text-[13px]">
+                  <span style={{ color: "#7A6A8A" }}>Status</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
+                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Plan Period</span>
-                  <span className="font-medium text-right">
-                    {safeFormat(participant.plan_start_date, "MMM yyyy")} –{" "}
-                    {safeFormat(participant.plan_end_date, "MMM yyyy")}
+                <div className="flex justify-between items-center text-[13px]">
+                  <span style={{ color: "#7A6A8A" }}>Plan Period</span>
+                  <span className="font-medium text-right" style={{ color: "#1C1626" }}>
+                    {safeFormat(participant.plan_start_date, "MMM yyyy")} – {safeFormat(participant.plan_end_date, "MMM yyyy")}
                   </span>
                 </div>
                 <div className="pt-1">
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="text-slate-500">Budget Used</span>
-                    <span className="font-medium">{budgetPct}%</span>
+                  <div className="flex justify-between text-[13px] mb-2">
+                    <span style={{ color: "#7A6A8A" }}>Budget Used</span>
+                    <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
                   </div>
-                  <Progress
-                    value={budgetPct}
-                    className={`h-2 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : ""}`}
-                  />
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>
-                      $
-                      {(participant.used_budget as number)?.toLocaleString() ??
-                        "0"}{" "}
-                      used
-                    </span>
-                    <span>
-                      $
-                      {(participant.total_budget as number)?.toLocaleString() ??
-                        "0"}{" "}
-                      total
-                    </span>
+                  <Progress value={budgetPct}
+                    className={`h-2 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-[#542269]"}`} />
+                  <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
+                    <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
+                    <span>${(participant.total_budget as number)?.toLocaleString() ?? "0"} total</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                  <Activity className="h-4 w-4" /> Clinical Profile
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
+            {/* Clinical Profile card */}
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                <Activity className="h-4 w-4" style={{ color: "#542269" }} /> Clinical Profile
+              </div>
+              <div className="p-5 space-y-4 text-[13px]">
                 <div>
-                  <span className="text-slate-500 block mb-1">
+                  <span className="block mb-1 text-[11px] uppercase tracking-wide font-medium" style={{ color: "#7A6A8A" }}>
                     Primary Disability
                   </span>
-                  <span className="font-medium">
+                  <span className="font-medium" style={{ color: "#1C1626" }}>
                     {String(participant.primary_disability || "Not specified")}
                   </span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           <GoalsManagementCard
@@ -1495,87 +1526,53 @@ function ParticipantDetail({
           </div>
 
           {/* Overall budget from patient record */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" /> Plan Overview
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="rounded-2xl bg-white overflow-hidden"
+            style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+              style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+              <TrendingUp className="h-4 w-4" style={{ color: "#542269" }} /> Plan Overview
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
-                  <span className="text-slate-500 block mb-0.5 text-xs uppercase tracking-wide">
-                    Status
-                  </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded border font-medium ${statusBadge(participant.plan_status ?? "")}`}
-                  >
-                    {String(participant.plan_status ?? "")
-                      .charAt(0)
-                      .toUpperCase() +
-                      String(participant.plan_status ?? "").slice(1)}
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Status</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
+                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block mb-0.5 text-xs uppercase tracking-wide">
-                    Plan Start
-                  </span>
-                  <span className="font-medium">
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan Start</span>
+                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
                     {safeFormat(participant.plan_start_date, "dd MMM yyyy")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block mb-0.5 text-xs uppercase tracking-wide">
-                    Plan End
-                  </span>
-                  <span className="font-medium">
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan End</span>
+                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
                     {safeFormat(participant.plan_end_date, "dd MMM yyyy")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block mb-0.5 text-xs uppercase tracking-wide">
-                    Total Funding
-                  </span>
-                  <span className="font-semibold text-slate-900 dark:text-white">
-                    $
-                    {(participant.total_budget as number)?.toLocaleString() ??
-                      "0"}
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Total Funding</span>
+                  <span className="font-bold text-[14px]" style={{ color: "#542269" }}>
+                    ${(participant.total_budget as number)?.toLocaleString() ?? "0"}
                   </span>
                 </div>
               </div>
               <div>
-                <div className="flex justify-between text-sm mb-1.5">
-                  <span className="text-slate-500">
-                    Overall Budget Utilisation
-                  </span>
-                  <span className="font-semibold">{budgetPct}%</span>
+                <div className="flex justify-between text-[13px] mb-2">
+                  <span style={{ color: "#7A6A8A" }}>Overall Budget Utilisation</span>
+                  <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
                 </div>
-                <Progress
-                  value={budgetPct}
-                  className={`h-3 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"}`}
-                />
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
-                  <span>
-                    $
-                    {(participant.used_budget as number)?.toLocaleString() ??
-                      "0"}{" "}
-                    used
-                  </span>
-                  <span>
-                    $
-                    {Math.max(
-                      0,
-                      ((participant.total_budget as number) ?? 0) -
-                        ((participant.used_budget as number) ?? 0),
-                    ).toLocaleString()}{" "}
-                    remaining
-                  </span>
+                <Progress value={budgetPct}
+                  className={`h-2.5 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"}`} />
+                <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
+                  <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
+                  <span>${Math.max(0, ((participant.total_budget as number) ?? 0) - ((participant.used_budget as number) ?? 0)).toLocaleString()} remaining</span>
                 </div>
               </div>
               {budgetPct >= 80 && (
-                <div
-                  className={`flex items-start gap-2 text-sm p-3 rounded-lg ${budgetPct >= 100 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}
-                >
+                <div className={`flex items-start gap-2 text-[13px] p-3 rounded-xl ${budgetPct >= 100 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                   <span>
                     {budgetPct >= 100
@@ -1584,66 +1581,55 @@ function ParticipantDetail({
                   </span>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Category budget breakdown */}
           {budgetSummary?.has_plan &&
           budgetSummary.budgets &&
           budgetSummary.budgets.length > 0 ? (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" /> Budget by Support Category
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5">
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                <BarChart3 className="h-4 w-4" style={{ color: "#542269" }} /> Budget by Support Category
+              </div>
+              <div className="p-5 space-y-5">
                 {budgetSummary.budgets.map((b) => (
                   <div key={b.category}>
-                    <div className="flex justify-between items-center mb-1.5">
-                      <div>
-                        <span className="font-medium text-sm">
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[13px]" style={{ color: "#1C1626" }}>
                           {b.category_label}
                         </span>
-                        <span
-                          className={`ml-2 text-[10px] px-1.5 py-0.5 rounded border font-medium ${
-                            b.percent_used >= 100
-                              ? "bg-red-50 text-red-700 border-red-200"
-                              : b.percent_used >= 80
-                                ? "bg-amber-50 text-amber-700 border-amber-200"
-                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          }`}
-                        >
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${
+                          b.percent_used >= 100
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : b.percent_used >= 80
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        }`}>
                           {b.percent_used.toFixed(0)}%
                         </span>
                       </div>
-                      <div className="text-right text-sm">
-                        <span className="font-semibold">
-                          ${b.used.toLocaleString()}
-                        </span>
-                        <span className="text-slate-400">
-                          {" "}
-                          / ${b.allocated.toLocaleString()}
-                        </span>
+                      <div className="text-right text-[13px]">
+                        <span className="font-semibold" style={{ color: "#1C1626" }}>${b.used.toLocaleString()}</span>
+                        <span style={{ color: "#7A6A8A" }}> / ${b.allocated.toLocaleString()}</span>
                       </div>
                     </div>
-                    <Progress
-                      value={Math.min(100, b.percent_used)}
+                    <Progress value={Math.min(100, b.percent_used)}
                       className={`h-2 ${
-                        b.percent_used >= 100
-                          ? "[&>div]:bg-red-500"
-                          : b.percent_used >= 80
-                            ? "[&>div]:bg-amber-500"
-                            : "[&>div]:bg-emerald-500"
-                      }`}
-                    />
-                    <div className="text-xs text-slate-500 mt-0.5 text-right">
+                        b.percent_used >= 100 ? "[&>div]:bg-red-500"
+                          : b.percent_used >= 80 ? "[&>div]:bg-amber-500"
+                          : "[&>div]:bg-emerald-500"
+                      }`} />
+                    <div className="text-[11px] mt-1 text-right" style={{ color: "#7A6A8A" }}>
                       ${b.remaining.toLocaleString()} remaining
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ) : (
             <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center text-slate-400">
               <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-30" />
