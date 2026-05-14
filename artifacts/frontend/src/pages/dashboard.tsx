@@ -43,10 +43,11 @@ import {
 } from "lucide-react";
 
 // Brand colours
-const LIME = "#D9F103";
-const PINK = "#FA879F";
+const LIME = "#D9F103";  // kept for data only (billing)
+const PINK = "#FA879F";  // kept for data badges
 const BLUE = "#5271FF";
 const NAVY = "#0D0D55";
+const ROSE = "#E2457A";  // primary SaaS accent
 
 const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 
@@ -105,10 +106,10 @@ function DonutChart({ compliant, atRisk, nonCompliant }: { compliant: number; at
   return (
     <div className="relative inline-flex">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#FFF0F5" strokeWidth="13" />
-        {arc(compliant, 0, LIME, "c")}
-        {arc(atRisk, compliant / total, PINK, "a")}
-        {arc(nonCompliant, (compliant + atRisk) / total, "#F87171", "n")}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#F1F5F9" strokeWidth="13" />
+        {arc(compliant, 0, "#22C55E", "c")}
+        {arc(atRisk, compliant / total, "#F59E0B", "a")}
+        {arc(nonCompliant, (compliant + atRisk) / total, "#EF4444", "n")}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold text-[#0D0D55]">
@@ -350,17 +351,16 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <Link href="/participants/new">
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm"
-              style={{ background: `${PINK}18`, color: PINK, border: `1px solid ${PINK}30` }}>
-              <UserPlus size={15} />
-              Create Participant
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-[#0D0D55] hover:bg-slate-50 transition-colors shadow-sm">
+              <UserPlus size={14} />
+              Add Participant
             </button>
           </Link>
           <Link href="/sessions/new">
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-[#0D0D55] hover:opacity-90 transition-opacity shadow-sm"
-              style={{ background: "linear-gradient(90deg, #D9F103 0%, #c8de00 100%)" }}>
-              <Play size={14} className="fill-current" />
-              Start New Session
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-[13px] font-semibold hover:opacity-90 transition-opacity shadow-sm"
+              style={{ background: "linear-gradient(135deg, #E2457A 0%, #C03068 100%)" }}>
+              <Play size={13} className="fill-current" />
+              New Session
             </button>
           </Link>
         </div>
@@ -371,16 +371,16 @@ export default function Dashboard() {
         <StatCard
           label="Sessions today"
           value={todaySessions.length}
-          icon={<Calendar size={20} style={{ color: PINK }} />}
-          bg={`${PINK}18`}
+          icon={<Calendar size={19} style={{ color: ROSE }} />}
+          bg="#FFF0F5"
           textColor="text-[#0D0D55]"
           href="/sessions"
         />
         <StatCard
           label="Ready to bill"
           value={readyCount}
-          icon={<CheckCircle2 size={20} style={{ color: "#5a7000" }} />}
-          bg={`${LIME}50`}
+          icon={<CheckCircle2 size={19} style={{ color: "#16A34A" }} />}
+          bg="#F0FDF4"
           textColor="text-[#0D0D55]"
           sub={readyCount > 0 ? "Compliant & complete" : ""}
           href="/sessions"
@@ -388,17 +388,17 @@ export default function Dashboard() {
         <StatCard
           label="Need attention"
           value={needsAttentionCount}
-          icon={<AlertCircle size={20} style={{ color: PINK }} />}
-          bg={`${PINK}14`}
-          textColor={needsAttentionCount > 0 ? "text-[#c0415c]" : "text-[#0D0D55]"}
+          icon={<AlertCircle size={19} style={{ color: "#D97706" }} />}
+          bg="#FFFBEB"
+          textColor={needsAttentionCount > 0 ? "text-amber-700" : "text-[#0D0D55]"}
           href="/compliance"
         />
         <StatCard
-          label="Incomplete (prior 7 days)"
+          label="Incomplete (prior days)"
           value={pastIncomplete.length}
-          icon={<Clock size={20} style={{ color: "#EA580C" }} />}
-          bg="#FFF7ED"
-          textColor={pastIncomplete.length > 0 ? "text-orange-600" : "text-[#0D0D55]"}
+          icon={<Clock size={19} style={{ color: "#DC2626" }} />}
+          bg="#FEF2F2"
+          textColor={pastIncomplete.length > 0 ? "text-red-600" : "text-[#0D0D55]"}
           href="/sessions"
         />
       </div>
@@ -472,9 +472,9 @@ export default function Dashboard() {
                 <DonutChart compliant={compliantCount} atRisk={atRiskCount} nonCompliant={nonCompliantCount} />
                 <div className="space-y-2.5 flex-1">
                   {[
-                    { label: "Compliant", count: compliantCount, color: LIME },
-                    { label: "Needs Attention", count: atRiskCount, color: PINK },
-                    { label: "At Risk", count: nonCompliantCount, color: "#F87171" },
+                    { label: "Compliant", count: compliantCount, color: "#22C55E" },
+                    { label: "Needs Attention", count: atRiskCount, color: "#F59E0B" },
+                    { label: "At Risk", count: nonCompliantCount, color: "#EF4444" },
                     { label: "Not Assessed", count: weekSessions.filter(s => s.compliance_score === null || s.compliance_score === undefined).length, color: "#CBD5E1" },
                   ].map(({ label, count, color }) => (
                     <div key={label} className="flex items-center gap-2">
@@ -529,43 +529,43 @@ export default function Dashboard() {
             href="/sessions/new"
             label="New Session"
             icon={<Calendar size={22} />}
-            bg={`${LIME}45`}
-            iconColor="#4d6000"
+            bg="#FFF0F5"
+            iconColor={ROSE}
           />
           <QuickActionBtn
             href="/participants/new"
             label="Add Participant"
             icon={<UserPlus size={22} />}
-            bg={`${PINK}20`}
-            iconColor={PINK}
+            bg="#FFF0F5"
+            iconColor={ROSE}
           />
           <QuickActionBtn
             href="/incidents/new"
             label="Report Incident"
             icon={<AlertTriangle size={22} />}
-            bg="#FFF7ED"
-            iconColor="#EA580C"
+            bg="#FFFBEB"
+            iconColor="#D97706"
           />
           <QuickActionBtn
             href="/sessions"
             label="Upload Document"
             icon={<UploadCloud size={22} />}
-            bg={`${BLUE}14`}
-            iconColor={BLUE}
+            bg="#F0F9FF"
+            iconColor="#0284C7"
           />
           <QuickActionBtn
             href="/compliance"
             label="View Reports"
             icon={<FileBarChart2 size={22} />}
-            bg={`${PINK}12`}
-            iconColor={PINK}
+            bg="#F0FDF4"
+            iconColor="#16A34A"
           />
           <QuickActionBtn
             href="/patients"
             label="All Participants"
             icon={<Users size={22} />}
-            bg={`${LIME}35`}
-            iconColor="#4D5E00"
+            bg="#F8F0FF"
+            iconColor="#7C3AED"
           />
         </div>
       </div>
