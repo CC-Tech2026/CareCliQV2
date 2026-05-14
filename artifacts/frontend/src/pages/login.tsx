@@ -1,41 +1,30 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, PenLine } from "lucide-react";
+import { Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
 
 // CareScribe palette
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const BLUSH  = "#F6B8C0";
-const LILAC  = "#EFDCEF";
-const PURPLE = "#DEB2E4";
-const BORDER = "#E8D5E8";
+const PLUM  = "#542269";
+const CORAL = "#F1738A";
 
 export default function Login() {
   const { login, isLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+  const [busy, setBusy]         = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email || !password) return;
-    setSubmitting(true);
+    setBusy(true);
     try {
-      const user = await login(email, password);
-      if (user && !user.onboarding_complete) {
-        navigate("/signup");
-      } else {
-        navigate("/dashboard");
-      }
+      const u = await login(email, password);
+      navigate(u && !u.onboarding_complete ? "/signup" : "/dashboard");
     } catch (err) {
       toast({
         title: "Sign in failed",
@@ -43,189 +32,146 @@ export default function Login() {
         variant: "destructive",
       });
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   }
 
-  const busy = submitting || isLoading;
+  const loading = busy || isLoading;
 
   return (
-    <div className="min-h-screen flex" style={{ background: LILAC }}>
-      {/* ── Left brand panel ── */}
-      <div
-        className="hidden lg:flex w-[420px] shrink-0 flex-col justify-between p-12"
-        style={{ background: `linear-gradient(160deg, ${PLUM} 0%, #3D1855 55%, #2A1040 100%)` }}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3">
-          <div
-            className="h-11 w-11 rounded-xl flex items-center justify-center"
-            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`, boxShadow: `0 4px 14px rgba(241,115,138,0.4)` }}
-          >
-            <PenLine size={20} color="white" strokeWidth={2.3} />
-          </div>
-          <div>
-            <p className="font-bold text-white text-[16px] leading-tight tracking-tight">CareScribe</p>
-            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: PURPLE }}>NDIS Clinical</p>
-          </div>
+    /*
+     * Full-screen mobile-first layout:
+     *  – Top section: coral/plum gradient with wordmark (~38% height)
+     *  – Bottom section: white card with form (~62% height), rounded top corners
+     */
+    <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)` }}>
+
+      {/* ── Top: brand area ── */}
+      <div className="flex flex-col items-center justify-center flex-[0_0_38%] min-h-[220px] px-6 pb-8 pt-16 text-white text-center">
+        <h1 className="text-[36px] font-black tracking-tight leading-none">
+          Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
+        </h1>
+        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold mt-2 opacity-60">
+          NDIS Clinical
+        </p>
+
+        {/* Decorative dots */}
+        <div className="flex gap-2 mt-8 opacity-30">
+          {[1,2,3].map(i => <span key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
         </div>
-
-        {/* Centre copy */}
-        <div className="space-y-6">
-          <div className="h-px w-10 rounded-full" style={{ background: BLUSH }} />
-
-          <h2 className="text-[30px] font-bold text-white leading-snug">
-            Compassionate care,{" "}
-            <span style={{ color: BLUSH }}>beautifully documented.</span>
-          </h2>
-          <p className="text-white/45 text-[14px] leading-relaxed max-w-xs">
-            Purpose-built for NDIS support workers and allied health professionals.
-          </p>
-
-          <ul className="space-y-3 pt-1">
-            {[
-              "AI-powered clinical notes",
-              "Real-time compliance checking",
-              "Instant audit-ready reports",
-              "Voice dictation & translation",
-            ].map((f) => (
-              <li key={f} className="flex items-center gap-2.5 text-[13.5px] text-white/55">
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: BLUSH }} />
-                {f}
-              </li>
-            ))}
-          </ul>
-
-          {/* Decorative pill */}
-          <div className="inline-flex items-center gap-2 mt-2 px-3.5 py-2 rounded-full" style={{ background: "rgba(222,178,228,0.12)", border: "1px solid rgba(222,178,228,0.2)" }}>
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: CORAL }} />
-            <span className="text-[11px] font-medium" style={{ color: PURPLE }}>Secure · Encrypted · NDIS-compliant</span>
-          </div>
-        </div>
-
-        <p className="text-[11px]" style={{ color: "rgba(255,255,255,0.2)" }}>© 2025 CareScribe</p>
       </div>
 
-      {/* ── Right: form ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12" style={{ background: LILAC }}>
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-3 mb-10">
-          <div
-            className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
-          >
-            <PenLine size={19} color="white" strokeWidth={2.3} />
-          </div>
-          <div>
-            <p className="font-bold text-[15px]" style={{ color: PLUM }}>CareScribe</p>
-            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: "#9B6FAB" }}>NDIS Clinical</p>
-          </div>
-        </div>
-
-        <div
-          className="w-full max-w-sm bg-white rounded-2xl px-8 py-10"
-          style={{ border: `1px solid ${BORDER}`, boxShadow: `0 4px 28px rgba(84,34,105,0.10)` }}
-        >
+      {/* ── Bottom: form card ── */}
+      <div
+        className="flex-1 bg-white px-6 pt-8 pb-10 flex flex-col"
+        style={{ borderRadius: "28px 28px 0 0", boxShadow: "0 -8px 40px rgba(84,34,105,0.15)" }}
+      >
+        <div className="w-full max-w-sm mx-auto flex flex-col flex-1">
           <div className="mb-7">
-            <h1 className="text-[22px] font-bold" style={{ color: "#37352F" }}>Welcome back</h1>
-            <p className="text-sm mt-1" style={{ color: "#7A5E7A" }}>Sign in to your CareScribe workspace</p>
+            <h2 className="text-[24px] font-black" style={{ color: PLUM }}>Welcome back</h2>
+            <p className="text-[14px] mt-1" style={{ color: "#9B6FAB" }}>Sign in to continue</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 flex-1">
+            {/* Email */}
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-[13px] font-semibold" style={{ color: "#37352F" }}>
+              <label className="text-[12px] font-bold uppercase tracking-wider" style={{ color: PLUM }}>
                 Email address
-              </Label>
-              <Input
-                id="email"
+              </label>
+              <input
                 type="email"
                 autoComplete="email"
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={busy}
+                onChange={e => setEmail(e.target.value)}
+                disabled={loading}
                 required
-                className="h-11 text-[13.5px] rounded-xl bg-white"
-                style={{ borderColor: BORDER }}
+                className="w-full h-12 px-4 rounded-2xl text-[14px] outline-none transition-all"
+                style={{
+                  background: "#FAF5FA",
+                  border: "1.5px solid #E8D5E8",
+                  color: "#37352F",
+                }}
+                onFocus={e => (e.target.style.borderColor = CORAL)}
+                onBlur={e => (e.target.style.borderColor = "#E8D5E8")}
               />
             </div>
 
+            {/* Password */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-[13px] font-semibold" style={{ color: "#37352F" }}>
+                <label className="text-[12px] font-bold uppercase tracking-wider" style={{ color: PLUM }}>
                   Password
-                </Label>
-                <button
-                  type="button"
-                  className="text-[12px] font-medium hover:underline"
-                  style={{ color: CORAL }}
-                >
-                  Forgot password?
+                </label>
+                <button type="button" className="text-[12px] font-semibold" style={{ color: CORAL }}>
+                  Forgot?
                 </button>
               </div>
               <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
+                <input
+                  type={showPass ? "text" : "password"}
                   autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy}
+                  onChange={e => setPassword(e.target.value)}
+                  disabled={loading}
                   required
-                  className="h-11 text-[13.5px] rounded-xl bg-white pr-11"
-                  style={{ borderColor: BORDER }}
+                  className="w-full h-12 pl-4 pr-12 rounded-2xl text-[14px] outline-none transition-all"
+                  style={{
+                    background: "#FAF5FA",
+                    border: "1.5px solid #E8D5E8",
+                    color: "#37352F",
+                  }}
+                  onFocus={e => (e.target.style.borderColor = CORAL)}
+                  onBlur={e => (e.target.style.borderColor = "#E8D5E8")}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: PURPLE }}
+                  onClick={() => setShowPass(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  style={{ color: "#DEB2E4" }}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            <Button
+            {/* Sign in button */}
+            <button
               type="submit"
-              disabled={busy || !email || !password}
-              className="w-full h-11 text-[13.5px] font-bold rounded-xl mt-1 border-0 text-white hover:opacity-90 transition-opacity"
+              disabled={loading || !email || !password}
+              className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 mt-2 transition-opacity hover:opacity-90 disabled:opacity-50"
               style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
-              {busy ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={15} className="animate-spin" />
-                  Signing in…
-                </span>
+              {loading ? (
+                <Loader2 size={18} className="animate-spin" />
               ) : (
-                "Sign in"
+                <>Sign in <ArrowRight size={16} /></>
               )}
-            </Button>
+            </button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px" style={{ background: "#E8D5E8" }} />
+              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "#C4A8CC" }}>or</span>
+              <div className="flex-1 h-px" style={{ background: "#E8D5E8" }} />
+            </div>
+
+            {/* Create account */}
+            <button
+              type="button"
+              onClick={() => navigate("/signup")}
+              className="w-full h-13 py-3.5 rounded-2xl text-[14px] font-bold border-2 transition-all hover:bg-[#FAF5FA]"
+              style={{ borderColor: "#E8D5E8", color: PLUM }}
+            >
+              Create a new account
+            </button>
           </form>
 
-          <div className="relative flex items-center gap-3 my-5">
-            <div className="flex-1 border-t" style={{ borderColor: BORDER }} />
-            <span className="text-xs" style={{ color: PURPLE }}>or</span>
-            <div className="flex-1 border-t" style={{ borderColor: BORDER }} />
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 text-[13.5px] font-semibold rounded-xl bg-white"
-            style={{ borderColor: BORDER, color: PLUM }}
-            onMouseEnter={e => (e.currentTarget.style.background = "#FAF0FA")}
-            onMouseLeave={e => (e.currentTarget.style.background = "white")}
-            onClick={() => navigate("/signup")}
-          >
-            Create a new account
-          </Button>
+          <p className="text-center text-[11px] mt-6" style={{ color: "#C4A8CC" }}>
+            Secure · Encrypted · NDIS-compliant
+          </p>
         </div>
-
-        <p className="mt-6 text-xs text-center" style={{ color: "#9B6FAB" }}>
-          Secure access for NDIS support workers and allied health professionals.
-        </p>
       </div>
     </div>
   );
