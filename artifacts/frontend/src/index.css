@@ -2,6 +2,57 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+/* ── CareScribe auth page animations ──────────────────────────────────────── */
+@keyframes cs-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-10px) rotate(1deg); }
+  66%       { transform: translateY(-5px) rotate(-1deg); }
+}
+@keyframes cs-float-slow {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-16px); }
+}
+@keyframes cs-orb-pulse {
+  0%, 100% { transform: scale(1);    opacity: 0.12; }
+  50%       { transform: scale(1.12); opacity: 0.22; }
+}
+@keyframes cs-twinkle {
+  0%, 100% { opacity: 0;   transform: scale(0.4) rotate(0deg); }
+  50%       { opacity: 1;   transform: scale(1)   rotate(20deg); }
+}
+@keyframes cs-heartbeat {
+  0%, 100% { transform: scale(1); }
+  14%       { transform: scale(1.18); }
+  28%       { transform: scale(1); }
+  42%       { transform: scale(1.12); }
+  56%       { transform: scale(1); }
+}
+@keyframes cs-ekg {
+  0%   { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes cs-rise-fade {
+  0%   { transform: translateY(0);    opacity: 0.8; }
+  100% { transform: translateY(-32px); opacity: 0; }
+}
+@keyframes cs-slide-up {
+  0%   { transform: translateY(28px); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+@keyframes cs-orbit {
+  from { transform: rotate(0deg)   translateX(52px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(52px) rotate(-360deg); }
+}
+@keyframes cs-orbit-rev {
+  from { transform: rotate(0deg)   translateX(68px) rotate(0deg); }
+  to   { transform: rotate(-360deg) translateX(68px) rotate(360deg); }
+}
+@keyframes cs-blob-morph {
+  0%, 100% { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; }
+  33%       { border-radius: 45% 55% 40% 60% / 60% 40% 55% 45%; }
+  66%       { border-radius: 55% 45% 60% 40% / 40% 55% 45% 60%; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

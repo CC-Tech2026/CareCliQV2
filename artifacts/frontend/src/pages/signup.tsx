@@ -4,6 +4,7 @@ import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { SignupGraphic } from "@/components/AuthGraphic";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const PLUM   = "#542269";
@@ -121,28 +122,30 @@ export default function Signup() {
   function TopArea() {
     return (
       <div
-        className="flex flex-col items-center justify-end pb-8 pt-14 px-6 text-center text-white flex-[0_0_auto]"
+        className="flex flex-col items-center justify-end pb-4 pt-8 px-6 text-center text-white overflow-hidden"
         style={{
           background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)`,
-          minHeight: 180,
+          minHeight: step < TOTAL ? 200 : 160,
         }}
       >
-        <h1 className="text-[30px] font-black tracking-tight leading-none">
+        <h1 className="text-[28px] font-black tracking-tight leading-none">
           Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
         </h1>
+
+        <SignupGraphic />
+
         {step < TOTAL && (
-          <div className="mt-5 w-full max-w-xs">
-            {/* Step pills */}
+          <div className="w-full max-w-xs mb-2">
             <div className="flex gap-2 justify-center">
               {STEP_LABELS.map((l, i) => (
                 <div
                   key={l}
-                  className="flex-1 h-1.5 rounded-full transition-all duration-300"
-                  style={{ background: i <= step ? "white" : "rgba(255,255,255,0.3)" }}
+                  className="flex-1 h-1.5 rounded-full transition-all duration-500"
+                  style={{ background: i <= step ? "white" : "rgba(255,255,255,0.28)" }}
                 />
               ))}
             </div>
-            <p className="text-[11px] uppercase tracking-widest mt-2 opacity-50 font-semibold">
+            <p className="text-[10px] uppercase tracking-widest mt-2 opacity-45 font-semibold">
               Step {step + 1} of {TOTAL} · {STEP_LABELS[step]}
             </p>
           </div>
@@ -398,10 +401,14 @@ export default function Signup() {
     <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)` }}>
       <TopArea />
 
-      {/* White bottom card */}
+      {/* White bottom card (slides up on mount) */}
       <div
         className="flex-1 bg-white px-5 pt-7 pb-10 overflow-y-auto"
-        style={{ borderRadius: "28px 28px 0 0", boxShadow: "0 -8px 40px rgba(84,34,105,0.15)" }}
+        style={{
+          borderRadius: "28px 28px 0 0",
+          boxShadow: "0 -8px 40px rgba(84,34,105,0.18)",
+          animation: "cs-slide-up 0.55s cubic-bezier(0.16,1,0.3,1) both",
+        }}
       >
         <div className="w-full max-w-sm mx-auto">
           {step === 0 && <Step0 />}

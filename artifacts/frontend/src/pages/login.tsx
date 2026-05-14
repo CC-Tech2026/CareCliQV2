@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowRight } from "lucide-react";
+import { LoginGraphic } from "@/components/AuthGraphic";
 
 // CareScribe palette
 const PLUM  = "#542269";
@@ -46,25 +47,25 @@ export default function Login() {
      */
     <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)` }}>
 
-      {/* ── Top: brand area ── */}
-      <div className="flex flex-col items-center justify-center flex-[0_0_38%] min-h-[220px] px-6 pb-8 pt-16 text-white text-center">
-        <h1 className="text-[36px] font-black tracking-tight leading-none">
+      {/* ── Top: brand + animated graphic ── */}
+      <div className="flex flex-col items-center justify-end flex-[0_0_46%] min-h-[260px] px-6 pb-4 pt-10 text-white text-center overflow-hidden">
+        <h1 className="text-[32px] font-black tracking-tight leading-none">
           Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
         </h1>
-        <p className="text-[11px] uppercase tracking-[0.18em] font-semibold mt-2 opacity-60">
+        <p className="text-[10px] uppercase tracking-[0.18em] font-semibold mt-1.5 opacity-50">
           NDIS Clinical
         </p>
-
-        {/* Decorative dots */}
-        <div className="flex gap-2 mt-8 opacity-30">
-          {[1,2,3].map(i => <span key={i} className="h-1.5 w-1.5 rounded-full bg-white" />)}
-        </div>
+        <LoginGraphic />
       </div>
 
-      {/* ── Bottom: form card ── */}
+      {/* ── Bottom: form card (slides up on mount) ── */}
       <div
         className="flex-1 bg-white px-6 pt-8 pb-10 flex flex-col"
-        style={{ borderRadius: "28px 28px 0 0", boxShadow: "0 -8px 40px rgba(84,34,105,0.15)" }}
+        style={{
+          borderRadius: "28px 28px 0 0",
+          boxShadow: "0 -8px 40px rgba(84,34,105,0.18)",
+          animation: "cs-slide-up 0.5s cubic-bezier(0.16,1,0.3,1) both",
+        }}
       >
         <div className="w-full max-w-sm mx-auto flex flex-col flex-1">
           <div className="mb-7">
