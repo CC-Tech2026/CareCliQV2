@@ -1,0 +1,103 @@
+Refine and enhance the existing CareScribe UI/UX to make the platform feel more polished, user-friendly, modern, and visually cohesive while maintaining the current functionality and system structure.
+
+This is a UI refinement phase only — do not rebuild the application logic or significantly change workflows unless it improves usability.
+
+Focus on improving:
+
+visual consistency
+spacing and alignment
+readability
+responsiveness
+user friendliness
+modern healthcare SaaS polish
+feminine and calm visual design
+
+The platform is a B2B NDIS support work system used by providers, support workers, coordinators, and admins, so the interface should feel:
+
+professional
+trustworthy
+calm
+approachable
+operationally efficient
+
+Avoid making the UI feel:
+
+overly corporate
+overly technical
+cluttered
+AI-generated
+cold or harsh
+
+Use a softer and more elegant design direction:
+
+soft neutral backgrounds
+subtle gradients where appropriate
+rounded cards and components
+gentle shadows
+modern spacing
+clean typography
+soft accent colors (periwinkle, blush, lavender, sage, muted pinks)
+
+Improve overall usability by ensuring:
+
+better text visibility and contrast
+cleaner hierarchy between sections
+more breathing room between components
+consistent button styling
+consistent card layouts
+aligned spacing throughout pages
+cleaner tables and forms
+improved empty states
+smoother responsive layouts on tablet/mobile
+
+Refine the following pages while keeping the existing structure:
+
+Dashboard
+Participants
+Sessions
+Live Session
+Incidents
+Compliance
+Reports
+Documents
+Settings
+
+For the Dashboard:
+
+reduce visual clutter
+improve alignment and spacing
+make cards feel softer and more modern
+improve session timeline readability
+prioritize operational clarity over KPI-heavy layouts
+
+For Participants and Sessions:
+
+improve profile layouts
+make information easier to scan
+improve timeline/note readability
+simplify forms and documentation sections
+ensure workflows feel calm and intuitive
+
+For Live Session:
+
+make the layout more focused and distraction-free
+improve note-taking experience
+make compliance prompts subtle and supportive
+ensure buttons and actions are easy to access during active support work
+
+For Incidents and Compliance:
+
+improve structure and readability
+make severity/status indicators cleaner and more elegant
+avoid harsh warning-heavy designs
+
+Ensure the entire platform feels cohesive and market-ready with:
+
+consistent spacing system
+consistent border radius
+unified typography
+unified color palette
+responsive layouts
+polished interactions and hover states
+
+The final result should feel like a polished modern healthcare SaaS platform that is calm, elegant, feminine, professional, and ready for real business use.
