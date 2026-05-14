@@ -42,17 +42,17 @@ export default function Login() {
   const busy = submitting || isLoading;
 
   return (
-    <div className="min-h-screen flex bg-white">
+    <div className="min-h-screen flex" style={{ background: "#F4F2FB" }}>
       {/* ── Left brand panel ── */}
       <div
-        className="hidden lg:flex w-[420px] shrink-0 flex-col justify-between p-12"
-        style={{ background: "linear-gradient(160deg, #1A0D2E 0%, #2D1650 50%, #0D0D55 100%)" }}
+        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between p-12"
+        style={{ background: "linear-gradient(155deg, #2E2A5C 0%, #3D3580 50%, #4A4A9C 100%)" }}
       >
         {/* Logo */}
         <div className="flex items-center gap-3">
           <div
             className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #E2457A 0%, #9B1D52 100%)" }}
+            style={{ background: "linear-gradient(135deg, #F4C3D9 0%, #7B8FD4 100%)" }}
           >
             <ShieldCheck size={22} color="white" strokeWidth={2.2} />
           </div>
@@ -64,17 +64,18 @@ export default function Login() {
 
         {/* Centre copy */}
         <div className="space-y-5">
-          <div className="h-px w-12 rounded-full" style={{ background: "linear-gradient(90deg, #E2457A, transparent)" }} />
-          <h2 className="text-[30px] font-bold text-white leading-snug">
+          {/* Blush accent line */}
+          <div className="h-px w-10 rounded-full" style={{ background: "#F4C3D9" }} />
+
+          <h2 className="text-[28px] font-bold text-white leading-snug">
             Compassionate care,{" "}
-            <span style={{ color: "#E2457A" }}>beautifully documented.</span>
+            <span style={{ color: "#F4C3D9" }}>beautifully documented.</span>
           </h2>
           <p className="text-white/50 text-sm leading-relaxed max-w-xs">
             Purpose-built for NDIS support workers and allied health professionals who put their participants first.
           </p>
 
-          {/* Feature list */}
-          <ul className="space-y-2.5 mt-2">
+          <ul className="space-y-2.5 pt-1">
             {[
               "AI-powered clinical notes",
               "Real-time compliance checking",
@@ -82,44 +83,46 @@ export default function Login() {
               "Voice dictation & translation",
             ].map((f) => (
               <li key={f} className="flex items-center gap-2.5 text-sm text-white/60">
-                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "#E2457A" }} />
+                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "#F4C3D9" }} />
                 {f}
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Bottom */}
-        <p className="text-[11px] text-white/25">
-          Secure, encrypted & NDIS-compliant
-        </p>
+        <p className="text-[11px] text-white/25">Secure, encrypted & NDIS-compliant</p>
       </div>
 
       {/* ── Right: form ── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 bg-[#FAFAFA]">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12" style={{ background: "#F4F2FB" }}>
         {/* Mobile logo */}
         <div className="lg:hidden flex items-center gap-3 mb-10">
           <div
             className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #E2457A 0%, #9B1D52 100%)" }}
+            style={{ background: "linear-gradient(135deg, #F4C3D9, #7B8FD4)" }}
           >
             <ShieldCheck size={22} color="white" strokeWidth={2.2} />
           </div>
           <div>
-            <p className="font-bold text-[#0D0D55] text-[15px]">Clinical Companion</p>
-            <p className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">NDIS Healthcare</p>
+            <p className="font-bold text-[15px]" style={{ color: "#37352F" }}>Clinical Companion</p>
+            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: "#718096" }}>
+              NDIS Healthcare
+            </p>
           </div>
         </div>
 
-        <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm px-8 py-10">
+        <div
+          className="w-full max-w-sm bg-white rounded-2xl px-8 py-10"
+          style={{ border: "1px solid #E8E4F0", boxShadow: "0 4px 24px rgba(123,143,212,0.08)" }}
+        >
           <div className="mb-7">
-            <h1 className="text-[22px] font-bold text-[#0D0D55]">Sign in</h1>
-            <p className="text-sm text-slate-500 mt-1">Access your clinical workspace</p>
+            <h1 className="text-[22px] font-bold" style={{ color: "#37352F" }}>Welcome back</h1>
+            <p className="text-sm mt-1" style={{ color: "#718096" }}>Sign in to your clinical workspace</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-[13px] font-semibold text-[#0D0D55]">
+              <Label htmlFor="email" className="text-[13px] font-semibold" style={{ color: "#37352F" }}>
                 Email address
               </Label>
               <Input
@@ -131,19 +134,20 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={busy}
                 required
-                className="h-11 text-[13.5px] rounded-xl border-slate-200 bg-white focus-visible:ring-[#E2457A]/20 focus-visible:border-[#E2457A]"
+                className="h-11 text-[13.5px] rounded-xl bg-white focus-visible:ring-[#7B8FD4]/25 focus-visible:border-[#7B8FD4]"
+                style={{ borderColor: "#E8E4F0" }}
               />
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="password" className="text-[13px] font-semibold text-[#0D0D55]">
+                <Label htmlFor="password" className="text-[13px] font-semibold" style={{ color: "#37352F" }}>
                   Password
                 </Label>
                 <button
                   type="button"
                   className="text-[12px] font-medium hover:underline"
-                  style={{ color: "#E2457A" }}
+                  style={{ color: "#7B8FD4" }}
                 >
                   Forgot password?
                 </button>
@@ -158,12 +162,14 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={busy}
                   required
-                  className="h-11 text-[13.5px] rounded-xl border-slate-200 bg-white focus-visible:ring-[#E2457A]/20 focus-visible:border-[#E2457A] pr-11"
+                  className="h-11 text-[13.5px] rounded-xl bg-white focus-visible:ring-[#7B8FD4]/25 focus-visible:border-[#7B8FD4] pr-11"
+                  style={{ borderColor: "#E8E4F0" }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                  style={{ color: "#A0AEC0" }}
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -174,7 +180,7 @@ export default function Login() {
               type="submit"
               disabled={busy || !email || !password}
               className="w-full h-11 text-[13.5px] font-bold rounded-xl mt-1 border-0 text-white hover:opacity-90 transition-opacity"
-              style={{ background: "linear-gradient(135deg, #E2457A 0%, #C03068 100%)" }}
+              style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}
             >
               {busy ? (
                 <span className="flex items-center gap-2">
@@ -188,22 +194,23 @@ export default function Login() {
           </form>
 
           <div className="relative flex items-center gap-3 my-5">
-            <div className="flex-1 border-t border-slate-100" />
-            <span className="text-xs text-slate-400">or</span>
-            <div className="flex-1 border-t border-slate-100" />
+            <div className="flex-1 border-t" style={{ borderColor: "#E8E4F0" }} />
+            <span className="text-xs" style={{ color: "#A0AEC0" }}>or</span>
+            <div className="flex-1 border-t" style={{ borderColor: "#E8E4F0" }} />
           </div>
 
           <Button
             type="button"
             variant="outline"
-            className="w-full h-11 text-[13.5px] font-semibold rounded-xl border-slate-200 bg-white text-[#0D0D55] hover:bg-slate-50"
+            className="w-full h-11 text-[13.5px] font-semibold rounded-xl bg-white hover:bg-[#F8F6FC]"
+            style={{ borderColor: "#E8E4F0", color: "#37352F" }}
             onClick={() => navigate("/signup")}
           >
             Create a new account
           </Button>
         </div>
 
-        <p className="mt-6 text-xs text-slate-400 text-center">
+        <p className="mt-6 text-xs text-center" style={{ color: "#A0AEC0" }}>
           Secure access for NDIS support workers and allied health professionals.
         </p>
       </div>

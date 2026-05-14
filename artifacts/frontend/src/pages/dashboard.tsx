@@ -42,12 +42,17 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-// Brand colours
-const LIME = "#D9F103";  // kept for data only (billing)
-const PINK = "#FA879F";  // kept for data badges
-const BLUE = "#5271FF";
-const NAVY = "#0D0D55";
-const ROSE = "#E2457A";  // primary SaaS accent
+// Palette (matches reference images)
+const LIME = "#D9F103";          // unused now but kept to avoid dead-ref errors
+const PINK = "#FA879F";          // unused now
+const BLUE = "#5271FF";          // unused now
+const NAVY = "#0D0D55";          // unused now
+const ROSE = "#E2457A";          // unused now
+const PERIWINKLE = "#7B8FD4";    // primary action colour
+const BLUSH = "#F4C3D9";         // soft accent fill
+const BLUSH_MID = "#C084A0";     // medium blush (text on blush bg)
+const TEXT_DARK = "#37352F";     // primary text (warm near-black)
+const TEXT_MID = "#718096";      // secondary text
 
 const TODAY_STR = format(new Date(), "yyyy-MM-dd");
 
@@ -134,17 +139,17 @@ function StatCard({
   href?: string;
 }) {
   const content = (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition-all cursor-pointer group">
+    <div className="bg-white rounded-2xl p-5 hover:shadow-md transition-all cursor-pointer group" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
       <div className="flex items-start justify-between mb-3">
         <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
           {icon}
         </div>
       </div>
       <p className={cn("text-3xl font-bold leading-none", textColor)}>{value}</p>
-      <p className="text-sm text-slate-500 mt-1 leading-tight">{label}</p>
-      {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+      <p className="text-sm mt-1 leading-tight" style={{ color: TEXT_MID }}>{label}</p>
+      {sub && <p className="text-xs mt-1" style={{ color: "#A0AEC0" }}>{sub}</p>}
       {href && (
-        <p className="text-xs font-medium mt-3 flex items-center gap-1 group-hover:gap-1.5 transition-all" style={{ color: BLUE }}>
+        <p className="text-xs font-medium mt-3 flex items-center gap-1 group-hover:gap-1.5 transition-all" style={{ color: PERIWINKLE }}>
           View <ArrowRight size={11} />
         </p>
       )}
@@ -166,12 +171,12 @@ function ScheduleRow({
   const isResume = session.status === "in_progress";
 
   const statusBadge = session.status === "completed"
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 bg-emerald-100 text-emerald-700 font-medium">✓ Completed</Badge>
+    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 bg-emerald-50 text-emerald-700 font-medium">✓ Completed</Badge>
     : session.status === "in_progress"
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: `${BLUE}18`, color: "#2d45b0" }}>● In Progress</Badge>
+    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#EEF0FB", color: PERIWINKLE }}>● In Progress</Badge>
     : isNext
-    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: `${PINK}20`, color: "#9D174D" }}>▶ Next</Badge>
-    : <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 bg-slate-100 text-slate-500 font-medium">+ Upcoming</Badge>;
+    ? <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#FBF0F6", color: BLUSH_MID }}>▶ Next</Badge>
+    : <Badge className="text-[11px] px-2.5 py-0.5 rounded-full border-0 font-medium" style={{ background: "#F4F2FB", color: TEXT_MID }}>+ Upcoming</Badge>;
 
   return (
     <div className="flex items-center gap-4 py-3.5 px-5 hover:bg-slate-50/60 transition-colors group">
@@ -344,21 +349,22 @@ export default function Dashboard() {
       {/* ── Page header row ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#0D0D55]">
+          <h1 className="text-2xl font-bold" style={{ color: TEXT_DARK }}>
             {greeting}, {firstName}! 👋
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Here's what's happening today.</p>
+          <p className="text-sm mt-0.5" style={{ color: TEXT_MID }}>Here's what's happening today.</p>
         </div>
         <div className="flex items-center gap-2.5 shrink-0">
           <Link href="/participants/new">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-[#0D0D55] hover:bg-slate-50 transition-colors shadow-sm">
+            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold bg-white transition-colors hover:bg-[#F8F6FC]"
+              style={{ border: "1px solid #E8E4F0", color: TEXT_DARK }}>
               <UserPlus size={14} />
               Add Participant
             </button>
           </Link>
           <Link href="/sessions/new">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-[13px] font-semibold hover:opacity-90 transition-opacity shadow-sm"
-              style={{ background: "linear-gradient(135deg, #E2457A 0%, #C03068 100%)" }}>
+            <button className="flex items-center gap-2 px-4 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+              style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}>
               <Play size={13} className="fill-current" />
               New Session
             </button>
@@ -406,35 +412,36 @@ export default function Dashboard() {
       {/* ── Two-column layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Left: Today's Schedule */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <h2 className="font-semibold text-[15px] text-[#0D0D55]">Today's Schedule</h2>
+        <div className="lg:col-span-3 bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
+            <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Today's Schedule</h2>
             <Link href="/sessions">
-              <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: BLUE }}>
-                View calendar <ArrowRight size={12} />
+              <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: PERIWINKLE }}>
+                View all <ArrowRight size={12} />
               </span>
             </Link>
           </div>
 
           {sessionsLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "#A0AEC0" }} />
             </div>
           ) : todaySessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 gap-3 text-center px-6">
-              <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: `${BLUE}18` }}>
-                <Calendar size={22} style={{ color: BLUE }} />
+              <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: "#EEF0FB" }}>
+                <Calendar size={22} style={{ color: PERIWINKLE }} />
               </div>
-              <p className="font-semibold text-[#0D0D55]">No sessions today</p>
-              <p className="text-sm text-slate-400">Start by creating a new session for a participant.</p>
+              <p className="font-semibold" style={{ color: TEXT_DARK }}>No sessions today</p>
+              <p className="text-sm" style={{ color: TEXT_MID }}>Start by creating a new session for a participant.</p>
               <Link href="/sessions/new">
-                <button className="mt-1 px-4 py-2 rounded-xl bg-[#0D0D55] text-white text-sm font-semibold hover:bg-[#1a1a77] transition-colors">
+                <button className="mt-1 px-4 py-2 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                  style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}>
                   New Session
                 </button>
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-slate-50">
+            <div className="divide-y" style={{ borderColor: "#F8F6FC" }}>
               {todaySessions.map((s) => (
                 <ScheduleRow
                   key={s.id}
@@ -447,9 +454,9 @@ export default function Dashboard() {
           )}
 
           {todaySessions.length > 0 && (
-            <div className="px-5 py-3 border-t border-slate-50">
+            <div className="px-5 py-3" style={{ borderTop: "1px solid #F8F6FC" }}>
               <Link href="/sessions">
-                <span className="text-xs font-medium cursor-pointer" style={{ color: BLUE }}>
+                <span className="text-xs font-medium cursor-pointer" style={{ color: PERIWINKLE }}>
                   View full schedule →
                 </span>
               </Link>
@@ -460,10 +467,10 @@ export default function Dashboard() {
         {/* Right: Compliance + Alerts */}
         <div className="lg:col-span-2 space-y-5">
           {/* Compliance overview */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-[15px] text-[#0D0D55]">Compliance Overview</h2>
-              <span className="text-xs text-slate-400 flex items-center gap-1">
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
+              <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Compliance Overview</h2>
+              <span className="text-xs flex items-center gap-1" style={{ color: TEXT_MID }}>
                 <Calendar size={11} /> This week
               </span>
             </div>
@@ -479,14 +486,14 @@ export default function Dashboard() {
                   ].map(({ label, count, color }) => (
                     <div key={label} className="flex items-center gap-2">
                       <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
-                      <span className="text-sm text-slate-500 flex-1 text-xs">{label}</span>
-                      <span className="text-sm font-bold text-[#0D0D55]">{count}</span>
+                      <span className="flex-1 text-xs" style={{ color: TEXT_MID }}>{label}</span>
+                      <span className="text-sm font-bold" style={{ color: TEXT_DARK }}>{count}</span>
                     </div>
                   ))}
                 </div>
               </div>
               <Link href="/compliance">
-                <button className="mt-4 w-full text-xs font-medium flex items-center justify-center gap-1 hover:underline" style={{ color: BLUE }}>
+                <button className="mt-4 w-full text-xs font-medium flex items-center justify-center gap-1 hover:underline" style={{ color: PERIWINKLE }}>
                   View compliance details <ArrowRight size={11} />
                 </button>
               </Link>
@@ -494,11 +501,11 @@ export default function Dashboard() {
           </div>
 
           {/* Recent alerts */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h2 className="font-semibold text-[15px] text-[#0D0D55]">Recent Alerts</h2>
+          <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
+              <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Recent Alerts</h2>
               <Link href="/compliance">
-                <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: BLUE }}>
+                <span className="text-xs font-medium flex items-center gap-1 hover:underline cursor-pointer" style={{ color: PERIWINKLE }}>
                   View all <ArrowRight size={11} />
                 </span>
               </Link>
@@ -506,10 +513,10 @@ export default function Dashboard() {
             {alerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-6">
                 <CheckCircle2 size={24} className="text-emerald-400" />
-                <p className="text-sm font-medium text-slate-500">No active alerts</p>
+                <p className="text-sm font-medium" style={{ color: TEXT_MID }}>No active alerts</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y" style={{ borderColor: "#F8F6FC" }}>
                 {(alerts as Alert[]).slice(0, 3).map((alert) => (
                   <AlertRow key={alert.id} alert={alert} />
                 ))}
@@ -520,24 +527,24 @@ export default function Dashboard() {
       </div>
 
       {/* ── Quick Actions ── */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-[15px] text-[#0D0D55]">Quick Actions</h2>
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ border: "1px solid #E8E4F0", boxShadow: "0 1px 4px rgba(123,143,212,0.06)" }}>
+        <div className="px-5 py-4" style={{ borderBottom: "1px solid #F0EDF6" }}>
+          <h2 className="font-semibold text-[15px]" style={{ color: TEXT_DARK }}>Quick Actions</h2>
         </div>
         <div className="flex items-center gap-2 px-4 py-4 flex-wrap">
           <QuickActionBtn
             href="/sessions/new"
             label="New Session"
             icon={<Calendar size={22} />}
-            bg="#FFF0F5"
-            iconColor={ROSE}
+            bg="#EEF0FB"
+            iconColor={PERIWINKLE}
           />
           <QuickActionBtn
             href="/participants/new"
             label="Add Participant"
             icon={<UserPlus size={22} />}
-            bg="#FFF0F5"
-            iconColor={ROSE}
+            bg="#FBF0F6"
+            iconColor={BLUSH_MID}
           />
           <QuickActionBtn
             href="/incidents/new"
@@ -550,8 +557,8 @@ export default function Dashboard() {
             href="/sessions"
             label="Upload Document"
             icon={<UploadCloud size={22} />}
-            bg="#F0F9FF"
-            iconColor="#0284C7"
+            bg="#EEF0FB"
+            iconColor={PERIWINKLE}
           />
           <QuickActionBtn
             href="/compliance"
@@ -564,8 +571,8 @@ export default function Dashboard() {
             href="/patients"
             label="All Participants"
             icon={<Users size={22} />}
-            bg="#F8F0FF"
-            iconColor="#7C3AED"
+            bg="#FBF0F6"
+            iconColor={BLUSH_MID}
           />
         </div>
       </div>

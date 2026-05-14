@@ -23,33 +23,38 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 
-// ── Design tokens ──────────────────────────────────────────────────────────
-const ROSE = "#E2457A";       // primary accent — warm rose
-const ROSE_BG = "#FFF0F5";    // active nav fill
-const BORDER = "#F3E8EE";     // sidebar / header border
+// ── Palette (from reference images) ─────────────────────────────────────────
+// Blush pink: #F4C3D9  · Periwinkle: #7B8FD4  · Warm dark: #37352F
+// Lavender bg: #F4F2FB · Lavender border: #E8E4F0
+
+const PERIWINKLE = "#7B8FD4";
+const BLUSH_FILL = "#FBF0F6";       // active nav background
+const BLUSH_PIP  = "#C084A0";       // active pip / accent text
+const BG_MAIN    = "#F4F2FB";       // main page background
+const BORDER     = "#E8E4F0";       // sidebar / header border
 
 const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
-      { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/patients", label: "Participants", icon: Users },
-      { href: "/sessions", label: "Sessions", icon: CalendarDays },
+      { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
+      { href: "/patients",   label: "Participants", icon: Users            },
+      { href: "/sessions",   label: "Sessions",     icon: CalendarDays     },
     ],
   },
   {
     label: "Clinical",
     items: [
-      { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-      { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/incidents",  label: "Incidents",    icon: AlertTriangle    },
+      { href: "/compliance", label: "Compliance",   icon: ShieldCheck      },
     ],
   },
   {
     label: "Admin",
     items: [
-      { href: "/reports", label: "Reports", icon: FileBarChart2 },
-      { href: "/documents", label: "Documents", icon: FolderOpen },
-      { href: "/settings", label: "Settings", icon: Settings },
+      { href: "/reports",    label: "Reports",      icon: FileBarChart2    },
+      { href: "/documents",  label: "Documents",    icon: FolderOpen       },
+      { href: "/settings",   label: "Settings",     icon: Settings         },
     ],
   },
 ];
@@ -61,7 +66,7 @@ function LogoMark({ size = 32 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg, #E2457A 0%, #9B1D52 100%)",
+        background: "linear-gradient(135deg, #F4C3D9 0%, #7B8FD4 100%)",
       }}
     >
       <ShieldCheck size={size * 0.56} color="white" strokeWidth={2.2} />
@@ -86,10 +91,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <LogoMark size={36} />
           <div>
-            <p className="font-bold text-[14.5px] tracking-tight text-[#0D0D55] leading-tight">
+            <p className="font-bold text-[14.5px] tracking-tight leading-tight" style={{ color: "#37352F" }}>
               Clinical Companion
             </p>
-            <p className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold mt-0.5">
+            <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: "#C084A0" }}>
               NDIS Healthcare
             </p>
           </div>
@@ -99,7 +104,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-6">
           {NAV_GROUPS.map((group) => (
             <div key={group.label}>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 px-3 mb-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1.5" style={{ color: "#718096" }}>
                 {group.label}
               </p>
               <div className="space-y-0.5">
@@ -117,30 +122,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                       onClick={onNav}
                       className={cn(
                         "relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-medium transition-colors",
-                        isActive
-                          ? "text-[#0D0D55]"
-                          : "text-slate-500 hover:bg-slate-50 hover:text-[#0D0D55]",
+                        isActive ? "" : "hover:bg-[#F8F6FC]",
                       )}
-                      style={isActive ? { background: ROSE_BG } : undefined}
+                      style={{
+                        background: isActive ? BLUSH_FILL : undefined,
+                        color: isActive ? "#37352F" : "#718096",
+                      }}
                     >
-                      {/* Left accent pip */}
                       {isActive && (
                         <span
                           className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
-                          style={{ background: ROSE }}
+                          style={{ background: BLUSH_PIP }}
                         />
                       )}
                       <item.icon
                         size={16}
-                        style={{ color: isActive ? ROSE : undefined }}
-                        className={isActive ? "" : "text-slate-400"}
+                        style={{ color: isActive ? BLUSH_PIP : "#A0AEC0" }}
                         strokeWidth={isActive ? 2.5 : 2}
                       />
                       <span>{item.label}</span>
                       {item.href === "/incidents" && (
                         <span
                           className="ml-auto h-[18px] min-w-[18px] px-1.5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
-                          style={{ background: ROSE }}
+                          style={{ background: "#F4C3D9", color: "#8B4C6E" }}
                         >
                           2
                         </span>
@@ -155,23 +159,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Profile */}
         <div className="px-4 py-4 shrink-0" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 transition-colors cursor-default">
+          <div className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-[#F8F6FC] transition-colors cursor-default">
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback
                 className="text-xs font-bold text-white"
-                style={{ background: "linear-gradient(135deg, #E2457A, #9B1D52)" }}
+                style={{ background: "linear-gradient(135deg, #F4C3D9, #7B8FD4)" }}
               >
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="text-[12.5px] font-semibold text-[#0D0D55] truncate">{displayName}</p>
-              <p className="text-[10px] text-slate-400 capitalize truncate">{displayRole}</p>
+              <p className="text-[12.5px] font-semibold truncate" style={{ color: "#37352F" }}>{displayName}</p>
+              <p className="text-[10px] capitalize truncate" style={{ color: "#718096" }}>{displayRole}</p>
             </div>
             <button
               onClick={logout}
               title="Sign out"
-              className="shrink-0 p-1.5 rounded-lg text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition-colors"
+              className="shrink-0 p-1.5 rounded-lg transition-colors"
+              style={{ color: "#A0AEC0" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#718096")}
+              onMouseLeave={e => (e.currentTarget.style.color = "#A0AEC0")}
             >
               <LogOut size={13} />
             </button>
@@ -182,7 +189,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-[#FAFAFA] text-[#0D0D55] overflow-hidden">
+    <div className="flex min-h-screen w-full overflow-hidden" style={{ background: BG_MAIN, color: "#37352F" }}>
       {/* Desktop Sidebar */}
       <aside
         className="hidden md:flex w-56 flex-col h-screen sticky top-0 bg-white shrink-0"
@@ -200,33 +207,44 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         >
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="md:hidden p-2 rounded-xl text-slate-400 hover:bg-slate-50"
+            className="md:hidden p-2 rounded-xl hover:bg-[#F8F6FC]"
+            style={{ color: "#718096" }}
           >
             <Menu size={20} />
           </button>
 
           {/* Search */}
-          <div className="flex flex-1 max-w-sm items-center gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5">
-            <Search size={14} className="text-slate-400 shrink-0" />
+          <div
+            className="flex flex-1 max-w-sm items-center gap-2.5 rounded-xl px-3 py-1.5 transition-colors"
+            style={{ background: "#F8F6FC", border: `1px solid ${BORDER}` }}
+          >
+            <Search size={14} style={{ color: "#A0AEC0" }} className="shrink-0" />
             <input
               type="text"
-              placeholder="Search..."
-              className="w-full bg-transparent outline-none text-[13px] placeholder:text-slate-400 text-[#0D0D55]"
+              placeholder="Search participants, sessions..."
+              className="w-full bg-transparent outline-none text-[13px]"
+              style={{ color: "#37352F" }}
             />
           </div>
 
           <div className="flex items-center gap-2 ml-auto shrink-0">
             {/* Bell */}
-            <button className="relative p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors">
-              <Bell size={16} className="text-slate-500" />
-              <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full" style={{ background: ROSE }} />
+            <button
+              className="relative p-2 rounded-xl transition-colors hover:bg-[#F8F6FC]"
+              style={{ border: `1px solid ${BORDER}` }}
+            >
+              <Bell size={16} style={{ color: "#718096" }} />
+              <span
+                className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full"
+                style={{ background: "#F4C3D9" }}
+              />
             </button>
 
             {/* New Session */}
             <Link href="/sessions/new">
               <button
-                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
-                style={{ background: "linear-gradient(135deg, #E2457A 0%, #C03068 100%)" }}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+                style={{ background: "linear-gradient(135deg, #8B9FE8 0%, #6B7FD4 100%)" }}
               >
                 <Plus size={14} strokeWidth={2.5} />
                 New Session
@@ -234,19 +252,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </Link>
 
             {/* User chip */}
-            <div className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-lg border border-slate-200 bg-white cursor-default">
+            <div
+              className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-xl bg-white cursor-default"
+              style={{ border: `1px solid ${BORDER}` }}
+            >
               <Avatar className="h-6 w-6">
                 <AvatarFallback
                   className="text-[10px] font-bold text-white"
-                  style={{ background: "linear-gradient(135deg, #E2457A, #9B1D52)" }}
+                  style={{ background: "linear-gradient(135deg, #F4C3D9, #7B8FD4)" }}
                 >
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden sm:block text-left">
-                <p className="text-[12px] font-semibold text-[#0D0D55] leading-tight">{displayName.split(" ")[0]}</p>
+                <p className="text-[12px] font-semibold leading-tight" style={{ color: "#37352F" }}>
+                  {displayName.split(" ")[0]}
+                </p>
               </div>
-              <ChevronDown size={12} className="text-slate-400" />
+              <ChevronDown size={12} style={{ color: "#A0AEC0" }} />
             </div>
           </div>
         </header>
@@ -260,7 +283,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/20 backdrop-blur-sm"
+          className="md:hidden fixed inset-0 z-40 backdrop-blur-sm"
+          style={{ background: "rgba(55,53,47,0.15)" }}
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
@@ -275,7 +299,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="absolute top-4 right-4">
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="p-2 rounded-xl text-slate-400 hover:bg-slate-50"
+            className="p-2 rounded-xl hover:bg-[#F8F6FC]"
+            style={{ color: "#718096" }}
           >
             <X size={18} />
           </button>
