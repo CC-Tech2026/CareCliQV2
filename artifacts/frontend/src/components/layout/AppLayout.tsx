@@ -11,13 +11,14 @@ import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 
-// ── Design tokens (warm clinical palette) ─────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#542269";
 const CORAL  = "#F1738A";
 const MUTED  = "#7A6A8A";
 const TEXT   = "#1C1626";
 const BORDER = "rgba(232,213,232,0.5)";
 
+// ── Navigation items ──────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
   { href: "/patients",   label: "Participants", icon: Users           },
@@ -50,124 +51,131 @@ function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
-  });
-  const { settings } = useSettings();
-  const { user, logout } = useAuth();
-  const { data: alerts = [] } = useGetUnreadAlerts();
+// ── Sidebar contents (extracted to avoid re-defining inside render) ───────────
+function SidebarContents({
+  location,
+  collapsed,
+  isDrawer,
+  alertCount,
+  displayName,
+  displayRole,
+  initials,
+  onNav,
+  onToggle,
+  onLogout,
+}: {
+  location: string;
+  collapsed: boolean;
+  isDrawer: boolean;
+  alertCount: number;
+  displayName: string;
+  displayRole: string;
+  initials: string;
+  onNav?: () => void;
+  onToggle: () => void;
+  onLogout: () => void;
+}) {
+  const compact = !isDrawer && collapsed;
 
-  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
-  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
-  const initials    = getInitials(displayName);
-  const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
+  return (
+    <div className="flex flex-col h-full">
 
-  const toggleCollapse = () => {
-    const next = !collapsed;
-    setCollapsed(next);
-    try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* ignore */ }
-  };
-
-  const SidebarInner = ({
-    onNav,
-    isDrawer = false,
-  }: {
-    onNav?: () => void;
-    isDrawer?: boolean;
-  }) => {
-    const compact = !isDrawer && collapsed;
-
-    return (
-      <div className="flex flex-col h-full">
-
-        {/* ── Wordmark + collapse toggle ── */}
+      {/* ── Wordmark header ────────────────────────────────────────── */}
+      <div
+        className={cn(
+          "flex items-center h-16 shrink-0",
+          compact ? "justify-center px-2" : "gap-3 px-4"
+        )}
+        style={{ borderBottom: `1px solid ${BORDER}` }}
+      >
+        {/* Logo icon */}
         <div
-          className={cn(
-            "flex items-center h-16 shrink-0 gap-3",
-            compact ? "px-2 justify-center" : "px-4"
-          )}
-          style={{ borderBottom: `1px solid ${BORDER}` }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
         >
-          {/* Gradient logo box */}
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-          >
-            <Sparkles size={16} color="white" strokeWidth={1.5} />
-          </div>
+          <Sparkles size={16} color="white" strokeWidth={1.5} />
+        </div>
 
-          {!compact && (
-            <div className="flex-1 min-w-0">
-              <p className="text-[17px] font-black tracking-tight leading-none select-none">
-                <span style={{ color: TEXT }}>Care</span>
-                <span style={{ color: CORAL }}>Scribe</span>
-              </p>
-              <p
-                className="text-[8.5px] font-semibold uppercase tracking-[0.08em] mt-0.5 select-none"
-                style={{ color: MUTED }}
-              >
-                NDIS Clinical Workspace
-              </p>
-            </div>
-          )}
-
-          {!isDrawer && !compact && (
-            <button
-              onClick={toggleCollapse}
-              title="Collapse sidebar"
-              className="p-1 rounded-lg transition-colors hover:bg-white/50 shrink-0"
+        {/* Wordmark + subtitle (expanded only) */}
+        {!compact && (
+          <div className="flex-1 min-w-0">
+            <p className="text-[17px] font-black tracking-tight leading-none select-none">
+              <span style={{ color: TEXT }}>Care</span>
+              <span style={{ color: CORAL }}>Scribe</span>
+            </p>
+            <p
+              className="text-[8.5px] font-semibold uppercase tracking-[0.08em] mt-0.5 select-none"
               style={{ color: MUTED }}
             >
-              <ChevronLeft size={15} />
-            </button>
-          )}
-          {!isDrawer && compact && (
-            <button
-              onClick={toggleCollapse}
-              title="Expand sidebar"
-              className="absolute bottom-20 left-0 right-0 mx-auto w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-pink-50"
-              style={{ color: MUTED, position: "relative" }}
-            >
-              <ChevronRight size={15} />
-            </button>
-          )}
+              NDIS Clinical Workspace
+            </p>
+          </div>
+        )}
+
+        {/* Collapse button (expanded desktop sidebar only) */}
+        {!compact && !isDrawer && (
+          <button
+            onClick={onToggle}
+            title="Collapse sidebar"
+            className="p-1.5 rounded-lg transition-colors hover:bg-pink-50 shrink-0"
+            style={{ color: MUTED }}
+          >
+            <ChevronLeft size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* ── Expand row (collapsed desktop sidebar only) ────────────── */}
+      {compact && (
+        <div
+          className="flex justify-center py-2 shrink-0"
+          style={{ borderBottom: `1px solid ${BORDER}` }}
+        >
+          <button
+            onClick={onToggle}
+            title="Expand sidebar"
+            className="p-1.5 rounded-lg transition-colors hover:bg-pink-50"
+            style={{ color: MUTED }}
+          >
+            <ChevronRight size={15} />
+          </button>
         </div>
+      )}
 
-        {/* ── New Session ── */}
-        <div className={cn("pt-3 shrink-0", compact ? "px-2" : "px-3")}>
-          <Link href="/sessions/new" onClick={onNav}>
-            <div
-              className={cn(
-                "flex items-center justify-center rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90",
-                compact ? "h-9 w-full" : "h-9 gap-2 px-3"
-              )}
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+      {/* ── New Session button ─────────────────────────────────────── */}
+      <div className={cn("pt-3 shrink-0", compact ? "px-2" : "px-3")}>
+        <Link href="/sessions/new" onClick={onNav}>
+          <div
+            className={cn(
+              "flex items-center justify-center rounded-xl text-white text-[13px] font-bold h-9 transition-opacity hover:opacity-90",
+              compact ? "w-full" : "gap-2 px-3"
+            )}
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+          >
+            <Plus size={15} strokeWidth={2.5} />
+            {!compact && "New Session"}
+          </div>
+        </Link>
+      </div>
+
+      {/* ── Navigation ────────────────────────────────────────────── */}
+      <nav className={cn("flex-1 overflow-y-auto py-3 space-y-0.5", compact ? "px-2" : "px-3")}>
+        {NAV_ITEMS.map((item) => {
+          const active    = isActive(location, item.href);
+          const Icon      = item.icon;
+          const showBadge = item.href === "/compliance" && alertCount > 0;
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNav}
+              title={compact ? item.label : undefined}
             >
-              <Plus size={15} strokeWidth={2.5} />
-              {!compact && "New Session"}
-            </div>
-          </Link>
-        </div>
-
-        {/* ── Navigation ── */}
-        <nav className={cn("flex-1 overflow-y-auto py-3 space-y-0.5", compact ? "px-2" : "px-3")}>
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(location, item.href);
-            const Icon   = item.icon;
-            const showBadge = item.href === "/compliance" && alertCount > 0;
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNav}
-                title={compact ? item.label : undefined}
+              <div
                 className={cn(
-                  "flex items-center gap-3 rounded-xl text-[13px] font-medium transition-colors w-full",
-                  compact ? "h-9 justify-center px-0" : "px-3 py-2"
+                  "flex items-center rounded-xl text-[13px] font-medium transition-colors w-full cursor-pointer",
+                  compact ? "h-9 justify-center px-0" : "gap-3 px-3 py-2"
                 )}
                 style={{
                   background: active ? "rgba(84,34,105,0.07)" : "transparent",
@@ -179,7 +187,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
                   {showBadge && (
                     <span
-                      className="absolute -top-1 -right-1 min-w-[14px] h-3.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5"
+                      className="absolute -top-1 -right-1.5 min-w-[14px] h-3.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5"
                       style={{ background: "#DC2626" }}
                     >
                       {alertCount > 9 ? "9+" : alertCount}
@@ -187,60 +195,101 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   )}
                 </div>
                 {!compact && item.label}
-              </Link>
-            );
-          })}
-        </nav>
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
 
-        {/* ── Alerts strip (expanded only) ── */}
-        {!compact && alertCount > 0 && (
+      {/* ── Alerts strip (expanded only) ─────────────────────────── */}
+      {!compact && alertCount > 0 && (
+        <Link href="/compliance" onClick={onNav}>
           <div
-            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium"
+            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium cursor-pointer hover:opacity-80 transition-opacity"
             style={{ background: "rgba(241,115,138,0.07)", color: CORAL }}
           >
             <AlertTriangle size={12} />
             {alertCount} unread alert{alertCount !== 1 ? "s" : ""}
           </div>
-        )}
+        </Link>
+      )}
 
-        {/* ── Profile ── */}
-        <div
-          className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")}
-          style={{ borderTop: `1px solid ${BORDER}` }}
-        >
-          {compact ? (
+      {/* ── Profile ──────────────────────────────────────────────── */}
+      <div
+        className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")}
+        style={{ borderTop: `1px solid ${BORDER}` }}
+      >
+        {compact ? (
+          <div
+            className="w-8 h-8 rounded-xl mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            title={displayName}
+          >
+            {initials}
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5">
             <div
-              className="w-8 h-8 rounded-xl mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0"
               style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-              title={displayName}
             >
               {initials}
             </div>
-          ) : (
-            <div className="flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-              >
-                {initials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[12.5px] font-semibold truncate" style={{ color: TEXT }}>{displayName}</p>
-                <p className="text-[10.5px] capitalize truncate" style={{ color: MUTED }}>{displayRole}</p>
-              </div>
-              <button
-                onClick={logout}
-                title="Sign out"
-                className="shrink-0 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
-                style={{ color: MUTED }}
-              >
-                <LogOut size={13} />
-              </button>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12.5px] font-semibold truncate" style={{ color: TEXT }}>
+                {displayName}
+              </p>
+              <p className="text-[10.5px] capitalize truncate" style={{ color: MUTED }}>
+                {displayRole}
+              </p>
             </div>
-          )}
-        </div>
+            <button
+              onClick={onLogout}
+              title="Sign out"
+              className="shrink-0 p-1.5 rounded-lg hover:bg-pink-50 transition-colors"
+              style={{ color: MUTED }}
+            >
+              <LogOut size={13} />
+            </button>
+          </div>
+        )}
       </div>
-    );
+    </div>
+  );
+}
+
+// ── Main layout ───────────────────────────────────────────────────────────────
+export function AppLayout({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const [drawerOpen, setDrawerOpen]   = useState(false);
+  const [collapsed, setCollapsed]     = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
+
+  const { settings } = useSettings();
+  const { user, logout } = useAuth();
+  const { data: alerts = [] } = useGetUnreadAlerts();
+
+  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
+  const displayRole = (user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker");
+  const initials    = getInitials(displayName);
+  const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
+
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* noop */ }
+  };
+
+  const sharedProps = {
+    location,
+    collapsed,
+    alertCount,
+    displayName,
+    displayRole,
+    initials,
+    onToggle: toggleCollapse,
+    onLogout: logout,
   };
 
   return (
@@ -250,16 +299,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <aside
         className="hidden md:flex flex-col h-screen sticky top-0 bg-white shrink-0 overflow-hidden"
         style={{
-          width: collapsed ? 60 : 220,
-          transition: "width 200ms ease",
+          width: collapsed ? 64 : 224,
+          transition: "width 220ms cubic-bezier(0.4, 0, 0.2, 1)",
           borderRight: `1px solid ${BORDER}`,
           boxShadow: "2px 0 12px rgba(84,34,105,0.04)",
         }}
       >
-        <SidebarInner />
+        <SidebarContents {...sharedProps} isDrawer={false} />
       </aside>
 
-      {/* ── Main content ── */}
+      {/* ── Main content column ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Mobile top bar */}
@@ -274,7 +323,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <Sparkles size={14} color="white" strokeWidth={1.5} />
             </div>
-            <span className="text-[17px] font-black tracking-tight">
+            <span className="text-[17px] font-black tracking-tight select-none">
               <span style={{ color: TEXT }}>Care</span>
               <span style={{ color: CORAL }}>Scribe</span>
             </span>
@@ -282,7 +331,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Link href="/sessions/new">
               <button
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-white text-[12px] font-bold"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-[12px] font-bold"
                 style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
               >
                 <Plus size={12} strokeWidth={2.5} /> New
@@ -298,25 +347,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Desktop context bar */}
+        {/* Desktop top bar */}
         <header
-          className="hidden md:flex h-11 items-center justify-end px-6 bg-white shrink-0"
+          className="hidden md:flex h-11 items-center justify-end px-6 bg-white shrink-0 gap-3"
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
           {alertCount > 0 && (
             <Link href="/compliance">
               <button
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11.5px] font-semibold transition-colors hover:bg-pink-50 mr-2"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11.5px] font-semibold transition-colors hover:bg-pink-50"
                 style={{ color: CORAL }}
               >
-                <AlertTriangle size={13} />
+                <AlertTriangle size={12} />
                 {alertCount} alert{alertCount !== 1 ? "s" : ""}
               </button>
             </Link>
           )}
-          <div className="flex items-center gap-2 pl-2" style={{ borderLeft: `1px solid ${BORDER}` }}>
+          <div
+            className="flex items-center gap-2 pl-3"
+            style={{ borderLeft: `1px solid ${BORDER}` }}
+          >
             <div
-              className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white select-none"
               style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
               {initials}
@@ -336,7 +388,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile bottom nav ── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white"
-        style={{ borderTop: `1px solid ${BORDER}`, paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={{
+          borderTop: `1px solid ${BORDER}`,
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
       >
         {BOTTOM_NAV.map((item) => {
           const active = isActive(location, item.href);
@@ -355,7 +410,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* Mobile drawer overlay */}
+      {/* Mobile drawer backdrop */}
       {drawerOpen && (
         <div
           className="md:hidden fixed inset-0 z-40"
@@ -367,12 +422,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col transition-transform duration-250",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col transition-transform duration-200",
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ boxShadow: "4px 0 24px rgba(84,34,105,0.15)" }}
       >
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 z-10">
           <button
             onClick={() => setDrawerOpen(false)}
             className="p-2 rounded-xl hover:bg-pink-50 transition-colors"
@@ -381,7 +436,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <X size={16} />
           </button>
         </div>
-        <SidebarInner onNav={() => setDrawerOpen(false)} isDrawer />
+        <SidebarContents
+          {...sharedProps}
+          isDrawer
+          collapsed={false}
+          onNav={() => setDrawerOpen(false)}
+        />
       </aside>
     </div>
   );
