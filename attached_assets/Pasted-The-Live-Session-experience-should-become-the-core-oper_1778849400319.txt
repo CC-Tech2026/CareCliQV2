@@ -1,0 +1,425 @@
+The Live Session experience should become the core operating system for frontline support work — not just a chat screen.
+
+Right now, most NDIS software treats session notes as:
+
+forms
+admin tasks
+afterthoughts
+
+CareScribe should instead treat the session as:
+
+a live operational workspace.
+
+The redesign should merge:
+
+WhatsApp simplicity
+AI-assisted compliance
+evidence capture
+real-time clinical guidance
+low-stress documentation
+Core UX Shift
+From:
+Chat app with compliance score
+To:
+Live support workspace with conversational evidence tracking
+
+That distinction changes everything.
+
+Recommended Live Session Architecture
+┌────────────────────────────┐
+│ Dynamic Compliance Header  │
+├────────────────────────────┤
+│ Session Health Strip       │
+├────────────────────────────┤
+│ Live Activity Timeline     │
+│                            │
+│ Notes / Voice / Photos     │
+│ AI Events / Evidence       │
+│ Goal Tracking              │
+│ Incident Detection         │
+│                            │
+├────────────────────────────┤
+│ Sticky Smart Composer      │
+└────────────────────────────┘
+1. Dynamic Compliance Header
+
+(The Session Guardian)
+
+This should feel alive.
+
+NOT:
+
+static top nav
+
+Instead:
+
+continuously evolving session intelligence
+Header Structure
+┌────────────────────────────┐
+│ ← Sarah Nguyen         84% │
+│ Community Access Session   │
+│                            │
+│ Goal Chips                 │
+│ Session Time • Live        │
+└────────────────────────────┘
+Important Improvement
+Add Session State
+
+This is missing in most designs.
+
+Session statuses:
+State	Meaning
+Live	Active support happening
+Idle	No activity detected
+Needs Review	Compliance weak
+Claim Ready	Sufficient evidence
+Supervisor Review	Escalated
+Offline Syncing	Poor connection
+Header Intelligence
+
+The score should NOT just be a percentage.
+
+Instead:
+
+84%
+Claim Ready
+
+or
+
+61%
+Needs Goal Alignment
+
+or
+
+43%
+Add Participant Outcomes
+
+This makes the score actionable.
+
+2. Session Health Strip
+
+(New Layer You Need)
+
+Directly under the header.
+
+This becomes the “progress tracker” for documentation quality.
+
+Visual Example
+Goals ✓
+Evidence ✓
+Outcomes ⚠
+Safety ✓
+Environment ✓
+
+Each item:
+
+tap expands explanation
+AI explains missing items
+non-threatening guidance
+Why This Is Important
+
+Workers do NOT understand compliance percentages.
+
+But they DO understand:
+
+Outcome missing
+
+This lowers cognitive load dramatically.
+
+3. The Live Activity Timeline
+
+(The Heart of the Product)
+
+The timeline should NOT behave like normal messaging.
+
+It should behave like:
+
+Operational event stream
+Timeline Content Types
+A. Support Worker Note
+Sarah independently ordered lunch
+with minimal prompting today.
+
+System underneath:
+
+✓ Goal 2 linked
+✓ Independence outcome detected
+✓ Timestamp captured
+B. Passive AI System Events
+
+(New Critical Feature)
+
+These make the app feel intelligent.
+
+Example:
+
+CareScribe AI
+Detected progression language
+Compliance +8%
+
+or:
+
+CareScribe AI
+Suggested Goal:
+Community Participation
+[Attach]
+
+These should appear subtly.
+
+C. Environmental Check Events
+Environment Adjusted
+✓ Noise reduced
+✓ Seating repositioned
+✓ Participant calmer afterward
+
+This is extremely important for NDIS audit defensibility.
+
+D. Timeline Grouping
+
+Group entries by:
+
+activity
+location
+support outcome
+
+NOT only timestamps.
+
+This creates meaningful session storytelling.
+
+4. Smart Session Composer
+
+(Biggest UX Opportunity)
+
+Your current input likely behaves like a normal chat box.
+
+It should behave more like:
+
+AI-assisted evidence capture
+Recommended Layout
+[ + ] [ Describe support provided... ] [ Mic ] [ Camera ]
+Smart Prompting
+
+Input placeholder changes dynamically.
+
+Examples:
+
+What progress did the participant make?
+Describe independence or engagement observed...
+Mention emotional regulation outcomes...
+
+This gently coaches workers.
+
+Voice Recording UX
+
+This is where CareScribe can dominate competitors.
+
+Most support workers hate typing.
+
+Your voice workflow should be:
+
+beautiful
+calming
+AI-assisted
+Recording Overlay
+────────────────
+ Listening...
+────────────────
+
+Mention:
+• participant progress
+• independence
+• emotional response
+
+Live Analysis:
+✓ Outcome language detected
+✓ Goal reference detected
+Critical UX Improvement
+
+DO NOT show:
+
+Recording...
+
+Show:
+
+CareScribe is organizing your documentation...
+
+This changes emotional perception completely.
+
+5. Smart AI Compliance Assistance
+
+The system should constantly work quietly in the background.
+
+Example Interaction
+Worker types:
+"Participant had a good outing."
+
+AI immediately responds inline:
+
+Suggestion:
+Describe what the participant achieved
+or how support reduced barriers.
+Better Version Suggested
+"Participant engaged in community shopping
+with reduced verbal prompting."
+
+Then:
+
+Compliance +14%
+
+This creates gamified documentation quality.
+
+6. Incident Handling
+
+(Most Important Compliance Workflow)
+
+This MUST feel emotionally safe.
+
+Most incident systems feel:
+
+legal
+stressful
+punitive
+
+CareScribe should feel:
+
+guided
+calm
+supportive
+Incident Entry Detection
+
+If worker types:
+
+fall
+aggressive
+unsafe
+medication error
+injury
+
+Show subtle inline card:
+
+Potential incident detected
+[Open Guided Report]
+
+NOT a scary modal.
+
+Zero-Panic Incident Experience
+Replace Forms With Guided Cards
+Step 1
+What happened?
+
+[Voice Note Shortcut]
+[Large Text Input]
+Step 2
+Immediate actions taken:
+
+[✓] Participant reassured
+[✓] Environment secured
+[✓] Supervisor informed
+Step 3
+Current participant wellbeing:
+
+○ Stable
+○ Distressed
+○ Requires follow-up
+Final Screen
+✓ Draft safely saved
+✓ Supervisor can review later
+✓ You can continue the session
+
+This is psychologically critical.
+
+7. Mobile Interaction Improvements
+A. Floating Evidence Capture
+
+Instead of hiding everything behind [+]
+
+Use expandable FAB:
+
+      [🎤]
+ [📷]     [🎯]
+      [+]
+
+Faster one-thumb operation.
+
+B. Swipe Actions
+Swipe message right:
+Link to Goal
+Swipe left:
+Add Follow-up
+
+Fast workflows matter massively in the field.
+
+C. Long Press Bubble
+
+Opens:
+
+Edit note
+Improve wording with AI
+Add evidence
+Convert to incident
+Translate note
+
+This integrates your multilingual system naturally.
+
+8. Session Completion Experience
+
+(Huge Opportunity)
+
+Do NOT let sessions simply “end.”
+
+Instead:
+
+generate confidence
+End Session Summary
+Session Complete
+
+Compliance Score: 92%
+
+✓ Goals linked
+✓ Evidence captured
+✓ Outcome language detected
+✓ Environmental supports documented
+✓ Claim-ready notes prepared
+
+Then:
+
+[Finalize Session]
+9. Design Language for Live Sessions
+The UI should feel:
+Emotion	Design Strategy
+Calm	Soft surfaces
+Safe	Warm language
+Intelligent	AI micro-events
+Fast	Minimal taps
+Trustworthy	Structured timelines
+Human	Conversational layouts
+Visual Style Direction
+
+Your current system likely looks:
+
+dashboard-heavy
+SaaS-admin-like
+
+The Live Session should instead feel:
+
+softer
+immersive
+operational
+mobile-native
+Recommended Visual Inspiration
+
+Blend elements from:
+
+WhatsApp
+Linear
+Slack
+modern healthcare mobile apps
+Most Important Product Insight
+
+The Live Session should not feel like:
+
+documentation
+
+It should feel like:
+
+CareScribe quietly building the documentation for me.
