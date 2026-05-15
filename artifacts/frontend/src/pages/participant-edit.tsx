@@ -1,5 +1,5 @@
+import React, { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -18,12 +18,12 @@ import { ArrowLeft, Edit, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const T1     = "#1C1626";
-const T2     = "#4A3D5A";
-const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
+const PLUM        = "#542269";
+const CORAL       = "#F1738A";
+const T1          = "#1C1626";
+const T2          = "#4A3D5A";
+const T3          = "#7A6A8A";
+const BORDER      = "rgba(232,213,232,0.5)";
 const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const schema = z.object({
@@ -41,13 +41,14 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+// Updated FormCard: Changed to single column flow on mobile, 2 columns on tablet/desktop
 function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
-      <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+      <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
         <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{title}</p>
       </div>
-      <div className="p-6 grid grid-cols-2 gap-4">{children}</div>
+      <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 }
@@ -116,19 +117,20 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
-        <Skeleton className="h-48 w-full rounded-2xl" />
+      <div className="max-w-2xl mx-auto space-y-6 p-4 md:p-8">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-12 w-64 rounded-xl" />
+        <Skeleton className="h-80 w-full rounded-2xl" />
+        <Skeleton className="h-60 w-full rounded-2xl" />
       </div>
     );
   }
 
   if (!participant) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-20" style={{ color: T2 }}>
+      <div className="max-w-2xl mx-auto text-center py-20 px-4" style={{ color: T2 }}>
         Participant not found.{" "}
-        <button onClick={() => navigate("/patients")} className="underline" style={{ color: CORAL }}>
+        <button onClick={() => navigate("/patients")} className="underline font-medium" style={{ color: CORAL }}>
           Back to Participants
         </button>
       </div>
@@ -136,35 +138,35 @@ export default function ParticipantEdit({ id }: { id: string }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 p-4 md:p-8">
 
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-[13px]">
+      {/* Breadcrumb - Touch-friendly tap targets */}
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <button
           onClick={() => navigate("/patients")}
-          className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
+          className="flex items-center gap-1.5 transition-opacity hover:opacity-70 py-1.5 -my-1.5"
           style={{ color: T3 }}
         >
           <ArrowLeft size={14} /> Participants
         </button>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
-        <span className="truncate max-w-[140px]" style={{ color: T2 }}>
+        <span className="truncate max-w-[120px] sm:max-w-[200px]" style={{ color: T2 }}>
           {String(participant.full_name ?? "")}
         </span>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
         <span className="font-medium" style={{ color: T1 }}>Edit</span>
       </div>
 
-      {/* Header */}
+      {/* Header Info Banner */}
       <div className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0"
+        <div className="h-11 w-11 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: `${CORAL}15` }}>
           <Edit size={18} style={{ color: PLUM }} />
         </div>
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: T1 }}>Edit Participant</h1>
-          <p className="text-[13px]" style={{ color: T2 }}>
-            {String(participant.full_name ?? "")} · NDIS {String(participant.ndis_number ?? "")}
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-bold leading-tight truncate" style={{ color: T1 }}>Edit Participant</h1>
+          <p className="text-[13px] mt-0.5 truncate" style={{ color: T2 }}>
+            {String(participant.full_name ?? "")} · <span className="font-medium">NDIS:</span> {String(participant.ndis_number ?? "")}
           </p>
         </div>
       </div>
@@ -172,45 +174,51 @@ export default function ParticipantEdit({ id }: { id: string }) {
       <Form {...form}>
         <form onSubmit={form.handleSubmit((d) => updateMutation.mutate(d))} className="space-y-5">
 
+          {/* SECTION 1: Personal Details */}
           <FormCard title="Personal Details">
             <FormField control={form.control} name="full_name" render={({ field }) => (
-              <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Full Name <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Full Name <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="ndis_number" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="date_of_birth" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input type="date" data-testid="input-date-of-birth" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-date-of-birth" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="email" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Email</FormLabel>
-                <FormControl><Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Email</FormLabel>
+                <FormControl><Input type="email" className="h-10 text-[14px] rounded-xl" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Phone</FormLabel>
-                <FormControl><Input placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Phone</FormLabel>
+                <FormControl><Input type="tel" className="h-10 text-[14px] rounded-xl" placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="primary_disability" render={({ field }) => (
-              <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Primary Disability</FormLabel>
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Primary Disability</FormLabel>
                 <FormControl>
                   <SmartInput
                     placeholder="e.g. Autism Spectrum Disorder"
@@ -222,12 +230,15 @@ export default function ParticipantEdit({ id }: { id: string }) {
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="biological_sex" render={({ field }) => (
-              <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Biological Sex</FormLabel>
+              <FormItem className="sm:col-span-2 md:col-span-1">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Biological Sex</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
-                    <SelectTrigger data-testid="select-biological-sex"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-white" data-testid="select-biological-sex" style={{ borderColor: BORDER }}>
+                      <SelectValue />
+                    </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="unspecified">Prefer not to say</SelectItem>
@@ -240,13 +251,16 @@ export default function ParticipantEdit({ id }: { id: string }) {
             )} />
           </FormCard>
 
+          {/* SECTION 2: NDIS Plan */}
           <FormCard title="NDIS Plan">
             <FormField control={form.control} name="plan_status" render={({ field }) => (
-              <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger data-testid="select-plan-status"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-white" data-testid="select-plan-status" style={{ borderColor: BORDER }}>
+                      <SelectValue />
+                    </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
@@ -258,35 +272,38 @@ export default function ParticipantEdit({ id }: { id: string }) {
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="plan_start_date" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Start Date</FormLabel>
-                <FormControl><Input type="date" data-testid="input-plan-start-date" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Start Date</FormLabel>
+                <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-start-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="plan_end_date" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan End Date</FormLabel>
-                <FormControl><Input type="date" data-testid="input-plan-end-date" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan End Date</FormLabel>
+                <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-end-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
+
             <FormField control={form.control} name="total_budget" render={({ field }) => (
-              <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Total Budget ($)</FormLabel>
-                <FormControl><Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Total Budget ($)</FormLabel>
+                <FormControl><Input type="number" className="h-10 text-[14px] rounded-xl" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
           </FormCard>
 
-          {/* Actions */}
-          <div className="flex items-center justify-between pt-1">
+          {/* Form Actions Layout - Clean spacing for thumb tabs */}
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
             <button
               type="button"
               onClick={() => navigate("/patients")}
-              className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB]"
+              className="h-11 sm:h-10 px-5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB] text-center"
               style={{ borderColor: BORDER, color: T2 }}
             >
               Cancel
@@ -294,13 +311,20 @@ export default function ParticipantEdit({ id }: { id: string }) {
             <button
               type="submit"
               disabled={updateMutation.isPending}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="flex items-center justify-center gap-2 h-11 sm:h-10 px-6 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
               style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
-              {updateMutation.isPending
-                ? <Loader2 size={14} className="animate-spin" />
-                : <Edit size={14} />}
-              Save Changes
+              {updateMutation.isPending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Saving Changes...</span>
+                </>
+              ) : (
+                <>
+                  <Edit size={14} />
+                  <span>Save Changes</span>
+                </>
+              )}
             </button>
           </div>
         </form>
