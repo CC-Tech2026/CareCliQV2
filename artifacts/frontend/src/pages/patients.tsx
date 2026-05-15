@@ -17,6 +17,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  ArrowLeft,
+  FileText,
+  Target,
+  Stethoscope,
+  UserCheck,
+  Trash2,
+  Plus,
+  ChevronRight,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -39,6 +47,9 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Form,
   FormControl,
@@ -396,17 +407,18 @@ function EditParticipantDialog({
 }
 
 // ---------------------------------------------------------------------------
-// NDIS Plan Setup Dialog
+// Native Inline NDIS Plan Setup View (Replaces Dialog)
 // ---------------------------------------------------------------------------
 
-function SetupPlanDialog({
+function InlineSetupPlan({
   participantId,
+  onCancel,
   onSaved,
 }: {
   participantId: string;
+  onCancel: () => void;
   onSaved: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
   const planForm = useForm<PlanFormValues>({
@@ -433,140 +445,491 @@ function SetupPlanDialog({
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "NDIS plan saved" });
-      setOpen(false);
+      toast({ title: "NDIS plan saved successfully" });
       onSaved();
     },
     onError: () => toast({ title: "Failed to save plan", variant: "destructive" }),
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <PlusCircle className="h-3.5 w-3.5" /> Set Up NDIS Plan
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 border-b pb-4 border-slate-100">
+        <Button size="icon" variant="ghost" onClick={onCancel} className="h-8 w-8 rounded-lg">
+          <ArrowLeft className="h-4 w-4 text-slate-500" />
         </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Set Up NDIS Plan</DialogTitle>
-        </DialogHeader>
-        <Form {...planForm}>
-          <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={planForm.control}
-                name="plan_number"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Plan Reference Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 2024-ABC-001" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_start"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Plan Start <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_end"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Plan End <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="total_funding"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Total Funding ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="50000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="col-span-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" /> Budget by Support Category
-                </p>
+        <div>
+          <h3 className="text-base font-bold text-slate-900">Set Up NDIS Plan</h3>
+          <p className="text-xs text-slate-500">Configure insurance brackets and localized standard categories.</p>
+        </div>
+      </div>
+
+      <Form {...planForm}>
+        <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-6">
+          <div className="bg-slate-50 border border-slate-100/80 rounded-xl p-4 grid grid-cols-2 gap-4">
+            <FormField
+              control={planForm.control}
+              name="plan_number"
+              render={({ field }) => (
+                <FormItem className="col-span-2">
+                  <FormLabel className="text-slate-700 font-medium">Plan Reference Number</FormLabel>
+                  <FormControl>
+                    <Input className="bg-white" placeholder="e.g. 2024-ABC-001" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={planForm.control}
+              name="plan_start"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-700 font-medium">
+                    Plan Start <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input className="bg-white" type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={planForm.control}
+              name="plan_end"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-700 font-medium">
+                    Plan End <span className="text-destructive">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <Input className="bg-white" type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="border border-purple-100/70 rounded-xl p-5 space-y-4">
+            <FormField
+              control={planForm.control}
+              name="total_funding"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-slate-900 font-semibold flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-purple-700" /> Total Funding Amount ($)
+                  </FormLabel>
+                  <FormControl>
+                    <Input className="text-base font-medium border-purple-200 focus-visible:ring-purple-600" type="number" placeholder="50000" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <DollarSign className="h-3.5 w-3.5" /> Budget Splits by Support Category
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <FormField
+                  control={planForm.control}
+                  name="core_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-slate-600 text-xs">Core Supports</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="capacity_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-slate-600 text-xs">Capacity Building</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="capital_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-slate-600 text-xs">Capital Supports</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <FormField
-                control={planForm.control}
-                name="core_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Core Supports ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capacity_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Capacity Building ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capital_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Capital Supports ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Plan
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createPlan.isPending} className="bg-purple-950 hover:bg-purple-900">
+              {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save NDIS Plan
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Plan Goals Panel
+// ---------------------------------------------------------------------------
+
+function PlanGoalsPanel({ participantId }: { participantId: string }) {
+  const { toast } = useToast();
+  const [showAdd, setShowAdd] = useState(false);
+  const [newDesc, setNewDesc] = useState("");
+  const [newCategory, setNewCategory] = useState("general");
+  const [newTargetDate, setNewTargetDate] = useState("");
+
+  const { data: goals = [], isLoading, refetch } = useQuery<any[]>({
+    queryKey: ["plan-goals", participantId],
+    queryFn: async () => {
+      const res = await fetch(`/api/participants/${participantId}/plan-goals`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const addGoal = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/participants/${participantId}/plan-goals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: newDesc,
+          category: newCategory,
+          target_date: newTargetDate || null,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).detail ?? "Failed to add goal");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Goal added" });
+      setNewDesc("");
+      setNewTargetDate("");
+      setShowAdd(false);
+      void refetch();
+    },
+    onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
+  });
+
+  const toggleAchieved = useMutation({
+    mutationFn: async ({ goalId, achieved }: { goalId: string; achieved: boolean }) => {
+      const res = await fetch(`/api/participants/${participantId}/plan-goals/${goalId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_achieved: achieved }),
+      });
+      if (!res.ok) throw new Error("Failed to update goal");
+      return res.json();
+    },
+    onSuccess: () => void refetch(),
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const deleteGoal = useMutation({
+    mutationFn: async (goalId: string) => {
+      await fetch(`/api/participants/${participantId}/plan-goals/${goalId}`, { method: "DELETE" });
+    },
+    onSuccess: () => { toast({ title: "Goal removed" }); void refetch(); },
+  });
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    core: "Core",
+    capacity_building: "Capacity Building",
+    capital: "Capital",
+    general: "General",
+  };
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    core: "bg-blue-50 text-blue-700 border-blue-200",
+    capacity_building: "bg-purple-50 text-purple-700 border-purple-200",
+    capital: "bg-amber-50 text-amber-700 border-amber-200",
+    general: "bg-slate-100 text-slate-600 border-slate-200",
+  };
+
+  if (isLoading) return <div className="py-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500">{goals.length} goal{goals.length !== 1 ? "s" : ""} linked to active plan</p>
+        <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setShowAdd(!showAdd)}>
+          <Plus className="h-3.5 w-3.5" /> Add Goal
+        </Button>
+      </div>
+
+      {showAdd && (
+        <div className="border border-purple-200/60 rounded-xl p-4 bg-purple-50/30 space-y-3">
+          <p className="text-xs font-semibold text-slate-700">New Plan Goal</p>
+          <Textarea
+            placeholder="Describe the NDIS goal…"
+            value={newDesc}
+            onChange={(e) => setNewDesc(e.target.value)}
+            className="text-sm min-h-[72px]"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-600 mb-1 block">Support Category</label>
+              <Select value={newCategory} onValueChange={setNewCategory}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="core">Core Supports</SelectItem>
+                  <SelectItem value="capacity_building">Capacity Building</SelectItem>
+                  <SelectItem value="capital">Capital Supports</SelectItem>
+                  <SelectItem value="general">General</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-600 mb-1 block">Target Date</label>
+              <Input type="date" className="h-8 text-xs" value={newTargetDate} onChange={(e) => setNewTargetDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={() => addGoal.mutate()} disabled={!newDesc.trim() || addGoal.isPending} className="h-8 text-xs bg-purple-950 hover:bg-purple-900">
+              {addGoal.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Save Goal
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowAdd(false)} className="h-8 text-xs">Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {goals.length === 0 && !showAdd && (
+        <div className="text-center py-10 text-slate-400">
+          <Target className="h-8 w-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">No plan goals yet.</p>
+          <p className="text-xs mt-1">Set up an NDIS plan first, then add goals linked to it.</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {goals.map((g: any) => (
+          <div key={g.id} className={`flex items-start gap-3 p-3 rounded-xl border transition-colors ${g.is_achieved ? "bg-emerald-50/50 border-emerald-100" : "bg-white border-slate-100"}`}>
+            <button
+              onClick={() => toggleAchieved.mutate({ goalId: g.id, achieved: !g.is_achieved })}
+              className="mt-0.5 shrink-0"
+              title={g.is_achieved ? "Mark incomplete" : "Mark achieved"}
+            >
+              {g.is_achieved
+                ? <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                : <div className="h-5 w-5 rounded-full border-2 border-slate-300 hover:border-emerald-400 transition-colors" />}
+            </button>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm ${g.is_achieved ? "line-through text-slate-400" : "text-slate-800"}`}>{g.description}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[g.category] ?? CATEGORY_COLORS.general}`}>
+                  {CATEGORY_LABELS[g.category] ?? g.category}
+                </span>
+                {g.target_date && (
+                  <span className="text-[10px] text-slate-400">Due {safeFormat(g.target_date)}</span>
+                )}
+                {g.goal_code && (
+                  <span className="text-[10px] text-slate-400 font-mono">{g.goal_code}</span>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => deleteGoal.mutate(g.id)}
+              className="shrink-0 text-slate-300 hover:text-red-400 transition-colors p-1"
+              title="Remove goal"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Practitioner Allocations Panel
+// ---------------------------------------------------------------------------
+
+function AllocationsPanel({ participantId }: { participantId: string }) {
+  const { toast } = useToast();
+
+  const { data: allocations = [], isLoading, refetch } = useQuery<any[]>({
+    queryKey: ["allocations", participantId],
+    queryFn: async () => {
+      const res = await fetch(`/api/participants/${participantId}/allocations`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const removeAllocation = useMutation({
+    mutationFn: async (allocationId: string) => {
+      await fetch(`/api/participants/${participantId}/allocations/${allocationId}`, { method: "DELETE" });
+    },
+    onSuccess: () => { toast({ title: "Allocation removed" }); void refetch(); },
+  });
+
+  const ROLE_LABELS: Record<string, string> = {
+    primary_ot: "Primary OT",
+    support_worker: "Support Worker",
+    supervisor: "Supervisor",
+  };
+
+  const ROLE_COLORS: Record<string, string> = {
+    primary_ot: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    support_worker: "bg-blue-50 text-blue-700 border-blue-200",
+    supervisor: "bg-amber-50 text-amber-700 border-amber-200",
+  };
+
+  if (isLoading) return <div className="py-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500">{allocations.length} practitioner{allocations.length !== 1 ? "s" : ""} allocated</p>
+      </div>
+
+      {allocations.length === 0 && (
+        <div className="text-center py-10 text-slate-400">
+          <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">No practitioners allocated.</p>
+          <p className="text-xs mt-1">Allocations are managed via the user administration panel or by assigning a worker during onboarding.</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {allocations.map((a: any) => {
+          const user = a.user ?? {};
+          const name = user.full_name || user.email || "Unknown";
+          return (
+            <div key={a.id} className={`flex items-center gap-3 p-3 rounded-xl border ${a.is_active ? "bg-white border-slate-100" : "bg-slate-50 border-slate-100 opacity-60"}`}>
+              <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                <span className="text-xs font-bold text-purple-700">{name.charAt(0).toUpperCase()}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">{name}</p>
+                {user.email && user.full_name && (
+                  <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${ROLE_COLORS[a.allocated_role] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                  {ROLE_LABELS[a.allocated_role] ?? a.allocated_role}
+                </span>
+                {!a.is_active && <Badge variant="secondary" className="text-[10px] py-0">Inactive</Badge>}
+              </div>
+              <button
+                onClick={() => removeAllocation.mutate(a.id)}
+                className="shrink-0 text-slate-300 hover:text-red-400 transition-colors p-1"
+                title="Remove allocation"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Budget Summary Panel
+// ---------------------------------------------------------------------------
+
+function BudgetPanel({ participantId }: { participantId: string }) {
+  const { data: budget, isLoading } = useQuery<any>({
+    queryKey: ["budget-summary", participantId],
+    queryFn: async () => {
+      const res = await fetch(`/api/participants/${participantId}/budget-summary`);
+      if (!res.ok) return { has_plan: false };
+      return res.json();
+    },
+  });
+
+  if (isLoading) return <div className="py-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>;
+
+  if (!budget?.has_plan) {
+    return (
+      <div className="text-center py-10 text-slate-400">
+        <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-40" />
+        <p className="text-sm">No active NDIS plan found.</p>
+        <p className="text-xs mt-1">Set up a plan to track budget by support category.</p>
+      </div>
+    );
+  }
+
+  const PILLAR_COLORS: Record<string, { bar: string; badge: string }> = {
+    core: { bar: "bg-blue-500", badge: "bg-blue-50 text-blue-700 border-blue-200" },
+    capacity_building: { bar: "bg-purple-500", badge: "bg-purple-50 text-purple-700 border-purple-200" },
+    capital: { bar: "bg-amber-500", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 text-xs text-slate-600">
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+          <p className="font-medium text-slate-500">Plan Number</p>
+          <p className="text-slate-800 font-semibold mt-0.5">{budget.plan_number || "—"}</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+          <p className="font-medium text-slate-500">Status</p>
+          <p className={`font-semibold mt-0.5 capitalize ${budget.status === "active" ? "text-emerald-600" : "text-slate-700"}`}>{budget.status}</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+          <p className="font-medium text-slate-500">Plan Period</p>
+          <p className="text-slate-800 font-semibold mt-0.5">{safeFormat(budget.plan_start)} – {safeFormat(budget.plan_end)}</p>
+        </div>
+        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+          <p className="font-medium text-slate-500">Total Funding</p>
+          <p className="text-slate-800 font-semibold mt-0.5">${Number(budget.total_funding ?? 0).toLocaleString()}</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">3 NDIS Support Pillars</p>
+        {(budget.budgets ?? []).map((b: any) => {
+          const colors = PILLAR_COLORS[b.category] ?? { bar: "bg-slate-400", badge: "bg-slate-100 text-slate-600 border-slate-200" };
+          const pct = Math.min(b.percent_used ?? 0, 100);
+          return (
+            <div key={b.category} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${colors.badge}`}>{b.category_label}</span>
+                <span className="text-xs text-slate-500">${Number(b.used ?? 0).toLocaleString()} / ${Number(b.allocated ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${colors.bar} ${pct >= 90 ? "opacity-80" : ""}`} style={{ width: `${pct}%` }} />
+              </div>
+              <p className="text-[10px] text-right text-slate-400">{pct}% used · ${Number(b.remaining ?? 0).toLocaleString()} remaining</p>
+            </div>
+          );
+        })}
+        {(budget.budgets ?? []).length === 0 && (
+          <p className="text-xs text-slate-400 text-center py-4">No budget allocations set. Edit the NDIS plan to add Core, Capacity Building, and Capital splits.</p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -575,20 +938,84 @@ function SetupPlanDialog({
 // ---------------------------------------------------------------------------
 
 function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
+  const [currentView, setCurrentView] = useState<"profile" | "setup_plan">("profile");
+  const { data: participant } = useQuery<any>({
+    queryKey: ["participant", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/participants/${id}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  if (currentView === "setup_plan") {
+    return (
+      <div className="p-6">
+        <InlineSetupPlan
+          participantId={id}
+          onCancel={() => setCurrentView("profile")}
+          onSaved={() => {
+            onRefreshList();
+            setCurrentView("profile");
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between border-b pb-4 border-purple-100/50">
-        <div>
-          <h3 className="text-lg font-bold text-slate-900">Clinical Profile & History</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Manage practitioner documentation and funding tracking.</p>
+    <div className="p-5 space-y-5 overflow-y-auto h-full">
+      {/* Header */}
+      <div className="flex items-start justify-between border-b pb-4 border-purple-100/50">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold text-slate-900 truncate">{participant?.full_name ?? "Participant"}</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            NDIS {participant?.ndis_number ?? "—"} · {participant?.primary_disability ?? "No disability recorded"}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-8 text-xs border-purple-200 text-purple-950 hover:bg-purple-50/50"
+            onClick={() => setCurrentView("setup_plan")}
+          >
+            <PlusCircle className="h-3.5 w-3.5" /> Set Up Plan
+          </Button>
+          <Link href={`/participants/${id}`}>
+            <Button size="sm" variant="ghost" className="h-8 text-xs gap-1">
+              Full Profile <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
         </div>
       </div>
-      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-sm text-slate-600">
-        Clinical case details, analytics tabs, and historical timelines for entry reference ID #{id}.
-      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="goals">
+        <TabsList className="w-full grid grid-cols-3 h-9 bg-slate-100/70 rounded-xl">
+          <TabsTrigger value="goals" className="text-xs rounded-lg gap-1.5">
+            <Target className="h-3.5 w-3.5" /> Plan Goals
+          </TabsTrigger>
+          <TabsTrigger value="budget" className="text-xs rounded-lg gap-1.5">
+            <DollarSign className="h-3.5 w-3.5" /> Budget
+          </TabsTrigger>
+          <TabsTrigger value="allocations" className="text-xs rounded-lg gap-1.5">
+            <UserCheck className="h-3.5 w-3.5" /> Team
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="goals" className="mt-4">
+          <PlanGoalsPanel participantId={id} />
+        </TabsContent>
+
+        <TabsContent value="budget" className="mt-4">
+          <BudgetPanel participantId={id} />
+        </TabsContent>
+
+        <TabsContent value="allocations" className="mt-4">
+          <AllocationsPanel participantId={id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -115,3 +115,37 @@ class NDISPlanCreate(BaseModel):
     core_budget: Optional[float] = None
     capacity_budget: Optional[float] = None
     capital_budget: Optional[float] = None
+
+
+# ---------------------------------------------------------------------------
+# Patient Goals (plan-linked, replaces JSONB goals on patients table)
+# ---------------------------------------------------------------------------
+
+GoalCategory2 = Literal["core", "capacity_building", "capital", "general"]
+
+
+class PatientGoalCreate(BaseModel):
+    description: str = Field(..., min_length=1)
+    category: GoalCategory2 = "general"
+    goal_code: Optional[str] = None
+    target_date: Optional[date] = None
+
+
+class PatientGoalUpdate(BaseModel):
+    description: Optional[str] = None
+    category: Optional[GoalCategory2] = None
+    goal_code: Optional[str] = None
+    target_date: Optional[date] = None
+    is_achieved: Optional[bool] = None
+
+
+# ---------------------------------------------------------------------------
+# Practitioner Allocations
+# ---------------------------------------------------------------------------
+
+AllocatedRole = Literal["primary_ot", "support_worker", "supervisor"]
+
+
+class PractitionerAllocationCreate(BaseModel):
+    user_id: str
+    allocated_role: AllocatedRole = "support_worker"

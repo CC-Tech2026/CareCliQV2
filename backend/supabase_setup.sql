@@ -674,3 +674,107 @@ CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant
 CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
 CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
+
+-- ============================================================
+-- PARTICIPANT MODULE REFINEMENT (Schema Design v2)
+-- Addresses circular references, adds patient_goals and
+-- practitioner_allocations junction table.
+-- All statements are idempotent.
+-- ============================================================
+
+-- 1. Remove circular ndis_plan_id from patients
+--    (resolution path is ndis_plans.patient_id — no need for reverse FK)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'patients' AND column_name = 'ndis_plan_id'
+    ) THEN
+        ALTER TABLE patients DROP COLUMN IF EXISTS ndis_plan_id;
+    END IF;
+END $$;
+
+-- 2. Enforce category constraint on plan_budgets (add if not already there)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.constraint_column_usage
+        WHERE table_name = 'plan_budgets' AND constraint_name = 'plan_budgets_category_check'
+    ) THEN
+        BEGIN
+            ALTER TABLE plan_budgets
+                ADD CONSTRAINT plan_budgets_category_check
+                CHECK (category IN ('core', 'capacity_building', 'capital'));
+        EXCEPTION WHEN others THEN
+            NULL; -- constraint may already exist under a different name
+        END;
+    END IF;
+END $$;
+
+-- 3. Patient Goals — linked to ndis_plans (not stored as JSONB on patients)
+CREATE TABLE IF NOT EXISTS public.patient_goals (
+    id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    plan_id     UUID        NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
+    goal_code   VARCHAR(50),                        -- e.g. 'GOAL-01'
+    description TEXT        NOT NULL,
+    category    TEXT        NOT NULL DEFAULT 'general'
+                            CHECK (category IN ('core', 'capacity_building', 'capital', 'general')),
+    target_date DATE,
+    is_achieved BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_patient_goals_plan_id ON patient_goals(plan_id);
+
+ALTER TABLE patient_goals ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'patient_goals' AND policyname = 'service_role_all_patient_goals'
+    ) THEN
+        CREATE POLICY service_role_all_patient_goals ON patient_goals
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- Auto-update trigger for patient_goals
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_patient_goals_updated_at') THEN
+        CREATE TRIGGER update_patient_goals_updated_at
+            BEFORE UPDATE ON patient_goals
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+-- 4. Practitioner Allocations — junction between users and patients
+CREATE TABLE IF NOT EXISTS public.practitioner_allocations (
+    id             UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    patient_id     UUID        NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    user_id        UUID        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    allocated_role TEXT        NOT NULL DEFAULT 'support_worker'
+                               CHECK (allocated_role IN ('primary_ot', 'support_worker', 'supervisor')),
+    is_active      BOOLEAN     NOT NULL DEFAULT TRUE,
+    assigned_at    TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_patient_user_allocation UNIQUE (patient_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_patient_id ON practitioner_allocations(patient_id);
+CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_user_id ON practitioner_allocations(user_id);
+
+ALTER TABLE practitioner_allocations ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'practitioner_allocations'
+          AND policyname = 'service_role_all_practitioner_allocations'
+    ) THEN
+        CREATE POLICY service_role_all_practitioner_allocations ON practitioner_allocations
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;

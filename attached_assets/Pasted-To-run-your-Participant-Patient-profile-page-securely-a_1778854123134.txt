@@ -1,0 +1,150 @@
+To run your Participant/Patient profile page securely and automate audit checks smoothly, we need to clean up these four areas:
+
+patients vs ndis_plans vs plans: Your schema contains a legacy public.plans table and a public.ndis_plans table. Additionally, the patients table explicitly references both an ndis_plan_id columns AND an ndis_plans table pointing back to patient_id. This creates circular reference loops.
+
+Missing Practitioner-to-Patient Allocations: You have a public.users table (with roles like support_worker, allied_health) and a public.patients table, but no clear junction table explicitly linking which practitioner is assigned to which patient. Without this, your app cannot filter the dashboard to show a worker only their specific clients.
+
+NDIS Support Categories & Budgets: Your plan_budgets table captures categories, but NDIS audits mandate tracking the specific 3 support sub-pillars: Core, Capacity Building, and Capital, mapped to their respective support item codes.
+
+The Goals Array: Storing goals jsonb directly on the patient table makes historical tracking hard when a patient switches NDIS plans annually. Goals should be linked to the active plan.
+
+2. Refined Schema Design for the Participant Module
+Here is the cleaned-up, highly optimized backend schema strategy designed to replace or patch your existing patients, ndis_plans, and allocation relations.
+
+SQL
+-- 1. CLEANED PARTICIPANTS/PATIENTS TABLE
+-- (Removed direct ndis_plan_id to prevent circular dependency; paths resolve via ndis_plans.patient_id)
+CREATE TABLE public.patients (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    organization_id uuid REFERENCES public.organizations(id),
+    full_name text NOT NULL,
+    ndis_number character varying NOT NULL UNIQUE,
+    date_of_birth date NOT NULL,
+    biological_sex text DEFAULT 'unspecified'::text,
+    email text,
+    phone character varying,
+    address text,
+    primary_disability text,
+    plan_status character varying CHECK (plan_status::text = ANY (ARRAY['active'::text, 'pending'::text, 'review'::text, 'completed'::text])),
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT patients_pkey PRIMARY KEY (id)
+);
+
+-- 2. ROBUST NDIS PLANS ARCHITECTURE
+CREATE TABLE public.ndis_plans (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    patient_id uuid NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    plan_number text NOT NULL,
+    plan_start date NOT NULL,
+    plan_end date NOT NULL,
+    total_funding numeric DEFAULT 0 CHECK (total_funding >= 0),
+    status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'pending'::text, 'expired'::text, 'review'::text])),
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT ndis_plans_pkey PRIMARY KEY (id)
+);
+
+-- 3. SPECIFIC BUDGET TRACKING BY NDIS PILLARS
+CREATE TABLE public.plan_budgets (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    plan_id uuid NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
+    category text NOT NULL CHECK (category = ANY (ARRAY['core'::text, 'capacity_building'::text, 'capital'::text])),
+    allocated_amount numeric DEFAULT 0 CHECK (allocated_amount >= 0),
+    used_amount numeric DEFAULT 0 CHECK (used_amount >= 0),
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT plan_budgets_pkey PRIMARY KEY (id),
+    CONSTRAINT unique_plan_category UNIQUE (plan_id, category)
+);
+
+-- 4. PATIENT GOALS (Crucial for AI verification matching during live sessions)
+CREATE TABLE public.patient_goals (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    plan_id uuid NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
+    goal_code varchar(50), -- e.g., 'GOAL-01'
+    description text NOT NULL,
+    target_date date,
+    is_achieved boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT patient_goals_pkey PRIMARY KEY (id)
+);
+
+-- 5. PRACTITIONER ALLOCATION JUNCTION TABLE (The Missing Link)
+CREATE TABLE public.practitioner_allocations (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    patient_id uuid NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
+    user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    allocated_role text NOT NULL CHECK (allocated_role = ANY (ARRAY['primary_ot'::text, 'support_worker'::text, 'supervisor'::text])),
+    is_active boolean DEFAULT true,
+    assigned_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT practitioner_allocations_pkey PRIMARY KEY (id),
+    CONSTRAINT unique_patient_user_allocation UNIQUE (patient_id, user_id)
+);
+3. What Each User Persona Needs from the Profile Data
+When building your API queries to serve the frontend profile page, populate your data object based on who is logged in:
+
+A. What an Allied Health professional / OT needs:
+Clinical Foundation: Immediate access to primary_disability and the comprehensive patient_goals breakdown.
+
+Progress Mapping: Historical visibility of public.sessions metrics linked to this client to evaluate if the current therapeutic approach is effectively serving the plan goals.
+
+AI Insight Analytics: A deep pull from public.ai_summaries and public.ai_insights to monitor high-level adjustments between physical appointments.
+
+B. What a Support Worker needs:
+Daily Action Metrics: Clear instructions on safety parameters, risk management warnings, and operational field triggers.
+
+Live Budget Feedback: Immediate confirmation from plan_budgets ensuring that if they deliver a 2-hour community shift, funding is valid and their chosen support_items line code matches the core allocation parameters.
+
+Alert Framework: Visual confirmation of pending public.alerts or outstanding compliance issues flagged during the previous session block.
+
+C. What the NDIS Provider Admin / Auditor needs:
+Verification Data: Clean records displaying ndis_number, valid start/end intervals on active plans, and explicit documentation proving that matching cross-references link to public.organizations.ndis_provider_number.
+
+The Audit Shield: Instant access to public.compliance_audit_logs and automatic generation tracking patterns through public.restrictive_practice_flags to confidently clear scheduled NDIS Quality and Safeguards Commission reviews.
+
+4. Operational API Workflow Hook: Activating a Participant Plan
+When a practitioner edits or fills out the Participant Form configuration on the UI, your backend processing chain should follow this transactional workflow to calculate baseline validation states:
+
+JavaScript
+// Conceptual Backend Controller Logic for Saving Plan Configurations
+async function handlePlanSetup(req, res) {
+  const { patientId, planDetails, budgets, goals } = req.body;
+  
+  // 1. Enforce date chronological sequencing rules
+  if (new Date(planDetails.planStart) >= new Date(planDetails.planEnd)) {
+    return res.status(400).json({ error: "Plan end date must occur after the start date." });
+  }
+
+  try {
+    // Run as an atomic database transaction
+    await db.transaction(async (tx) => {
+      // 2. Insert or update the core NDIS Plan matrix row
+      const plan = await tx.ndis_plans.upsert({
+        where: { id: planDetails.id || 'new-uuid' },
+        create: { patient_id: patientId, ...planDetails },
+        update: { ...planDetails }
+      });
+
+      // 3. Populate allocation buckets for Core, Capacity Building, and Capital
+      for (let budget of budgets) {
+        await tx.plan_budgets.upsert({
+          where: { plan_id_category: { plan_id: plan.id, category: budget.category } },
+          create: { plan_id: plan.id, ...budget },
+          update: { allocated_amount: budget.allocated_amount }
+        });
+      }
+
+      // 4. Map actionable Goal descriptors directly into the verification loop
+      for (let goal of goals) {
+        await tx.patient_goals.create({
+          data: { plan_id: plan.id, description: goal.text }
+        });
+      }
+    });
+
+    return res.status(200).json({ message: "Participant NDIS matrix successfully configured for live engine validation." });
+  } catch (err) {
+    return res.status(500).json({ error: "Transaction aborted", details: err.message });
+  }
+}
+This structural shift unifies your schema cleanly. It sets up your system to run the live billing system effectively because the live session engine now has explicit access to patient_goals, specific financial budgets, and accurate user security mappings.

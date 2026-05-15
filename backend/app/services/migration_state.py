@@ -10,3 +10,5 @@ biological_sex_column_missing: bool = False
 users_onboarding_columns_missing: bool = False   # account_type, onboarding_complete, organization_id
 organizations_table_missing: bool = False
 session_messages_table_missing: bool = False
+patient_goals_table_missing: bool = False
+practitioner_allocations_table_missing: bool = False

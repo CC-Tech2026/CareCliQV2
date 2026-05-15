@@ -11,8 +11,11 @@ from ..schemas.participant import (
     NDISPlanCreate,
     ParticipantCreate,
     ParticipantUpdate,
+    PatientGoalCreate,
+    PatientGoalUpdate,
+    PractitionerAllocationCreate,
 )
-from ..services import funding_service, participant_service
+from ..services import funding_service, participant_service, goals_service, allocation_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/participants", tags=["participants"])
@@ -150,6 +153,92 @@ async def get_budget_summary(participant_id: str):
 async def get_budget_usage(participant_id: str):
     """Return paginated budget usage history."""
     return await funding_service.get_budget_usage_history(participant_id)
+
+
+# ---------------------------------------------------------------------------
+# Plan-linked Goals (patient_goals table)
+# ---------------------------------------------------------------------------
+
+@router.get("/{participant_id}/plan-goals")
+async def get_plan_goals(participant_id: str):
+    """Return goals linked to the participant's active NDIS plan."""
+    return await goals_service.get_goals_for_participant(participant_id)
+
+
+@router.post("/{participant_id}/plan-goals", status_code=201)
+async def create_plan_goal(participant_id: str, body: PatientGoalCreate):
+    """Add a new goal to the participant's active NDIS plan."""
+    participant = await participant_service.get_participant_by_id(participant_id)
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    try:
+        goal = await goals_service.create_goal(
+            participant_id=participant_id,
+            description=body.description,
+            category=body.category,
+            goal_code=body.goal_code,
+            target_date=body.target_date,
+        )
+        if not goal:
+            raise HTTPException(status_code=500, detail="Failed to create goal")
+        return goal
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("create_plan_goal(%s) failed: %s", participant_id, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/{participant_id}/plan-goals/{goal_id}")
+async def update_plan_goal(participant_id: str, goal_id: str, body: PatientGoalUpdate):
+    """Partial update on a plan goal (description, category, target_date, is_achieved)."""
+    updates = body.model_dump(exclude_unset=True)
+    updated = await goals_service.update_goal(goal_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return updated
+
+
+@router.delete("/{participant_id}/plan-goals/{goal_id}", status_code=204)
+async def delete_plan_goal(participant_id: str, goal_id: str):
+    """Delete a plan goal."""
+    await goals_service.delete_goal(goal_id)
+
+
+# ---------------------------------------------------------------------------
+# Practitioner Allocations
+# ---------------------------------------------------------------------------
+
+@router.get("/{participant_id}/allocations")
+async def get_allocations(participant_id: str):
+    """Return all practitioner allocations for a participant."""
+    return await allocation_service.get_allocations_for_participant(participant_id)
+
+
+@router.post("/{participant_id}/allocations", status_code=201)
+async def create_allocation(participant_id: str, body: PractitionerAllocationCreate):
+    """Assign a practitioner to a participant."""
+    participant = await participant_service.get_participant_by_id(participant_id)
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    try:
+        allocation = await allocation_service.create_allocation(
+            participant_id=participant_id,
+            user_id=body.user_id,
+            allocated_role=body.allocated_role,
+        )
+        if not allocation:
+            raise HTTPException(status_code=500, detail="Failed to create allocation")
+        return allocation
+    except Exception as exc:
+        logger.error("create_allocation(%s) failed: %s", participant_id, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/{participant_id}/allocations/{allocation_id}", status_code=204)
+async def delete_allocation(participant_id: str, allocation_id: str):
+    """Remove a practitioner allocation."""
+    await allocation_service.delete_allocation(allocation_id)
 
 
 # ---------------------------------------------------------------------------

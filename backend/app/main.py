@@ -127,6 +127,28 @@ async def _apply_startup_migrations():
             migration_state.organizations_table_missing = True
             logger.warning("organizations table missing — run backend/supabase_setup.sql")
 
+        # --- patient_goals table ---
+        ok = await _check_column(supabase, "patient_goals", "id, plan_id, description", "patient_goals table")
+        if ok:
+            logger.info("patient_goals table OK")
+            migration_state.patient_goals_table_missing = False
+        else:
+            migration_state.patient_goals_table_missing = True
+            logger.warning("patient_goals table missing — run backend/supabase_setup.sql")
+
+        # --- practitioner_allocations table ---
+        ok = await _check_column(
+            supabase, "practitioner_allocations",
+            "id, patient_id, user_id, allocated_role",
+            "practitioner_allocations table",
+        )
+        if ok:
+            logger.info("practitioner_allocations table OK")
+            migration_state.practitioner_allocations_table_missing = False
+        else:
+            migration_state.practitioner_allocations_table_missing = True
+            logger.warning("practitioner_allocations table missing — run backend/supabase_setup.sql")
+
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
 
@@ -179,11 +201,15 @@ async def migration_status_endpoint():
         "session_messages_table_missing":    migration_state.session_messages_table_missing,
         "migration_sql_file":                "backend/supabase_setup.sql",
         "supabase_sql_editor":               _MIGRATION_URL,
+        "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
+        "practitioner_allocations_table_missing":    migration_state.practitioner_allocations_table_missing,
         "all_ok": not any([
             migration_state.biological_sex_column_missing,
             migration_state.users_onboarding_columns_missing,
             migration_state.organizations_table_missing,
             migration_state.session_messages_table_missing,
+            migration_state.patient_goals_table_missing,
+            migration_state.practitioner_allocations_table_missing,
         ]),
     }
 
