@@ -230,16 +230,15 @@ function formatDuration(totalSeconds: number): string {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-function deriveSessionStateLabel(isActive: boolean, elapsed: number, score: number): {
+function deriveSessionStateLabel(isActive: boolean, score: number): {
   label: string;
   color: string;
   dot: string;
 } {
-  if (!isActive && elapsed === 0) return { label: "Ready", color: "bg-slate-700 text-slate-300 border-slate-600", dot: "bg-slate-400" };
-  if (!isActive && elapsed > 0)   return { label: "Paused", color: "bg-amber-500/20 text-amber-300 border-amber-500/30", dot: "bg-amber-400" };
-  if (score >= 80)  return { label: "Claim Ready", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400 animate-pulse" };
-  if (score >= 60)  return { label: "Live", color: "bg-blue-500/20 text-blue-300 border-blue-500/30", dot: "bg-blue-400 animate-pulse" };
-  return { label: "Needs Review", color: "bg-amber-500/20 text-amber-300 border-amber-500/30", dot: "bg-amber-400 animate-pulse" };
+  if (!isActive) return { label: "Idle", color: "bg-slate-700 text-slate-300 border-slate-600", dot: "bg-slate-400" };
+  if (score >= 80) return { label: "Claim Ready", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400 animate-pulse" };
+  if (score >= 60) return { label: "Live",        color: "bg-blue-500/20 text-blue-300 border-blue-500/30",        dot: "bg-blue-400 animate-pulse" };
+  return              { label: "Needs Review",    color: "bg-amber-500/20 text-amber-300 border-amber-500/30",    dot: "bg-amber-400 animate-pulse" };
 }
 
 function deriveComplianceActionLabel(score: number, checks: Array<{ label: string; pass: boolean }>): string {
@@ -335,10 +334,12 @@ function MessageBubble({
   msg,
   translationView,
   onLongPress,
+  onOpenIncident,
 }: {
   msg: ChatMessage;
   translationView: TranslationView;
   onLongPress?: (msgId: string, el: HTMLElement) => void;
+  onOpenIncident?: (triggerText: string) => void;
 }) {
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -381,15 +382,18 @@ function MessageBubble({
   if (msg.type === "incident_prompt") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <div className="w-full max-w-xs bg-amber-950/60 border border-amber-700/40 rounded-2xl px-4 py-3">
+        <button
+          onClick={() => onOpenIncident?.(msg.content)}
+          className="w-full max-w-xs bg-amber-950/60 border border-amber-700/40 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
+        >
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-amber-200 text-[11px] font-semibold">Potential incident noted</p>
-              <p className="text-amber-300/70 text-[10px] mt-0.5">Would you like to document this safely?</p>
+              <p className="text-amber-300/70 text-[10px] mt-0.5">Tap to document this safely →</p>
             </div>
           </div>
-        </div>
+        </button>
       </div>
     );
   }
@@ -843,10 +847,37 @@ export default function SessionLive() {
   }, []);
 
   // ── AI micro-event injection ──
-  // We'll compute liveCompliance in the render section and store the score in state
-  // via a callback. But since we need it before render, we track it inline here:
-  const [lastInjectedScore, setLastInjectedScore] = useState(0);
   const aiMicroEventDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Compliance-delta AI event: inject when score increases >= 5 points
+  useEffect(() => {
+    if (!isActive) return;
+    const score = checkStructuredCompliance(
+      structuredNotes,
+      !!(session?.participant_id),
+      elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
+      messages.filter((m) => m.type === "activity").length,
+      messages.filter((m) => m.type === "image").map((m) => m.mediaUrl!).filter(Boolean).length,
+      session?.goals_addressed?.length ?? 0,
+    ).score;
+    if (score - prevScoreRef.current >= 5 && score > 0) {
+      const delta = score - prevScoreRef.current;
+      prevScoreRef.current = score;
+      if (aiMicroEventDebounce.current) clearTimeout(aiMicroEventDebounce.current);
+      aiMicroEventDebounce.current = setTimeout(() => {
+        addMessage({
+          type: "ai_event",
+          content: `Documentation improving — ${score}% compliance`,
+          timestamp: new Date(),
+          aiDelta: delta,
+        });
+      }, 300);
+    } else if (score > prevScoreRef.current) {
+      prevScoreRef.current = score;
+    }
+    return () => { if (aiMicroEventDebounce.current) clearTimeout(aiMicroEventDebounce.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, structuredNotes, elapsed, isActive]);
 
   // Inject RP detection event
   useEffect(() => {
@@ -1262,11 +1293,6 @@ export default function SessionLive() {
     activityMessages.length, imageUrls.length, goalsAddressedCount,
   );
 
-  // Inject score AI micro-events (score must be computed first)
-  if (isActive && liveCompliance.score - lastInjectedScore >= 10 && liveCompliance.score > 0) {
-    setLastInjectedScore(liveCompliance.score);
-  }
-
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
   if (compSettings?.requireActivity) bannerItems.push({ label: "Activity required", met: activityMessages.length > 0 });
@@ -1276,7 +1302,7 @@ export default function SessionLive() {
   }
   if (compSettings?.requireDuration) bannerItems.push({ label: "Timer required", met: elapsed > 0 });
 
-  const sessionState = deriveSessionStateLabel(isActive, elapsed, liveCompliance.score);
+  const sessionState = deriveSessionStateLabel(isActive, liveCompliance.score);
   const complianceActionLabel = deriveComplianceActionLabel(liveCompliance.score, liveCompliance.checks);
 
   // Health strip items
@@ -1492,6 +1518,10 @@ export default function SessionLive() {
               msg={msg}
               translationView={translationView}
               onLongPress={handleBubbleLongPress}
+              onOpenIncident={(triggerText) => {
+                setIncidentDraft({ step: 0, what: triggerText, actions: [], wellbeing: "" });
+                setShowIncidentSheet(true);
+              }}
             />
           ))}
         </div>
@@ -1533,10 +1563,11 @@ export default function SessionLive() {
                   <Camera className="h-3.5 w-3.5" style={{ color: "#60A5FA" }} /> Take Photo
                 </button>
                 <button
-                  onClick={() => { fileAttachRef.current?.click(); setShowFab(false); }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
+                  onClick={() => { startRecording(); setShowFab(false); }}
+                  disabled={!isActive}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all disabled:opacity-40"
                 >
-                  <Paperclip className="h-3.5 w-3.5" style={{ color: "#A78BFA" }} /> Attach File
+                  <Mic className="h-3.5 w-3.5" style={{ color: CORAL }} /> Voice Note
                 </button>
                 {goals.length > 0 && (
                   <button
