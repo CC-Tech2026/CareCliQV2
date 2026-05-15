@@ -21,7 +21,7 @@ export default function NotFound() {
         <Link href="/dashboard">
           <span
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: "#542269" }}
+            style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
           >
             Go to Dashboard
           </span>

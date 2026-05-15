@@ -1664,7 +1664,7 @@ export default function SessionLive() {
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
                 className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
-                style={{ background: "#542269" }}
+                style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
               >
                 <FileText className="h-4 w-4" />
                 View Session Record
@@ -1954,7 +1954,7 @@ export default function SessionLive() {
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
                   className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
-                  style={{ background: "#542269" }}
+                  style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

@@ -15,12 +15,12 @@ import { exportBulkSessionsPDF } from "@/lib/pdf-export";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM  = "#542269";
-const CORAL = "#542269";
-const T1    = "#111827";
-const T2    = "#374151";
-const T3    = "#6B7280";
-const BORDER = "#E5E7EB";
-const CARD_SHADOW = "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB";
+const CORAL = "#F1738A";
+const T1    = "#1C1626";
+const T2    = "#4A3D5A";
+const T3    = "#7A6A8A";
+const BORDER = "rgba(232,213,232,0.5)";
+const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 // ── Styled input ──────────────────────────────────────────────────────────────
 function Field({
@@ -153,7 +153,7 @@ export default function Sessions() {
           <button
             data-testid="button-new-session"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 shrink-0"
-            style={{ background: PLUM }}
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
           >
             <Plus size={14} strokeWidth={2.5} /> New Session
           </button>

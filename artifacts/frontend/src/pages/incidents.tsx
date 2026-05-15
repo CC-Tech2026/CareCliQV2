@@ -107,7 +107,7 @@ export default function Incidents() {
         <button
           onClick={() => navigate("/incidents/new")}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 shrink-0"
-          style={{ background: PLUM }}
+          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
         >
           <Plus size={14} strokeWidth={2.5} /> Log Incident
         </button>

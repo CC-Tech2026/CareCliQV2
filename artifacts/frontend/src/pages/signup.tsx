@@ -7,11 +7,11 @@ import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucid
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const PLUM   = "#542269";
-const CORAL  = "#542269";
-const BLUSH  = "#E9D5F5";
-const PURPLE = "#8B5CF6";
-const BORDER = "#E5E7EB";
-const BG     = "#F9FAFB";
+const CORAL  = "#F1738A";
+const BLUSH  = "#F6B8C0";
+const PURPLE = "#DEB2E4";
+const BORDER = "#E8D5E8";
+const BG     = "#FAF5FA";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {

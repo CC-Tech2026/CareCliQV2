@@ -4,19 +4,19 @@ import {
   Menu, X, Plus, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, CalendarDays, ShieldCheck,
   Settings, AlertTriangle, FileBarChart2, FolderOpen,
-  LogOut, Bell,
+  LogOut, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 
-// ── Design tokens (enterprise neutral) ───────────────────────────────────────
-const PLUM    = "#542269";
-const TEXT    = "#111827";
-const MUTED   = "#6B7280";
-const BORDER  = "#E5E7EB";
-const BGHOVER = "#F3F4F6";
+// ── Design tokens (warm clinical palette) ─────────────────────────────────────
+const PLUM   = "#542269";
+const CORAL  = "#F1738A";
+const MUTED  = "#7A6A8A";
+const TEXT   = "#1C1626";
+const BORDER = "rgba(232,213,232,0.5)";
 
 const NAV_ITEMS = [
   { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
@@ -60,10 +60,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { data: alerts = [] } = useGetUnreadAlerts();
 
-  const displayName   = user?.full_name || settings?.name || user?.email || "Support Worker";
-  const displayRole   = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
-  const initials      = getInitials(displayName);
-  const alertCount    = Array.isArray(alerts) ? alerts.length : 0;
+  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
+  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
+  const initials    = getInitials(displayName);
+  const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -71,7 +71,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* ignore */ }
   };
 
-  // ── Sidebar inner content ──────────────────────────────────────────────────
   const SidebarInner = ({
     onNav,
     isDrawer = false,
@@ -83,37 +82,69 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
     return (
       <div className="flex flex-col h-full">
-        {/* Wordmark + collapse toggle */}
+
+        {/* ── Wordmark + collapse toggle ── */}
         <div
-          className="flex items-center h-14 shrink-0 px-3"
+          className={cn(
+            "flex items-center h-16 shrink-0 gap-3",
+            compact ? "px-2 justify-center" : "px-4"
+          )}
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
+          {/* Gradient logo box */}
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+          >
+            <Sparkles size={16} color="white" strokeWidth={1.5} />
+          </div>
+
           {!compact && (
-            <span className="flex-1 text-[17px] font-bold tracking-tight select-none" style={{ color: PLUM }}>
-              Care<span style={{ color: TEXT }}>Scribe</span>
-            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[17px] font-black tracking-tight leading-none select-none">
+                <span style={{ color: TEXT }}>Care</span>
+                <span style={{ color: CORAL }}>Scribe</span>
+              </p>
+              <p
+                className="text-[8.5px] font-semibold uppercase tracking-[0.08em] mt-0.5 select-none"
+                style={{ color: MUTED }}
+              >
+                NDIS Clinical Workspace
+              </p>
+            </div>
           )}
-          {!isDrawer && (
+
+          {!isDrawer && !compact && (
             <button
               onClick={toggleCollapse}
-              title={compact ? "Expand sidebar" : "Collapse sidebar"}
-              className="p-1.5 rounded-lg transition-colors hover:bg-gray-100 ml-auto shrink-0"
+              title="Collapse sidebar"
+              className="p-1 rounded-lg transition-colors hover:bg-white/50 shrink-0"
               style={{ color: MUTED }}
             >
-              {compact ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+              <ChevronLeft size={15} />
+            </button>
+          )}
+          {!isDrawer && compact && (
+            <button
+              onClick={toggleCollapse}
+              title="Expand sidebar"
+              className="absolute bottom-20 left-0 right-0 mx-auto w-7 h-7 rounded-full flex items-center justify-center transition-colors hover:bg-pink-50"
+              style={{ color: MUTED, position: "relative" }}
+            >
+              <ChevronRight size={15} />
             </button>
           )}
         </div>
 
-        {/* New Session — always visible */}
+        {/* ── New Session ── */}
         <div className={cn("pt-3 shrink-0", compact ? "px-2" : "px-3")}>
           <Link href="/sessions/new" onClick={onNav}>
             <div
               className={cn(
-                "flex items-center justify-center rounded-lg text-white text-[13px] font-semibold transition-opacity hover:opacity-90",
+                "flex items-center justify-center rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90",
                 compact ? "h-9 w-full" : "h-9 gap-2 px-3"
               )}
-              style={{ background: PLUM }}
+              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
               <Plus size={15} strokeWidth={2.5} />
               {!compact && "New Session"}
@@ -121,7 +152,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        {/* Navigation */}
+        {/* ── Navigation ── */}
         <nav className={cn("flex-1 overflow-y-auto py-3 space-y-0.5", compact ? "px-2" : "px-3")}>
           {NAV_ITEMS.map((item) => {
             const active = isActive(location, item.href);
@@ -135,11 +166,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={onNav}
                 title={compact ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg text-[13px] font-medium transition-colors w-full",
-                  compact ? "h-9 justify-center px-0" : "px-2.5 py-2"
+                  "flex items-center gap-3 rounded-xl text-[13px] font-medium transition-colors w-full",
+                  compact ? "h-9 justify-center px-0" : "px-3 py-2"
                 )}
                 style={{
-                  background: active ? `${PLUM}0F` : "transparent",
+                  background: active ? "rgba(84,34,105,0.07)" : "transparent",
                   color: active ? PLUM : MUTED,
                   fontWeight: active ? 600 : 500,
                 }}
@@ -161,26 +192,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Alerts status strip (expanded only) */}
+        {/* ── Alerts strip (expanded only) ── */}
         {!compact && alertCount > 0 && (
           <div
-            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium"
-            style={{ background: "rgba(220,38,38,0.06)", color: "#DC2626" }}
+            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium"
+            style={{ background: "rgba(241,115,138,0.07)", color: CORAL }}
           >
-            <Bell size={12} />
+            <AlertTriangle size={12} />
             {alertCount} unread alert{alertCount !== 1 ? "s" : ""}
           </div>
         )}
 
-        {/* Profile */}
+        {/* ── Profile ── */}
         <div
           className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")}
           style={{ borderTop: `1px solid ${BORDER}` }}
         >
           {compact ? (
             <div
-              className="w-8 h-8 rounded-lg mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
-              style={{ background: PLUM }}
+              className="w-8 h-8 rounded-xl mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
+              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
               title={displayName}
             >
               {initials}
@@ -188,8 +219,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           ) : (
             <div className="flex items-center gap-2.5">
               <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-                style={{ background: PLUM }}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
               >
                 {initials}
               </div>
@@ -200,7 +231,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={logout}
                 title="Sign out"
-                className="shrink-0 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-white/60 transition-colors"
                 style={{ color: MUTED }}
               >
                 <LogOut size={13} />
@@ -213,21 +244,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen w-full" style={{ background: "#F9FAFB", color: TEXT }}>
+    <div className="flex min-h-screen w-full" style={{ background: "#FAF5FF", color: TEXT }}>
 
-      {/* ── Desktop sidebar ────────────────────────────────────────────────── */}
+      {/* ── Desktop sidebar ── */}
       <aside
         className="hidden md:flex flex-col h-screen sticky top-0 bg-white shrink-0 overflow-hidden"
         style={{
           width: collapsed ? 60 : 220,
           transition: "width 200ms ease",
           borderRight: `1px solid ${BORDER}`,
+          boxShadow: "2px 0 12px rgba(84,34,105,0.04)",
         }}
       >
         <SidebarInner />
       </aside>
 
-      {/* ── Main content ───────────────────────────────────────────────────── */}
+      {/* ── Main content ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Mobile top bar */}
@@ -235,21 +267,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           className="md:hidden h-14 flex items-center justify-between px-4 bg-white shrink-0"
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
-          <span className="text-[17px] font-bold tracking-tight" style={{ color: PLUM }}>
-            Care<span style={{ color: TEXT }}>Scribe</span>
-          </span>
+          <div className="flex items-center gap-2.5">
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            >
+              <Sparkles size={14} color="white" strokeWidth={1.5} />
+            </div>
+            <span className="text-[17px] font-black tracking-tight">
+              <span style={{ color: TEXT }}>Care</span>
+              <span style={{ color: CORAL }}>Scribe</span>
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <Link href="/sessions/new">
               <button
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-[12px] font-semibold"
-                style={{ background: PLUM }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-white text-[12px] font-bold"
+                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
               >
                 <Plus size={12} strokeWidth={2.5} /> New
               </button>
             </Link>
             <button
               onClick={() => setDrawerOpen(true)}
-              className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+              className="p-2 rounded-xl transition-colors hover:bg-pink-50"
               style={{ color: MUTED }}
             >
               <Menu size={20} />
@@ -257,34 +298,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Desktop top bar — slim context bar */}
+        {/* Desktop context bar */}
         <header
           className="hidden md:flex h-11 items-center justify-end px-6 bg-white shrink-0"
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
-          <div className="flex items-center gap-3">
-            {alertCount > 0 && (
-              <Link href="/compliance">
-                <button
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-semibold transition-colors hover:bg-red-50"
-                  style={{ color: "#DC2626" }}
-                >
-                  <Bell size={13} />
-                  {alertCount} alert{alertCount !== 1 ? "s" : ""}
-                </button>
-              </Link>
-            )}
-            <div className="flex items-center gap-2 pl-2" style={{ borderLeft: `1px solid ${BORDER}` }}>
-              <div
-                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold text-white"
-                style={{ background: PLUM }}
+          {alertCount > 0 && (
+            <Link href="/compliance">
+              <button
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11.5px] font-semibold transition-colors hover:bg-pink-50 mr-2"
+                style={{ color: CORAL }}
               >
-                {initials}
-              </div>
-              <span className="text-[12px] font-medium" style={{ color: TEXT }}>
-                {displayName.split(" ")[0]}
-              </span>
+                <AlertTriangle size={13} />
+                {alertCount} alert{alertCount !== 1 ? "s" : ""}
+              </button>
+            </Link>
+          )}
+          <div className="flex items-center gap-2 pl-2" style={{ borderLeft: `1px solid ${BORDER}` }}>
+            <div
+              className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
+              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            >
+              {initials}
             </div>
+            <span className="text-[12px] font-medium" style={{ color: TEXT }}>
+              {displayName.split(" ")[0]}
+            </span>
           </div>
         </header>
 
@@ -294,7 +333,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* ── Mobile bottom nav ──────────────────────────────────────────────── */}
+      {/* ── Mobile bottom nav ── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white"
         style={{ borderTop: `1px solid ${BORDER}`, paddingBottom: "env(safe-area-inset-bottom)" }}
@@ -316,26 +355,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* ── Mobile drawer overlay ───────────────────────────────────────────── */}
+      {/* Mobile drawer overlay */}
       {drawerOpen && (
         <div
           className="md:hidden fixed inset-0 z-40"
-          style={{ background: "rgba(0,0,0,0.3)" }}
+          style={{ background: "rgba(84,34,105,0.25)" }}
           onClick={() => setDrawerOpen(false)}
         />
       )}
 
-      {/* ── Mobile drawer ───────────────────────────────────────────────────── */}
+      {/* Mobile drawer */}
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col shadow-xl transition-transform duration-250",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col transition-transform duration-250",
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ boxShadow: "4px 0 24px rgba(84,34,105,0.15)" }}
       >
         <div className="absolute top-3 right-3">
           <button
             onClick={() => setDrawerOpen(false)}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-xl hover:bg-pink-50 transition-colors"
             style={{ color: MUTED }}
           >
             <X size={16} />

@@ -406,7 +406,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               }
               disabled={updateMutation.isPending}
               className="rounded-xl h-9 text-[13px] text-white"
-              style={{ background: "#542269" }}
+              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
             >
               {updateMutation.isPending
                 ? <Loader2 size={13} className="animate-spin mr-1.5" />

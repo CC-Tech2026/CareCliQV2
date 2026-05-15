@@ -304,7 +304,7 @@ export default function IncidentNew() {
             onClick={handleSubmit}
             disabled={saving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-            style={{ background: PLUM }}
+            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />}
             Log Incident
