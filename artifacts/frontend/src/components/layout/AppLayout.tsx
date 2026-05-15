@@ -396,9 +396,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors relative"
               style={{ color: active ? PLUM : MUTED }}
             >
-              {active && <div className="absolute top-0 w-8 h-1 rounded-b-full" style={{ background: PLUM }} />}
+              {active && <div className="absolute top-0 w-10 h-[3px] rounded-b-full" style={{ background: PLUM }} />}
               <Icon size={22} strokeWidth={active ? 2.5 : 2} className={cn("mt-1", active && "animate-in zoom-in-90 duration-200")} />
-              <span className={cn("text-[10px]", active ? "font-bold" : "font-medium")}>
+              <span className={cn("text-[11px] leading-none", active ? "font-bold" : "font-medium")}>
                 {item.label}
               </span>
             </Link>

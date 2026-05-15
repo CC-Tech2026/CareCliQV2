@@ -1414,17 +1414,18 @@ export default function SessionLive() {
         style={{ background: isActive ? NAVY : "#0a0a3a" }}
       >
         {/* Top row: back, session state, controls */}
-        <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1 text-white/60 hover:text-white text-sm transition-colors font-medium shrink-0"
+            className="flex items-center gap-1.5 text-white/60 hover:text-white text-xs transition-colors font-semibold shrink-0 px-2 py-1 rounded-lg hover:bg-white/8"
           >
             <ArrowLeft className="h-4 w-4" />
+            <span>Session</span>
           </button>
 
           {/* Session state chip */}
-          <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold border shrink-0", sessionState.color)}>
-            <span className={cn("h-1.5 w-1.5 rounded-full", sessionState.dot)} />
+          <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border shrink-0", sessionState.color)}>
+            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", sessionState.dot)} />
             {sessionState.label}
           </span>
 
@@ -1438,8 +1439,8 @@ export default function SessionLive() {
                 <button
                   key={v}
                   onClick={() => setTranslationView(v)}
-                  className={cn("px-1.5 py-0.5 text-[9px] font-medium transition-colors",
-                    translationView === v ? "bg-white/20 text-white" : "text-white/30 hover:text-white/60")}
+                  className={cn("px-2 py-1 text-[10px] font-semibold transition-colors",
+                    translationView === v ? "bg-white/20 text-white" : "text-white/35 hover:text-white/70")}
                 >
                   {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
                 </button>
@@ -1450,7 +1451,8 @@ export default function SessionLive() {
           {elapsed > 0 && (
             <button
               onClick={() => setShowRestartConfirm(true)}
-              className="text-white/35 hover:text-white/60 text-[10px] px-2 py-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+              title="Restart session"
+              className="text-white/40 hover:text-white/70 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
@@ -1459,7 +1461,7 @@ export default function SessionLive() {
           {!isActive ? (
             <Button
               onClick={handleStart}
-              className="gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 h-auto text-xs shrink-0"
+              className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3.5 py-1.5 h-auto text-xs shrink-0 rounded-lg"
             >
               <Play className="h-3 w-3 fill-white" />
               {elapsed > 0 ? "Resume" : "Start"}
@@ -1467,130 +1469,159 @@ export default function SessionLive() {
           ) : (
             <Button
               onClick={handleStop}
-              className="gap-1 bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-1.5 h-auto text-xs shrink-0"
+              className="gap-1.5 bg-red-500 hover:bg-red-600 text-white font-bold px-3.5 py-1.5 h-auto text-xs shrink-0 rounded-lg"
             >
               <Square className="h-3 w-3 fill-white" />
-              End
+              End Session
             </Button>
           )}
         </div>
 
-        {/* Second row: name + timer + compliance score */}
-        <div className="flex items-end justify-between px-4 pb-2.5 pt-1">
-          <div className="min-w-0 flex-1 mr-3">
+        {/* Second row: name + timer + compliance badge */}
+        <div className="flex items-center justify-between px-4 pb-2 pt-1 gap-3">
+          <div className="min-w-0 flex-1">
             <h1 className="text-white font-bold text-base leading-tight truncate">{participantName}</h1>
-            <p className="text-white/40 text-[11px] mt-0.5">{session.session_type}</p>
+            <p className="text-white/50 text-xs mt-0.5">{session.session_type} · {session.session_date ? new Date(session.session_date).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) : "Today"}</p>
           </div>
-          <div className="text-right shrink-0">
+          <div className="shrink-0 flex flex-col items-end gap-0.5">
             <p className="font-mono text-2xl font-black text-white tracking-tight leading-none">
               {formatDuration(elapsed)}
             </p>
-            <div className="flex items-center justify-end gap-1 mt-0.5">
+            <div
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+              style={{
+                background: liveCompliance.score >= 80 ? "rgba(16,185,129,0.15)" : liveCompliance.score >= 60 ? "rgba(245,158,11,0.15)" : "rgba(240,48,96,0.15)",
+                border: `1px solid ${liveCompliance.score >= 80 ? "rgba(16,185,129,0.3)" : liveCompliance.score >= 60 ? "rgba(245,158,11,0.3)" : "rgba(240,48,96,0.3)"}`,
+              }}
+            >
               <span
-                className="text-[11px] font-bold"
-                style={{ color: liveCompliance.score >= 80 ? "#10B981" : liveCompliance.score >= 60 ? "#F59E0B" : CORAL }}
+                className="text-xs font-black"
+                style={{ color: liveCompliance.score >= 80 ? "#34D399" : liveCompliance.score >= 60 ? "#FBBF24" : "#FB7185" }}
               >
                 {liveCompliance.score}%
               </span>
-              <span className="text-[10px] text-white/40">· {complianceActionLabel}</span>
+              <span className="text-[10px] text-white/50">{complianceActionLabel}</span>
             </div>
           </div>
         </div>
 
-        {/* Health strip */}
-        <div className="flex gap-1.5 px-3 pb-2.5 overflow-x-auto scrollbar-none">
-          {healthItems.map((item) => (
-            <div key={item.label}>
+        {/* NDIS Compliance health strip */}
+        <div className="px-3 pb-2.5">
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+            {healthItems.map((item) => (
               <button
+                key={item.label}
                 onClick={() => setExpandedHealthChip(expandedHealthChip === item.label ? null : item.label)}
                 className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[9px] font-semibold whitespace-nowrap transition-all shrink-0",
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-semibold whitespace-nowrap transition-all shrink-0 min-h-[28px]",
                   item.pass
-                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
-                    : "bg-amber-500/15 text-amber-300 border-amber-500/25",
+                    ? "bg-emerald-500/12 text-emerald-300 border-emerald-500/20"
+                    : expandedHealthChip === item.label
+                    ? "bg-amber-500/25 text-amber-200 border-amber-400/40"
+                    : "bg-amber-500/12 text-amber-300 border-amber-500/20",
                 )}
               >
                 {item.pass
-                  ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
-                  : <AlertCircle className="h-2.5 w-2.5 shrink-0" />}
-                {item.label.replace("Clinical notes completed", "Notes").replace("Photo evidence captured", "Evidence").replace("Participant linked", "Participant").replace("Duration recorded", "Duration").replace("Activity logged", "Activity")}
-                {item.note && <span className="opacity-60 ml-0.5">({item.note})</span>}
-              </button>
-            </div>
-          ))}
-        </div>
-
-        {/* Expanded health chip tooltip */}
-        {expandedHealthChip && (
-          <div className="mx-3 mb-2.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-start gap-2">
-            <Zap className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-[11px] text-white/70 leading-relaxed flex-1">
-              {healthItems.find((h) => h.label === expandedHealthChip)?.tip}
-            </p>
-            <button onClick={() => setExpandedHealthChip(null)} className="text-white/30 hover:text-white/60">
-              <X className="h-3 w-3" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Goal chips strip ── */}
-      {goals.length > 0 ? (
-        <div className="shrink-0 border-b border-white/10 bg-[#1A0D2E]/70 px-3 py-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-white/40 shrink-0">
-              <Target className="h-3 w-3" /> Goals:
-            </span>
-            {goals.map((goal) => (
-              <button
-                key={goal.id}
-                onClick={() => cycleGoalStatus(goal.id)}
-                className={cn("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border transition-all active:scale-95", GOAL_STATUS_CONFIG[goal.status].cls)}
-              >
-                {goal.name.length > 22 ? goal.name.slice(0, 22) + "…" : goal.name}
+                  ? <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  : <AlertCircle className="h-3 w-3 shrink-0" />}
+                {item.label
+                  .replace("Clinical notes completed", "Notes")
+                  .replace("Photo evidence captured", "Evidence")
+                  .replace("Participant linked", "Linked")
+                  .replace("Duration recorded", "Timer")
+                  .replace("Activity logged", "Activity")
+                  .replace("Goals linked", "Goals")}
+                {item.note && <span className="opacity-55 ml-0.5 text-[9px]">({item.note})</span>}
               </button>
             ))}
+          </div>
+
+          {/* Expanded health chip guidance */}
+          {expandedHealthChip && (
+            <div className="mt-1.5 bg-amber-950/40 border border-amber-800/30 rounded-xl px-3 py-2.5 flex items-start gap-2.5 animate-in slide-in-from-top-1 duration-150">
+              <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-200/80 leading-relaxed flex-1">
+                {healthItems.find((h) => h.label === expandedHealthChip)?.tip}
+              </p>
+              <button onClick={() => setExpandedHealthChip(null)} className="text-white/30 hover:text-white/60 p-0.5">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── NDIS Goal Tracker ── */}
+      {goals.length > 0 ? (
+        <div className="shrink-0 border-b border-white/8" style={{ background: "rgba(13,5,32,0.6)" }}>
+          <div className="px-3 py-2 flex items-center gap-2">
+            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/50 shrink-0">
+              <Target className="h-3 w-3" style={{ color: LIME }} /> NDIS Goals
+            </span>
+            <div className="flex items-center gap-1.5 flex-1 overflow-x-auto scrollbar-none min-w-0">
+              {goals.map((goal) => (
+                <button
+                  key={goal.id}
+                  onClick={() => cycleGoalStatus(goal.id)}
+                  title={goal.name}
+                  className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition-all active:scale-95 whitespace-nowrap shrink-0", GOAL_STATUS_CONFIG[goal.status].cls)}
+                >
+                  {goal.name.length > 24 ? goal.name.slice(0, 24) + "…" : goal.name}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setBodyMapOpen((o) => !o)}
-              className="ml-auto flex items-center gap-1 text-[9px] text-white/25 hover:text-white/50 transition-colors"
+              title="Physical examination map"
+              className="shrink-0 flex items-center gap-1 text-[10px] text-white/30 hover:text-white/60 transition-colors px-1.5 py-1 rounded-lg hover:bg-white/8"
             >
-              <HeartPulse className="h-3 w-3" />
-              {bodyMapOpen ? "Hide" : "Body Map"}
+              <HeartPulse className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{bodyMapOpen ? "Hide map" : "Body map"}</span>
             </button>
           </div>
         </div>
       ) : (
-        <div className="shrink-0 bg-amber-950/30 border-b border-amber-800/20 px-3 py-1.5 flex items-center gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />
-          <p className="text-amber-300/70 text-[10px]">No goals linked — non-compliant. Add goals in session setup.</p>
+        <div className="shrink-0 border-b border-amber-800/25 px-3 py-2 flex items-center gap-2.5" style={{ background: "rgba(120,53,15,0.2)" }}>
+          <AlertTriangle className="h-4 w-4 text-amber-400/80 shrink-0" />
+          <p className="text-amber-300/80 text-xs flex-1">No NDIS goals linked — affects claim compliance.</p>
+          <button
+            onClick={() => navigate(`/sessions/${id}`)}
+            className="text-amber-400 text-[10px] font-bold underline shrink-0 hover:text-amber-300"
+          >
+            Add goals
+          </button>
         </div>
       )}
 
       {/* ── Risk Profile Alert ── */}
       {riskProfile && (
         <div
-          className="shrink-0 border-b px-3 py-2 flex items-start gap-2"
+          className="shrink-0 border-b px-3 py-2.5 flex items-start gap-2.5"
           style={{
-            background: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.15)" : "rgba(245,158,11,0.12)",
-            borderColor: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.3)" : "rgba(245,158,11,0.25)",
+            background: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.18)" : "rgba(245,158,11,0.14)",
+            borderColor: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.35)" : "rgba(245,158,11,0.3)",
           }}
         >
           <ShieldAlert
-            className="h-3.5 w-3.5 shrink-0 mt-0.5"
+            className="h-4 w-4 shrink-0 mt-0.5"
             style={{ color: riskProfile.risk_level === "high" ? "#F87171" : "#FBBF24" }}
           />
           <div className="flex-1 min-w-0">
             <p
-              className="text-[10px] font-bold uppercase tracking-wider"
+              className="text-xs font-bold uppercase tracking-wider"
               style={{ color: riskProfile.risk_level === "high" ? "#FCA5A5" : "#FCD34D" }}
             >
-              {riskProfile.risk_level === "high" ? "High Risk" : "Medium Risk"} Participant
+              {riskProfile.risk_level === "high" ? "⚠ High Risk" : "⚠ Medium Risk"} Participant
             </p>
             {riskProfile.triggers && (
-              <p className="text-[10px] text-white/50 mt-0.5 truncate">Triggers: {riskProfile.triggers}</p>
+              <p className="text-[11px] text-white/60 mt-0.5 leading-snug">
+                <span className="text-white/40 font-medium">Triggers: </span>{riskProfile.triggers}
+              </p>
             )}
             {riskProfile.management_plan && (
-              <p className="text-[10px] text-white/40 truncate">Plan: {riskProfile.management_plan}</p>
+              <p className="text-[11px] text-white/50 mt-0.5 leading-snug">
+                <span className="text-white/40 font-medium">Plan: </span>{riskProfile.management_plan}
+              </p>
             )}
           </div>
         </div>
@@ -1598,42 +1629,45 @@ export default function SessionLive() {
 
       {/* ── Goal Rules Matrix (collapsible) ── */}
       {planGoals.length > 0 && (
-        <div className="shrink-0 border-b border-white/10" style={{ background: "rgba(85,51,204,0.08)" }}>
+        <div className="shrink-0 border-b border-purple-900/30" style={{ background: "rgba(55,25,120,0.15)" }}>
           <button
             onClick={() => setShowGoalMatrix((o) => !o)}
-            className="w-full flex items-center justify-between px-3 py-1.5 text-left"
+            className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/3 transition-colors"
           >
-            <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-purple-300/70">
-              <BarChart2 className="h-3 w-3" /> Goal Rules Matrix
-              <span className="text-white/30 font-normal normal-case tracking-normal">({planGoals.filter((g) => !g.is_achieved).length} active)</span>
+            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-purple-300/80">
+              <BarChart2 className="h-3.5 w-3.5" />
+              Goal Rules Matrix
+              <span className="text-white/40 font-normal normal-case tracking-normal">
+                {planGoals.filter((g) => !g.is_achieved).length} of {planGoals.length} active
+              </span>
             </span>
-            <span className="text-white/25 text-[9px]">{showGoalMatrix ? "▲" : "▼"}</span>
+            <span className="text-white/30 text-xs">{showGoalMatrix ? "▲" : "▼"}</span>
           </button>
           {showGoalMatrix && (
-            <div className="px-3 pb-3 space-y-1.5 max-h-[180px] overflow-y-auto">
+            <div className="px-3 pb-3 space-y-2 max-h-[200px] overflow-y-auto">
               {planGoals.map((g) => (
                 <div
                   key={g.id}
-                  className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                  className="flex items-start gap-2.5 px-3 py-2 rounded-xl"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
                 >
                   <div className="shrink-0 mt-0.5">
                     {g.is_achieved
-                      ? <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                      : <Circle className="h-3 w-3 text-white/30" />}
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      : <Circle className="h-3.5 w-3.5 text-white/35" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[10px] leading-snug ${g.is_achieved ? "text-white/30 line-through" : "text-white/70"}`}>
+                    <p className={`text-xs leading-snug ${g.is_achieved ? "text-white/30 line-through" : "text-white/75"}`}>
                       {g.description}
                     </p>
                     <span
-                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 inline-block"
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block"
                       style={{
                         background: g.category === "core" ? "rgba(59,130,246,0.2)" : g.category === "capacity_building" ? "rgba(139,92,246,0.2)" : "rgba(245,158,11,0.2)",
                         color: g.category === "core" ? "#93C5FD" : g.category === "capacity_building" ? "#C4B5FD" : "#FCD34D",
                       }}
                     >
-                      {g.category === "capacity_building" ? "Capacity" : g.category === "core" ? "Core" : g.category === "capital" ? "Capital" : g.category}
+                      {g.category === "capacity_building" ? "Capacity Building" : g.category === "core" ? "Core Supports" : g.category === "capital" ? "Capital" : g.category}
                     </span>
                   </div>
                 </div>
@@ -1661,10 +1695,31 @@ export default function SessionLive() {
       {/* ── Chat feed ── */}
       <div className="flex-1 overflow-y-auto px-2 py-3" onClick={() => { setBubbleMenu(null); setShowFab(false); }}>
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center py-20">
-            <MessageSquare className="h-12 w-12 text-white/8 mb-3" />
-            <p className="text-white/25 text-sm font-medium">No messages yet</p>
-            <p className="text-white/15 text-xs mt-1">Start the session and document below</p>
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12">
+            <div className="h-14 w-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(85,51,204,0.15)", border: "1px solid rgba(85,51,204,0.2)" }}>
+              <MessageSquare className="h-7 w-7" style={{ color: "rgba(139,92,246,0.5)" }} />
+            </div>
+            <p className="text-white/40 text-sm font-semibold mb-1">Ready to document</p>
+            <p className="text-white/20 text-xs leading-relaxed max-w-[220px]">
+              {isActive
+                ? "Use the + button to log activities, voice notes or photos. Tap mic to dictate."
+                : "Press Start to begin the session timer, then document as you go."}
+            </p>
+            {!isActive && (
+              <div className="mt-5 flex flex-col items-center gap-2">
+                {[
+                  { step: "1", label: "Start timer" },
+                  { step: "2", label: "Log activities & notes" },
+                  { step: "3", label: "Link NDIS goals" },
+                  { step: "4", label: "End & review for billing" },
+                ].map(({ step, label }) => (
+                  <div key={step} className="flex items-center gap-2.5 text-white/25">
+                    <span className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: "rgba(85,51,204,0.2)", color: "rgba(167,139,250,0.5)" }}>{step}</span>
+                    <span className="text-[11px]">{label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         <div className="space-y-0.5">
@@ -1699,81 +1754,102 @@ export default function SessionLive() {
       )}
 
       {/* ── Bottom composer ── */}
-      <div className="shrink-0 border-t border-white/10 px-3 py-2" style={{ background: NAVY }}>
-        <div className="flex items-center gap-1.5">
-
-          {/* Expandable FAB */}
-          <div className="relative shrink-0">
-            {showFab && (
-              <div className="absolute bottom-11 left-0 flex flex-col gap-2 items-start animate-in slide-in-from-bottom-2 duration-150">
-                <button
-                  onClick={() => { setShowActivitySheet(true); setShowFab(false); }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
-                >
-                  <Activity className="h-3.5 w-3.5" style={{ color: LIME }} /> Log Activity
-                </button>
-                <button
-                  onClick={() => { fileInputRef.current?.click(); setShowFab(false); }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
-                >
-                  <Camera className="h-3.5 w-3.5" style={{ color: "#60A5FA" }} /> Take Photo
-                </button>
-                <button
-                  onClick={() => { startRecording(); setShowFab(false); }}
-                  disabled={!isActive}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all disabled:opacity-40"
-                >
-                  <Mic className="h-3.5 w-3.5" style={{ color: CORAL }} /> Voice Note
-                </button>
-                {goals.length > 0 && (
-                  <button
-                    onClick={() => {
-                      const nextGoal = goals.find((g) => g.status === "not_started") ?? goals[0];
-                      if (nextGoal) cycleGoalStatus(nextGoal.id);
-                      setShowFab(false);
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
-                  >
-                    <Target className="h-3.5 w-3.5" style={{ color: LIME }} /> Update Goal
-                  </button>
-                )}
-              </div>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); setShowFab((o) => !o); }}
-              className={cn(
-                "h-9 w-9 rounded-full flex items-center justify-center transition-all",
-                showFab
-                  ? "text-white rotate-45"
-                  : "bg-white/8 text-white/50 hover:bg-white/15 hover:text-white/80"
-              )}
-              style={showFab ? { background: PURPLE } : {}}
+      <div className="shrink-0 border-t border-white/10 px-3 pt-2 pb-3 safe-area-bottom" style={{ background: NAVY }}>
+        {/* FAB menu — floats above composer */}
+        <div className="relative">
+          {showFab && (
+            <div
+              className="absolute bottom-full left-0 mb-2 flex flex-col gap-1.5 items-start animate-in slide-in-from-bottom-2 duration-150"
+              style={{ zIndex: 20 }}
             >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
+              <button
+                onClick={() => { setShowActivitySheet(true); setShowFab(false); }}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
+                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                <Activity className="h-4 w-4 shrink-0" style={{ color: LIME }} />
+                Log NDIS Activity
+              </button>
+              <button
+                onClick={() => { fileInputRef.current?.click(); setShowFab(false); }}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
+                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                <Camera className="h-4 w-4 shrink-0" style={{ color: "#60A5FA" }} />
+                Photo Evidence
+              </button>
+              <button
+                onClick={() => { startRecording(); setShowFab(false); }}
+                disabled={!isActive}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg disabled:opacity-40"
+                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+              >
+                <Mic className="h-4 w-4 shrink-0" style={{ color: CORAL }} />
+                Voice Note
+              </button>
+              {goals.length > 0 && (
+                <button
+                  onClick={() => {
+                    const nextGoal = goals.find((g) => g.status === "not_started") ?? goals[0];
+                    if (nextGoal) cycleGoalStatus(nextGoal.id);
+                    setShowFab(false);
+                  }}
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
+                  style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+                >
+                  <Target className="h-4 w-4 shrink-0" style={{ color: LIME }} />
+                  Update Goal Progress
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* FAB toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowFab((o) => !o); }}
+            title="More actions"
+            aria-label="More documentation actions"
+            className={cn(
+              "h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0",
+              showFab
+                ? "text-white rotate-45"
+                : "bg-white/8 text-white/55 hover:bg-white/15 hover:text-white border border-white/10"
+            )}
+            style={showFab ? { background: PURPLE, border: `1px solid rgba(255,255,255,0.2)` } : {}}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
 
           {/* Text input */}
-          <div className="flex-1 bg-white/8 border border-white/10 rounded-2xl px-4 py-2 min-h-[36px] flex items-center">
+          <div className={cn(
+            "flex-1 border rounded-2xl px-4 py-2.5 min-h-[40px] flex items-center transition-colors",
+            isActive ? "bg-white/8 border-white/12" : "bg-white/4 border-white/6"
+          )}>
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTextMessage(); } }}
-              placeholder={isActive ? COMPOSER_PLACEHOLDERS[placeholderIdx] : "Start session to add notes"}
+              placeholder={isActive ? COMPOSER_PLACEHOLDERS[placeholderIdx] : "Start session to add notes…"}
               disabled={!isActive}
-              className="w-full bg-transparent text-white text-sm placeholder-white/20 outline-none disabled:opacity-30"
+              className="w-full bg-transparent text-white text-sm placeholder-white/25 outline-none disabled:opacity-30"
             />
           </div>
 
-          {/* Mic */}
+          {/* Mic button */}
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={!isActive}
-            title={isRecording ? "Stop recording" : "Start voice note"}
+            title={isRecording ? "Stop recording" : "Dictate voice note"}
+            aria-label={isRecording ? "Stop voice recording" : "Start voice note"}
             className={cn(
-              "h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
-              isRecording ? "bg-red-500 text-white animate-pulse" : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
+              "h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
+              isRecording
+                ? "text-white animate-pulse"
+                : "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white/80 border border-white/10"
             )}
+            style={isRecording ? { background: "#DC2626" } : {}}
           >
             {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </button>
@@ -1782,8 +1858,9 @@ export default function SessionLive() {
           <button
             onClick={sendTextMessage}
             disabled={!inputText.trim() || !isActive}
-            className="h-9 w-9 rounded-full flex items-center justify-center disabled:opacity-20 hover:opacity-90 transition-all shrink-0"
-            style={{ background: LIME }}
+            aria-label="Send note"
+            className="h-10 w-10 rounded-xl flex items-center justify-center disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shrink-0"
+            style={{ background: inputText.trim() && isActive ? LIME : "rgba(217,241,3,0.4)" }}
           >
             <Send className="h-4 w-4" style={{ color: DEEP }} />
           </button>
@@ -2282,25 +2359,29 @@ export default function SessionLive() {
                   </div>
                 )}
 
-                {/* ── Assess-note compliance score panel ── */}
+                {/* ── Assess-note AI Compliance Score panel ── */}
                 {(assessScore || assessLoading) && (
-                  <div className="rounded-2xl px-4 py-3.5 shadow-sm" style={{ background: "#F5F3FC", border: "1px solid rgba(213,204,238,0.6)" }}>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A9E" }}>
-                        <BarChart2 className="h-3.5 w-3.5" /> AI Compliance Score
+                  <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: "#F5F3FC", border: "1px solid rgba(213,204,238,0.7)" }}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: "rgba(213,204,238,0.5)" }}>
+                      <p className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#6D5BA8" }}>
+                        <BarChart2 className="h-3.5 w-3.5" /> NDIS AI Compliance Score
                       </p>
                       {assessLoading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "#7A6A9E" }} />
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "#9B8CC8" }} />
+                          <span className="text-[10px]" style={{ color: "#9B8CC8" }}>Analysing…</span>
+                        </div>
                       ) : assessScore && (
                         <div className="flex items-center gap-2">
                           <span
-                            className="text-sm font-black"
-                            style={{ color: assessScore.score >= 75 ? "#10B981" : assessScore.score >= 50 ? "#F59E0B" : CORAL }}
+                            className="text-base font-black"
+                            style={{ color: assessScore.score >= 75 ? "#059669" : assessScore.score >= 50 ? "#D97706" : "#DC2626" }}
                           >
-                            {assessScore.score}/100
+                            {assessScore.score}<span className="text-xs font-semibold text-slate-400">/100</span>
                           </span>
                           {assessScore.is_ready_for_billing && (
-                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
                               ✓ Billing Ready
                             </span>
                           )}
@@ -2309,58 +2390,58 @@ export default function SessionLive() {
                     </div>
 
                     {assessScore && (
-                      <>
-                        {/* Criteria bars */}
-                        <div className="space-y-2">
-                          {Object.entries(assessScore.breakdown).map(([key, crit]) => {
-                            const pct = Math.round((crit.score / crit.max) * 100);
-                            const barColor = pct >= 75 ? "#10B981" : pct >= 40 ? "#F59E0B" : "#F03060";
-                            return (
-                              <div key={key}>
-                                <div className="flex items-center justify-between mb-0.5">
-                                  <span className="text-[10px] text-slate-600">{crit.label}</span>
-                                  <span className="text-[10px] font-semibold" style={{ color: barColor }}>{crit.score}/{crit.max}</span>
-                                </div>
-                                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${pct}%`, background: barColor }}
-                                  />
-                                </div>
-                                {crit.feedback && pct < 75 && (
-                                  <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">{crit.feedback}</p>
-                                )}
+                      <div className="px-4 py-3 space-y-3">
+                        {/* 4-criteria progress bars */}
+                        {Object.entries(assessScore.breakdown).map(([key, crit]) => {
+                          const pct = Math.round((crit.score / crit.max) * 100);
+                          const barColor = pct >= 75 ? "#10B981" : pct >= 40 ? "#F59E0B" : "#F03060";
+                          return (
+                            <div key={key}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-medium text-slate-700">{crit.label}</span>
+                                <span className="text-[11px] font-bold tabular-nums" style={{ color: barColor }}>{crit.score}/{crit.max}pts</span>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-700"
+                                  style={{ width: `${pct}%`, background: barColor }}
+                                />
+                              </div>
+                              {crit.feedback && pct < 75 && (
+                                <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{crit.feedback}</p>
+                              )}
+                            </div>
+                          );
+                        })}
                         {assessScore.feedback && (
-                          <p className="text-[10px] mt-2.5 leading-relaxed" style={{ color: assessScore.is_ready_for_billing ? "#059669" : "#7A6A9E" }}>
-                            {assessScore.feedback}
+                          <p className="text-xs mt-1 pt-2.5 border-t border-slate-200 leading-relaxed" style={{ color: assessScore.is_ready_for_billing ? "#065F46" : "#6D5BA8" }}>
+                            {assessScore.is_ready_for_billing ? "✓ " : "ℹ "}{assessScore.feedback}
                           </p>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* Structured case notes */}
                 <div className="bg-white rounded-2xl px-5 py-4 shadow-sm space-y-4">
-                  <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A9E" }}>
-                    <FileText className="h-3.5 w-3.5" /> Structured Case Notes
-                    <span className="font-normal normal-case tracking-normal ml-1" style={{ color: CORAL }}>— required</span>
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#6D5BA8" }}>
+                      <FileText className="h-3.5 w-3.5" /> NDIS Case Notes
+                    </p>
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100 shrink-0">Required for billing</span>
+                  </div>
                   {(
                     [
-                      { key: "activitiesPerformed" as keyof StructuredNotes, label: "Activities Performed", placeholder: "Describe the specific support activities provided…", required: true },
-                      { key: "outcomes" as keyof StructuredNotes, label: "Outcomes", placeholder: "Measurable outcomes achieved…", required: true },
-                      { key: "participantResponse" as keyof StructuredNotes, label: "Participant Response", placeholder: "How did the participant engage and respond?", required: true },
-                      { key: "progressTowardGoals" as keyof StructuredNotes, label: "Progress Toward NDIS Goals", placeholder: "Link outcomes to specific NDIS goals…", required: false },
+                      { key: "activitiesPerformed" as keyof StructuredNotes, label: "Activities Performed", placeholder: "Describe the specific support activities provided during this session…", required: true },
+                      { key: "outcomes" as keyof StructuredNotes, label: "Outcomes Achieved", placeholder: "Measurable outcomes or changes observed…", required: true },
+                      { key: "participantResponse" as keyof StructuredNotes, label: "Participant Response", placeholder: "How did the participant engage and respond to supports?", required: true },
+                      { key: "progressTowardGoals" as keyof StructuredNotes, label: "Progress Toward NDIS Goals", placeholder: "Link outcomes to the participant's specific NDIS plan goals…", required: false },
                     ] as const
                   ).map(({ key, label, placeholder, required }) => (
                     <div key={key}>
-                      <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
-                        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+                      <label className="text-xs font-semibold mb-1.5 flex items-center gap-1" style={{ color: "#3D2F55" }}>
+                        {label}{required && <span className="text-red-400 ml-0.5 font-bold">*</span>}
                       </label>
                       <SmartTextarea
                         value={structuredNotes[key]}
