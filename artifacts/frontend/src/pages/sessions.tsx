@@ -31,8 +31,8 @@ interface Session {
 
 interface SessionsProps {
   /** Expects dynamic data and state from your data-fetching layer (e.g., React Query or Context) */
-  sessions: Session[] | undefined;
-  isLoading: boolean;
+  sessions?: Session[];
+  isLoading?: boolean;
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────

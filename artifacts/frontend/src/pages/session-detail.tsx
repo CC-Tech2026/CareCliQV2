@@ -692,18 +692,24 @@ export default function SessionDetail({ id }: { id?: string }) {
                 <div className="pt-2 space-y-2">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rule Parameters Check</p>
                   <div className="space-y-2 text-xs">
-                    {Array.isArray(rulesResult.passed_rules) && rulesResult.passed_rules.map((rule: string) => (
-                      <div key={rule} className="flex items-center gap-2 text-slate-600 bg-slate-50 p-1.5 rounded-lg">
-                        <RuleIcon status="pass" />
-                        <span className="capitalize">{rule.replace(/_/g, " ")}</span>
-                      </div>
-                    ))}
-                    {Array.isArray(rulesResult.failed_rules) && rulesResult.failed_rules.map((rule: string) => (
-                      <div key={rule} className="flex items-center gap-2 text-red-800 bg-red-50/60 p-1.5 rounded-lg">
-                        <RuleIcon status="fail" />
-                        <span className="capitalize font-medium">{rule.replace(/_/g, " ")}</span>
-                      </div>
-                    ))}
+                    {Array.isArray(rulesResult.passed_rules) && rulesResult.passed_rules.map((rule: unknown, i: number) => {
+                      const label = typeof rule === "string" ? rule : (rule as { name?: string; rule?: string })?.name ?? (rule as { rule?: string })?.rule ?? String(rule);
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-slate-600 bg-slate-50 p-1.5 rounded-lg">
+                          <RuleIcon status="pass" />
+                          <span className="capitalize">{label.replace(/_/g, " ")}</span>
+                        </div>
+                      );
+                    })}
+                    {Array.isArray(rulesResult.failed_rules) && rulesResult.failed_rules.map((rule: unknown, i: number) => {
+                      const label = typeof rule === "string" ? rule : (rule as { name?: string; rule?: string })?.name ?? (rule as { rule?: string })?.rule ?? String(rule);
+                      return (
+                        <div key={i} className="flex items-center gap-2 text-red-800 bg-red-50/60 p-1.5 rounded-lg">
+                          <RuleIcon status="fail" />
+                          <span className="capitalize font-medium">{label.replace(/_/g, " ")}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
