@@ -24,7 +24,6 @@ import { CareScribeLogo, CareScribeLogoSm } from "@/components/CareScribeLogo";
 
 // ── Friendly Design Tokens ────────────────────────────────────────────────────
 const PLUM = "#6A407D"; // Warmer, softer plum
-const CORAL = "#FF8FA3"; // Bubbly coral/pink
 const MUTED = "#9A8C9E"; // Lighter muted text
 const TEXT = "#3B2E42"; // Softer dark text
 const APP_BG = "#F7F5FA"; // Very soft purple-tinted white
@@ -96,16 +95,22 @@ function SidebarContents({
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Logo Header ──────────────────────────────────────────── */}
+      {/* ── Logo header ──────────────────────────────────────────── */}
       <div
         className={cn(
-          "flex items-center h-16 shrink-0",
-          compact ? "justify-center px-2" : "justify-between px-5",
+          "flex items-center h-16 shrink-0 select-none overflow-hidden",
+          compact ? "justify-center px-3" : "justify-between pl-5 pr-3",
         )}
       >
-        <CareScribeLogo compact={compact} />
+        <Link
+          href="/dashboard"
+          onClick={onNav}
+          className="flex items-center focus:outline-none active:opacity-75 transition-opacity"
+        >
+          <CareScribeLogo compact={compact} />
+        </Link>
 
-        {/* Collapse button — only when expanded + not a drawer */}
+        {/* Collapse button — expanded sidebar only */}
         {!compact && !isDrawer && (
           <button
             onClick={onToggle}
@@ -113,7 +118,7 @@ function SidebarContents({
             className="p-1.5 rounded-full transition-colors hover:bg-black/5 shrink-0"
             style={{ color: MUTED }}
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={17} />
           </button>
         )}
       </div>
@@ -154,7 +159,7 @@ function SidebarContents({
       {/* ── Navigation ────────────────────────────────────────────── */}
       <nav
         className={cn(
-          "flex-1 overflow-y-auto space-y-1",
+          "flex-1 overflow-y-auto space-y-1 scrollbar-none",
           compact ? "px-2" : "px-4",
         )}
       >
@@ -308,7 +313,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       className="flex h-screen w-full selection:bg-pink-100"
       style={{ background: APP_BG, color: TEXT }}
     >
-      {/* ── Desktop sidebar (Floating instead of rigid column) ── */}
+      {/* ── Desktop sidebar ── */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out"
         style={{ width: collapsed ? 88 : 260 }}
@@ -316,12 +321,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarContents {...sharedProps} isDrawer={false} />
       </aside>
 
-      {/* ── Main content wrapper (App Card style on Desktop) ── */}
+      {/* ── Main content wrapper ── */}
       <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
         <div className="flex-1 flex flex-col bg-white md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] overflow-hidden relative">
           {/* Mobile top bar */}
-          <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10">
-            <CareScribeLogoSm />
+          <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10 border-b border-black/5">
+            <Link
+              href="/dashboard"
+              className="flex items-center focus:outline-none py-1 active:opacity-75 transition-opacity"
+            >
+              <CareScribeLogoSm />
+            </Link>
             <div className="flex items-center gap-2">
               <Link href="/sessions/new">
                 <button
@@ -341,7 +351,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          {/* Desktop App Header (Inside the white card) */}
+          {/* Desktop App Header */}
           <header className="hidden md:flex h-16 items-center justify-end px-8 shrink-0 z-10 gap-4">
             {alertCount > 0 && (
               <Link href="/compliance">
@@ -374,7 +384,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* ── Mobile bottom nav (Floating soft shadow) ── */}
+      {/* ── Mobile bottom nav ── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white/90 backdrop-blur-md"
         style={{
