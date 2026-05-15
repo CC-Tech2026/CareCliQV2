@@ -15,6 +15,7 @@ type ExtendedSession = Session & {
   compliance_status?: string | null;
   body_markers?: BodyMarker[] | null;
 };
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,7 +29,7 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download,
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -126,7 +127,6 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
-  const [pendingSave, setPendingSave] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
 
   useEffect(() => {
@@ -285,24 +285,26 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 max-w-5xl mx-auto">
-        <Skeleton className="h-12 w-1/3" />
+      <div className="space-y-6 max-w-5xl mx-auto p-4">
+        <Skeleton className="h-12 w-1/3 animate-pulse bg-slate-200" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-64 w-full" /><Skeleton className="h-48 w-full" />
+            <Skeleton className="h-64 w-full bg-slate-200" />
+            <Skeleton className="h-48 w-full bg-slate-200" />
           </div>
           <div className="space-y-6">
-            <Skeleton className="h-48 w-full" /><Skeleton className="h-48 w-full" />
+            <Skeleton className="h-48 w-full bg-slate-200" />
+            <Skeleton className="h-48 w-full bg-slate-200" />
           </div>
         </div>
       </div>
     );
   }
 
-  if (!session) return <div className="p-8 text-slate-500">Session not found</div>;
+  if (!session) return <div className="p-8 text-slate-500 text-center font-medium">Session record not found.</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-6 max-w-5xl mx-auto pb-12 px-4 pt-4">
 
       {/* Blocking save warning dialog */}
       <AlertDialog open={showSaveWarning} onOpenChange={setShowSaveWarning}>
@@ -329,7 +331,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Fix First</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
               onClick={() => { setShowSaveWarning(false); doSaveNotes(); }}
             >
               Save Draft Anyway
@@ -343,9 +345,8 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">
-              {session.participants?.full_name || "Session"}
+              {session.participants?.full_name || "Session Record"}
             </h1>
-            {/* Claim Readiness Status badge */}
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>
               <statusCfg.icon className="h-3.5 w-3.5" />
               {statusCfg.label}
@@ -353,14 +354,16 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
           <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "#4A3D5A" }}>
             <span className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : ""}
+              <Calendar className="h-4 w-4 text-slate-400" />
+              {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : "No Date Listed"}
             </span>
-            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {session.duration_minutes} min</span>
-            <span className="flex items-center gap-1.5"><Activity className="h-4 w-4" /> {session.session_type}</span>
+            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {session.duration_minutes || 0} min</span>
+            <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-slate-400" /> {session.session_type}</span>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
+
+        {/* Top bar control utilities */}
+        <div className="flex gap-2 flex-wrap items-center">
           <Link href="/patients">
             <Button variant="outline" size="sm">View Participant</Button>
           </Link>
@@ -407,7 +410,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             Re-check
           </Button>
           <Button
-            className="gap-2 text-white rounded-xl"
+            className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity"
             style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
             onClick={handleAIAnalysis}
             disabled={saveWithAI.isPending}
@@ -421,7 +424,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left column — notes + transcription */}
+        {/* Left column — notes + transcription + structural outputs */}
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
@@ -464,7 +467,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                           <><AlertTriangle className="h-3.5 w-3.5" /> {liveIssues.length} compliance warning{liveIssues.length > 1 ? "s" : ""}</>
                         )}
                       </div>
-                      <ul className="p-2 space-y-1">
+                      <ul className="p-2 space-y-1 bg-slate-50/50">
                         {liveIssues.map((issue, i) => (
                           <li key={i} className={`text-xs flex items-start gap-2 px-1 py-0.5 ${issue.type === "error" ? "text-red-700" : "text-amber-700"}`}>
                             {issue.type === "error"
@@ -482,7 +485,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       Notes look good — no compliance issues detected
                     </div>
                   )}
-                  {/* Character count */}
+                  {/* Character count metrics */}
                   <div className="flex justify-between text-[11px]" style={{ color: "#7A6A8A" }}>
                     <span>{notes.length} characters</span>
                     <span className={notes.length < 50 ? "text-red-500" : notes.length < 200 ? "text-amber-500" : "text-emerald-500"}>
@@ -623,7 +626,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             </div>
           )}
 
-          {/* Physical Examination — shown when body markers are recorded */}
+          {/* Physical Examination panel */}
           {(() => {
             const markers = (session as ExtendedSession).body_markers;
             if (!markers || markers.length === 0) return null;
@@ -637,9 +640,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   <BodyExaminationPanel
                     markers={markers}
                     readOnly
-                    bodyType={
-                      participant?.biological_sex ?? "unspecified"
-                    }
+                    bodyType={participant?.biological_sex ?? "unspecified"}
                   />
                 </div>
               </div>
@@ -647,7 +648,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           })()}
         </div>
 
-        {/* Right column — compliance + tags/goals + photos */}
+        {/* Right column — compliance score breakdowns + linked targets + metadata tools */}
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
@@ -662,299 +663,182 @@ export default function SessionDetail({ id }: { id?: string }) {
               : {}),
           }}>
             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-              <div className="flex items-center gap-1.5">
-                <Shield className="h-4 w-4" style={{ color: "#7A6A8A" }} />
-                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Compliance</p>
+              <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
+                <ShieldAlert className="h-4 w-4 text-slate-500" /> NDIS Audit Audit Score
               </div>
-              {session.compliance_score != null && (
-                <span className={`text-[18px] font-bold ${
-                  claimStatus === "compliant" ? "text-emerald-700" :
-                  claimStatus === "at_risk" ? "text-amber-700" : "text-red-700"
-                }`}>
-                  {Number(session.compliance_score).toFixed(0)}%
-                </span>
-              )}
+              <Badge variant={claimStatus === "compliant" ? "default" : "secondary"} className="text-xs">
+                {session.compliance_score != null ? `${session.compliance_score.toFixed(0)}%` : "N/A"}
+              </Badge>
             </div>
+
             <div className="p-5 space-y-4">
-              {!session.compliance_score ? (
-                <div className="text-center py-4" style={{ color: "#7A6A8A" }}>
-                  <ShieldAlert className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-[13px]">Not yet analyzed</p>
-                  <Button variant="link" size="sm" onClick={handleAIAnalysis} className="mt-1 h-auto py-0 text-xs">
-                    Run AI Analysis
-                  </Button>
+              {session.compliance_score != null && (
+                <div className="space-y-1.5">
+                  <Progress 
+                    value={session.compliance_score} 
+                    className={`h-2 ${
+                      claimStatus === "compliant" ? "[&>div]:bg-emerald-500" : 
+                      claimStatus === "at_risk" ? "[&>div]:bg-amber-500" : "[&>div]:bg-red-500"
+                    }`}
+                  />
+                  <p className="text-[11px] text-slate-500 text-right font-medium">
+                    Target NDIS Threshold: 85%
+                  </p>
                 </div>
-              ) : (
-                <>
-                  {/* Score bar */}
-                  <div>
-                    <Progress
-                      value={Number(session.compliance_score)}
-                      className={`h-2.5 ${
-                        claimStatus === "compliant" ? "[&>div]:bg-emerald-500" :
-                        claimStatus === "at_risk" ? "[&>div]:bg-amber-500" :
-                        "[&>div]:bg-red-500"
-                      }`}
-                    />
-                    <div className="flex justify-between text-xs text-slate-400 mt-1">
-                      <span>0</span><span>Target: 85+</span><span>100</span>
-                    </div>
-                  </div>
+              )}
 
-                  {/* Rules breakdown from rules engine */}
-                  {rulesResult?.rules && (
-                    <div className="space-y-1.5">
-                      <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">Rule Checks</p>
-                      {rulesResult.rules.map((rule: { rule: string; status: string; message: string }, i: number) => (
-                        <div key={i} className="flex items-start gap-2">
-                          <RuleIcon status={rule.status} />
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-slate-700 dark:text-slate-300 leading-snug capitalize">
-                              {rule.rule.replace(/_/g, " ")}
-                            </p>
-                            {rule.status !== "pass" && (
-                              <p className="text-[10px] text-slate-500 leading-snug">{rule.message}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Spec score breakdown (5 weighted dimensions) */}
-                  {aiInsights?.score_breakdown && Object.keys(aiInsights.score_breakdown).length > 0 && (() => {
-                    const bd = aiInsights.score_breakdown as Record<string, number>;
-                    const dims: { key: string; label: string; max: number }[] = [
-                      { key: "documentation_completeness", label: "Documentation", max: 30 },
-                      { key: "goal_alignment",             label: "Goal Alignment", max: 25 },
-                      { key: "ndis_language_compliance",   label: "NDIS Language",  max: 20 },
-                      { key: "risk_detection",             label: "Risk Detection", max: 15 },
-                      { key: "audit_readiness",            label: "Audit Readiness",max: 10 },
-                    ];
-                    return (
-                      <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                        <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">Score Breakdown</p>
-                        <div className="space-y-2">
-                          {dims.map(({ key, label, max }) => {
-                            const val = bd[key] ?? 0;
-                            const pct = max > 0 ? Math.round((val / max) * 100) : 0;
-                            return (
-                              <div key={key}>
-                                <div className="flex justify-between text-[10px] text-slate-500 mb-0.5">
-                                  <span>{label}</span>
-                                  <span className="font-medium">{val}/{max}</span>
-                                </div>
-                                <div className="h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-400" : "bg-red-400"}`}
-                                    style={{ width: `${pct}%` }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+              {/* Rules Verification Matrix */}
+              {rulesResult && (
+                <div className="pt-2 space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rule Parameters Check</p>
+                  <div className="space-y-2 text-xs">
+                    {Array.isArray(rulesResult.passed_rules) && rulesResult.passed_rules.map((rule: string) => (
+                      <div key={rule} className="flex items-center gap-2 text-slate-600 bg-slate-50 p-1.5 rounded-lg">
+                        <RuleIcon status="pass" />
+                        <span className="capitalize">{rule.replace(/_/g, " ")}</span>
                       </div>
-                    );
-                  })()}
+                    ))}
+                    {Array.isArray(rulesResult.failed_rules) && rulesResult.failed_rules.map((rule: string) => (
+                      <div key={rule} className="flex items-center gap-2 text-red-800 bg-red-50/60 p-1.5 rounded-lg">
+                        <RuleIcon status="fail" />
+                        <span className="capitalize font-medium">{rule.replace(/_/g, " ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                  {/* Compliance notes from AI */}
-                  {session.compliance_notes && (
-                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                      <p className="text-xs text-slate-500 font-medium mb-1">AI Assessment:</p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{session.compliance_notes}</p>
-                    </div>
-                  )}
-
-                  {/* AI Fix Suggestions */}
-                  {rulesResult?.failed_rules?.length > 0 && (
-                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-                      {!showExplanation ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full gap-1.5 text-xs h-8"
-                          onClick={() => { setShowExplanation(true); fetchExplanation(); }}
-                        >
-                          <Lightbulb className="h-3.5 w-3.5" />
-                          Get AI Fix Suggestions
-                        </Button>
-                      ) : explanationLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-slate-500 py-2">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Getting suggestions...
+              {/* Explanation Expandable Widget */}
+              {rulesResult?.failed_rules?.length > 0 && (
+                <div className="pt-2">
+                  {!showExplanation ? (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full text-xs gap-1"
+                      onClick={() => { setShowExplanation(true); fetchExplanation(); }}
+                    >
+                      <Lightbulb className="h-3.5 w-3.5 text-amber-500" /> Explain Failed Rules
+                    </Button>
+                  ) : (
+                    <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-3.5 space-y-2 text-xs text-amber-900 animate-in fade-in duration-150">
+                      <div className="flex justify-between items-center">
+                        <p className="font-bold flex items-center gap-1"><Lightbulb className="h-3.5 w-3.5 text-amber-600" /> Remediation Insight</p>
+                        <Button variant="ghost" className="h-5 p-1 text-slate-400" onClick={() => setShowExplanation(false)}>Hide</Button>
+                      </div>
+                      {explanationLoading ? (
+                        <div className="flex items-center gap-2 text-slate-500 py-2">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Querying compliance definitions...
                         </div>
                       ) : explanation ? (
-                        <div className={`rounded-lg p-3 text-xs space-y-2 ${
-                          explanation.priority === "critical"
-                            ? "bg-red-50 border border-red-100"
-                            : "bg-amber-50 border border-amber-100"
-                        }`}>
-                          <p className={`font-semibold flex items-center gap-1 ${
-                            explanation.priority === "critical" ? "text-red-800" : "text-amber-800"
-                          }`}>
-                            <Lightbulb className="h-3.5 w-3.5" /> AI Explanation
-                          </p>
-                          <p className="text-slate-700 leading-relaxed">{explanation.explanation}</p>
-                          {explanation.fix_suggestion && (
-                            <div className="pt-2 border-t border-current/10">
-                              <p className="font-semibold text-slate-700 mb-1">How to fix:</p>
-                              <p className="text-slate-600 whitespace-pre-line leading-relaxed">
-                                {explanation.fix_suggestion}
-                              </p>
-                            </div>
-                          )}
+                        <div className="space-y-2 leading-relaxed">
+                          <p>{explanation.explanation}</p>
+                          <div className="bg-white/80 p-2 rounded-lg border border-amber-200/40 font-medium">
+                            <span className="text-amber-700 font-bold">Actionable Fix:</span> {explanation.fix_suggestion}
+                          </div>
                         </div>
-                      ) : null}
+                      ) : (
+                        <p className="text-slate-500">Failed to pull explanation details.</p>
+                      )}
                     </div>
                   )}
-                </>
+                </div>
               )}
             </div>
           </div>
 
-          {/* Tags & Goals */}
+          {/* Linked Goals & Tags */}
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-            <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Tags &amp; Goals</p>
+            <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <Target className="h-4 w-4 text-slate-500" />
+              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Core Mapping</p>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Tags</p>
-                {session.tags && session.tags.length > 0 ? (
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> Linked Goals</p>
+                {Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {session.goals_addressed.map((goal: string, index: number) => (
+                      <div key={index} className="text-xs bg-indigo-50/50 border border-indigo-100/40 text-indigo-900 px-2.5 py-1.5 rounded-lg font-medium leading-normal">
+                        {goal}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-slate-400">No specific NDIS strategic support goals linked.</p>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Tags className="h-3 w-3" /> Categorization Tags</p>
+                {Array.isArray(session.tags) && session.tags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {session.tags.map((tag: string) => (
-                      <span key={tag} className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
-                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>{tag}</span>
+                      <Badge key={tag} variant="secondary" className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-slate-100 text-slate-700 border">
+                        {tag}
+                      </Badge>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[12px]" style={{ color: "#7A6A8A" }}>No tags</p>
-                )}
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>NDIS Goals Addressed</p>
-                {session.goals_addressed && session.goals_addressed.length > 0 ? (
-                  <ul className="space-y-1">
-                    {(session.goals_addressed as string[]).map((goal, i) => (
-                      <li key={i} className="text-[12px] flex gap-2" style={{ color: "#4A3D5A" }}>
-                        <span style={{ color: "#F1738A" }}>•</span> {goal}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-[12px]" style={{ color: "#7A6A8A" }}>No goals linked — edit session to add goals</p>
+                  <p className="text-xs italic text-slate-400">No labels attached.</p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* NDIS Mapping & Budget Insights (from AI spec analysis) */}
-          {aiInsights?.ndis_mapping && (aiInsights.ndis_mapping.support_category || (aiInsights.ndis_mapping.support_items?.length > 0)) && (
-            <div className="rounded-2xl bg-white overflow-hidden" style={{ background: "rgba(84,34,105,0.03)", border: "1px solid rgba(84,34,105,0.12)" }}>
-              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
-                <Activity className="h-4 w-4" style={{ color: "#542269" }} />
-                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Funding Mapping</p>
+          {/* Funding Support Category & Billing Metrics */}
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+              <DollarSign className="h-4 w-4 text-slate-500" />
+              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Billing Accounts</p>
+            </div>
+            <div className="p-4 space-y-3 text-xs font-medium">
+              <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50">
+                <span className="text-slate-500">Support Category:</span>
+                <span className="text-slate-800 font-bold">{(session as ExtendedSession).support_category || "Capacity Building"}</span>
               </div>
-              <div className="p-5 space-y-3">
-                {aiInsights.ndis_mapping.support_category && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium" style={{ color: "#7A6A8A" }}>Support Category</span>
-                    <span className="text-[11px] px-2.5 py-0.5 rounded-full font-medium"
-                      style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
-                      {aiInsights.ndis_mapping.support_category}
-                    </span>
-                  </div>
-                )}
-                {Array.isArray(aiInsights.ndis_mapping.support_items) && aiInsights.ndis_mapping.support_items.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-medium mb-1.5" style={{ color: "#7A6A8A" }}>Support Items</p>
-                    <ul className="space-y-1">
-                      {aiInsights.ndis_mapping.support_items.map((item: string, i: number) => (
-                        <li key={i} className="text-[12px] flex gap-1.5" style={{ color: "#4A3D5A" }}>
-                          <span style={{ color: "#F1738A" }}>•</span>{item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {aiInsights.budget_insights && (
-                  <div className="pt-3 border-t space-y-1.5" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
-                    {aiInsights.budget_insights.estimated_cost > 0 && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px]" style={{ color: "#7A6A8A" }}>AI Est. Cost</span>
-                        <span className="text-[13px] font-semibold" style={{ color: "#1C1626" }}>${Number(aiInsights.budget_insights.estimated_cost).toFixed(2)}</span>
-                      </div>
-                    )}
-                    {aiInsights.budget_insights.budget_status && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[12px]" style={{ color: "#7A6A8A" }}>Budget Status</span>
-                        <span className={`text-[12px] font-medium capitalize ${
-                          aiInsights.budget_insights.budget_status === "exceeded" ? "text-red-600" :
-                          aiInsights.budget_insights.budget_status === "nearing limit" ? "text-amber-600" :
-                          "text-emerald-600"
-                        }`}>{aiInsights.budget_insights.budget_status}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50">
+                <span className="text-slate-500">Calculated Cost:</span>
+                <span className="text-slate-900 font-extrabold text-[13px]">
+                  {(session as ExtendedSession).cost != null ? `$${(session as ExtendedSession).cost?.toFixed(2)}` : "Uncalculated"}
+                </span>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Cost & Category (from DB — shown when billing is recorded) */}
-          {((session as ExtendedSession).cost || (session as ExtendedSession).support_category) && (
-            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-                <DollarSign className="h-4 w-4" style={{ color: "#7A6A8A" }} />
-                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Billing</p>
-              </div>
-              <div className="p-5 text-[13px] space-y-2">
-                {(session as ExtendedSession).support_category && (
-                  <div className="flex justify-between">
-                    <span style={{ color: "#7A6A8A" }}>Category</span>
-                    <span className="font-medium capitalize" style={{ color: "#1C1626" }}>{String((session as ExtendedSession).support_category).replace("_", " ")}</span>
-                  </div>
-                )}
-                {(session as ExtendedSession).cost && (
-                  <div className="flex justify-between">
-                    <span style={{ color: "#7A6A8A" }}>Session Cost</span>
-                    <span className="font-semibold" style={{ color: "#1C1626" }}>${Number((session as ExtendedSession).cost).toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Photos */}
+          {/* Media Attachments & Session Evidence */}
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" style={{ color: "#7A6A8A" }} />
-                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Photos</p>
+              <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
+                <ImageIcon className="h-4 w-4 text-slate-500" /> Evidence Uploads
               </div>
-              <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                <span className="sr-only sm:not-sr-only sm:ml-2 text-xs">Upload</span>
-              </Button>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
             </div>
-            <div className="p-5">
-              {session.photo_urls && session.photo_urls.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {(session.photo_urls as string[]).map((url, i) => (
-                    <div key={i} className="aspect-square rounded-xl overflow-hidden border" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                      <img src={url} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "rgba(232,213,232,0.7)", color: "#7A6A8A" }}>
-                  <ImageIcon className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                  <p className="text-[12px]">No photos attached</p>
-                </div>
-              )}
+            <div className="p-5 space-y-4">
+              <input 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload}
+              />
+              <Button 
+                variant="outline" 
+                className="w-full border-dashed h-20 flex flex-col justify-center items-center gap-1 rounded-xl hover:bg-slate-50/80 transition-colors"
+                disabled={isUploading}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5 text-slate-400" />
+                    <span className="text-xs font-semibold text-slate-600">Upload Observation Media</span>
+                  </>
+                )}
+              </Button>
             </div>
           </div>
+
         </div>
       </div>
     </div>

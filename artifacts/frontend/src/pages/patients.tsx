@@ -416,86 +416,110 @@ export default function Patients() {
     }) || [];
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-5 overflow-hidden">
-
-      {/* ── Left panel: participant list ── */}
+    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
+      {/* Left panel — participant list */}
       <div
-        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-[260px] md:shrink-0 flex-col bg-white rounded-2xl overflow-hidden`}
+        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden`}
         style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
       >
-        {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b flex items-center justify-between"
-          style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-          <h2 className="font-semibold text-[16px]" style={{ color: "#1C1626" }}>Participants</h2>
-          <Link href="/participants/new">
-            <button
-              className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-[rgba(84,34,105,0.07)]"
-              style={{ color: "#542269" }}
-              data-testid="button-add-participant"
-              title="Add participant"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </Link>
-        </div>
-
-        {/* Search */}
-        <div className="px-3 py-2.5 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5" style={{ color: "#7A6A8A" }} />
-            <Input
-              placeholder="Search name or NDIS..."
-              className="pl-8 h-8 text-[13px] rounded-lg"
-              style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="input-search-participants"
-            />
+        <div className="p-4 border-b space-y-4" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-[16px]" style={{ color: "#1C1626" }}>Participants</h2>
+            <Link href="/participants/new">
+              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Add</span>
+              </Button>
+            </Link>
+          </div>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4" style={{ color: "#7A6A8A" }} />
+              <Input
+                placeholder="Search name or NDIS..."
+                className="pl-9 rounded-xl"
+                style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="input-search-participants"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 rounded-xl" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {participantsLoading ? (
-            Array(5).fill(0).map((_, i) => (
-              <div key={i} className="px-3 py-2.5 space-y-1.5">
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-3 w-20" />
-              </div>
-            ))
+            Array(5)
+              .fill(0)
+              .map((_, i) => (
+                <div key={i} className="p-3 space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              ))
           ) : filteredParticipants.length === 0 ? (
-            <div className="flex flex-col items-center py-10 gap-2 px-4 text-center">
-              <Users className="h-5 w-5 mx-auto" style={{ color: "#542269", opacity: 0.25 }} />
-              <p className="text-[12px]" style={{ color: "#7A6A8A" }}>No participants found</p>
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                style={{ background: "rgba(84,34,105,0.07)" }}>
+                <Users className="h-5 w-5" style={{ color: "#542269", opacity: 0.5 }} />
+              </div>
+              <p className="text-[13px] font-medium" style={{ color: "#4A3D5A" }}>No participants found</p>
+              <p className="text-[12px] text-center leading-relaxed" style={{ color: "#7A6A8A" }}>
+                Try adjusting your search or add a new participant
+              </p>
             </div>
           ) : (
             filteredParticipants.map((p) => {
-              const isSelected = selectedId === p.id;
-              const dotColor =
-                p.plan_status === "active" ? "#22C55E"
-                : p.plan_status === "pending" ? "#F59E0B"
-                : "#9CA3AF";
-              const ndisFormatted = p.ndis_number.replace(/(\d{3})(?=\d)/g, "$1 ").trim();
+              const initials = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
               return (
                 <button
                   key={p.id}
                   onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
                   data-testid={`button-participant-${p.id}`}
-                  className="w-full text-left px-4 py-2.5 transition-all duration-100"
+                  className="w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border"
                   style={{
-                    background: isSelected ? "rgba(84,34,105,0.06)" : "transparent",
-                    borderLeft: isSelected ? "2px solid #542269" : "2px solid transparent",
+                    background: selectedId === p.id ? "rgba(84,34,105,0.07)" : "transparent",
+                    borderColor: selectedId === p.id ? "rgba(84,34,105,0.20)" : "transparent",
                   }}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-[13px] truncate" style={{ color: "#1C1626" }}>
-                      {p.full_name}
-                    </span>
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
+                  {/* Avatar */}
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
+                    style={{
+                      background: selectedId === p.id
+                        ? "linear-gradient(135deg, #F1738A, #542269)"
+                        : "rgba(84,34,105,0.09)",
+                      color: selectedId === p.id ? "white" : "#542269",
+                    }}
+                  >
+                    {initials}
                   </div>
-                  <span className="text-[11px] font-mono block mt-0.5" style={{ color: "#7A6A8A" }}>
-                    NDIS: {ndisFormatted}
-                  </span>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-1">
+                      <span className="font-semibold text-[13px] truncate" style={{ color: selectedId === p.id ? "linear-gradient(135deg, #F1738A, #542269)" : "#1C1626" }}>
+                        {p.full_name}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${statusBadge(p.plan_status)}`}>
+                        {p.plan_status}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono block mt-0.5" style={{ color: "#7A6A8A" }}>
+                      {p.ndis_number}
+                    </span>
+                  </div>
                 </button>
               );
             })
@@ -503,9 +527,9 @@ export default function Patients() {
         </div>
       </div>
 
-      {/* ── Right panel: participant detail ── */}
+      {/* Right panel — participant detail */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-hidden`}
+        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto`}
         style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
       >
         {selectedId ? (
@@ -513,14 +537,26 @@ export default function Patients() {
             <button
               className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b hover:bg-gray-50 shrink-0 transition-colors"
               style={{ color: "#542269", borderColor: "rgba(232,213,232,0.5)" }}
-              onClick={() => setShowMobileDetail(false)}
+              onClick={() => {
+                setShowMobileDetail(false);
+              }}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
               Back to Participants
             </button>
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
               <ParticipantDetail id={selectedId} onRefreshList={refetch} />
             </div>
           </>
@@ -533,7 +569,7 @@ export default function Patients() {
             <div>
               <p className="text-[15px] font-semibold" style={{ color: "#4A3D5A" }}>Select a participant</p>
               <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
-                Choose a participant to view their clinical goals, session history, and NDIS compliance status.
+                Choose someone from the list to view their clinical profile, NDIS plan, and session history.
               </p>
             </div>
           </div>
@@ -1018,8 +1054,8 @@ function GoalsManagementCard({
             <Target className="h-3.5 w-3.5" style={{ color: "#542269" }} />
           </div>
           <div>
-            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: "#1C1626" }}>Outcome Framework</h3>
-            <p className="text-[11px]" style={{ color: "#7A6A8A" }}>NDIS funded support goals and progress</p>
+            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: "#1C1626" }}>NDIS Goals</h3>
+            <p className="text-[11px]" style={{ color: "#7A6A8A" }}>Progress toward plan objectives</p>
           </div>
         </div>
         <Button size="sm" variant="outline" className="h-7 gap-1 text-xs rounded-lg"
@@ -1149,42 +1185,34 @@ function GoalsManagementCard({
                 </div>
               ) : (
                 /* ── Goal card ── */
-                <div className="px-4 py-4">
-                  <div className="flex items-start gap-3">
-                    {/* Status circle */}
-                    <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ borderColor: pct >= 100 ? "#22C55E" : "rgba(84,34,105,0.3)" }}>
-                      {pct >= 100 && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      {/* Category + date row */}
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
-                          style={{ background: cat.bg, color: cat.color }}>
-                          {cat.label}
-                        </span>
-                        {goal.target_date && (
-                          <span className="text-[10px] shrink-0" style={{ color: "#9CA3AF" }}>
-                            Ends {fmtGoalDate(goal.target_date)}
-                          </span>
-                        )}
+                <div className="p-4">
+                  {/* Top row: category badge + target date */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.border}` }}>
+                      {cat.label}
+                    </span>
+                    {goal.target_date && (
+                      <div className="flex items-center gap-1" style={{ color: "#7A6A8A" }}>
+                        <Clock className="h-3 w-3" />
+                        <span className="text-[10px]">Target: {fmtGoalDate(goal.target_date)}</span>
                       </div>
+                    )}
+                  </div>
 
-                      {/* Goal title */}
-                      <p className="text-[13px] font-medium mb-3 leading-snug" style={{ color: "#1C1626" }}>{goal.title}</p>
+                  {/* Goal title */}
+                  <p className="text-[13px] font-medium mb-3 leading-snug" style={{ color: "#1C1626" }}>{goal.title}</p>
 
-                      {/* Progress bar */}
-                      <div>
-                        <div className="flex justify-between mb-1">
-                          <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "#9CA3AF" }}>Progress</span>
-                          <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{pct}%</span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(232,213,232,0.5)" }}>
-                          <div className="h-full rounded-full transition-all duration-500"
-                            style={{ width: `${pct}%`, background: "#542269" }} />
-                        </div>
+                  {/* Progress row + action buttons */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Progress</span>
+                        <span className="text-[10px] font-bold" style={{ color: pc }}>{pct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(232,213,232,0.5)" }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, background: pc }} />
                       </div>
                     </div>
 
@@ -1428,348 +1456,509 @@ function ParticipantDetail({
         s.notes?.toLowerCase().includes(historySearch.toLowerCase()),
     ) ?? [];
 
-  // Right-sidebar computed values
-  const lastSession = typedSessions?.[0] ?? null;
-  const daysUntilPlanEnd = (() => {
-    const d = participant?.plan_end_date ? String(participant.plan_end_date) : null;
-    if (!d) return null;
-    try { return Math.floor((parseISO(d).getTime() - Date.now()) / 86400000); }
-    catch { return null; }
-  })();
-  const draftCount = typedSessions?.filter(s => s.status === "draft").length ?? 0;
-  const sessionsWithScores = typedSessions?.filter(s => s.compliance_score != null) ?? [];
-  const avgCompliance = sessionsWithScores.length > 0
-    ? sessionsWithScores.reduce((a, s) => a + Number(s.compliance_score), 0) / sessionsWithScores.length
-    : null;
-  const activeGoalsList = ((participant?.goals ?? []) as NDISGoal[]).filter(g => g.status === "active");
-  const lowProgressGoalsList = activeGoalsList.filter(g => (g.progress_percentage ?? 0) < 30);
-  const goalCoverage = activeGoalsList.length > 0
-    ? Math.round(activeGoalsList.filter(g => (g.progress_percentage ?? 0) >= 50).length / activeGoalsList.length * 100)
-    : 0;
-  const complianceAlerts: string[] = [
-    ...(daysUntilPlanEnd !== null && daysUntilPlanEnd >= 0 && daysUntilPlanEnd <= 60
-      ? [`Progress Report for NDIS Review is due in ${daysUntilPlanEnd} days. Current outcome data covers ${goalCoverage}% of goals.`]
-      : []),
-    ...(draftCount > 0
-      ? [`${draftCount} session${draftCount > 1 ? "s" : ""} ${draftCount > 1 ? "have" : "has"} missing clinical notes.`]
-      : []),
-    ...(avgCompliance !== null && avgCompliance < 70
-      ? [`Average compliance score is ${avgCompliance.toFixed(0)}%. Review flagged sessions.`]
-      : []),
-    ...(lowProgressGoalsList.length > 0
-      ? [`${lowProgressGoalsList.length} goal${lowProgressGoalsList.length > 1 ? "s" : ""} below 30% progress. Update outcome documentation.`]
-      : []),
-  ];
-  const TAB_CLS = "data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium text-[#7A6A8A] hover:text-[#1C1626] transition-colors";
-
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ── */}
-      <div className="px-6 pt-5 pb-4 shrink-0"
-        style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap mb-1.5">
-              <h2 className="text-[22px] font-bold tracking-tight" style={{ color: "#1C1626" }}>
+      {/* Header */}
+      <div className="px-6 pt-5 pb-5 border-b shrink-0"
+        style={{ borderColor: "rgba(232,213,232,0.5)", background: "linear-gradient(to bottom, rgba(246,244,251,0.6), white)" }}>
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            {/* Participant avatar */}
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-[20px] font-bold shrink-0 text-white"
+              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+            >
+              {String(participant.full_name ?? "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[20px] font-bold tracking-tight leading-tight truncate" style={{ color: "#1C1626" }}>
                 {participant.full_name}
               </h2>
-              <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${statusBadge(String(participant.plan_status ?? ""))}`}>
-                {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
-              </span>
-            </div>
-            {lastSession?.session_date ? (
-              <div className="flex items-center gap-1.5 text-[13px]" style={{ color: "#7A6A8A" }}>
-                <Calendar className="h-3.5 w-3.5" />
-                <span>Last clinical session: <span className="font-medium" style={{ color: "#4A3D5A" }}>{safeFormat(lastSession.session_date)}</span></span>
+              <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 mt-1.5 text-[12px]" style={{ color: "#4A3D5A" }}>
+                <span className="font-mono px-2 py-0.5 rounded text-[11px]"
+                  style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
+                  {participant.ndis_number}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  DOB: {safeFormat(participant.date_of_birth)}
+                </span>
+                {participant.email && (
+                  <span className="hidden sm:inline truncate max-w-[160px]">{String(participant.email)}</span>
+                )}
+                {participant.phone && (
+                  <span>{String(participant.phone)}</span>
+                )}
               </div>
-            ) : (
-              <p className="text-[13px]" style={{ color: "#9CA3AF" }}>No sessions recorded yet</p>
-            )}
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            <Link href={`/sessions/new?participantId=${id}`}>
-              <Button size="sm" variant="outline" className="rounded-xl text-[13px] h-9"
-                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
-                Create Service Note
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href={`/participants/${id}/edit`}>
+              <Button size="sm" variant="outline" className="gap-1.5 rounded-xl"
+                style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+                <Edit className="h-3.5 w-3.5" /> Edit
               </Button>
             </Link>
-            <Link href={`/participants/${id}/edit`}>
-              <Button size="sm" className="rounded-xl text-[13px] h-9 text-white"
+            <Link href={`/sessions/new?participantId=${id}`}>
+              <Button size="sm" className="rounded-xl"
                 style={{ background: "#542269", border: "none" }}>
-                Edit Profile
+                New Session
               </Button>
             </Link>
           </div>
         </div>
       </div>
 
-      {/* ── Body: Tabs + Right Sidebar ── */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Tabs */}
+      <Tabs
+        defaultValue="overview"
+        className="flex-1 flex flex-col overflow-hidden"
+      >
+        <div className="px-6 pt-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+          <TabsList className="h-9 bg-transparent gap-1 p-0">
+            <TabsTrigger
+              value="overview"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
+            >
+              Overview
+            </TabsTrigger>
+            <TabsTrigger
+              value="ndis-plan"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
+            >
+              NDIS Plan
+            </TabsTrigger>
+            <TabsTrigger
+              value="history"
+              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
+            >
+              Client History
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        {/* Center: tabs */}
-        <Tabs defaultValue="goals" className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-6 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-            <TabsList className="h-10 bg-transparent gap-0 p-0">
-              <TabsTrigger value="goals" className={TAB_CLS}>Clinical Goals</TabsTrigger>
-              <TabsTrigger value="history" className={TAB_CLS}>Session History</TabsTrigger>
-              <TabsTrigger value="files" className={TAB_CLS}>Files</TabsTrigger>
-            </TabsList>
-          </div>
-
-          {/* ── Clinical Goals Tab ── */}
-          <TabsContent value="goals" className="flex-1 overflow-y-auto p-6 space-y-5 mt-0">
-            <GoalsManagementCard
-              participantId={id}
-              goals={(participant.goals as NDISGoal[]) ?? []}
-              onUpdated={handleSaved}
-            />
-            {aiSummary?.summary && (
-              <div className="rounded-2xl p-5" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <ShieldCheck className="h-4 w-4" style={{ color: "#542269" }} />
-                  <p className="text-[13px] font-semibold" style={{ color: "#542269" }}>AI Clinical Summary</p>
-                </div>
-                <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{aiSummary.summary}</p>
-                <p className="text-[11px] font-medium mt-3" style={{ color: "#7A6A8A" }}>Based on {aiSummary.sessions_count} recent sessions</p>
+        {/* ── Overview Tab ── */}
+        <TabsContent
+          value="overview"
+          className="flex-1 overflow-y-auto p-6 space-y-6 mt-0"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Plan Details card */}
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
+                <FileText className="h-4 w-4" style={{ color: "#542269" }} /> Plan Details
               </div>
-            )}
-          </TabsContent>
-
-          {/* ── Session History Tab ── */}
-          <TabsContent value="history" className="flex-1 overflow-y-auto p-6 space-y-4 mt-0">
-            {typedSessions && typedSessions.length > 0 && (
-              <BodyMarkerHistory
-                sessions={typedSessions.map((s) => ({
-                  id: s.id,
-                  session_date: s.session_date,
-                  session_type: s.session_type,
-                  body_markers: Array.isArray(s.body_markers) ? s.body_markers : [],
-                }))}
-                bodyType={typedParticipant?.biological_sex}
-              />
-            )}
-            <div className="flex items-center justify-between gap-4">
-              <h3 className="font-semibold text-[14px] flex items-center gap-2 shrink-0" style={{ color: "#1C1626" }}>
-                <History className="h-4 w-4" style={{ color: "#542269" }} />
-                Session History
-                {typedSessions && (
-                  <span className="text-[12px] font-normal" style={{ color: "#7A6A8A" }}>({typedSessions.length})</span>
-                )}
-              </h3>
-              <div className="relative max-w-[200px] w-full">
-                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5" style={{ color: "#7A6A8A" }} />
-                <Input
-                  placeholder="Search sessions..."
-                  className="pl-8 h-8 text-[13px]"
-                  value={historySearch}
-                  onChange={(e) => setHistorySearch(e.target.value)}
-                />
+              <div className="p-5 space-y-4">
+                <div className="flex justify-between items-center text-[13px]">
+                  <span style={{ color: "#7A6A8A" }}>Status</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
+                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[13px]">
+                  <span style={{ color: "#7A6A8A" }}>Plan Period</span>
+                  <span className="font-medium text-right" style={{ color: "#1C1626" }}>
+                    {safeFormat(participant.plan_start_date, "MMM yyyy")} – {safeFormat(participant.plan_end_date, "MMM yyyy")}
+                  </span>
+                </div>
+                <div className="pt-1">
+                  <div className="flex justify-between text-[13px] mb-2">
+                    <span style={{ color: "#7A6A8A" }}>Budget Used</span>
+                    <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
+                  </div>
+                  <Progress value={budgetPct}
+                    className={`h-2 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-[#542269]"}`} />
+                  <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
+                    <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
+                    <span>${(participant.total_budget as number)?.toLocaleString() ?? "0"} total</span>
+                  </div>
+                </div>
               </div>
             </div>
-            {sessionsLoading ? (
-              <div className="space-y-3">
-                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+
+            {/* Clinical Profile card */}
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
+                <Activity className="h-4 w-4" style={{ color: "#542269" }} /> Clinical Profile
               </div>
-            ) : filteredHistory.length === 0 ? (
-              <div className="text-center p-12 border-2 border-dashed rounded-2xl"
-                style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                <FileText className="h-8 w-8 mx-auto mb-3" style={{ color: "rgba(84,34,105,0.2)" }} />
-                <p className="text-[13px]" style={{ color: "#7A6A8A" }}>
-                  {historySearch ? "No sessions match your search" : "No sessions recorded yet"}
-                </p>
-                {!historySearch && (
-                  <Link href={`/sessions/new?participantId=${id}`}>
-                    <Button size="sm" variant="outline" className="mt-4 rounded-xl">Record First Session</Button>
-                  </Link>
-                )}
+              <div className="p-5 space-y-4 text-[13px]">
+                <div>
+                  <span className="block mb-1 text-[11px] uppercase tracking-wide font-medium" style={{ color: "#7A6A8A" }}>
+                    Primary Disability
+                  </span>
+                  <span className="font-medium" style={{ color: "#1C1626" }}>
+                    {String(participant.primary_disability || "Not specified")}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <GoalsManagementCard
+            participantId={id}
+            goals={(participant.goals as NDISGoal[]) ?? []}
+            onUpdated={handleSaved}
+          />
+
+          {aiSummary?.summary && (
+            <div className="rounded-2xl p-5" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <ShieldCheck className="h-4 w-4" style={{ color: "#542269" }} />
+                <p className="text-[13px] font-semibold" style={{ color: "#542269" }}>AI Clinical Summary</p>
+              </div>
+              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                {aiSummary.summary}
+              </p>
+              <p className="text-[11px] font-medium mt-3" style={{ color: "#7A6A8A" }}>
+                Based on {aiSummary.sessions_count} recent sessions
+              </p>
+            </div>
+          )}
+
+          <div>
+            <h3 className="font-semibold text-base mb-4">Recent Sessions</h3>
+            {sessionsLoading ? (
+              <Skeleton className="h-32 w-full" />
+            ) : !sessions?.length ? (
+              <div className="text-center p-8 rounded-2xl text-[13px]"
+                style={{ border: "1px solid #E5E7EB", background: "#F6F4FB", color: "#7A6A8A" }}>
+                No sessions recorded yet
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredHistory.map((s) => (
+                {sessions.slice(0, 5).map((s) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
-                    <div className="border rounded-xl p-4 hover:border-[rgba(84,34,105,0.25)] transition-colors cursor-pointer group"
+                    <div className="rounded-xl p-4 cursor-pointer transition-all duration-150 border hover:border-[rgba(84,34,105,0.20)]"
                       style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-[13px] group-hover:text-[#542269] transition-colors truncate" style={{ color: "#1C1626" }}>
-                              {s.session_type || "Session"}
-                            </span>
-                            <span className="text-[11px] flex items-center gap-1 shrink-0" style={{ color: "#7A6A8A" }}>
-                              <Clock className="h-3 w-3" /> {s.duration_minutes} min
-                            </span>
-                          </div>
-                          {s.notes && (
-                            <p className="text-[12px] line-clamp-2" style={{ color: "#7A6A8A" }}>{s.notes}</p>
-                          )}
-                          {Array.isArray(s.tags) && s.tags.length > 0 && (
-                            <div className="flex gap-1 mt-2 flex-wrap">
-                              {s.tags.map((t: string) => (
-                                <span key={t} className="text-[10px] uppercase tracking-wide font-semibold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {Array.isArray(s.body_markers) && s.body_markers.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1.5">
-                              <MapPin className="h-2.5 w-2.5 text-indigo-500" />
-                              <span className="text-[10px] text-indigo-600 font-medium">
-                                {s.body_markers.length} body finding{s.body_markers.length !== 1 ? "s" : ""} recorded
-                              </span>
-                            </div>
-                          )}
+                      <div className="flex justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
+                            {s.session_type}
+                          </span>
+                          <span className="text-[11px] flex items-center gap-1" style={{ color: "#7A6A8A" }}>
+                            <Clock className="h-3 w-3" />
+                            {s.duration_minutes} min
+                          </span>
                         </div>
-                        <div className="flex flex-col items-end gap-1.5 shrink-0">
-                          <span className="text-[11px]" style={{ color: "#7A6A8A" }}>{safeFormat(s.session_date)}</span>
-                          <div className="flex items-center gap-1.5">
-                            {s.status === "draft" ? (
-                              <Badge variant="outline" className="text-amber-600 bg-amber-50 border-amber-200 text-[10px]">Draft</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200 text-[10px]">Completed</Badge>
-                            )}
-                            {s.compliance_score != null && (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                                Number(s.compliance_score) >= 80 ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                : Number(s.compliance_score) >= 60 ? "text-amber-700 bg-amber-50 border-amber-200"
-                                : "text-red-700 bg-red-50 border-red-200"
-                              }`}>
-                                {Number(s.compliance_score).toFixed(0)}%
-                              </span>
-                            )}
-                          </div>
+                        <div className="flex items-center gap-2">
+                          {s.status === "draft" && (
+                            <Badge variant="outline" className="text-amber-600 bg-amber-50 text-[10px]">Draft</Badge>
+                          )}
+                          {s.compliance_score != null && (
+                            <Badge variant="outline" className={`text-[10px] ${Number(s.compliance_score) >= 80 ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"}`}>
+                              {Number(s.compliance_score).toFixed(0)}%
+                            </Badge>
+                          )}
+                          <span className="text-[11px]" style={{ color: "#7A6A8A" }}>
+                            {safeFormat(s.session_date)}
+                          </span>
                         </div>
                       </div>
+                      {s.notes && (
+                        <p className="text-[12px] line-clamp-1 mt-1" style={{ color: "#7A6A8A" }}>
+                          {s.notes}
+                        </p>
+                      )}
                     </div>
                   </Link>
                 ))}
               </div>
             )}
-          </TabsContent>
+          </div>
+        </TabsContent>
 
-          {/* ── Files Tab ── */}
-          <TabsContent value="files" className="flex-1 overflow-y-auto p-6 mt-0">
-            <div className="text-center py-16 rounded-2xl border-2 border-dashed"
-              style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3"
-                style={{ background: "rgba(84,34,105,0.06)" }}>
-                <FileText className="h-5 w-5" style={{ color: "rgba(84,34,105,0.25)" }} />
+        {/* ── NDIS Plan Tab ── */}
+        <TabsContent
+          value="ndis-plan"
+          className="flex-1 overflow-y-auto p-6 space-y-6 mt-0"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-base flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-primary" /> NDIS Plan &
+              Funding
+            </h3>
+            <SetupPlanDialog
+              participantId={id}
+              onSaved={() => {
+                refetchBudget();
+                handleSaved();
+              }}
+            />
+          </div>
+
+          {/* Overall budget from patient record */}
+          <div className="rounded-2xl bg-white overflow-hidden"
+            style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+              style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
+              <TrendingUp className="h-4 w-4" style={{ color: "#542269" }} /> Plan Overview
+            </div>
+            <div className="p-5 space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Status</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
+                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan Start</span>
+                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
+                    {safeFormat(participant.plan_start_date, "dd MMM yyyy")}
+                  </span>
+                </div>
+                <div>
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan End</span>
+                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
+                    {safeFormat(participant.plan_end_date, "dd MMM yyyy")}
+                  </span>
+                </div>
+                <div>
+                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Total Funding</span>
+                  <span className="font-bold text-[14px]" style={{ color: "#542269" }}>
+                    ${(participant.total_budget as number)?.toLocaleString() ?? "0"}
+                  </span>
+                </div>
               </div>
-              <p className="text-[14px] font-medium mb-1" style={{ color: "#4A3D5A" }}>No files uploaded yet</p>
-              <p className="text-[12px]" style={{ color: "#7A6A8A" }}>
-                Clinical documents, reports and evidence files will appear here
+              <div>
+                <div className="flex justify-between text-[13px] mb-2">
+                  <span style={{ color: "#7A6A8A" }}>Overall Budget Utilisation</span>
+                  <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
+                </div>
+                <Progress value={budgetPct}
+                  className={`h-2.5 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"}`} />
+                <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
+                  <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
+                  <span>${Math.max(0, ((participant.total_budget as number) ?? 0) - ((participant.used_budget as number) ?? 0)).toLocaleString()} remaining</span>
+                </div>
+              </div>
+              {budgetPct >= 80 && (
+                <div className={`flex items-start gap-2 text-[13px] p-3 rounded-xl ${budgetPct >= 100 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    {budgetPct >= 100
+                      ? "Budget fully exhausted. No further services can be funded under this plan."
+                      : `Budget is ${budgetPct}% utilised. Consider reviewing upcoming services.`}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Category budget breakdown */}
+          {budgetSummary?.has_plan &&
+          budgetSummary.budgets &&
+          budgetSummary.budgets.length > 0 ? (
+            <div className="rounded-2xl bg-white overflow-hidden"
+              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
+                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
+                <BarChart3 className="h-4 w-4" style={{ color: "#542269" }} /> Budget by Support Category
+              </div>
+              <div className="p-5 space-y-5">
+                {budgetSummary.budgets.map((b) => (
+                  <div key={b.category}>
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[13px]" style={{ color: "#1C1626" }}>
+                          {b.category_label}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${
+                          b.percent_used >= 100
+                            ? "bg-red-50 text-red-700 border-red-200"
+                            : b.percent_used >= 80
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        }`}>
+                          {b.percent_used.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="text-right text-[13px]">
+                        <span className="font-semibold" style={{ color: "#1C1626" }}>${b.used.toLocaleString()}</span>
+                        <span style={{ color: "#7A6A8A" }}> / ${b.allocated.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <Progress value={Math.min(100, b.percent_used)}
+                      className={`h-2 ${
+                        b.percent_used >= 100 ? "[&>div]:bg-red-500"
+                          : b.percent_used >= 80 ? "[&>div]:bg-amber-500"
+                          : "[&>div]:bg-emerald-500"
+                      }`} />
+                    <div className="text-[11px] mt-1 text-right" style={{ color: "#7A6A8A" }}>
+                      ${b.remaining.toLocaleString()} remaining
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center text-slate-400">
+              <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-medium mb-1">
+                No detailed budget plan set up
+              </p>
+              <p className="text-xs">
+                Use "Set Up NDIS Plan" to configure category budgets
               </p>
             </div>
-          </TabsContent>
-        </Tabs>
+          )}
+        </TabsContent>
 
-        {/* ── Right Sidebar ── */}
-        <div className="w-[216px] shrink-0 overflow-y-auto p-4 space-y-5"
-          style={{ borderLeft: "1px solid rgba(232,213,232,0.5)" }}>
+        {/* ── Client History Tab ── */}
+        <TabsContent
+          value="history"
+          className="flex-1 overflow-y-auto p-6 space-y-4 mt-0"
+        >
+          {typedSessions && typedSessions.length > 0 && (
+            <BodyMarkerHistory
+              sessions={typedSessions.map((s) => ({
+                id: s.id,
+                session_date: s.session_date,
+                session_type: s.session_type,
+                body_markers: Array.isArray(s.body_markers)
+                  ? s.body_markers
+                  : [],
+              }))}
+              bodyType={typedParticipant?.biological_sex}
+            />
+          )}
 
-          {/* Financial Snapshot */}
-          <div>
-            <h4 className="text-[9px] font-bold uppercase tracking-widest mb-3" style={{ color: "#7A6A8A" }}>
-              Financial Snapshot
-            </h4>
-            <div className="rounded-xl p-3 space-y-3"
-              style={{ border: "1px solid rgba(232,213,232,0.5)", background: "rgba(246,244,251,0.4)" }}>
-              <div>
-                <div className="flex items-center gap-1 mb-1.5">
-                  <DollarSign className="h-3 w-3" style={{ color: "#542269" }} />
-                  <span className="text-[11px] font-medium" style={{ color: "#4A3D5A" }}>NDIS Funding Utilisation</span>
-                </div>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-[13px] font-bold" style={{ color: "#1C1626" }}>
-                    ${(participant.used_budget as number)?.toLocaleString() ?? "0"}
-                  </span>
-                  <span className="text-[11px]" style={{ color: "#7A6A8A" }}>
-                    / ${(participant.total_budget as number)?.toLocaleString() ?? "0"}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(232,213,232,0.5)" }}>
-                  <div className="h-full rounded-full transition-all"
-                    style={{ width: `${budgetPct}%`, background: budgetPct >= 90 ? "#EF4444" : "#542269" }} />
-                </div>
-                <p className="text-[9px] mt-1.5 italic leading-relaxed" style={{ color: "#9CA3AF" }}>
-                  Calculated based on approved service bookings and invoiced hours.
-                </p>
-              </div>
-              <div className="space-y-2 pt-2" style={{ borderTop: "1px solid rgba(232,213,232,0.4)" }}>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Service Agreement</span>
-                  <span className={`text-[11px] font-semibold ${String(participant.plan_status) === "active" ? "text-emerald-600" : "text-amber-600"}`}>
-                    {String(participant.plan_status) === "active" ? "Signed & Active" : String(participant.plan_status ?? "Unknown")}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Provider</span>
-                  <span className="text-[11px] font-medium" style={{ color: "#542269" }}>NDIS Provider</span>
-                </div>
-                {participant.plan_end_date && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Plan Ends</span>
-                    <span className="text-[11px] font-medium"
-                      style={{ color: daysUntilPlanEnd !== null && daysUntilPlanEnd <= 30 ? "#EF4444" : "#1C1626" }}>
-                      {safeFormat(String(participant.plan_end_date))}
-                    </span>
+          <div className="flex items-center justify-between gap-4">
+            <h3 className="font-semibold text-base flex items-center gap-2 shrink-0">
+              <History className="h-4 w-4 text-primary" /> Session History
+              {typedSessions && (
+                <span className="text-slate-400 font-normal text-sm">
+                  ({typedSessions.length})
+                </span>
+              )}
+            </h3>
+            <div className="relative max-w-xs w-full">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                placeholder="Search sessions..."
+                className="pl-8 h-8 text-sm"
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {sessionsLoading ? (
+            <div className="space-y-3">
+              {Array(4)
+                .fill(0)
+                .map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full" />
+                ))}
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <div className="text-center p-12 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-slate-400">
+              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">
+                {historySearch
+                  ? "No sessions match your search"
+                  : "No sessions recorded yet"}
+              </p>
+              {!historySearch && (
+                <Link href={`/sessions/new?participantId=${id}`}>
+                  <Button size="sm" variant="outline" className="mt-4">
+                    Record First Session
+                  </Button>
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredHistory.map((s) => (
+                <Link key={s.id} href={`/sessions/${s.id}`}>
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:border-primary/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm group-hover:text-primary transition-colors truncate">
+                            {s.session_type || "Session"}
+                          </span>
+                          <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
+                            <Clock className="h-3 w-3" />
+                            {s.duration_minutes} min
+                          </span>
+                        </div>
+                        {s.notes && (
+                          <p className="text-xs text-slate-500 line-clamp-2">
+                            {s.notes}
+                          </p>
+                        )}
+                        {Array.isArray(s.tags) && s.tags.length > 0 && (
+                          <div className="flex gap-1 mt-2 flex-wrap">
+                            {s.tags.map((t: string) => (
+                              <span
+                                key={t}
+                                className="text-[10px] uppercase tracking-wide font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 px-1.5 py-0.5 rounded"
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {Array.isArray(s.body_markers) &&
+                          s.body_markers.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <MapPin className="h-2.5 w-2.5 text-indigo-500" />
+                              <span className="text-[10px] text-indigo-600 font-medium">
+                                {s.body_markers.length} body finding
+                                {s.body_markers.length !== 1 ? "s" : ""}{" "}
+                                recorded
+                              </span>
+                            </div>
+                          )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span className="text-xs text-slate-500">
+                          {safeFormat(s.session_date)}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {s.status === "draft" ? (
+                            <Badge
+                              variant="outline"
+                              className="text-amber-600 bg-amber-50 border-amber-200 text-[10px]"
+                            >
+                              Draft
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="text-emerald-600 bg-emerald-50 border-emerald-200 text-[10px]"
+                            >
+                              Completed
+                            </Badge>
+                          )}
+                          {s.compliance_score != null && (
+                            <span
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                                Number(s.compliance_score) >= 80
+                                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                  : Number(s.compliance_score) >= 60
+                                    ? "text-amber-700 bg-amber-50 border-amber-200"
+                                    : "text-red-700 bg-red-50 border-red-200"
+                              }`}
+                            >
+                              {Number(s.compliance_score).toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                </Link>
+              ))}
             </div>
-          </div>
-
-          {/* Compliance Alerts */}
-          <div>
-            <h4 className="text-[9px] font-bold uppercase tracking-widest mb-3" style={{ color: "#7A6A8A" }}>
-              Compliance Alerts
-            </h4>
-            {complianceAlerts.length > 0 ? (
-              <div className="rounded-xl p-3 space-y-2"
-                style={{ background: "rgba(251,191,36,0.07)", border: "1px solid rgba(251,191,36,0.35)" }}>
-                <div className="flex items-center gap-1.5 mb-0.5">
-                  <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-amber-700">Attention Needed</span>
-                </div>
-                <div className="space-y-2">
-                  {complianceAlerts.map((alert, i) => (
-                    <p key={i} className="text-[11px] leading-relaxed" style={{ color: "#92400E" }}>{alert}</p>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl p-3 flex items-center gap-2"
-                style={{ background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)" }}>
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span className="text-[11px] text-emerald-700">All checks passed</span>
-              </div>
-            )}
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h4 className="text-[9px] font-bold uppercase tracking-widest mb-2.5" style={{ color: "#7A6A8A" }}>
-              Quick Links
-            </h4>
-            <div className="space-y-0.5">
-              <Link href={`/sessions/new?participantId=${id}`}>
-                <button className="w-full text-left text-[12px] px-2 py-1.5 rounded-lg transition-colors hover:bg-[rgba(84,34,105,0.06)]"
-                  style={{ color: "#542269" }}>
-                  + New Session
-                </button>
-              </Link>
-              <Link href="/compliance">
-                <button className="w-full text-left text-[12px] px-2 py-1.5 rounded-lg transition-colors hover:bg-[rgba(84,34,105,0.06)]"
-                  style={{ color: "#542269" }}>
-                  Compliance Centre
-                </button>
-              </Link>
-            </div>
-          </div>
-
-        </div>
-      </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
-
