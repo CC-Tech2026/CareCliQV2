@@ -22,12 +22,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareScribeLogo, CareScribeLogoSm } from "@/components/CareScribeLogo";
 
-// ── Friendly Design Tokens ────────────────────────────────────────────────────
-const PLUM = "#6A407D"; // Warmer, softer plum
-const MUTED = "#9A8C9E"; // Lighter muted text
-const TEXT = "#3B2E42"; // Softer dark text
-const APP_BG = "#F7F5FA"; // Very soft purple-tinted white
-const ACTIVE = "#FFF0F3"; // Soft active background
+// ── Design Tokens — aligned to the CareScribe brand logo ─────────────────────
+// Logo: coral "C" ≈ #F03060  ·  purple "S" ≈ #5533CC
+const PLUM   = "#5533CC"; // Brand indigo-purple (logo "S" colour)
+const CORAL  = "#F03060"; // Brand coral (logo "C" colour)
+const MUTED  = "#7A6A9E"; // Muted purple-grey
+const TEXT   = "#1E1640"; // Deep indigo-black text
+const APP_BG = "#F5F3FC"; // Soft indigo-tinted page background
+const ACTIVE = "#EDEAFF"; // Soft purple active-state pill background
 
 // ── Navigation items ──────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -98,16 +100,27 @@ function SidebarContents({
       {/* ── Logo header ──────────────────────────────────────────── */}
       <div
         className={cn(
-          "flex items-center h-16 shrink-0 select-none overflow-hidden",
-          compact ? "justify-center px-3" : "justify-between pl-5 pr-3",
+          "flex items-center shrink-0 select-none overflow-visible",
+          compact ? "justify-center px-3 h-20" : "justify-between px-5 h-24",
         )}
       >
+        {/* Logo wrapper */}
         <Link
           href="/dashboard"
           onClick={onNav}
-          className="flex items-center focus:outline-none active:opacity-75 transition-opacity"
+          className={cn(
+            "flex items-center transition-all duration-300 active:opacity-75",
+            compact ? "justify-center w-full" : "flex-1 min-w-0",
+          )}
         >
-          <CareScribeLogo compact={compact} />
+          <div
+            className={cn(
+              "flex items-center overflow-visible",
+              compact ? "justify-center" : "justify-start",
+            )}
+          >
+            <CareScribeLogo compact={compact} />
+          </div>
         </Link>
 
         {/* Collapse button — expanded sidebar only */}
@@ -115,10 +128,18 @@ function SidebarContents({
           <button
             onClick={onToggle}
             title="Collapse sidebar"
-            className="p-1.5 rounded-full transition-colors hover:bg-black/5 shrink-0"
+            className="
+              ml-2
+              shrink-0
+              p-2
+              rounded-full
+              transition-all
+              hover:bg-black/5
+              hover:scale-105
+            "
             style={{ color: MUTED }}
           >
-            <ChevronLeft size={17} />
+            <ChevronLeft size={18} />
           </button>
         )}
       </div>
@@ -191,7 +212,7 @@ function SidebarContents({
                   {showBadge && (
                     <span
                       className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-1"
-                      style={{ background: "#FF5C77" }}
+                      style={{ background: CORAL }}
                     >
                       {alertCount > 9 ? "9+" : alertCount}
                     </span>
@@ -209,7 +230,7 @@ function SidebarContents({
         <Link href="/compliance" onClick={onNav}>
           <div
             className="mx-4 mb-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl text-[13px] font-bold cursor-pointer transition-all hover:scale-[1.02]"
-            style={{ background: "#FFF0F3", color: "#FF5C77" }}
+            style={{ background: "#FFE8EE", color: CORAL }}
           >
             <AlertTriangle size={14} strokeWidth={2.5} />
             {alertCount} Action Item{alertCount !== 1 ? "s" : ""}
@@ -357,7 +378,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <Link href="/compliance">
                 <button
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors hover:opacity-80"
-                  style={{ background: ACTIVE, color: "#FF5C77" }}
+                  style={{ background: "#FFE8EE", color: CORAL }}
                 >
                   <AlertTriangle size={14} strokeWidth={2.5} />
                   {alertCount} Action Item{alertCount !== 1 ? "s" : ""}

@@ -5,13 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 
-// ── Palette ──────────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const BLUSH  = "#F6B8C0";
-const PURPLE = "#DEB2E4";
-const BORDER = "#E8D5E8";
-const BG     = "#FAF5FA";
+// ── Palette — aligned to CareScribe brand logo ───────────────────────────────
+const PLUM   = "#5533CC"; // brand indigo-purple
+const CORAL  = "#F03060"; // brand coral
+const BLUSH  = "#F8C0CE"; // light coral tint
+const PURPLE = "#C8C0EE"; // light indigo tint
+const BORDER = "#D8D0F0"; // indigo border
+const BG     = "#F5F3FC"; // soft indigo bg
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -121,9 +121,7 @@ export default function Signup() {
   function TopArea() {
     return (
       <div className="text-center pt-10 pb-6 px-6">
-        <h1 className="text-[22px] font-bold tracking-tight" style={{ color: PLUM }}>
-          Care<span style={{ color: "#111827" }}>Scribe</span>
-        </h1>
+        <img src="/carescribe_logo.png" alt="CareScribe" style={{ height: 38, width: "auto", maxWidth: 200, objectFit: "contain", margin: "0 auto 4px" }} />
         <p className="text-[13px] mt-1" style={{ color: "#6B7280" }}>Create your account</p>
         {step < TOTAL && (
           <div className="flex items-center gap-2 justify-center mt-4 max-w-xs mx-auto">

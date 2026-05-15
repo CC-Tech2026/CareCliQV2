@@ -4,12 +4,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Loader2, ArrowRight, ShieldCheck } from "lucide-react";
 
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const TEXT   = "#1C1626";
-const MUTED  = "#7A6A8A";
-const BORDER = "#E8D5E8";
-const BG     = "#FAF5FA";
+const PLUM   = "#5533CC"; // brand indigo-purple
+const CORAL  = "#F03060"; // brand coral
+const TEXT   = "#1E1640";
+const MUTED  = "#7A6A9E";
+const BORDER = "#D8D0F0";
+const BG     = "#F5F3FC";
 
 export default function Login() {
   const { login, isLoading } = useAuth();
@@ -44,17 +44,14 @@ export default function Login() {
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4 py-12"
-      style={{ background: "#FAF5FF" }}
+      style={{ background: "#F5F3FC" }}
     >
       <div className="w-full max-w-sm">
 
-        {/* Wordmark */}
-        <div className="text-center mb-8">
-          <h1 className="text-[26px] font-black tracking-tight">
-            <span style={{ color: TEXT }}>Care</span>
-            <span style={{ color: CORAL }}>Scribe</span>
-          </h1>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] mt-1" style={{ color: MUTED }}>
+        {/* Brand logo */}
+        <div className="flex flex-col items-center mb-8 gap-2">
+          <img src="/carescribe_logo.png" alt="CareScribe" style={{ height: 44, width: "auto", maxWidth: 220, objectFit: "contain" }} />
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: MUTED }}>
             NDIS Clinical Workspace
           </p>
         </div>

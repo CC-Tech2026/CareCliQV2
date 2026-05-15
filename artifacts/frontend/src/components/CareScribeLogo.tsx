@@ -1,11 +1,11 @@
 /**
- * CareScribeLogo — uses the official brand PNGs (transparent backgrounds).
+ * CareScribeLogo — official brand PNG assets (transparent backgrounds).
  *
- * Sidebar context: background #F7F5FA (soft lavender-white), 260px expanded / 88px collapsed.
+ * Sidebar: #F5F3FC background, 260px expanded / 88px collapsed.
  *
- * Exports:
- *  CareScribeLogo   — desktop sidebar (compact prop switches CS badge ↔ full wordmark)
- *  CareScribeLogoSm — mobile top bar (always full wordmark, slightly smaller)
+ * Swap is INSTANT (no CSS transition) — the sidebar width animation at
+ * 300ms already provides a smooth visual; fading the logo on top just
+ * felt sluggish. We simply show/hide the correct asset immediately.
  */
 
 interface CareScribeLogoProps {
@@ -15,52 +15,36 @@ interface CareScribeLogoProps {
 
 export function CareScribeLogo({ compact = false, className = "" }: CareScribeLogoProps) {
   return (
-    <div className={`relative flex items-center select-none ${className}`} title="CareScribe">
-
-      {/* Full wordmark — expanded sidebar */}
-      <img
-        src="/carescribe_logo.png"
-        alt="CareScribe"
-        style={{
-          height: 36,
-          width: "auto",
-          maxWidth: 160,
-          objectFit: "contain",
-          opacity: compact ? 0 : 1,
-          transform: compact ? "scale(0.88)" : "scale(1)",
-          transition: "opacity 0.25s ease, transform 0.25s ease",
-          position: compact ? "absolute" : "relative",
-          pointerEvents: compact ? "none" : "auto",
-        }}
-      />
-
-      {/* CS monogram — collapsed sidebar */}
-      <img
-        src="/cs.png"
-        alt="CS"
-        style={{
-          height: 46,
-          width: 46,
-          objectFit: "contain",
-          opacity: compact ? 1 : 0,
-          transform: compact ? "scale(1)" : "scale(0.75)",
-          transition: "opacity 0.25s ease, transform 0.25s ease",
-          position: compact ? "relative" : "absolute",
-          pointerEvents: compact ? "auto" : "none",
-        }}
-      />
+    <div className={`flex items-center select-none ${className}`} title="CareScribe">
+      {compact ? (
+        /* Collapsed sidebar — CS monogram */
+        <img
+          key="cs"
+          src="/cs.png"
+          alt="CS"
+          style={{ height: 46, width: 46, objectFit: "contain", display: "block" }}
+        />
+      ) : (
+        /* Expanded sidebar — full wordmark */
+        <img
+          key="full"
+          src="/carescribe_logo.png"
+          alt="CareScribe"
+          style={{ height: 36, width: "auto", maxWidth: 155, objectFit: "contain", display: "block" }}
+        />
+      )}
     </div>
   );
 }
 
-/** Mobile top bar — always full wordmark, white background context */
+/** Mobile top bar — always full wordmark */
 export function CareScribeLogoSm({ className = "" }: { className?: string }) {
   return (
     <img
       src="/carescribe_logo.png"
       alt="CareScribe"
       className={`select-none object-contain ${className}`}
-      style={{ height: 30, width: "auto", maxWidth: 150 }}
+      style={{ height: 28, width: "auto", maxWidth: 140 }}
     />
   );
 }
