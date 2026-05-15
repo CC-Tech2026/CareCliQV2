@@ -97,7 +97,8 @@ interface ChatMessage {
   activityType?: string;
   goalId?: string;
   goalStatus?: string;
-  aiDelta?: number; // compliance score delta for ai_event
+  aiDelta?: number;
+  linkedNoteId?: string;
 }
 
 interface GoalItem {
@@ -599,6 +600,8 @@ export default function SessionLive() {
   const [bodyMapOpen, setBodyMapOpen] = useState(false);
   const [showFab, setShowFab] = useState(false);
   const [expandedHealthChip, setExpandedHealthChip] = useState<string | null>(null);
+  const [showGoalPicker, setShowGoalPicker] = useState(false);
+  const [goalPickerMsgId, setGoalPickerMsgId] = useState<string | null>(null);
 
   // ── Placeholder rotation ──
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
@@ -1638,9 +1641,7 @@ export default function SessionLive() {
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
       <input ref={fileAttachRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={handleFileAttach} />
 
-      {/* ══════════════════════════════════════════════════════
-          Voice Recording Overlay
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Voice recording overlay ── */}
       {isRecording && (
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(5,5,32,0.92)" }}>
           <div className="w-full rounded-t-3xl px-6 pt-6 pb-10 animate-in slide-in-from-bottom-4 duration-200" style={{ background: NAVY, borderTop: `1px solid rgba(255,255,255,0.1)` }}>
@@ -1698,9 +1699,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          Activity Sheet
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Activity sheet ── */}
       {showActivitySheet && (
         <div className="fixed inset-0 z-40 flex items-end" onClick={() => setShowActivitySheet(false)}>
           <div
@@ -1746,9 +1745,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          Bubble long-press menu
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Bubble long-press menu ── */}
       {bubbleMenu && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setBubbleMenu(null)} />
@@ -1775,7 +1772,11 @@ export default function SessionLive() {
             </button>
             {goals.length > 0 && (
               <button
-                onClick={() => { setBubbleMenu(null); toast({ title: "Open the Goals strip to link this note to a goal." }); }}
+                onClick={() => {
+                  setGoalPickerMsgId(bubbleMenu.msgId);
+                  setBubbleMenu(null);
+                  setShowGoalPicker(true);
+                }}
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
               >
                 <Target className="h-3.5 w-3.5" style={{ color: LIME }} />
@@ -1795,9 +1796,78 @@ export default function SessionLive() {
         </>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          Incident Guided Sheet
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Goal picker bottom sheet ── */}
+      {showGoalPicker && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowGoalPicker(false)} />
+          <div
+            className="relative w-full rounded-t-3xl shadow-2xl px-5 pt-5 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            style={{ background: NAVY, border: "1px solid rgba(255,255,255,0.1)" }}
+          >
+            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
+            <p className="text-white font-semibold text-sm mb-3">Link note to a goal</p>
+            <div className="space-y-2">
+              {goals.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => {
+                    const targetMsgId = goalPickerMsgId;
+                    setGoals((prev) =>
+                      prev.map((gl) =>
+                        gl.id === g.id && gl.status === "not_started"
+                          ? { ...gl, status: "in_progress" as const }
+                          : gl
+                      )
+                    );
+                    addMessage({
+                      type: "goal_update",
+                      content: g.name,
+                      timestamp: new Date(),
+                      goalId: g.id,
+                      goalStatus: g.status === "not_started" ? "in_progress" : g.status,
+                      linkedNoteId: targetMsgId ?? undefined,
+                    });
+                    setShowGoalPicker(false);
+                    setGoalPickerMsgId(null);
+                    toast({ title: "Note linked", description: g.name });
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-white text-sm active:scale-[0.98] transition-transform"
+                  style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+                >
+                  <span className="truncate pr-2">{g.name}</span>
+                  <span
+                    className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{
+                      background:
+                        g.status === "achieved"
+                          ? "rgba(217,241,3,0.2)"
+                          : g.status === "in_progress"
+                          ? "rgba(85,51,204,0.3)"
+                          : "rgba(255,255,255,0.1)",
+                      color:
+                        g.status === "achieved"
+                          ? LIME
+                          : g.status === "in_progress"
+                          ? "#A78BFA"
+                          : "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {g.status === "not_started" ? "Not started" : g.status === "in_progress" ? "In progress" : "Achieved"}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowGoalPicker(false)}
+              className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Incident guided sheet ── */}
       {showIncidentSheet && (
         <div className="fixed inset-0 z-50 flex items-end">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowIncidentSheet(false)} />
@@ -1920,9 +1990,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          Completion / Approval Screen (full slide-up)
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Completion / approval screen ── */}
       {showSummary && (
         <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#F5F3FC" }}>
 
@@ -2161,9 +2229,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          RP Bottom Sheet
-      ══════════════════════════════════════════════════════ */}
+      {/* ── RP bottom sheet ── */}
       {showRpBottomSheet && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowRpBottomSheet(false)} />
@@ -2205,9 +2271,7 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          Restart Confirm
-      ══════════════════════════════════════════════════════ */}
+      {/* ── Restart confirm ── */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
