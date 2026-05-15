@@ -31,8 +31,8 @@ interface Session {
 
 interface SessionsProps {
   /** Expects dynamic data and state from your data-fetching layer (e.g., React Query or Context) */
-  sessions: Session[] | undefined;
-  isLoading: boolean;
+  sessions?: Session[] | undefined;
+  isLoading?: boolean;
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ function StatusBadge({ score, status }: { score?: number | null; status?: string
   return null;
 }
 
-export default function Sessions({ sessions = [], isLoading }: SessionsProps) {
+export default function Sessions({ sessions = [], isLoading = false }: SessionsProps) {
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom]       = useState("");
