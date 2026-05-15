@@ -1,9 +1,13 @@
 import React, { useState, useMemo } from "react";
-import { format, parseISO, isAfter, isBefore, isEqual, startOfDay, endOfDay } from "date-fns";
+import {
+  parse, format, parseISO, isAfter, isBefore, isEqual,
+  startOfDay, endOfDay, startOfWeek, startOfMonth, isToday, isThisWeek, isThisMonth,
+} from "date-fns";
 import { Link, useLocation } from "wouter";
 import {
-  Search, Plus, Calendar, Clock, ShieldCheck,
-  ChevronRight, Play, FileDown, Loader2, X,
+  Search, Plus, Calendar, Clock, ShieldCheck, ChevronDown,
+  ChevronRight, Play, FileDown, Loader2, X, ArrowUpDown, Users,
+  AlertTriangle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -11,43 +15,82 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { exportBulkSessionsPDF } from "@/lib/pdf-export";
+import { useGetSessions, useGetParticipants } from "@workspace/api-client-react";
+import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
-// ── Types & Interfaces ────────────────────────────────────────────────────────
-interface Participant {
-  full_name: string;
-}
-
-interface Session {
-  id: string;
-  session_type: string;
-  session_date: string; // ISO String
-  duration_minutes: number;
-  status: "completed" | "in_progress" | "draft" | string;
-  compliance_score: number | null;
-  restrictive_practice_detected: boolean;
-  tags?: string[];
-  participants?: Participant | null;
-}
-
-interface SessionsProps {
-  /** Expects dynamic data and state from your data-fetching layer (e.g., React Query or Context) */
-  sessions?: Session[] | undefined;
-  isLoading?: boolean;
-}
-
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM  = "#542269";
-const CORAL = "#F1738A";
-const T1    = "#1C1626";
-const T2    = "#4A3D5A";
-const T3    = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
+// ── Design tokens ──────────────────────────────────────────────────────────────
+const PLUM        = "#542269";
+const CORAL       = "#F1738A";
+const T1          = "#1C1626";
+const T2          = "#4A3D5A";
+const T3          = "#7A6A8A";
+const BORDER      = "rgba(232,213,232,0.5)";
 const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
-// ── Styled input container ────────────────────────────────────────────────────
-function Field({
-  icon, children,
-}: { icon?: React.ReactNode; children: React.ReactNode }) {
+// ── Sort options ───────────────────────────────────────────────────────────────
+type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
+const SORT_LABELS: Record<SortKey, string> = {
+  date_desc:   "Newest first",
+  date_asc:    "Oldest first",
+  severity:    "Severity (worst first)",
+  participant: "Participant A–Z",
+  status:      "Status",
+  activity:    "Recent activity",
+};
+
+// ── Chronological group labels ─────────────────────────────────────────────────
+type Group = "Today" | "This Week" | "This Month" | "Earlier";
+
+function getGroup(dateStr: string): Group {
+  try {
+    // Parse date-only strings (YYYY-MM-DD) in local time to avoid UTC shift
+    const d = dateStr.includes("T")
+      ? parseISO(dateStr)
+      : parse(dateStr, "yyyy-MM-dd", new Date());
+    if (isToday(d))      return "Today";
+    if (isThisWeek(d, { weekStartsOn: 1 }))  return "This Week";
+    if (isThisMonth(d))  return "This Month";
+    return "Earlier";
+  } catch {
+    return "Earlier";
+  }
+}
+
+const GROUP_ORDER: Group[] = ["Today", "This Week", "This Month", "Earlier"];
+
+// ── Safe date parser (local time, not UTC) ─────────────────────────────────────
+function safeParseDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  try {
+    return dateStr.includes("T")
+      ? parseISO(dateStr)
+      : parse(dateStr, "yyyy-MM-dd", new Date());
+  } catch {
+    return null;
+  }
+}
+
+function safeFormat(dateStr: string | null | undefined, fmt: string, fallback = "—"): string {
+  const d = safeParseDate(dateStr);
+  return d ? format(d, fmt) : fallback;
+}
+
+// ── Severity score → config ────────────────────────────────────────────────────
+function severityConfig(score: number | null | undefined, status?: string) {
+  const s = status?.toLowerCase();
+  if (s === "draft" || score == null) {
+    return { label: "Draft", color: T3, bg: `${PLUM}08`, bar: 0 };
+  }
+  if (s === "in_progress") {
+    return { label: "In Progress", color: "#7C3AED", bg: "rgba(124,58,237,0.06)", bar: 0 };
+  }
+  if (score >= 85) return { label: `Compliant · ${score}%`, color: "#16A34A", bg: "rgba(22,163,74,0.07)", bar: score };
+  if (score >= 60) return { label: `At Risk · ${score}%`,   color: "#D97706", bg: "rgba(245,158,11,0.07)", bar: score };
+  return          { label: `Non-Compliant · ${score}%`,      color: "#DC2626", bg: "rgba(239,68,68,0.07)",  bar: score };
+}
+
+// ── Field wrapper ──────────────────────────────────────────────────────────────
+function Field({ icon, children }: { icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="relative flex items-center w-full">
       {icon && (
@@ -60,100 +103,159 @@ function Field({
   );
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────────
-function StatusBadge({ score, status }: { score?: number | null; status?: string }) {
-  if (status === "draft" || (!score && !status)) {
-    return (
-      <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
-        style={{ background: "rgba(84,34,105,0.06)", color: T3 }}>Draft</span>
-    );
-  }
-  if (score != null) {
-    const cfg = score >= 85
-      ? { bg: "rgba(22,163,74,0.08)", color: "#16A34A", label: "Compliant" }
-      : score >= 60
-      ? { bg: "rgba(245,158,11,0.08)", color: "#D97706", label: "At Risk" }
-      : { bg: "rgba(239,68,68,0.08)", color: "#DC2626", label: "Non-Compliant" };
-    return (
-      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
-        style={{ background: cfg.bg, color: cfg.color }}>
-        <ShieldCheck size={10} />
-        {cfg.label} · {score}%
-      </span>
-    );
-  }
-  return null;
+// ── Skeleton row ───────────────────────────────────────────────────────────────
+function SkeletonRow() {
+  return (
+    <div className="px-5 py-4 flex items-center gap-4 animate-pulse">
+      <div className="w-4 h-4 rounded bg-[#EDE3ED]" />
+      <div className="flex-1 space-y-2">
+        <div className="h-4 w-48 rounded bg-[#EDE3ED]" />
+        <div className="h-3 w-32 rounded bg-[#EDE3ED]" />
+      </div>
+      <div className="h-6 w-28 rounded-full bg-[#EDE3ED]" />
+    </div>
+  );
 }
 
-export default function Sessions({ sessions = [], isLoading = false }: SessionsProps) {
-  const [search, setSearch]           = useState("");
+// ── Main component ─────────────────────────────────────────────────────────────
+export default function Sessions() {
+  const [search, setSearch]             = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [dateFrom, setDateFrom]       = useState("");
-  const [dateTo, setDateTo]           = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [participantFilter, setParticipantFilter] = useState("all");
+  const [sortBy, setSortBy]             = useState<SortKey>("date_desc");
+  const [dateFrom, setDateFrom]         = useState("");
+  const [dateTo, setDateTo]             = useState("");
+  const [selectedIds, setSelectedIds]   = useState<Set<string>>(new Set());
   const [isBulkExporting, setIsBulkExporting] = useState(false);
   const [exportProgress, setExportProgress]   = useState<{ done: number; total: number } | null>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  // Optimized Filtering Engine
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
-      const matchesSearch =
-        (s.participants?.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
-        s.session_type.toLowerCase().includes(search.toLowerCase());
+  // ── Data fetching ────────────────────────────────────────────────────────────
+  const { data: rawSessions = [], isLoading: sessionsLoading } = useGetSessions({ limit: 200 });
+  const { data: participants = [], isLoading: participantsLoading } = useGetParticipants();
+  const isLoading = sessionsLoading || participantsLoading;
 
-      const matchesStatus = statusFilter === "all" || s.status === statusFilter;
-
-      let matchesDateFrom = true;
-      let matchesDateTo   = true;
-
-      if (dateFrom) {
-        const from = startOfDay(parseISO(dateFrom));
-        const sessionDate = startOfDay(parseISO(s.session_date));
-        matchesDateFrom = isAfter(sessionDate, from) || isEqual(sessionDate, from);
-      }
-      if (dateTo) {
-        const to = endOfDay(parseISO(dateTo));
-        const sessionDate = startOfDay(parseISO(s.session_date));
-        matchesDateTo = isBefore(sessionDate, to) || isEqual(sessionDate, to);
-      }
-
-      return matchesSearch && matchesStatus && matchesDateFrom && matchesDateTo;
+  // Build participant lookup: id → name
+  const participantMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (participants as ApiParticipant[]).forEach((p) => {
+      if (p.id) m.set(p.id, p.full_name ?? "Unknown");
     });
-  }, [sessions, search, statusFilter, dateFrom, dateTo]);
+    return m;
+  }, [participants]);
 
-  const allFilteredIds = useMemo(() => filteredSessions.map((s) => s.id), [filteredSessions]);
-  const allSelected  = filteredSessions.length > 0 && filteredSessions.every((s) => selectedIds.has(s.id));
-  const someSelected = selectedIds.size > 0;
+  // Enrich sessions with participant name (from embedded field or lookup)
+  const sessions = useMemo(() =>
+    (rawSessions as ApiSession[]).map((s) => ({
+      ...s,
+      _participantName:
+        s.participants?.full_name ||
+        participantMap.get(s.participant_id) ||
+        "Unknown Participant",
+    })),
+  [rawSessions, participantMap]);
 
-  const toggleSession = (id: string) => {
-    setSelectedIds(prev => {
+  // Unique participants for the filter dropdown
+  const participantOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    sessions.forEach((s) => seen.set(s.participant_id, s._participantName));
+    return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [sessions]);
+
+  // ── Filtering ────────────────────────────────────────────────────────────────
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return sessions.filter((s) => {
+      if (!s) return false;
+
+      if (q && !s._participantName.toLowerCase().includes(q) && !s.session_type?.toLowerCase().includes(q))
+        return false;
+
+      if (statusFilter !== "all" && s.status?.toLowerCase() !== statusFilter)
+        return false;
+
+      if (participantFilter !== "all" && s.participant_id !== participantFilter)
+        return false;
+
+      if (dateFrom && s.session_date) {
+        try {
+          const from = startOfDay(parse(dateFrom, "yyyy-MM-dd", new Date()));
+          const d    = startOfDay(safeParseDate(s.session_date)!);
+          if (isBefore(d, from) && !isEqual(d, from)) return false;
+        } catch { return false; }
+      }
+      if (dateTo && s.session_date) {
+        try {
+          const to = endOfDay(parse(dateTo, "yyyy-MM-dd", new Date()));
+          const d   = safeParseDate(s.session_date)!;
+          if (isAfter(d, to)) return false;
+        } catch { return false; }
+      }
+
+      return true;
+    });
+  }, [sessions, search, statusFilter, participantFilter, dateFrom, dateTo]);
+
+  // ── Sorting ──────────────────────────────────────────────────────────────────
+  const sorted = useMemo(() => {
+    const arr = [...filtered];
+    switch (sortBy) {
+      case "date_desc":
+        return arr.sort((a, b) => (b.session_date ?? "").localeCompare(a.session_date ?? ""));
+      case "date_asc":
+        return arr.sort((a, b) => (a.session_date ?? "").localeCompare(b.session_date ?? ""));
+      case "severity":
+        return arr.sort((a, b) => {
+          const sa = a.compliance_score ?? 101;
+          const sb = b.compliance_score ?? 101;
+          return sa - sb;
+        });
+      case "participant":
+        return arr.sort((a, b) => a._participantName.localeCompare(b._participantName));
+      case "status": {
+        const order: Record<string, number> = { in_progress: 0, draft: 1, completed: 2 };
+        return arr.sort((a, b) => (order[a.status ?? ""] ?? 9) - (order[b.status ?? ""] ?? 9));
+      }
+      case "activity":
+        return arr.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+      default:
+        return arr;
+    }
+  }, [filtered, sortBy]);
+
+  // ── Chronological grouping (only for date sorts) ──────────────────────────────
+  const grouped = useMemo(() => {
+    if (sortBy !== "date_desc" && sortBy !== "date_asc") return null;
+    const map = new Map<Group, typeof sorted>();
+    GROUP_ORDER.forEach((g) => map.set(g, []));
+    sorted.forEach((s) => {
+      const g = getGroup(s.session_date);
+      map.get(g)!.push(s);
+    });
+    // Remove empty groups
+    GROUP_ORDER.forEach((g) => { if (!map.get(g)!.length) map.delete(g); });
+    return map;
+  }, [sorted, sortBy]);
+
+  // ── Selection helpers ─────────────────────────────────────────────────────────
+  const allFilteredIds = useMemo(() => sorted.map((s) => s.id), [sorted]);
+  const allSelected    = sorted.length > 0 && sorted.every((s) => selectedIds.has(s.id));
+  const someSelected   = selectedIds.size > 0;
+
+  const toggleSession = (id: string) =>
+    setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) => {
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
+      allSelected ? allFilteredIds.forEach((id) => n.delete(id)) : allFilteredIds.forEach((id) => n.add(id));
       return n;
     });
-  };
-
-  const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(prev => {
-        const n = new Set(prev);
-        allFilteredIds.forEach(id => n.delete(id));
-        return n;
-      });
-    } else {
-      setSelectedIds(prev => {
-        const n = new Set(prev);
-        allFilteredIds.forEach(id => n.add(id));
-        return n;
-      });
-    }
-  };
 
   const clearSelection = () => setSelectedIds(new Set());
 
+  // ── Bulk export ───────────────────────────────────────────────────────────────
   const handleBulkExport = async () => {
     if (!selectedIds.size) return;
     setIsBulkExporting(true);
@@ -170,8 +272,6 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
     }
   };
 
-  const hasDateFilter = dateFrom || dateTo;
-
   const inputStyle = {
     background: "white",
     border: `1px solid ${BORDER}`,
@@ -183,17 +283,160 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
     padding: "0 12px",
   } as const;
 
-  return (
-    <div className="space-y-6 max-w-5xl mx-auto p-4 md:p-8">
+  const hasDateFilter  = dateFrom || dateTo;
+  const hasAnyFilter   = search || statusFilter !== "all" || participantFilter !== "all" || hasDateFilter;
 
-      {/* ── Header ── */}
+  // ── Session row ───────────────────────────────────────────────────────────────
+  function SessionRow({ session }: { session: typeof sorted[number] }) {
+    const sev = severityConfig(session.compliance_score, session.status);
+    const isSelected = selectedIds.has(session.id);
+
+    return (
+      <div
+        className={`flex flex-col md:flex-row md:items-center gap-3 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
+          isSelected ? "border-l-[#542269]" : "border-l-transparent hover:border-l-[#F1738A]/30 hover:bg-[#F6F4FB]/50"
+        }`}
+        style={isSelected ? { background: `${PLUM}04` } : {}}
+      >
+        {/* Checkbox */}
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => toggleSession(session.id)}
+            aria-label={`Select session for ${session._participantName}`}
+          />
+        </div>
+
+        {/* Main info (clickable) */}
+        <div
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={() => navigate(`/sessions/${session.id}`)}
+        >
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-1">
+            <span className="text-[14px] font-bold group-hover:text-[#542269] transition-colors truncate" style={{ color: T1 }}>
+              {session._participantName}
+            </span>
+            <span className="hidden sm:inline text-slate-300 text-xs">·</span>
+            <span className="text-[12px] font-medium capitalize truncate" style={{ color: T2 }}>
+              {session.session_type?.replace(/_/g, " ") ?? "General"}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="flex items-center gap-1 text-[11px]" style={{ color: T3 }}>
+              <Calendar size={11} className="opacity-70" />
+              {safeFormat(session.session_date, "EEE d MMM yyyy")}
+            </span>
+            <span className="flex items-center gap-1 text-[11px]" style={{ color: T3 }}>
+              <Clock size={11} className="opacity-70" />
+              {session.duration_minutes ? `${session.duration_minutes} min` : "—"}
+            </span>
+            {session.tags && session.tags.length > 0 && (
+              <div className="flex gap-1">
+                <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wide font-medium border"
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
+                  {session.tags[0]}
+                </span>
+                {session.tags.length > 1 && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono" style={{ color: T3, borderColor: BORDER }}>
+                    +{session.tags.length - 1}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: severity + RP + actions */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0 justify-end" onClick={(e) => e.stopPropagation()}>
+
+          {/* Compliance score pill + mini bar */}
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <span
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap"
+                style={{ background: sev.bg, color: sev.color }}
+              >
+                <ShieldCheck size={10} />
+                {sev.label}
+              </span>
+              {sev.bar > 0 && (
+                <div className="mt-1 w-full h-1 rounded-full overflow-hidden" style={{ background: `${BORDER}` }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${sev.bar}%`,
+                      background: sev.bar >= 85 ? "#16A34A" : sev.bar >= 60 ? "#D97706" : "#DC2626",
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RP Alert badge */}
+          {session.restrictive_practice_detected && (
+            <span
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wide shrink-0"
+              style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#DC2626" }}
+              title="Restrictive Practice Detected"
+            >
+              <AlertTriangle size={9} strokeWidth={2.5} /> RP
+            </span>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1.5">
+            <button
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-150 hover:bg-[#F1738A]/10 shrink-0"
+              style={{ borderColor: `${CORAL}40`, color: CORAL, background: `${CORAL}08` }}
+              onClick={() => navigate(`/sessions/${session.id}/live`)}
+              title="Start live session"
+            >
+              <Play size={10} fill={CORAL} /> Live
+            </button>
+            <button
+              className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-400 transition-all hover:text-slate-700 shrink-0"
+              style={{ borderColor: BORDER }}
+              onClick={() => navigate(`/sessions/${session.id}`)}
+              title="View session detail"
+            >
+              <ChevronRight size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Group heading ──────────────────────────────────────────────────────────────
+  function GroupHeading({ label, count }: { label: string; count: number }) {
+    return (
+      <div
+        className="px-5 py-2 flex items-center gap-2 sticky top-0 z-10"
+        style={{ background: "rgba(246,244,251,0.95)", borderBottom: `1px solid ${BORDER}` }}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: T3 }}>{label}</span>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+          style={{ background: `${PLUM}10`, color: PLUM }}>
+          {count}
+        </span>
+      </div>
+    );
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-5 max-w-5xl mx-auto p-4 md:p-8">
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
             Clinical Sessions
           </h1>
-          <p className="text-[14px] mt-1" style={{ color: T2 }}>
-            Manage your clinical notes and compliance records.
+          <p className="text-[13px] mt-0.5" style={{ color: T2 }}>
+            {isLoading ? "Loading records…" : `${sessions.length} session${sessions.length !== 1 ? "s" : ""} · ${filtered.length} shown`}
           </p>
         </div>
         <Link href="/sessions/new">
@@ -207,80 +450,134 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
         </Link>
       </div>
 
-      {/* ── Filter card ── */}
+      {/* Filter + Sort card */}
       <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
 
         {/* Filter bar */}
-        <div className="p-4 border-b flex flex-col gap-4" style={{ borderColor: "rgba(232,213,232,0.35)" }}>
+        <div className="p-4 border-b space-y-3" style={{ borderColor: "rgba(232,213,232,0.35)" }}>
+
+          {/* Row 1: search + status + participant */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Search */}
             <Field icon={<Search size={14} />}>
               <input
-                placeholder="Search participant or session type…"
+                placeholder="Search by participant or session type…"
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 style={{ ...inputStyle, paddingLeft: 36 }}
-                className="w-full flex-1"
+                className="w-full"
               />
             </Field>
 
-            {/* Status filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger
-                className="h-[38px] rounded-xl text-[13px] w-full sm:w-48 bg-white"
-                style={{ borderColor: BORDER, color: T2 }}
-              >
-                <SelectValue placeholder="All sessions" />
+              <SelectTrigger className="h-[38px] rounded-xl text-[13px] w-full sm:w-44 bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sessions</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="draft">Drafts</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={participantFilter} onValueChange={setParticipantFilter}>
+              <SelectTrigger className="h-[38px] rounded-xl text-[13px] w-full sm:w-52 bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                <Users size={13} className="mr-1.5 opacity-60" />
+                <SelectValue placeholder="All participants" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Participants</SelectItem>
+                {participantOptions.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Date range */}
-          <div className="flex flex-wrap items-center gap-3 pt-1">
+          {/* Row 2: date range + sort */}
+          <div className="flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap" style={{ color: T3 }}>
               <Calendar size={13} /> Date range
             </span>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                type="date"
-                style={inputStyle}
-                className="w-full sm:w-[148px]"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                aria-label="From date"
-              />
-              <span className="text-[12px]" style={{ color: T3 }}>to</span>
-              <input
-                type="date"
-                style={inputStyle}
-                className="w-full sm:w-[148px]"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                aria-label="To date"
-              />
-            </div>
+            <input
+              type="date"
+              style={inputStyle}
+              className="w-full sm:w-[140px]"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="From date"
+            />
+            <span className="text-[12px]" style={{ color: T3 }}>to</span>
+            <input
+              type="date"
+              style={inputStyle}
+              className="w-full sm:w-[140px]"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              aria-label="To date"
+            />
+
             {hasDateFilter && (
               <button
                 onClick={() => { setDateFrom(""); setDateTo(""); }}
                 className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F6F4FB]"
                 style={{ color: T3 }}
               >
-                <X size={12} /> Clear
+                <X size={12} /> Clear dates
               </button>
             )}
+
+            {/* Sort */}
+            <div className="ml-auto flex items-center gap-2">
+              <ArrowUpDown size={13} style={{ color: T3 }} />
+              <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                <SelectTrigger className="h-[34px] rounded-xl text-[12px] w-full sm:w-48 bg-white" style={{ borderColor: BORDER, color: T2 }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(SORT_LABELS) as [SortKey, string][]).map(([k, label]) => (
+                    <SelectItem key={k} value={k}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {/* Active filter pills */}
+          {hasAnyFilter && !isLoading && (
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <span className="text-[11px] font-medium" style={{ color: T3 }}>Filters:</span>
+              {search && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
+                  "{search}" <X size={10} className="cursor-pointer" onClick={() => setSearch("")} />
+                </span>
+              )}
+              {statusFilter !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
+                  {statusFilter} <X size={10} className="cursor-pointer" onClick={() => setStatusFilter("all")} />
+                </span>
+              )}
+              {participantFilter !== "all" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
+                  {participantMap.get(participantFilter) ?? participantFilter}
+                  <X size={10} className="cursor-pointer" onClick={() => setParticipantFilter("all")} />
+                </span>
+              )}
+              <button onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
+                className="text-[11px] font-medium underline underline-offset-2 ml-1" style={{ color: T3 }}>
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bulk action bar */}
         {someSelected && (
           <div
-            className="px-5 py-2.5 border-b flex flex-col sm:flex-row sm:items-center gap-3 transition-all duration-200"
+            className="px-5 py-2.5 border-b flex flex-col sm:flex-row sm:items-center gap-3"
             style={{ background: `${PLUM}08`, borderColor: "rgba(232,213,232,0.35)" }}
           >
             <span className="text-[13px] font-semibold flex-1" style={{ color: PLUM }}>
@@ -296,7 +593,7 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all duration-150 hover:bg-slate-50 disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-slate-50 disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -314,10 +611,10 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
         )}
 
         {/* Select-all row */}
-        {!isLoading && filteredSessions.length > 0 && (
+        {!isLoading && sorted.length > 0 && (
           <div
-            className="px-5 py-2.5 flex items-center gap-3"
-            style={{ background: "rgba(246,244,251,0.6)", borderBottom: `1px solid rgba(232,213,232,0.3)` }}
+            className="px-5 py-2 flex items-center gap-3"
+            style={{ background: "rgba(246,244,251,0.5)", borderBottom: `1px solid rgba(232,213,232,0.25)` }}
           >
             <Checkbox
               checked={allSelected ? true : someSelected ? "indeterminate" : false}
@@ -327,137 +624,58 @@ export default function Sessions({ sessions = [], isLoading = false }: SessionsP
             />
             <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: T3 }}>
               {allSelected
-                ? "Deselect all records"
-                : `Select all ${filteredSessions.length} listed item${filteredSessions.length !== 1 ? "s" : ""}`}
+                ? `Deselect all ${sorted.length}`
+                : `Select all ${sorted.length} record${sorted.length !== 1 ? "s" : ""}`}
             </span>
           </div>
         )}
 
-        {/* Session rows */}
-        <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.3)" }}>
+        {/* Session list */}
+        <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.25)" }}>
           {isLoading ? (
-            Array(5).fill(0).map((_, i) => (
-              <div key={i} className="px-5 py-4 flex items-center gap-4 animate-pulse">
-                <div className="w-4 h-4 rounded bg-[#EDE3ED]" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 rounded bg-[#EDE3ED]" />
-                  <div className="h-3 w-32 rounded bg-[#EDE3ED]" />
-                </div>
-                <div className="h-6 w-24 rounded-full bg-[#EDE3ED]" />
-              </div>
-            ))
-          ) : filteredSessions.length === 0 ? (
+            Array(5).fill(0).map((_, i) => <SkeletonRow key={i} />)
+          ) : sorted.length === 0 ? (
             <div className="py-16 flex flex-col items-center text-center px-8">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style={{ background: `${PLUM}0A` }}>
                 <Calendar size={20} style={{ color: PLUM }} />
               </div>
               <p className="text-[15px] font-semibold" style={{ color: T1 }}>No sessions found</p>
               <p className="text-[13px] mt-1" style={{ color: T3 }}>
-                Try adjusting your filters or create a new session record.
+                {hasAnyFilter ? "Try adjusting your filters." : "Create your first session to get started."}
               </p>
             </div>
-          ) : (
-            filteredSessions.map(session => (
-              <div
-                key={session.id}
-                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 px-5 py-4 transition-colors duration-150 group border-l-2 ${
-                  selectedIds.has(session.id) 
-                    ? "border-l-[#542269]" 
-                    : "border-l-transparent hover:bg-[#F6F4FB]/40"
-                }`}
-                style={selectedIds.has(session.id) ? { background: `${PLUM}04` } : {}}
-              >
-                {/* Left Side: Checkbox + Interactive Meta Container */}
-                <div
-                  className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
-                  onClick={() => navigate(`/sessions/${session.id}`)}
-                >
-                  <div className="shrink-0" onClick={e => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedIds.has(session.id)}
-                      onCheckedChange={() => toggleSession(session.id)}
-                      aria-label={`Select session for ${session.participants?.full_name ?? "participant"}`}
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span className="text-[14px] font-bold truncate transition-colors duration-150 group-hover:text-[#542269]"
-                        style={{ color: T1 }}>
-                        {session.participants?.full_name || "Unknown Participant"}
-                      </span>
-                      <span className="text-slate-300 hidden sm:inline">·</span>
-                      <span className="text-[13px] font-medium truncate" style={{ color: T2 }}>
-                        {session.session_type}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-0.5">
-                      <span className="flex items-center gap-1 text-[12px] font-medium" style={{ color: T3 }}>
-                        <Calendar size={12} className="opacity-70" />
-                        {format(parseISO(session.session_date), "MMM d, yyyy · h:mm a")}
-                      </span>
-                      <span className="flex items-center gap-1 text-[12px] font-medium" style={{ color: T3 }}>
-                        <Clock size={12} className="opacity-70" />
-                        {session.duration_minutes} min
-                      </span>
-                      {session.tags && session.tags.length > 0 && (
-                        <div className="flex gap-1 items-center">
-                          <span className="text-[10px] bg-slate-100 border text-slate-600 px-1.5 py-0.5 rounded font-medium uppercase tracking-wider">
-                            {session.tags[0]}
-                          </span>
-                          {session.tags.length > 1 && (
-                            <span className="text-[10px] bg-slate-50 border text-slate-500 px-1.5 py-0.5 rounded font-mono">
-                              +{session.tags.length - 1}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Side: Status Metrics & Primary Actions */}
-                <div
-                  className="flex flex-wrap items-center gap-3 shrink-0 justify-end md:justify-start"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="flex items-center gap-2">
-                    <StatusBadge score={session.compliance_score} status={session.status} />
-
-                    {session.restrictive_practice_detected && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-bold border border-red-200 uppercase tracking-wide"
-                        style={{ background: "rgba(239,68,68,0.08)", color: "#DC2626" }}
-                        title="Restrictive Practice Detected"
-                      >
-                        ⚠ RP Alert
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold border transition-all duration-150 hover:bg-[#F1738A]/10"
-                      style={{ borderColor: `${CORAL}40`, color: CORAL, background: `${CORAL}08` }}
-                      onClick={() => navigate(`/sessions/${session.id}/live`)}
-                    >
-                      <Play size={11} fill={CORAL} /> Live
-                    </button>
-
-                    <button
-                      className="w-8 h-8 rounded-xl flex items-center justify-center border bg-white text-slate-400 transition-all duration-150 hover:text-slate-700"
-                      style={{ borderColor: BORDER }}
-                      onClick={() => navigate(`/sessions/${session.id}`)}
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
+          ) : grouped ? (
+            /* Chronological groups */
+            Array.from(grouped.entries()).map(([label, items]) => (
+              <React.Fragment key={label}>
+                <GroupHeading label={label} count={items.length} />
+                {items.map((s) => <SessionRow key={s.id} session={s} />)}
+              </React.Fragment>
             ))
+          ) : (
+            /* Flat list (non-date sort) */
+            sorted.map((s) => <SessionRow key={s.id} session={s} />)
           )}
         </div>
+
+        {/* Footer count */}
+        {!isLoading && sorted.length > 0 && (
+          <div className="px-5 py-3 border-t flex items-center justify-between"
+            style={{ borderColor: "rgba(232,213,232,0.35)", background: "rgba(246,244,251,0.4)" }}>
+            <span className="text-[11px]" style={{ color: T3 }}>
+              Showing {sorted.length} of {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+            </span>
+            {sessions.length > sorted.length && (
+              <button
+                className="text-[11px] font-semibold"
+                style={{ color: PLUM }}
+                onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
+              >
+                Clear filters to see all
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
