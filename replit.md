@@ -38,6 +38,34 @@ The Physical Examination body map now renders sex-specific silhouettes:
 - **PDF export** draws the gendered silhouette on the canvas body diagram using the same three branches
 - **DB migration**: idempotent `ALTER TABLE patients ADD COLUMN biological_sex TEXT DEFAULT 'unspecified'` added to `backend/supabase_setup.sql` — run this in Supabase SQL editor to activate
 
+## Live Session Compliance Engine (spec: assess-note + risk)
+
+### A. Goal Rules Matrix
+- `GET /api/sessions/{id}/context` returns session + participant's active `patient_goals` (plan-linked) + risk profile
+- Goals surface in the live session as the **Goal Rules Matrix** — collapsible strip showing all active plan goals by NDIS category (Core / Capacity Building / Capital)
+- Goals auto-seed the goal chips tracker when `patient_goals` table is populated
+
+### B. Risk Profile Alerts
+- `patients` table gains `risk_level` (low/medium/high), `risk_triggers`, `risk_management_plan` columns (idempotent ALTER in `backend/supabase_setup.sql`)
+- If risk_level is medium or high, a coloured banner renders at the top of the live session with the triggers and management plan visible to the worker
+
+### C. Plan Creation Fixes
+- `NDISPlanCreate` Pydantic schema validates `plan_end > plan_start` (raises 422 if reversed)
+- `POST /api/participants/{id}/plan` auto-derives `status`: "active" if today within dates, "pending" if future, "expired" if past — no manual override needed from frontend
+- Remaining balances are computed automatically from budget allocations via `funding_service.upsert_plan_budget`
+
+### D. Real-time 4-Criteria Compliance Scoring
+- `POST /api/ai/assess-note` — lightweight scoring endpoint called by the live session
+- Scoring matrix (NDIS spec §4):
+  - +25% Verified timestamp / session active check-in (heuristic)
+  - +35% Semantic NDIS goal connection (GPT-4o-mini)
+  - +25% Documented support outcome text (GPT-4o-mini)
+  - +15% Next-step / routine action logged (GPT-4o-mini)
+- Score ≥ 75 → `is_ready_for_billing = true` auto-patched on the session record
+- `sessions` table gains `is_ready_for_billing BOOLEAN DEFAULT FALSE` column (in `supabase_setup.sql`)
+- Frontend (live session approval screen): debounced call (2.5 s) on structured notes changes → displays per-criterion progress bars + "✓ Billing Ready" badge
+- Auto-fetches participant goals from `patient_goals` table to send to AI as context for goal-connection scoring
+
 ## Input Intelligence Layer
 
 A system-wide voice + AI input component available on all clinical text fields.

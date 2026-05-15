@@ -722,6 +722,108 @@ Respond with a JSON object:
 
 
 # ---------------------------------------------------------------------------
+# Real-time Note Assessment (4-criteria scoring matrix)
+# ---------------------------------------------------------------------------
+
+async def assess_note(
+    note_text: str,
+    session_started: bool,
+    goals: list[dict],
+) -> dict:
+    """Score a clinical note entry against the NDIS compliance matrix.
+
+    Criteria and weights (spec §4):
+      • Timestamp/session check-in  +25%  (heuristic — session started flag)
+      • Semantic NDIS goal connection +35% (AI)
+      • Documented support outcome   +25% (AI)
+      • Next-step/routine action     +15% (AI)
+
+    Returns:
+      score (0-100), is_ready_for_billing (score >= 75),
+      breakdown dict with per-criteria scores and labels.
+    """
+    # Criterion A — Timestamp / session check-in (heuristic, no AI needed)
+    score_a = 25 if session_started else 0
+
+    # Short-circuit: nothing useful to assess if the note is too short
+    if len(note_text.strip()) < 15:
+        return {
+            "score": score_a,
+            "is_ready_for_billing": False,
+            "breakdown": {
+                "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in"},
+                "goal":     {"score": 0, "max": 35, "label": "Semantic NDIS goal connection"},
+                "outcome":  {"score": 0, "max": 25, "label": "Documented support outcome"},
+                "nextstep": {"score": 0, "max": 15, "label": "Next-step / routine action"},
+            },
+            "feedback": "Note is too short to assess — add more detail.",
+        }
+
+    goal_texts = "\n".join(
+        f"- [{g.get('category','general')}] {g.get('description', g.get('title', ''))}"
+        for g in goals[:10]
+    ) or "No specific NDIS goals on file."
+
+    prompt = f"""You are an NDIS compliance evaluator. Score the following clinical note entry against three criteria. Return JSON only.
+
+PARTICIPANT NDIS GOALS:
+{goal_texts}
+
+CLINICAL NOTE:
+\"\"\"{note_text}\"\"\"
+
+SCORING CRITERIA:
+1. "goal_score" (0-35): Does the note semantically reference or address any of the participant's NDIS goals? Award up to 35 based on specificity and clarity.
+2. "outcome_score" (0-25): Does the note document a measurable or observable support outcome (e.g. what was achieved, participant's response)? Award up to 25.
+3. "nextstep_score" (0-15): Does the note mention a follow-up action, next routine step, or plan for the next session? Award up to 15.
+
+For each criterion also provide a one-sentence "feedback" explaining the score.
+
+Respond with exactly:
+{{
+  "goal_score": <int 0-35>,
+  "goal_feedback": "<sentence>",
+  "outcome_score": <int 0-25>,
+  "outcome_feedback": "<sentence>",
+  "nextstep_score": <int 0-15>,
+  "nextstep_feedback": "<sentence>"
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=400,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        r = json.loads(response.choices[0].message.content)
+    except Exception as exc:
+        logger.warning("assess_note AI call failed: %s", exc)
+        r = {"goal_score": 0, "goal_feedback": "", "outcome_score": 0, "outcome_feedback": "", "nextstep_score": 0, "nextstep_feedback": ""}
+
+    score_b = max(0, min(35, int(r.get("goal_score", 0))))
+    score_c = max(0, min(25, int(r.get("outcome_score", 0))))
+    score_d = max(0, min(15, int(r.get("nextstep_score", 0))))
+    total   = score_a + score_b + score_c + score_d
+
+    return {
+        "score": total,
+        "is_ready_for_billing": total >= 75,
+        "breakdown": {
+            "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in",       "feedback": "Session is active — timestamp check passed." if session_started else "Session not yet started."},
+            "goal":     {"score": score_b, "max": 35, "label": "Semantic NDIS goal connection",  "feedback": r.get("goal_feedback", "")},
+            "outcome":  {"score": score_c, "max": 25, "label": "Documented support outcome",    "feedback": r.get("outcome_feedback", "")},
+            "nextstep": {"score": score_d, "max": 15, "label": "Next-step / routine action",    "feedback": r.get("nextstep_feedback", "")},
+        },
+        "feedback": "Ready for billing." if total >= 75 else f"Score {total}/100 — add goal references, outcomes, and next steps to reach billing threshold.",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Audio transcription
 # ---------------------------------------------------------------------------
 

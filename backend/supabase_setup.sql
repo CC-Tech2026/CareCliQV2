@@ -778,3 +778,18 @@ BEGIN
             FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 END $$;
+
+-- ============================================================
+-- LIVE SESSION COMPLIANCE FIELDS (spec: assess-note + risk)
+-- ============================================================
+
+-- 1. Risk profile on participants
+ALTER TABLE public.patients
+    ADD COLUMN IF NOT EXISTS risk_level TEXT DEFAULT 'low'
+        CHECK (risk_level IN ('low', 'medium', 'high')),
+    ADD COLUMN IF NOT EXISTS risk_triggers TEXT,
+    ADD COLUMN IF NOT EXISTS risk_management_plan TEXT;
+
+-- 2. Billing-ready flag on sessions (set when assess-note score >= 75)
+ALTER TABLE public.sessions
+    ADD COLUMN IF NOT EXISTS is_ready_for_billing BOOLEAN DEFAULT FALSE;

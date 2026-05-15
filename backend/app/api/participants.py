@@ -118,12 +118,27 @@ async def create_participant_plan(participant_id: str, body: NDISPlanCreate):
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
 
+    from datetime import date as _date
+    today = _date.today()
+    if body.plan_end <= body.plan_start:
+        raise HTTPException(status_code=422, detail="plan_end must be after plan_start")
+
+    # Auto-derive status from plan dates if not explicitly provided
+    if body.status:
+        auto_status = body.status
+    elif body.plan_start <= today <= body.plan_end:
+        auto_status = "active"
+    elif today < body.plan_start:
+        auto_status = "pending"
+    else:
+        auto_status = "expired"
+
     plan_data = {
         "plan_number": body.plan_number,
         "plan_start": str(body.plan_start),
         "plan_end": str(body.plan_end),
         "total_funding": body.total_funding,
-        "status": body.status,
+        "status": auto_status,
     }
 
     try:

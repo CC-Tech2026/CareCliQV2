@@ -1,0 +1,60 @@
+Crucial Backend Fields Needed for Live Session Compliance
+When a practitioner starts a live session, the backend needs to deliver an optimization payload containing context markers. Here are the specific parameters your endpoint should return to empower the front-end chat engine:
+
+A. The "Goal Rules Matrix" (Critical for NDIS Claims)
+When a support worker writes text or records a voice note, your backend AI parser needs to know exactly what goals it is tracking to confirm compliance. Your API response must provide:
+
+goals.id: For mapping database record associations.
+
+goals.description: The actual text of the participant's goal (e.g., "Improve community mobility via modified vehicle operations").
+
+goals.category: Maps natively to NDIS categories (e.g., Capacity Building).
+
+B. Risk Assessments & Critical Alerts
+To ensure safe practices during audits, safety and risk-reduction strategies must be immediately visible to the worker.
+
+risk_level: High, Medium, Low.
+
+triggers: (e.g., "Sensory overload in crowded environments").
+
+management_plan: Immediate steps the worker must perform to maintain alignment with the NDIS Quality and Safeguards Commission rules.
+
+3. Core API Endpoints Implementation
+Here is how your backend endpoint rules should look to feed the frontend form component you just constructed.
+
+POST: /api/participants/{id}/plan (Saves Form Payload)
+Expected JSON Payload Input:
+
+JSON
+{
+  "plan_number": "NDIS-2026-X8912",
+  "plan_start": "2026-07-01",
+  "plan_end": "2027-06-30",
+  "total_funding": 75000.00,
+  "core_budget": 25000.00,
+  "capacity_budget": 45000.00,
+  "capital_budget": 50000.00
+}
+Backend Process Checklist on Receipt:
+
+Check that plan_end occurs after plan_start.
+
+Automatically compute initial remaining balances: remaining_core = core_budget.
+
+Evaluate the corresponding participant's record status, automatically updating plan_status to "active" if the current date falls within the plan's validity window.
+
+4. How the Backend Powers the Real-Time Compliance Score
+When the user enters text or finishes a voice transcription, the frontend hits an assessment endpoint. The backend processes the text using a lightweight validation matrix to instantly compute the score:
+
+Plaintext
+Score Calculation Logic Matrix:
++------------------------------------+--------+
+| Requirement Metric Verified        | Weight |
++------------------------------------+--------+
+| Verified Timestamp & GPS Check-In  |  +25%  |
+| Semantic connection to NDIS Goal   |  +35%  |
+| Documented Support Outcome Text    |  +25%  |
+| Next-step / Routine Action Logged  |  +15%  |
++------------------------------------+--------+
+| Total Potential Score              |  100%  |
+If the score returns at 75% or greater, the backend marks the entry row flag as is_ready_for_billing = true. This allows automated extraction tools to instantly pull your audit logs and generate cleanly formatted invoices for the NDIA myplace provider portal.

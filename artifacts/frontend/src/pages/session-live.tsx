@@ -48,6 +48,8 @@ import {
   Sparkles,
   Zap,
   RefreshCw,
+  BarChart2,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -652,6 +654,21 @@ export default function SessionLive() {
   }
   const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
 
+  // ── Plan Goals (Goal Rules Matrix) ──
+  const [planGoals, setPlanGoals] = useState<Array<{ id: string; description: string; category: string; is_achieved: boolean }>>([]);
+  const [riskProfile, setRiskProfile] = useState<{ risk_level: string; triggers: string; management_plan: string } | null>(null);
+  const [showGoalMatrix, setShowGoalMatrix] = useState(false);
+
+  // ── Real-time assess-note score ──
+  const [assessScore, setAssessScore] = useState<{
+    score: number;
+    is_ready_for_billing: boolean;
+    breakdown: Record<string, { score: number; max: number; label: string; feedback?: string }>;
+    feedback: string;
+  } | null>(null);
+  const [assessLoading, setAssessLoading] = useState(false);
+  const assessDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // ── Reminder ──
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [reminderDismissed, setReminderDismissed] = useState(false);
@@ -762,9 +779,12 @@ export default function SessionLive() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyMarkers]);
 
-  // ── Init goals ──
+  // ── Init goals + fetch session context (plan goals + risk profile) ──
   useEffect(() => {
-    if (session && goals.length === 0) {
+    if (!session?.id) return;
+
+    // Seed goal chips from session.goals_addressed (fast, from existing data)
+    if (goals.length === 0) {
       const addressed = session.goals_addressed ?? [];
       if (addressed.length > 0 && resolvedGoalTitles.length > 0) {
         setGoals(addressed.map((gid, i) => ({ id: gid, name: resolvedGoalTitles[i] ?? gid, status: "not_started" as const })));
@@ -772,8 +792,64 @@ export default function SessionLive() {
         setGoals(addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })));
       }
     }
+
+    // Fetch full context payload (plan goals + risk profile)
+    fetch(`/api/sessions/${session.id}/context`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((ctx) => {
+        if (!ctx) return;
+        if (Array.isArray(ctx.plan_goals) && ctx.plan_goals.length > 0) {
+          setPlanGoals(ctx.plan_goals);
+          // If no goal chips yet, seed from plan goals
+          setGoals((prev) => {
+            if (prev.length > 0) return prev;
+            return ctx.plan_goals
+              .filter((g: any) => !g.is_achieved)
+              .map((g: any) => ({ id: g.id, name: g.description?.slice(0, 60) ?? g.id, status: "not_started" as const }));
+          });
+        }
+        if (ctx.risk_profile && ctx.risk_profile.risk_level && ctx.risk_profile.risk_level !== "low") {
+          setRiskProfile(ctx.risk_profile);
+        }
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, resolvedGoalTitles.join(",")]);
+
+  // ── Debounced assess-note ──
+  useEffect(() => {
+    const noteText = [
+      structuredNotes.activitiesPerformed,
+      structuredNotes.outcomes,
+      structuredNotes.participantResponse,
+      structuredNotes.progressTowardGoals,
+    ].filter(Boolean).join("\n");
+
+    if (noteText.trim().length < 20) return;
+
+    if (assessDebounceRef.current) clearTimeout(assessDebounceRef.current);
+    assessDebounceRef.current = setTimeout(async () => {
+      setAssessLoading(true);
+      try {
+        const res = await fetch("/api/ai/assess-note", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            note_text: noteText,
+            session_id: id,
+            participant_id: participantId || undefined,
+            session_started: isActive,
+            goals: planGoals.map((g) => ({ id: g.id, description: g.description, category: g.category })),
+          }),
+        });
+        if (res.ok) setAssessScore(await res.json());
+      } catch { /* silent */ }
+      finally { setAssessLoading(false); }
+    }, 2500);
+
+    return () => { if (assessDebounceRef.current) clearTimeout(assessDebounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structuredNotes.activitiesPerformed, structuredNotes.outcomes, structuredNotes.participantResponse, structuredNotes.progressTowardGoals, isActive]);
 
   // ── Timer ──
   useEffect(() => {
@@ -1490,6 +1566,83 @@ export default function SessionLive() {
         </div>
       )}
 
+      {/* ── Risk Profile Alert ── */}
+      {riskProfile && (
+        <div
+          className="shrink-0 border-b px-3 py-2 flex items-start gap-2"
+          style={{
+            background: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.15)" : "rgba(245,158,11,0.12)",
+            borderColor: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.3)" : "rgba(245,158,11,0.25)",
+          }}
+        >
+          <ShieldAlert
+            className="h-3.5 w-3.5 shrink-0 mt-0.5"
+            style={{ color: riskProfile.risk_level === "high" ? "#F87171" : "#FBBF24" }}
+          />
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: riskProfile.risk_level === "high" ? "#FCA5A5" : "#FCD34D" }}
+            >
+              {riskProfile.risk_level === "high" ? "High Risk" : "Medium Risk"} Participant
+            </p>
+            {riskProfile.triggers && (
+              <p className="text-[10px] text-white/50 mt-0.5 truncate">Triggers: {riskProfile.triggers}</p>
+            )}
+            {riskProfile.management_plan && (
+              <p className="text-[10px] text-white/40 truncate">Plan: {riskProfile.management_plan}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Goal Rules Matrix (collapsible) ── */}
+      {planGoals.length > 0 && (
+        <div className="shrink-0 border-b border-white/10" style={{ background: "rgba(85,51,204,0.08)" }}>
+          <button
+            onClick={() => setShowGoalMatrix((o) => !o)}
+            className="w-full flex items-center justify-between px-3 py-1.5 text-left"
+          >
+            <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-wider text-purple-300/70">
+              <BarChart2 className="h-3 w-3" /> Goal Rules Matrix
+              <span className="text-white/30 font-normal normal-case tracking-normal">({planGoals.filter((g) => !g.is_achieved).length} active)</span>
+            </span>
+            <span className="text-white/25 text-[9px]">{showGoalMatrix ? "▲" : "▼"}</span>
+          </button>
+          {showGoalMatrix && (
+            <div className="px-3 pb-3 space-y-1.5 max-h-[180px] overflow-y-auto">
+              {planGoals.map((g) => (
+                <div
+                  key={g.id}
+                  className="flex items-start gap-2 px-2.5 py-1.5 rounded-lg"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
+                >
+                  <div className="shrink-0 mt-0.5">
+                    {g.is_achieved
+                      ? <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                      : <Circle className="h-3 w-3 text-white/30" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-[10px] leading-snug ${g.is_achieved ? "text-white/30 line-through" : "text-white/70"}`}>
+                      {g.description}
+                    </p>
+                    <span
+                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 inline-block"
+                      style={{
+                        background: g.category === "core" ? "rgba(59,130,246,0.2)" : g.category === "capacity_building" ? "rgba(139,92,246,0.2)" : "rgba(245,158,11,0.2)",
+                        color: g.category === "core" ? "#93C5FD" : g.category === "capacity_building" ? "#C4B5FD" : "#FCD34D",
+                      }}
+                    >
+                      {g.category === "capacity_building" ? "Capacity" : g.category === "core" ? "Core" : g.category === "capital" ? "Capital" : g.category}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
         <div className="shrink-0 border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto" style={{ background: DEEP }}>
@@ -2126,6 +2279,68 @@ export default function SessionLive() {
                         ))}
                       </ul>
                     </div>
+                  </div>
+                )}
+
+                {/* ── Assess-note compliance score panel ── */}
+                {(assessScore || assessLoading) && (
+                  <div className="rounded-2xl px-4 py-3.5 shadow-sm" style={{ background: "#F5F3FC", border: "1px solid rgba(213,204,238,0.6)" }}>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A9E" }}>
+                        <BarChart2 className="h-3.5 w-3.5" /> AI Compliance Score
+                      </p>
+                      {assessLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "#7A6A9E" }} />
+                      ) : assessScore && (
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="text-sm font-black"
+                            style={{ color: assessScore.score >= 75 ? "#10B981" : assessScore.score >= 50 ? "#F59E0B" : CORAL }}
+                          >
+                            {assessScore.score}/100
+                          </span>
+                          {assessScore.is_ready_for_billing && (
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              ✓ Billing Ready
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {assessScore && (
+                      <>
+                        {/* Criteria bars */}
+                        <div className="space-y-2">
+                          {Object.entries(assessScore.breakdown).map(([key, crit]) => {
+                            const pct = Math.round((crit.score / crit.max) * 100);
+                            const barColor = pct >= 75 ? "#10B981" : pct >= 40 ? "#F59E0B" : "#F03060";
+                            return (
+                              <div key={key}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <span className="text-[10px] text-slate-600">{crit.label}</span>
+                                  <span className="text-[10px] font-semibold" style={{ color: barColor }}>{crit.score}/{crit.max}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{ width: `${pct}%`, background: barColor }}
+                                  />
+                                </div>
+                                {crit.feedback && pct < 75 && (
+                                  <p className="text-[9px] text-slate-400 mt-0.5 leading-snug">{crit.feedback}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {assessScore.feedback && (
+                          <p className="text-[10px] mt-2.5 leading-relaxed" style={{ color: assessScore.is_ready_for_billing ? "#059669" : "#7A6A9E" }}>
+                            {assessScore.feedback}
+                          </p>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
 

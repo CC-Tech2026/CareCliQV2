@@ -111,10 +111,21 @@ class NDISPlanCreate(BaseModel):
     plan_start: date
     plan_end: date
     total_funding: float = 0.0
-    status: str = "active"
+    status: Optional[str] = None          # auto-derived from dates if not supplied
     core_budget: Optional[float] = None
     capacity_budget: Optional[float] = None
     capital_budget: Optional[float] = None
+
+    @field_validator("plan_end")
+    @classmethod
+    def _end_after_start(cls, v: date, info) -> date:
+        start = (info.data or {}).get("plan_start")
+        if start and v <= start:
+            raise ValueError("plan_end must be after plan_start")
+        return v
+
+
+RiskLevel = Literal["low", "medium", "high"]
 
 
 # ---------------------------------------------------------------------------

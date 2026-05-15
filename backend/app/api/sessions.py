@@ -44,6 +44,46 @@ async def create_session(body: SessionCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{session_id}/context")
+async def get_session_context(session_id: str):
+    """Return session + participant's active plan goals + risk profile for the live session engine."""
+    session = await session_service.get_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    plan_goals: list[dict] = []
+    risk_profile: dict = {}
+
+    if participant_id:
+        # Goals from patient_goals table (plan-linked)
+        try:
+            from ..services import goals_service
+            from ..services.migration_state import patient_goals_table_missing
+            if not patient_goals_table_missing:
+                plan_goals = await goals_service.get_goals_for_participant(participant_id)
+        except Exception as exc:
+            logger.warning("context: goals fetch failed for %s: %s", participant_id, exc)
+
+        # Risk profile from patients record
+        try:
+            participant = await participant_service.get_participant_by_id(participant_id)
+            if participant:
+                risk_profile = {
+                    "risk_level": participant.get("risk_level", "low"),
+                    "triggers": participant.get("risk_triggers", "") or "",
+                    "management_plan": participant.get("risk_management_plan", "") or "",
+                }
+        except Exception as exc:
+            logger.warning("context: risk fetch failed for %s: %s", participant_id, exc)
+
+    return {
+        "session": session,
+        "plan_goals": plan_goals,
+        "risk_profile": risk_profile,
+    }
+
+
 @router.get("/{session_id}")
 async def get_session(session_id: str):
     session = await session_service.get_session_by_id(session_id)

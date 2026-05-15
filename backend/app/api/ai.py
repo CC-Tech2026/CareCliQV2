@@ -41,6 +41,14 @@ class ClinicalRewriteRequest(BaseModel):
     text: str
 
 
+class AssessNoteRequest(BaseModel):
+    note_text: str
+    session_id: Optional[str] = None
+    participant_id: Optional[str] = None
+    session_started: bool = False
+    goals: Optional[List[dict]] = None
+
+
 @router.post("/insight")
 async def get_insights(body: InsightRequest):
     participant = await participant_service.get_participant_by_id(body.participant_id)
@@ -118,3 +126,51 @@ async def rewrite_clinical(body: ClinicalRewriteRequest):
     except Exception as e:
         logger.error(f"Clinical rewrite error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/assess-note")
+async def assess_note(body: AssessNoteRequest):
+    """Real-time 4-criteria compliance scoring for a clinical note entry.
+
+    Criteria (from NDIS spec):
+      +25% Timestamp/session check-in
+      +35% Semantic NDIS goal connection
+      +25% Documented support outcome text
+      +15% Next-step / routine action logged
+
+    Returns score (0-100), is_ready_for_billing, and per-criterion breakdown.
+    If score >= 75 and session_id provided, patches is_ready_for_billing on the session.
+    """
+    goals: list[dict] = body.goals or []
+
+    # If participant_id supplied but no goals, try to fetch from patient_goals table
+    if body.participant_id and not goals:
+        try:
+            from ..services import goals_service
+            from ..services.migration_state import patient_goals_table_missing
+            if not patient_goals_table_missing:
+                goals = await goals_service.get_goals_for_participant(body.participant_id)
+        except Exception:
+            pass
+
+    try:
+        result = await ai_service.assess_note(
+            note_text=body.note_text,
+            session_started=body.session_started,
+            goals=goals,
+        )
+    except Exception as e:
+        logger.error(f"Assess-note error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # If billing-ready, flag the session record
+    if result.get("is_ready_for_billing") and body.session_id:
+        try:
+            from ..services import session_service
+            await session_service.update_session(
+                body.session_id, {"is_ready_for_billing": True}
+            )
+        except Exception as exc:
+            logger.warning("Failed to flag is_ready_for_billing on session %s: %s", body.session_id, exc)
+
+    return result
