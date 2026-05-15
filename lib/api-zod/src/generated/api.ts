@@ -42,6 +42,20 @@ export const GetParticipantsResponseItem = zod.object({
           id: zod.string(),
           title: zod.string(),
           status: zod.enum(["active", "archived"]),
+          category: zod
+            .enum(["core", "capacity_building", "capital", "general"])
+            .nullish(),
+          progress_percentage: zod.number().nullish(),
+          target_date: zod.string().nullish(),
+          progress_history: zod
+            .array(
+              zod.object({
+                date: zod.string(),
+                percentage: zod.number(),
+                note: zod.string().nullish(),
+              }),
+            )
+            .nullish(),
         }),
         zod.object({
           text: zod.string(),
@@ -138,6 +152,20 @@ export const GetParticipantResponse = zod.object({
           id: zod.string(),
           title: zod.string(),
           status: zod.enum(["active", "archived"]),
+          category: zod
+            .enum(["core", "capacity_building", "capital", "general"])
+            .nullish(),
+          progress_percentage: zod.number().nullish(),
+          target_date: zod.string().nullish(),
+          progress_history: zod
+            .array(
+              zod.object({
+                date: zod.string(),
+                percentage: zod.number(),
+                note: zod.string().nullish(),
+              }),
+            )
+            .nullish(),
         }),
         zod.object({
           text: zod.string(),
@@ -179,6 +207,20 @@ export const UpdateParticipantBody = zod.object({
           id: zod.string(),
           title: zod.string(),
           status: zod.enum(["active", "archived"]),
+          category: zod
+            .enum(["core", "capacity_building", "capital", "general"])
+            .nullish(),
+          progress_percentage: zod.number().nullish(),
+          target_date: zod.string().nullish(),
+          progress_history: zod
+            .array(
+              zod.object({
+                date: zod.string(),
+                percentage: zod.number(),
+                note: zod.string().nullish(),
+              }),
+            )
+            .nullish(),
         }),
         zod.object({
           text: zod.string(),
@@ -217,6 +259,20 @@ export const UpdateParticipantResponse = zod.object({
           id: zod.string(),
           title: zod.string(),
           status: zod.enum(["active", "archived"]),
+          category: zod
+            .enum(["core", "capacity_building", "capital", "general"])
+            .nullish(),
+          progress_percentage: zod.number().nullish(),
+          target_date: zod.string().nullish(),
+          progress_history: zod
+            .array(
+              zod.object({
+                date: zod.string(),
+                percentage: zod.number(),
+                note: zod.string().nullish(),
+              }),
+            )
+            .nullish(),
         }),
         zod.object({
           text: zod.string(),
@@ -244,6 +300,20 @@ export const UpdateParticipantGoalsBody = zod.object({
       id: zod.string(),
       title: zod.string(),
       status: zod.enum(["active", "archived"]),
+      category: zod
+        .enum(["core", "capacity_building", "capital", "general"])
+        .nullish(),
+      progress_percentage: zod.number().nullish(),
+      target_date: zod.string().nullish(),
+      progress_history: zod
+        .array(
+          zod.object({
+            date: zod.string(),
+            percentage: zod.number(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .nullish(),
     }),
   ),
 });
@@ -273,6 +343,20 @@ export const UpdateParticipantGoalsResponse = zod.object({
           id: zod.string(),
           title: zod.string(),
           status: zod.enum(["active", "archived"]),
+          category: zod
+            .enum(["core", "capacity_building", "capital", "general"])
+            .nullish(),
+          progress_percentage: zod.number().nullish(),
+          target_date: zod.string().nullish(),
+          progress_history: zod
+            .array(
+              zod.object({
+                date: zod.string(),
+                percentage: zod.number(),
+                note: zod.string().nullish(),
+              }),
+            )
+            .nullish(),
         }),
         zod.object({
           text: zod.string(),

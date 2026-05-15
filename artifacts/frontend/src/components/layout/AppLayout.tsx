@@ -11,12 +11,13 @@ import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const MUTED  = "#7A6A8A";
-const TEXT   = "#1C1626";
-const BORDER = "rgba(232,213,232,0.5)";
+// ── Friendly Design Tokens ────────────────────────────────────────────────────
+const PLUM   = "#6A407D"; // Warmer, softer plum
+const CORAL  = "#FF8FA3"; // Bubbly coral/pink
+const MUTED  = "#9A8C9E"; // Lighter muted text
+const TEXT   = "#3B2E42"; // Softer dark text
+const APP_BG = "#F7F5FA"; // Very soft purple-tinted white
+const ACTIVE = "#FFF0F3"; // Soft active background
 
 // ── Navigation items ──────────────────────────────────────────────────────────
 const NAV_ITEMS = [
@@ -51,7 +52,7 @@ function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-// ── Sidebar contents (extracted to avoid re-defining inside render) ───────────
+// ── Sidebar contents ──────────────────────────────────────────────────────────
 function SidebarContents({
   location,
   collapsed,
@@ -80,115 +81,104 @@ function SidebarContents({
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── Wordmark header ────────────────────────────────────────── */}
-      <div
-        className={cn(
-          "flex items-center h-16 shrink-0",
-          compact ? "justify-center px-2" : "gap-3 px-4"
-        )}
-        style={{ borderBottom: `1px solid ${BORDER}` }}
-      >
+      {/* ── Friendly Wordmark header ───────────────────────────────── */}
+      <div className={cn("flex items-center h-20 shrink-0", compact ? "justify-center px-2" : "gap-3 px-6")}>
         {/* Logo icon */}
         <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+          style={{ background: CORAL }}
         >
-          <Sparkles size={16} color="white" strokeWidth={1.5} />
+          <Sparkles size={20} color="white" strokeWidth={2} />
         </div>
 
-        {/* Wordmark + subtitle (expanded only) */}
+        {/* Wordmark + subtitle */}
         {!compact && (
           <div className="flex-1 min-w-0">
-            <p className="text-[17px] font-black tracking-tight leading-none select-none">
+            <p className="text-[19px] font-extrabold tracking-tight leading-none select-none">
               <span style={{ color: TEXT }}>Care</span>
               <span style={{ color: CORAL }}>Scribe</span>
             </p>
             <p
-              className="text-[8.5px] font-semibold uppercase tracking-[0.08em] mt-0.5 select-none"
+              className="text-[10px] font-medium tracking-wide mt-1 select-none"
               style={{ color: MUTED }}
             >
-              NDIS Clinical Workspace
+              NDIS Workspace
             </p>
           </div>
         )}
 
-        {/* Collapse button (expanded desktop sidebar only) */}
+        {/* Soft Collapse button */}
         {!compact && !isDrawer && (
           <button
             onClick={onToggle}
             title="Collapse sidebar"
-            className="p-1.5 rounded-lg transition-colors hover:bg-pink-50 shrink-0"
+            className="p-2 rounded-full transition-colors hover:bg-black/5 shrink-0"
             style={{ color: MUTED }}
           >
-            <ChevronLeft size={15} />
+            <ChevronLeft size={18} />
           </button>
         )}
       </div>
 
-      {/* ── Expand row (collapsed desktop sidebar only) ────────────── */}
+      {/* ── Expand row (collapsed only) ────────────── */}
       {compact && (
-        <div
-          className="flex justify-center py-2 shrink-0"
-          style={{ borderBottom: `1px solid ${BORDER}` }}
-        >
+        <div className="flex justify-center pb-2 shrink-0">
           <button
             onClick={onToggle}
             title="Expand sidebar"
-            className="p-1.5 rounded-lg transition-colors hover:bg-pink-50"
+            className="p-2 rounded-full transition-colors hover:bg-black/5"
             style={{ color: MUTED }}
           >
-            <ChevronRight size={15} />
+            <ChevronRight size={18} />
           </button>
         </div>
       )}
 
-      {/* ── New Session button ─────────────────────────────────────── */}
-      <div className={cn("pt-3 shrink-0", compact ? "px-2" : "px-3")}>
+      {/* ── Bubbly New Session button ──────────────────────────────── */}
+      <div className={cn("pt-2 pb-4 shrink-0", compact ? "px-3" : "px-5")}>
         <Link href="/sessions/new" onClick={onNav}>
           <div
             className={cn(
-              "flex items-center justify-center rounded-xl text-white text-[13px] font-bold h-9 transition-opacity hover:opacity-90",
-              compact ? "w-full" : "gap-2 px-3"
+              "flex items-center justify-center rounded-2xl text-white text-[14px] font-bold h-11 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
+              compact ? "w-full" : "gap-2 px-4"
             )}
-            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            style={{ 
+              background: PLUM,
+              boxShadow: "0 8px 16px -4px rgba(106, 64, 125, 0.2)"
+            }}
           >
-            <Plus size={15} strokeWidth={2.5} />
+            <Plus size={18} strokeWidth={2.5} />
             {!compact && "New Session"}
           </div>
         </Link>
       </div>
 
       {/* ── Navigation ────────────────────────────────────────────── */}
-      <nav className={cn("flex-1 overflow-y-auto py-3 space-y-0.5", compact ? "px-2" : "px-3")}>
+      <nav className={cn("flex-1 overflow-y-auto space-y-1", compact ? "px-2" : "px-4")}>
         {NAV_ITEMS.map((item) => {
           const active    = isActive(location, item.href);
           const Icon      = item.icon;
           const showBadge = item.href === "/compliance" && alertCount > 0;
 
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNav}
-              title={compact ? item.label : undefined}
-            >
+            <Link key={item.href} href={item.href} onClick={onNav} title={compact ? item.label : undefined}>
               <div
                 className={cn(
-                  "flex items-center rounded-xl text-[13px] font-medium transition-colors w-full cursor-pointer",
-                  compact ? "h-9 justify-center px-0" : "gap-3 px-3 py-2"
+                  "flex items-center rounded-2xl text-[14px] transition-all w-full cursor-pointer",
+                  compact ? "h-11 justify-center px-0" : "gap-3.5 px-4 py-3"
                 )}
                 style={{
-                  background: active ? "rgba(84,34,105,0.07)" : "transparent",
+                  background: active ? ACTIVE : "transparent",
                   color: active ? PLUM : MUTED,
-                  fontWeight: active ? 600 : 500,
+                  fontWeight: active ? 700 : 500,
                 }}
               >
                 <div className="relative shrink-0">
-                  <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
+                  <Icon size={20} strokeWidth={active ? 2.5 : 2} />
                   {showBadge && (
                     <span
-                      className="absolute -top-1 -right-1.5 min-w-[14px] h-3.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5"
-                      style={{ background: "#DC2626" }}
+                      className="absolute -top-1 -right-1.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center px-1"
+                      style={{ background: "#FF5C77" }}
                     >
                       {alertCount > 9 ? "9+" : alertCount}
                     </span>
@@ -201,55 +191,52 @@ function SidebarContents({
         })}
       </nav>
 
-      {/* ── Alerts strip (expanded only) ─────────────────────────── */}
+      {/* ── Alerts strip ─────────────────────────── */}
       {!compact && alertCount > 0 && (
         <Link href="/compliance" onClick={onNav}>
           <div
-            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-medium cursor-pointer hover:opacity-80 transition-opacity"
-            style={{ background: "rgba(241,115,138,0.07)", color: CORAL }}
+            className="mx-4 mb-4 flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl text-[13px] font-bold cursor-pointer transition-all hover:scale-[1.02]"
+            style={{ background: "#FFF0F3", color: "#FF5C77" }}
           >
-            <AlertTriangle size={12} />
-            {alertCount} unread alert{alertCount !== 1 ? "s" : ""}
+            <AlertTriangle size={14} strokeWidth={2.5} />
+            {alertCount} Action Item{alertCount !== 1 ? "s" : ""}
           </div>
         </Link>
       )}
 
       {/* ── Profile ──────────────────────────────────────────────── */}
-      <div
-        className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")}
-        style={{ borderTop: `1px solid ${BORDER}` }}
-      >
+      <div className={cn("shrink-0 py-4 mt-2", compact ? "px-2" : "px-5")}>
         {compact ? (
           <div
-            className="w-8 h-8 rounded-xl mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
-            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            className="w-10 h-10 rounded-full mx-auto flex items-center justify-center text-[12px] font-bold cursor-default"
+            style={{ background: ACTIVE, color: PLUM }}
             title={displayName}
           >
             {initials}
           </div>
         ) : (
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-3">
             <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0"
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
+              style={{ background: ACTIVE, color: PLUM }}
             >
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[12.5px] font-semibold truncate" style={{ color: TEXT }}>
+              <p className="text-[14px] font-bold truncate" style={{ color: TEXT }}>
                 {displayName}
               </p>
-              <p className="text-[10.5px] capitalize truncate" style={{ color: MUTED }}>
+              <p className="text-[11px] font-medium capitalize truncate" style={{ color: MUTED }}>
                 {displayRole}
               </p>
             </div>
             <button
               onClick={onLogout}
               title="Sign out"
-              className="shrink-0 p-1.5 rounded-lg hover:bg-pink-50 transition-colors"
+              className="shrink-0 p-2 rounded-full hover:bg-black/5 transition-colors"
               style={{ color: MUTED }}
             >
-              <LogOut size={13} />
+              <LogOut size={16} strokeWidth={2} />
             </button>
           </div>
         )}
@@ -293,103 +280,91 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen w-full" style={{ background: "#FAF5FF", color: TEXT }}>
+    <div className="flex h-screen w-full selection:bg-pink-100" style={{ background: APP_BG, color: TEXT }}>
 
-      {/* ── Desktop sidebar ── */}
+      {/* ── Desktop sidebar (Floating instead of rigid column) ── */}
       <aside
-        className="hidden md:flex flex-col h-screen sticky top-0 bg-white shrink-0 overflow-hidden"
-        style={{
-          width: collapsed ? 64 : 224,
-          transition: "width 220ms cubic-bezier(0.4, 0, 0.2, 1)",
-          borderRight: `1px solid ${BORDER}`,
-          boxShadow: "2px 0 12px rgba(84,34,105,0.04)",
-        }}
+        className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out"
+        style={{ width: collapsed ? 88 : 260 }}
       >
         <SidebarContents {...sharedProps} isDrawer={false} />
       </aside>
 
-      {/* ── Main content column ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* ── Main content wrapper (App Card style on Desktop) ── */}
+      <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
+        <div className="flex-1 flex flex-col bg-white md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] overflow-hidden relative">
 
-        {/* Mobile top bar */}
-        <header
-          className="md:hidden h-14 flex items-center justify-between px-4 bg-white shrink-0"
-          style={{ borderBottom: `1px solid ${BORDER}` }}
-        >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-            >
-              <Sparkles size={14} color="white" strokeWidth={1.5} />
-            </div>
-            <span className="text-[17px] font-black tracking-tight select-none">
-              <span style={{ color: TEXT }}>Care</span>
-              <span style={{ color: CORAL }}>Scribe</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/sessions/new">
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-[12px] font-bold"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+          {/* Mobile top bar */}
+          <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10">
+            <div className="flex items-center gap-3">
+              <div
+                className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-sm"
+                style={{ background: CORAL }}
               >
-                <Plus size={12} strokeWidth={2.5} /> New
-              </button>
-            </Link>
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="p-2 rounded-xl transition-colors hover:bg-pink-50"
-              style={{ color: MUTED }}
-            >
-              <Menu size={20} />
-            </button>
-          </div>
-        </header>
-
-        {/* Desktop top bar */}
-        <header
-          className="hidden md:flex h-11 items-center justify-end px-6 bg-white shrink-0 gap-3"
-          style={{ borderBottom: `1px solid ${BORDER}` }}
-        >
-          {alertCount > 0 && (
-            <Link href="/compliance">
-              <button
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11.5px] font-semibold transition-colors hover:bg-pink-50"
-                style={{ color: CORAL }}
-              >
-                <AlertTriangle size={12} />
-                {alertCount} alert{alertCount !== 1 ? "s" : ""}
-              </button>
-            </Link>
-          )}
-          <div
-            className="flex items-center gap-2 pl-3"
-            style={{ borderLeft: `1px solid ${BORDER}` }}
-          >
-            <div
-              className="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white select-none"
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-            >
-              {initials}
+                <Sparkles size={16} color="white" strokeWidth={2} />
+              </div>
+              <span className="text-[19px] font-extrabold tracking-tight select-none">
+                <span style={{ color: TEXT }}>Care</span>
+                <span style={{ color: CORAL }}>Scribe</span>
+              </span>
             </div>
-            <span className="text-[12px] font-medium" style={{ color: TEXT }}>
-              {displayName.split(" ")[0]}
-            </span>
-          </div>
-        </header>
+            <div className="flex items-center gap-2">
+              <Link href="/sessions/new">
+                <button
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-[13px] font-bold transition-transform active:scale-95"
+                  style={{ background: PLUM }}
+                >
+                  <Plus size={14} strokeWidth={2.5} /> New
+                </button>
+              </Link>
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="p-2.5 rounded-full transition-colors active:bg-black/5"
+                style={{ color: TEXT }}
+              >
+                <Menu size={22} />
+              </button>
+            </div>
+          </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto px-4 md:px-6 py-5 pb-20 md:pb-6">
-          {children}
-        </main>
+          {/* Desktop App Header (Inside the white card) */}
+          <header className="hidden md:flex h-16 items-center justify-end px-8 shrink-0 z-10 gap-4">
+            {alertCount > 0 && (
+              <Link href="/compliance">
+                <button
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-bold transition-colors hover:opacity-80"
+                  style={{ background: ACTIVE, color: "#FF5C77" }}
+                >
+                  <AlertTriangle size={14} strokeWidth={2.5} />
+                  {alertCount} Action Item{alertCount !== 1 ? "s" : ""}
+                </button>
+              </Link>
+            )}
+            <div className="flex items-center gap-2.5">
+              <span className="text-[13px] font-bold" style={{ color: TEXT }}>
+                {displayName.split(" ")[0]}
+              </span>
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
+                style={{ background: APP_BG, color: PLUM }}
+              >
+                {initials}
+              </div>
+            </div>
+          </header>
+
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto px-5 md:px-8 py-4 pb-24 md:pb-8">
+            {children}
+          </main>
+        </div>
       </div>
 
-      {/* ── Mobile bottom nav ── */}
+      {/* ── Mobile bottom nav (Floating soft shadow) ── */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white/90 backdrop-blur-md"
         style={{
-          borderTop: `1px solid ${BORDER}`,
+          boxShadow: "0 -8px 30px rgba(0,0,0,0.04)",
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
@@ -400,11 +375,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className="flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors"
+              className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors relative"
               style={{ color: active ? PLUM : MUTED }}
             >
-              <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
-              <span className="text-[10px] font-semibold">{item.label}</span>
+              {active && (
+                <div className="absolute top-0 w-8 h-1 rounded-b-full" style={{ background: PLUM }} />
+              )}
+              <Icon size={22} strokeWidth={active ? 2.5 : 2} className={cn("mt-1", active && "animate-in zoom-in-90 duration-200")} />
+              <span className={cn("text-[10px]", active ? "font-bold" : "font-medium")}>
+                {item.label}
+              </span>
             </Link>
           );
         })}
@@ -413,8 +393,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer backdrop */}
       {drawerOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40"
-          style={{ background: "rgba(84,34,105,0.25)" }}
+          className="md:hidden fixed inset-0 z-40 transition-opacity duration-300"
+          style={{ background: "rgba(59, 46, 66, 0.4)", backdropFilter: "blur(2px)" }}
           onClick={() => setDrawerOpen(false)}
         />
       )}
@@ -422,18 +402,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col transition-transform duration-200",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col transition-transform duration-300 ease-out",
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
-        style={{ boxShadow: "4px 0 24px rgba(84,34,105,0.15)" }}
+        style={{ boxShadow: "10px 0 40px rgba(0,0,0,0.08)" }}
       >
-        <div className="absolute top-3 right-3 z-10">
+        <div className="absolute top-4 right-4 z-10">
           <button
             onClick={() => setDrawerOpen(false)}
-            className="p-2 rounded-xl hover:bg-pink-50 transition-colors"
+            className="p-2 rounded-full hover:bg-black/5 transition-colors"
             style={{ color: MUTED }}
           >
-            <X size={16} />
+            <X size={20} strokeWidth={2.5} />
           </button>
         </div>
         <SidebarContents

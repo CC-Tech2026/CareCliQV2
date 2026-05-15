@@ -18,6 +18,12 @@ export interface ParticipantGoal {
   progress: number;
 }
 
+export interface NDISGoalProgressEntry {
+  date: string;
+  percentage: number;
+  note?: string | null;
+}
+
 export type NDISGoalStatus =
   (typeof NDISGoalStatus)[keyof typeof NDISGoalStatus];
 
@@ -26,10 +32,25 @@ export const NDISGoalStatus = {
   archived: "archived",
 } as const;
 
+export type NDISGoalCategory =
+  | (typeof NDISGoalCategory)[keyof typeof NDISGoalCategory]
+  | null;
+
+export const NDISGoalCategory = {
+  core: "core",
+  capacity_building: "capacity_building",
+  capital: "capital",
+  general: "general",
+} as const;
+
 export interface NDISGoal {
   id: string;
   title: string;
   status: NDISGoalStatus;
+  category?: NDISGoalCategory;
+  progress_percentage?: number | null;
+  target_date?: string | null;
+  progress_history?: NDISGoalProgressEntry[] | null;
 }
 
 export type ParticipantBiologicalSex =

@@ -461,6 +461,18 @@ components:
           maximum: 100
       required: [text, progress]
 
+    NDISGoalProgressEntry:
+      type: object
+      properties:
+        date:
+          type: string
+        percentage:
+          type: integer
+        note:
+          type: string
+          nullable: true
+      required: [date, percentage]
+
     NDISGoal:
       type: object
       properties:
@@ -471,6 +483,21 @@ components:
         status:
           type: string
           enum: [active, archived]
+        category:
+          type: string
+          nullable: true
+          enum: [core, capacity_building, capital, general]
+        progress_percentage:
+          type: integer
+          nullable: true
+        target_date:
+          type: string
+          nullable: true
+        progress_history:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/NDISGoalProgressEntry"
       required: [id, title, status]
 
     Participant:

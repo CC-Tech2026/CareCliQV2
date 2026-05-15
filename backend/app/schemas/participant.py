@@ -4,11 +4,23 @@ from datetime import date
 
 VALID_BIOLOGICAL_SEX = ("male", "female", "unspecified")
 
+VALID_GOAL_CATEGORIES = ("core", "capacity_building", "capital", "general")
+
+
+class NDISGoalProgressEntry(BaseModel):
+    date: str           # ISO date string e.g. "2025-05-15"
+    percentage: int     # 0-100
+    note: Optional[str] = None
+
 
 class NDISGoal(BaseModel):
     id: str
     title: str
     status: str = "active"
+    category: Optional[str] = "general"       # core | capacity_building | capital | general
+    progress_percentage: Optional[int] = 0    # 0-100
+    target_date: Optional[str] = None         # ISO date string
+    progress_history: Optional[List[NDISGoalProgressEntry]] = []
 
 
 class GoalsUpdateBody(BaseModel):

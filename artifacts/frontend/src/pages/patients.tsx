@@ -6,7 +6,9 @@ import {
   useGetParticipantSessions,
   useGetAISummary,
   useUpdateParticipant,
+  NDISGoalCategory,
   type NDISGoal,
+  type NDISGoalProgressEntry,
 } from "@workspace/api-client-react";
 
 import { Input } from "@/components/ui/input";
@@ -58,6 +60,11 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Form,
   FormControl,
@@ -888,8 +895,31 @@ function RuleBadge({ status }: { status: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Goals Management Card (NDIS goal linking)
 // ---------------------------------------------------------------------------
+// Goals Management Card — category badges, progress bars, history popover
+// ---------------------------------------------------------------------------
+
+const GOAL_CATEGORIES = {
+  core:              { label: "Core Supports",     bg: "rgba(241,115,138,0.10)", color: "#C0365A", border: "rgba(241,115,138,0.3)"  },
+  capacity_building: { label: "Capacity Building", bg: "rgba(84,34,105,0.08)",  color: "#542269", border: "rgba(84,34,105,0.2)"    },
+  capital:           { label: "Capital",           bg: "rgba(59,130,246,0.08)", color: "#1D4ED8", border: "rgba(59,130,246,0.2)"   },
+  general:           { label: "General",           bg: "rgba(107,114,128,0.07)",color: "#4B5563", border: "rgba(107,114,128,0.15)" },
+} as const;
+
+type GoalCategory = keyof typeof GOAL_CATEGORIES;
+
+function catCfg(cat?: string | null) {
+  return GOAL_CATEGORIES[(cat as GoalCategory) ?? "general"] ?? GOAL_CATEGORIES.general;
+}
+
+function pctColor(p: number) {
+  return p >= 70 ? "#16A34A" : p >= 40 ? "#D97706" : "#DC2626";
+}
+
+function fmtGoalDate(d?: string | null) {
+  if (!d) return null;
+  try { return format(parseISO(d), "d MMM yyyy"); } catch { return d; }
+}
 
 function GoalsManagementCard({
   participantId,
@@ -900,13 +930,25 @@ function GoalsManagementCard({
   goals: NDISGoal[];
   onUpdated: () => void;
 }) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [showArchived, setShowArchived] = useState(false);
-  const [newGoalTitle, setNewGoalTitle] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
+  const { toast }    = useToast();
+  const queryClient  = useQueryClient();
+
+  const [showArchived,  setShowArchived ] = useState(false);
+  const [isAdding,      setIsAdding     ] = useState(false);
+  const [newTitle,      setNewTitle     ] = useState("");
+  const [newCategory,   setNewCategory  ] = useState("general");
+  const [newTargetDate, setNewTargetDate] = useState("");
+  const [newProgress,   setNewProgress  ] = useState(0);
+
+  const [editingId,     setEditingId    ] = useState<string | null>(null);
+  const [editTitle,     setEditTitle    ] = useState("");
+  const [editCategory,  setEditCategory ] = useState("general");
+  const [editTarget,    setEditTarget   ] = useState("");
+  const [editPct,       setEditPct      ] = useState(0);
+
+  const [logGoalId,     setLogGoalId    ] = useState<string | null>(null);
+  const [logPct,        setLogPct       ] = useState(0);
+  const [logNote,       setLogNote      ] = useState("");
 
   const updateGoals = useMutation({
     mutationFn: async (updatedGoals: NDISGoal[]) => {
@@ -919,28 +961,32 @@ function GoalsManagementCard({
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["getParticipant", participantId],
-      });
+      queryClient.invalidateQueries({ queryKey: ["getParticipant", participantId] });
       queryClient.invalidateQueries({ queryKey: ["getParticipants"] });
       onUpdated();
     },
-    onError: () => {
-      toast({ title: "Failed to update goals", variant: "destructive" });
-    },
+    onError: () => { toast({ title: "Failed to update goals", variant: "destructive" }); },
   });
 
   function addGoal() {
-    const trimmed = newGoalTitle.trim();
+    const trimmed = newTitle.trim();
     if (!trimmed) return;
+    const today = new Date().toISOString().split("T")[0];
+    const initHistory: NDISGoalProgressEntry[] = newProgress > 0
+      ? [{ date: today, percentage: newProgress }]
+      : [];
     const newGoal: NDISGoal = {
       id: `goal_${Date.now()}`,
       title: trimmed,
       status: "active",
+      category: newCategory as NDISGoalCategory,
+      progress_percentage: newProgress,
+      target_date: newTargetDate || null,
+      progress_history: initHistory,
     };
     updateGoals.mutate([...goals, newGoal], {
       onSuccess: () => {
-        setNewGoalTitle("");
+        setNewTitle(""); setNewCategory("general"); setNewTargetDate(""); setNewProgress(0);
         setIsAdding(false);
         toast({ title: "Goal added" });
       },
@@ -949,222 +995,341 @@ function GoalsManagementCard({
 
   function startEditing(goal: NDISGoal) {
     setEditingId(goal.id);
-    setEditingTitle(goal.title);
+    setEditTitle(goal.title);
+    setEditCategory(goal.category ?? "general");
+    setEditTarget(goal.target_date ?? "");
+    setEditPct(goal.progress_percentage ?? 0);
   }
 
   function saveEdit() {
-    const trimmed = editingTitle.trim();
-    if (!trimmed || !editingId) {
-      setEditingId(null);
-      return;
-    }
+    const trimmed = editTitle.trim();
+    if (!trimmed || !editingId) { setEditingId(null); return; }
     updateGoals.mutate(
-      goals.map((g) => (g.id === editingId ? { ...g, title: trimmed } : g)),
-      {
-        onSuccess: () => {
-          setEditingId(null);
-          toast({ title: "Goal updated" });
-        },
-      },
+      goals.map(g => g.id === editingId
+        ? { ...g, title: trimmed, category: editCategory as NDISGoalCategory, target_date: editTarget || null, progress_percentage: editPct }
+        : g),
+      { onSuccess: () => { setEditingId(null); toast({ title: "Goal updated" }); } },
+    );
+  }
+
+  function saveProgress(goalId: string) {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    const today = new Date().toISOString().split("T")[0];
+    const entry = { date: today, percentage: logPct, ...(logNote.trim() ? { note: logNote.trim() } : {}) };
+    const history = [...(goal.progress_history ?? []), entry];
+    updateGoals.mutate(
+      goals.map(g => g.id === goalId ? { ...g, progress_percentage: logPct, progress_history: history } : g),
+      { onSuccess: () => { setLogGoalId(null); setLogPct(0); setLogNote(""); toast({ title: "Progress logged" }); } },
     );
   }
 
   function archiveGoal(id: string) {
     updateGoals.mutate(
-      goals.map((g) =>
-        g.id === id ? { ...g, status: "archived" as const } : g,
-      ),
+      goals.map(g => g.id === id ? { ...g, status: "archived" as const } : g),
       { onSuccess: () => toast({ title: "Goal archived" }) },
     );
   }
 
   function restoreGoal(id: string) {
     updateGoals.mutate(
-      goals.map((g) => (g.id === id ? { ...g, status: "active" as const } : g)),
+      goals.map(g => g.id === id ? { ...g, status: "active" as const } : g),
       { onSuccess: () => toast({ title: "Goal restored" }) },
     );
   }
 
-  const activeGoals = goals.filter((g) => g.status === "active");
-  const archivedGoals = goals.filter((g) => g.status === "archived");
+  const activeGoals   = goals.filter(g => g.status === "active");
+  const archivedGoals = goals.filter(g => g.status === "archived");
 
   return (
     <div className="rounded-2xl overflow-hidden bg-white"
       style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-      <div className="flex items-center justify-between px-5 py-4 border-b"
-        style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-        <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: "#1C1626" }}>
-          <Target className="h-4 w-4" style={{ color: "#542269" }} />
-          NDIS Goals
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-5 py-4"
+        style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+            style={{ background: "rgba(84,34,105,0.07)" }}>
+            <Target className="h-3.5 w-3.5" style={{ color: "#542269" }} />
+          </div>
+          <div>
+            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: "#1C1626" }}>NDIS Goals</h3>
+            <p className="text-[11px]" style={{ color: "#7A6A8A" }}>Progress toward plan objectives</p>
+          </div>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1 text-xs rounded-lg"
+        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs rounded-lg"
           style={{ borderColor: "rgba(232,213,232,0.5)" }}
-          onClick={() => setIsAdding(true)}
-          disabled={isAdding}
+          onClick={() => setIsAdding(v => !v)}
           data-testid="button-add-goal"
         >
-          <Plus className="h-3.5 w-3.5" /> Add Goal
+          <Plus className="h-3 w-3" /> Add Goal
         </Button>
       </div>
-      <div className="p-5 space-y-3">
-        {isAdding && (
-          <div className="flex gap-2">
-            <Input
-              autoFocus
-              placeholder="e.g. Improve independent mobility"
-              value={newGoalTitle}
-              onChange={(e) => setNewGoalTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addGoal();
-                if (e.key === "Escape") {
-                  setIsAdding(false);
-                  setNewGoalTitle("");
-                }
-              }}
-              data-testid="input-goal-title"
-              className="flex-1 text-sm"
-            />
-            <Button
-              size="sm"
-              onClick={addGoal}
-              disabled={updateGoals.isPending || !newGoalTitle.trim()}
-              data-testid="button-save-goal"
-            >
-              {updateGoals.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                "Save"
-              )}
+      {/* ── Add Goal Form ── */}
+      {isAdding && (
+        <div className="px-5 pt-4 pb-1 space-y-3"
+          style={{ borderBottom: "1px solid rgba(232,213,232,0.5)", background: "rgba(246,244,251,0.5)" }}>
+          <Input
+            autoFocus
+            placeholder="e.g. Improve independent mobility and transition to community activities"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") addGoal(); if (e.key === "Escape") setIsAdding(false); }}
+            className="text-sm"
+            data-testid="input-goal-title"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider block mb-1" style={{ color: "#7A6A8A" }}>
+                Funding Category
+              </label>
+              <Select value={newCategory} onValueChange={setNewCategory}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="core">Core Supports</SelectItem>
+                  <SelectItem value="capacity_building">Capacity Building</SelectItem>
+                  <SelectItem value="capital">Capital</SelectItem>
+                  <SelectItem value="general">General</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider block mb-1" style={{ color: "#7A6A8A" }}>
+                Target Date
+              </label>
+              <Input type="date" className="h-8 text-xs" value={newTargetDate} onChange={e => setNewTargetDate(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between mb-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>
+                Initial Progress
+              </label>
+              <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{newProgress}%</span>
+            </div>
+            <input type="range" min={0} max={100} step={5}
+              value={newProgress} onChange={e => setNewProgress(Number(e.target.value))}
+              className="w-full h-1.5 rounded-full accent-[#542269]" />
+          </div>
+          <div className="flex gap-2 pb-3">
+            <Button size="sm" onClick={addGoal} disabled={updateGoals.isPending || !newTitle.trim()}
+              className="text-xs h-7" data-testid="button-save-goal">
+              {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save Goal"}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setIsAdding(false);
-                setNewGoalTitle("");
-              }}
-            >
+            <Button size="sm" variant="ghost" className="text-xs h-7"
+              onClick={() => { setIsAdding(false); setNewTitle(""); }}>
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* ── Goal List ── */}
+      <div className="p-5 space-y-3">
+        {activeGoals.length === 0 && !isAdding && (
+          <div className="text-center py-8 rounded-xl border-2 border-dashed"
+            style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+            <Target className="h-6 w-6 mx-auto mb-2" style={{ color: "rgba(84,34,105,0.2)" }} />
+            <p className="text-[12px] mb-1" style={{ color: "#7A6A8A" }}>No goals linked to this plan yet</p>
+            <p className="text-[11px]" style={{ color: "#C4A8CC" }}>Add funded support goals to enable compliance tracking</p>
+          </div>
         )}
 
-        {activeGoals.length === 0 && !isAdding ? (
-          <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "rgba(232,213,232,0.5)", color: "#7A6A8A" }}>
-            <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
-            <p className="text-[12px]">
-              No active goals — click "Add Goal" to add funded support goals
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {activeGoals.map((goal) => (
-              <li
-                key={goal.id}
-                className="flex items-center gap-2 p-2.5 rounded-xl border group"
-                style={{ background: "rgba(246,244,251,0.6)", borderColor: "rgba(232,213,232,0.5)" }}
-                data-testid={`goal-item-${goal.id}`}
-              >
-                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                {editingId === goal.id ? (
-                  <div className="flex items-center gap-2 flex-1">
-                    <Input
-                      autoFocus
-                      value={editingTitle}
-                      onChange={(e) => setEditingTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") saveEdit();
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      className="flex-1 text-sm h-7 py-1"
-                      data-testid={`input-edit-goal-${goal.id}`}
-                    />
-                    <Button
-                      size="sm"
-                      className="h-6 text-xs px-2"
-                      onClick={saveEdit}
-                      disabled={updateGoals.isPending}
-                    >
-                      {updateGoals.isPending ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        "Save"
-                      )}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 text-xs px-2"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </Button>
+        {activeGoals.map(goal => {
+          const cat     = catCfg(goal.category);
+          const pct     = goal.progress_percentage ?? 0;
+          const pc      = pctColor(pct);
+          const history = goal.progress_history ?? [];
+          const isEditing = editingId === goal.id;
+          const isLogging = logGoalId === goal.id;
+
+          return (
+            <div key={goal.id} className="rounded-xl border overflow-hidden"
+              style={{ borderColor: "rgba(232,213,232,0.5)", background: "rgba(246,244,251,0.4)" }}
+              data-testid={`goal-item-${goal.id}`}>
+
+              {isEditing ? (
+                /* ── Edit form ── */
+                <div className="p-4 space-y-3">
+                  <Input autoFocus value={editTitle} onChange={e => setEditTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingId(null); }}
+                    className="text-sm" data-testid={`input-edit-goal-${goal.id}`} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={editCategory} onValueChange={setEditCategory}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="core">Core Supports</SelectItem>
+                        <SelectItem value="capacity_building">Capacity Building</SelectItem>
+                        <SelectItem value="capital">Capital</SelectItem>
+                        <SelectItem value="general">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input type="date" className="h-8 text-xs" value={editTarget} onChange={e => setEditTarget(e.target.value)} />
                   </div>
-                ) : (
-                  <>
-                    <span className="text-[13px] flex-1" style={{ color: "#1C1626" }}>
-                      {goal.title}
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>Progress</span>
+                      <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{editPct}%</span>
+                    </div>
+                    <input type="range" min={0} max={100} step={5}
+                      value={editPct} onChange={e => setEditPct(Number(e.target.value))}
+                      className="w-full h-1.5 rounded-full accent-[#542269]" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="text-xs h-7" onClick={saveEdit} disabled={updateGoals.isPending}>
+                      {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                /* ── Goal card ── */
+                <div className="p-4">
+                  {/* Top row: category badge + target date */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.border}` }}>
+                      {cat.label}
                     </span>
-                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 transition-all">
-                      <button
-                        className="hover:text-[#542269] text-[12px] transition-colors" style={{ color: "#7A6A8A" }}
-                        onClick={() => startEditing(goal)}
-                        title="Edit goal"
-                        data-testid={`button-edit-goal-${goal.id}`}
-                      >
+                    {goal.target_date && (
+                      <div className="flex items-center gap-1" style={{ color: "#7A6A8A" }}>
+                        <Clock className="h-3 w-3" />
+                        <span className="text-[10px]">Target: {fmtGoalDate(goal.target_date)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Goal title */}
+                  <p className="text-[13px] font-medium mb-3 leading-snug" style={{ color: "#1C1626" }}>{goal.title}</p>
+
+                  {/* Progress row + action buttons */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Progress</span>
+                        <span className="text-[10px] font-bold" style={{ color: pc }}>{pct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(232,213,232,0.5)" }}>
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%`, background: pc }} />
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {/* Progress history popover */}
+                      <Popover open={isLogging} onOpenChange={open => {
+                        setLogGoalId(open ? goal.id : null);
+                        if (open) { setLogPct(pct); setLogNote(""); }
+                      }}>
+                        <PopoverTrigger asChild>
+                          <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white"
+                            style={{ color: "#7A6A8A" }} title="Log progress">
+                            <TrendingUp className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-0" align="end">
+                          <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
+                            <p className="text-[13px] font-semibold" style={{ color: "#1C1626" }}>Log Progress</p>
+                            <p className="text-[11px] truncate" style={{ color: "#7A6A8A" }}>{goal.title}</p>
+                          </div>
+
+                          {/* Sparkline history */}
+                          {history.length > 0 && (
+                            <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
+                              <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "#7A6A8A" }}>History</p>
+                              <div className="flex items-end gap-0.5 h-9 mb-2.5">
+                                {history.slice(-12).map((h, i) => (
+                                  <div key={i} className="flex-1 rounded-sm"
+                                    style={{
+                                      height: `${Math.max(4, (h.percentage / 100) * 36)}px`,
+                                      background: pctColor(h.percentage),
+                                      opacity: 0.5 + (i / history.slice(-12).length) * 0.5,
+                                    }}
+                                    title={`${h.date}: ${h.percentage}%`} />
+                                ))}
+                              </div>
+                              {history.slice(-3).reverse().map((h, i) => (
+                                <div key={i} className="flex items-center justify-between py-0.5">
+                                  <span className="text-[10px]" style={{ color: "#7A6A8A" }}>{fmtGoalDate(h.date)}</span>
+                                  <div className="flex items-center gap-2">
+                                    {h.note && <span className="text-[10px] italic truncate max-w-28" style={{ color: "#4A3D5A" }}>{h.note}</span>}
+                                    <span className="text-[10px] font-bold" style={{ color: pctColor(h.percentage) }}>{h.percentage}%</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Log new progress */}
+                          <div className="px-4 py-3 space-y-2.5">
+                            <div>
+                              <div className="flex justify-between mb-1">
+                                <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>New Progress</label>
+                                <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{logPct}%</span>
+                              </div>
+                              <input type="range" min={0} max={100} step={5}
+                                value={logPct} onChange={e => setLogPct(Number(e.target.value))}
+                                className="w-full h-1.5 rounded-full accent-[#542269]" />
+                            </div>
+                            <Input placeholder="Note (optional)" value={logNote}
+                              onChange={e => setLogNote(e.target.value)} className="h-8 text-xs" />
+                            <Button size="sm" className="w-full text-xs h-8 text-white"
+                              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+                              onClick={() => saveProgress(goal.id)} disabled={updateGoals.isPending}>
+                              {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save Progress"}
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+
+                      <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white"
+                        style={{ color: "#7A6A8A" }}
+                        onClick={() => startEditing(goal)} title="Edit goal"
+                        data-testid={`button-edit-goal-${goal.id}`}>
                         <Edit className="h-3.5 w-3.5" />
                       </button>
-                      <button
-                        className="hover:text-amber-600 text-[12px] flex items-center gap-1 transition-colors" style={{ color: "#7A6A8A" }}
-                        onClick={() => archiveGoal(goal.id)}
-                        disabled={updateGoals.isPending}
-                        data-testid={`button-archive-goal-${goal.id}`}
-                        title="Archive goal"
-                      >
+
+                      <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-amber-50"
+                        style={{ color: "#7A6A8A" }}
+                        onClick={() => archiveGoal(goal.id)} disabled={updateGoals.isPending}
+                        title="Archive goal" data-testid={`button-archive-goal-${goal.id}`}>
                         <Archive className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
+        {/* Archived goals */}
         {archivedGoals.length > 0 && (
           <div>
-            <button
-              className="flex items-center gap-1 text-[12px] mt-1 mb-2 hover:opacity-70 transition-opacity" style={{ color: "#7A6A8A" }}
-              onClick={() => setShowArchived((v) => !v)}
-            >
-              {showArchived ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
+            <button className="flex items-center gap-1 text-[12px] mt-1 mb-2 hover:opacity-70 transition-opacity"
+              style={{ color: "#7A6A8A" }} onClick={() => setShowArchived(v => !v)}>
+              {showArchived ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               {showArchived ? "Hide" : "Show"} archived ({archivedGoals.length})
             </button>
             {showArchived && (
               <ul className="space-y-2">
-                {archivedGoals.map((goal) => (
-                  <li
-                    key={goal.id}
-                    className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed group"
-                    style={{ borderColor: "rgba(232,213,232,0.5)" }}
-                  >
+                {archivedGoals.map(goal => (
+                  <li key={goal.id}
+                    className="flex items-center gap-2 p-3 rounded-xl border border-dashed group"
+                    style={{ borderColor: "rgba(232,213,232,0.5)" }}>
                     <XCircle className="h-4 w-4 shrink-0" style={{ color: "#D1D5DB" }} />
-                    <span className="text-[13px] flex-1 line-through" style={{ color: "#7A6A8A" }}>
-                      {goal.title}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[12px] line-through block truncate" style={{ color: "#7A6A8A" }}>{goal.title}</span>
+                      <span className="text-[10px]" style={{ color: catCfg(goal.category).color }}>
+                        {catCfg(goal.category).label}
+                      </span>
+                    </div>
                     <button
-                      className="opacity-0 group-hover:opacity-100 hover:text-emerald-600 transition-all text-[12px]" style={{ color: "#7A6A8A" }}
-                      onClick={() => restoreGoal(goal.id)}
-                      disabled={updateGoals.isPending}
-                      title="Restore goal"
-                    >
+                      className="opacity-0 group-hover:opacity-100 text-[12px] font-medium transition-all hover:text-emerald-600"
+                      style={{ color: "#7A6A8A" }}
+                      onClick={() => restoreGoal(goal.id)} disabled={updateGoals.isPending} title="Restore goal">
                       Restore
                     </button>
                   </li>
