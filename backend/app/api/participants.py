@@ -1,12 +1,26 @@
-from fastapi import APIRouter, HTTPException
-from ..schemas.participant import ParticipantCreate, ParticipantUpdate, NDISPlanCreate, GoalsUpdateBody
-from ..services import participant_service
-from ..services import funding_service
+"""FastAPI router for participant (patient) endpoints."""
+
+from __future__ import annotations
+
 import logging
+
+from fastapi import APIRouter, HTTPException
+
+from ..schemas.participant import (
+    GoalsUpdateBody,
+    NDISPlanCreate,
+    ParticipantCreate,
+    ParticipantUpdate,
+)
+from ..services import funding_service, participant_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/participants", tags=["participants"])
 
+
+# ---------------------------------------------------------------------------
+# Participant CRUD
+# ---------------------------------------------------------------------------
 
 @router.get("")
 async def list_participants():
@@ -17,9 +31,9 @@ async def list_participants():
 async def create_participant(body: ParticipantCreate):
     try:
         return await participant_service.create_participant(body)
-    except Exception as e:
-        logger.error(f"Error creating participant: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        logger.error("create_participant failed: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/dashboard-stats")
@@ -37,7 +51,7 @@ async def get_participant(participant_id: str):
 
 @router.put("/{participant_id}")
 async def replace_participant(participant_id: str, body: ParticipantUpdate):
-    """Full update of participant data."""
+    """Full replacement of participant data (all writable fields)."""
     updated = await participant_service.update_participant(participant_id, body)
     if not updated:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -46,7 +60,7 @@ async def replace_participant(participant_id: str, body: ParticipantUpdate):
 
 @router.patch("/{participant_id}")
 async def update_participant(participant_id: str, body: ParticipantUpdate):
-    """Partial update of participant data."""
+    """Partial update — only supplied fields are written."""
     updated = await participant_service.update_participant(participant_id, body)
     if not updated:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -59,12 +73,29 @@ async def delete_participant(participant_id: str):
 
 
 # ---------------------------------------------------------------------------
-# NDIS Plan endpoints
+# NDIS Goals
+# ---------------------------------------------------------------------------
+
+@router.patch("/{participant_id}/goals")
+async def update_participant_goals(participant_id: str, body: GoalsUpdateBody):
+    """Replace the full goals list for a participant."""
+    exists = await participant_service.get_participant_by_id(participant_id)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    updated = await participant_service.update_participant_goals(participant_id, body.goals)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Failed to update goals")
+    return updated
+
+
+# ---------------------------------------------------------------------------
+# NDIS Plans & Budgets
 # ---------------------------------------------------------------------------
 
 @router.get("/{participant_id}/plan")
 async def get_participant_plan(participant_id: str):
-    """Get the active NDIS plan for a participant."""
+    """Return the active NDIS plan for a participant."""
     plan = await funding_service.get_plan_for_participant(participant_id)
     if not plan:
         return {"has_plan": False}
@@ -73,13 +104,13 @@ async def get_participant_plan(participant_id: str):
 
 @router.get("/{participant_id}/plans")
 async def get_all_participant_plans(participant_id: str):
-    """Get all NDIS plans for a participant."""
+    """Return all NDIS plans for a participant."""
     return await funding_service.get_all_plans_for_participant(participant_id)
 
 
 @router.post("/{participant_id}/plan", status_code=201)
 async def create_participant_plan(participant_id: str, body: NDISPlanCreate):
-    """Create or update the active NDIS plan for a participant."""
+    """Create or update the active NDIS plan and budget allocations."""
     participant = await participant_service.get_participant_by_id(participant_id)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -104,54 +135,44 @@ async def create_participant_plan(participant_id: str, body: NDISPlanCreate):
                 if amount is not None and amount > 0:
                     await funding_service.upsert_plan_budget(plan_id, category, amount)
         return await funding_service.get_budget_summary(participant_id)
-    except Exception as e:
-        logger.error(f"Error creating plan for {participant_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as exc:
+        logger.error("create_participant_plan(%s) failed: %s", participant_id, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/{participant_id}/budget-summary")
 async def get_budget_summary(participant_id: str):
-    """Get budget summary by support category."""
+    """Return budget totals and usage by support category."""
     return await funding_service.get_budget_summary(participant_id)
 
 
 @router.get("/{participant_id}/budget-usage")
 async def get_budget_usage(participant_id: str):
-    """Get budget usage history."""
+    """Return paginated budget usage history."""
     return await funding_service.get_budget_usage_history(participant_id)
 
 
-@router.patch("/{participant_id}/goals")
-async def update_participant_goals(participant_id: str, body: GoalsUpdateBody):
-    """Update NDIS goals for a participant (add/archive goals)."""
-    participant = await participant_service.get_participant_by_id(participant_id)
-    if not participant:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    goals_data = [g.model_dump() for g in body.goals]
-    from ..services.supabase_client import get_supabase_admin
-    supabase = get_supabase_admin()
-    # Pass goals_data as a plain list — PostgREST will store it as a proper JSONB
-    # array, not as a quoted JSON string.
-    result = supabase.table("patients").update({"goals": goals_data}).eq("id", participant_id).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Participant not found")
-    return await participant_service.get_participant_by_id(participant_id)
-
+# ---------------------------------------------------------------------------
+# Compliance history
+# ---------------------------------------------------------------------------
 
 @router.get("/{participant_id}/compliance-history")
 async def get_compliance_history(participant_id: str):
-    """Get compliance audit log history for all sessions of a participant."""
+    """Return the compliance audit log for all sessions of a participant."""
     from ..services.session_service import get_sessions_by_participant
     from ..services.funding_service import get_compliance_audit_logs
+
     sessions = await get_sessions_by_participant(participant_id)
     history = []
     for session in sessions[:20]:
         logs = await get_compliance_audit_logs(session["id"])
         if logs:
-            history.append({
-                "session_id": session["id"],
-                "session_date": session.get("session_date"),
-                "session_type": session.get("session_type"),
-                "latest_audit": logs[0],
-            })
+            history.append(
+                {
+                    "session_id": session["id"],
+                    "session_date": session.get("session_date"),
+                    "session_type": session.get("session_type"),
+                    "latest_audit": logs[0],
+                }
+            )
     return history
