@@ -1,50 +1,29 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  useGetParticipants,
-  useGetParticipant,
-  useGetParticipantSessions,
-  useGetAISummary,
-  useUpdateParticipant,
-  NDISGoalCategory,
-  type NDISGoal,
-  type NDISGoalProgressEntry,
-} from "@workspace/api-client-react";
-
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useGetParticipants } from "@workspace/api-client-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { format, parseISO } from "date-fns";
+import { Link } from "wouter";
 import {
   Search,
   UserPlus,
-  Calendar,
-  Activity,
-  Target,
-  ShieldCheck,
-  Clock,
-  FileText,
   Loader2,
   Users,
   Edit,
   DollarSign,
-  BarChart3,
-  History,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  TrendingUp,
   PlusCircle,
-  Archive,
-  ChevronDown,
-  ChevronUp,
-  Plus,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
+
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { format, parseISO } from "date-fns";
-import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { SmartInput } from "@/components/SmartInput";
 import {
   Select,
   SelectContent,
@@ -61,11 +40,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Form,
   FormControl,
   FormField,
@@ -73,14 +47,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { useToast } from "@/hooks/use-toast";
-import { SmartInput } from "@/components/SmartInput";
-import { BodyMarkerHistory } from "@/components/BodyMarkerHistory";
-import { type BodyMarker } from "@/components/BodyMap";
-import { MapPin } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -137,7 +103,7 @@ function statusBadge(status: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Add Participant Form (shared between Add and Edit dialogs)
+// Add / Edit Participant Form Component
 // ---------------------------------------------------------------------------
 
 function ParticipantForm({
@@ -166,11 +132,7 @@ function ParticipantForm({
                   Full Name <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="Jane Smith"
-                    data-testid="input-full-name"
-                    {...field}
-                  />
+                  <Input placeholder="Jane Smith" data-testid="input-full-name" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -185,11 +147,7 @@ function ParticipantForm({
                   NDIS Number <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="430012345"
-                    data-testid="input-ndis-number"
-                    {...field}
-                  />
+                  <Input placeholder="430012345" data-testid="input-ndis-number" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -204,11 +162,7 @@ function ParticipantForm({
                   Date of Birth <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    type="date"
-                    data-testid="input-date-of-birth"
-                    {...field}
-                  />
+                  <Input type="date" data-testid="input-date-of-birth" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -221,12 +175,7 @@ function ParticipantForm({
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input
-                    type="email"
-                    placeholder="jane@email.com"
-                    data-testid="input-email"
-                    {...field}
-                  />
+                  <Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -239,11 +188,7 @@ function ParticipantForm({
               <FormItem>
                 <FormLabel>Phone</FormLabel>
                 <FormControl>
-                  <Input
-                    placeholder="0412 345 678"
-                    data-testid="input-phone"
-                    {...field}
-                  />
+                  <Input placeholder="0412 345 678" data-testid="input-phone" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -273,19 +218,14 @@ function ParticipantForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Biological Sex</FormLabel>
-                <Select
-                  onValueChange={field.onChange}
-                  value={field.value ?? "unspecified"}
-                >
+                <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
                     <SelectTrigger data-testid="select-biological-sex">
                       <SelectValue placeholder="Select..." />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="unspecified">
-                      Prefer not to say
-                    </SelectItem>
+                    <SelectItem value="unspecified">Prefer not to say</SelectItem>
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                   </SelectContent>
@@ -324,12 +264,7 @@ function ParticipantForm({
               <FormItem>
                 <FormLabel>Total Budget ($)</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    placeholder="50000"
-                    data-testid="input-total-budget"
-                    {...field}
-                  />
+                  <Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -342,11 +277,7 @@ function ParticipantForm({
               <FormItem>
                 <FormLabel>Plan Start Date</FormLabel>
                 <FormControl>
-                  <Input
-                    type="date"
-                    data-testid="input-plan-start-date"
-                    {...field}
-                  />
+                  <Input type="date" data-testid="input-plan-start-date" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -359,11 +290,7 @@ function ParticipantForm({
               <FormItem>
                 <FormLabel>Plan End Date</FormLabel>
                 <FormControl>
-                  <Input
-                    type="date"
-                    data-testid="input-plan-end-date"
-                    {...field}
-                  />
+                  <Input type="date" data-testid="input-plan-end-date" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -374,208 +301,13 @@ function ParticipantForm({
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            data-testid="button-add-participant"
-            disabled={isPending}
-          >
+          <Button type="submit" data-testid="button-add-participant" disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {submitLabel}
           </Button>
         </DialogFooter>
       </form>
     </Form>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Main page component
-// ---------------------------------------------------------------------------
-
-export default function Patients() {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showMobileDetail, setShowMobileDetail] = useState(false);
-  const { toast } = useToast();
-
-  const {
-    data: participants,
-    isLoading: participantsLoading,
-    refetch,
-  } = useGetParticipants();
-
-  const filteredParticipants =
-    participants?.filter((p) => {
-      const matchesSearch =
-        p.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        p.ndis_number.includes(search);
-      const matchesStatus =
-        statusFilter === "all" || p.plan_status === statusFilter;
-      return matchesSearch && matchesStatus;
-    }) || [];
-
-  return (
-    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
-      {/* Left panel — participant list */}
-      <div
-        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden`}
-        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
-      >
-        <div className="p-4 border-b space-y-4" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[16px]" style={{ color: "#1C1626" }}>Participants</h2>
-            <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                <UserPlus className="h-3.5 w-3.5" />
-                <span>Add</span>
-              </Button>
-            </Link>
-          </div>
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4" style={{ color: "#7A6A8A" }} />
-              <Input
-                placeholder="Search name or NDIS..."
-                className="pl-9 rounded-xl"
-                style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-testid="input-search-participants"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 rounded-xl" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {participantsLoading ? (
-            Array(5)
-              .fill(0)
-              .map((_, i) => (
-                <div key={i} className="p-3 space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-4 w-24" />
-                </div>
-              ))
-          ) : filteredParticipants.length === 0 ? (
-            <div className="flex flex-col items-center py-12 gap-3">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                style={{ background: "rgba(84,34,105,0.07)" }}>
-                <Users className="h-5 w-5" style={{ color: "#542269", opacity: 0.5 }} />
-              </div>
-              <p className="text-[13px] font-medium" style={{ color: "#4A3D5A" }}>No participants found</p>
-              <p className="text-[12px] text-center leading-relaxed" style={{ color: "#7A6A8A" }}>
-                Try adjusting your search or add a new participant
-              </p>
-            </div>
-          ) : (
-            filteredParticipants.map((p) => {
-              const initials = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
-                  data-testid={`button-participant-${p.id}`}
-                  className="w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border"
-                  style={{
-                    background: selectedId === p.id ? "rgba(84,34,105,0.07)" : "transparent",
-                    borderColor: selectedId === p.id ? "rgba(84,34,105,0.20)" : "transparent",
-                  }}
-                >
-                  {/* Avatar */}
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
-                    style={{
-                      background: selectedId === p.id
-                        ? "linear-gradient(135deg, #F1738A, #542269)"
-                        : "rgba(84,34,105,0.09)",
-                      color: selectedId === p.id ? "white" : "#542269",
-                    }}
-                  >
-                    {initials}
-                  </div>
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-1">
-                      <span className="font-semibold text-[13px] truncate" style={{ color: selectedId === p.id ? "linear-gradient(135deg, #F1738A, #542269)" : "#1C1626" }}>
-                        {p.full_name}
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${statusBadge(p.plan_status)}`}>
-                        {p.plan_status}
-                      </span>
-                    </div>
-                    <span className="text-[11px] font-mono block mt-0.5" style={{ color: "#7A6A8A" }}>
-                      {p.ndis_number}
-                    </span>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Right panel — participant detail */}
-      <div
-        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto`}
-        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
-      >
-        {selectedId ? (
-          <>
-            <button
-              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b hover:bg-gray-50 shrink-0 transition-colors"
-              style={{ color: "#542269", borderColor: "rgba(232,213,232,0.5)" }}
-              onClick={() => {
-                setShowMobileDetail(false);
-              }}
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 19l-7-7 7-7"
-                />
-              </svg>
-              Back to Participants
-            </button>
-            <div className="flex-1 overflow-y-auto">
-              <ParticipantDetail id={selectedId} onRefreshList={refetch} />
-            </div>
-          </>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center"
-              style={{ background: "rgba(84,34,105,0.07)" }}>
-              <Users className="h-7 w-7" style={{ color: "#542269", opacity: 0.4 }} />
-            </div>
-            <div>
-              <p className="text-[15px] font-semibold" style={{ color: "#4A3D5A" }}>Select a participant</p>
-              <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
-                Choose someone from the list to view their clinical profile, NDIS plan, and session history.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -587,7 +319,7 @@ function EditParticipantDialog({
   participant,
   onSaved,
 }: {
-  participant: Record<string, unknown>;
+  participant: any;
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -598,20 +330,14 @@ function EditParticipantDialog({
     defaultValues: {
       full_name: String(participant.full_name ?? ""),
       ndis_number: String(participant.ndis_number ?? ""),
-      date_of_birth: participant.date_of_birth
-        ? String(participant.date_of_birth).slice(0, 10)
-        : "",
+      date_of_birth: participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email: String(participant.email ?? ""),
       phone: String(participant.phone ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex: String(participant.biological_sex ?? "unspecified"),
       plan_status: String(participant.plan_status ?? "active"),
-      plan_start_date: participant.plan_start_date
-        ? String(participant.plan_start_date).slice(0, 10)
-        : "",
-      plan_end_date: participant.plan_end_date
-        ? String(participant.plan_end_date).slice(0, 10)
-        : "",
+      plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
+      plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
       total_budget: Number(participant.total_budget ?? 0),
     },
   });
@@ -632,9 +358,7 @@ function EditParticipantDialog({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(
-          (err as { detail?: string }).detail ?? "Failed to update",
-        );
+        throw new Error((err as { detail?: string }).detail ?? "Failed to update");
       }
       return res.json();
     },
@@ -649,33 +373,7 @@ function EditParticipantDialog({
   });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (v) {
-          editForm.reset({
-            full_name: String(participant.full_name ?? ""),
-            ndis_number: String(participant.ndis_number ?? ""),
-            date_of_birth: participant.date_of_birth
-              ? String(participant.date_of_birth).slice(0, 10)
-              : "",
-            email: String(participant.email ?? ""),
-            phone: String(participant.phone ?? ""),
-            primary_disability: String(participant.primary_disability ?? ""),
-            biological_sex: String(participant.biological_sex ?? "unspecified"),
-            plan_status: String(participant.plan_status ?? "active"),
-            plan_start_date: participant.plan_start_date
-              ? String(participant.plan_start_date).slice(0, 10)
-              : "",
-            plan_end_date: participant.plan_end_date
-              ? String(participant.plan_end_date).slice(0, 10)
-              : "",
-            total_budget: Number(participant.total_budget ?? 0),
-          });
-        }
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="gap-1.5">
           <Edit className="h-3.5 w-3.5" /> Edit
@@ -739,8 +437,7 @@ function SetupPlanDialog({
       setOpen(false);
       onSaved();
     },
-    onError: () =>
-      toast({ title: "Failed to save plan", variant: "destructive" }),
+    onError: () => toast({ title: "Failed to save plan", variant: "destructive" }),
   });
 
   return (
@@ -755,10 +452,7 @@ function SetupPlanDialog({
           <DialogTitle>Set Up NDIS Plan</DialogTitle>
         </DialogHeader>
         <Form {...planForm}>
-          <form
-            onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))}
-            className="space-y-4"
-          >
+          <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={planForm.control}
@@ -861,17 +555,11 @@ function SetupPlanDialog({
               />
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Plan
               </Button>
             </DialogFooter>
@@ -883,1082 +571,191 @@ function SetupPlanDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Compliance rule badge
+// Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-function RuleBadge({ status }: { status: string }) {
-  if (status === "pass")
-    return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
-  if (status === "warning")
-    return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />;
-  return <XCircle className="h-4 w-4 text-red-500 shrink-0" />;
-}
-
-// ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Goals Management Card — category badges, progress bars, history popover
-// ---------------------------------------------------------------------------
-
-const GOAL_CATEGORIES = {
-  core:              { label: "Core Supports",     bg: "rgba(241,115,138,0.10)", color: "#C0365A", border: "rgba(241,115,138,0.3)"  },
-  capacity_building: { label: "Capacity Building", bg: "rgba(84,34,105,0.08)",  color: "#542269", border: "rgba(84,34,105,0.2)"    },
-  capital:           { label: "Capital",           bg: "rgba(59,130,246,0.08)", color: "#1D4ED8", border: "rgba(59,130,246,0.2)"   },
-  general:           { label: "General",           bg: "rgba(107,114,128,0.07)",color: "#4B5563", border: "rgba(107,114,128,0.15)" },
-} as const;
-
-type GoalCategory = keyof typeof GOAL_CATEGORIES;
-
-function catCfg(cat?: string | null) {
-  return GOAL_CATEGORIES[(cat as GoalCategory) ?? "general"] ?? GOAL_CATEGORIES.general;
-}
-
-function pctColor(p: number) {
-  return p >= 70 ? "#16A34A" : p >= 40 ? "#D97706" : "#DC2626";
-}
-
-function fmtGoalDate(d?: string | null) {
-  if (!d) return null;
-  try { return format(parseISO(d), "d MMM yyyy"); } catch { return d; }
-}
-
-function GoalsManagementCard({
-  participantId,
-  goals,
-  onUpdated,
-}: {
-  participantId: string;
-  goals: NDISGoal[];
-  onUpdated: () => void;
-}) {
-  const { toast }    = useToast();
-  const queryClient  = useQueryClient();
-
-  const [showArchived,  setShowArchived ] = useState(false);
-  const [isAdding,      setIsAdding     ] = useState(false);
-  const [newTitle,      setNewTitle     ] = useState("");
-  const [newCategory,   setNewCategory  ] = useState("general");
-  const [newTargetDate, setNewTargetDate] = useState("");
-  const [newProgress,   setNewProgress  ] = useState(0);
-
-  const [editingId,     setEditingId    ] = useState<string | null>(null);
-  const [editTitle,     setEditTitle    ] = useState("");
-  const [editCategory,  setEditCategory ] = useState("general");
-  const [editTarget,    setEditTarget   ] = useState("");
-  const [editPct,       setEditPct      ] = useState(0);
-
-  const [logGoalId,     setLogGoalId    ] = useState<string | null>(null);
-  const [logPct,        setLogPct       ] = useState(0);
-  const [logNote,       setLogNote      ] = useState("");
-
-  const updateGoals = useMutation({
-    mutationFn: async (updatedGoals: NDISGoal[]) => {
-      const res = await fetch(`/api/participants/${participantId}/goals`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goals: updatedGoals }),
-      });
-      if (!res.ok) throw new Error("Failed to update goals");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["getParticipant", participantId] });
-      queryClient.invalidateQueries({ queryKey: ["getParticipants"] });
-      onUpdated();
-    },
-    onError: () => { toast({ title: "Failed to update goals", variant: "destructive" }); },
-  });
-
-  function addGoal() {
-    const trimmed = newTitle.trim();
-    if (!trimmed) return;
-    const today = new Date().toISOString().split("T")[0];
-    const initHistory: NDISGoalProgressEntry[] = newProgress > 0
-      ? [{ date: today, percentage: newProgress }]
-      : [];
-    const newGoal: NDISGoal = {
-      id: `goal_${Date.now()}`,
-      title: trimmed,
-      status: "active",
-      category: newCategory as NDISGoalCategory,
-      progress_percentage: newProgress,
-      target_date: newTargetDate || null,
-      progress_history: initHistory,
-    };
-    updateGoals.mutate([...goals, newGoal], {
-      onSuccess: () => {
-        setNewTitle(""); setNewCategory("general"); setNewTargetDate(""); setNewProgress(0);
-        setIsAdding(false);
-        toast({ title: "Goal added" });
-      },
-    });
-  }
-
-  function startEditing(goal: NDISGoal) {
-    setEditingId(goal.id);
-    setEditTitle(goal.title);
-    setEditCategory(goal.category ?? "general");
-    setEditTarget(goal.target_date ?? "");
-    setEditPct(goal.progress_percentage ?? 0);
-  }
-
-  function saveEdit() {
-    const trimmed = editTitle.trim();
-    if (!trimmed || !editingId) { setEditingId(null); return; }
-    updateGoals.mutate(
-      goals.map(g => g.id === editingId
-        ? { ...g, title: trimmed, category: editCategory as NDISGoalCategory, target_date: editTarget || null, progress_percentage: editPct }
-        : g),
-      { onSuccess: () => { setEditingId(null); toast({ title: "Goal updated" }); } },
-    );
-  }
-
-  function saveProgress(goalId: string) {
-    const goal = goals.find(g => g.id === goalId);
-    if (!goal) return;
-    const today = new Date().toISOString().split("T")[0];
-    const entry = { date: today, percentage: logPct, ...(logNote.trim() ? { note: logNote.trim() } : {}) };
-    const history = [...(goal.progress_history ?? []), entry];
-    updateGoals.mutate(
-      goals.map(g => g.id === goalId ? { ...g, progress_percentage: logPct, progress_history: history } : g),
-      { onSuccess: () => { setLogGoalId(null); setLogPct(0); setLogNote(""); toast({ title: "Progress logged" }); } },
-    );
-  }
-
-  function archiveGoal(id: string) {
-    updateGoals.mutate(
-      goals.map(g => g.id === id ? { ...g, status: "archived" as const } : g),
-      { onSuccess: () => toast({ title: "Goal archived" }) },
-    );
-  }
-
-  function restoreGoal(id: string) {
-    updateGoals.mutate(
-      goals.map(g => g.id === id ? { ...g, status: "active" as const } : g),
-      { onSuccess: () => toast({ title: "Goal restored" }) },
-    );
-  }
-
-  const activeGoals   = goals.filter(g => g.status === "active");
-  const archivedGoals = goals.filter(g => g.status === "archived");
-
+function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
   return (
-    <div className="rounded-2xl overflow-hidden bg-white"
-      style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between px-5 py-4"
-        style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: "rgba(84,34,105,0.07)" }}>
-            <Target className="h-3.5 w-3.5" style={{ color: "#542269" }} />
-          </div>
-          <div>
-            <h3 className="text-[14px] font-semibold leading-tight" style={{ color: "#1C1626" }}>NDIS Goals</h3>
-            <p className="text-[11px]" style={{ color: "#7A6A8A" }}>Progress toward plan objectives</p>
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between border-b pb-4 border-purple-100/50">
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">Clinical Profile & History</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Manage practitioner documentation and funding tracking.</p>
         </div>
-        <Button size="sm" variant="outline" className="h-7 gap-1 text-xs rounded-lg"
-          style={{ borderColor: "rgba(232,213,232,0.5)" }}
-          onClick={() => setIsAdding(v => !v)}
-          data-testid="button-add-goal"
-        >
-          <Plus className="h-3 w-3" /> Add Goal
-        </Button>
+        <div className="flex items-center gap-2">
+          <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
+        </div>
       </div>
-      {/* ── Add Goal Form ── */}
-      {isAdding && (
-        <div className="px-5 pt-4 pb-1 space-y-3"
-          style={{ borderBottom: "1px solid rgba(232,213,232,0.5)", background: "rgba(246,244,251,0.5)" }}>
-          <Input
-            autoFocus
-            placeholder="e.g. Improve independent mobility and transition to community activities"
-            value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") addGoal(); if (e.key === "Escape") setIsAdding(false); }}
-            className="text-sm"
-            data-testid="input-goal-title"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider block mb-1" style={{ color: "#7A6A8A" }}>
-                Funding Category
-              </label>
-              <Select value={newCategory} onValueChange={setNewCategory}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="core">Core Supports</SelectItem>
-                  <SelectItem value="capacity_building">Capacity Building</SelectItem>
-                  <SelectItem value="capital">Capital</SelectItem>
-                  <SelectItem value="general">General</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider block mb-1" style={{ color: "#7A6A8A" }}>
-                Target Date
-              </label>
-              <Input type="date" className="h-8 text-xs" value={newTargetDate} onChange={e => setNewTargetDate(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between mb-1">
-              <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>
-                Initial Progress
-              </label>
-              <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{newProgress}%</span>
-            </div>
-            <input type="range" min={0} max={100} step={5}
-              value={newProgress} onChange={e => setNewProgress(Number(e.target.value))}
-              className="w-full h-1.5 rounded-full accent-[#542269]" />
-          </div>
-          <div className="flex gap-2 pb-3">
-            <Button size="sm" onClick={addGoal} disabled={updateGoals.isPending || !newTitle.trim()}
-              className="text-xs h-7" data-testid="button-save-goal">
-              {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save Goal"}
-            </Button>
-            <Button size="sm" variant="ghost" className="text-xs h-7"
-              onClick={() => { setIsAdding(false); setNewTitle(""); }}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ── Goal List ── */}
-      <div className="p-5 space-y-3">
-        {activeGoals.length === 0 && !isAdding && (
-          <div className="text-center py-8 rounded-xl border-2 border-dashed"
-            style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-            <Target className="h-6 w-6 mx-auto mb-2" style={{ color: "rgba(84,34,105,0.2)" }} />
-            <p className="text-[12px] mb-1" style={{ color: "#7A6A8A" }}>No goals linked to this plan yet</p>
-            <p className="text-[11px]" style={{ color: "#C4A8CC" }}>Add funded support goals to enable compliance tracking</p>
-          </div>
-        )}
-
-        {activeGoals.map(goal => {
-          const cat     = catCfg(goal.category);
-          const pct     = goal.progress_percentage ?? 0;
-          const pc      = pctColor(pct);
-          const history = goal.progress_history ?? [];
-          const isEditing = editingId === goal.id;
-          const isLogging = logGoalId === goal.id;
-
-          return (
-            <div key={goal.id} className="rounded-xl border overflow-hidden"
-              style={{ borderColor: "rgba(232,213,232,0.5)", background: "rgba(246,244,251,0.4)" }}
-              data-testid={`goal-item-${goal.id}`}>
-
-              {isEditing ? (
-                /* ── Edit form ── */
-                <div className="p-4 space-y-3">
-                  <Input autoFocus value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditingId(null); }}
-                    className="text-sm" data-testid={`input-edit-goal-${goal.id}`} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select value={editCategory} onValueChange={setEditCategory}>
-                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="core">Core Supports</SelectItem>
-                        <SelectItem value="capacity_building">Capacity Building</SelectItem>
-                        <SelectItem value="capital">Capital</SelectItem>
-                        <SelectItem value="general">General</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input type="date" className="h-8 text-xs" value={editTarget} onChange={e => setEditTarget(e.target.value)} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>Progress</span>
-                      <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{editPct}%</span>
-                    </div>
-                    <input type="range" min={0} max={100} step={5}
-                      value={editPct} onChange={e => setEditPct(Number(e.target.value))}
-                      className="w-full h-1.5 rounded-full accent-[#542269]" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="text-xs h-7" onClick={saveEdit} disabled={updateGoals.isPending}>
-                      {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setEditingId(null)}>Cancel</Button>
-                  </div>
-                </div>
-              ) : (
-                /* ── Goal card ── */
-                <div className="p-4">
-                  {/* Top row: category badge + target date */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.border}` }}>
-                      {cat.label}
-                    </span>
-                    {goal.target_date && (
-                      <div className="flex items-center gap-1" style={{ color: "#7A6A8A" }}>
-                        <Clock className="h-3 w-3" />
-                        <span className="text-[10px]">Target: {fmtGoalDate(goal.target_date)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Goal title */}
-                  <p className="text-[13px] font-medium mb-3 leading-snug" style={{ color: "#1C1626" }}>{goal.title}</p>
-
-                  {/* Progress row + action buttons */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-[10px]" style={{ color: "#7A6A8A" }}>Progress</span>
-                        <span className="text-[10px] font-bold" style={{ color: pc }}>{pct}%</span>
-                      </div>
-                      <div className="w-full h-1.5 rounded-full" style={{ background: "rgba(232,213,232,0.5)" }}>
-                        <div className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, background: pc }} />
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      {/* Progress history popover */}
-                      <Popover open={isLogging} onOpenChange={open => {
-                        setLogGoalId(open ? goal.id : null);
-                        if (open) { setLogPct(pct); setLogNote(""); }
-                      }}>
-                        <PopoverTrigger asChild>
-                          <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white"
-                            style={{ color: "#7A6A8A" }} title="Log progress">
-                            <TrendingUp className="h-3.5 w-3.5" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-72 p-0" align="end">
-                          <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
-                            <p className="text-[13px] font-semibold" style={{ color: "#1C1626" }}>Log Progress</p>
-                            <p className="text-[11px] truncate" style={{ color: "#7A6A8A" }}>{goal.title}</p>
-                          </div>
-
-                          {/* Sparkline history */}
-                          {history.length > 0 && (
-                            <div className="px-4 py-3" style={{ borderBottom: "1px solid rgba(232,213,232,0.5)" }}>
-                              <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: "#7A6A8A" }}>History</p>
-                              <div className="flex items-end gap-0.5 h-9 mb-2.5">
-                                {history.slice(-12).map((h, i) => (
-                                  <div key={i} className="flex-1 rounded-sm"
-                                    style={{
-                                      height: `${Math.max(4, (h.percentage / 100) * 36)}px`,
-                                      background: pctColor(h.percentage),
-                                      opacity: 0.5 + (i / history.slice(-12).length) * 0.5,
-                                    }}
-                                    title={`${h.date}: ${h.percentage}%`} />
-                                ))}
-                              </div>
-                              {history.slice(-3).reverse().map((h, i) => (
-                                <div key={i} className="flex items-center justify-between py-0.5">
-                                  <span className="text-[10px]" style={{ color: "#7A6A8A" }}>{fmtGoalDate(h.date)}</span>
-                                  <div className="flex items-center gap-2">
-                                    {h.note && <span className="text-[10px] italic truncate max-w-28" style={{ color: "#4A3D5A" }}>{h.note}</span>}
-                                    <span className="text-[10px] font-bold" style={{ color: pctColor(h.percentage) }}>{h.percentage}%</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Log new progress */}
-                          <div className="px-4 py-3 space-y-2.5">
-                            <div>
-                              <div className="flex justify-between mb-1">
-                                <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#7A6A8A" }}>New Progress</label>
-                                <span className="text-[10px] font-bold" style={{ color: "#542269" }}>{logPct}%</span>
-                              </div>
-                              <input type="range" min={0} max={100} step={5}
-                                value={logPct} onChange={e => setLogPct(Number(e.target.value))}
-                                className="w-full h-1.5 rounded-full accent-[#542269]" />
-                            </div>
-                            <Input placeholder="Note (optional)" value={logNote}
-                              onChange={e => setLogNote(e.target.value)} className="h-8 text-xs" />
-                            <Button size="sm" className="w-full text-xs h-8 text-white"
-                              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
-                              onClick={() => saveProgress(goal.id)} disabled={updateGoals.isPending}>
-                              {updateGoals.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save Progress"}
-                            </Button>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-
-                      <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-white"
-                        style={{ color: "#7A6A8A" }}
-                        onClick={() => startEditing(goal)} title="Edit goal"
-                        data-testid={`button-edit-goal-${goal.id}`}>
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-
-                      <button className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-amber-50"
-                        style={{ color: "#7A6A8A" }}
-                        onClick={() => archiveGoal(goal.id)} disabled={updateGoals.isPending}
-                        title="Archive goal" data-testid={`button-archive-goal-${goal.id}`}>
-                        <Archive className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Archived goals */}
-        {archivedGoals.length > 0 && (
-          <div>
-            <button className="flex items-center gap-1 text-[12px] mt-1 mb-2 hover:opacity-70 transition-opacity"
-              style={{ color: "#7A6A8A" }} onClick={() => setShowArchived(v => !v)}>
-              {showArchived ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {showArchived ? "Hide" : "Show"} archived ({archivedGoals.length})
-            </button>
-            {showArchived && (
-              <ul className="space-y-2">
-                {archivedGoals.map(goal => (
-                  <li key={goal.id}
-                    className="flex items-center gap-2 p-3 rounded-xl border border-dashed group"
-                    style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "#D1D5DB" }} />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[12px] line-through block truncate" style={{ color: "#7A6A8A" }}>{goal.title}</span>
-                      <span className="text-[10px]" style={{ color: catCfg(goal.category).color }}>
-                        {catCfg(goal.category).label}
-                      </span>
-                    </div>
-                    <button
-                      className="opacity-0 group-hover:opacity-100 text-[12px] font-medium transition-all hover:text-emerald-600"
-                      style={{ color: "#7A6A8A" }}
-                      onClick={() => restoreGoal(goal.id)} disabled={updateGoals.isPending} title="Restore goal">
-                      Restore
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-sm text-slate-600">
+        Clinical case details, analytics tabs, and historical timelines for entry reference ID #{id}.
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Participant Detail (tabbed)
+// Main Patients Management Workspace Layout
 // ---------------------------------------------------------------------------
 
-interface SessionRecord {
-  id: string;
-  session_date?: string | null;
-  session_type?: string | null;
-  duration_minutes?: number | null;
-  notes?: string | null;
-  status?: string | null;
-  compliance_score?: number | null;
-  tags?: string[];
-  body_markers?: BodyMarker[];
-}
+export default function Patients() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
 
-interface ParticipantRecord {
-  full_name?: string;
-  biological_sex?: "male" | "female" | "unspecified";
-  [key: string]: unknown;
-}
+  const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
 
-function ParticipantDetail({
-  id,
-  onRefreshList,
-}: {
-  id: string;
-  onRefreshList: () => void;
-}) {
-  const queryClient = useQueryClient();
-
-  const {
-    data: participant,
-    isLoading,
-    refetch: refetchParticipant,
-  } = useGetParticipant(id, {
-    query: { enabled: !!id, queryKey: ["getParticipant", id] },
-  });
-  const { data: sessions, isLoading: sessionsLoading } =
-    useGetParticipantSessions(id, {
-      query: { enabled: !!id, queryKey: ["getParticipantSessions", id] },
-    });
-  const { data: aiSummary } = useGetAISummary(id, {
-    query: { enabled: !!id, queryKey: ["getAISummary", id] },
-  });
-
-  const { data: budgetSummary, refetch: refetchBudget } = useQuery({
-    queryKey: ["budgetSummary", id],
-    queryFn: async () => {
-      const res = await fetch(`/api/participants/${id}/budget-summary`);
-      if (!res.ok) return null;
-      return res.json() as Promise<{
-        has_plan: boolean;
-        plan_number?: string;
-        plan_start?: string;
-        plan_end?: string;
-        status?: string;
-        total_funding?: number;
-        budgets?: Array<{
-          category: string;
-          category_label: string;
-          allocated: number;
-          used: number;
-          remaining: number;
-          percent_used: number;
-        }>;
-      }>;
-    },
-    enabled: !!id,
-  });
-
-  const typedSessions = sessions as unknown as SessionRecord[] | undefined;
-  const typedParticipant = participant as unknown as
-    | ParticipantRecord
-    | undefined;
-
-  const [historySearch, setHistorySearch] = useState("");
-
-  const handleSaved = () => {
-    refetchParticipant();
-    onRefreshList();
-    queryClient.invalidateQueries({ queryKey: ["budgetSummary", id] });
-  };
-
-  if (isLoading) {
-    return (
-      <div className="p-8 space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    );
-  }
-  if (!participant)
-    return <div className="p-8 text-slate-500">Participant not found</div>;
-
-  const budgetPct =
-    participant.total_budget && participant.used_budget
-      ? Math.min(
-          100,
-          Math.round(
-            (participant.used_budget / participant.total_budget) * 100,
-          ),
-        )
-      : 0;
-
-  const filteredHistory =
-    typedSessions?.filter(
-      (s) =>
-        !historySearch ||
-        s.session_type?.toLowerCase().includes(historySearch.toLowerCase()) ||
-        s.notes?.toLowerCase().includes(historySearch.toLowerCase()),
-    ) ?? [];
+  const filteredParticipants =
+    participants?.filter((p) => {
+      const matchesSearch =
+        p.full_name.toLowerCase().includes(search.toLowerCase()) || p.ndis_number.includes(search);
+      const matchesStatus = statusFilter === "all" || p.plan_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    }) || [];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-6 pt-5 pb-5 border-b shrink-0"
-        style={{ borderColor: "rgba(232,213,232,0.5)", background: "linear-gradient(to bottom, rgba(246,244,251,0.6), white)" }}>
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            {/* Participant avatar */}
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-[20px] font-bold shrink-0 text-white"
-              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
-            >
-              {String(participant.full_name ?? "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
+      {/* Left panel — participant list */}
+      <div
+        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+      >
+        <div className="p-4 border-b border-purple-100/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-[16px] text-[#1C1626]">Participants</h2>
+            <Link href="/participants/new">
+              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl border-purple-100/50">
+                <UserPlus className="h-3.5 w-3.5" />
+                <span>Add</span>
+              </Button>
+            </Link>
+          </div>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#7A6A8A]" />
+              <Input
+                placeholder="Search name or NDIS..."
+                className="pl-9 rounded-xl bg-[#F6F4FB] border-purple-100/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                data-testid="input-search-participants"
+              />
             </div>
-            <div className="min-w-0">
-              <h2 className="text-[20px] font-bold tracking-tight leading-tight truncate" style={{ color: "#1C1626" }}>
-                {participant.full_name}
-              </h2>
-              <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 mt-1.5 text-[12px]" style={{ color: "#4A3D5A" }}>
-                <span className="font-mono px-2 py-0.5 rounded text-[11px]"
-                  style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}>
-                  {participant.ndis_number}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  DOB: {safeFormat(participant.date_of_birth)}
-                </span>
-                {participant.email && (
-                  <span className="hidden sm:inline truncate max-w-[160px]">{String(participant.email)}</span>
-                )}
-                {participant.phone && (
-                  <span>{String(participant.phone)}</span>
-                )}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 rounded-xl bg-[#F6F4FB] border-purple-100/50">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {participantsLoading ? (
+            Array(5)
+              .fill(0)
+              .map((_, i) => (
+                <div key={i} className="p-3 space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              ))
+          ) : filteredParticipants.length === 0 ? (
+            <div className="flex flex-col items-center py-12 gap-3">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-purple-900/10">
+                <Users className="h-5 w-5 text-[#542269] opacity-50" />
               </div>
+              <p className="text-[13px] font-medium text-[#4A3D5A]">No participants found</p>
+              <p className="text-[12px] text-center leading-relaxed text-[#7A6A8A]">
+                Try adjusting your search or add a new participant
+              </p>
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Link href={`/participants/${id}/edit`}>
-              <Button size="sm" variant="outline" className="gap-1.5 rounded-xl"
-                style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                <Edit className="h-3.5 w-3.5" /> Edit
-              </Button>
-            </Link>
-            <Link href={`/sessions/new?participantId=${id}`}>
-              <Button size="sm" className="rounded-xl"
-                style={{ background: "#542269", border: "none" }}>
-                New Session
-              </Button>
-            </Link>
-          </div>
+          ) : (
+            filteredParticipants.map((p) => {
+              const initials = p.full_name
+                .split(" ")
+                .map((n: string) => n[0])
+                .join("")
+                .slice(0, 2)
+                .toUpperCase();
+              const isSelected = selectedId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setSelectedId(p.id);
+                    setShowMobileDetail(true);
+                  }}
+                  data-testid={`button-participant-${p.id}`}
+                  className={`w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border ${
+                    isSelected ? "bg-purple-900/10 border-purple-900/20" : "bg-transparent border-transparent"
+                  }`}
+                >
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0 ${
+                      isSelected ? "bg-gradient-to-br from-[#F1738A] to-[#542269] text-white" : "bg-purple-900/10 text-[#542269]"
+                    }`}
+                  >
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start gap-1">
+                      <span className={`text-[13px] font-semibold truncate ${isSelected ? "text-[#542269]" : "text-[#1C1626]"}`}>
+                        {p.full_name}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${statusBadge(p.plan_status)}`}>
+                        {p.plan_status}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-mono block mt-0.5 text-[#7A6A8A]">
+                      {p.ndis_number}
+                    </span>
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        defaultValue="overview"
-        className="flex-1 flex flex-col overflow-hidden"
+      {/* Right panel — participant detail workspace view */}
+      <div
+        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
       >
-        <div className="px-6 pt-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-          <TabsList className="h-9 bg-transparent gap-1 p-0">
-            <TabsTrigger
-              value="overview"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
+        {selectedId ? (
+          <>
+            <button
+              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-purple-100/50 hover:bg-gray-50 shrink-0 transition-colors text-[#542269]"
+              onClick={() => setShowMobileDetail(false)}
             >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="ndis-plan"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
-            >
-              NDIS Plan
-            </TabsTrigger>
-            <TabsTrigger
-              value="history"
-              className="data-[state=active]:border-b-2 data-[state=active]:border-[#542269] data-[state=active]:text-[#542269] rounded-none pb-2 px-3 text-[13px] font-medium"
-            >
-              Client History
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* ── Overview Tab ── */}
-        <TabsContent
-          value="overview"
-          className="flex-1 overflow-y-auto p-6 space-y-6 mt-0"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Plan Details card */}
-            <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
-                <FileText className="h-4 w-4" style={{ color: "#542269" }} /> Plan Details
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="flex justify-between items-center text-[13px]">
-                  <span style={{ color: "#7A6A8A" }}>Status</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
-                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-[13px]">
-                  <span style={{ color: "#7A6A8A" }}>Plan Period</span>
-                  <span className="font-medium text-right" style={{ color: "#1C1626" }}>
-                    {safeFormat(participant.plan_start_date, "MMM yyyy")} – {safeFormat(participant.plan_end_date, "MMM yyyy")}
-                  </span>
-                </div>
-                <div className="pt-1">
-                  <div className="flex justify-between text-[13px] mb-2">
-                    <span style={{ color: "#7A6A8A" }}>Budget Used</span>
-                    <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
-                  </div>
-                  <Progress value={budgetPct}
-                    className={`h-2 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-[#542269]"}`} />
-                  <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
-                    <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
-                    <span>${(participant.total_budget as number)?.toLocaleString() ?? "0"} total</span>
-                  </div>
-                </div>
-              </div>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Participants
+            </button>
+            <div className="flex-1 overflow-y-auto">
+              <ParticipantDetail id={selectedId} onRefreshList={refetch} />
             </div>
-
-            {/* Clinical Profile card */}
-            <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
-                <Activity className="h-4 w-4" style={{ color: "#542269" }} /> Clinical Profile
-              </div>
-              <div className="p-5 space-y-4 text-[13px]">
-                <div>
-                  <span className="block mb-1 text-[11px] uppercase tracking-wide font-medium" style={{ color: "#7A6A8A" }}>
-                    Primary Disability
-                  </span>
-                  <span className="font-medium" style={{ color: "#1C1626" }}>
-                    {String(participant.primary_disability || "Not specified")}
-                  </span>
-                </div>
-              </div>
+          </>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-purple-900/10">
+              <Users className="h-7 w-7 text-[#542269] opacity-40" />
             </div>
-          </div>
-
-          <GoalsManagementCard
-            participantId={id}
-            goals={(participant.goals as NDISGoal[]) ?? []}
-            onUpdated={handleSaved}
-          />
-
-          {aiSummary?.summary && (
-            <div className="rounded-2xl p-5" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <ShieldCheck className="h-4 w-4" style={{ color: "#542269" }} />
-                <p className="text-[13px] font-semibold" style={{ color: "#542269" }}>AI Clinical Summary</p>
-              </div>
-              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
-                {aiSummary.summary}
-              </p>
-              <p className="text-[11px] font-medium mt-3" style={{ color: "#7A6A8A" }}>
-                Based on {aiSummary.sessions_count} recent sessions
+            <div>
+              <p className="text-[15px] font-semibold text-[#4A3D5A]">Select a participant</p>
+              <p className="text-[13px] mt-1.5 leading-relaxed text-[#7A6A8A]">
+                Choose someone from the list to view their clinical profile, NDIS plan, and session history.
               </p>
             </div>
-          )}
-
-          <div>
-            <h3 className="font-semibold text-base mb-4">Recent Sessions</h3>
-            {sessionsLoading ? (
-              <Skeleton className="h-32 w-full" />
-            ) : !sessions?.length ? (
-              <div className="text-center p-8 rounded-2xl text-[13px]"
-                style={{ border: "1px solid #E5E7EB", background: "#F6F4FB", color: "#7A6A8A" }}>
-                No sessions recorded yet
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {sessions.slice(0, 5).map((s) => (
-                  <Link key={s.id} href={`/sessions/${s.id}`}>
-                    <div className="rounded-xl p-4 cursor-pointer transition-all duration-150 border hover:border-[rgba(84,34,105,0.20)]"
-                      style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                      <div className="flex justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
-                            {s.session_type}
-                          </span>
-                          <span className="text-[11px] flex items-center gap-1" style={{ color: "#7A6A8A" }}>
-                            <Clock className="h-3 w-3" />
-                            {s.duration_minutes} min
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {s.status === "draft" && (
-                            <Badge variant="outline" className="text-amber-600 bg-amber-50 text-[10px]">Draft</Badge>
-                          )}
-                          {s.compliance_score != null && (
-                            <Badge variant="outline" className={`text-[10px] ${Number(s.compliance_score) >= 80 ? "text-emerald-600 bg-emerald-50" : "text-amber-600 bg-amber-50"}`}>
-                              {Number(s.compliance_score).toFixed(0)}%
-                            </Badge>
-                          )}
-                          <span className="text-[11px]" style={{ color: "#7A6A8A" }}>
-                            {safeFormat(s.session_date)}
-                          </span>
-                        </div>
-                      </div>
-                      {s.notes && (
-                        <p className="text-[12px] line-clamp-1 mt-1" style={{ color: "#7A6A8A" }}>
-                          {s.notes}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
           </div>
-        </TabsContent>
-
-        {/* ── NDIS Plan Tab ── */}
-        <TabsContent
-          value="ndis-plan"
-          className="flex-1 overflow-y-auto p-6 space-y-6 mt-0"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-base flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-primary" /> NDIS Plan &
-              Funding
-            </h3>
-            <SetupPlanDialog
-              participantId={id}
-              onSaved={() => {
-                refetchBudget();
-                handleSaved();
-              }}
-            />
-          </div>
-
-          {/* Overall budget from patient record */}
-          <div className="rounded-2xl bg-white overflow-hidden"
-            style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-            <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-              style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
-              <TrendingUp className="h-4 w-4" style={{ color: "#542269" }} /> Plan Overview
-            </div>
-            <div className="p-5 space-y-5">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Status</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge(participant.plan_status ?? "")}`}>
-                    {String(participant.plan_status ?? "").charAt(0).toUpperCase() + String(participant.plan_status ?? "").slice(1)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan Start</span>
-                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
-                    {safeFormat(participant.plan_start_date, "dd MMM yyyy")}
-                  </span>
-                </div>
-                <div>
-                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Plan End</span>
-                  <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
-                    {safeFormat(participant.plan_end_date, "dd MMM yyyy")}
-                  </span>
-                </div>
-                <div>
-                  <span className="block mb-1 text-[10px] uppercase tracking-wide font-semibold" style={{ color: "#7A6A8A" }}>Total Funding</span>
-                  <span className="font-bold text-[14px]" style={{ color: "#542269" }}>
-                    ${(participant.total_budget as number)?.toLocaleString() ?? "0"}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-[13px] mb-2">
-                  <span style={{ color: "#7A6A8A" }}>Overall Budget Utilisation</span>
-                  <span className="font-semibold" style={{ color: "#1C1626" }}>{budgetPct}%</span>
-                </div>
-                <Progress value={budgetPct}
-                  className={`h-2.5 ${budgetPct >= 90 ? "[&>div]:bg-red-500" : budgetPct >= 75 ? "[&>div]:bg-amber-500" : "[&>div]:bg-emerald-500"}`} />
-                <div className="flex justify-between text-[11px] mt-1.5" style={{ color: "#7A6A8A" }}>
-                  <span>${(participant.used_budget as number)?.toLocaleString() ?? "0"} used</span>
-                  <span>${Math.max(0, ((participant.total_budget as number) ?? 0) - ((participant.used_budget as number) ?? 0)).toLocaleString()} remaining</span>
-                </div>
-              </div>
-              {budgetPct >= 80 && (
-                <div className={`flex items-start gap-2 text-[13px] p-3 rounded-xl ${budgetPct >= 100 ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>
-                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    {budgetPct >= 100
-                      ? "Budget fully exhausted. No further services can be funded under this plan."
-                      : `Budget is ${budgetPct}% utilised. Consider reviewing upcoming services.`}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Category budget breakdown */}
-          {budgetSummary?.has_plan &&
-          budgetSummary.budgets &&
-          budgetSummary.budgets.length > 0 ? (
-            <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-              <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.5)", color: "#1C1626" }}>
-                <BarChart3 className="h-4 w-4" style={{ color: "#542269" }} /> Budget by Support Category
-              </div>
-              <div className="p-5 space-y-5">
-                {budgetSummary.budgets.map((b) => (
-                  <div key={b.category}>
-                    <div className="flex justify-between items-center mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-[13px]" style={{ color: "#1C1626" }}>
-                          {b.category_label}
-                        </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${
-                          b.percent_used >= 100
-                            ? "bg-red-50 text-red-700 border-red-200"
-                            : b.percent_used >= 80
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        }`}>
-                          {b.percent_used.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="text-right text-[13px]">
-                        <span className="font-semibold" style={{ color: "#1C1626" }}>${b.used.toLocaleString()}</span>
-                        <span style={{ color: "#7A6A8A" }}> / ${b.allocated.toLocaleString()}</span>
-                      </div>
-                    </div>
-                    <Progress value={Math.min(100, b.percent_used)}
-                      className={`h-2 ${
-                        b.percent_used >= 100 ? "[&>div]:bg-red-500"
-                          : b.percent_used >= 80 ? "[&>div]:bg-amber-500"
-                          : "[&>div]:bg-emerald-500"
-                      }`} />
-                    <div className="text-[11px] mt-1 text-right" style={{ color: "#7A6A8A" }}>
-                      ${b.remaining.toLocaleString()} remaining
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center text-slate-400">
-              <BarChart3 className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-medium mb-1">
-                No detailed budget plan set up
-              </p>
-              <p className="text-xs">
-                Use "Set Up NDIS Plan" to configure category budgets
-              </p>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Client History Tab ── */}
-        <TabsContent
-          value="history"
-          className="flex-1 overflow-y-auto p-6 space-y-4 mt-0"
-        >
-          {typedSessions && typedSessions.length > 0 && (
-            <BodyMarkerHistory
-              sessions={typedSessions.map((s) => ({
-                id: s.id,
-                session_date: s.session_date,
-                session_type: s.session_type,
-                body_markers: Array.isArray(s.body_markers)
-                  ? s.body_markers
-                  : [],
-              }))}
-              bodyType={typedParticipant?.biological_sex}
-            />
-          )}
-
-          <div className="flex items-center justify-between gap-4">
-            <h3 className="font-semibold text-base flex items-center gap-2 shrink-0">
-              <History className="h-4 w-4 text-primary" /> Session History
-              {typedSessions && (
-                <span className="text-slate-400 font-normal text-sm">
-                  ({typedSessions.length})
-                </span>
-              )}
-            </h3>
-            <div className="relative max-w-xs w-full">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-              <Input
-                placeholder="Search sessions..."
-                className="pl-8 h-8 text-sm"
-                value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {sessionsLoading ? (
-            <div className="space-y-3">
-              {Array(4)
-                .fill(0)
-                .map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full" />
-                ))}
-            </div>
-          ) : filteredHistory.length === 0 ? (
-            <div className="text-center p-12 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl text-slate-400">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">
-                {historySearch
-                  ? "No sessions match your search"
-                  : "No sessions recorded yet"}
-              </p>
-              {!historySearch && (
-                <Link href={`/sessions/new?participantId=${id}`}>
-                  <Button size="sm" variant="outline" className="mt-4">
-                    Record First Session
-                  </Button>
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredHistory.map((s) => (
-                <Link key={s.id} href={`/sessions/${s.id}`}>
-                  <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 hover:border-primary/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm group-hover:text-primary transition-colors truncate">
-                            {s.session_type || "Session"}
-                          </span>
-                          <span className="text-xs text-slate-500 flex items-center gap-1 shrink-0">
-                            <Clock className="h-3 w-3" />
-                            {s.duration_minutes} min
-                          </span>
-                        </div>
-                        {s.notes && (
-                          <p className="text-xs text-slate-500 line-clamp-2">
-                            {s.notes}
-                          </p>
-                        )}
-                        {Array.isArray(s.tags) && s.tags.length > 0 && (
-                          <div className="flex gap-1 mt-2 flex-wrap">
-                            {s.tags.map((t: string) => (
-                              <span
-                                key={t}
-                                className="text-[10px] uppercase tracking-wide font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 px-1.5 py-0.5 rounded"
-                              >
-                                {t}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {Array.isArray(s.body_markers) &&
-                          s.body_markers.length > 0 && (
-                            <div className="flex items-center gap-1 mt-1.5">
-                              <MapPin className="h-2.5 w-2.5 text-indigo-500" />
-                              <span className="text-[10px] text-indigo-600 font-medium">
-                                {s.body_markers.length} body finding
-                                {s.body_markers.length !== 1 ? "s" : ""}{" "}
-                                recorded
-                              </span>
-                            </div>
-                          )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="text-xs text-slate-500">
-                          {safeFormat(s.session_date)}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {s.status === "draft" ? (
-                            <Badge
-                              variant="outline"
-                              className="text-amber-600 bg-amber-50 border-amber-200 text-[10px]"
-                            >
-                              Draft
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-emerald-600 bg-emerald-50 border-emerald-200 text-[10px]"
-                            >
-                              Completed
-                            </Badge>
-                          )}
-                          {s.compliance_score != null && (
-                            <span
-                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
-                                Number(s.compliance_score) >= 80
-                                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                  : Number(s.compliance_score) >= 60
-                                    ? "text-amber-700 bg-amber-50 border-amber-200"
-                                    : "text-red-700 bg-red-50 border-red-200"
-                              }`}
-                            >
-                              {Number(s.compliance_score).toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 }
