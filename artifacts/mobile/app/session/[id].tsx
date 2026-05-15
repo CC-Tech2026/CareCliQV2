@@ -33,6 +33,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
 
 const ACTIVITIES = [
@@ -101,6 +103,7 @@ export default function LiveSessionScreen() {
 
   const updateSession = useUpdateSession();
   const saveWithAI = useSaveSessionWithAI();
+  const { isOnline, queueNoteUpdate } = useOffline();
 
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -221,11 +224,37 @@ export default function LiveSessionScreen() {
 
   const handleComplete = useCallback(async () => {
     setIsSaving(true);
+    const durationMins = Math.max(
+      session?.duration_minutes ?? 0,
+      Math.floor(elapsedSeconds / 60)
+    );
+
+    if (!isOnline) {
+      try {
+        await queueNoteUpdate({
+          sessionId: id,
+          notes,
+          activities,
+          durationMinutes: durationMins,
+          completed: true,
+          timestamp: Date.now(),
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowCompleteModal(false);
+        Alert.alert(
+          "Saved Offline",
+          "Your notes have been saved locally and will sync automatically when you are back online.",
+          [{ text: "OK", onPress: () => router.replace("/(tabs)") }]
+        );
+      } catch {
+        Alert.alert("Error", "Failed to save notes offline. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
     try {
-      const durationMins = Math.max(
-        session?.duration_minutes ?? 0,
-        Math.floor(elapsedSeconds / 60)
-      );
       await updateSession.mutateAsync({
         sessionId: id,
         data: {
@@ -244,7 +273,7 @@ export default function LiveSessionScreen() {
     } finally {
       setIsSaving(false);
     }
-  }, [id, notes, activities, elapsedSeconds, session, updateSession, saveWithAI, router]);
+  }, [id, notes, activities, elapsedSeconds, session, isOnline, queueNoteUpdate, updateSession, saveWithAI, router]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -258,6 +287,7 @@ export default function LiveSessionScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.sessionHeader,

@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { useGetParticipants, type Participant } from "@workspace/api-client-react";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  cacheParticipants,
+  getCachedParticipants,
+} from "@/hooks/useOfflineCache";
 
 function planStatusColor(
   status: string,
@@ -171,24 +177,45 @@ export default function ParticipantsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const { isOnline } = useOffline();
+
+  const [cachedParticipants, setCachedParticipants] = useState<Participant[] | null>(null);
 
   const { data: participants, isLoading, refetch, isRefetching } = useGetParticipants();
 
+  useEffect(() => {
+    if (participants && participants.length > 0) {
+      cacheParticipants(participants);
+    }
+  }, [participants]);
+
+  useEffect(() => {
+    if (!participants && !isOnline) {
+      getCachedParticipants<Participant>().then((cached) => {
+        if (cached) setCachedParticipants(cached);
+      });
+    }
+  }, [participants, isOnline]);
+
+  const activeParticipants = participants ?? (isOnline ? undefined : cachedParticipants ?? undefined);
+
   const filtered = React.useMemo(() => {
-    if (!participants) return [];
+    if (!activeParticipants) return [];
     const q = search.toLowerCase();
-    return participants.filter(
+    return activeParticipants.filter(
       (p) =>
         !q ||
         p.full_name.toLowerCase().includes(q) ||
         p.ndis_number.toLowerCase().includes(q)
     );
-  }, [participants, search]);
+  }, [activeParticipants, search]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const showLoading = isLoading && !cachedParticipants;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,
@@ -241,7 +268,7 @@ export default function ParticipantsScreen() {
         </View>
       </View>
 
-      {isLoading ? (
+      {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
@@ -256,11 +283,13 @@ export default function ParticipantsScreen() {
           scrollEnabled={!!filtered.length}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-            />
+            isOnline ? (
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                tintColor={colors.primary}
+              />
+            ) : undefined
           }
           renderItem={({ item }) => (
             <ParticipantCard
@@ -277,7 +306,7 @@ export default function ParticipantsScreen() {
                   { color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
                 ]}
               >
-                No participants found
+                {isOnline ? "No participants found" : "No cached participants"}
               </Text>
             </View>
           }

@@ -5,7 +5,7 @@ import {
   type Session,
 } from "@workspace/api-client-react";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -19,7 +19,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  cacheSessions,
+  cacheParticipants,
+  getCachedSessions,
+  getCachedParticipants,
+} from "@/hooks/useOfflineCache";
 
 function statusColor(
   status: string,
@@ -200,31 +208,77 @@ export default function SessionsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const { isOnline } = useOffline();
 
-  const { data: sessions, isLoading, refetch, isRefetching } = useGetRecentSessions({ limit: 50 });
+  const [cachedSessions, setCachedSessions] = useState<Session[] | null>(null);
+  const [cachedParticipantMap, setCachedParticipantMap] = useState<Record<string, string>>({});
+
+  const {
+    data: sessions,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = useGetRecentSessions({ limit: 50 });
   const { data: participants } = useGetParticipants();
 
+  useEffect(() => {
+    if (sessions && sessions.length > 0) {
+      cacheSessions(sessions);
+    } else if (!isOnline) {
+      getCachedSessions<Session>().then((cached) => {
+        if (cached) setCachedSessions(cached);
+      });
+    }
+  }, [sessions, isOnline]);
+
+  useEffect(() => {
+    if (!sessions && !isOnline) {
+      getCachedSessions<Session>().then((cached) => {
+        if (cached) setCachedSessions(cached);
+      });
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (participants && participants.length > 0) {
+      cacheParticipants(participants);
+    } else if (!isOnline) {
+      getCachedParticipants<{ id: string; full_name: string }>().then((cached) => {
+        if (cached) {
+          const map: Record<string, string> = {};
+          cached.forEach((p) => { map[p.id] = p.full_name; });
+          setCachedParticipantMap(map);
+        }
+      });
+    }
+  }, [participants, isOnline]);
+
+  const activeSessions = sessions ?? (isOnline ? undefined : cachedSessions ?? undefined);
+
   const participantMap = React.useMemo(() => {
-    const map: Record<string, string> = {};
-    (participants ?? []).forEach((p) => {
-      map[p.id] = p.full_name;
-    });
-    return map;
-  }, [participants]);
+    if (participants) {
+      const map: Record<string, string> = {};
+      participants.forEach((p) => { map[p.id] = p.full_name; });
+      return map;
+    }
+    return cachedParticipantMap;
+  }, [participants, cachedParticipantMap]);
 
   const filtered = React.useMemo(() => {
-    if (!sessions) return [];
+    if (!activeSessions) return [];
     const q = search.toLowerCase();
-    return sessions.filter((s) => {
+    return activeSessions.filter((s) => {
       const name = (participantMap[s.participant_id] ?? s.participants?.full_name ?? "").toLowerCase();
       return !q || name.includes(q) || s.session_type.toLowerCase().includes(q);
     });
-  }, [sessions, search, participantMap]);
+  }, [activeSessions, search, participantMap]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const showLoading = isLoading && !cachedSessions;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <OfflineBanner />
       <View
         style={[
           styles.header,
@@ -268,7 +322,7 @@ export default function SessionsScreen() {
         </View>
       </View>
 
-      {isLoading ? (
+      {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
@@ -283,11 +337,13 @@ export default function SessionsScreen() {
           scrollEnabled={!!filtered.length}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-            />
+            isOnline ? (
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                tintColor={colors.primary}
+              />
+            ) : undefined
           }
           renderItem={({ item }) => (
             <SessionCard
@@ -313,7 +369,9 @@ export default function SessionsScreen() {
                   { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
                 ]}
               >
-                Start a session from a participant's profile
+                {isOnline
+                  ? "Start a session from a participant's profile"
+                  : "No cached sessions available"}
               </Text>
             </View>
           }
