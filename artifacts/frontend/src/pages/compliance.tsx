@@ -14,12 +14,12 @@ import { Progress } from "@/components/ui/progress";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM  = "#542269";
-const CORAL = "#F1738A";
-const T1    = "#1C1626";
-const T2    = "#4A3D5A";
-const T3    = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const CORAL = "#542269";
+const T1    = "#111827";
+const T2    = "#374151";
+const T3    = "#6B7280";
+const BORDER = "#E5E7EB";
+const CARD_SHADOW = "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB";
 
 // ── Extended types ────────────────────────────────────────────────────────────
 interface ExtendedComplianceOverview {
@@ -109,7 +109,7 @@ export default function Compliance() {
   const atRisk       = overview?.at_risk       ?? 0;
   const nonCompliant = overview?.non_compliant ?? 0;
 
-  const arcColor = avg >= 85 ? CORAL : avg >= 60 ? "#D97706" : "#DC2626";
+  const arcColor = avg >= 85 ? "#16A34A" : avg >= 60 ? "#D97706" : "#DC2626";
   const circ = 2 * Math.PI * 60;
 
   return (
@@ -118,7 +118,7 @@ export default function Compliance() {
       {/* ── Header ── */}
       <div className="flex items-start gap-3">
         <div className="mt-1.5 h-8 w-1 rounded-full shrink-0"
-          style={{ background: `linear-gradient(to bottom, ${CORAL}, ${PLUM})` }} />
+          style={{ background: PLUM }} />
         <div>
           <h1 className="text-[24px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
             Compliance Centre
@@ -143,7 +143,7 @@ export default function Compliance() {
           ) : (
             <div className="relative flex items-center justify-center">
               <svg width="130" height="130" className="-rotate-90" viewBox="0 0 144 144">
-                <circle cx="72" cy="72" r="60" stroke="rgba(232,213,232,0.55)" strokeWidth="13" fill="none" />
+                <circle cx="72" cy="72" r="60" stroke="#F3F4F6" strokeWidth="13" fill="none" />
                 <circle
                   cx="72" cy="72" r="60" stroke={arcColor} strokeWidth="13" fill="none"
                   strokeDasharray={circ} strokeDashoffset={circ * (1 - avg / 100)}

@@ -16,23 +16,18 @@ import {
   Users,
   AlertTriangle,
   ChevronRight,
-  FileBarChart2,
-  ClipboardList,
-  Loader2,
-  Sparkles,
-  Activity,
+  FileText,
+  CheckCircle2,
+  CircleDot,
 } from "lucide-react";
 
-// ── Design tokens ──────────────────────────────────────────────────────────────
-const PLUM        = "#542269";
-const CORAL       = "#F1738A";
-const T1          = "#1C1626";
-const T2          = "#4A3D5A";
-const T3          = "#7A6A8A";
-const BORDER      = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+// ── Design tokens (enterprise neutral) ────────────────────────────────────────
+const PLUM   = "#542269";
+const TEXT   = "#111827";
+const MUTED  = "#6B7280";
+const BORDER = "#E5E7EB";
+const CARD   = "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB";
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -40,21 +35,22 @@ function greeting() {
   return "Good evening";
 }
 
-function StatusBadge({ score, status }: { score?: number | null; status?: string }) {
+// ── Compliance chip ────────────────────────────────────────────────────────────
+function ComplianceChip({ score, status }: { score?: number | null; status?: string }) {
   if (status === "draft" || (!score && !status)) {
     return (
-      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-        style={{ background: "rgba(84,34,105,0.06)", color: T3 }}>Draft</span>
+      <span className="px-2 py-0.5 rounded text-[10px] font-semibold"
+        style={{ background: "#F3F4F6", color: MUTED }}>Draft</span>
     );
   }
   if (score != null) {
     const cfg = score >= 85
-      ? { bg: "rgba(22,163,74,0.08)", color: "#16A34A", label: "Compliant" }
+      ? { bg: "#DCFCE7", color: "#15803D", label: "Compliant" }
       : score >= 60
-      ? { bg: "rgba(245,158,11,0.08)", color: "#D97706", label: "At Risk" }
-      : { bg: "rgba(239,68,68,0.08)", color: "#DC2626", label: "Non-Compliant" };
+      ? { bg: "#FEF3C7", color: "#92400E", label: "At Risk" }
+      : { bg: "#FEE2E2", color: "#991B1B", label: "Non-Compliant" };
     return (
-      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+      <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold"
         style={{ background: cfg.bg, color: cfg.color }}>
         <ShieldCheck size={9} />
         {cfg.label}
@@ -64,178 +60,166 @@ function StatusBadge({ score, status }: { score?: number | null; status?: string
   return null;
 }
 
-// ── Stat card ──────────────────────────────────────────────────────────────────
+// ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({
-  label, value, sub, icon: Icon, accent, loading,
+  label, value, sub, icon: Icon, loading,
 }: {
-  label: string;
-  value: number | string;
-  sub: string;
-  icon: React.ComponentType<{ size?: number }>;
-  accent: string;
+  label: string; value: number | string; sub: string;
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
   loading?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-2xl p-5" style={{ boxShadow: CARD_SHADOW }}>
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>
+    <div className="bg-white rounded-xl p-5" style={{ boxShadow: CARD }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
           {label}
         </span>
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-          style={{ background: `${accent}12` }}>
-          <Icon size={15} />
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+          style={{ background: "#F3F4F6" }}>
+          <Icon size={14} style={{ color: MUTED }} />
         </div>
       </div>
       {loading ? (
-        <div className="h-8 w-16 rounded-lg animate-pulse" style={{ background: "rgba(232,213,232,0.4)" }} />
+        <div className="h-7 w-14 rounded animate-pulse" style={{ background: "#F3F4F6" }} />
       ) : (
-        <p className="text-[28px] font-bold leading-none" style={{ color: T1 }}>{value}</p>
+        <p className="text-[26px] font-bold leading-none tracking-tight" style={{ color: TEXT }}>{value}</p>
       )}
-      <p className="text-[12px] mt-1.5" style={{ color: T3 }}>{sub}</p>
+      <p className="text-[12px] mt-1" style={{ color: MUTED }}>{sub}</p>
     </div>
   );
 }
 
-// ── Quick action button ────────────────────────────────────────────────────────
-function QuickBtn({
-  label, icon: Icon, href, onClick,
-}: {
-  label: string;
-  icon: React.ComponentType<{ size?: number }>;
-  href?: string;
-  onClick?: () => void;
-}) {
-  const inner = (
-    <div
-      className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-white text-center transition-all duration-150 hover:-translate-y-0.5 cursor-pointer"
-      style={{ boxShadow: CARD_SHADOW }}
-      onClick={onClick}
-    >
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-        style={{ background: `${PLUM}0A` }}>
-        <Icon size={16} />
-      </div>
-      <span className="text-[12px] font-semibold leading-tight" style={{ color: T2 }}>{label}</span>
-    </div>
-  );
-  if (href) return <Link href={href}>{inner}</Link>;
-  return inner;
-}
-
-// ── Page ───────────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
   const [, navigate] = useLocation();
 
-  const { data: sessions = [], isLoading: sessionsLoading } = useGetSessions({ limit: 50 });
+  const { data: sessions = [],     isLoading: sessionsLoading }     = useGetSessions({ limit: 50 });
   const { data: participants = [], isLoading: participantsLoading } = useGetParticipants();
-  const { data: alerts = [], isLoading: alertsLoading }           = useGetUnreadAlerts();
-  const { data: rawOverview, isLoading: overviewLoading }         = useGetComplianceOverview();
+  const { data: alerts = [],       isLoading: alertsLoading }       = useGetUnreadAlerts();
+  const { data: rawOverview,       isLoading: overviewLoading }     = useGetComplianceOverview();
 
-  // Computed stats from real data
-  const now      = new Date();
-  const weekAgo  = subDays(now, 7);
-  const thisWeek = sessions.filter(s => {
+  const now           = new Date();
+  const weekAgo       = subDays(now, 7);
+  const thisWeek      = sessions.filter(s => {
     try { return isAfter(parseISO(s.session_date), weekAgo); } catch { return false; }
   });
-
-  const missingNotes = sessions.filter(s =>
+  const missingNotes  = sessions.filter(s =>
     !s.notes || (s.notes as string).trim().length < 30
-  ).length;
-
-  const complianceScore = (rawOverview as any)?.average_score ?? null;
-  const unreadCount     = (Array.isArray(alerts) ? alerts : []).length;
-
+  );
+  const inProgress    = sessions.find(s => s.status === "in_progress");
+  const complianceScore = (rawOverview as { average_score?: number })?.average_score ?? null;
+  const unreadCount   = Array.isArray(alerts) ? alerts.length : 0;
   const recentSessions = sessions.slice(0, 6);
-  const firstName = user?.full_name?.split(" ")[0] ?? "there";
+  const firstName     = user?.full_name?.split(" ")[0] ?? "there";
+
+  function fmtDate(d?: string | null) {
+    if (!d) return "—";
+    try { return format(parseISO(d), "d MMM"); } catch { return d; }
+  }
+
+  function sessionTypeLabel(t?: string | null) {
+    if (!t) return "Session";
+    return t.split("_").map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
+  }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-5 max-w-5xl">
 
-      {/* ── Welcome card ─────────────────────────────────────────────────── */}
-      <div
-        className="rounded-2xl p-6 relative overflow-hidden"
-        style={{
-          background: "linear-gradient(135deg, #FAF5FF 0%, #FDF0F5 50%, #F6F4FB 100%)",
-          boxShadow: CARD_SHADOW,
-        }}
-      >
-        {/* Decorative blobs */}
-        <div className="absolute top-0 right-0 w-48 h-48 rounded-full pointer-events-none"
-          style={{ background: `${CORAL}10`, transform: "translate(30%, -30%)", filter: "blur(32px)" }} />
-        <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full pointer-events-none"
-          style={{ background: `${PLUM}08`, transform: "translate(-20%, 30%)", filter: "blur(24px)" }} />
-
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Sparkles size={14} style={{ color: CORAL }} />
-              <span className="text-[12px] font-semibold" style={{ color: T3 }}>
-                {format(now, "EEEE, MMMM d")}
-              </span>
-            </div>
-            <h1 className="text-[26px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
-              {greeting()}, {firstName}
-            </h1>
-            <p className="text-[14px] mt-1.5" style={{ color: T2 }}>
-              {sessionsLoading
-                ? "Loading your sessions…"
-                : `${thisWeek.length} session${thisWeek.length !== 1 ? "s" : ""} this week · ${missingNotes > 0 ? `${missingNotes} note${missingNotes !== 1 ? "s" : ""} still needed` : "All notes complete"}`}
-            </p>
-            <div className="flex items-center gap-2.5 mt-4">
-              <Link href="/sessions/new">
-                <button
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90"
-                  style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-                >
-                  <Play size={13} fill="white" /> Start Session
-                </button>
-              </Link>
-              <Link href="/patients/new">
-                <button
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border bg-white/70 transition-all duration-150 hover:bg-white"
-                  style={{ borderColor: BORDER, color: T2 }}
-                >
-                  <Plus size={13} /> Add Participant
-                </button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Soft care illustration — desktop only */}
-          <div className="hidden sm:flex items-center justify-center shrink-0 opacity-90">
-            <svg width="140" height="120" viewBox="0 0 140 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              {/* Background circle */}
-              <circle cx="70" cy="60" r="52" fill="rgba(241,115,138,0.07)" />
-              <circle cx="70" cy="60" r="40" fill="rgba(84,34,105,0.05)" />
-              {/* Clipboard */}
-              <rect x="42" y="22" width="56" height="72" rx="10" fill="white" fillOpacity="0.9" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5"/>
-              {/* Clip */}
-              <rect x="55" y="16" width="30" height="14" rx="7" fill="rgba(241,115,138,0.18)" stroke="rgba(241,115,138,0.5)" strokeWidth="1.5"/>
-              {/* Heart */}
-              <path d="M70 72 C70 72 56 63 56 54 C56 49 59.5 46 63 48.5 C66.5 46 70 46 70 46 C70 46 73.5 46 77 48.5 C80.5 46 84 49 84 54 C84 63 70 72 70 72Z" fill="rgba(241,115,138,0.25)" stroke="#F1738A" strokeWidth="1.5" strokeLinejoin="round"/>
-              {/* Check in heart */}
-              <path d="M63 56 L67 61 L77 52" stroke="#F1738A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              {/* Lines */}
-              <line x1="50" y1="84" x2="90" y2="84" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-              <line x1="50" y1="90" x2="78" y2="90" stroke="rgba(232,213,232,0.9)" strokeWidth="1.5" strokeLinecap="round"/>
-              {/* Sparkle top right */}
-              <circle cx="104" cy="28" r="3" fill="rgba(241,115,138,0.4)"/>
-              <circle cx="110" cy="48" r="2" fill="rgba(84,34,105,0.25)"/>
-              <circle cx="32" cy="72" r="2.5" fill="rgba(241,115,138,0.3)"/>
-            </svg>
-          </div>
+      {/* ── Page header ──────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4 pt-1">
+        <div>
+          <p className="text-[12px] font-medium mb-0.5" style={{ color: MUTED }}>
+            {format(now, "EEEE, d MMMM yyyy")}
+          </p>
+          <h1 className="text-[22px] font-bold tracking-tight" style={{ color: TEXT }}>
+            {greeting()}, {firstName}
+          </h1>
+          <p className="text-[13px] mt-0.5" style={{ color: MUTED }}>
+            {sessionsLoading
+              ? "Loading…"
+              : `${thisWeek.length} session${thisWeek.length !== 1 ? "s" : ""} this week`
+              + (missingNotes.length > 0
+                ? ` · ${missingNotes.length} note${missingNotes.length !== 1 ? "s" : ""} incomplete`
+                : " · all notes complete")}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link href="/sessions/new">
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+              style={{ background: PLUM }}
+            >
+              <Play size={13} fill="white" /> Start Session
+            </button>
+          </Link>
+          <Link href="/patients">
+            <button
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-semibold border bg-white hover:bg-gray-50 transition-colors"
+              style={{ borderColor: BORDER, color: TEXT }}
+            >
+              <Plus size={13} /> Add Participant
+            </button>
+          </Link>
         </div>
       </div>
 
-      {/* ── Stat cards ───────────────────────────────────────────────────── */}
+      {/* ── Continue last session (if in progress) ───────────────────────── */}
+      {inProgress && (
+        <div
+          className="flex items-center justify-between px-5 py-4 rounded-xl bg-white border-l-4"
+          style={{ boxShadow: CARD, borderLeftColor: PLUM }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+              style={{ background: `${PLUM}0F` }}>
+              <CircleDot size={15} style={{ color: PLUM }} />
+            </div>
+            <div>
+              <p className="text-[13px] font-semibold" style={{ color: TEXT }}>Session in progress</p>
+              <p className="text-[12px]" style={{ color: MUTED }}>
+                {sessionTypeLabel(inProgress.session_type)} · {fmtDate(inProgress.session_date)}
+              </p>
+            </div>
+          </div>
+          <Link href={`/sessions/${inProgress.id}/live`}>
+            <button
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-[12.5px] font-semibold hover:opacity-90 transition-opacity"
+              style={{ background: PLUM }}
+            >
+              <Play size={12} fill="white" /> Continue
+            </button>
+          </Link>
+        </div>
+      )}
+
+      {/* ── Incomplete notes alert ────────────────────────────────────────── */}
+      {!sessionsLoading && missingNotes.length > 0 && (
+        <div
+          className="flex items-center justify-between px-5 py-3 rounded-xl"
+          style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={15} style={{ color: "#92400E" }} />
+            <p className="text-[13px] font-medium" style={{ color: "#92400E" }}>
+              {missingNotes.length} session{missingNotes.length !== 1 ? "s" : ""} missing clinical notes
+            </p>
+          </div>
+          <Link href="/sessions">
+            <button className="text-[12px] font-semibold underline underline-offset-2" style={{ color: "#92400E" }}>
+              Review
+            </button>
+          </Link>
+        </div>
+      )}
+
+      {/* ── Stat cards ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Participants"
           value={participantsLoading ? "—" : participants.length}
-          sub="Active participants"
+          sub="Active"
           icon={Users}
-          accent={PLUM}
           loading={participantsLoading}
         />
         <StatCard
@@ -243,228 +227,208 @@ export default function Dashboard() {
           value={sessionsLoading ? "—" : thisWeek.length}
           sub="This week"
           icon={Calendar}
-          accent={CORAL}
           loading={sessionsLoading}
         />
         <StatCard
-          label="Missing Notes"
-          value={sessionsLoading ? "—" : missingNotes}
-          sub={missingNotes === 0 ? "All notes complete" : "Sessions need attention"}
-          icon={ClipboardList}
-          accent={missingNotes > 0 ? "#D97706" : "#16A34A"}
+          label="Incomplete"
+          value={sessionsLoading ? "—" : missingNotes.length}
+          sub="Notes needed"
+          icon={FileText}
           loading={sessionsLoading}
         />
         <StatCard
-          label="Compliance Alerts"
-          value={alertsLoading ? "—" : unreadCount}
-          sub={unreadCount === 0 ? "No new alerts" : "Unread alerts"}
-          icon={AlertTriangle}
-          accent={unreadCount > 0 ? "#DC2626" : "#16A34A"}
-          loading={alertsLoading}
+          label="Compliance"
+          value={overviewLoading ? "—" : complianceScore != null ? `${Math.round(complianceScore)}%` : "—"}
+          sub="Avg. audit score"
+          icon={ShieldCheck}
+          loading={overviewLoading}
         />
       </div>
 
-      {/* ── Main grid ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── Two-column row ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-        {/* Recent sessions (left, spans 2 cols) */}
-        <div className="lg:col-span-2 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
-          <div
-            className="flex items-center justify-between px-5 py-4 border-b"
-            style={{ borderColor: "rgba(232,213,232,0.4)" }}
-          >
-            <div>
-              <h2 className="text-[15px] font-semibold" style={{ color: T1 }}>Recent Sessions</h2>
-              <p className="text-[12px] mt-0.5" style={{ color: T3 }}>Your latest clinical activity</p>
-            </div>
+        {/* ── Recent sessions (2/3) ─────────────────────────────────────── */}
+        <div className="lg:col-span-2 bg-white rounded-xl overflow-hidden" style={{ boxShadow: CARD }}>
+          <div className="flex items-center justify-between px-5 py-4"
+            style={{ borderBottom: `1px solid ${BORDER}` }}>
+            <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Recent Sessions</h2>
             <Link href="/sessions">
-              <button
-                className="flex items-center gap-1 text-[12px] font-semibold transition-colors duration-150 hover:opacity-70"
-                style={{ color: CORAL }}
-              >
+              <button className="flex items-center gap-1 text-[12px] font-medium hover:underline" style={{ color: PLUM }}>
                 View all <ChevronRight size={13} />
               </button>
             </Link>
           </div>
 
-          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.25)" }}>
-            {sessionsLoading ? (
-              Array(4).fill(0).map((_, i) => (
-                <div key={i} className="px-5 py-3.5 flex items-center gap-3 animate-pulse">
-                  <div className="w-8 h-8 rounded-xl shrink-0" style={{ background: "rgba(232,213,232,0.45)" }} />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-36 rounded" style={{ background: "rgba(232,213,232,0.45)" }} />
-                    <div className="h-2.5 w-24 rounded" style={{ background: "rgba(232,213,232,0.35)" }} />
-                  </div>
+          {sessionsLoading ? (
+            <div className="divide-y" style={{ borderColor: BORDER }}>
+              {Array(4).fill(0).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-5 py-4">
+                  <div className="h-4 w-24 rounded animate-pulse" style={{ background: "#F3F4F6" }} />
+                  <div className="h-4 w-16 rounded animate-pulse ml-auto" style={{ background: "#F3F4F6" }} />
                 </div>
-              ))
-            ) : recentSessions.length === 0 ? (
-              <div className="py-14 flex flex-col items-center gap-2">
-                <Calendar size={24} style={{ color: "rgba(122,106,138,0.3)" }} />
-                <p className="text-[13px] font-medium" style={{ color: T3 }}>No sessions yet</p>
-                <Link href="/sessions/new">
-                  <button
-                    className="mt-1 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors hover:opacity-80"
-                    style={{ color: CORAL }}
-                  >
-                    Start your first session →
-                  </button>
-                </Link>
-              </div>
-            ) : (
-              recentSessions.map(session => {
-                const name = (session as any).participants?.full_name;
-                const initials = name
-                  ? name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
-                  : "?";
-                let dateStr = "—";
-                try { dateStr = format(parseISO(session.session_date), "MMM d · h:mm a"); } catch {}
-
+              ))}
+            </div>
+          ) : recentSessions.length === 0 ? (
+            <div className="px-5 py-12 text-center">
+              <Calendar size={28} className="mx-auto mb-2 opacity-25" style={{ color: MUTED }} />
+              <p className="text-[13px]" style={{ color: MUTED }}>No sessions yet</p>
+              <Link href="/sessions/new">
+                <button className="mt-3 text-[12px] font-semibold underline" style={{ color: PLUM }}>
+                  Start your first session
+                </button>
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y" style={{ borderColor: BORDER }}>
+              {recentSessions.map((s) => {
+                const isLive = s.status === "in_progress";
                 return (
-                  <div
-                    key={session.id}
-                    className="flex items-center gap-3.5 px-5 py-3 transition-colors duration-150 hover:bg-[#F6F4FB]/60 cursor-pointer group"
-                    onClick={() => navigate(`/sessions/${session.id}`)}
-                  >
-                    {/* Avatar */}
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0"
-                      style={{ background: `${PLUM}10`, color: PLUM }}
-                    >
-                      {initials}
-                    </div>
+                  <Link key={s.id} href={isLive ? `/sessions/${s.id}/live` : `/sessions/${s.id}`}>
+                    <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors cursor-pointer">
+                      {/* Date */}
+                      <div className="shrink-0 text-center w-10">
+                        <p className="text-[18px] font-bold leading-none" style={{ color: TEXT }}>
+                          {s.session_date ? format(parseISO(s.session_date), "d") : "—"}
+                        </p>
+                        <p className="text-[10px] font-medium uppercase" style={{ color: MUTED }}>
+                          {s.session_date ? format(parseISO(s.session_date), "MMM") : ""}
+                        </p>
+                      </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="text-[13px] font-semibold truncate transition-colors duration-150 group-hover:text-[#542269]"
-                        style={{ color: T1 }}
-                      >
-                        {name || "Unknown Participant"}
-                      </p>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[11px] truncate" style={{ color: T3 }}>
-                          {session.session_type}
-                        </span>
-                        <span className="flex items-center gap-1 text-[11px] shrink-0" style={{ color: T3 }}>
-                          <Calendar size={10} /> {dateStr}
-                        </span>
-                        {session.duration_minutes && (
-                          <span className="flex items-center gap-1 text-[11px] shrink-0" style={{ color: T3 }}>
-                            <Clock size={10} /> {session.duration_minutes}m
-                          </span>
-                        )}
+                      {/* Divider */}
+                      <div className="w-px h-8 shrink-0" style={{ background: BORDER }} />
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold truncate" style={{ color: TEXT }}>
+                          {sessionTypeLabel(s.session_type)}
+                          {isLive && (
+                            <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                              style={{ background: `${PLUM}0F`, color: PLUM }}>
+                              <span className="w-1.5 h-1.5 rounded-full animate-pulse inline-block" style={{ background: PLUM }} />
+                              Live
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11.5px] truncate mt-0.5" style={{ color: MUTED }}>
+                          {s.duration_minutes ? `${s.duration_minutes} min` : "Duration TBD"}
+                          {s.notes && ` · ${(s.notes as string).slice(0, 60)}…`}
+                        </p>
+                      </div>
+
+                      {/* Badge + arrow */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <ComplianceChip score={s.compliance_score} status={s.status} />
+                        <ChevronRight size={14} style={{ color: MUTED }} />
                       </div>
                     </div>
-
-                    {/* Status + action */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <StatusBadge score={session.compliance_score} status={session.status} />
-                      {session.status === "in_progress" && (
-                        <button
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all duration-150 hover:opacity-80"
-                          style={{ borderColor: `${CORAL}40`, color: CORAL, background: `${CORAL}08` }}
-                          onClick={e => { e.stopPropagation(); navigate(`/sessions/${session.id}/live`); }}
-                        >
-                          <Play size={9} fill={CORAL} /> Continue
-                        </button>
-                      )}
-                      <ChevronRight size={13} style={{ color: T3, opacity: 0.5 }} />
-                    </div>
-                  </div>
+                  </Link>
                 );
-              })
-            )}
-          </div>
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Right column */}
+        {/* ── Right column (1/3) ────────────────────────────────────────── */}
         <div className="space-y-4">
 
-          {/* Compliance score card */}
-          <div className="bg-white rounded-2xl p-5" style={{ boxShadow: CARD_SHADOW }}>
-            <div className="flex items-center gap-2 mb-4">
-              <Activity size={14} style={{ color: T3 }} />
-              <h3 className="text-[14px] font-semibold" style={{ color: T1 }}>Compliance Score</h3>
-            </div>
-
-            {overviewLoading ? (
-              <div className="h-16 animate-pulse rounded-xl" style={{ background: "rgba(232,213,232,0.3)" }} />
-            ) : complianceScore !== null ? (
-              <div className="space-y-3">
-                <div className="flex items-end gap-2">
-                  <span className="text-[36px] font-bold leading-none" style={{ color: T1 }}>
-                    {Math.round(complianceScore)}
-                  </span>
-                  <span className="text-[14px] mb-1" style={{ color: T3 }}>/100</span>
-                </div>
-                {/* Arc progress bar */}
-                <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ background: "rgba(232,213,232,0.4)" }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${complianceScore}%`,
-                      background: complianceScore >= 85
-                        ? "#16A34A"
-                        : complianceScore >= 60
-                        ? "#D97706"
-                        : "#DC2626",
-                    }}
-                  />
-                </div>
-                <p className="text-[12px]" style={{ color: T3 }}>
-                  {complianceScore >= 85
-                    ? "Audit-ready — excellent documentation"
-                    : complianceScore >= 60
-                    ? "At risk — some sessions need attention"
-                    : "Action needed — compliance is low"}
-                </p>
-                <Link href="/compliance">
-                  <button
-                    className="w-full mt-1 py-2 rounded-xl text-[12px] font-semibold border transition-all duration-150 hover:shadow-sm"
-                    style={{ borderColor: BORDER, color: T2 }}
-                  >
-                    View full report →
-                  </button>
-                </Link>
-              </div>
-            ) : (
-              <p className="text-[13px]" style={{ color: T3 }}>Run a session to see your compliance score.</p>
-            )}
-          </div>
-
           {/* Quick actions */}
-          <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
-            <div
-              className="px-5 py-3.5 border-b"
-              style={{ borderColor: "rgba(232,213,232,0.4)" }}
-            >
-              <h3 className="text-[14px] font-semibold" style={{ color: T1 }}>Quick Actions</h3>
+          <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: CARD }}>
+            <div className="px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Quick Actions</h2>
             </div>
-            <div className="grid grid-cols-2 gap-0 divide-x divide-y" style={{ borderColor: "rgba(232,213,232,0.3)" }}>
+            <div className="divide-y" style={{ borderColor: BORDER }}>
               {[
-                { label: "New Session",    icon: Play,          href: "/sessions/new"  },
-                { label: "Add Participant",icon: Users,         href: "/patients"      },
-                { label: "View Sessions",  icon: Calendar,      href: "/sessions"      },
-                { label: "Audit Report",   icon: FileBarChart2, href: "/compliance"    },
+                { label: "Start New Session",   icon: Play,          href: "/sessions/new" },
+                { label: "View Participants",   icon: Users,         href: "/patients" },
+                { label: "Compliance Report",  icon: ShieldCheck,   href: "/compliance" },
+                { label: "View All Sessions",   icon: Calendar,      href: "/sessions" },
               ].map(({ label, icon: Icon, href }) => (
                 <Link key={label} href={href}>
-                  <button
-                    className="w-full flex flex-col items-center gap-1.5 py-4 px-3 transition-colors duration-150 hover:bg-[#F6F4FB]"
-                  >
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                      style={{ background: `${PLUM}0A` }}>
-                      <Icon size={14} style={{ color: PLUM }} />
-                    </div>
-                    <span className="text-[11px] font-semibold leading-tight text-center" style={{ color: T2 }}>
-                      {label}
-                    </span>
-                  </button>
+                  <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                    <Icon size={14} style={{ color: MUTED }} />
+                    <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
+                    <ChevronRight size={13} className="ml-auto" style={{ color: MUTED }} />
+                  </div>
                 </Link>
               ))}
             </div>
           </div>
 
+          {/* Compliance summary */}
+          <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: CARD }}>
+            <div className="px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Compliance</h2>
+            </div>
+            <div className="px-4 py-4">
+              {overviewLoading ? (
+                <div className="h-8 w-24 rounded animate-pulse" style={{ background: "#F3F4F6" }} />
+              ) : complianceScore != null ? (
+                <>
+                  <div className="flex items-end gap-2 mb-2">
+                    <span className="text-[32px] font-bold leading-none" style={{ color: TEXT }}>
+                      {Math.round(complianceScore)}
+                    </span>
+                    <span className="text-[16px] font-medium mb-0.5" style={{ color: MUTED }}>/ 100</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full mb-2" style={{ background: "#F3F4F6" }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, complianceScore)}%`,
+                        background: complianceScore >= 85 ? "#16A34A" : complianceScore >= 60 ? "#D97706" : "#DC2626",
+                      }}
+                    />
+                  </div>
+                  <p className="text-[12px]" style={{ color: MUTED }}>
+                    {complianceScore >= 85
+                      ? "Audit-ready · All sessions compliant"
+                      : complianceScore >= 60
+                      ? "Some sessions need attention"
+                      : "Action required · Review failing sessions"}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[13px]" style={{ color: MUTED }}>No compliance data yet</p>
+              )}
+              <Link href="/compliance">
+                <button className="mt-3 flex items-center gap-1 text-[12px] font-semibold" style={{ color: PLUM }}>
+                  View full report <ChevronRight size={13} />
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Alerts panel */}
+          {!alertsLoading && unreadCount > 0 && (
+            <div className="bg-white rounded-xl overflow-hidden" style={{ boxShadow: CARD }}>
+              <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <h2 className="text-[14px] font-semibold" style={{ color: TEXT }}>Alerts</h2>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white"
+                  style={{ background: "#DC2626" }}>
+                  {unreadCount}
+                </span>
+              </div>
+              <div className="divide-y" style={{ borderColor: BORDER }}>
+                {(Array.isArray(alerts) ? alerts : []).slice(0, 3).map((alert: { id: string; message?: string; type?: string }) => (
+                  <div key={alert.id} className="flex items-start gap-3 px-4 py-3">
+                    <AlertTriangle size={13} className="mt-0.5 shrink-0" style={{ color: "#D97706" }} />
+                    <p className="text-[12px] leading-relaxed" style={{ color: TEXT }}>
+                      {alert.message ?? "Compliance alert"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 py-3" style={{ borderTop: `1px solid ${BORDER}` }}>
+                <Link href="/compliance">
+                  <button className="text-[12px] font-semibold" style={{ color: PLUM }}>
+                    Review all alerts →
+                  </button>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

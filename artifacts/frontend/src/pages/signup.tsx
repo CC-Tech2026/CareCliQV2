@@ -4,15 +4,14 @@ import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
-import { SignupGraphic } from "@/components/AuthGraphic";
 
 // ── Palette ──────────────────────────────────────────────────────────────────
 const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const BLUSH  = "#F6B8C0";
-const PURPLE = "#DEB2E4";
-const BORDER = "#E8D5E8";
-const BG     = "#FAF5FA";
+const CORAL  = "#542269";
+const BLUSH  = "#E9D5F5";
+const PURPLE = "#8B5CF6";
+const BORDER = "#E5E7EB";
+const BG     = "#F9FAFB";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -118,36 +117,26 @@ export default function Signup() {
   const STEP_LABELS = ["Account Type", "Your Details", "Practice Info"];
   const TOTAL = 3;
 
-  // ── Top gradient area
+  // ── Top header area (clean enterprise style)
   function TopArea() {
     return (
-      <div
-        className="flex flex-col items-center justify-end pb-4 pt-8 px-6 text-center text-white overflow-hidden"
-        style={{
-          background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)`,
-          minHeight: step < TOTAL ? 200 : 160,
-        }}
-      >
-        <h1 className="text-[28px] font-black tracking-tight leading-none">
-          Care<span style={{ color: "#FBD0DA" }}>Scribe</span>
+      <div className="text-center pt-10 pb-6 px-6">
+        <h1 className="text-[22px] font-bold tracking-tight" style={{ color: PLUM }}>
+          Care<span style={{ color: "#111827" }}>Scribe</span>
         </h1>
-
-        <SignupGraphic />
-
+        <p className="text-[13px] mt-1" style={{ color: "#6B7280" }}>Create your account</p>
         {step < TOTAL && (
-          <div className="w-full max-w-xs mb-2">
-            <div className="flex gap-2 justify-center">
-              {STEP_LABELS.map((l, i) => (
+          <div className="flex items-center gap-2 justify-center mt-4 max-w-xs mx-auto">
+            {STEP_LABELS.map((l, i) => (
+              <div key={l} className="flex-1 flex flex-col items-center gap-1">
                 <div
-                  key={l}
-                  className="flex-1 h-1.5 rounded-full transition-all duration-500"
-                  style={{ background: i <= step ? "white" : "rgba(255,255,255,0.28)" }}
+                  className="h-1 w-full rounded-full transition-all duration-300"
+                  style={{ background: i <= step ? PLUM : "#E5E7EB" }}
                 />
-              ))}
-            </div>
-            <p className="text-[10px] uppercase tracking-widest mt-2 opacity-45 font-semibold">
-              Step {step + 1} of {TOTAL} · {STEP_LABELS[step]}
-            </p>
+                <span className="text-[9px] font-medium uppercase tracking-wide"
+                  style={{ color: i <= step ? PLUM : "#9CA3AF" }}>{l}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -398,19 +387,12 @@ export default function Signup() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(155deg, ${CORAL} 0%, ${PLUM} 100%)` }}>
+    <div className="min-h-screen flex flex-col" style={{ background: "#F9FAFB" }}>
       <TopArea />
 
-      {/* White bottom card (slides up on mount) */}
-      <div
-        className="flex-1 bg-white px-5 pt-7 pb-10 overflow-y-auto"
-        style={{
-          borderRadius: "28px 28px 0 0",
-          boxShadow: "0 -8px 40px rgba(84,34,105,0.18)",
-          animation: "cs-slide-up 0.55s cubic-bezier(0.16,1,0.3,1) both",
-        }}
-      >
-        <div className="w-full max-w-sm mx-auto">
+      <div className="flex-1 px-4 pb-12 overflow-y-auto">
+        <div className="w-full max-w-sm mx-auto bg-white rounded-2xl px-6 py-6"
+          style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
           {step === 0 && <Step0 />}
           {step === 1 && <Step1 />}
           {step === 2 && <Step2 />}

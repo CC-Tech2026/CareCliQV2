@@ -408,7 +408,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </Button>
           <Button
             className="gap-2 text-white rounded-xl"
-            style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+            style={{ background: "#542269" }}
             onClick={handleAIAnalysis}
             disabled={saveWithAI.isPending}
             data-testid="button-ai-analyze"

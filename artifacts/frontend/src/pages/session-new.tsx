@@ -455,7 +455,7 @@ export default function SessionNew() {
                 disabled={startDisabled || createSessionMutation.isPending}
                 title={startDisabled ? "Select at least one participant goal before starting." : undefined}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {createSessionMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 Start Session

@@ -413,13 +413,13 @@ export default function Patients() {
       {/* Left panel — participant list */}
       <div
         className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden`}
-        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
+        style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}
       >
-        <div className="p-4 border-b space-y-4" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+        <div className="p-4 border-b space-y-4" style={{ borderColor: "#E5E7EB" }}>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-[16px]" style={{ color: "#1C1626" }}>Participants</h2>
             <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl" style={{ borderColor: "rgba(232,213,232,0.7)" }}>
+              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl" style={{ borderColor: "#E5E7EB" }}>
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Add</span>
               </Button>
@@ -431,14 +431,14 @@ export default function Patients() {
               <Input
                 placeholder="Search name or NDIS..."
                 className="pl-9 rounded-xl"
-                style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}
+                style={{ background: "#F9FAFB", borderColor: "#E5E7EB" }}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 data-testid="input-search-participants"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 rounded-xl" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+              <SelectTrigger className="h-9 rounded-xl" style={{ background: "#F6F4FB", borderColor: "#E5E7EB" }}>
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -492,7 +492,7 @@ export default function Patients() {
                     className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0"
                     style={{
                       background: selectedId === p.id
-                        ? "linear-gradient(135deg, #F1738A, #542269)"
+                        ? "#542269"
                         : "rgba(84,34,105,0.09)",
                       color: selectedId === p.id ? "white" : "#542269",
                     }}
@@ -523,13 +523,13 @@ export default function Patients() {
       {/* Right panel — participant detail */}
       <div
         className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto`}
-        style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
+        style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}
       >
         {selectedId ? (
           <>
             <button
-              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b hover:bg-[#F6F4FB] shrink-0 transition-colors"
-              style={{ color: "#542269", borderColor: "rgba(232,213,232,0.5)" }}
+              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b hover:bg-gray-50 shrink-0 transition-colors"
+              style={{ color: "#542269", borderColor: "#E5E7EB" }}
               onClick={() => {
                 setShowMobileDetail(false);
               }}
@@ -990,9 +990,9 @@ function GoalsManagementCard({
 
   return (
     <div className="rounded-2xl overflow-hidden bg-white"
-      style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
       <div className="flex items-center justify-between px-5 py-4 border-b"
-        style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+        style={{ borderColor: "#E5E7EB" }}>
         <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: "#1C1626" }}>
           <Target className="h-4 w-4" style={{ color: "#542269" }} />
           NDIS Goals
@@ -1001,7 +1001,7 @@ function GoalsManagementCard({
           size="sm"
           variant="outline"
           className="h-7 gap-1 text-xs rounded-lg"
-          style={{ borderColor: "rgba(232,213,232,0.7)" }}
+          style={{ borderColor: "#E5E7EB" }}
           onClick={() => setIsAdding(true)}
           disabled={isAdding}
           data-testid="button-add-goal"
@@ -1053,7 +1053,7 @@ function GoalsManagementCard({
         )}
 
         {activeGoals.length === 0 && !isAdding ? (
-          <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "rgba(232,213,232,0.7)", color: "#7A6A8A" }}>
+          <div className="text-center py-6 rounded-xl border border-dashed" style={{ borderColor: "#E5E7EB", color: "#7A6A8A" }}>
             <Target className="h-6 w-6 mx-auto mb-2 opacity-30" />
             <p className="text-[12px]">
               No active goals — click "Add Goal" to add funded support goals
@@ -1065,7 +1065,7 @@ function GoalsManagementCard({
               <li
                 key={goal.id}
                 className="flex items-center gap-2 p-2.5 rounded-xl border group"
-                style={{ background: "rgba(246,244,251,0.6)", borderColor: "rgba(232,213,232,0.5)" }}
+                style={{ background: "rgba(246,244,251,0.6)", borderColor: "#E5E7EB" }}
                 data-testid={`goal-item-${goal.id}`}
               >
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -1153,9 +1153,9 @@ function GoalsManagementCard({
                   <li
                     key={goal.id}
                     className="flex items-center gap-2 p-2.5 rounded-xl border border-dashed group"
-                    style={{ borderColor: "rgba(232,213,232,0.6)" }}
+                    style={{ borderColor: "#E5E7EB" }}
                   >
-                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "rgba(232,213,232,0.9)" }} />
+                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "#D1D5DB" }} />
                     <span className="text-[13px] flex-1 line-through" style={{ color: "#7A6A8A" }}>
                       {goal.title}
                     </span>
@@ -1295,13 +1295,13 @@ function ParticipantDetail({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-6 pt-5 pb-5 border-b shrink-0"
-        style={{ borderColor: "rgba(232,213,232,0.5)", background: "linear-gradient(to bottom, rgba(246,244,251,0.6), white)" }}>
+        style={{ borderColor: "#E5E7EB", background: "white" }}>
         <div className="flex justify-between items-start gap-4">
           <div className="flex items-center gap-4 min-w-0">
             {/* Participant avatar */}
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center text-[20px] font-bold shrink-0 text-white"
-              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+              style={{ background: "#542269" }}
             >
               {String(participant.full_name ?? "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
             </div>
@@ -1330,13 +1330,13 @@ function ParticipantDetail({
           <div className="flex items-center gap-2 shrink-0">
             <Link href={`/participants/${id}/edit`}>
               <Button size="sm" variant="outline" className="gap-1.5 rounded-xl"
-                style={{ borderColor: "rgba(232,213,232,0.8)" }}>
+                style={{ borderColor: "#E5E7EB" }}>
                 <Edit className="h-3.5 w-3.5" /> Edit
               </Button>
             </Link>
             <Link href={`/sessions/new?participantId=${id}`}>
               <Button size="sm" className="rounded-xl"
-                style={{ background: "linear-gradient(135deg, #F1738A, #542269)", border: "none" }}>
+                style={{ background: "#542269", border: "none" }}>
                 New Session
               </Button>
             </Link>
@@ -1349,7 +1349,7 @@ function ParticipantDetail({
         defaultValue="overview"
         className="flex-1 flex flex-col overflow-hidden"
       >
-        <div className="px-6 pt-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+        <div className="px-6 pt-3 border-b" style={{ borderColor: "#E5E7EB" }}>
           <TabsList className="h-9 bg-transparent gap-1 p-0">
             <TabsTrigger
               value="overview"
@@ -1380,9 +1380,9 @@ function ParticipantDetail({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Plan Details card */}
             <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                style={{ borderColor: "#E5E7EB", color: "#1C1626" }}>
                 <FileText className="h-4 w-4" style={{ color: "#542269" }} /> Plan Details
               </div>
               <div className="p-5 space-y-4">
@@ -1415,9 +1415,9 @@ function ParticipantDetail({
 
             {/* Clinical Profile card */}
             <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                style={{ borderColor: "#E5E7EB", color: "#1C1626" }}>
                 <Activity className="h-4 w-4" style={{ color: "#542269" }} /> Clinical Profile
               </div>
               <div className="p-5 space-y-4 text-[13px]">
@@ -1440,7 +1440,7 @@ function ParticipantDetail({
           />
 
           {aiSummary?.summary && (
-            <div className="rounded-2xl p-5" style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(84,34,105,0.12)" }}>
+            <div className="rounded-2xl p-5" style={{ background: "#F9FAFB", border: "1px solid #E5E7EB" }}>
               <div className="flex items-center gap-2 mb-3">
                 <ShieldCheck className="h-4 w-4" style={{ color: "#542269" }} />
                 <p className="text-[13px] font-semibold" style={{ color: "#542269" }}>AI Clinical Summary</p>
@@ -1460,7 +1460,7 @@ function ParticipantDetail({
               <Skeleton className="h-32 w-full" />
             ) : !sessions?.length ? (
               <div className="text-center p-8 rounded-2xl text-[13px]"
-                style={{ border: "1px solid rgba(232,213,232,0.5)", background: "#F6F4FB", color: "#7A6A8A" }}>
+                style={{ border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#6B7280" }}>
                 No sessions recorded yet
               </div>
             ) : (
@@ -1468,7 +1468,7 @@ function ParticipantDetail({
                 {sessions.slice(0, 5).map((s) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
                     <div className="rounded-xl p-4 cursor-pointer transition-all duration-150 border hover:border-[rgba(84,34,105,0.20)]"
-                      style={{ borderColor: "rgba(232,213,232,0.5)" }}>
+                      style={{ borderColor: "#E5E7EB" }}>
                       <div className="flex justify-between mb-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-[13px]" style={{ color: "#1C1626" }}>
@@ -1527,9 +1527,9 @@ function ParticipantDetail({
 
           {/* Overall budget from patient record */}
           <div className="rounded-2xl bg-white overflow-hidden"
-            style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
             <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-              style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+              style={{ borderColor: "#E5E7EB", color: "#1C1626" }}>
               <TrendingUp className="h-4 w-4" style={{ color: "#542269" }} /> Plan Overview
             </div>
             <div className="p-5 space-y-5">
@@ -1589,9 +1589,9 @@ function ParticipantDetail({
           budgetSummary.budgets &&
           budgetSummary.budgets.length > 0 ? (
             <div className="rounded-2xl bg-white overflow-hidden"
-              style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px #E5E7EB" }}>
               <div className="flex items-center gap-2 px-5 py-4 border-b text-[13px] font-semibold"
-                style={{ borderColor: "rgba(232,213,232,0.4)", color: "#1C1626" }}>
+                style={{ borderColor: "#E5E7EB", color: "#1C1626" }}>
                 <BarChart3 className="h-4 w-4" style={{ color: "#542269" }} /> Budget by Support Category
               </div>
               <div className="p-5 space-y-5">

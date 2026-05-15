@@ -1,0 +1,141 @@
+Design and improve the CareScribe SaaS platform UI/UX with a strong focus on usability, reliability, and efficiency for real clinical support workers and NDIS documentation workflows.
+
+The design must feel like a serious enterprise SaaS product (e.g. Stripe, Linear, Notion, Vercel dashboard style) — NOT an AI-generated, futuristic, or “chatbot-like” interface.
+
+Avoid:
+
+AI sparkles, gradients, glowing elements, or “intelligent assistant” visuals
+Over-designed cards or decorative illustrations
+Anything that feels like a “startup AI dashboard”
+
+Instead focus on:
+
+Clean, structured, functional UI
+High readability and fast navigation
+Clinical / compliance-first design language
+🧠 Core UX Goals
+1. Functionality (Primary)
+
+Ensure the system clearly supports:
+
+Fast session creation and editing
+Participant management (view, add, edit, track)
+Compliance tracking and audit readiness
+Note-taking that is structured, not freeform chaos
+Minimal clicks to complete core workflows
+
+Every screen should answer:
+
+“Can a support worker complete this in under 30 seconds?”
+
+2. Reliability (UX Perception)
+
+Design must communicate:
+
+Stability and trust
+Clear system status (saving, synced, draft, completed)
+No confusing modals or hidden state changes
+Every action should have a visible result
+
+Add UX patterns like:
+
+Autosave indicators (“Saved just now”)
+Status chips (Draft / In Progress / Completed / Reviewed)
+Audit-friendly timestamps
+3. Efficiency (Speed of Use)
+
+Optimize for speed:
+
+Keyboard-first navigation where possible
+Bulk actions for sessions and participants
+Inline editing (avoid unnecessary modals)
+Persistent filters and saved views
+Quick actions always visible
+
+Reduce friction:
+
+No unnecessary page hops
+No modal-based workflows for critical tasks
+Use full-page forms instead of popups
+4. User-Focused Features
+
+Tailor UI for support workers:
+
+Include:
+
+“Continue last session” shortcut
+“Incomplete notes” reminder panel
+Daily schedule overview
+Participant quick search (global command bar optional)
+Recently accessed sessions
+🧭 Sidebar UX (IMPORTANT)
+
+Redesign the sidebar as a core navigation + workspace control system, not just links.
+
+Sidebar Requirements:
+✔ Collapsible / Expandable
+Default expanded on desktop
+Can collapse to icon-only mode
+Smooth animation when toggling width
+Remember user preference
+✔ Sections
+
+Structure like:
+
+Dashboard
+Sessions
+Participants
+Compliance
+Reports
+Settings
+✔ Smart Sidebar Enhancements
+
+Add UX improvements:
+
+1. “Pinned Recent”
+
+Show:
+
+Last 3 sessions
+Last accessed participant
+2. Quick Create Button
+“+ New Session” always visible at top
+Sticky position
+3. Status Indicator Area
+
+Small section showing:
+
+Sync status
+Offline/online
+Alerts count
+4. Hover Expansion Mode
+When collapsed → hover expands tooltip preview
+Smooth micro-interactions
+🎨 Visual Style Direction
+Neutral, clinical SaaS palette (white, soft gray, muted accent like plum or navy)
+Subtle borders instead of heavy shadows
+8px spacing system consistency
+Rounded corners: medium (not overly soft)
+Typography: clean, system-like (Inter or similar)
+No decorative gradients or AI-style glow effects
+📱 Interaction Rules
+No forced modals for core flows (sessions, participants)
+Prefer:
+Full page routes
+Side panels (optional)
+Inline editing
+Always allow back navigation instead of modal dismissal
+🧩 Outcome Goal
+
+The final product should feel like:
+
+A compliance-grade clinical operations dashboard
+not an AI assistant or experimental tool
+
+It should be:
+
+Fast
+Predictable
+Structured
+Trustworthy
+Built for daily operational use

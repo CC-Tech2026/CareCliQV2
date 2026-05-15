@@ -1,22 +1,22 @@
 import { Link, useLocation } from "wouter";
 import { useState } from "react";
 import {
-  Menu, X, Plus,
+  Menu, X, Plus, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, CalendarDays, ShieldCheck,
-  Settings, AlertTriangle, FileBarChart2, FolderOpen, LogOut,
+  Settings, AlertTriangle, FileBarChart2, FolderOpen,
+  LogOut, Bell,
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGetUnreadAlerts } from "@workspace/api-client-react";
 
-// ── CareScribe palette ────────────────────────────────────────────────────────
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const LILAC  = "#F5EEF5";
-const BORDER = "#E8D5E8";
-const TEXT   = "#37352F";
-const MUTED  = "#7A5E7A";
+// ── Design tokens (enterprise neutral) ───────────────────────────────────────
+const PLUM    = "#542269";
+const TEXT    = "#111827";
+const MUTED   = "#6B7280";
+const BORDER  = "#E5E7EB";
+const BGHOVER = "#F3F4F6";
 
 const NAV_ITEMS = [
   { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
@@ -29,7 +29,6 @@ const NAV_ITEMS = [
   { href: "/settings",   label: "Settings",     icon: Settings        },
 ];
 
-// 4 bottom-nav tabs for mobile
 const BOTTOM_NAV = [
   { href: "/dashboard",  label: "Home",     icon: LayoutDashboard },
   { href: "/sessions",   label: "Sessions", icon: CalendarDays    },
@@ -41,157 +40,251 @@ function isActive(location: string, href: string) {
   return (
     location === href ||
     location.startsWith(href + "/") ||
-    (href === "/patients" && (location.startsWith("/patients") || location.startsWith("/participants")))
+    (href === "/patients" && (
+      location.startsWith("/patients") || location.startsWith("/participants")
+    ))
   );
+}
+
+function getInitials(name: string) {
+  return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
+  });
   const { settings } = useSettings();
   const { user, logout } = useAuth();
+  const { data: alerts = [] } = useGetUnreadAlerts();
 
-  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
-  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
-  const initials = displayName.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase();
+  const displayName   = user?.full_name || settings?.name || user?.email || "Support Worker";
+  const displayRole   = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
+  const initials      = getInitials(displayName);
+  const alertCount    = Array.isArray(alerts) ? alerts.length : 0;
 
-  const SidebarInner = ({ onNav }: { onNav?: () => void }) => (
-    <div className="flex flex-col h-full">
-      {/* Wordmark */}
-      <div className="px-5 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <span className="text-[20px] font-black tracking-tight" style={{ color: PLUM }}>
-          Care<span style={{ color: CORAL }}>Scribe</span>
-        </span>
-        <p className="text-[9px] uppercase tracking-widest font-semibold mt-0.5" style={{ color: MUTED }}>
-          NDIS Clinical
-        </p>
-      </div>
+  const toggleCollapse = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* ignore */ }
+  };
 
-      {/* Nav — with icons */}
-      <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-0.5">
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(location, item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNav}
-              className="relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-150"
-              style={{
-                background: active ? `${PLUM}10` : "transparent",
-                color: active ? PLUM : MUTED,
-                fontWeight: active ? 700 : 500,
-              }}
+  // ── Sidebar inner content ──────────────────────────────────────────────────
+  const SidebarInner = ({
+    onNav,
+    isDrawer = false,
+  }: {
+    onNav?: () => void;
+    isDrawer?: boolean;
+  }) => {
+    const compact = !isDrawer && collapsed;
+
+    return (
+      <div className="flex flex-col h-full">
+        {/* Wordmark + collapse toggle */}
+        <div
+          className="flex items-center h-14 shrink-0 px-3"
+          style={{ borderBottom: `1px solid ${BORDER}` }}
+        >
+          {!compact && (
+            <span className="flex-1 text-[17px] font-bold tracking-tight select-none" style={{ color: PLUM }}>
+              Care<span style={{ color: TEXT }}>Scribe</span>
+            </span>
+          )}
+          {!isDrawer && (
+            <button
+              onClick={toggleCollapse}
+              title={compact ? "Expand sidebar" : "Collapse sidebar"}
+              className="p-1.5 rounded-lg transition-colors hover:bg-gray-100 ml-auto shrink-0"
+              style={{ color: MUTED }}
             >
-              {active && (
-                <span
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
-                  style={{ background: CORAL }}
-                />
+              {compact ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+            </button>
+          )}
+        </div>
+
+        {/* New Session — always visible */}
+        <div className={cn("pt-3 shrink-0", compact ? "px-2" : "px-3")}>
+          <Link href="/sessions/new" onClick={onNav}>
+            <div
+              className={cn(
+                "flex items-center justify-center rounded-lg text-white text-[13px] font-semibold transition-opacity hover:opacity-90",
+                compact ? "h-9 w-full" : "h-9 gap-2 px-3"
               )}
-              <Icon
-                size={15}
-                strokeWidth={active ? 2.5 : 1.8}
-                style={{ color: active ? PLUM : MUTED, flexShrink: 0 }}
-              />
-              {item.label}
-            </Link>
-          );
-        })}
-      </nav>
+              style={{ background: PLUM }}
+            >
+              <Plus size={15} strokeWidth={2.5} />
+              {!compact && "New Session"}
+            </div>
+          </Link>
+        </div>
 
-      {/* New Session shortcut */}
-      <div className="px-3 pb-3">
-        <Link href="/sessions/new" onClick={onNav}>
+        {/* Navigation */}
+        <nav className={cn("flex-1 overflow-y-auto py-3 space-y-0.5", compact ? "px-2" : "px-3")}>
+          {NAV_ITEMS.map((item) => {
+            const active = isActive(location, item.href);
+            const Icon   = item.icon;
+            const showBadge = item.href === "/compliance" && alertCount > 0;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNav}
+                title={compact ? item.label : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg text-[13px] font-medium transition-colors w-full",
+                  compact ? "h-9 justify-center px-0" : "px-2.5 py-2"
+                )}
+                style={{
+                  background: active ? `${PLUM}0F` : "transparent",
+                  color: active ? PLUM : MUTED,
+                  fontWeight: active ? 600 : 500,
+                }}
+              >
+                <div className="relative shrink-0">
+                  <Icon size={16} strokeWidth={active ? 2.5 : 1.8} />
+                  {showBadge && (
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[14px] h-3.5 rounded-full text-[8px] font-bold text-white flex items-center justify-center px-0.5"
+                      style={{ background: "#DC2626" }}
+                    >
+                      {alertCount > 9 ? "9+" : alertCount}
+                    </span>
+                  )}
+                </div>
+                {!compact && item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Alerts status strip (expanded only) */}
+        {!compact && alertCount > 0 && (
           <div
-            className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-[13px] font-bold hover:opacity-90 transition-opacity"
-            style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+            className="mx-3 mb-2 flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium"
+            style={{ background: "rgba(220,38,38,0.06)", color: "#DC2626" }}
           >
-            <Plus size={14} strokeWidth={2.5} />
-            New Session
+            <Bell size={12} />
+            {alertCount} unread alert{alertCount !== 1 ? "s" : ""}
           </div>
-        </Link>
-      </div>
+        )}
 
-      {/* Profile */}
-      <div className="px-3 py-4" style={{ borderTop: `1px solid ${BORDER}` }}>
-        <div className="flex items-center gap-3 px-2 py-2 rounded-xl cursor-default">
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback
-              className="text-xs font-bold text-white"
-              style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+        {/* Profile */}
+        <div
+          className={cn("shrink-0 py-3", compact ? "px-2" : "px-3")}
+          style={{ borderTop: `1px solid ${BORDER}` }}
+        >
+          {compact ? (
+            <div
+              className="w-8 h-8 rounded-lg mx-auto flex items-center justify-center text-[11px] font-bold text-white cursor-default"
+              style={{ background: PLUM }}
+              title={displayName}
             >
               {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-[12.5px] font-semibold truncate" style={{ color: TEXT }}>{displayName}</p>
-            <p className="text-[10px] capitalize truncate" style={{ color: MUTED }}>{displayRole}</p>
-          </div>
-          <button onClick={logout} title="Sign out" style={{ color: MUTED }} className="shrink-0 p-1.5 rounded-lg hover:bg-[#F5EEF5] transition-colors">
-            <LogOut size={13} />
-          </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                style={{ background: PLUM }}
+              >
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12.5px] font-semibold truncate" style={{ color: TEXT }}>{displayName}</p>
+                <p className="text-[10.5px] capitalize truncate" style={{ color: MUTED }}>{displayRole}</p>
+              </div>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="shrink-0 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                style={{ color: MUTED }}
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="flex min-h-screen w-full" style={{ background: LILAC, color: TEXT }}>
-      {/* ── Desktop sidebar ── */}
+    <div className="flex min-h-screen w-full" style={{ background: "#F9FAFB", color: TEXT }}>
+
+      {/* ── Desktop sidebar ────────────────────────────────────────────────── */}
       <aside
-        className="hidden md:flex w-52 flex-col h-screen sticky top-0 bg-white shrink-0"
-        style={{ borderRight: `1px solid ${BORDER}` }}
+        className="hidden md:flex flex-col h-screen sticky top-0 bg-white shrink-0 overflow-hidden"
+        style={{
+          width: collapsed ? 60 : 220,
+          transition: "width 200ms ease",
+          borderRight: `1px solid ${BORDER}`,
+        }}
       >
         <SidebarInner />
       </aside>
 
-      {/* ── Main column ── */}
+      {/* ── Main content ───────────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile header */}
+
+        {/* Mobile top bar */}
         <header
-          className="md:hidden h-14 flex items-center justify-between px-5 bg-white shrink-0"
+          className="md:hidden h-14 flex items-center justify-between px-4 bg-white shrink-0"
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
-          <span className="text-[18px] font-black tracking-tight" style={{ color: PLUM }}>
-            Care<span style={{ color: CORAL }}>Scribe</span>
+          <span className="text-[17px] font-bold tracking-tight" style={{ color: PLUM }}>
+            Care<span style={{ color: TEXT }}>Scribe</span>
           </span>
           <div className="flex items-center gap-2">
             <Link href="/sessions/new">
               <button
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-[12px] font-bold"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-[12px] font-semibold"
+                style={{ background: PLUM }}
               >
-                <Plus size={12} strokeWidth={2.5} />
-                New
+                <Plus size={12} strokeWidth={2.5} /> New
               </button>
             </Link>
-            <button onClick={() => setDrawerOpen(true)} className="p-2 rounded-xl" style={{ color: PLUM }}>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+              style={{ color: MUTED }}
+            >
               <Menu size={20} />
             </button>
           </div>
         </header>
 
-        {/* Desktop header — slim */}
+        {/* Desktop top bar — slim context bar */}
         <header
-          className="hidden md:flex h-11 items-center justify-between px-6 bg-white shrink-0"
+          className="hidden md:flex h-11 items-center justify-end px-6 bg-white shrink-0"
           style={{ borderBottom: `1px solid ${BORDER}` }}
         >
-          <div className="flex-1" />
-          <div className="flex items-center gap-2.5">
-            <div className="text-right">
-              <p className="text-[11px] font-semibold" style={{ color: TEXT }}>{displayName.split(" ")[0]}</p>
-              <p className="text-[9px] capitalize" style={{ color: MUTED }}>{displayRole}</p>
-            </div>
-            <Avatar className="h-7 w-7">
-              <AvatarFallback
-                className="text-[10px] font-bold text-white"
-                style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          <div className="flex items-center gap-3">
+            {alertCount > 0 && (
+              <Link href="/compliance">
+                <button
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-semibold transition-colors hover:bg-red-50"
+                  style={{ color: "#DC2626" }}
+                >
+                  <Bell size={13} />
+                  {alertCount} alert{alertCount !== 1 ? "s" : ""}
+                </button>
+              </Link>
+            )}
+            <div className="flex items-center gap-2 pl-2" style={{ borderLeft: `1px solid ${BORDER}` }}>
+              <div
+                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold text-white"
+                style={{ background: PLUM }}
               >
                 {initials}
-              </AvatarFallback>
-            </Avatar>
+              </div>
+              <span className="text-[12px] font-medium" style={{ color: TEXT }}>
+                {displayName.split(" ")[0]}
+              </span>
+            </div>
           </div>
         </header>
 
@@ -201,20 +294,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* ── Mobile bottom nav ── */}
+      {/* ── Mobile bottom nav ──────────────────────────────────────────────── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white"
         style={{ borderTop: `1px solid ${BORDER}`, paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {BOTTOM_NAV.map((item) => {
           const active = isActive(location, item.href);
-          const Icon = item.icon;
+          const Icon   = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
               className="flex-1 flex flex-col items-center gap-0.5 py-2.5 transition-colors"
-              style={{ color: active ? CORAL : MUTED }}
+              style={{ color: active ? PLUM : MUTED }}
             >
               <Icon size={20} strokeWidth={active ? 2.5 : 1.8} />
               <span className="text-[10px] font-semibold">{item.label}</span>
@@ -223,28 +316,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* ── Mobile drawer overlay ── */}
+      {/* ── Mobile drawer overlay ───────────────────────────────────────────── */}
       {drawerOpen && (
         <div
           className="md:hidden fixed inset-0 z-40"
-          style={{ background: "rgba(84,34,105,0.18)", backdropFilter: "blur(2px)" }}
+          style={{ background: "rgba(0,0,0,0.3)" }}
           onClick={() => setDrawerOpen(false)}
         />
       )}
 
-      {/* ── Mobile drawer ── */}
+      {/* ── Mobile drawer ───────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col shadow-2xl transition-transform duration-300",
-          drawerOpen ? "translate-x-0" : "-translate-x-full",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-64 bg-white flex flex-col shadow-xl transition-transform duration-250",
+          drawerOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="absolute top-4 right-4">
-          <button onClick={() => setDrawerOpen(false)} className="p-2 rounded-xl" style={{ color: MUTED }}>
-            <X size={18} />
+        <div className="absolute top-3 right-3">
+          <button
+            onClick={() => setDrawerOpen(false)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            style={{ color: MUTED }}
+          >
+            <X size={16} />
           </button>
         </div>
-        <SidebarInner onNav={() => setDrawerOpen(false)} />
+        <SidebarInner onNav={() => setDrawerOpen(false)} isDrawer />
       </aside>
     </div>
   );
