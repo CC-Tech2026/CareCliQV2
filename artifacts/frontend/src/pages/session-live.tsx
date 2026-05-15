@@ -42,9 +42,13 @@ import {
   Utensils,
   BookOpen,
   ShieldCheck,
-  Radio,
   Send,
   Paperclip,
+  Plus,
+  Sparkles,
+  Zap,
+  RefreshCw,
+  type LucideIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -66,6 +70,16 @@ import {
 import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 
 // ---------------------------------------------------------------------------
+// Brand tokens
+// ---------------------------------------------------------------------------
+
+const PURPLE = "#5533CC";
+const CORAL  = "#F03060";
+const LIME   = "#D9F103";
+const NAVY   = "#0D0D55";
+const DEEP   = "#050520";
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -73,7 +87,7 @@ type TranslationView = "original" | "translated" | "both";
 
 interface ChatMessage {
   id: string;
-  type: "text" | "voice" | "image" | "file" | "activity" | "goal_update" | "system";
+  type: "text" | "voice" | "image" | "file" | "activity" | "goal_update" | "system" | "ai_event" | "incident_prompt";
   content: string;
   timestamp: Date;
   mediaUrl?: string;
@@ -83,6 +97,7 @@ interface ChatMessage {
   activityType?: string;
   goalId?: string;
   goalStatus?: string;
+  aiDelta?: number; // compliance score delta for ai_event
 }
 
 interface GoalItem {
@@ -102,11 +117,22 @@ interface LiveSummary {
   evidenceSummary: string;
 }
 
+interface IncidentDraft {
+  step: 0 | 1 | 2;
+  what: string;
+  actions: string[];
+  wellbeing: "stable" | "distressed" | "follow_up" | "";
+}
+
+interface BubbleMenu {
+  msgId: string;
+  top: number;
+  right: number;
+}
+
 // ---------------------------------------------------------------------------
 // Activity category definitions
 // ---------------------------------------------------------------------------
-
-type LucideIcon = React.ComponentType<{ className?: string }>;
 
 interface ActivityDef {
   type: string;
@@ -172,9 +198,26 @@ function findActivityDef(type: string): ActivityDef | undefined {
 const GOAL_STATUS_CONFIG = {
   not_started: { label: "Not Started", cls: "bg-slate-700 text-white/50 border-slate-600", icon: Circle },
   in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Activity },
-  achieved: { label: "Achieved", cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
-  needs_review: { label: "Needs Review", cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
+  achieved:    { label: "Achieved",    cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
+  needs_review:{ label: "Needs Review",cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
 };
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const COMPOSER_PLACEHOLDERS = [
+  "What progress did the participant make?",
+  "Describe independence or engagement observed…",
+  "Mention emotional regulation outcomes…",
+  "What support was provided today?",
+  "Describe any changes in participant wellbeing…",
+];
+
+const INCIDENT_KEYWORDS = /\b(fall|fell|injur|aggress|unsafe|medication error|overdose|seizure|chok|self.?harm|accident|hurt|blood|bruise|hospital|emergency|ambulance|police|paramedic|restrain|seclu)\w*/i;
+
+const OUTCOME_KEYWORDS = /\b(independen|progress|achiev|improve|engag|communicat|participat|calm|settled|confident|motivated|cooperat|goal|success|reduc\w+ prompt)\w*/i;
+const GOAL_KEYWORDS    = /\b(goal|target|objective|milestone|outcome|skill)\w*/i;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -187,6 +230,29 @@ function formatDuration(totalSeconds: number): string {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
+function deriveSessionStateLabel(isActive: boolean, elapsed: number, score: number): {
+  label: string;
+  color: string;
+  dot: string;
+} {
+  if (!isActive && elapsed === 0) return { label: "Ready", color: "bg-slate-700 text-slate-300 border-slate-600", dot: "bg-slate-400" };
+  if (!isActive && elapsed > 0)   return { label: "Paused", color: "bg-amber-500/20 text-amber-300 border-amber-500/30", dot: "bg-amber-400" };
+  if (score >= 80)  return { label: "Claim Ready", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400 animate-pulse" };
+  if (score >= 60)  return { label: "Live", color: "bg-blue-500/20 text-blue-300 border-blue-500/30", dot: "bg-blue-400 animate-pulse" };
+  return { label: "Needs Review", color: "bg-amber-500/20 text-amber-300 border-amber-500/30", dot: "bg-amber-400 animate-pulse" };
+}
+
+function deriveComplianceActionLabel(score: number, checks: Array<{ label: string; pass: boolean }>): string {
+  if (score >= 80) return "Claim Ready";
+  const failed = checks.filter((c) => !c.pass).map((c) => c.label);
+  if (failed.includes("Goals linked")) return "Link Participant Goals";
+  if (failed.includes("Clinical notes completed")) return "Add Clinical Notes";
+  if (failed.includes("Activity logged")) return "Log Activities";
+  if (failed.includes("Duration recorded")) return "Start Timer";
+  if (failed.includes("Photo evidence captured")) return "Add Photo Evidence";
+  return "Building Documentation…";
+}
+
 function buildSummaryFromMessages(
   session: { session_type: string; duration_minutes: number; notes?: string | null },
   messages: ChatMessage[],
@@ -196,14 +262,14 @@ function buildSummaryFromMessages(
 ): LiveSummary {
   const durationMins = Math.max(Math.round(elapsed / 60), 1);
   const activityMsgs = messages.filter((m) => m.type === "activity");
-  const voiceMsgs = messages.filter((m) => m.type === "voice");
-  const imageMsgs = messages.filter((m) => m.type === "image");
-  const textMsgs = messages.filter((m) => m.type === "text");
+  const voiceMsgs    = messages.filter((m) => m.type === "voice");
+  const imageMsgs    = messages.filter((m) => m.type === "image");
+  const textMsgs     = messages.filter((m) => m.type === "text");
 
-  const activityTypes = [...new Set(activityMsgs.map((m) => m.activityType || m.content))];
-  const achievedGoals = goals.filter((g) => g.status === "achieved");
-  const inProgressGoals = goals.filter((g) => g.status === "in_progress");
-  const goalProgress = goals
+  const activityTypes  = [...new Set(activityMsgs.map((m) => m.activityType || m.content))];
+  const achievedGoals  = goals.filter((g) => g.status === "achieved");
+  const inProgressGoals= goals.filter((g) => g.status === "in_progress");
+  const goalProgress   = goals
     .filter((g) => g.status !== "not_started")
     .map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`);
 
@@ -221,12 +287,8 @@ function buildSummaryFromMessages(
   } else {
     lines.push("Support provided: General assistance and supervision.");
   }
-  if (achievedGoals.length > 0) {
-    lines.push(`Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`);
-  }
-  if (inProgressGoals.length > 0) {
-    lines.push(`Goals worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`);
-  }
+  if (achievedGoals.length > 0) lines.push(`Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`);
+  if (inProgressGoals.length > 0) lines.push(`Goals worked on: ${inProgressGoals.map((g) => g.name).join(", ")}.`);
   if (allTexts.length > 0) {
     lines.push("");
     lines.push("Practitioner observations:");
@@ -240,9 +302,7 @@ function buildSummaryFromMessages(
     lines.push("");
     lines.push(`Pre-session notes: ${session.notes}`);
   }
-  if (translationView !== "original") {
-    lines.unshift("[Observations translated to English]\n");
-  }
+  if (translationView !== "original") lines.unshift("[Observations translated to English]\n");
 
   const clinicalNotes = lines.join("\n");
   let score = 0;
@@ -254,12 +314,12 @@ function buildSummaryFromMessages(
 
   return {
     clinicalNotes,
-    activities: activityMsgs.map((a) => `${a.activityType || a.content} (${format(a.timestamp, "HH:mm")})`),
+    activities:    activityMsgs.map((a) => `${a.activityType || a.content} (${format(a.timestamp, "HH:mm")})`),
     goalProgress,
     complianceScore: score,
-    duration: formatDuration(elapsed),
+    duration:       formatDuration(elapsed),
     voiceNoteCount: voiceMsgs.length,
-    imageCount: imageMsgs.length,
+    imageCount:     imageMsgs.length,
     evidenceSummary:
       imageMsgs.length > 0
         ? `${imageMsgs.length} photo${imageMsgs.length > 1 ? "s" : ""} captured`
@@ -274,14 +334,62 @@ function buildSummaryFromMessages(
 function MessageBubble({
   msg,
   translationView,
+  onLongPress,
 }: {
   msg: ChatMessage;
   translationView: TranslationView;
+  onLongPress?: (msgId: string, el: HTMLElement) => void;
 }) {
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleTouchStart() {
+    longPressRef.current = setTimeout(() => {
+      // Get the element via the touch
+      onLongPress?.(msg.id, document.getElementById(`msg-${msg.id}`) as HTMLElement);
+    }, 600);
+  }
+  function handleTouchEnd() {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+  }
+  function handleContextMenu(e: React.MouseEvent<HTMLElement>) {
+    e.preventDefault();
+    onLongPress?.(msg.id, e.currentTarget);
+  }
+
   if (msg.type === "system") {
     return (
       <div className="flex justify-center my-2 px-4">
         <span className="text-[10px] text-white/25 italic">{msg.content}</span>
+      </div>
+    );
+  }
+
+  if (msg.type === "ai_event") {
+    return (
+      <div className="flex justify-center my-2 px-4">
+        <div className="flex items-center gap-2 bg-[#5533CC]/12 border border-[#5533CC]/20 rounded-2xl px-4 py-2 max-w-xs">
+          <Sparkles className="h-3 w-3 shrink-0" style={{ color: PURPLE }} />
+          <span className="text-[10px] font-medium" style={{ color: "#A89EDD" }}>{msg.content}</span>
+          {msg.aiDelta != null && msg.aiDelta > 0 && (
+            <span className="text-[9px] font-bold" style={{ color: LIME }}>+{msg.aiDelta}%</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (msg.type === "incident_prompt") {
+    return (
+      <div className="flex justify-center my-2 px-4">
+        <div className="w-full max-w-xs bg-amber-950/60 border border-amber-700/40 rounded-2xl px-4 py-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-amber-200 text-[11px] font-semibold">Potential incident noted</p>
+              <p className="text-amber-300/70 text-[10px] mt-0.5">Would you like to document this safely?</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -292,7 +400,7 @@ function MessageBubble({
     return (
       <div className="flex justify-center my-1.5">
         <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1">
-          <AIcon className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <AIcon className="h-2.5 w-2.5 shrink-0" style={{ color: LIME }} />
           <span className="text-[10px] text-white/60 font-medium">{msg.activityType || msg.content}</span>
           <span className="text-[9px] text-white/25">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
@@ -304,7 +412,7 @@ function MessageBubble({
     return (
       <div className="flex justify-center my-1.5">
         <div className="flex items-center gap-1.5 bg-[#D9F103]/8 border border-[#D9F103]/15 rounded-full px-3 py-1">
-          <Target className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <Target className="h-2.5 w-2.5 shrink-0" style={{ color: LIME }} />
           <span className="text-[10px] text-[#D9F103]/70 font-medium">{msg.content}</span>
           <span className="text-[9px] text-[#D9F103]/30">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
@@ -313,9 +421,16 @@ function MessageBubble({
   }
 
   // Worker messages: text, voice, image, file — right aligned
+  const isInteractive = msg.type === "text" || msg.type === "voice";
   return (
     <div className="flex justify-end px-1 my-0.5">
-      <div className="max-w-[82%] min-w-[60px]">
+      <div
+        id={`msg-${msg.id}`}
+        className="max-w-[82%] min-w-[60px]"
+        onTouchStart={isInteractive ? handleTouchStart : undefined}
+        onTouchEnd={isInteractive ? handleTouchEnd : undefined}
+        onContextMenu={isInteractive ? handleContextMenu : undefined}
+      >
         <div className="bg-[#1a1a6e] border border-[#5271FF]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
@@ -343,7 +458,7 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#D9F103]">
+                  <div className="flex items-center gap-1" style={{ color: LIME }}>
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
@@ -368,7 +483,7 @@ function MessageBubble({
                   {msg.translated ? (
                     <>
                       {translationView === "both" && (
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103] mb-0.5">EN</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: LIME }}>EN</p>
                       )}
                       <p className="text-white/80 text-sm leading-relaxed">{msg.translated}</p>
                     </>
@@ -381,6 +496,35 @@ function MessageBubble({
           )}
         </div>
         <p className="text-white/20 text-[9px] text-right mt-0.5 pr-1">{format(msg.timestamp, "HH:mm")}</p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ScoreRing
+// ---------------------------------------------------------------------------
+
+function ScoreRing({ score }: { score: number }) {
+  const r = 44;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  const color = score >= 80 ? "#10B981" : score >= 60 ? "#F59E0B" : "#EF4444";
+  return (
+    <div className="relative flex items-center justify-center w-28 h-28 mx-auto">
+      <svg className="absolute inset-0 -rotate-90" width="112" height="112" viewBox="0 0 112 112">
+        <circle cx="56" cy="56" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+        <circle
+          cx="56" cy="56" r={r} fill="none"
+          stroke={color} strokeWidth="8"
+          strokeDasharray={`${dash} ${circ}`}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dasharray 0.6s ease" }}
+        />
+      </svg>
+      <div className="text-center z-10">
+        <p className="text-3xl font-black text-white leading-none">{score}</p>
+        <p className="text-[9px] text-white/50 mt-0.5">/ 100</p>
       </div>
     </div>
   );
@@ -449,8 +593,23 @@ export default function SessionLive() {
   // ── UI panels ──
   const [showActivitySheet, setShowActivitySheet] = useState(false);
   const [bodyMapOpen, setBodyMapOpen] = useState(false);
+  const [showFab, setShowFab] = useState(false);
+  const [expandedHealthChip, setExpandedHealthChip] = useState<string | null>(null);
 
-  // ── Approval modal ──
+  // ── Placeholder rotation ──
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
+
+  // ── Bubble long-press menu ──
+  const [bubbleMenu, setBubbleMenu] = useState<BubbleMenu | null>(null);
+  const [improvingMsgId, setImprovingMsgId] = useState<string | null>(null);
+
+  // ── Incident guided sheet ──
+  const [showIncidentSheet, setShowIncidentSheet] = useState(false);
+  const [incidentDraft, setIncidentDraft] = useState<IncidentDraft>({
+    step: 0, what: "", actions: [], wellbeing: "",
+  });
+
+  // ── Approval / completion ──
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState<LiveSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -473,6 +632,10 @@ export default function SessionLive() {
   const [rpAcknowledged, setRpAcknowledged] = useState(false);
   const rpDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── AI micro-events ──
+  const prevScoreRef = useRef(0);
+  const prevRpCountRef = useRef(0);
+
   // ── Post-save result ──
   interface PostSaveResult {
     score: number;
@@ -494,16 +657,16 @@ export default function SessionLive() {
 
   // ── Derived ──
   const activityMessages = messages.filter((m) => m.type === "activity");
-  const voiceMessages = messages.filter((m) => m.type === "voice");
-  const imageMessages = messages.filter((m) => m.type === "image");
-  const imageUrls = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
+  const voiceMessages    = messages.filter((m) => m.type === "voice");
+  const imageMessages    = messages.filter((m) => m.type === "image");
+  const imageUrls        = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
 
   // ── addMessage helper ──
   const addMessage = useCallback(
     (msg: Omit<ChatMessage, "id">): ChatMessage => {
       const newMsg: ChatMessage = { ...msg, id: crypto.randomUUID() };
       setMessages((prev) => [...prev, newMsg]);
-      if (id) {
+      if (id && !["ai_event", "incident_prompt"].includes(msg.type)) {
         fetch(`/api/sessions/${id}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -545,42 +708,21 @@ export default function SessionLive() {
       .then((data: unknown) => {
         if (Array.isArray(data) && data.length > 0) {
           setMessages(
-            (
-              data as Array<{
-                id: string;
-                message_type: string;
-                content: string;
-                created_at: string;
-                media_url?: string;
-              }>
-            ).map((m) => ({
-              id: m.id,
-              type: m.message_type as ChatMessage["type"],
-              content: m.content || "",
-              timestamp: new Date(m.created_at),
-              mediaUrl: m.media_url || undefined,
-            })),
+            (data as Array<{ id: string; message_type: string; content: string; created_at: string; media_url?: string }>)
+              .map((m) => ({
+                id: m.id,
+                type: m.message_type as ChatMessage["type"],
+                content: m.content || "",
+                timestamp: new Date(m.created_at),
+                mediaUrl: m.media_url || undefined,
+              })),
           );
         } else {
-          setMessages([
-            {
-              id: crypto.randomUUID(),
-              type: "system",
-              content: `${session.session_type} session`,
-              timestamp: new Date(),
-            },
-          ]);
+          setMessages([{ id: crypto.randomUUID(), type: "system", content: `${session.session_type} session`, timestamp: new Date() }]);
         }
       })
       .catch(() => {
-        setMessages([
-          {
-            id: crypto.randomUUID(),
-            type: "system",
-            content: `${session.session_type} session`,
-            timestamp: new Date(),
-          },
-        ]);
+        setMessages([{ id: crypto.randomUUID(), type: "system", content: `${session.session_type} session`, timestamp: new Date() }]);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
@@ -590,19 +732,14 @@ export default function SessionLive() {
     if (!session || bodyMarkersInitRef.current) return;
     bodyMarkersInitRef.current = true;
     const raw = (session as unknown as { body_markers?: unknown }).body_markers;
-    if (Array.isArray(raw) && raw.length > 0) {
-      setBodyMarkers(raw as BodyMarker[]);
-    }
+    if (Array.isArray(raw) && raw.length > 0) setBodyMarkers(raw as BodyMarker[]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
   // ── Body markers debounced save ──
   const bodyMarkersAutoSaveSkipRef = useRef(true);
   useEffect(() => {
-    if (bodyMarkersAutoSaveSkipRef.current) {
-      bodyMarkersAutoSaveSkipRef.current = false;
-      return;
-    }
+    if (bodyMarkersAutoSaveSkipRef.current) { bodyMarkersAutoSaveSkipRef.current = false; return; }
     if (!id) return;
     if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current);
     bodyMarkersDebounceRef.current = setTimeout(async () => {
@@ -612,13 +749,9 @@ export default function SessionLive() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ body_markers: bodyMarkers }),
         });
-      } catch {
-        // silent
-      }
+      } catch { /* silent */ }
     }, 1500);
-    return () => {
-      if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current);
-    };
+    return () => { if (bodyMarkersDebounceRef.current) clearTimeout(bodyMarkersDebounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bodyMarkers]);
 
@@ -627,17 +760,9 @@ export default function SessionLive() {
     if (session && goals.length === 0) {
       const addressed = session.goals_addressed ?? [];
       if (addressed.length > 0 && resolvedGoalTitles.length > 0) {
-        setGoals(
-          addressed.map((gid, i) => ({
-            id: gid,
-            name: resolvedGoalTitles[i] ?? gid,
-            status: "not_started" as const,
-          })),
-        );
+        setGoals(addressed.map((gid, i) => ({ id: gid, name: resolvedGoalTitles[i] ?? gid, status: "not_started" as const })));
       } else if (addressed.length > 0) {
-        setGoals(
-          addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })),
-        );
+        setGoals(addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -650,9 +775,7 @@ export default function SessionLive() {
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isActive]);
 
   // ── Auto-start from settings ──
@@ -680,10 +803,7 @@ export default function SessionLive() {
         action: (
           <ToastAction
             altText="Start Session"
-            onClick={() => {
-              handleStart();
-              setReminderDismissed(true);
-            }}
+            onClick={() => { handleStart(); setReminderDismissed(true); }}
             className="bg-emerald-600 text-white hover:bg-emerald-700 border-0 text-xs font-semibold"
           >
             Start Session
@@ -692,9 +812,7 @@ export default function SessionLive() {
       });
       setReminderDismissed(true);
     }, 5000);
-    return () => {
-      if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
-    };
+    return () => { if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, isActive]);
 
@@ -704,28 +822,45 @@ export default function SessionLive() {
     rpDebounceRef.current = setTimeout(() => {
       const flags = detectRestrictivePracticesAll([
         ...messages.filter((m) => ["text", "voice"].includes(m.type)).map((m) => m.content),
-        recordingText,
-        editableNotes,
-        structuredNotes.activitiesPerformed,
-        structuredNotes.outcomes,
-        structuredNotes.participantResponse,
-        structuredNotes.progressTowardGoals,
+        recordingText, editableNotes,
+        structuredNotes.activitiesPerformed, structuredNotes.outcomes,
+        structuredNotes.participantResponse, structuredNotes.progressTowardGoals,
       ]);
       setRpFlags(flags);
     }, 600);
-    return () => {
-      if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current);
-    };
+    return () => { if (rpDebounceRef.current) clearTimeout(rpDebounceRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    messages.length,
-    recordingText,
-    editableNotes,
-    structuredNotes.activitiesPerformed,
-    structuredNotes.outcomes,
-    structuredNotes.participantResponse,
-    structuredNotes.progressTowardGoals,
-  ]);
+  }, [messages.length, recordingText, editableNotes,
+      structuredNotes.activitiesPerformed, structuredNotes.outcomes,
+      structuredNotes.participantResponse, structuredNotes.progressTowardGoals]);
+
+  // ── Placeholder rotation ──
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIdx((i) => (i + 1) % COMPOSER_PLACEHOLDERS.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ── AI micro-event injection ──
+  // We'll compute liveCompliance in the render section and store the score in state
+  // via a callback. But since we need it before render, we track it inline here:
+  const [lastInjectedScore, setLastInjectedScore] = useState(0);
+  const aiMicroEventDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Inject RP detection event
+  useEffect(() => {
+    if (!isActive) return;
+    if (rpFlags.length > prevRpCountRef.current && rpFlags.length > 0) {
+      prevRpCountRef.current = rpFlags.length;
+      addMessage({
+        type: "ai_event",
+        content: `Possible restrictive practice language detected — review before saving`,
+        timestamp: new Date(),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rpFlags.length, isActive]);
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -744,25 +879,40 @@ export default function SessionLive() {
     }
   };
 
+  const checkIncidentTriggers = (text: string) => {
+    if (!INCIDENT_KEYWORDS.test(text)) return;
+    // Only add if the last message is not already an incident_prompt
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.type === "incident_prompt") return prev;
+      return [...prev, { id: crypto.randomUUID(), type: "incident_prompt", content: text, timestamp: new Date() }];
+    });
+  };
+
+  const injectAiMicroEvent = useCallback((content: string, delta?: number) => {
+    if (!isActive) return;
+    if (aiMicroEventDebounce.current) clearTimeout(aiMicroEventDebounce.current);
+    aiMicroEventDebounce.current = setTimeout(() => {
+      addMessage({ type: "ai_event", content, timestamp: new Date(), aiDelta: delta });
+    }, 200);
+  }, [isActive, addMessage]);
+
   const sendTextMessage = () => {
     if (!inputText.trim()) return;
-    if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
-      return;
-    }
+    if (!isActive) { toast({ title: "Start the session first", variant: "destructive" }); return; }
     addMessage({ type: "text", content: inputText.trim(), timestamp: new Date() });
+    checkIncidentTriggers(inputText.trim());
     setInputText("");
   };
 
   const logActivity = (type: string) => {
-    if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
-      setShowActivitySheet(false);
-      return;
-    }
+    if (!isActive) { toast({ title: "Start the session first", variant: "destructive" }); setShowActivitySheet(false); return; }
     addMessage({ type: "activity", content: type, timestamp: new Date(), activityType: type });
     setShowActivitySheet(false);
+    setShowFab(false);
     toast({ title: `${type} logged` });
+    // Inject AI micro-event after activity log
+    setTimeout(() => injectAiMicroEvent("Activity logged — compliance improving", 10), 800);
   };
 
   const cycleGoalStatus = (goalId: string) => {
@@ -772,13 +922,10 @@ export default function SessionLive() {
     const idx = cycle.indexOf(goal.status);
     const newStatus = cycle[(idx + 1) % cycle.length];
     setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: newStatus } : g)));
-    addMessage({
-      type: "goal_update",
-      content: `${goal.name} → ${GOAL_STATUS_CONFIG[newStatus].label}`,
-      timestamp: new Date(),
-      goalId,
-      goalStatus: newStatus,
-    });
+    addMessage({ type: "goal_update", content: `${goal.name} → ${GOAL_STATUS_CONFIG[newStatus].label}`, timestamp: new Date(), goalId, goalStatus: newStatus });
+    if (newStatus === "achieved") {
+      setTimeout(() => injectAiMicroEvent(`Goal achieved: ${goal.name}`, 8), 600);
+    }
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -788,6 +935,7 @@ export default function SessionLive() {
     addMessage({ type: "image", content: "Photo evidence", timestamp: new Date(), mediaUrl: url });
     toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
     e.target.value = "";
+    setTimeout(() => injectAiMicroEvent("Photo evidence captured — strengthens claim", 10), 600);
   };
 
   const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -803,11 +951,7 @@ export default function SessionLive() {
     const w = window as any;
     const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
-      toast({
-        title: "Voice not supported",
-        description: "Use Chrome for voice notes.",
-        variant: "destructive",
-      });
+      toast({ title: "Voice not supported", description: "Use Chrome for voice notes.", variant: "destructive" });
       return;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -818,22 +962,16 @@ export default function SessionLive() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
+      for (let i = event.resultIndex; i < event.results.length; i++) transcript += event.results[i][0].transcript;
       setRecordingText(transcript);
     };
-    recognition.onerror = () => {
-      setIsRecording(false);
-      setRecordingText("");
-    };
-    recognition.onend = () => {
-      if (!stopIntentRef.current) recognition.start();
-    };
+    recognition.onerror = () => { setIsRecording(false); setRecordingText(""); };
+    recognition.onend = () => { if (!stopIntentRef.current) recognition.start(); };
     stopIntentRef.current = false;
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
+    setShowFab(false);
   };
 
   const stopRecording = async () => {
@@ -844,75 +982,55 @@ export default function SessionLive() {
     if (!text) return;
 
     const needsTranslation = translationView !== "original";
-    const newMsg = addMessage({
-      type: "voice",
-      content: text,
-      timestamp: new Date(),
-      isTranslating: needsTranslation,
-    });
+    const newMsg = addMessage({ type: "voice", content: text, timestamp: new Date(), isTranslating: needsTranslation });
     setRecordingText("");
     toast({ title: "Voice note saved" });
+    checkIncidentTriggers(text);
+
+    // Detect outcome/goal language
+    if (OUTCOME_KEYWORDS.test(text)) {
+      setTimeout(() => injectAiMicroEvent("Outcome language detected", 8), 500);
+    } else if (GOAL_KEYWORDS.test(text)) {
+      setTimeout(() => injectAiMicroEvent("Goal reference detected", 5), 500);
+    }
 
     if (needsTranslation) {
       try {
         const result = await translateToEnglish(text);
-        updateMessage(newMsg.id, {
-          isTranslating: false,
-          translated: result.translated,
-          detectedLanguage: result.detectedLanguage,
-        });
+        updateMessage(newMsg.id, { isTranslating: false, translated: result.translated, detectedLanguage: result.detectedLanguage });
       } catch {
         updateMessage(newMsg.id, { isTranslating: false });
-        toast({
-          title: "Translation unavailable",
-          description: "Original text preserved.",
-          variant: "destructive",
-        });
+        toast({ title: "Translation unavailable", description: "Original text preserved.", variant: "destructive" });
       }
     }
   };
 
   const handleStop = useCallback(async () => {
     if (elapsed === 0) {
-      toast({
-        title: "Session not started",
-        description: 'Click "Start" to begin the timer before ending.',
-        variant: "destructive",
-      });
+      toast({ title: "Session not started", description: 'Click "Start" to begin the timer before ending.', variant: "destructive" });
       return;
     }
 
-    const actMsgs = messages.filter((m) => m.type === "activity");
-    const vMsgs = messages.filter((m) => m.type === "voice");
-    const tMsgs = messages.filter((m) => m.type === "text");
-    const activityTypes = [...new Set(actMsgs.map((m) => m.activityType || m.content))];
-    const achievedGoals = goals.filter((g) => g.status === "achieved");
+    const actMsgs  = messages.filter((m) => m.type === "activity");
+    const vMsgs    = messages.filter((m) => m.type === "voice");
+    const tMsgs    = messages.filter((m) => m.type === "text");
+    const activityTypes   = [...new Set(actMsgs.map((m) => m.activityType || m.content))];
+    const achievedGoals   = goals.filter((g) => g.status === "achieved");
     const inProgressGoals = goals.filter((g) => g.status === "in_progress");
-    const voiceTexts = vMsgs
-      .map((v) => (translationView !== "original" && v.translated ? v.translated : v.content))
-      .filter(Boolean);
+    const voiceTexts = vMsgs.map((v) => (translationView !== "original" && v.translated ? v.translated : v.content)).filter(Boolean);
     const textContent = tMsgs.map((m) => m.content);
     const allObs = [...voiceTexts, ...textContent];
 
-    const prefilledHasContent =
-      activityTypes.length > 0 || voiceTexts.length > 0 || textContent.length > 0;
+    const prefilledHasContent = activityTypes.length > 0 || voiceTexts.length > 0 || textContent.length > 0;
     if (!prefilledHasContent && !session?.notes?.trim()) {
-      toast({
-        title: "Nothing to document yet",
-        description: "Log an activity or add a note before reviewing.",
-        variant: "destructive",
-      });
+      toast({ title: "Nothing to document yet", description: "Log an activity or add a note before reviewing.", variant: "destructive" });
       return;
     }
 
     hasManuallyEditedNotesRef.current = false;
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    if (isRecording) {
-      stopIntentRef.current = true;
-      recognitionRef.current?.stop();
-      setIsRecording(false);
-    }
+    if (isRecording) { stopIntentRef.current = true; recognitionRef.current?.stop(); setIsRecording(false); }
 
     setSummaryLoading(true);
     setShowSummary(true);
@@ -920,30 +1038,16 @@ export default function SessionLive() {
     const prefilled: StructuredNotes = {
       activitiesPerformed: activityTypes.join(", "),
       outcomes: [
-        achievedGoals.length > 0
-          ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.`
-          : "",
+        achievedGoals.length > 0 ? `Goals achieved: ${achievedGoals.map((g) => g.name).join(", ")}.` : "",
         allObs.length > 0 ? `Observations: ${allObs.slice(0, 2).join(" ")}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      ].filter(Boolean).join("\n"),
       participantResponse: "",
-      progressTowardGoals: goals
-        .filter((g) => g.status !== "not_started")
-        .map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`)
-        .join("\n"),
+      progressTowardGoals: goals.filter((g) => g.status !== "not_started").map((g) => `${g.name}: ${GOAL_STATUS_CONFIG[g.status].label}`).join("\n"),
     };
 
     const s = buildSummaryFromMessages(
-      {
-        session_type: session?.session_type ?? "Session",
-        duration_minutes: session?.duration_minutes ?? 0,
-        notes: session?.notes,
-      },
-      messages,
-      goals,
-      elapsed,
-      translationView,
+      { session_type: session?.session_type ?? "Session", duration_minutes: session?.duration_minutes ?? 0, notes: session?.notes },
+      messages, goals, elapsed, translationView,
     );
     setSummary(s);
     setStructuredNotes(prefilled);
@@ -952,59 +1056,34 @@ export default function SessionLive() {
 
   const handleApproveAndSave = useCallback(async () => {
     setShowRpBottomSheet(false);
-    if (!id) {
-      navigate("/sessions");
-      return;
-    }
+    if (!id) { navigate("/sessions"); return; }
 
     const compSettings = settings?.compliance;
     const actMsgs = messages.filter((m) => m.type === "activity");
-    const vMsgs = messages.filter((m) => m.type === "voice");
-    const iMsgs = messages.filter((m) => m.type === "image");
-    const iUrls = iMsgs.map((m) => m.mediaUrl!).filter(Boolean);
+    const vMsgs   = messages.filter((m) => m.type === "voice");
+    const iMsgs   = messages.filter((m) => m.type === "image");
+    const iUrls   = iMsgs.map((m) => m.mediaUrl!).filter(Boolean);
 
     if (compSettings?.requireActivity && actMsgs.length === 0) {
-      toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
-      return;
+      toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" }); return;
     }
     if (compSettings?.requireNotes) {
-      const hasNotes =
-        [
-          structuredNotes.activitiesPerformed,
-          structuredNotes.outcomes,
-          structuredNotes.participantResponse,
-        ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
-      if (!hasNotes) {
-        toast({
-          title: "Session cannot be approved: clinical notes are required",
-          variant: "destructive",
-        });
-        return;
-      }
+      const hasNotes = [structuredNotes.activitiesPerformed, structuredNotes.outcomes, structuredNotes.participantResponse]
+        .some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
+      if (!hasNotes) { toast({ title: "Session cannot be approved: clinical notes are required", variant: "destructive" }); return; }
     }
     if (compSettings?.requireDuration && elapsed === 0) {
-      toast({
-        title: "Session cannot be approved: session duration not recorded",
-        variant: "destructive",
-      });
-      return;
+      toast({ title: "Session cannot be approved: session duration not recorded", variant: "destructive" }); return;
     }
 
     setIsSaving(true);
 
-    const transcription = vMsgs
-      .map(
-        (n) =>
-          `[${format(n.timestamp, "HH:mm")}] ${n.content}${n.translated && n.translated !== n.content ? ` [EN: ${n.translated}]` : ""}`,
-      )
-      .join("\n");
+    const transcription = vMsgs.map((n) =>
+      `[${format(n.timestamp, "HH:mm")}] ${n.content}${n.translated && n.translated !== n.content ? ` [EN: ${n.translated}]` : ""}`
+    ).join("\n");
 
     const durationMinutes = Math.max(1, Math.round(elapsed / 60));
-    const activityLog = actMsgs.map((a) => ({
-      timestamp: format(a.timestamp, "HH:mm"),
-      type: a.activityType || a.content,
-      label: a.activityType || a.content,
-    }));
+    const activityLog = actMsgs.map((a) => ({ timestamp: format(a.timestamp, "HH:mm"), type: a.activityType || a.content, label: a.activityType || a.content }));
 
     try {
       const patchBody: Record<string, unknown> = {
@@ -1023,31 +1102,15 @@ export default function SessionLive() {
       };
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
 
-      const patchRes = await fetch(`/api/sessions/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patchBody),
-      });
+      const patchRes = await fetch(`/api/sessions/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patchBody) });
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
 
       const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
-      const liveComplianceLocal = checkStructuredCompliance(
-        structuredNotes,
-        !!(session?.participant_id),
-        durationMinutes,
-        actMsgs.length,
-        iUrls.length,
-        goalsAddressedCount,
-      );
+      const liveComplianceLocal = checkStructuredCompliance(structuredNotes, !!(session?.participant_id), durationMinutes, actMsgs.length, iUrls.length, goalsAddressedCount);
 
       const localResult: PostSaveResult = {
         score: liveComplianceLocal.score,
-        status:
-          liveComplianceLocal.score >= 85
-            ? "Compliant"
-            : liveComplianceLocal.score >= 60
-              ? "At Risk"
-              : "Non-Compliant",
+        status: liveComplianceLocal.score >= 85 ? "Compliant" : liveComplianceLocal.score >= 60 ? "At Risk" : "Non-Compliant",
         rules: liveComplianceLocal.checks.map((c) => ({ label: c.label, pass: c.pass, note: c.note })),
         rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
       };
@@ -1071,15 +1134,11 @@ export default function SessionLive() {
               category: String(f.category ?? ""),
               phrase: String(f.phrase ?? ""),
               index: Number(f.index ?? 0),
-              suggested_rewrite:
-                (f.suggested_rewrite as string | undefined) ??
-                (f.suggestion as string | undefined),
+              suggested_rewrite: (f.suggested_rewrite as string | undefined) ?? (f.suggestion as string | undefined),
             }));
           }
         }
-      } catch {
-        // timeout/error — use local
-      }
+      } catch { /* timeout/error — use local */ }
 
       setIsSaving(false);
       setPostSaveResult(localResult);
@@ -1087,34 +1146,15 @@ export default function SessionLive() {
     } catch (err) {
       setIsSaving(false);
       console.error("session save failed", err);
-      toast({
-        title: "Save failed",
-        description: "Could not save. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Save failed", description: "Could not save. Please try again.", variant: "destructive" });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    id,
-    elapsed,
-    editableNotes,
-    messages,
-    structuredNotes,
-    settings,
-    rpFlags,
-    bodyMarkers,
-    session,
-    toast,
-    navigate,
-  ]);
+  }, [id, elapsed, editableNotes, messages, structuredNotes, settings, rpFlags, bodyMarkers, session, toast, navigate]);
 
   const handleInitiateApprove = useCallback(() => {
     const freshFlags = detectRestrictivePracticesAll([
-      editableNotes,
-      structuredNotes.activitiesPerformed,
-      structuredNotes.outcomes,
-      structuredNotes.participantResponse,
-      structuredNotes.progressTowardGoals,
+      editableNotes, structuredNotes.activitiesPerformed, structuredNotes.outcomes,
+      structuredNotes.participantResponse, structuredNotes.progressTowardGoals,
       ...voiceMessages.map((n) => n.content),
     ]);
     const flagsToUse = freshFlags.length > 0 ? freshFlags : rpFlags;
@@ -1132,14 +1172,7 @@ export default function SessionLive() {
     setIsActive(false);
     if (timerRef.current) clearInterval(timerRef.current);
     setElapsed(0);
-    setMessages([
-      {
-        id: crypto.randomUUID(),
-        type: "system",
-        content: `${session?.session_type ?? "Session"} restarted`,
-        timestamp: new Date(),
-      },
-    ]);
+    setMessages([{ id: crypto.randomUUID(), type: "system", content: `${session?.session_type ?? "Session"} restarted`, timestamp: new Date() }]);
     setGoals((prev) => prev.map((g) => ({ ...g, status: "not_started" as const })));
     setBodyMarkers([]);
     setShowRestartConfirm(false);
@@ -1147,16 +1180,57 @@ export default function SessionLive() {
     setSummary(null);
     hasManuallyEditedNotesRef.current = false;
     setEditableNotes("");
-    setStructuredNotes({
-      activitiesPerformed: "",
-      outcomes: "",
-      participantResponse: "",
-      progressTowardGoals: "",
-    });
+    setStructuredNotes({ activitiesPerformed: "", outcomes: "", participantResponse: "", progressTowardGoals: "" });
     stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
+    prevScoreRef.current = 0;
+    prevRpCountRef.current = 0;
     toast({ title: "Session restarted", description: "All logs cleared." });
+  };
+
+  // ── Long-press bubble menu handlers ──
+  const handleBubbleLongPress = useCallback((msgId: string, el: HTMLElement) => {
+    const rect = el.getBoundingClientRect();
+    setBubbleMenu({ msgId, top: rect.top + window.scrollY, right: window.innerWidth - rect.right });
+  }, []);
+
+  const handleImproveWithAI = async (msgId: string) => {
+    setBubbleMenu(null);
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg) return;
+    setImprovingMsgId(msgId);
+    try {
+      const res = await fetch("/api/ai/clinical-rewrite", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: msg.content }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const improved = data.rewritten ?? data.result ?? data.text;
+        if (improved) updateMessage(msgId, { content: improved });
+        toast({ title: "Note improved with AI" });
+      }
+    } catch { toast({ title: "AI improvement unavailable", variant: "destructive" }); }
+    finally { setImprovingMsgId(null); }
+  };
+
+  const handleConvertToIncident = (msgId: string) => {
+    setBubbleMenu(null);
+    const msg = messages.find((m) => m.id === msgId);
+    setIncidentDraft({ step: 0, what: msg?.content ?? "", actions: [], wellbeing: "" });
+    setShowIncidentSheet(true);
+  };
+
+  const handleTranslateBubble = async (msgId: string) => {
+    setBubbleMenu(null);
+    const msg = messages.find((m) => m.id === msgId);
+    if (!msg) return;
+    try {
+      const result = await translateToEnglish(msg.content);
+      updateMessage(msgId, { translated: result.translated, detectedLanguage: result.detectedLanguage });
+      toast({ title: "Translated to English" });
+    } catch { toast({ title: "Translation failed", variant: "destructive" }); }
   };
 
   // ---------------------------------------------------------------------------
@@ -1165,19 +1239,17 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0D0D55]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#D9F103]" />
+      <div className="h-screen flex items-center justify-center" style={{ background: DEEP }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: LIME }} />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#0D0D55]">
+      <div className="h-screen flex flex-col items-center justify-center gap-4" style={{ background: DEEP }}>
         <p className="text-white/50">Session not found</p>
-        <Button onClick={() => navigate("/sessions")} variant="outline">
-          Back to Sessions
-        </Button>
+        <Button onClick={() => navigate("/sessions")} variant="outline">Back to Sessions</Button>
       </div>
     );
   }
@@ -1185,153 +1257,179 @@ export default function SessionLive() {
   const participantName = session.participants?.full_name ?? "Session";
   const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
   const liveCompliance = checkStructuredCompliance(
-    structuredNotes,
-    !!(session?.participant_id),
+    structuredNotes, !!(session?.participant_id),
     elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
-    activityMessages.length,
-    imageUrls.length,
-    goalsAddressedCount,
+    activityMessages.length, imageUrls.length, goalsAddressedCount,
   );
+
+  // Inject score AI micro-events (score must be computed first)
+  if (isActive && liveCompliance.score - lastInjectedScore >= 10 && liveCompliance.score > 0) {
+    setLastInjectedScore(liveCompliance.score);
+  }
 
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
-  if (compSettings?.requireActivity) {
-    bannerItems.push({ label: "Activity required", met: activityMessages.length > 0 });
-  }
+  if (compSettings?.requireActivity) bannerItems.push({ label: "Activity required", met: activityMessages.length > 0 });
   if (compSettings?.requireNotes) {
-    const hasNotes =
-      activityMessages.length > 0 ||
-      voiceMessages.length > 0 ||
-      messages.filter((m) => m.type === "text").length > 0;
+    const hasNotes = activityMessages.length > 0 || voiceMessages.length > 0 || messages.filter((m) => m.type === "text").length > 0;
     bannerItems.push({ label: "Clinical notes required", met: hasNotes });
   }
-  if (compSettings?.requireDuration) {
-    bannerItems.push({ label: "Timer required", met: elapsed > 0 });
-  }
-  const bannerVisible = bannerItems.length > 0;
-  const bannerAllMet = bannerItems.every((i) => i.met);
-  const bannerAnyMet = bannerItems.some((i) => i.met);
+  if (compSettings?.requireDuration) bannerItems.push({ label: "Timer required", met: elapsed > 0 });
+
+  const sessionState = deriveSessionStateLabel(isActive, elapsed, liveCompliance.score);
+  const complianceActionLabel = deriveComplianceActionLabel(liveCompliance.score, liveCompliance.checks);
+
+  // Health strip items
+  const healthItems = liveCompliance.checks.map((c) => {
+    const tips: Record<string, string> = {
+      "Goals linked": "Link NDIS goals in session setup to improve claim defensibility.",
+      "Duration recorded": "Start the timer before beginning support activities.",
+      "Activity logged": "Tap the + button and log each support activity as it happens.",
+      "Clinical notes completed": "Add structured notes in the review screen before saving.",
+      "Photo evidence captured": "Tap the camera button to capture photo evidence.",
+      "Participant linked": "This session must be linked to a participant.",
+    };
+    return { label: c.label, pass: c.pass, note: c.note, tip: tips[c.label] ?? "" };
+  });
+
+  // Voice overlay keyword detection
+  const hasOutcomeLang = OUTCOME_KEYWORDS.test(recordingText);
+  const hasGoalLang    = GOAL_KEYWORDS.test(recordingText);
 
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="h-screen flex flex-col bg-[#050520] overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: DEEP }}>
 
-      {/* ── Top control bar ── */}
+      {/* ── Dynamic Header ── */}
       <div
-        className={cn(
-          "shrink-0 border-b border-white/10 transition-colors duration-300",
-          isActive ? "bg-[#0D0D55]" : "bg-slate-900",
-        )}
+        className="shrink-0 border-b border-white/10"
+        style={{ background: isActive ? NAVY : "#0a0a3a" }}
       >
-        <div className="flex items-center justify-between px-4 py-3">
+        {/* Top row: back, session state, controls */}
+        <div className="flex items-center gap-2 px-4 pt-3 pb-1">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1.5 text-white/70 hover:text-white text-sm transition-colors font-medium"
+            className="flex items-center gap-1 text-white/60 hover:text-white text-sm transition-colors font-medium shrink-0"
           >
-            <ArrowLeft className="h-4 w-4" /> Back
+            <ArrowLeft className="h-4 w-4" />
           </button>
 
-          <div className="text-center min-w-0 flex-1 px-3">
-            <h1 className="text-white font-bold text-sm tracking-tight leading-tight truncate">
-              {participantName}
-            </h1>
-            <p className="text-white/50 text-[10px]">{session.session_type}</p>
-          </div>
+          {/* Session state chip */}
+          <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-bold border shrink-0", sessionState.color)}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", sessionState.dot)} />
+            {sessionState.label}
+          </span>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <div className="flex items-center gap-1">
-              <Globe className="h-3 w-3 text-white/35 shrink-0" />
-              <div className="flex rounded-md border border-white/20 overflow-hidden">
-                {(["original", "translated", "both"] as TranslationView[]).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setTranslationView(v)}
-                    className={cn(
-                      "px-1.5 py-0.5 text-[9px] font-medium transition-colors",
-                      translationView === v
-                        ? "bg-white/20 text-white"
-                        : "text-white/35 hover:text-white/60",
-                    )}
-                  >
-                    {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
-                  </button>
-                ))}
-              </div>
+          <div className="flex-1" />
+
+          {/* Translation toggle */}
+          <div className="flex items-center gap-1 shrink-0">
+            <Globe className="h-3 w-3 text-white/30" />
+            <div className="flex rounded-md border border-white/15 overflow-hidden">
+              {(["original", "translated", "both"] as TranslationView[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setTranslationView(v)}
+                  className={cn("px-1.5 py-0.5 text-[9px] font-medium transition-colors",
+                    translationView === v ? "bg-white/20 text-white" : "text-white/30 hover:text-white/60")}
+                >
+                  {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
+                </button>
+              ))}
             </div>
-
-            {elapsed > 0 && (
-              <button
-                onClick={() => setShowRestartConfirm(true)}
-                className="text-white/40 hover:text-white/70 text-[10px] px-2 py-1 rounded-lg hover:bg-white/10 transition-colors"
-              >
-                Restart
-              </button>
-            )}
-
-            {!isActive ? (
-              <Button
-                onClick={handleStart}
-                className="gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-3 py-1.5 h-auto text-xs"
-              >
-                <Play className="h-3 w-3 fill-white" />
-                {elapsed > 0 ? "Resume" : "Start"}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleStop}
-                className="gap-1 bg-red-500 hover:bg-red-600 text-white font-semibold px-3 py-1.5 h-auto text-xs"
-              >
-                <Square className="h-3 w-3 fill-white" />
-                End
-              </Button>
-            )}
           </div>
-        </div>
 
-        {/* Timer bar */}
-        <div className="flex items-center justify-between px-4 pb-2 border-t border-white/10 pt-2">
-          <div className="flex items-center gap-2.5">
-            <span className="font-mono text-xl font-bold text-white tracking-tight">
-              {formatDuration(elapsed)}
-            </span>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border",
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
-                  : "bg-slate-700 text-slate-300 border-slate-600",
-              )}
+          {elapsed > 0 && (
+            <button
+              onClick={() => setShowRestartConfirm(true)}
+              className="text-white/35 hover:text-white/60 text-[10px] px-2 py-1 rounded-lg hover:bg-white/10 transition-colors shrink-0"
             >
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full",
-                  isActive ? "bg-emerald-400 animate-pulse" : "bg-slate-400",
-                )}
-              />
-              {isActive ? "In Progress" : elapsed > 0 ? "Paused" : "Ready"}
-            </span>
-            {isRecording && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-red-500/20 text-red-300 border border-red-500/30">
-                <Radio className="h-2.5 w-2.5 animate-pulse" /> Listening
-              </span>
-            )}
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          {!isActive ? (
+            <Button
+              onClick={handleStart}
+              className="gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 h-auto text-xs shrink-0"
+            >
+              <Play className="h-3 w-3 fill-white" />
+              {elapsed > 0 ? "Resume" : "Start"}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleStop}
+              className="gap-1 bg-red-500 hover:bg-red-600 text-white font-bold px-3 py-1.5 h-auto text-xs shrink-0"
+            >
+              <Square className="h-3 w-3 fill-white" />
+              End
+            </Button>
+          )}
+        </div>
+
+        {/* Second row: name + timer + compliance score */}
+        <div className="flex items-end justify-between px-4 pb-2.5 pt-1">
+          <div className="min-w-0 flex-1 mr-3">
+            <h1 className="text-white font-bold text-base leading-tight truncate">{participantName}</h1>
+            <p className="text-white/40 text-[11px] mt-0.5">{session.session_type}</p>
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-white/35">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {session.duration_minutes}m planned
-            </span>
-            {session.session_date && (
-              <span>{format(new Date(session.session_date), "MMM d")}</span>
-            )}
+          <div className="text-right shrink-0">
+            <p className="font-mono text-2xl font-black text-white tracking-tight leading-none">
+              {formatDuration(elapsed)}
+            </p>
+            <div className="flex items-center justify-end gap-1 mt-0.5">
+              <span
+                className="text-[11px] font-bold"
+                style={{ color: liveCompliance.score >= 80 ? "#10B981" : liveCompliance.score >= 60 ? "#F59E0B" : CORAL }}
+              >
+                {liveCompliance.score}%
+              </span>
+              <span className="text-[10px] text-white/40">· {complianceActionLabel}</span>
+            </div>
           </div>
         </div>
+
+        {/* Health strip */}
+        <div className="flex gap-1.5 px-3 pb-2.5 overflow-x-auto scrollbar-none">
+          {healthItems.map((item) => (
+            <div key={item.label}>
+              <button
+                onClick={() => setExpandedHealthChip(expandedHealthChip === item.label ? null : item.label)}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[9px] font-semibold whitespace-nowrap transition-all shrink-0",
+                  item.pass
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
+                    : "bg-amber-500/15 text-amber-300 border-amber-500/25",
+                )}
+              >
+                {item.pass
+                  ? <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                  : <AlertCircle className="h-2.5 w-2.5 shrink-0" />}
+                {item.label.replace("Clinical notes completed", "Notes").replace("Photo evidence captured", "Evidence").replace("Participant linked", "Participant").replace("Duration recorded", "Duration").replace("Activity logged", "Activity")}
+                {item.note && <span className="opacity-60 ml-0.5">({item.note})</span>}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Expanded health chip tooltip */}
+        {expandedHealthChip && (
+          <div className="mx-3 mb-2.5 bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-start gap-2">
+            <Zap className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-white/70 leading-relaxed flex-1">
+              {healthItems.find((h) => h.label === expandedHealthChip)?.tip}
+            </p>
+            <button onClick={() => setExpandedHealthChip(null)} className="text-white/30 hover:text-white/60">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ── Goals strip (tap chips to cycle status) ── */}
+      {/* ── Goal chips strip ── */}
       {goals.length > 0 ? (
         <div className="shrink-0 border-b border-white/10 bg-[#1A0D2E]/70 px-3 py-1.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -1342,10 +1440,7 @@ export default function SessionLive() {
               <button
                 key={goal.id}
                 onClick={() => cycleGoalStatus(goal.id)}
-                className={cn(
-                  "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border transition-all active:scale-95",
-                  GOAL_STATUS_CONFIG[goal.status].cls,
-                )}
+                className={cn("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border transition-all active:scale-95", GOAL_STATUS_CONFIG[goal.status].cls)}
               >
                 {goal.name.length > 22 ? goal.name.slice(0, 22) + "…" : goal.name}
               </button>
@@ -1362,81 +1457,27 @@ export default function SessionLive() {
       ) : (
         <div className="shrink-0 bg-amber-950/30 border-b border-amber-800/20 px-3 py-1.5 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-amber-400/70 shrink-0" />
-          <p className="text-amber-300/70 text-[10px]">
-            No goals linked — non-compliant. Add goals in session setup.
-          </p>
-        </div>
-      )}
-
-      {/* ── Compliance banner ── */}
-      {bannerVisible && (
-        <div
-          className={cn(
-            "shrink-0 border-b px-3 py-1.5 transition-colors",
-            bannerAllMet
-              ? "bg-emerald-950/30 border-emerald-900/20"
-              : bannerAnyMet
-                ? "bg-amber-950/30 border-amber-900/20"
-                : "bg-red-950/30 border-red-900/20",
-          )}
-        >
-          <div className="flex items-center gap-2 flex-wrap">
-            <ShieldCheck
-              className={cn(
-                "h-3 w-3 shrink-0",
-                bannerAllMet ? "text-emerald-400" : "text-amber-400",
-              )}
-            />
-            {bannerAllMet ? (
-              <span className="text-[10px] text-emerald-400 font-medium">
-                All compliance requirements met
-              </span>
-            ) : (
-              bannerItems.map((item) => (
-                <span
-                  key={item.label}
-                  className={cn(
-                    "text-[10px] font-medium flex items-center gap-1",
-                    item.met ? "text-emerald-400" : "text-red-400",
-                  )}
-                >
-                  {item.met ? (
-                    <CheckCircle2 className="h-3 w-3" />
-                  ) : (
-                    <AlertCircle className="h-3 w-3" />
-                  )}
-                  {item.label}
-                </span>
-              ))
-            )}
-          </div>
+          <p className="text-amber-300/70 text-[10px]">No goals linked — non-compliant. Add goals in session setup.</p>
         </div>
       )}
 
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
-        <div className="shrink-0 bg-[#050520] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
+        <div className="shrink-0 border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto" style={{ background: DEEP }}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
-              <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
+              <HeartPulse className="h-3.5 w-3.5" style={{ color: CORAL }} /> Physical Examination
             </h3>
-            <button
-              onClick={() => setBodyMapOpen(false)}
-              className="text-white/35 hover:text-white/60"
-            >
+            <button onClick={() => setBodyMapOpen(false)} className="text-white/35 hover:text-white/60">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <BodyExaminationPanel
-            markers={bodyMarkers}
-            onChange={setBodyMarkers}
-            bodyType={participant?.biological_sex ?? "unspecified"}
-          />
+          <BodyExaminationPanel markers={bodyMarkers} onChange={setBodyMarkers} bodyType={participant?.biological_sex ?? "unspecified"} />
         </div>
       )}
 
       {/* ── Chat feed ── */}
-      <div className="flex-1 overflow-y-auto px-2 py-3">
+      <div className="flex-1 overflow-y-auto px-2 py-3" onClick={() => { setBubbleMenu(null); setShowFab(false); }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-20">
             <MessageSquare className="h-12 w-12 text-white/8 mb-3" />
@@ -1444,92 +1485,94 @@ export default function SessionLive() {
             <p className="text-white/15 text-xs mt-1">Start the session and document below</p>
           </div>
         )}
-
         <div className="space-y-0.5">
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} translationView={translationView} />
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              translationView={translationView}
+              onLongPress={handleBubbleLongPress}
+            />
           ))}
         </div>
-
-        {/* Live recording bubble */}
-        {isRecording && (
-          <div className="flex justify-end px-1 mt-1">
-            <div className="max-w-[82%] bg-red-950/50 border border-red-800/40 rounded-2xl rounded-tr-sm px-4 py-3">
-              <div className="flex items-center gap-2 mb-1.5 text-red-400">
-                <Radio className="h-3 w-3 animate-pulse" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
-              </div>
-              <p className="text-white/60 text-sm italic">
-                {recordingText || "Speak clearly…"}
-              </p>
-            </div>
-          </div>
-        )}
-
         <div ref={chatBottomRef} className="h-2" />
       </div>
 
-      {/* ── RP warning (above input) ── */}
+      {/* ── RP warning strip ── */}
       {rpFlags.length > 0 && !showSummary && (
         <div className="shrink-0 bg-red-950/50 border-t border-red-800/30 px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
           <p className="text-red-300 text-xs flex-1">
             <span className="font-semibold">Possible RP language detected</span>
-            <span className="text-red-400/70 ml-1">
-              ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
-            </span>
+            <span className="text-red-400/70 ml-1">({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})</span>
           </p>
-          <button
-            onClick={() => setShowRpBottomSheet(true)}
-            className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0"
-          >
+          <button onClick={() => setShowRpBottomSheet(true)} className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0">
             Review
           </button>
         </div>
       )}
 
-      {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-[#0D0D55] border-t border-white/10 px-3 py-2">
+      {/* ── Bottom composer ── */}
+      <div className="shrink-0 border-t border-white/10 px-3 py-2" style={{ background: NAVY }}>
         <div className="flex items-center gap-1.5">
-          {/* Activity picker */}
-          <button
-            onClick={() => setShowActivitySheet(true)}
-            title="Log activity"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-[#D9F103]/15 text-[#D9F103] hover:bg-[#D9F103]/25 transition-all shrink-0"
-          >
-            <Activity className="h-4 w-4" />
-          </button>
 
-          {/* Camera */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Take photo"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Camera className="h-4 w-4" />
-          </button>
-
-          {/* Attachment */}
-          <button
-            onClick={() => fileAttachRef.current?.click()}
-            title="Attach file"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
+          {/* Expandable FAB */}
+          <div className="relative shrink-0">
+            {showFab && (
+              <div className="absolute bottom-11 left-0 flex flex-col gap-2 items-start animate-in slide-in-from-bottom-2 duration-150">
+                <button
+                  onClick={() => { setShowActivitySheet(true); setShowFab(false); }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
+                >
+                  <Activity className="h-3.5 w-3.5" style={{ color: LIME }} /> Log Activity
+                </button>
+                <button
+                  onClick={() => { fileInputRef.current?.click(); setShowFab(false); }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
+                >
+                  <Camera className="h-3.5 w-3.5" style={{ color: "#60A5FA" }} /> Take Photo
+                </button>
+                <button
+                  onClick={() => { fileAttachRef.current?.click(); setShowFab(false); }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
+                >
+                  <Paperclip className="h-3.5 w-3.5" style={{ color: "#A78BFA" }} /> Attach File
+                </button>
+                {goals.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const nextGoal = goals.find((g) => g.status === "not_started") ?? goals[0];
+                      if (nextGoal) cycleGoalStatus(nextGoal.id);
+                      setShowFab(false);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white bg-[#1a1a6e] border border-white/15 whitespace-nowrap hover:bg-[#2a2a8e] transition-all"
+                  >
+                    <Target className="h-3.5 w-3.5" style={{ color: LIME }} /> Update Goal
+                  </button>
+                )}
+              </div>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowFab((o) => !o); }}
+              className={cn(
+                "h-9 w-9 rounded-full flex items-center justify-center transition-all",
+                showFab
+                  ? "text-white rotate-45"
+                  : "bg-white/8 text-white/50 hover:bg-white/15 hover:text-white/80"
+              )}
+              style={showFab ? { background: PURPLE } : {}}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
 
           {/* Text input */}
           <div className="flex-1 bg-white/8 border border-white/10 rounded-2xl px-4 py-2 min-h-[36px] flex items-center">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendTextMessage();
-                }
-              }}
-              placeholder={isActive ? "Type a note…" : "Start session to add notes"}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTextMessage(); } }}
+              placeholder={isActive ? COMPOSER_PLACEHOLDERS[placeholderIdx] : "Start session to add notes"}
               disabled={!isActive}
               className="w-full bg-transparent text-white text-sm placeholder-white/20 outline-none disabled:opacity-30"
             />
@@ -1542,9 +1585,7 @@ export default function SessionLive() {
             title={isRecording ? "Stop recording" : "Start voice note"}
             className={cn(
               "h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
-              isRecording
-                ? "bg-red-500 text-white animate-pulse"
-                : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
+              isRecording ? "bg-red-500 text-white animate-pulse" : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
             )}
           >
             {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -1554,46 +1595,91 @@ export default function SessionLive() {
           <button
             onClick={sendTextMessage}
             disabled={!inputText.trim() || !isActive}
-            className="h-9 w-9 bg-[#D9F103] rounded-full flex items-center justify-center disabled:opacity-20 hover:bg-[#D9F103]/90 transition-all shrink-0"
+            className="h-9 w-9 rounded-full flex items-center justify-center disabled:opacity-20 hover:opacity-90 transition-all shrink-0"
+            style={{ background: LIME }}
           >
-            <Send className="h-4 w-4 text-[#0D0D55]" />
+            <Send className="h-4 w-4" style={{ color: DEEP }} />
           </button>
         </div>
       </div>
 
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handlePhotoUpload}
-      />
-      <input
-        ref={fileAttachRef}
-        type="file"
-        accept=".pdf,.doc,.docx,.txt"
-        className="hidden"
-        onChange={handleFileAttach}
-      />
+      {/* ── Hidden file inputs ── */}
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoUpload} />
+      <input ref={fileAttachRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={handleFileAttach} />
 
-      {/* ── Activity sheet ── */}
+      {/* ══════════════════════════════════════════════════════
+          Voice Recording Overlay
+      ══════════════════════════════════════════════════════ */}
+      {isRecording && (
+        <div className="fixed inset-0 z-50 flex items-end" style={{ background: "rgba(5,5,32,0.92)" }}>
+          <div className="w-full rounded-t-3xl px-6 pt-6 pb-10 animate-in slide-in-from-bottom-4 duration-200" style={{ background: NAVY, borderTop: `1px solid rgba(255,255,255,0.1)` }}>
+
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-2 mb-3">
+                <div className="h-3 w-3 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">Listening</span>
+              </div>
+              <p className="text-white font-bold text-lg">CareScribe is organizing</p>
+              <p className="text-white font-bold text-lg">your documentation…</p>
+            </div>
+
+            {/* Live transcript */}
+            <div className="min-h-[60px] bg-white/5 rounded-2xl px-4 py-3 mb-4">
+              <p className="text-white/70 text-sm italic leading-relaxed">
+                {recordingText || "Speak clearly — describe the support you're providing…"}
+              </p>
+            </div>
+
+            {/* Live keyword badges */}
+            <div className="flex flex-wrap gap-2 justify-center mb-6">
+              <span className={cn(
+                "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all",
+                hasOutcomeLang
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                  : "bg-white/5 text-white/25 border-white/10",
+              )}>
+                {hasOutcomeLang ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                Outcome language
+              </span>
+              <span className={cn(
+                "flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold border transition-all",
+                hasGoalLang
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                  : "bg-white/5 text-white/25 border-white/10",
+              )}>
+                {hasGoalLang ? <CheckCircle2 className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
+                Goal reference
+              </span>
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold border bg-white/5 text-white/25 border-white/10">
+                <Clock className="h-3 w-3" />
+                Timestamp captured
+              </span>
+            </div>
+
+            <button
+              onClick={stopRecording}
+              className="w-full py-3 rounded-2xl text-sm font-bold text-white transition-colors"
+              style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)" }}
+            >
+              Stop Recording
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          Activity Sheet
+      ══════════════════════════════════════════════════════ */}
       {showActivitySheet && (
-        <div
-          className="fixed inset-0 z-40 flex items-end"
-          onClick={() => setShowActivitySheet(false)}
-        >
+        <div className="fixed inset-0 z-40 flex items-end" onClick={() => setShowActivitySheet(false)}>
           <div
-            className="w-full bg-[#0D0D55] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            style={{ background: NAVY, borderTop: "1px solid rgba(255,255,255,0.1)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-bold text-sm">Log Activity</h3>
-              <button
-                onClick={() => setShowActivitySheet(false)}
-                className="text-white/40 hover:text-white/70"
-              >
+              <button onClick={() => setShowActivitySheet(false)} className="text-white/40 hover:text-white/70">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1604,9 +1690,7 @@ export default function SessionLive() {
                   <div key={cat.label}>
                     <div className="flex items-center gap-1.5 mb-2">
                       <CatIcon className="h-3 w-3 text-white/30" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/30">
-                        {cat.label}
-                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/30">{cat.label}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {cat.items.map((a) => {
@@ -1615,13 +1699,10 @@ export default function SessionLive() {
                           <button
                             key={a.type}
                             onClick={() => logActivity(a.type)}
-                            className={cn(
-                              "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all active:scale-95",
-                              a.color,
-                            )}
+                            className={cn("flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-all active:scale-95", a.color)}
                           >
                             <AIcon className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{a.type}</span>
+                            {a.type}
                           </button>
                         );
                       })}
@@ -1634,406 +1715,458 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Practitioner Approval Modal ── */}
-      <Dialog
-        open={showSummary}
-        onOpenChange={(open) => {
-          if (!isSaving) setShowSummary(open);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl p-0 bg-white" style={{ border: "1px solid rgba(232,213,232,0.5)" }}>
-          <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-            <DialogTitle className="font-bold text-[18px] flex items-center gap-2" style={{ color: "#1C1626" }}>
-              <Shield className="h-5 w-5" style={{ color: "#542269" }} />
-              Review &amp; Approve Session Notes
-            </DialogTitle>
-            <DialogDescription className="text-[12px] mt-1" style={{ color: "#7A6A8A" }}>
-              Review the auto-generated notes below. Edit anything before approving — data is only
-              saved on your explicit approval.
-            </DialogDescription>
+      {/* ══════════════════════════════════════════════════════
+          Bubble long-press menu
+      ══════════════════════════════════════════════════════ */}
+      {bubbleMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setBubbleMenu(null)} />
+          <div
+            className="fixed z-50 bg-[#1a1a6e] border border-white/15 rounded-2xl shadow-2xl py-2 min-w-[180px] animate-in zoom-in-95 duration-150"
+            style={{ bottom: "80px", right: "16px" }}
+          >
+            <button
+              onClick={() => void handleImproveWithAI(bubbleMenu.msgId)}
+              disabled={improvingMsgId === bubbleMenu.msgId}
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+            >
+              {improvingMsgId === bubbleMenu.msgId
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: PURPLE }} />
+                : <Sparkles className="h-3.5 w-3.5" style={{ color: PURPLE }} />}
+              Improve with AI
+            </button>
+            <button
+              onClick={() => void handleTranslateBubble(bubbleMenu.msgId)}
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+            >
+              <Globe className="h-3.5 w-3.5 text-blue-400" />
+              Translate note
+            </button>
+            {goals.length > 0 && (
+              <button
+                onClick={() => { setBubbleMenu(null); toast({ title: "Open the Goals strip to link this note to a goal." }); }}
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+              >
+                <Target className="h-3.5 w-3.5" style={{ color: LIME }} />
+                Link to goal
+              </button>
+            )}
+            <div className="border-t border-white/10 mt-1 pt-1">
+              <button
+                onClick={() => handleConvertToIncident(bubbleMenu.msgId)}
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-amber-300 hover:bg-white/10 transition-colors text-left"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Convert to incident
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          Incident Guided Sheet
+      ══════════════════════════════════════════════════════ */}
+      {showIncidentSheet && (
+        <div className="fixed inset-0 z-50 flex items-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowIncidentSheet(false)} />
+          <div
+            className="relative w-full rounded-t-3xl shadow-2xl px-5 pt-5 pb-10 animate-in slide-in-from-bottom-4 duration-200 max-h-[85vh] overflow-y-auto"
+            style={{ background: "#ffffff" }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Shield className="h-5 w-5 text-amber-500" />
+              <h3 className="text-base font-bold text-slate-900">Guided Incident Record</h3>
+              <button onClick={() => setShowIncidentSheet(false)} className="ml-auto text-slate-400 hover:text-slate-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">This is a safe space — document calmly and continue the session.</p>
+
+            {/* Step indicator */}
+            <div className="flex gap-1 mb-5">
+              {[0, 1, 2].map((s) => (
+                <div
+                  key={s}
+                  className="flex-1 h-1 rounded-full transition-all"
+                  style={{ background: s <= incidentDraft.step ? PURPLE : "#E5E7EB" }}
+                />
+              ))}
+            </div>
+
+            {incidentDraft.step === 0 && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Step 1 — What happened?</p>
+                <textarea
+                  value={incidentDraft.what}
+                  onChange={(e) => setIncidentDraft((d) => ({ ...d, what: e.target.value }))}
+                  rows={4}
+                  placeholder="Describe what occurred in plain language…"
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-400 resize-none"
+                  style={{ color: "#1E1640" }}
+                />
+                <Button
+                  disabled={!incidentDraft.what.trim()}
+                  className="w-full text-white font-semibold"
+                  style={{ background: PURPLE }}
+                  onClick={() => setIncidentDraft((d) => ({ ...d, step: 1 }))}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
+
+            {incidentDraft.step === 1 && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Step 2 — Immediate actions taken</p>
+                {["Participant reassured", "Environment secured", "Supervisor informed", "First aid applied", "Emergency services contacted"].map((action) => (
+                  <label key={action} className="flex items-center gap-3 cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={incidentDraft.actions.includes(action)}
+                      onChange={(e) => setIncidentDraft((d) => ({
+                        ...d,
+                        actions: e.target.checked ? [...d.actions, action] : d.actions.filter((a) => a !== action),
+                      }))}
+                      className="h-4 w-4 rounded"
+                    />
+                    <span className="text-sm text-slate-700">{action}</span>
+                  </label>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setIncidentDraft((d) => ({ ...d, step: 0 }))}>Back</Button>
+                  <Button className="flex-1 text-white font-semibold" style={{ background: PURPLE }} onClick={() => setIncidentDraft((d) => ({ ...d, step: 2 }))}>Next</Button>
+                </div>
+              </div>
+            )}
+
+            {incidentDraft.step === 2 && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold text-slate-800">Step 3 — Participant wellbeing now</p>
+                {(["stable", "distressed", "follow_up"] as const).map((w) => (
+                  <label key={w} className="flex items-center gap-3 cursor-pointer py-1">
+                    <input
+                      type="radio"
+                      name="wellbeing"
+                      checked={incidentDraft.wellbeing === w}
+                      onChange={() => setIncidentDraft((d) => ({ ...d, wellbeing: w }))}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm text-slate-700">
+                      {w === "stable" ? "Stable" : w === "distressed" ? "Distressed — monitoring" : "Requires follow-up"}
+                    </span>
+                  </label>
+                ))}
+                <div className="flex gap-2 pt-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setIncidentDraft((d) => ({ ...d, step: 1 }))}>Back</Button>
+                  <Button
+                    className="flex-1 text-white font-semibold"
+                    style={{ background: PURPLE }}
+                    disabled={!incidentDraft.wellbeing}
+                    onClick={() => {
+                      const incidentText = [
+                        `INCIDENT RECORD`,
+                        `What happened: ${incidentDraft.what}`,
+                        incidentDraft.actions.length > 0 ? `Actions taken: ${incidentDraft.actions.join(", ")}` : "",
+                        `Participant wellbeing: ${incidentDraft.wellbeing}`,
+                      ].filter(Boolean).join("\n");
+                      addMessage({ type: "text", content: incidentText, timestamp: new Date() });
+                      addMessage({ type: "system", content: "Incident draft saved — you can continue the session", timestamp: new Date() });
+                      setShowIncidentSheet(false);
+                      toast({ title: "Incident draft saved", description: "You can continue the session." });
+                    }}
+                  >
+                    Save Incident Draft
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-xs text-emerald-700">
+              Draft saved automatically · Supervisor can review later · You can continue the session
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          Completion / Approval Screen (full slide-up)
+      ══════════════════════════════════════════════════════ */}
+      {showSummary && (
+        <div className="fixed inset-0 z-40 flex flex-col" style={{ background: "#F5F3FC" }}>
+
+          {/* Header */}
+          <div className="shrink-0 px-5 pt-5 pb-4 border-b border-white" style={{ background: "white" }}>
+            <div className="flex items-center gap-2 mb-0.5">
+              <ShieldCheck className="h-5 w-5 shrink-0" style={{ color: PURPLE }} />
+              <h2 className="text-base font-bold" style={{ color: "#1E1640" }}>
+                {postSaveResult ? "Session Saved" : "Review & Approve"}
+              </h2>
+            </div>
+            {!postSaveResult && (
+              <p className="text-[11px]" style={{ color: "#7A6A9E" }}>
+                Review notes below. Only saved on your explicit approval.
+              </p>
+            )}
           </div>
 
-          {postSaveResult ? (
-            <div className="p-6 space-y-5">
-              <ComplianceResultPanel
-                score={postSaveResult.score}
-                status={postSaveResult.status}
-                rules={postSaveResult.rules}
-                rpFlags={postSaveResult.rpFlags}
-              />
-              <Button
-                onClick={() => navigate(`/sessions/${id}`)}
-                className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
-                style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
-              >
-                <FileText className="h-4 w-4" />
-                View Session Record
-              </Button>
-            </div>
-          ) : summaryLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#542269" }} />
-            </div>
-          ) : summary ? (
-            <div className="p-6 space-y-5">
-              {/* Stat row */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
-                  <p className="text-xl font-bold font-mono" style={{ color: "#1C1626" }}>{summary.duration}</p>
-                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
-                    Duration
+          <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            {postSaveResult ? (
+              /* ── Post-save result view ── */
+              <div className="space-y-5">
+                {/* Score ring + achievement checklist */}
+                <div className="bg-white rounded-2xl px-5 py-6 shadow-sm">
+                  <p className="text-center text-[11px] font-bold uppercase tracking-widest mb-4" style={{ color: "#7A6A9E" }}>
+                    Session Complete
+                  </p>
+                  <ScoreRing score={postSaveResult.score} />
+                  <p className="text-center font-bold mt-3" style={{ color: "#1E1640" }}>
+                    {postSaveResult.status}
                   </p>
                 </div>
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
-                  <p className="text-xl font-bold" style={{ color: "#1C1626" }}>{summary.activities.length}</p>
-                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
-                    Activities
-                  </p>
-                </div>
-                <div
-                  className={cn(
-                    "rounded-xl p-3 text-center border",
-                    liveCompliance.score >= 80
-                      ? "bg-emerald-50 border-emerald-200"
-                      : liveCompliance.score >= 60
-                        ? "bg-amber-50 border-amber-200"
-                        : "bg-red-50 border-red-200",
-                  )}
+
+                {/* Checklist */}
+                {postSaveResult.rules && (
+                  <div className="bg-white rounded-2xl px-5 py-4 shadow-sm space-y-2">
+                    {postSaveResult.rules.map((rule, i) => (
+                      <div key={i} className="flex items-center gap-2.5 text-sm">
+                        {rule.pass
+                          ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          : <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />}
+                        <span style={{ color: rule.pass ? "#065F46" : "#92400E" }}>{rule.label}</span>
+                        {rule.note && <span className="text-[10px] text-slate-400 ml-auto">{rule.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {postSaveResult.rpFlags && postSaveResult.rpFlags.length > 0 && (
+                  <ComplianceResultPanel
+                    score={postSaveResult.score}
+                    status={postSaveResult.status}
+                    rpFlags={postSaveResult.rpFlags}
+                  />
+                )}
+
+                <Button
+                  onClick={() => navigate(`/sessions/${id}`)}
+                  className="w-full text-white font-semibold gap-2 min-h-[48px] rounded-2xl"
+                  style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PURPLE} 100%)` }}
                 >
-                  <p
-                    className={cn(
-                      "text-xl font-bold",
-                      liveCompliance.score >= 80
-                        ? "text-emerald-600"
-                        : liveCompliance.score >= 60
-                          ? "text-amber-600"
-                          : "text-red-600",
-                    )}
-                  >
-                    {liveCompliance.score}%
-                  </p>
-                  <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
-                    Compliance
-                  </p>
-                </div>
+                  <FileText className="h-4 w-4" /> View Session Record
+                </Button>
               </div>
+            ) : summaryLoading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin" style={{ color: PURPLE }} />
+              </div>
+            ) : summary ? (
+              /* ── Pre-save review view ── */
+              <div className="space-y-5">
 
-              {/* RP Warning */}
-              {rpFlags.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-red-700">
-                      Possible restrictive practice language detected
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {rpFlags.map((f, i) => (
-                        <li key={i} className="text-xs text-red-600">
-                          <span className="font-medium">
-                            {RP_CATEGORY_LABELS[f.category] ?? f.category}:
-                          </span>{" "}
-                          <span className="italic">"{f.phrase}"</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-xs text-red-600 mt-1.5">
-                      You will be asked to review and acknowledge this before saving.
-                    </p>
+                {/* Score ring + stat row */}
+                <div className="bg-white rounded-2xl px-5 py-5 shadow-sm">
+                  <ScoreRing score={liveCompliance.score} />
+                  <p className="text-center text-sm font-bold mt-2" style={{ color: "#1E1640" }}>
+                    {complianceActionLabel}
+                  </p>
+                  <div className="grid grid-cols-3 gap-3 mt-4">
+                    <div className="rounded-xl p-3 text-center" style={{ background: "#F5F3FC" }}>
+                      <p className="text-lg font-bold font-mono" style={{ color: "#1E1640" }}>{summary.duration}</p>
+                      <p className="text-[9px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A9E" }}>Duration</p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center" style={{ background: "#F5F3FC" }}>
+                      <p className="text-lg font-bold" style={{ color: "#1E1640" }}>{summary.activities.length}</p>
+                      <p className="text-[9px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A9E" }}>Activities</p>
+                    </div>
+                    <div className="rounded-xl p-3 text-center" style={{ background: "#F5F3FC" }}>
+                      <p className="text-lg font-bold" style={{ color: "#1E1640" }}>{summary.voiceNoteCount + messages.filter((m) => m.type === "text").length}</p>
+                      <p className="text-[9px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A9E" }}>Notes</p>
+                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Structured Case Notes */}
-              <div className="space-y-3">
-                <p className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A8A" }}>
-                  <FileText className="h-3.5 w-3.5" /> Structured Case Notes
-                  <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
-                    — required for NDIS compliance
-                  </span>
-                </p>
-                {(
-                  [
-                    {
-                      key: "activitiesPerformed" as keyof StructuredNotes,
-                      label: "Activities Performed",
-                      placeholder: "Describe the specific support activities provided…",
-                      required: true,
-                    },
-                    {
-                      key: "outcomes" as keyof StructuredNotes,
-                      label: "Outcomes",
-                      placeholder: "Measurable outcomes achieved…",
-                      required: true,
-                    },
-                    {
-                      key: "participantResponse" as keyof StructuredNotes,
-                      label: "Participant Response",
-                      placeholder: "How did the participant engage and respond?",
-                      required: true,
-                    },
-                    {
-                      key: "progressTowardGoals" as keyof StructuredNotes,
-                      label: "Progress Toward NDIS Goals",
-                      placeholder: "Link outcomes to specific NDIS goals…",
-                      required: false,
-                    },
-                  ] as const
-                ).map(({ key, label, placeholder, required }) => (
-                  <div key={key}>
-                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
-                      {label}
-                      {required && <span className="text-red-400 ml-0.5">*</span>}
-                    </label>
-                    <SmartTextarea
-                      value={structuredNotes[key]}
-                      onChange={(val) =>
-                        setStructuredNotes((prev) => ({ ...prev, [key]: val }))
-                      }
-                      rows={4}
-                      placeholder={placeholder}
-                      className="text-[12px] p-3 rounded-xl leading-relaxed min-h-[120px]"
-                      style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {/* Compliance gate */}
-              <div
-                className={cn(
-                  "rounded-xl border p-3 space-y-2",
-                  liveCompliance.blocking
-                    ? "bg-red-50 border-red-200"
-                    : liveCompliance.score >= 80
-                      ? "bg-emerald-50 border-emerald-200"
-                      : "bg-amber-50 border-amber-200",
-                )}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "#1C1626" }}>
-                    <Shield className="h-3.5 w-3.5" style={{ color: "#7A6A8A" }} /> Compliance Check
-                  </span>
-                  <span
-                    className={cn(
-                      "text-sm font-bold",
-                      liveCompliance.score >= 80
-                        ? "text-emerald-700"
-                        : liveCompliance.score >= 60
-                          ? "text-amber-700"
-                          : "text-red-700",
-                    )}
-                  >
-                    {liveCompliance.score}/100
-                  </span>
-                </div>
-                <ul className="space-y-1">
-                  {liveCompliance.checks.map((c, i) => (
-                    <li
-                      key={i}
-                      className={cn(
-                        "text-xs flex items-center gap-1.5",
-                        c.pass
-                          ? "text-emerald-700"
+                {/* Compliance checklist */}
+                <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-widest mb-3 flex items-center gap-1.5" style={{ color: "#7A6A9E" }}>
+                    <Shield className="h-3.5 w-3.5" /> Compliance Check
+                  </p>
+                  <div className="space-y-2">
+                    {liveCompliance.checks.map((c, i) => (
+                      <div key={i} className="flex items-center gap-2.5 text-sm">
+                        {c.pass
+                          ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                           : liveCompliance.blocking
-                            ? "text-red-700"
-                            : "text-amber-700",
-                      )}
-                    >
-                      {c.pass ? (
-                        <CheckCircle2 className="h-3 w-3 shrink-0" />
-                      ) : liveCompliance.blocking ? (
-                        <XCircle className="h-3 w-3 shrink-0" />
-                      ) : (
-                        <AlertTriangle className="h-3 w-3 shrink-0" />
-                      )}
-                      <span>
-                        {c.label}
-                        {c.note ? (
-                          <span className="font-normal ml-1" style={{ color: "#7A6A8A" }}>({c.note})</span>
-                        ) : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {liveCompliance.blocking && (
-                  <p className="text-xs text-red-700 font-medium flex items-center gap-1.5 pt-1 border-t border-red-200">
-                    <XCircle className="h-3.5 w-3.5 shrink-0" />
-                    Resolve the items above before this session can be approved
-                  </p>
+                            ? <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                            : <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />}
+                        <span style={{ color: c.pass ? "#065F46" : liveCompliance.blocking ? "#991B1B" : "#92400E" }}>{c.label}</span>
+                        {c.note && <span className="text-[10px] ml-auto" style={{ color: "#7A6A9E" }}>{c.note}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  {liveCompliance.blocking && (
+                    <p className="text-xs text-red-700 font-medium flex items-center gap-1.5 pt-3 mt-2 border-t border-red-100">
+                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                      Resolve the issues above before this session can be approved
+                    </p>
+                  )}
+                </div>
+
+                {/* RP warning */}
+                {rpFlags.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700">Restrictive practice language detected</p>
+                      <ul className="mt-1 space-y-0.5">
+                        {rpFlags.map((f, i) => (
+                          <li key={i} className="text-xs text-red-600">
+                            <span className="font-medium">{RP_CATEGORY_LABELS[f.category] ?? f.category}:</span>{" "}
+                            <span className="italic">"{f.phrase}"</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 )}
-              </div>
 
-              {/* Clinical record */}
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-1.5" style={{ color: "#7A6A8A" }}>
-                  <FileText className="h-3.5 w-3.5" /> Clinical Record
-                  <span className="font-normal normal-case tracking-normal ml-1" style={{ color: "#F1738A" }}>
-                    — auto-generated · editable
-                  </span>
-                </label>
-                <SmartTextarea
-                  value={editableNotes}
-                  onChange={(v) => {
-                    hasManuallyEditedNotesRef.current = true;
-                    setEditableNotes(v);
-                  }}
-                  rows={6}
-                  placeholder="Combined clinical record…"
-                  className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
-                  style={{ background: "white", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
-                />
-              </div>
+                {/* Structured case notes */}
+                <div className="bg-white rounded-2xl px-5 py-4 shadow-sm space-y-4">
+                  <p className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5" style={{ color: "#7A6A9E" }}>
+                    <FileText className="h-3.5 w-3.5" /> Structured Case Notes
+                    <span className="font-normal normal-case tracking-normal ml-1" style={{ color: CORAL }}>— required</span>
+                  </p>
+                  {(
+                    [
+                      { key: "activitiesPerformed" as keyof StructuredNotes, label: "Activities Performed", placeholder: "Describe the specific support activities provided…", required: true },
+                      { key: "outcomes" as keyof StructuredNotes, label: "Outcomes", placeholder: "Measurable outcomes achieved…", required: true },
+                      { key: "participantResponse" as keyof StructuredNotes, label: "Participant Response", placeholder: "How did the participant engage and respond?", required: true },
+                      { key: "progressTowardGoals" as keyof StructuredNotes, label: "Progress Toward NDIS Goals", placeholder: "Link outcomes to specific NDIS goals…", required: false },
+                    ] as const
+                  ).map(({ key, label, placeholder, required }) => (
+                    <div key={key}>
+                      <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
+                        {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+                      </label>
+                      <SmartTextarea
+                        value={structuredNotes[key]}
+                        onChange={(val) => setStructuredNotes((prev) => ({ ...prev, [key]: val }))}
+                        rows={4}
+                        placeholder={placeholder}
+                        className="text-[12px] p-3 rounded-xl leading-relaxed min-h-[100px]"
+                        style={{ background: "#F5F3FC", borderColor: "rgba(213,204,238,0.6)", color: "#1E1640" }}
+                      />
+                    </div>
+                  ))}
+                </div>
 
-              {/* Activities */}
-              {summary.activities.length > 0 && (
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-widest mb-1.5 block" style={{ color: "#7A6A8A" }}>
-                    Activities Logged
+                {/* Clinical record */}
+                <div className="bg-white rounded-2xl px-5 py-4 shadow-sm">
+                  <label className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 mb-2" style={{ color: "#7A6A9E" }}>
+                    <FileText className="h-3.5 w-3.5" /> Clinical Record
+                    <span className="font-normal normal-case tracking-normal ml-1" style={{ color: CORAL }}>— auto-generated · editable</span>
                   </label>
+                  <SmartTextarea
+                    value={editableNotes}
+                    onChange={(v) => { hasManuallyEditedNotesRef.current = true; setEditableNotes(v); }}
+                    rows={6}
+                    placeholder="Combined clinical record…"
+                    className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
+                    style={{ background: "#F5F3FC", borderColor: "rgba(213,204,238,0.6)", color: "#1E1640" }}
+                  />
+                </div>
+
+                {/* Activities logged */}
+                {summary.activities.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {summary.activities.map((a, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] px-2.5 py-1 rounded-full font-medium"
-                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}
-                      >
+                      <span key={i} className="text-[10px] px-2.5 py-1 rounded-full font-medium" style={{ background: "rgba(85,51,204,0.08)", color: PURPLE }}>
                         {a}
                       </span>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Goal progress */}
-              {summary.goalProgress.length > 0 && (
-                <div>
-                  <label className="text-[11px] font-bold uppercase tracking-widest mb-1.5 block" style={{ color: "#7A6A8A" }}>
-                    Goal Progress
-                  </label>
-                  <div className="space-y-1">
-                    {summary.goalProgress.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "#4A3D5A" }}>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                        {g}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Evidence */}
-              <div className="flex gap-3">
-                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
-                  <ImageIcon className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
-                  {summary.evidenceSummary}
-                </div>
-                {summary.voiceNoteCount > 0 && (
-                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
-                    <Mic className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
-                    {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""}{" "}
-                    captured
-                  </div>
                 )}
-              </div>
 
-              {/* Actions */}
-              <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowSummary(false);
-                    setElapsed(0);
-                    setIsActive(false);
-                  }}
-                  disabled={isSaving}
-                  className="flex-1 min-h-[44px] border-red-200 text-red-600 hover:bg-red-50 order-2 sm:order-1 rounded-xl"
-                >
-                  Discard Session
-                </Button>
-                <Button
-                  onClick={handleInitiateApprove}
-                  disabled={isSaving || liveCompliance.blocking}
-                  className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
-                  style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
-                >
-                  {isSaving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Shield className="h-4 w-4" />
+                {/* Evidence */}
+                <div className="flex gap-3">
+                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F5F3FC", border: "1px solid rgba(213,204,238,0.6)", color: "#1E1640" }}>
+                    <ImageIcon className="h-4 w-4 shrink-0" style={{ color: "#7A6A9E" }} />
+                    {summary.evidenceSummary}
+                  </div>
+                  {summary.voiceNoteCount > 0 && (
+                    <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F5F3FC", border: "1px solid rgba(213,204,238,0.6)", color: "#1E1640" }}>
+                      <Mic className="h-4 w-4 shrink-0" style={{ color: "#7A6A9E" }} />
+                      {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""} captured
+                    </div>
                   )}
-                  {isSaving
-                    ? "Saving…"
-                    : liveCompliance.blocking
-                      ? "Fix Issues to Approve"
-                      : "Approve & Save"}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+                </div>
 
-      {/* ── RP Bottom Sheet ── */}
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row gap-3 pb-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setShowSummary(false); setElapsed(0); setIsActive(false); }}
+                    disabled={isSaving}
+                    className="flex-1 min-h-[48px] border-red-200 text-red-600 hover:bg-red-50 rounded-2xl"
+                  >
+                    Discard Session
+                  </Button>
+                  <Button
+                    onClick={handleInitiateApprove}
+                    disabled={isSaving || liveCompliance.blocking}
+                    className="flex-1 min-h-[48px] text-white font-semibold gap-2 disabled:opacity-50 rounded-2xl"
+                    style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PURPLE} 100%)` }}
+                  >
+                    {isSaving
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+                      : liveCompliance.blocking
+                        ? <><XCircle className="h-4 w-4" /> Fix Issues to Approve</>
+                        : <><Shield className="h-4 w-4" /> Approve &amp; Save</>}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          RP Bottom Sheet
+      ══════════════════════════════════════════════════════ */}
       {showRpBottomSheet && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setShowRpBottomSheet(false)}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowRpBottomSheet(false)} />
           <div className="relative w-full max-w-lg bg-white rounded-t-2xl shadow-2xl px-5 pt-5 pb-8 animate-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
-              <h3 className="text-base font-bold text-slate-900">
-                Restrictive Practice Review Required
-              </h3>
+              <h3 className="text-base font-bold text-slate-900">Restrictive Practice Review Required</h3>
             </div>
             <p className="text-sm text-slate-600 mb-3">
-              The following restrictive practice language was detected in your notes. Please review
-              carefully before saving.
+              The following restrictive practice language was detected. Please review carefully before saving.
             </p>
             <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
               {rpFlags.map((f, i) => (
                 <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs">
-                  <span className="font-semibold text-red-800">
-                    {RP_CATEGORY_LABELS[f.category] ?? f.category}
-                  </span>
+                  <span className="font-semibold text-red-800">{RP_CATEGORY_LABELS[f.category] ?? f.category}</span>
                   <span className="text-red-700 ml-2 italic">"{f.phrase}"</span>
                 </div>
               ))}
             </div>
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
-              <Checkbox
-                id="rp-ack"
-                checked={rpAcknowledged}
-                onCheckedChange={(v) => setRpAcknowledged(!!v)}
-                className="mt-0.5 shrink-0"
-              />
-              <label
-                htmlFor="rp-ack"
-                className="text-sm text-amber-800 cursor-pointer leading-snug"
-              >
-                I have reviewed the compliance warning and confirm that any restrictive practices
-                are covered under an approved Behaviour Support Plan.
+              <Checkbox id="rp-ack" checked={rpAcknowledged} onCheckedChange={(v) => setRpAcknowledged(!!v)} className="mt-0.5 shrink-0" />
+              <label htmlFor="rp-ack" className="text-sm text-amber-800 cursor-pointer leading-snug">
+                I have reviewed this and confirm any restrictive practices are covered under an approved Behaviour Support Plan.
               </label>
             </div>
             <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setShowRpBottomSheet(false)}
-              >
-                Go Back
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={() => setShowRpBottomSheet(false)}>Go Back</Button>
               <Button
                 disabled={!rpAcknowledged || isSaving}
                 onClick={() => void handleApproveAndSave()}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold gap-2"
+                className="flex-1 text-white font-semibold gap-2"
+                style={{ background: PURPLE }}
               >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Shield className="h-4 w-4" />
-                )}
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
                 {isSaving ? "Saving…" : "Confirm & Save"}
               </Button>
             </div>
@@ -2041,7 +2174,9 @@ export default function SessionLive() {
         </div>
       )}
 
-      {/* ── Restart Confirm ── */}
+      {/* ══════════════════════════════════════════════════════
+          Restart Confirm
+      ══════════════════════════════════════════════════════ */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
@@ -2049,27 +2184,14 @@ export default function SessionLive() {
               <AlertCircle className="h-5 w-5 text-amber-500" /> Restart Session?
             </DialogTitle>
             <DialogDescription className="text-sm text-slate-500 leading-relaxed mt-2">
-              This will clear all current messages, voice notes, and photos. The timer will reset
-              to zero.
-              <br />
-              <br />
+              This will clear all current messages, voice notes, and photos. The timer will reset to zero.
+              <br /><br />
               <span className="font-medium text-slate-700">This action cannot be undone.</span>
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 mt-4">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowRestartConfirm(false)}
-            >
-              Keep Going
-            </Button>
-            <Button
-              onClick={handleConfirmRestart}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
-            >
-              Yes, Restart
-            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => setShowRestartConfirm(false)}>Keep Going</Button>
+            <Button onClick={handleConfirmRestart} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold">Yes, Restart</Button>
           </div>
         </DialogContent>
       </Dialog>
