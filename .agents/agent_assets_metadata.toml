@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "JgJpgx2cFZDc9dKeoZ4i3"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "carescribe mobile icon"
