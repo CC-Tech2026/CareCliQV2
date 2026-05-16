@@ -20,6 +20,7 @@ import Incidents from "@/pages/incidents";
 import IncidentNew from "@/pages/incident-new";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
+import Reports from "@/pages/reports";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -128,6 +129,19 @@ function Router() {
       <Route path="/compliance">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* Reports & Documentation */}
+      <Route path="/reports">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><Reports /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/documents">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 

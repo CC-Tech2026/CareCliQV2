@@ -1,0 +1,353 @@
+Design and build a comprehensive “Reports & Documentation” module for CareScribe — an AI-powered operational compliance platform for NDIS providers.
+
+IMPORTANT CONTEXT:
+CareScribe is NOT a generic CRM or rostering platform.
+It is a real-time compliance operating system focused on:
+- Session-live workflows
+- Participant-focused care delivery
+- Daily operational compliance
+- Audit readiness
+- AI-assisted documentation
+- Frontline support workers and coordinators
+
+The Reports & Documentation area must feel:
+- operational
+- compliance-first
+- minimal cognitive overload
+- audit-ready
+- professional and healthcare-grade
+- mobile-friendly
+- task-oriented
+
+DO NOT design this like a traditional enterprise admin dashboard with cluttered tables and excessive filters.
+
+---------------------------------------------------
+CORE UX PRINCIPLES
+---------------------------------------------------
+
+1. No modal-heavy workflows
+- Every major action opens as a full page or side panel
+- Users must always know where they are
+- Include back navigation
+- Maintain context from previous screen
+
+2. Session-first workflow
+Reports and documentation should connect directly to:
+- today’s sessions
+- participant care
+- incidents
+- incomplete tasks
+- compliance gaps
+
+3. Compliance visibility everywhere
+Every document/report should visually indicate:
+- complete
+- pending
+- missing info
+- audit risk
+- requires review
+- signed off
+
+4. AI should feel assistive, not gimmicky
+Avoid “chatbot-looking” UI.
+AI should quietly assist with:
+- note structuring
+- compliance checks
+- missing details
+- summary generation
+- risk detection
+- wording improvements
+
+---------------------------------------------------
+MAIN REPORTS & DOCUMENTATION STRUCTURE
+---------------------------------------------------
+
+Create these primary sections:
+
+1. Documentation Hub
+2. Session Reports
+3. Incident Reports
+4. Participant Notes
+5. Compliance Reports
+6. Audit Readiness
+7. AI Insights & Flags
+8. Templates & Forms
+9. Export Center
+
+---------------------------------------------------
+1. DOCUMENTATION HUB
+---------------------------------------------------
+
+Purpose:
+A central operational workspace showing all documentation status across the organization.
+
+Include:
+- Missing documentation alerts
+- Incomplete session notes
+- Unsigned reports
+- Overdue incident follow-ups
+- Expiring compliance documents
+- Daily completion progress
+- AI compliance warnings
+- Quick actions
+
+UI Requirements:
+- Clean card/grid layout
+- Prioritize urgent actions first
+- Minimal table usage
+- Use timeline/activity-feed patterns
+- Status chips with colors
+- Sticky summary header
+
+Top summary cards:
+- Sessions needing documentation
+- Audit risks detected
+- Reports pending review
+- Completed today
+- Compliance score
+- Incident follow-ups
+
+---------------------------------------------------
+2. SESSION REPORTS
+---------------------------------------------------
+
+Purpose:
+Operational reporting for daily support sessions.
+
+Features:
+- Session timeline
+- Progress notes
+- Goal tracking
+- Task completion
+- Checklists
+- Worker observations
+- Medication logs
+- Behavioral observations
+- Shift summary
+- Attachments/photos/files
+
+AI Features:
+- Generate structured session summaries
+- Detect vague wording
+- Suggest compliance improvements
+- Highlight missing evidence
+- Suggest follow-up actions
+
+Workflow:
+Session > Documentation > Review > Submit > Audit-ready
+
+UI Requirements:
+- Full-page session workspace
+- Participant context pinned on side
+- Timeline-style interaction
+- Auto-save
+- “Audit readiness” indicator
+- Smart prompts during note writing
+
+---------------------------------------------------
+3. INCIDENT REPORTS
+---------------------------------------------------
+
+Purpose:
+Fast, compliant incident capture and escalation.
+
+Features:
+- Create incident reports
+- Severity classification
+- Participant linkage
+- Staff involved
+- Witnesses
+- Attach evidence
+- Escalation tracking
+- Follow-up tasks
+- Risk categorization
+
+AI Features:
+- Detect critical language
+- Suggest proper incident wording
+- Identify missing compliance sections
+- Generate executive summaries
+
+UI Requirements:
+- Guided step-by-step workflow
+- Calm and focused design
+- Emergency escalation banner if critical
+- Timeline/history tracking
+
+---------------------------------------------------
+4. PARTICIPANT NOTES
+---------------------------------------------------
+
+Purpose:
+Centralized participant care documentation.
+
+Features:
+- Daily notes
+- Care observations
+- Goal progress
+- Behavioral tracking
+- Communication logs
+- Wellness tracking
+- Linked sessions
+- Linked incidents
+
+UI Requirements:
+- Participant-centered layout
+- Chronological timeline
+- Filter by category/date/support worker
+- Pin important care notes
+- Highlight risks and alerts
+
+---------------------------------------------------
+5. COMPLIANCE REPORTS
+---------------------------------------------------
+
+Purpose:
+Organization-wide compliance visibility.
+
+Features:
+- Missing documentation
+- Staff compliance
+- Expired certifications
+- Incomplete notes
+- Incident resolution status
+- Audit gap tracking
+- Documentation quality scoring
+
+Visualizations:
+- Compliance heatmaps
+- Risk indicators
+- Completion percentages
+- Trends over time
+
+AI Features:
+- Predict audit risks
+- Detect recurring compliance issues
+- Suggest operational improvements
+
+---------------------------------------------------
+6. AUDIT READINESS CENTER
+---------------------------------------------------
+
+Purpose:
+Continuous audit readiness monitoring.
+
+Features:
+- Audit readiness score
+- Missing evidence tracker
+- Required document validation
+- Compliance checklist engine
+- Exportable audit packs
+- Historical audit logs
+
+UI Requirements:
+- Executive dashboard feel
+- High-trust visual language
+- Clear pass/fail indicators
+- Readiness progress bars
+
+Important:
+The platform should communicate:
+“You are audit-ready today.”
+
+---------------------------------------------------
+7. AI INSIGHTS & FLAGS
+---------------------------------------------------
+
+Purpose:
+Operational intelligence and proactive compliance assistance.
+
+Features:
+- High-risk participant alerts
+- Missing note detection
+- Repeated incident patterns
+- Documentation quality analysis
+- Staff compliance trends
+- Smart recommendations
+
+UI Requirements:
+- Intelligence-feed style layout
+- Prioritized by severity
+- Explainable AI suggestions
+- Action buttons beside insights
+
+---------------------------------------------------
+8. TEMPLATES & FORMS
+---------------------------------------------------
+
+Purpose:
+Standardized NDIS-compliant documentation.
+
+Features:
+- Progress note templates
+- Incident templates
+- Assessment forms
+- Shift handover forms
+- Care plan templates
+- Custom organization templates
+
+Requirements:
+- Drag/drop builder
+- Conditional fields
+- Mandatory compliance fields
+- Version history
+
+---------------------------------------------------
+9. EXPORT CENTER
+---------------------------------------------------
+
+Purpose:
+Generate professional audit-ready exports.
+
+Export Options:
+- PDF
+- CSV
+- Compliance bundles
+- Participant history packs
+- Incident summaries
+- Session reports
+
+Requirements:
+- Branded exports
+- Timestamped
+- Digital signatures
+- Audit metadata included
+
+---------------------------------------------------
+DESIGN DIRECTION
+---------------------------------------------------
+
+Visual Style:
+- Modern healthcare SaaS
+- Calm and trustworthy
+- Soft cards
+- Spacious layouts
+- Clear hierarchy
+- Minimal clutter
+- Premium operational software feel
+
+Avoid:
+- Generic AI visuals
+- Neon AI icons
+- Overly corporate ERP style
+- Dense tables everywhere
+- Complex navigation
+- Too many colors
+
+Preferred UX:
+- Sticky action bars
+- Timeline interactions
+- Smart summaries
+- Progressive disclosure
+- Contextual AI assistance
+- Mobile responsiveness
+
+---------------------------------------------------
+KEY DIFFERENTIATOR
+---------------------------------------------------
+
+The Reports & Documentation module should reinforce this message:
+
+“CareScribe ensures every session, task, and participant interaction is continuously audit-ready in real time.”
+
+The experience should feel proactive, not reactive.
