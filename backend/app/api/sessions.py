@@ -65,7 +65,7 @@ async def get_session_context(session_id: str):
         except Exception as exc:
             logger.warning("context: goals fetch failed for %s: %s", participant_id, exc)
 
-        # Risk profile from patients record
+        # Risk profile + clinical flags from patients record
         try:
             participant = await participant_service.get_participant_by_id(participant_id)
             if participant:
@@ -73,6 +73,8 @@ async def get_session_context(session_id: str):
                     "risk_level": participant.get("risk_level", "low"),
                     "triggers": participant.get("risk_triggers", "") or "",
                     "management_plan": participant.get("risk_management_plan", "") or "",
+                    "allergies": participant.get("allergies", "") or "",
+                    "communication_preferences": participant.get("communication_preferences", "") or "",
                 }
         except Exception as exc:
             logger.warning("context: risk fetch failed for %s: %s", participant_id, exc)

@@ -17,6 +17,8 @@ class Participant(BaseModel):
     total_budget: Optional[float] = None
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
+    allergies: Optional[str] = None
+    communication_preferences: Optional[str] = None
     goals: Optional[list] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

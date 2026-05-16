@@ -41,6 +41,12 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='updated_at') THEN
         ALTER TABLE patients ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='allergies') THEN
+        ALTER TABLE patients ADD COLUMN allergies TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='communication_preferences') THEN
+        ALTER TABLE patients ADD COLUMN communication_preferences TEXT;
+    END IF;
 END $$;
 
 -- Add missing columns to existing 'sessions' table

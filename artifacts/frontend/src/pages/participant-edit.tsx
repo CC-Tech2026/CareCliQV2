@@ -27,17 +27,19 @@ const BORDER      = "rgba(232,213,232,0.5)";
 const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const schema = z.object({
-  full_name:          z.string().min(1, "Name is required"),
-  ndis_number:        z.string().min(1, "NDIS Number is required"),
-  date_of_birth:      z.string().min(1, "Date of birth is required"),
-  email:              z.string().email("Invalid email").optional().or(z.literal("")),
-  phone:              z.string().optional(),
-  primary_disability: z.string().optional(),
-  biological_sex:     z.string().optional(),
-  plan_status:        z.string().min(1, "Plan status is required"),
-  plan_start_date:    z.string().optional(),
-  plan_end_date:      z.string().optional(),
-  total_budget:       z.coerce.number().min(0).optional(),
+  full_name:                  z.string().min(1, "Name is required"),
+  ndis_number:                z.string().min(1, "NDIS Number is required"),
+  date_of_birth:              z.string().min(1, "Date of birth is required"),
+  email:                      z.string().email("Invalid email").optional().or(z.literal("")),
+  phone:                      z.string().optional(),
+  primary_disability:         z.string().optional(),
+  allergies:                  z.string().optional(),
+  communication_preferences:  z.string().optional(),
+  biological_sex:             z.string().optional(),
+  plan_status:                z.string().min(1, "Plan status is required"),
+  plan_start_date:            z.string().optional(),
+  plan_end_date:              z.string().optional(),
+  total_budget:               z.coerce.number().min(0).optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -64,7 +66,8 @@ export default function ParticipantEdit({ id }: { id: string }) {
     resolver: zodResolver(schema),
     defaultValues: {
       full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
-      primary_disability: "", biological_sex: "unspecified", plan_status: "active",
+      primary_disability: "", allergies: "", communication_preferences: "",
+      biological_sex: "unspecified", plan_status: "active",
       plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
   });
@@ -77,8 +80,10 @@ export default function ParticipantEdit({ id }: { id: string }) {
       date_of_birth:      participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email:              String(participant.email ?? ""),
       phone:              String(participant.phone ?? ""),
-      primary_disability: String(participant.primary_disability ?? ""),
-      biological_sex:     String(participant.biological_sex ?? "unspecified"),
+      primary_disability:         String(participant.primary_disability ?? ""),
+      allergies:                  String(participant.allergies ?? ""),
+      communication_preferences:  String(participant.communication_preferences ?? ""),
+      biological_sex:             String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
       plan_start_date:    participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
       plan_end_date:      participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
@@ -223,6 +228,36 @@ export default function ParticipantEdit({ id }: { id: string }) {
                   <SmartInput
                     placeholder="e.g. Autism Spectrum Disorder"
                     data-testid="input-primary-disability"
+                    value={field.value ?? ""}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="allergies" render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Known Allergies / Contraindications</FormLabel>
+                <FormControl>
+                  <SmartInput
+                    placeholder="e.g. Penicillin, latex — leave blank if none"
+                    data-testid="input-allergies"
+                    value={field.value ?? ""}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="communication_preferences" render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Communication Preferences</FormLabel>
+                <FormControl>
+                  <SmartInput
+                    placeholder="e.g. Uses AAC device, prefers visual cues, responds to short sentences"
+                    data-testid="input-communication-preferences"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
                   />

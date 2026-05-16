@@ -24,17 +24,19 @@ const BORDER = "rgba(232,213,232,0.5)";
 const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const schema = z.object({
-  full_name:          z.string().min(1, "Name is required"),
-  ndis_number:        z.string().min(1, "NDIS Number is required"),
-  date_of_birth:      z.string().min(1, "Date of birth is required"),
-  email:              z.string().email("Invalid email").optional().or(z.literal("")),
-  phone:              z.string().optional(),
-  primary_disability: z.string().optional(),
-  biological_sex:     z.string().optional(),
-  plan_status:        z.string().min(1, "Plan status is required"),
-  plan_start_date:    z.string().optional(),
-  plan_end_date:      z.string().optional(),
-  total_budget:       z.coerce.number().min(0).optional(),
+  full_name:                  z.string().min(1, "Name is required"),
+  ndis_number:                z.string().min(1, "NDIS Number is required"),
+  date_of_birth:              z.string().min(1, "Date of birth is required"),
+  email:                      z.string().email("Invalid email").optional().or(z.literal("")),
+  phone:                      z.string().optional(),
+  primary_disability:         z.string().optional(),
+  allergies:                  z.string().optional(),
+  communication_preferences:  z.string().optional(),
+  biological_sex:             z.string().optional(),
+  plan_status:                z.string().min(1, "Plan status is required"),
+  plan_start_date:            z.string().optional(),
+  plan_end_date:              z.string().optional(),
+  total_budget:               z.coerce.number().min(0).optional(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -58,19 +60,22 @@ export default function ParticipantNew() {
     resolver: zodResolver(schema),
     defaultValues: {
       full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
-      primary_disability: "", biological_sex: "unspecified", plan_status: "active",
+      primary_disability: "", allergies: "", communication_preferences: "",
+      biological_sex: "unspecified", plan_status: "active",
       plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
   });
 
   async function onSubmit(data: FormValues) {
     const payload: Record<string, unknown> = { ...data };
-    if (!payload.email)              delete payload.email;
-    if (!payload.phone)              delete payload.phone;
-    if (!payload.primary_disability) delete payload.primary_disability;
-    if (!payload.plan_start_date)    delete payload.plan_start_date;
-    if (!payload.plan_end_date)      delete payload.plan_end_date;
-    if (!payload.total_budget)       delete payload.total_budget;
+    if (!payload.email)                      delete payload.email;
+    if (!payload.phone)                      delete payload.phone;
+    if (!payload.primary_disability)         delete payload.primary_disability;
+    if (!payload.allergies)                  delete payload.allergies;
+    if (!payload.communication_preferences)  delete payload.communication_preferences;
+    if (!payload.plan_start_date)            delete payload.plan_start_date;
+    if (!payload.plan_end_date)              delete payload.plan_end_date;
+    if (!payload.total_budget)               delete payload.total_budget;
 
     try {
       await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
@@ -163,6 +168,36 @@ export default function ParticipantNew() {
                 <FormMessage />
               </FormItem>
             )} />
+            <FormField control={form.control} name="allergies" render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel style={{ color: T2, fontSize: 12 }}>Known Allergies / Contraindications</FormLabel>
+                <FormControl>
+                  <SmartInput
+                    placeholder="e.g. Penicillin, latex — leave blank if none"
+                    data-testid="input-allergies"
+                    value={field.value ?? ""}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="communication_preferences" render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel style={{ color: T2, fontSize: 12 }}>Communication Preferences</FormLabel>
+                <FormControl>
+                  <SmartInput
+                    placeholder="e.g. Uses AAC device, prefers visual cues, responds to short sentences"
+                    data-testid="input-communication-preferences"
+                    value={field.value ?? ""}
+                    onChange={(v) => field.onChange(v)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
             <FormField control={form.control} name="biological_sex" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Biological Sex</FormLabel>

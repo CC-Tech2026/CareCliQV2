@@ -1,0 +1,132 @@
+User Story
+
+As a support worker, I want to see everything I must complete today so I do not miss required compliance tasks.
+
+Acceptance Criteria
+Dashboard shows:
+today’s sessions
+incomplete notes
+overdue tasks
+incident follow-ups
+medication tasks
+expiring documents
+Priority items highlighted
+Compliance risk score visible
+EPIC 2 — Session Live Workflow
+
+This is likely your flagship feature.
+
+User Story
+
+As a support worker, I want a guided live session workflow so I can complete documentation while delivering care.
+
+Acceptance Criteria
+Session starts with one click
+Session timeline visible
+Required tasks/checklists displayed
+Live notes available
+Incident capture available
+Session cannot close with missing mandatory fields
+User Story
+
+As a support worker, I want reminders during sessions so I don’t forget critical participant tasks.
+
+Acceptance Criteria
+Medication reminders
+Goal tracking reminders
+Progress note reminders
+Shift task reminders
+Escalation alerts
+EPIC 3 — Participant-Centered Care Tracking
+User Story
+
+As a coordinator, I want participant goals and risks visible during sessions so workers can provide aligned supports.
+
+Acceptance Criteria
+Participant profile shows:
+goals
+risks
+support plans
+allergies
+behavior alerts
+communication preferences
+Key alerts pinned during sessions
+User Story
+
+As a support worker, I want participant tasks linked to sessions so I know exactly what needs to be achieved today.
+
+Acceptance Criteria
+Tasks assigned per participant
+Status tracking:
+pending
+in progress
+completed
+Tasks roll over if incomplete
+EPIC 4 — Audit-Ready Documentation
+
+This is MASSIVE for NDIS providers.
+
+User Story
+
+As an NDIS provider, I want documentation validated automatically so audits become easier.
+
+Acceptance Criteria
+AI detects missing compliance information
+Mandatory fields enforced
+Timestamping automatic
+User actions logged
+Notes locked after approval
+User Story
+
+As an admin, I want audit readiness indicators so I know where compliance gaps exist.
+
+Acceptance Criteria
+Compliance heatmap
+Missing documentation alerts
+Risk scoring
+Exportable audit reports
+EPIC 5 — AI Compliance Assistance
+
+THIS is where AI becomes valuable first.
+
+Not translation.
+
+User Story
+
+As a support worker, I want AI to help me complete compliant progress notes quickly.
+
+Acceptance Criteria
+AI suggests structured notes
+AI detects vague wording
+AI prompts missing compliance details
+AI converts shorthand into professional documentation
+User Story
+
+As a coordinator, I want AI to identify compliance risks before audits occur.
+
+Acceptance Criteria
+Missing signatures detected
+Incomplete session notes flagged
+Incident follow-up gaps highlighted
+Expired training identified
+EPIC 6 — Smart Daily Operations
+User Story
+
+As a support worker, I want my day automatically organized so I can focus on participant care instead of admin.
+
+Acceptance Criteria
+Smart task prioritization
+Session timeline
+Auto-generated reminders
+Carry-over unfinished tasks
+Daily completion tracking
+EPIC 7 — Incident & Risk Management
+User Story
+
+As a support worker, I want to quickly report incidents during sessions so compliance is maintained immediately.
+
+Acceptance Criteria
+Fast incident capture
+AI-assisted categorization
+Escalation workflow
+Linked participant records

@@ -81,6 +81,8 @@ class ParticipantCreate(BaseModel):
     total_budget: Optional[float] = 0.0
     used_budget: Optional[float] = 0.0
     primary_disability: Optional[str] = None
+    allergies: Optional[str] = None
+    communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = "unspecified"
     goals: Optional[List[NDISGoal]] = Field(default_factory=list)
 
@@ -98,6 +100,8 @@ class ParticipantUpdate(BaseModel):
     total_budget: Optional[float] = None
     used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
+    allergies: Optional[str] = None
+    communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = None
     goals: Optional[List[NDISGoal]] = None
 

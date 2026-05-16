@@ -663,7 +663,7 @@ export default function SessionLive() {
 
   // ── Plan Goals (Goal Rules Matrix) ──
   const [planGoals, setPlanGoals] = useState<Array<{ id: string; description: string; category: string; is_achieved: boolean }>>([]);
-  const [riskProfile, setRiskProfile] = useState<{ risk_level: string; triggers: string; management_plan: string } | null>(null);
+  const [riskProfile, setRiskProfile] = useState<{ risk_level: string; triggers: string; management_plan: string; allergies?: string; communication_preferences?: string } | null>(null);
   const [showGoalMatrix, setShowGoalMatrix] = useState(false);
 
   // ── Real-time assess-note score ──
@@ -1630,6 +1630,25 @@ export default function SessionLive() {
             {riskProfile.management_plan && (
               <p className="text-[11px] mt-0.5 leading-snug" style={{ color: "#4B5563" }}>
                 <span className="font-medium" style={{ color: "#4B5563" }}>Plan: </span>{riskProfile.management_plan}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Allergies / Communication Flags ── */}
+      {(riskProfile?.allergies || riskProfile?.communication_preferences) && (
+        <div className="shrink-0 border-b border-violet-200 bg-violet-50 px-3 py-2 flex items-start gap-2.5">
+          <User className="h-3.5 w-3.5 text-violet-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-0.5">
+            {riskProfile.allergies && (
+              <p className="text-[11px] leading-snug text-violet-900">
+                <span className="font-bold text-red-600">Allergies: </span>{riskProfile.allergies}
+              </p>
+            )}
+            {riskProfile.communication_preferences && (
+              <p className="text-[11px] leading-snug text-violet-900">
+                <span className="font-bold text-violet-700">Comm: </span>{riskProfile.communication_preferences}
               </p>
             )}
           </div>

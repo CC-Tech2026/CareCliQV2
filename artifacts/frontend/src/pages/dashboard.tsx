@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { format, parseISO, isAfter, subDays } from "date-fns";
+import { format, parseISO, isAfter, subDays, differenceInDays } from "date-fns";
 import {
   useGetSessions,
   useGetParticipants,
@@ -14,6 +14,10 @@ import {
   FileText,
   CircleDot,
   ArrowRight,
+  AlertTriangle,
+  ClipboardList,
+  Bell,
+  ChevronRight,
 } from "lucide-react";
 
 // ── Palette Alignment (Matched Exactly with Brand Identity) ──────────────────
@@ -113,6 +117,32 @@ export default function Dashboard() {
   const activeSession = sessions.find(s => s.status === "in_progress");
   const complianceScore = (rawOverview as any)?.average_score ?? null;
 
+  // Priority items — derived from already-fetched data
+  const overdueNotes = sessions.filter(s =>
+    s.status !== "in_progress" && s.status !== "cancelled" &&
+    (!s.notes || (s.notes as string).length < 20) &&
+    differenceInDays(now, parseISO(s.session_date)) >= 1
+  );
+  const expiringPlans = (participants as any[]).filter((p: any) => {
+    if (!p.plan_end_date) return false;
+    const days = differenceInDays(parseISO(p.plan_end_date), now);
+    return days >= 0 && days <= 30;
+  });
+  const priorityItems: Array<{ label: string; detail: string; href: string; color: string }> = [
+    ...overdueNotes.slice(0, 2).map(s => ({
+      label: "Overdue note",
+      detail: `${format(parseISO(s.session_date), "MMM d")} · ${(s.session_type ?? "Session").replace("_", " ")}`,
+      href: `/sessions/${s.id}`,
+      color: CORAL,
+    })),
+    ...expiringPlans.slice(0, 2).map((p: any) => ({
+      label: "Plan expiring soon",
+      detail: `${p.full_name} · ends ${format(parseISO(p.plan_end_date), "MMM d")}`,
+      href: `/patients`,
+      color: "#D97706",
+    })),
+  ];
+
   return (
     <div className="w-full relative min-h-full selection:bg-[#5533CC]/20">
 
@@ -177,6 +207,35 @@ export default function Dashboard() {
                 <ArrowRight size={12} strokeWidth={3} />
               </button>
             </Link>
+          </div>
+        )}
+
+        {/* PRIORITY ACTIONS */}
+        {priorityItems.length > 0 && (
+          <div className="bg-white/90 backdrop-blur-md rounded-[2rem] border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#D8D0F0]/60 flex items-center gap-2.5">
+              <Bell size={15} style={{ color: CORAL }} />
+              <h2 className="text-[13px] font-black tracking-tight" style={{ color: COLORS.TEXT_MAIN }}>Priority Actions</h2>
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${CORAL}18`, color: CORAL }}>
+                {priorityItems.length} item{priorityItems.length > 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="divide-y divide-[#F5F3FC]">
+              {priorityItems.map((item, i) => (
+                <Link key={i} href={item.href}>
+                  <div className="flex items-center gap-3 px-6 py-3.5 hover:bg-[#F5F3FC]/60 transition-colors cursor-pointer group">
+                    <div className="h-7 w-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${item.color}14` }}>
+                      <AlertTriangle size={13} style={{ color: item.color }} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold truncate" style={{ color: COLORS.TEXT_MAIN }}>{item.label}</p>
+                      <p className="text-[11px] font-medium truncate" style={{ color: COLORS.TEXT_MUTED }}>{item.detail}</p>
+                    </div>
+                    <ChevronRight size={14} className="shrink-0 opacity-40 group-hover:opacity-70 transition-opacity" style={{ color: COLORS.TEXT_MUTED }} />
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 

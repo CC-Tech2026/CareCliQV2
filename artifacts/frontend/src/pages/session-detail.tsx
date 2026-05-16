@@ -29,7 +29,7 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target, Lock
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -431,7 +431,11 @@ export default function SessionDetail({ id }: { id?: string }) {
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
               </div>
-              {!isEditing ? (
+              {session.status === "completed" ? (
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                  <Lock className="h-3 w-3" /> Approved &amp; Locked
+                </span>
+              ) : !isEditing ? (
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
               ) : (
                 <div className="flex gap-2">
