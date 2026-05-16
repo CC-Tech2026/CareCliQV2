@@ -75,11 +75,18 @@ import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 // Brand tokens
 // ---------------------------------------------------------------------------
 
-const PURPLE = "#5533CC";
-const CORAL  = "#F03060";
-const LIME   = "#D9F103";
-const NAVY   = "#0D0D55";
-const DEEP   = "#050520";
+const PURPLE  = "#5533CC";
+const CORAL   = "#F03060";
+// Light clinical theme tokens
+const CANVAS  = "#F4F2FA";   // page background — soft lavender grey
+const SURFACE = "#FFFFFF";   // card / panel surfaces
+const BORDER  = "#E8E5F4";   // subtle borders
+const TEXT1   = "#1E1640";   // primary text
+const TEXT2   = "#6B5FA6";   // secondary / muted text
+const TEXT3   = "#9B8CC8";   // tertiary / placeholder
+// Legacy — used only for small accent splashes
+const NAVY    = "#0D0D55";
+const LIME    = "#D9F103";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -199,10 +206,10 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-slate-700 text-white/50 border-slate-600", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Activity },
-  achieved:    { label: "Achieved",    cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
-  needs_review:{ label: "Needs Review",cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
+  not_started: { label: "Not Started", cls: "bg-slate-100 text-slate-500 border-slate-200",       icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-blue-50 text-blue-700 border-blue-200",            icon: Activity },
+  achieved:    { label: "Achieved",    cls: "bg-emerald-50 text-emerald-700 border-emerald-200",   icon: CheckCircle2 },
+  needs_review:{ label: "Needs Review",cls: "bg-amber-50 text-amber-700 border-amber-200",         icon: AlertCircle },
 };
 
 // ---------------------------------------------------------------------------
@@ -238,10 +245,10 @@ function deriveSessionStateLabel(isActive: boolean, score: number): {
   color: string;
   dot: string;
 } {
-  if (!isActive) return { label: "Idle", color: "bg-slate-700 text-slate-300 border-slate-600", dot: "bg-slate-400" };
-  if (score >= 80) return { label: "Claim Ready", color: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", dot: "bg-emerald-400 animate-pulse" };
-  if (score >= 60) return { label: "Live",        color: "bg-blue-500/20 text-blue-300 border-blue-500/30",        dot: "bg-blue-400 animate-pulse" };
-  return              { label: "Needs Review",    color: "bg-amber-500/20 text-amber-300 border-amber-500/30",    dot: "bg-amber-400 animate-pulse" };
+  if (!isActive) return { label: "Idle",        color: "bg-slate-100 text-slate-600 border-slate-200",       dot: "bg-slate-400" };
+  if (score >= 80) return { label: "Claim Ready", color: "bg-emerald-50 text-emerald-700 border-emerald-200",   dot: "bg-emerald-500 animate-pulse" };
+  if (score >= 60) return { label: "Live",        color: "bg-blue-50 text-blue-700 border-blue-200",            dot: "bg-blue-500 animate-pulse" };
+  return              { label: "Needs Review",    color: "bg-amber-50 text-amber-700 border-amber-200",         dot: "bg-amber-500 animate-pulse" };
 }
 
 function deriveComplianceActionLabel(score: number, checks: Array<{ label: string; pass: boolean }>): string {
@@ -363,7 +370,7 @@ function MessageBubble({
   if (msg.type === "system") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <span className="text-[10px] text-white/25 italic">{msg.content}</span>
+        <span className="text-[10px] text-slate-400 italic">{msg.content}</span>
       </div>
     );
   }
@@ -371,11 +378,11 @@ function MessageBubble({
   if (msg.type === "ai_event") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <div className="flex items-center gap-2 bg-[#5533CC]/12 border border-[#5533CC]/20 rounded-2xl px-4 py-2 max-w-xs">
-          <Sparkles className="h-3 w-3 shrink-0" style={{ color: PURPLE }} />
-          <span className="text-[10px] font-medium" style={{ color: "#A89EDD" }}>{msg.content}</span>
+        <div className="flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-2xl px-4 py-2 max-w-xs">
+          <Sparkles className="h-3 w-3 shrink-0 text-violet-500" />
+          <span className="text-[10px] font-medium text-violet-700">{msg.content}</span>
           {msg.aiDelta != null && msg.aiDelta > 0 && (
-            <span className="text-[9px] font-bold" style={{ color: LIME }}>+{msg.aiDelta}%</span>
+            <span className="text-[9px] font-bold text-emerald-600">+{msg.aiDelta}%</span>
           )}
         </div>
       </div>
@@ -387,13 +394,13 @@ function MessageBubble({
       <div className="flex justify-center my-2 px-4">
         <button
           onClick={() => onOpenIncident?.(msg.content)}
-          className="w-full max-w-xs bg-amber-950/60 border border-amber-700/40 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
+          className="w-full max-w-xs bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-left active:scale-[0.98] transition-transform"
         >
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-amber-200 text-[11px] font-semibold">Potential incident noted</p>
-              <p className="text-amber-300/70 text-[10px] mt-0.5">Tap to document this safely →</p>
+              <p className="text-amber-800 text-[11px] font-semibold">Potential incident noted</p>
+              <p className="text-amber-600 text-[10px] mt-0.5">Tap to document this safely</p>
             </div>
           </div>
         </button>
@@ -406,10 +413,10 @@ function MessageBubble({
     const AIcon = def?.icon ?? Activity;
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1">
-          <AIcon className="h-2.5 w-2.5 shrink-0" style={{ color: LIME }} />
-          <span className="text-[10px] text-white/60 font-medium">{msg.activityType || msg.content}</span>
-          <span className="text-[9px] text-white/25">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
+          <AIcon className="h-2.5 w-2.5 shrink-0 text-violet-500" />
+          <span className="text-[10px] text-slate-600 font-medium">{msg.activityType || msg.content}</span>
+          <span className="text-[9px] text-slate-400">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -418,10 +425,10 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#D9F103]/8 border border-[#D9F103]/15 rounded-full px-3 py-1">
-          <Target className="h-2.5 w-2.5 shrink-0" style={{ color: LIME }} />
-          <span className="text-[10px] text-[#D9F103]/70 font-medium">{msg.content}</span>
-          <span className="text-[9px] text-[#D9F103]/30">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+          <Target className="h-2.5 w-2.5 shrink-0 text-emerald-600" />
+          <span className="text-[10px] text-emerald-700 font-medium">{msg.content}</span>
+          <span className="text-[9px] text-emerald-400">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -438,12 +445,12 @@ function MessageBubble({
         onTouchEnd={isInteractive ? handleTouchEnd : undefined}
         onContextMenu={isInteractive ? handleContextMenu : undefined}
       >
-        <div className="bg-[#1a1a6e] border border-[#5271FF]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-3 py-2">
-                <div className="flex items-center gap-1 text-white/60 text-[9px]">
+                <div className="flex items-center gap-1 text-white/80 text-[9px]">
                   <Camera className="h-2.5 w-2.5" />
                   <span>Photo evidence • {format(msg.timestamp, "HH:mm")}</span>
                 </div>
@@ -452,12 +459,12 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#5271FF]/20 rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#5271FF]" />
+              <div className="h-9 w-9 bg-violet-50 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-violet-500" />
               </div>
               <div className="min-w-0">
-                <p className="text-white text-sm font-medium leading-tight truncate">{msg.content}</p>
-                <p className="text-white/35 text-[10px]">Document attached</p>
+                <p className="text-slate-900 text-sm font-medium leading-tight truncate">{msg.content}</p>
+                <p className="text-slate-400 text-[10px]">Document attached</p>
               </div>
             </div>
           )}
@@ -465,17 +472,17 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1" style={{ color: LIME }}>
+                  <div className="flex items-center gap-1 text-violet-600">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
                   {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
-                    <span className="text-[9px] bg-white/10 text-white/50 px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
                       {msg.detectedLanguage.toUpperCase()}
                     </span>
                   )}
                   {msg.isTranslating && (
-                    <div className="flex items-center gap-1 text-white/35">
+                    <div className="flex items-center gap-1 text-slate-400">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
                       <span className="text-[9px]">Translating…</span>
                     </div>
@@ -483,26 +490,26 @@ function MessageBubble({
                 </div>
               )}
               {(translationView === "original" || translationView === "both" || msg.type === "text") && (
-                <p className="text-white text-sm leading-relaxed">{msg.content}</p>
+                <p className="text-slate-900 text-sm leading-relaxed">{msg.content}</p>
               )}
               {msg.type === "voice" && translationView !== "original" && (
-                <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-white/10")}>
+                <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-slate-100")}>
                   {msg.translated ? (
                     <>
                       {translationView === "both" && (
-                        <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5" style={{ color: LIME }}>EN</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wider mb-0.5 text-violet-500">EN</p>
                       )}
-                      <p className="text-white/80 text-sm leading-relaxed">{msg.translated}</p>
+                      <p className="text-slate-700 text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-white/30 text-xs italic">Translation unavailable</p>
+                    <p className="text-slate-400 text-xs italic">Translation unavailable</p>
                   ) : null}
                 </div>
               )}
             </div>
           )}
         </div>
-        <p className="text-white/20 text-[9px] text-right mt-0.5 pr-1">{format(msg.timestamp, "HH:mm")}</p>
+        <p className="text-slate-400 text-[9px] text-right mt-0.5 pr-1">{format(msg.timestamp, "HH:mm")}</p>
       </div>
     </div>
   );
@@ -520,7 +527,7 @@ function ScoreRing({ score }: { score: number }) {
   return (
     <div className="relative flex items-center justify-center w-28 h-28 mx-auto">
       <svg className="absolute inset-0 -rotate-90" width="112" height="112" viewBox="0 0 112 112">
-        <circle cx="56" cy="56" r={r} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+        <circle cx="56" cy="56" r={r} fill="none" stroke="#E8E5F4" strokeWidth="8" />
         <circle
           cx="56" cy="56" r={r} fill="none"
           stroke={color} strokeWidth="8"
@@ -530,8 +537,8 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="text-center z-10">
-        <p className="text-3xl font-black text-white leading-none">{score}</p>
-        <p className="text-[9px] text-white/50 mt-0.5">/ 100</p>
+        <p className="text-3xl font-black leading-none" style={{ color: TEXT1 }}>{score}</p>
+        <p className="text-[9px] mt-0.5" style={{ color: TEXT2 }}>/ 100</p>
       </div>
     </div>
   );
@@ -1349,16 +1356,16 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center" style={{ background: DEEP }}>
-        <Loader2 className="h-8 w-8 animate-spin" style={{ color: LIME }} />
+      <div className="h-screen flex items-center justify-center" style={{ background: CANVAS }}>
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: PURPLE }} />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4" style={{ background: DEEP }}>
-        <p className="text-white/50">Session not found</p>
+      <div className="h-screen flex flex-col items-center justify-center gap-4" style={{ background: CANVAS }}>
+        <p style={{ color: TEXT2 }}>Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">Back to Sessions</Button>
       </div>
     );
@@ -1406,18 +1413,19 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: DEEP }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: CANVAS }}>
 
       {/* ── Dynamic Header ── */}
       <div
-        className="shrink-0 border-b border-white/10"
-        style={{ background: isActive ? NAVY : "#0a0a3a" }}
+        className="shrink-0 border-b border-slate-200"
+        style={{ background: isActive ? "#EDFCF4" : SURFACE }}
       >
         {/* Top row: back, session state, controls */}
         <div className="flex items-center gap-2 px-3 pt-3 pb-1">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1.5 text-white/60 hover:text-white text-xs transition-colors font-semibold shrink-0 px-2 py-1 rounded-lg hover:bg-white/8"
+            className="flex items-center gap-1.5 text-xs transition-colors font-semibold shrink-0 px-2 py-1 rounded-lg hover:bg-slate-100"
+            style={{ color: TEXT2 }}
           >
             <ArrowLeft className="h-4 w-4" />
             <span>Session</span>
@@ -1433,14 +1441,15 @@ export default function SessionLive() {
 
           {/* Translation toggle */}
           <div className="flex items-center gap-1 shrink-0">
-            <Globe className="h-3 w-3 text-white/30" />
-            <div className="flex rounded-md border border-white/15 overflow-hidden">
+            <Globe className="h-3 w-3 text-slate-400" />
+            <div className="flex rounded-md border border-slate-200 overflow-hidden">
               {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => setTranslationView(v)}
                   className={cn("px-2 py-1 text-[10px] font-semibold transition-colors",
-                    translationView === v ? "bg-white/20 text-white" : "text-white/35 hover:text-white/70")}
+                    translationView === v ? "text-white" : "text-slate-500 hover:text-slate-700")}
+                  style={translationView === v ? { background: PURPLE } : {}}
                 >
                   {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
                 </button>
@@ -1452,7 +1461,7 @@ export default function SessionLive() {
             <button
               onClick={() => setShowRestartConfirm(true)}
               title="Restart session"
-              className="text-white/40 hover:text-white/70 p-1.5 rounded-lg hover:bg-white/10 transition-colors shrink-0"
+              className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors shrink-0"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
@@ -1480,27 +1489,27 @@ export default function SessionLive() {
         {/* Second row: name + timer + compliance badge */}
         <div className="flex items-center justify-between px-4 pb-2 pt-1 gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-white font-bold text-base leading-tight truncate">{participantName}</h1>
-            <p className="text-white/50 text-xs mt-0.5">{session.session_type} · {session.session_date ? new Date(session.session_date).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) : "Today"}</p>
+            <h1 className="font-bold text-base leading-tight truncate" style={{ color: TEXT1 }}>{participantName}</h1>
+            <p className="text-xs mt-0.5" style={{ color: TEXT2 }}>{session.session_type} · {session.session_date ? new Date(session.session_date).toLocaleDateString("en-AU", { day: "numeric", month: "short" }) : "Today"}</p>
           </div>
           <div className="shrink-0 flex flex-col items-end gap-0.5">
-            <p className="font-mono text-2xl font-black text-white tracking-tight leading-none">
+            <p className="font-mono text-2xl font-black tracking-tight leading-none" style={{ color: TEXT1 }}>
               {formatDuration(elapsed)}
             </p>
             <div
               className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
               style={{
-                background: liveCompliance.score >= 80 ? "rgba(16,185,129,0.15)" : liveCompliance.score >= 60 ? "rgba(245,158,11,0.15)" : "rgba(240,48,96,0.15)",
-                border: `1px solid ${liveCompliance.score >= 80 ? "rgba(16,185,129,0.3)" : liveCompliance.score >= 60 ? "rgba(245,158,11,0.3)" : "rgba(240,48,96,0.3)"}`,
+                background: liveCompliance.score >= 80 ? "#ECFDF5" : liveCompliance.score >= 60 ? "#FFFBEB" : "#FFF1F2",
+                border: `1px solid ${liveCompliance.score >= 80 ? "#A7F3D0" : liveCompliance.score >= 60 ? "#FDE68A" : "#FECDD3"}`,
               }}
             >
               <span
                 className="text-xs font-black"
-                style={{ color: liveCompliance.score >= 80 ? "#34D399" : liveCompliance.score >= 60 ? "#FBBF24" : "#FB7185" }}
+                style={{ color: liveCompliance.score >= 80 ? "#059669" : liveCompliance.score >= 60 ? "#D97706" : "#E11D48" }}
               >
                 {liveCompliance.score}%
               </span>
-              <span className="text-[10px] text-white/50">{complianceActionLabel}</span>
+              <span className="text-[10px]" style={{ color: TEXT2 }}>{complianceActionLabel}</span>
             </div>
           </div>
         </div>
@@ -1515,10 +1524,10 @@ export default function SessionLive() {
                 className={cn(
                   "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-semibold whitespace-nowrap transition-all shrink-0 min-h-[28px]",
                   item.pass
-                    ? "bg-emerald-500/12 text-emerald-300 border-emerald-500/20"
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : expandedHealthChip === item.label
-                    ? "bg-amber-500/25 text-amber-200 border-amber-400/40"
-                    : "bg-amber-500/12 text-amber-300 border-amber-500/20",
+                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                    : "bg-amber-50 text-amber-700 border-amber-200",
                 )}
               >
                 {item.pass
@@ -1538,12 +1547,12 @@ export default function SessionLive() {
 
           {/* Expanded health chip guidance */}
           {expandedHealthChip && (
-            <div className="mt-1.5 bg-amber-950/40 border border-amber-800/30 rounded-xl px-3 py-2.5 flex items-start gap-2.5 animate-in slide-in-from-top-1 duration-150">
-              <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-200/80 leading-relaxed flex-1">
+            <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 flex items-start gap-2.5 animate-in slide-in-from-top-1 duration-150">
+              <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 leading-relaxed flex-1">
                 {healthItems.find((h) => h.label === expandedHealthChip)?.tip}
               </p>
-              <button onClick={() => setExpandedHealthChip(null)} className="text-white/30 hover:text-white/60 p-0.5">
+              <button onClick={() => setExpandedHealthChip(null)} className="text-amber-400 hover:text-amber-600 p-0.5">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -1553,10 +1562,10 @@ export default function SessionLive() {
 
       {/* ── NDIS Goal Tracker ── */}
       {goals.length > 0 ? (
-        <div className="shrink-0 border-b border-white/8" style={{ background: "rgba(13,5,32,0.6)" }}>
+        <div className="shrink-0 border-b border-slate-200" style={{ background: "#F0EEFF" }}>
           <div className="px-3 py-2 flex items-center gap-2">
-            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-white/50 shrink-0">
-              <Target className="h-3 w-3" style={{ color: LIME }} /> NDIS Goals
+            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider shrink-0" style={{ color: TEXT2 }}>
+              <Target className="h-3 w-3 text-violet-500" /> NDIS Goals
             </span>
             <div className="flex items-center gap-1.5 flex-1 overflow-x-auto scrollbar-none min-w-0">
               {goals.map((goal) => (
@@ -1573,7 +1582,7 @@ export default function SessionLive() {
             <button
               onClick={() => setBodyMapOpen((o) => !o)}
               title="Physical examination map"
-              className="shrink-0 flex items-center gap-1 text-[10px] text-white/30 hover:text-white/60 transition-colors px-1.5 py-1 rounded-lg hover:bg-white/8"
+              className="shrink-0 flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 transition-colors px-1.5 py-1 rounded-lg hover:bg-white/60"
             >
               <HeartPulse className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{bodyMapOpen ? "Hide map" : "Body map"}</span>
@@ -1581,12 +1590,12 @@ export default function SessionLive() {
           </div>
         </div>
       ) : (
-        <div className="shrink-0 border-b border-amber-800/25 px-3 py-2 flex items-center gap-2.5" style={{ background: "rgba(120,53,15,0.2)" }}>
-          <AlertTriangle className="h-4 w-4 text-amber-400/80 shrink-0" />
-          <p className="text-amber-300/80 text-xs flex-1">No NDIS goals linked — affects claim compliance.</p>
+        <div className="shrink-0 border-b border-amber-200 px-3 py-2 flex items-center gap-2.5 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+          <p className="text-amber-700 text-xs flex-1">No NDIS goals linked — affects claim compliance.</p>
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="text-amber-400 text-[10px] font-bold underline shrink-0 hover:text-amber-300"
+            className="text-amber-600 text-[10px] font-bold underline shrink-0 hover:text-amber-800"
           >
             Add goals
           </button>
@@ -1598,29 +1607,29 @@ export default function SessionLive() {
         <div
           className="shrink-0 border-b px-3 py-2.5 flex items-start gap-2.5"
           style={{
-            background: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.18)" : "rgba(245,158,11,0.14)",
-            borderColor: riskProfile.risk_level === "high" ? "rgba(220,38,38,0.35)" : "rgba(245,158,11,0.3)",
+            background: riskProfile.risk_level === "high" ? "#FFF1F2" : "#FFFBEB",
+            borderColor: riskProfile.risk_level === "high" ? "#FECDD3" : "#FDE68A",
           }}
         >
           <ShieldAlert
             className="h-4 w-4 shrink-0 mt-0.5"
-            style={{ color: riskProfile.risk_level === "high" ? "#F87171" : "#FBBF24" }}
+            style={{ color: riskProfile.risk_level === "high" ? "#DC2626" : "#D97706" }}
           />
           <div className="flex-1 min-w-0">
             <p
               className="text-xs font-bold uppercase tracking-wider"
-              style={{ color: riskProfile.risk_level === "high" ? "#FCA5A5" : "#FCD34D" }}
+              style={{ color: riskProfile.risk_level === "high" ? "#9F1239" : "#92400E" }}
             >
-              {riskProfile.risk_level === "high" ? "⚠ High Risk" : "⚠ Medium Risk"} Participant
+              {riskProfile.risk_level === "high" ? "High Risk" : "Medium Risk"} Participant
             </p>
             {riskProfile.triggers && (
-              <p className="text-[11px] text-white/60 mt-0.5 leading-snug">
-                <span className="text-white/40 font-medium">Triggers: </span>{riskProfile.triggers}
+              <p className="text-[11px] mt-0.5 leading-snug" style={{ color: "#374151" }}>
+                <span className="font-medium" style={{ color: "#4B5563" }}>Triggers: </span>{riskProfile.triggers}
               </p>
             )}
             {riskProfile.management_plan && (
-              <p className="text-[11px] text-white/50 mt-0.5 leading-snug">
-                <span className="text-white/40 font-medium">Plan: </span>{riskProfile.management_plan}
+              <p className="text-[11px] mt-0.5 leading-snug" style={{ color: "#4B5563" }}>
+                <span className="font-medium" style={{ color: "#4B5563" }}>Plan: </span>{riskProfile.management_plan}
               </p>
             )}
           </div>
@@ -1629,19 +1638,19 @@ export default function SessionLive() {
 
       {/* ── Goal Rules Matrix (collapsible) ── */}
       {planGoals.length > 0 && (
-        <div className="shrink-0 border-b border-purple-900/30" style={{ background: "rgba(55,25,120,0.15)" }}>
+        <div className="shrink-0 border-b border-violet-200" style={{ background: "#F5F0FF" }}>
           <button
             onClick={() => setShowGoalMatrix((o) => !o)}
-            className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/3 transition-colors"
+            className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-violet-50 transition-colors"
           >
-            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-purple-300/80">
+            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-violet-600">
               <BarChart2 className="h-3.5 w-3.5" />
               Goal Rules Matrix
-              <span className="text-white/40 font-normal normal-case tracking-normal">
+              <span className="text-slate-400 font-normal normal-case tracking-normal">
                 {planGoals.filter((g) => !g.is_achieved).length} of {planGoals.length} active
               </span>
             </span>
-            <span className="text-white/30 text-xs">{showGoalMatrix ? "▲" : "▼"}</span>
+            <span className="text-slate-400 text-xs">{showGoalMatrix ? "▲" : "▼"}</span>
           </button>
           {showGoalMatrix && (
             <div className="px-3 pb-3 space-y-2 max-h-[200px] overflow-y-auto">
@@ -1649,22 +1658,22 @@ export default function SessionLive() {
                 <div
                   key={g.id}
                   className="flex items-start gap-2.5 px-3 py-2 rounded-xl"
-                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
                 >
                   <div className="shrink-0 mt-0.5">
                     {g.is_achieved
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                      : <Circle className="h-3.5 w-3.5 text-white/35" />}
+                      ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      : <Circle className="h-3.5 w-3.5 text-slate-300" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-xs leading-snug ${g.is_achieved ? "text-white/30 line-through" : "text-white/75"}`}>
+                    <p className={`text-xs leading-snug ${g.is_achieved ? "text-slate-400 line-through" : "text-slate-700"}`}>
                       {g.description}
                     </p>
                     <span
                       className="text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1 inline-block"
                       style={{
-                        background: g.category === "core" ? "rgba(59,130,246,0.2)" : g.category === "capacity_building" ? "rgba(139,92,246,0.2)" : "rgba(245,158,11,0.2)",
-                        color: g.category === "core" ? "#93C5FD" : g.category === "capacity_building" ? "#C4B5FD" : "#FCD34D",
+                        background: g.category === "core" ? "#EFF6FF" : g.category === "capacity_building" ? "#F5F3FF" : "#FFFBEB",
+                        color: g.category === "core" ? "#1D4ED8" : g.category === "capacity_building" ? "#6D28D9" : "#92400E",
                       }}
                     >
                       {g.category === "capacity_building" ? "Capacity Building" : g.category === "core" ? "Core Supports" : g.category === "capital" ? "Capital" : g.category}
@@ -1679,12 +1688,12 @@ export default function SessionLive() {
 
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
-        <div className="shrink-0 border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto" style={{ background: DEEP }}>
+        <div className="shrink-0 border-b border-slate-200 px-4 py-4 max-h-[260px] overflow-y-auto bg-white">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: CORAL }} /> Physical Examination
             </h3>
-            <button onClick={() => setBodyMapOpen(false)} className="text-white/35 hover:text-white/60">
+            <button onClick={() => setBodyMapOpen(false)} className="text-slate-400 hover:text-slate-600">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -1696,11 +1705,11 @@ export default function SessionLive() {
       <div className="flex-1 overflow-y-auto px-2 py-3" onClick={() => { setBubbleMenu(null); setShowFab(false); }}>
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12">
-            <div className="h-14 w-14 rounded-2xl flex items-center justify-center mb-4" style={{ background: "rgba(85,51,204,0.15)", border: "1px solid rgba(85,51,204,0.2)" }}>
-              <MessageSquare className="h-7 w-7" style={{ color: "rgba(139,92,246,0.5)" }} />
+            <div className="h-14 w-14 rounded-2xl flex items-center justify-center mb-4 bg-violet-50 border border-violet-200">
+              <MessageSquare className="h-7 w-7 text-violet-400" />
             </div>
-            <p className="text-white/40 text-sm font-semibold mb-1">Ready to document</p>
-            <p className="text-white/20 text-xs leading-relaxed max-w-[220px]">
+            <p className="text-sm font-semibold mb-1" style={{ color: TEXT1 }}>Ready to document</p>
+            <p className="text-xs leading-relaxed max-w-[220px]" style={{ color: TEXT2 }}>
               {isActive
                 ? "Use the + button to log activities, voice notes or photos. Tap mic to dictate."
                 : "Press Start to begin the session timer, then document as you go."}
@@ -1713,8 +1722,8 @@ export default function SessionLive() {
                   { step: "3", label: "Link NDIS goals" },
                   { step: "4", label: "End & review for billing" },
                 ].map(({ step, label }) => (
-                  <div key={step} className="flex items-center gap-2.5 text-white/25">
-                    <span className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: "rgba(85,51,204,0.2)", color: "rgba(167,139,250,0.5)" }}>{step}</span>
+                  <div key={step} className="flex items-center gap-2.5" style={{ color: TEXT2 }}>
+                    <span className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0" style={{ background: "#EDE9FE", color: "#6D28D9" }}>{step}</span>
                     <span className="text-[11px]">{label}</span>
                   </div>
                 ))}
@@ -1741,20 +1750,20 @@ export default function SessionLive() {
 
       {/* ── RP warning strip ── */}
       {rpFlags.length > 0 && !showSummary && (
-        <div className="shrink-0 bg-red-950/50 border-t border-red-800/30 px-3 py-2 flex items-center gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-          <p className="text-red-300 text-xs flex-1">
+        <div className="shrink-0 bg-red-50 border-t border-red-200 px-3 py-2 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+          <p className="text-red-700 text-xs flex-1">
             <span className="font-semibold">Possible RP language detected</span>
-            <span className="text-red-400/70 ml-1">({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})</span>
+            <span className="text-red-500 ml-1">({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})</span>
           </p>
-          <button onClick={() => setShowRpBottomSheet(true)} className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0">
+          <button onClick={() => setShowRpBottomSheet(true)} className="text-red-600 hover:text-red-800 text-[10px] underline shrink-0">
             Review
           </button>
         </div>
       )}
 
       {/* ── Bottom composer ── */}
-      <div className="shrink-0 border-t border-white/10 px-3 pt-2 pb-3 safe-area-bottom" style={{ background: NAVY }}>
+      <div className="shrink-0 border-t border-slate-200 px-3 pt-2 pb-3 safe-area-bottom bg-white">
         {/* FAB menu — floats above composer */}
         <div className="relative">
           {showFab && (
@@ -1764,25 +1773,25 @@ export default function SessionLive() {
             >
               <button
                 onClick={() => { setShowActivitySheet(true); setShowFab(false); }}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
-                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active:scale-95 shadow-md bg-white border border-slate-200 hover:bg-slate-50"
+                style={{ color: TEXT1 }}
               >
-                <Activity className="h-4 w-4 shrink-0" style={{ color: LIME }} />
+                <Activity className="h-4 w-4 shrink-0 text-violet-500" />
                 Log NDIS Activity
               </button>
               <button
                 onClick={() => { fileInputRef.current?.click(); setShowFab(false); }}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
-                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active:scale-95 shadow-md bg-white border border-slate-200 hover:bg-slate-50"
+                style={{ color: TEXT1 }}
               >
-                <Camera className="h-4 w-4 shrink-0" style={{ color: "#60A5FA" }} />
+                <Camera className="h-4 w-4 shrink-0 text-blue-500" />
                 Photo Evidence
               </button>
               <button
                 onClick={() => { startRecording(); setShowFab(false); }}
                 disabled={!isActive}
-                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg disabled:opacity-40"
-                style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active:scale-95 shadow-md bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-40"
+                style={{ color: TEXT1 }}
               >
                 <Mic className="h-4 w-4 shrink-0" style={{ color: CORAL }} />
                 Voice Note
@@ -1794,10 +1803,10 @@ export default function SessionLive() {
                     if (nextGoal) cycleGoalStatus(nextGoal.id);
                     setShowFab(false);
                   }}
-                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold text-white whitespace-nowrap transition-all active:scale-95 shadow-lg"
-                  style={{ background: "#1a1060", border: "1px solid rgba(255,255,255,0.12)" }}
+                  className="flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all active:scale-95 shadow-md bg-white border border-slate-200 hover:bg-slate-50"
+                  style={{ color: TEXT1 }}
                 >
-                  <Target className="h-4 w-4 shrink-0" style={{ color: LIME }} />
+                  <Target className="h-4 w-4 shrink-0 text-emerald-500" />
                   Update Goal Progress
                 </button>
               )}
@@ -1815,9 +1824,9 @@ export default function SessionLive() {
               "h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0",
               showFab
                 ? "text-white rotate-45"
-                : "bg-white/8 text-white/55 hover:bg-white/15 hover:text-white border border-white/10"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 border border-slate-200"
             )}
-            style={showFab ? { background: PURPLE, border: `1px solid rgba(255,255,255,0.2)` } : {}}
+            style={showFab ? { background: PURPLE, border: `1px solid ${PURPLE}` } : {}}
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -1825,7 +1834,7 @@ export default function SessionLive() {
           {/* Text input */}
           <div className={cn(
             "flex-1 border rounded-2xl px-4 py-2.5 min-h-[40px] flex items-center transition-colors",
-            isActive ? "bg-white/8 border-white/12" : "bg-white/4 border-white/6"
+            isActive ? "bg-[#F8F7FC] border-[#E8E5F4]" : "bg-slate-50 border-slate-100"
           )}>
             <input
               value={inputText}
@@ -1833,7 +1842,7 @@ export default function SessionLive() {
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendTextMessage(); } }}
               placeholder={isActive ? COMPOSER_PLACEHOLDERS[placeholderIdx] : "Start session to add notes…"}
               disabled={!isActive}
-              className="w-full bg-transparent text-white text-sm placeholder-white/25 outline-none disabled:opacity-30"
+              className="w-full bg-transparent text-sm outline-none disabled:opacity-30 text-slate-900 placeholder-slate-400"
             />
           </div>
 
@@ -1847,7 +1856,7 @@ export default function SessionLive() {
               "h-10 w-10 rounded-xl flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
               isRecording
                 ? "text-white animate-pulse"
-                : "bg-white/6 text-white/50 hover:bg-white/12 hover:text-white/80 border border-white/10"
+                : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 border border-slate-200"
             )}
             style={isRecording ? { background: "#DC2626" } : {}}
           >
@@ -1860,9 +1869,9 @@ export default function SessionLive() {
             disabled={!inputText.trim() || !isActive}
             aria-label="Send note"
             className="h-10 w-10 rounded-xl flex items-center justify-center disabled:opacity-20 hover:scale-105 active:scale-95 transition-all shrink-0"
-            style={{ background: inputText.trim() && isActive ? LIME : "rgba(217,241,3,0.4)" }}
+            style={{ background: inputText.trim() && isActive ? PURPLE : "#E8E5F4" }}
           >
-            <Send className="h-4 w-4" style={{ color: DEEP }} />
+            <Send className="h-4 w-4" style={{ color: inputText.trim() && isActive ? "white" : TEXT3 }} />
           </button>
         </div>
       </div>
@@ -1934,12 +1943,12 @@ export default function SessionLive() {
         <div className="fixed inset-0 z-40 flex items-end" onClick={() => setShowActivitySheet(false)}>
           <div
             className="w-full rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
-            style={{ background: NAVY, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+            style={{ background: SURFACE, borderTop: `1px solid ${BORDER}` }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-bold text-sm">Log Activity</h3>
-              <button onClick={() => setShowActivitySheet(false)} className="text-white/40 hover:text-white/70">
+              <h3 className="font-bold text-sm" style={{ color: TEXT1 }}>Log Activity</h3>
+              <button onClick={() => setShowActivitySheet(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1949,8 +1958,8 @@ export default function SessionLive() {
                 return (
                   <div key={cat.label}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <CatIcon className="h-3 w-3 text-white/30" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-white/30">{cat.label}</span>
+                      <CatIcon className="h-3 w-3 text-slate-400" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{cat.label}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {cat.items.map((a) => {
@@ -1980,13 +1989,14 @@ export default function SessionLive() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setBubbleMenu(null)} />
           <div
-            className="fixed z-50 bg-[#1a1a6e] border border-white/15 rounded-2xl shadow-2xl py-2 min-w-[180px] animate-in zoom-in-95 duration-150"
+            className="fixed z-50 bg-white border border-slate-200 rounded-2xl shadow-2xl py-2 min-w-[180px] animate-in zoom-in-95 duration-150"
             style={{ bottom: "80px", right: "16px" }}
           >
             <button
               onClick={() => void handleImproveWithAI(bubbleMenu.msgId)}
               disabled={improvingMsgId === bubbleMenu.msgId}
-              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-left"
+              style={{ color: TEXT1 }}
             >
               {improvingMsgId === bubbleMenu.msgId
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: PURPLE }} />
@@ -1995,9 +2005,10 @@ export default function SessionLive() {
             </button>
             <button
               onClick={() => void handleTranslateBubble(bubbleMenu.msgId)}
-              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+              className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-left"
+              style={{ color: TEXT1 }}
             >
-              <Globe className="h-3.5 w-3.5 text-blue-400" />
+              <Globe className="h-3.5 w-3.5 text-blue-500" />
               Translate note
             </button>
             {goals.length > 0 && (
@@ -2007,16 +2018,17 @@ export default function SessionLive() {
                   setBubbleMenu(null);
                   setShowGoalPicker(true);
                 }}
-                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-white hover:bg-white/10 transition-colors text-left"
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors text-left"
+                style={{ color: TEXT1 }}
               >
-                <Target className="h-3.5 w-3.5" style={{ color: LIME }} />
+                <Target className="h-3.5 w-3.5 text-emerald-500" />
                 Link to goal
               </button>
             )}
-            <div className="border-t border-white/10 mt-1 pt-1">
+            <div className="border-t border-slate-100 mt-1 pt-1">
               <button
                 onClick={() => handleConvertToIncident(bubbleMenu.msgId)}
-                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-amber-300 hover:bg-white/10 transition-colors text-left"
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-amber-600 hover:bg-slate-50 transition-colors text-left"
               >
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Convert to incident
@@ -2029,13 +2041,13 @@ export default function SessionLive() {
       {/* ── Goal picker bottom sheet ── */}
       {showGoalPicker && (
         <div className="fixed inset-0 z-50 flex items-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowGoalPicker(false)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowGoalPicker(false)} />
           <div
             className="relative w-full rounded-t-3xl shadow-2xl px-5 pt-5 pb-10 animate-in slide-in-from-bottom-4 duration-200"
-            style={{ background: NAVY, border: "1px solid rgba(255,255,255,0.1)" }}
+            style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
           >
-            <div className="w-10 h-1 rounded-full bg-white/20 mx-auto mb-4" />
-            <p className="text-white font-semibold text-sm mb-3">Link note to a goal</p>
+            <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-4" />
+            <p className="font-semibold text-sm mb-3" style={{ color: TEXT1 }}>Link note to a goal</p>
             <div className="space-y-2">
               {goals.map((g) => (
                 <button
@@ -2061,8 +2073,8 @@ export default function SessionLive() {
                     setGoalPickerMsgId(null);
                     toast({ title: "Note linked", description: g.name });
                   }}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-white text-sm active:scale-[0.98] transition-transform"
-                  style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-sm active:scale-[0.98] transition-transform hover:bg-slate-50 border border-slate-200"
+                  style={{ color: TEXT1 }}
                 >
                   <span className="truncate pr-2">{g.name}</span>
                   <span
@@ -2070,16 +2082,16 @@ export default function SessionLive() {
                     style={{
                       background:
                         g.status === "achieved"
-                          ? "rgba(217,241,3,0.2)"
+                          ? "#ECFDF5"
                           : g.status === "in_progress"
-                          ? "rgba(85,51,204,0.3)"
-                          : "rgba(255,255,255,0.1)",
+                          ? "#EDE9FE"
+                          : "#F1F5F9",
                       color:
                         g.status === "achieved"
-                          ? LIME
+                          ? "#059669"
                           : g.status === "in_progress"
-                          ? "#A78BFA"
-                          : "rgba(255,255,255,0.5)",
+                          ? "#6D28D9"
+                          : "#94A3B8",
                     }}
                   >
                     {g.status === "not_started" ? "Not started" : g.status === "in_progress" ? "In progress" : "Achieved"}
@@ -2089,7 +2101,7 @@ export default function SessionLive() {
             </div>
             <button
               onClick={() => setShowGoalPicker(false)}
-              className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold text-white/60 hover:text-white transition-colors"
+              className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors"
             >
               Cancel
             </button>
