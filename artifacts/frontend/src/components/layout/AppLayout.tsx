@@ -13,7 +13,6 @@ import {
   Settings,
   AlertTriangle,
   FileBarChart2,
-  FolderOpen,
   LogOut,
   Search,
   Bell,
@@ -38,8 +37,7 @@ const NAV_ITEMS = [
   { href: "/sessions", label: "Sessions", icon: CalendarDays },
   { href: "/incidents", label: "Incidents", icon: AlertTriangle },
   { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-  { href: "/reports", label: "Reports", icon: FileBarChart2 },
-  { href: "/documents", label: "Documents", icon: FolderOpen },
+  { href: "/reports", label: "Reports & Docs", icon: FileBarChart2 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
