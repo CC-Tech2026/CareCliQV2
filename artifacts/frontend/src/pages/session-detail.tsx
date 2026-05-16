@@ -7,6 +7,7 @@ import { exportSingleSessionPDF } from "@/lib/pdf-export";
 
 import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 
 // Extended session type with extra DB columns not yet in the OpenAPI spec
 type ExtendedSession = Session & {
@@ -14,6 +15,9 @@ type ExtendedSession = Session & {
   support_category?: string | null;
   compliance_status?: string | null;
   body_markers?: BodyMarker[] | null;
+  original_language_input?: string | null;
+  translated_english_note?: string | null;
+  translation_metadata?: Record<string, string> | null;
 };
 
 import { Button } from "@/components/ui/button";
@@ -815,6 +819,15 @@ export default function SessionDetail({ id }: { id?: string }) {
               </div>
             </div>
           </div>
+
+          {/* Translation Audit Trail — Phase 6 (SCRUM-113) */}
+          {((session as ExtendedSession).original_language_input || (session as ExtendedSession).translated_english_note) && (
+            <TranslationAuditView
+              originalLanguageInput={(session as ExtendedSession).original_language_input}
+              translatedEnglishNote={(session as ExtendedSession).translated_english_note}
+              translationMetadata={(session as ExtendedSession).translation_metadata}
+            />
+          )}
 
           {/* Media Attachments & Session Evidence */}
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>

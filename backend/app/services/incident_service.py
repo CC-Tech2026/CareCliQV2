@@ -51,6 +51,7 @@ async def get_all_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
+    org_id: Optional[str] = None,
 ) -> List[dict]:
     supabase = get_supabase_admin()
     q = supabase.table(TABLE).select("*").order("incident_date", desc=True).limit(limit)
@@ -60,6 +61,8 @@ async def get_all_incidents(
         q = q.eq("severity", severity)
     if participant_id:
         q = q.eq("participant_id", participant_id)
+    if org_id:
+        q = q.eq("organization_id", org_id)
     result = q.execute()
     rows = result.data or []
 
@@ -109,9 +112,11 @@ async def get_incidents_by_participant(participant_id: str) -> List[dict]:
     return await get_all_incidents(participant_id=participant_id)
 
 
-async def create_incident(data: IncidentCreate) -> dict:
+async def create_incident(data: IncidentCreate, org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
+    if org_id:
+        payload["organization_id"] = org_id
 
     # Coerce datetimes/dates to strings for PostgREST
     for key in ("incident_date", "follow_up_date"):
@@ -163,10 +168,13 @@ async def update_incident(incident_id: str, updates: dict) -> Optional[dict]:
         return None
 
 
-async def get_incident_stats() -> dict:
+async def get_incident_stats(org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     try:
-        result = supabase.table(TABLE).select("id, status, severity, ndis_reportable, ndis_reported_at, incident_date").execute()
+        q = supabase.table(TABLE).select("id, status, severity, ndis_reportable, ndis_reported_at, incident_date")
+        if org_id:
+            q = q.eq("organization_id", org_id)
+        result = q.execute()
         rows = result.data or []
     except Exception as e:
         logger.warning(f"Could not fetch incident stats: {e}")

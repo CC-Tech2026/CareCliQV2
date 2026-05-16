@@ -56,6 +56,19 @@ def get_current_user(
     return payload
 
 
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+) -> Optional[dict]:
+    """Like get_current_user but returns None instead of raising 401.
+
+    Use on routes that should work unauthenticated but scope data by org when
+    a valid token is present.
+    """
+    if not credentials:
+        return None
+    return decode_access_token(credentials.credentials)
+
+
 def require_role(allowed_roles: list[str]):
     """FastAPI dependency factory — validates JWT and enforces role membership.
 

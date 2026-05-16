@@ -109,9 +109,12 @@ def _goals_to_jsonb(goals: Optional[List[NDISGoal]]) -> Optional[list]:
 # Service functions
 # ---------------------------------------------------------------------------
 
-async def get_all_participants() -> List[dict]:
+async def get_all_participants(org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
+    q = supabase.table(TABLE).select("*").order("created_at", desc=True)
+    if org_id:
+        q = q.eq("organization_id", org_id)
+    result = q.execute()
     return [_normalize(r) for r in (result.data or [])]
 
 
@@ -128,13 +131,16 @@ async def get_participant_by_id(participant_id: str) -> Optional[dict]:
         return None
 
 
-async def create_participant(data: ParticipantCreate) -> dict:
+async def create_participant(data: ParticipantCreate, org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     # exclude_none so we rely on DB/Pydantic defaults rather than sending nulls
     payload: dict = data.model_dump(exclude_none=True)
     payload.pop("address", None)
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
+
+    if org_id:
+        payload["organization_id"] = org_id
 
     # Serialize NDISGoal objects to plain dicts for JSONB
     if "goals" in payload:

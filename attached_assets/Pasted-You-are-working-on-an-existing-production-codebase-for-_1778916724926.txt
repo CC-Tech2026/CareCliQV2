@@ -1,0 +1,167 @@
+You are working on an existing production codebase for a SaaS called "CareScribe".
+
+IMPORTANT:
+- DO NOT rebuild the system from scratch
+- DO NOT duplicate authentication, database models, or routing
+- Your job is to extend and harden the existing system for compliance-grade multi-tenancy and auditability
+
+---
+
+## CONTEXT
+
+CareScribe is a compliance-first SaaS for NDIS providers. It already has existing functionality including:
+- authentication system
+- basic user system
+- some domain models (sessions/notes or similar)
+- existing frontend/backend structure
+
+Your task is to upgrade it to a compliance-ready architecture.
+
+---
+
+## PHASE 1 — VERIFY EXISTING ARCHITECTURE (DO THIS FIRST)
+Scan the codebase and identify:
+- current auth system (Supabase/Auth0/custom)
+- existing database schema
+- existing user model
+- current session/note structure
+- current routing structure
+
+DO NOT MODIFY YET — just analyze.
+
+---
+
+## PHASE 2 — MULTI-TENANT HARDENING (CRITICAL)
+Add or enforce:
+
+### organizations
+- ensure organizations table exists (create ONLY if missing)
+- ensure every user belongs to exactly one organization
+- ensure every domain table includes organization_id
+
+### ENFORCEMENT RULE:
+No query should ever return cross-organization data.
+
+If needed:
+- add middleware for org filtering
+- add DB constraints or RLS policies (if Supabase)
+
+---
+
+## PHASE 3 — USER PROFILE REFACTOR
+Ensure separation of:
+- auth user (system identity)
+- app user (business identity)
+
+Update or create:
+users table:
+- id (auth id)
+- name
+- email
+- organization_id
+- status
+
+DO NOT break existing auth system.
+
+---
+
+## PHASE 4 — ROLE & PERMISSION LAYER
+Introduce RBAC if not already present:
+
+Roles:
+- support_worker
+- support_coordinator
+- allied_health_professional
+
+Implement:
+- API-level authorization middleware
+- route protection
+- data filtering per role + organization
+
+Keep it backward compatible.
+
+---
+
+## PHASE 5 — AUDIT LOG SYSTEM (CRITICAL FOR COMPLIANCE)
+If not already present, implement:
+
+audit_logs table:
+- id
+- organization_id
+- user_id
+- action_type
+- entity_type
+- entity_id
+- before_state (JSON)
+- after_state (JSON)
+- timestamp
+
+Requirements:
+- append-only (NO updates or deletes)
+- automatically log:
+  - note creation
+  - note updates
+  - session updates
+  - exports (if exists)
+
+---
+
+## PHASE 6 — TRANSLATION TRACEABILITY (SCRUM-113)
+Enhance notes system with:
+
+- original_language_input
+- translated_english_note
+- translation_metadata (model/version)
+- optional segment mapping (advanced)
+
+Add UI view:
+- side-by-side original vs translated note
+- read-only audit mode
+- optional highlight mapping
+
+DO NOT allow editing in audit view.
+
+---
+
+## PHASE 7 — EXPORT FOR AUDITS
+Add export capability:
+
+- export note/session as PDF or JSON
+- must include:
+  - original input
+  - translated output
+  - audit logs
+  - timestamps
+  - user + org info
+
+---
+
+## SECURITY REQUIREMENTS (NON-NEGOTIABLE)
+
+- enforce organization isolation at API level
+- enforce role-based access control
+- ensure no cross-tenant data leaks
+- audit all sensitive actions
+- do not rely on frontend-only security
+
+---
+
+## IMPORTANT RULES
+
+- Do not refactor working auth unless required
+- Do not break existing API contracts
+- Extend existing schema instead of replacing it
+- Keep backward compatibility at all times
+- Prefer additive changes over destructive changes
+
+---
+
+## GOAL
+
+Upgrade this existing codebase into a:
+- multi-tenant secure SaaS
+- compliance-grade audit system
+- NDIS-ready documentation platform
+- translation traceability-enabled system
+
+This is a production system, not a prototype.

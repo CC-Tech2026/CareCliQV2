@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Optional
 from datetime import datetime, timezone
+from ..core.security import get_optional_user
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
-from ..services import session_service, ai_service, alert_service, funding_service, message_service
+from ..services import audit_service, session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
@@ -15,8 +16,9 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions(limit: int = 50):
-    return await session_service.get_all_sessions(limit)
+async def list_sessions(limit: int = 50, user: Optional[dict] = Depends(get_optional_user)):
+    org_id = (user or {}).get("organization_id")
+    return await session_service.get_all_sessions(limit, org_id=org_id)
 
 
 @router.get("/recent")
@@ -35,9 +37,21 @@ async def get_participant_sessions(participant_id: str):
 
 
 @router.post("", status_code=201)
-async def create_session(body: SessionCreate):
+async def create_session(body: SessionCreate, user: Optional[dict] = Depends(get_optional_user)):
     try:
-        session = await session_service.create_session(body)
+        org_id = (user or {}).get("organization_id")
+        session = await session_service.create_session(body, org_id=org_id)
+        await audit_service.log_action(
+            action_type="session.created",
+            entity_type="session",
+            entity_id=session.get("id", ""),
+            user_id=(user or {}).get("sub"),
+            organization_id=org_id,
+            after_state={
+                k: session.get(k)
+                for k in ("id", "session_date", "session_type", "status", "patient_id")
+            },
+        )
         return session
     except Exception as e:
         logger.error(f"Error creating session: {str(e)}")
@@ -95,13 +109,29 @@ async def get_session(session_id: str):
 
 
 @router.patch("/{session_id}")
-async def update_session(session_id: str, body: SessionUpdate):
+async def update_session(
+    session_id: str,
+    body: SessionUpdate,
+    user: Optional[dict] = Depends(get_optional_user),
+):
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "session_date" in data and data["session_date"]:
         data["session_date"] = str(data["session_date"])
     updated = await session_service.update_session(session_id, data)
     if not updated:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    changed_fields = list(data.keys())
+    action = "session.notes_updated" if "notes" in changed_fields else "session.updated"
+    await audit_service.log_action(
+        action_type=action,
+        entity_type="session",
+        entity_id=session_id,
+        user_id=(user or {}).get("sub"),
+        organization_id=(user or {}).get("organization_id"),
+        details={"changed_fields": changed_fields},
+        after_state={k: updated.get(k) for k in ("id", "status", "compliance_score") if updated.get(k) is not None},
+    )
     return updated
 
 

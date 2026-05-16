@@ -25,10 +25,12 @@ async def get_sessions_by_participant(participant_id: str) -> List[dict]:
     return [_normalize(r) for r in (result.data or [])]
 
 
-async def get_all_sessions(limit: int = 50) -> List[dict]:
+async def get_all_sessions(limit: int = 50, org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit).execute()
-    sessions = result.data or []
+    q = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit)
+    if org_id:
+        q = q.eq("organization_id", org_id)
+    sessions = q.execute().data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
     name_map = _fetch_patient_name_map(supabase, patient_ids)
@@ -62,7 +64,7 @@ async def get_session_by_id(session_id: str) -> Optional[dict]:
     return row
 
 
-async def create_session(data: SessionCreate) -> dict:
+async def create_session(data: SessionCreate, org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
     if "session_date" in payload and payload["session_date"]:
@@ -75,6 +77,9 @@ async def create_session(data: SessionCreate) -> dict:
     participant_id = payload.pop("participant_id", None)
     if participant_id:
         payload["patient_id"] = participant_id
+
+    if org_id:
+        payload["organization_id"] = org_id
 
     result = supabase.table("sessions").insert(payload).execute()
     return _normalize(result.data[0]) if result.data else {}

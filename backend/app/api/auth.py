@@ -296,6 +296,7 @@ async def login(body: LoginRequest, request: Request):
         "email": str(auth_user.email),
         "role": role,
         "account_type": account_type,
+        "organization_id": profile.get("organization_id"),
     })
 
     await _touch_last_login(str(auth_user.id))

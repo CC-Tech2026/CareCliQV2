@@ -799,3 +799,33 @@ ALTER TABLE public.patients
 -- 2. Billing-ready flag on sessions (set when assess-note score >= 75)
 ALTER TABLE public.sessions
     ADD COLUMN IF NOT EXISTS is_ready_for_billing BOOLEAN DEFAULT FALSE;
+
+-- ============================================================
+-- COMPLIANCE-GRADE MULTI-TENANCY & AUDIT HARDENING
+-- Phase 2: organization_id on all domain tables (nullable, additive)
+-- ============================================================
+ALTER TABLE public.patients   ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.sessions   ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.incidents  ADD COLUMN IF NOT EXISTS organization_id UUID;
+
+CREATE INDEX IF NOT EXISTS idx_patients_organization_id  ON public.patients(organization_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_organization_id  ON public.sessions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_organization_id ON public.incidents(organization_id);
+
+-- Phase 5: Extend audit_logs with compliance-grade fields (additive)
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action_type    TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_type    TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_id      TEXT;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS before_state   JSONB;
+ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS after_state    JSONB;
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_organization_id ON public.audit_logs(organization_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity          ON public.audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id         ON public.audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at      ON public.audit_logs(created_at DESC);
+
+-- Phase 6: Translation traceability fields on sessions
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS original_language_input TEXT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translated_english_note  TEXT;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translation_metadata     JSONB;

@@ -54,3 +54,7 @@ class SessionUpdate(BaseModel):
     input_language: Optional[str] = None
     voice_input: Optional[str] = None
     incident_language_detected: Optional[bool] = None
+    # Phase 6 — Translation traceability (SCRUM-113)
+    original_language_input: Optional[str] = None
+    translated_english_note: Optional[str] = None
+    translation_metadata: Optional[Dict] = None
