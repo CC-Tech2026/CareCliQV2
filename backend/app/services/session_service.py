@@ -218,9 +218,12 @@ async def update_session(session_id: str, data: dict) -> Optional[dict]:
         raise
 
 
-async def get_recent_sessions(limit: int = 10) -> List[dict]:
+async def get_recent_sessions(limit: int = 10, org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit).execute()
+    q = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit)
+    if org_id:
+        q = q.eq("organization_id", org_id)
+    result = q.execute()
     sessions = result.data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})

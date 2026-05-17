@@ -1,0 +1,182 @@
+Refactor the existing CareScribe codebase to fix broken multi-tenant architecture, onboarding flow, and role-based data access without introducing new features.
+
+This is a stability + security refactor, not a feature upgrade.
+
+🚨 CRITICAL PROBLEMS TO FIX
+1. Broken Organisation Linkage (Root Issue)
+Users are not consistently linked to organization_id
+Some users exist without org context after signup/onboarding
+This breaks all downstream queries (participants, sessions, assignments)
+REQUIRED FIX
+
+Ensure:
+
+Every user MUST have either:
+organization_id (Support Coordinator + Support Worker)
+OR standalone pro context (Allied Health Pro)
+No “orphan users” allowed
+2. JWT / Session Does NOT Carry Org Scope
+
+Current issue:
+
+organization_id missing from token OR stale after onboarding
+REQUIRED FIX
+
+Refactor auth layer so JWT ALWAYS includes:
+
+user_id
+role
+organization_id (if applicable)
+
+If onboarding changes org state:
+
+token MUST be refreshed immediately
+3. Participants Not Visible (Data Scoping Broken)
+
+Current failure:
+
+participants exist but return empty in UI
+REQUIRED FIX
+
+Standardize query rule:
+
+WHERE organization_id = current_user.organization_id
+
+AND for workers:
+
+AND assigned_user_id = current_user.id
+4. Sessions Not Loading Properly
+
+Sessions are currently:
+
+missing org filter OR
+not linked properly via participant_id
+REQUIRED FIX
+
+Enforce:
+
+sessions.organization_id is REQUIRED
+sessions.participant_id is REQUIRED
+NEVER query sessions without org scope
+5. Role-Based Access Control is Inconsistent
+MUST REFACTOR INTO SINGLE SOURCE OF TRUTH:
+👑 Support Coordinator
+full organization scope
+can see ALL participants, sessions, workers
+👤 Support Worker
+only assigned participants
+only own sessions
+🩺 Allied Health Pro
+only own caseload
+standalone OR optionally linked org
+6. Missing Assignment Integrity Layer
+
+Current issue:
+
+participants are not reliably linked to workers
+REQUIRED FIX
+
+Introduce consistent enforcement:
+
+assignments table must be source of truth
+NOT frontend state
+NOT ad-hoc session filtering
+🧱 REQUIRED ARCHITECTURAL REFACTOR
+1. Single Source of Truth Rules
+User context MUST come from:
+JWT (primary)
+server-side validation (secondary)
+Never trust frontend filters alone
+2. Data Model Enforcement
+
+Every record MUST include:
+
+organization_id (mandatory for org-based roles)
+created_by (audit trail recommended)
+assigned_user_id (for worker scoping)
+3. Backend Query Standardisation Layer
+
+Create (or refactor into) a single access layer:
+
+getParticipants(user)
+getSessions(user)
+getAssignments(user)
+
+All MUST internally enforce:
+
+role checks
+org scoping
+assignment filtering
+
+NO raw table access in frontend.
+
+4. RLS Policy Alignment (CRITICAL)
+
+Refactor all Supabase/Postgres policies so:
+
+Rule 1: Org isolation
+organization_id = auth.jwt.organization_id
+Rule 2: Worker restriction
+assigned_user_id = auth.uid()
+Rule 3: Coordinator override
+role = 'support_coordinator' → full access within org
+5. Onboarding Refactor (Critical Path)
+Small Provider Flow MUST:
+Create organization
+Attach user → organization_id
+Set role = support_coordinator
+Issue NEW JWT with org included
+Force session refresh
+6. Fix Broken State Sync
+
+Current issue:
+
+frontend assumes auth state is correct after signup
+backend state is not synced
+REQUIRED FIX:
+
+After onboarding:
+
+re-fetch /me
+refresh auth context
+invalidate cached queries
+🧪 VALIDATION CHECKLIST (REFRACTOR SUCCESS CRITERIA)
+Auth
+ JWT always includes organization_id
+ role always correct after onboarding
+ token refresh works after org creation
+Data
+ participants always scoped correctly
+ sessions always scoped correctly
+ no cross-org leakage possible
+Roles
+ Coordinator sees all org data
+ Worker sees only assigned data
+ Allied Health sees only own caseload
+Assignments
+ participant → worker linking works reliably
+ sessions reflect assignment correctly
+⚠️ NON-NEGOTIABLE RULE
+
+Do NOT:
+
+add new features
+redesign UI
+change product logic
+
+ONLY:
+
+fix data flow
+fix auth
+fix scoping
+fix RLS
+fix onboarding consistency
+🎯 FINAL OUTCOME
+
+After refactor:
+
+No orphan users
+No unscoped queries
+No participant/session leakage
+Clean role separation
+Stable onboarding → org → access pipeline

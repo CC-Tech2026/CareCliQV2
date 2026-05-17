@@ -21,6 +21,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
+  updateToken: (newToken: string) => Promise<void>;
 }
 
 const TOKEN_KEY = "carescribe_token";
@@ -102,6 +103,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const updateToken = useCallback(async (newToken: string): Promise<void> => {
+    _currentToken = newToken;
+    localStorage.setItem(TOKEN_KEY, newToken);
+    setToken(newToken);
+    try {
+      const res = await fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${newToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const fresh: AuthUser = {
+          id: data.user.id,
+          email: data.user.email,
+          full_name: data.user.full_name || "",
+          role: data.user.role || "support_worker",
+          account_type: data.user.account_type || "independent_worker",
+          onboarding_complete: data.user.onboarding_complete ?? true,
+        };
+        localStorage.setItem(USER_KEY, JSON.stringify(fresh));
+        setUser(fresh);
+      }
+    } catch {
+      // Non-critical: token stored, user profile refresh failed
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -112,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         updateUser,
+        updateToken,
       }}
     >
       {children}

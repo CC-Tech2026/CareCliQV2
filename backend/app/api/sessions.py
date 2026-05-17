@@ -22,8 +22,9 @@ async def list_sessions(limit: int = 50, user: Optional[dict] = Depends(get_opti
 
 
 @router.get("/recent")
-async def recent_sessions(limit: int = 10):
-    return await session_service.get_recent_sessions(limit)
+async def recent_sessions(limit: int = 10, user: Optional[dict] = Depends(get_optional_user)):
+    org_id = (user or {}).get("organization_id")
+    return await session_service.get_recent_sessions(limit, org_id=org_id)
 
 
 @router.get("/compliance-report")

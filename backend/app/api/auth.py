@@ -37,8 +37,13 @@ def _check_rate_limit(ip: str) -> None:
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
     "allied_health":      "allied_health",
-    "small_provider":     "admin",
+    "small_provider":     "support_coordinator",
 }
+
+# Roles that map to coordinator-level access (full org visibility).
+# Includes "admin" as a legacy alias for rows created before the
+# support_coordinator constraint migration was applied.
+COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
 
@@ -148,6 +153,19 @@ async def _upsert_user_record(
                 f"Onboarding columns not yet in DB for user {user_id} — "
                 "using base upsert. Run supabase_setup.sql to enable full onboarding."
             )
+        elif "23514" in err or "check constraint" in err.lower() or "role_check" in err:
+            # DB role constraint hasn't been migrated to include support_coordinator yet.
+            # Fallback: store as "admin" (coordinator-equivalent) until migration applied.
+            logger.info(
+                f"Role '{role}' not yet in DB role constraint for {user_id} — "
+                "falling back to 'admin'. Run supabase_setup.sql to add support_coordinator."
+            )
+            fallback = {**extended_payload, "role": "admin"}
+            try:
+                supabase.table("users").upsert(fallback, on_conflict="id").execute()
+                return
+            except Exception as efb:
+                logger.warning(f"Role-fallback upsert also failed for {user_id}: {efb}")
         else:
             # Different error — log it but still attempt fallback
             logger.warning(f"Extended upsert failed for {user_id}: {e1}")
@@ -320,10 +338,16 @@ async def complete_onboarding(
     body: OnboardingCompleteRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Save professional/organisation details and mark onboarding complete."""
+    """Save professional/organisation details and mark onboarding complete.
+
+    Returns a fresh JWT that includes the new ``organization_id`` so the
+    client does not need a second login call to pick up org scope.
+    """
     user_id = current_user.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    from ..services import migration_state as _ms
 
     supabase = get_supabase_admin()
     update_payload: dict = {
@@ -332,24 +356,35 @@ async def complete_onboarding(
         "onboarding_complete": True,
     }
 
+    org_created = False
+
     # For small providers: create an organisation row and link it
     if body.account_type == "small_provider" and body.organization_name:
-        try:
-            org_payload = {
-                "owner_user_id": user_id,
-                "organization_name": body.organization_name,
-                "provider_type": body.provider_type,
-                "registration_status": body.registration_status,
-                "team_size": body.team_size,
-                "participant_volume": body.participant_volume,
-                "contact_number": body.contact_number,
-            }
-            org_payload = {k: v for k, v in org_payload.items() if v is not None}
-            org_result = supabase.table("organizations").insert(org_payload).execute()
-            if org_result.data:
-                update_payload["organization_id"] = org_result.data[0]["id"]
-        except Exception as e:
-            logger.warning(f"Could not create organisation for {user_id}: {e}")
+        if _ms.organizations_table_missing:
+            logger.warning(
+                "Cannot create organisation for %s: organizations table missing — "
+                "run backend/supabase_setup.sql in Supabase SQL editor.",
+                user_id,
+            )
+        else:
+            try:
+                org_payload = {
+                    "owner_user_id": user_id,
+                    "organization_name": body.organization_name,
+                    "provider_type": body.provider_type,
+                    "registration_status": body.registration_status,
+                    "team_size": body.team_size,
+                    "participant_volume": body.participant_volume,
+                    "contact_number": body.contact_number,
+                }
+                org_payload = {k: v for k, v in org_payload.items() if v is not None}
+                org_result = supabase.table("organizations").insert(org_payload).execute()
+                if org_result.data:
+                    update_payload["organization_id"] = org_result.data[0]["id"]
+                    org_created = True
+                    logger.info("Organisation created for user %s: %s", user_id, org_result.data[0]["id"])
+            except Exception as e:
+                logger.warning(f"Could not create organisation for {user_id}: {e}")
 
     # Two-pass update: with new columns, then fallback
     try:
@@ -358,12 +393,38 @@ async def complete_onboarding(
         err = str(e)
         if "42703" in err or "does not exist" in err:
             logger.warning(f"Onboarding columns missing — skipping extended update for {user_id}")
-            # At minimum record that onboarding happened (if base column exists)
         else:
             logger.error(f"Could not complete onboarding for {user_id}: {e}")
             raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
 
-    return {"success": True, "message": "Onboarding complete."}
+    # Re-fetch the saved profile so the fresh token carries accurate state.
+    # org_id from the just-created org takes priority over any stale JWT value.
+    org_id_for_token = update_payload.get("organization_id") or current_user.get("organization_id")
+    current_role = current_user.get("role", "support_worker")
+    try:
+        profile = await _get_user_profile(user_id)
+        current_role = profile.get("role") or current_role
+        if not org_id_for_token:
+            org_id_for_token = profile.get("organization_id")
+    except Exception:
+        pass
+
+    new_token = create_access_token({
+        "sub": user_id,
+        "email": current_user.get("email", ""),
+        "role": current_role,
+        "account_type": body.account_type,
+        "organization_id": org_id_for_token,
+    })
+
+    return {
+        "success": True,
+        "message": "Onboarding complete.",
+        "org_created": org_created,
+        "organization_id": org_id_for_token,
+        "access_token": new_token,
+        "token_type": "bearer",
+    }
 
 
 @router.post("/logout")

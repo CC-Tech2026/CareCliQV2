@@ -893,3 +893,14 @@ BEGIN
         CREATE POLICY service_role_all_security_events ON security_events FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 END $$;
+
+-- ============================================================
+-- RBAC: Expand role constraint to include support_coordinator
+-- small_provider account type now maps to support_coordinator.
+-- "admin" remains valid as a legacy alias for existing rows.
+-- Safe to run multiple times (DROP CONSTRAINT IF EXISTS).
+-- ============================================================
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE public.users
+    ADD CONSTRAINT users_role_check
+    CHECK (role IN ('admin', 'support_worker', 'allied_health', 'support_coordinator'));

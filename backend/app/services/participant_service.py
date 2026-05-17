@@ -109,6 +109,62 @@ def _goals_to_jsonb(goals: Optional[List[NDISGoal]]) -> Optional[list]:
 # Service functions
 # ---------------------------------------------------------------------------
 
+async def get_scoped_participants(user: dict) -> List[dict]:
+    """Return participants visible to ``user`` based on their role.
+
+    * support_coordinator / admin  → all participants in the org
+    * support_worker               → only participants with an active allocation
+    * allied_health                → all org participants (or all if no org)
+    """
+    from . import migration_state as _ms
+
+    role   = user.get("role", "")
+    org_id = user.get("organization_id")
+    uid    = user.get("sub")
+
+    if role in ("support_coordinator", "admin"):
+        return await get_all_participants(org_id=org_id)
+
+    if role == "support_worker":
+        if not uid:
+            return []
+        if _ms.practitioner_allocations_table_missing:
+            logger.info(
+                "practitioner_allocations table missing; falling back to org scope "
+                "for support_worker %s — run supabase_setup.sql to enable assignment filtering.",
+                uid,
+            )
+            return await get_all_participants(org_id=org_id)
+        supabase = get_supabase_admin()
+        try:
+            alloc = (
+                supabase.table("practitioner_allocations")
+                .select("patient_id")
+                .eq("user_id", uid)
+                .eq("is_active", True)
+                .execute()
+            )
+            patient_ids = [r["patient_id"] for r in (alloc.data or [])]
+            if not patient_ids:
+                return []
+            result = (
+                supabase.table(TABLE)
+                .select("*")
+                .in_("id", patient_ids)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return [_normalize(r) for r in (result.data or [])]
+        except Exception as exc:
+            logger.warning(
+                "get_scoped_participants: allocation query failed (%s) — falling back to org scope", exc
+            )
+            return await get_all_participants(org_id=org_id)
+
+    # allied_health or unknown role: org-scoped (or unscoped if no org)
+    return await get_all_participants(org_id=org_id)
+
+
 async def get_all_participants(org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
     q = supabase.table(TABLE).select("*").order("created_at", desc=True)

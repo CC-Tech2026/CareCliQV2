@@ -196,7 +196,7 @@ function Label({ children }: { children: React.ReactNode }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Signup() {
-  const { login, updateUser } = useAuth();
+  const { login, updateUser, updateToken } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
@@ -316,7 +316,7 @@ export default function Signup() {
 
       if (token) {
         try {
-          await fetch("/api/auth/complete-onboarding", {
+          const onboardingRes = await fetch("/api/auth/complete-onboarding", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -325,16 +325,30 @@ export default function Signup() {
             body: JSON.stringify(buildPayload(form)),
           });
 
-          // For small_provider, complete-onboarding creates an org and sets
-          // organization_id on the user row.  We must re-login so the new JWT
-          // carries that organization_id; otherwise all participant queries run
-          // without org scoping until the user manually logs out and back in.
-          if (form.account_type === "small_provider") {
-            await login(form.email, form.password);
+          // complete-onboarding now returns a fresh JWT that already includes
+          // organization_id — use it directly so no second login is needed.
+          if (onboardingRes.ok) {
+            const onboardingData = await onboardingRes.json().catch(() => ({}));
+            if (onboardingData.access_token) {
+              await updateToken(onboardingData.access_token);
+            } else {
+              updateUser({ onboarding_complete: true });
+            }
+            if (form.account_type === "small_provider" && !onboardingData.org_created) {
+              toast({
+                title: "Database migration required",
+                description:
+                  "Your account is ready but organisation setup needs the database migration. " +
+                  "Run supabase_setup.sql in your Supabase SQL editor to activate multi-tenant features.",
+                variant: "destructive",
+              });
+            }
           } else {
             updateUser({ onboarding_complete: true });
           }
-        } catch {}
+        } catch {
+          updateUser({ onboarding_complete: true });
+        }
       }
 
       setStep(3);

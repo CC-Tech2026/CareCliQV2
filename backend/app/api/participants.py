@@ -117,8 +117,10 @@ def _slim(record: Optional[dict]) -> Optional[dict]:
 
 @router.get("")
 async def list_participants(user: Optional[dict] = Depends(get_optional_user)):
-    org_id = (user or {}).get("organization_id")
-    return await participant_service.get_all_participants(org_id=org_id)
+    if not user:
+        # Unauthenticated — return all participants (backward-compat for pre-auth callers)
+        return await participant_service.get_all_participants()
+    return await participant_service.get_scoped_participants(user)
 
 
 @router.post("", status_code=201)
