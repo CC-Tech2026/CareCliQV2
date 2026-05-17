@@ -74,7 +74,15 @@ async def _ndis_secrecy_audit(
     )
 
     # 2. Strict secrecy check — hasClearance equivalent
-    CLEARED_ROLES = {"admin", "authorised_officer", "support_coordinator", "practitioner", "plan_manager", ""}
+    # Roles that exist in the system (from _ACCOUNT_TYPE_TO_ROLE in auth.py):
+    #   support_worker (independent_worker), allied_health, admin (small_provider)
+    # Plus legacy/extended role names kept for future RBAC expansion.
+    CLEARED_ROLES = {
+        "admin", "support_worker", "allied_health",
+        "authorised_officer", "support_coordinator",
+        "practitioner", "plan_manager",
+        "",  # unauthenticated — logged but permitted for backward compat
+    }
     role = (user or {}).get("role", "")
     if user and role not in CLEARED_ROLES:
         await access_log_service.log_security_event(

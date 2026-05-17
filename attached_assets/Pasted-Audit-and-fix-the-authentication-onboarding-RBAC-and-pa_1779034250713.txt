@@ -1,0 +1,188 @@
+Audit and fix the authentication, onboarding, RBAC, and participant visibility system across the entire CareScribe platform.
+
+Critical issues currently reported:
+
+1. ORGANISATION / SMALL PROVIDER SIGNUP FAILING
+
+* Investigate why account_type = "small_provider" onboarding is failing
+
+* Verify:
+
+  * frontend payload structure
+  * backend validation schema
+  * Supabase auth signup flow
+  * organizations table creation
+  * profile insertion
+  * onboarding_data handling
+  * RLS policies
+  * required fields mismatch
+
+* Check whether:
+
+  * organisation_name
+  * provider_type
+  * team_size
+  * participant_volume
+  * contact_number
+    are properly stored
+
+* Ensure:
+
+  * organization is created automatically
+  * authenticated user becomes organization owner/admin
+  * organization_id is attached to:
+
+    * profiles
+    * participants
+    * sessions
+    * notes
+    * alerts
+    * invoices
+    * tasks
+
+* Add detailed logging:
+
+  * frontend signup errors
+  * backend auth errors
+  * database insert failures
+  * RLS rejection errors
+
+* Return user-friendly errors instead of generic “Registration failed”.
+
+2. PARTICIPANTS DATA NOT LOADING PROPERLY
+   Investigate why participants/patients component is inconsistent or failing to load.
+
+Check:
+
+* API queries
+* React Query hooks
+* Supabase joins
+* RLS policies
+* organization scoping
+* loading states
+* null organization_id issues
+* stale session/auth problems
+
+Ensure:
+
+* participants render correctly
+* participant detail page loads
+* pagination/search/filtering works
+* support workers only see assigned participants
+* allied health users only see assigned caseloads
+* admins/coordinators can view all organization participants
+
+3. ROLE-BASED ACCESS CONTROL (VERY IMPORTANT)
+   Implement proper RBAC and participant scoping.
+
+Required roles:
+
+* organization_owner
+* admin
+* support_coordinator
+* support_worker
+* allied_health
+* finance
+* viewer
+
+Rules:
+
+* support workers CANNOT see all participants
+* allied health CANNOT see all participants
+* only assigned participants should appear
+* coordinators/admins can assign staff to participants
+* participant access must be enforced at DATABASE LEVEL using RLS
+
+Create:
+
+* participant_assignments table
+* organization_members table
+* role permissions map
+
+Example access:
+
+* support_worker sees:
+
+  * assigned participants
+  * assigned sessions
+  * assigned notes
+* allied_health sees:
+
+  * their clinical participants only
+* finance sees:
+
+  * invoices and billing only
+* admins see everything within organization
+
+4. FIX RLS POLICIES
+   Current policies are too permissive.
+
+Remove unsafe policies like:
+USING (true)
+
+Implement strict multi-tenant isolation:
+
+* every query scoped to organization_id
+* users cannot access another organization’s data
+* assignments enforced in policies
+
+Add secure RLS for:
+
+* participants
+* sessions
+* progress_notes
+* alerts
+* invoices
+* tasks
+* ai_insights
+* organizations
+* profiles
+
+5. SESSIONS COMPONENT ISSUES
+   Investigate session data loading problems.
+
+Ensure:
+
+* sessions only show assigned participants
+* filtering by date/status works
+* completed sessions save correctly
+* support workers cannot modify unauthorized sessions
+* allied health clinical notes remain scoped
+
+6. DEBUGGING + QA
+   Add:
+
+* centralized API error handler
+* auth state listener
+* onboarding validation
+* console/network diagnostics
+* loading fallbacks
+* retry handling
+
+Perform end-to-end testing for:
+
+* independent worker signup
+* allied health signup
+* small provider signup
+* organization onboarding
+* participant assignment flow
+* participant visibility
+* session visibility
+* RBAC enforcement
+
+7. EXPECTED FINAL ARCHITECTURE
+   The platform should operate as:
+
+* fully multi-tenant
+* organization-scoped
+* assignment-based visibility
+* compliance-safe
+* audit-ready
+* secure by default
+
+Important:
+Do NOT use placeholder fixes.
+Do NOT bypass RLS.
+Do NOT use client-side filtering as security.
+All authorization must be enforced server-side and database-side.
+Refactor any broken architecture if required.
