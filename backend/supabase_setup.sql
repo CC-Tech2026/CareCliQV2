@@ -829,3 +829,67 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at      ON public.audit_logs(c
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS original_language_input TEXT;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translated_english_note  TEXT;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translation_metadata     JSONB;
+
+-- ============================================================
+-- PRIVACY ACT 2026 & NDIS ACT SECRECY PROVISIONS
+-- Add-on compliance hardening
+-- ============================================================
+
+-- External pseudonym + disposal date on participants (APP 2 Anonymity + Archives Act 1983)
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS external_pseudonym TEXT UNIQUE;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS disposal_date       DATE;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS is_purged           BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS pii_encrypted       BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_patients_disposal_date ON public.patients(disposal_date);
+CREATE INDEX IF NOT EXISTS idx_patients_is_purged     ON public.patients(is_purged);
+
+-- Access Logs — NDIS Act Section 66 "Need-to-Know" Audit Trail
+CREATE TABLE IF NOT EXISTS public.access_logs (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id          TEXT,
+    participant_id   UUID,
+    action           TEXT NOT NULL DEFAULT 'READ',
+    ip_address       TEXT,
+    purpose          TEXT DEFAULT 'Provision of NDIS Supports',
+    organization_id  UUID,
+    created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_access_logs_participant_id ON public.access_logs(participant_id);
+CREATE INDEX IF NOT EXISTS idx_access_logs_user_id        ON public.access_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_logs_created_at     ON public.access_logs(created_at DESC);
+
+ALTER TABLE public.access_logs ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='access_logs' AND policyname='service_role_all_access_logs') THEN
+        CREATE POLICY service_role_all_access_logs ON access_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+-- Security Events — Eligible Data Breach notification (Privacy Act 2026)
+CREATE TABLE IF NOT EXISTS public.security_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type      TEXT NOT NULL,
+    accessor_id     TEXT,
+    participant_id  UUID,
+    ip_address      TEXT,
+    description     TEXT,
+    severity        TEXT DEFAULT 'medium' CHECK (severity IN ('low','medium','high','critical')),
+    is_reported     BOOLEAN DEFAULT FALSE,
+    organization_id UUID,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_events_event_type  ON public.security_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_security_events_severity    ON public.security_events(severity);
+CREATE INDEX IF NOT EXISTS idx_security_events_is_reported ON public.security_events(is_reported);
+
+ALTER TABLE public.security_events ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='security_events' AND policyname='service_role_all_security_events') THEN
+        CREATE POLICY service_role_all_security_events ON security_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;

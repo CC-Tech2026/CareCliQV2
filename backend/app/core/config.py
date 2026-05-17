@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     secret_key: str = os.environ.get("SESSION_SECRET", "changeme-in-production")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24
+    # AES-256 GCM PII encryption (Privacy Act 2026)
+    # Set PII_ENCRYPTION_ENABLED=true and PII_ENCRYPTION_KEY=<32-byte base64> to activate.
+    # Generate a key: python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
+    pii_encryption_enabled: bool = os.environ.get("PII_ENCRYPTION_ENABLED", "false").lower() == "true"
+    pii_encryption_key: str = os.environ.get("PII_ENCRYPTION_KEY", "")
 
     class Config:
         env_file = ".env"

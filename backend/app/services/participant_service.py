@@ -132,6 +132,9 @@ async def get_participant_by_id(participant_id: str) -> Optional[dict]:
 
 
 async def create_participant(data: ParticipantCreate, org_id: Optional[str] = None) -> dict:
+    from .pii_service import generate_pseudonym, encrypt_participant
+    from datetime import date
+
     supabase = get_supabase_admin()
     # exclude_none so we rely on DB/Pydantic defaults rather than sending nulls
     payload: dict = data.model_dump(exclude_none=True)
@@ -142,6 +145,16 @@ async def create_participant(data: ParticipantCreate, org_id: Optional[str] = No
     if org_id:
         payload["organization_id"] = org_id
 
+    # Privacy Act 2026 — APP 2 Anonymity: auto-generate external pseudonym
+    if not payload.get("external_pseudonym"):
+        payload["external_pseudonym"] = generate_pseudonym()
+
+    # Archives Act 1983 — auto-set 7-year disposal date from today
+    if not payload.get("disposal_date"):
+        today = date.today()
+        disposal = today.replace(year=today.year + 7)
+        payload["disposal_date"] = str(disposal)
+
     # Serialize NDISGoal objects to plain dicts for JSONB
     if "goals" in payload:
         goals_raw = payload["goals"]
@@ -149,6 +162,9 @@ async def create_participant(data: ParticipantCreate, org_id: Optional[str] = No
             g if isinstance(g, dict) else g.model_dump()
             for g in goals_raw
         ] if goals_raw else []
+
+    # AES-256 GCM PII encryption (Privacy Act 2026 APP 11) — no-op when disabled
+    payload = encrypt_participant(payload)
 
     result = supabase.table(TABLE).insert(payload).execute()
     return _normalize(result.data[0]) if result.data else {}
@@ -249,3 +265,26 @@ async def get_dashboard_stats() -> dict:
             1 for p in participant_data if p.get("plan_status") == "active"
         ),
     }
+
+
+async def force_update_participant(participant_id: str, payload: dict) -> Optional[dict]:
+    """Direct field-level update without Pydantic validation.
+
+    Used by the PII purge endpoint and the retention cron to write
+    de-identified values without triggering the full update pipeline.
+    """
+    supabase = get_supabase_admin()
+    clean: dict = {}
+    for k, v in payload.items():
+        # Convert date/datetime objects to ISO strings for PostgREST
+        if v is not None and hasattr(v, "isoformat"):
+            clean[k] = v.isoformat()
+        else:
+            clean[k] = v
+    try:
+        result = supabase.table(TABLE).update(clean).eq("id", participant_id).execute()
+        rows = result.data or []
+        return _normalize(rows[0]) if rows else None
+    except Exception as exc:
+        logger.error("force_update_participant(%s) failed: %s", participant_id, exc)
+        return None

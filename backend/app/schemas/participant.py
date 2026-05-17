@@ -85,6 +85,9 @@ class ParticipantCreate(BaseModel):
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = "unspecified"
     goals: Optional[List[NDISGoal]] = Field(default_factory=list)
+    # Privacy Act 2026 — APP 2 Anonymity support
+    external_pseudonym: Optional[str] = None   # auto-generated on create if not provided
+    disposal_date: Optional[date] = None       # auto-set to 7 years from today if not provided
 
 
 class ParticipantUpdate(BaseModel):
@@ -104,6 +107,8 @@ class ParticipantUpdate(BaseModel):
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = None
     goals: Optional[List[NDISGoal]] = None
+    external_pseudonym: Optional[str] = None
+    disposal_date: Optional[date] = None
 
 
 # ---------------------------------------------------------------------------

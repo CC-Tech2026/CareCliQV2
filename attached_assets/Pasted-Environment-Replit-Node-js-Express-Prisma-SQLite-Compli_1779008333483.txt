@@ -1,0 +1,26 @@
+Environment: Replit (Node.js/Express + Prisma/SQLite). Compliance Framework: Privacy Act 2026 (Australia) & NDIS Act 2026 (Secrecy Provisions).
+1. Participant Tab Features (Functionality)
+Implement the following logic to ensure the enhanced UI is fully operational:
+	• Add Participant: Generate a UUID and a separate "External Pseudonym" to support APP 2 (Anonymity).
+	• Edit Profile: Multi-step form support with Field-Level Encryption for PII.
+	• Plan Setup: Create a Plans table linked to Participants, storing budget totals and date ranges.
+	• Goal Tracking: Implement a CRUD system for Goals including target_date, status, and progress_percentage.
+2. Advanced Security (2026 Reform Standards)
+	• Need-to-Know Audit (NDIS Act Section 66): Write a middleware that logs every single database "Read" of a participant's record. Log: Accessor_ID, IP_Address, Purpose_of_Access, and Timestamp.
+	• AES-256 GCM Encryption: Use authenticated encryption (GCM) for names, Medicare numbers, and addresses to ensure data integrity and confidentiality.
+	• RBAC (Role-Based Access Control): Restrict "Goal Setting" to Plan_Managers and "PII Access" to Authorised_Officers.
+3. Privacy-by-Design Endpoints
+	• The "Right to be Forgotten" (2026 Update): A DELETE /participants/:id/purge endpoint that hard-deletes PII while retaining anonymized goal data for NDIS Commission reporting.
+	• Data Portability (APP 12): A GET /participants/:id/export endpoint that generates a machine-readable JSON file of the participant's entire record.
+	• Breach Notification Logic: Implement a security_events table to flag unauthorized access attempts, facilitating "Eligible Data Breach" reporting within the 2026 statutory timeframes.
+4. Automated Governance (Archives Act 1983)
+	• Implement a Retention Logic: Add a disposal_date field. Write a cron job script that automatically de-identifies records once they exceed the 7-year inactivity threshold.
+
+Core Middleware Logic (The "Secrecy" Hook)
+For your Replit implementation, ensure this specific logic is applied to all participant routes:
+JavaScript
+
+// Middleware to enforce NDIS Act Secrecy Provisionsconst ndisSecrecyAudit = async (req, res, next) => {  const { participantId } = req.params;  const { user } = req; // Provided by auth middleware
+// 1. Log access for the "Need-to-Know" Audit Trail  await db.accessLogs.create({    data: {      userId: user.id,      participantId: participantId,      action: req.method,      reason: "Provision of NDIS Supports" // APP Requirement    }  });
+// 2. Strict Secrecy Check  if (!user.hasClearance) {    return res.status(403).json({ error: "Unauthorized access to Protected Commission Information." });  }
+next();};
