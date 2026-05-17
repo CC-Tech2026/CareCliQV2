@@ -358,6 +358,13 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  if (!headers.has("x-access-reason")) {
+    const accessReason = getRequestContext().accessReason;
+    if (accessReason) {
+      headers.set("x-access-reason", accessReason);
+    }
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
