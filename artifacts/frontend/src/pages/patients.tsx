@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -78,7 +79,7 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
-function GoalsPanel({ participant }: { participant: Participant | null }) {
+function GoalsPanel({ participant, onAddGoal }: { participant: Participant | null; onAddGoal?: () => void }) {
   const list = Array.isArray(participant?.goals) ? participant.goals : [];
 
   return (
@@ -86,13 +87,11 @@ function GoalsPanel({ participant }: { participant: Participant | null }) {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Participant Goals</h3>
-          <p className="mt-1 text-sm text-slate-500">Live goals tied to the participant’s plan.</p>
+          <p className="mt-1 text-sm text-slate-500">Live goals tied to the participant's plan.</p>
         </div>
-        <Link href={`/participants/${participant?.id ?? ""}/edit`}>
-          <Button className="rounded-2xl bg-purple-900 px-4 hover:bg-purple-800">
-            <PlusCircle className="mr-2 h-4 w-4" />Add Goal
-          </Button>
-        </Link>
+        <Button className="rounded-2xl bg-purple-900 px-4 hover:bg-purple-800" onClick={onAddGoal}>
+          <PlusCircle className="mr-2 h-4 w-4" />Add Goal
+        </Button>
       </div>
       {list.length ? (
         <div className="space-y-3">
@@ -184,34 +183,41 @@ function TeamPanel({ sessions }: { sessions: Session[] }) {
 export default function CareScribePatientsWorkspace() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const createParticipant = useCreateParticipant();
-  const updateParticipant = useUpdateParticipant();
-  const updateParticipantGoals = useUpdateParticipantGoals();
   const queryClient = useQueryClient();
+  const createParticipantMutation = useCreateParticipant();
+  const updateParticipantMutation = useUpdateParticipant();
+  const updateGoalsMutation = useUpdateParticipantGoals();
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string>("");
+
   const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [showGoalsEdit, setShowGoalsEdit] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createNdisNumber, setCreateNdisNumber] = useState("");
   const [createDob, setCreateDob] = useState("");
   const [createBudget, setCreateBudget] = useState("");
+
+  const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState("");
-  const [editNdisNumber, setEditNdisNumber] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editDisability, setEditDisability] = useState("");
+
+  const [showGoalsEdit, setShowGoalsEdit] = useState(false);
   const [goalText, setGoalText] = useState("");
+
   const { data: participants = [], isLoading, error } = useGetParticipants();
   const selectedQuery = useGetParticipant(selectedId);
   const selectedParticipant = selectedQuery.data ?? null;
   const { data: selectedParticipantSessions = [] } = useGetParticipantSessions(selectedId);
 
   const filteredParticipants = useMemo(() => {
-    return participants.filter((participant: Participant) => {
+    return (participants as Participant[]).filter((p) => {
       const matchesSearch =
-        participant.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-        participant.ndis_number?.includes(search);
-      const matchesStatus = statusFilter === "all" || participant.plan_status === statusFilter;
+        p.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+        p.ndis_number?.includes(search);
+      const matchesStatus = statusFilter === "all" || p.plan_status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [participants, search, statusFilter]);
@@ -227,69 +233,91 @@ export default function CareScribePatientsWorkspace() {
   useEffect(() => {
     if (!selectedItem) return;
     setEditName(selectedItem.full_name ?? "");
-    setEditNdisNumber(selectedItem.ndis_number ?? "");
+    setEditEmail(selectedItem.email ?? "");
+    setEditPhone(selectedItem.phone ?? "");
+    setEditDisability(selectedItem.primary_disability ?? "");
   }, [selectedItem]);
 
-  async function handleSaveEdit() {
-    if (!selectedItem?.id) return;
-    await updateParticipant.mutateAsync({
-      participantId: selectedItem.id,
-      data: {
-        full_name: editName,
-        ndis_number: editNdisNumber,
-      },
-    });
-    setShowEdit(false);
-    toast({ title: "Participant updated" });
-    await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
-    await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
-  }
-
   async function handleCreateParticipant() {
-    if (!createName || !createNdisNumber || !createDob) {
+    if (!createName.trim() || !createNdisNumber.trim() || !createDob) {
       toast({ title: "Name, NDIS number, and date of birth are required", variant: "destructive" });
       return;
     }
-    const created = await createParticipant.mutateAsync({
-      full_name: createName,
-      ndis_number: createNdisNumber,
-      date_of_birth: createDob,
-      total_budget: createBudget ? Number(createBudget) : undefined,
-    });
-    setShowCreate(false);
-    setCreateName("");
-    setCreateNdisNumber("");
-    setCreateDob("");
-    setCreateBudget("");
-    if (created?.id) setSelectedId(created.id);
-    await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
-    toast({ title: "Participant created" });
+    try {
+      const created = await createParticipantMutation.mutateAsync({
+        data: {
+          full_name: createName.trim(),
+          ndis_number: createNdisNumber.trim(),
+          date_of_birth: createDob,
+          total_budget: createBudget ? Number(createBudget) : undefined,
+        },
+      });
+      setShowCreate(false);
+      setCreateName("");
+      setCreateNdisNumber("");
+      setCreateDob("");
+      setCreateBudget("");
+      await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      if (created?.id) setSelectedId(created.id);
+      toast({ title: "Participant created" });
+    } catch {
+      toast({ title: "Failed to create participant", variant: "destructive" });
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!selectedItem?.id) return;
+    try {
+      await updateParticipantMutation.mutateAsync({
+        participantId: selectedItem.id,
+        data: {
+          full_name: editName.trim() || undefined,
+          email: editEmail.trim() || undefined,
+          phone: editPhone.trim() || undefined,
+          primary_disability: editDisability.trim() || undefined,
+        },
+      });
+      setShowEdit(false);
+      await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
+      toast({ title: "Participant updated" });
+    } catch {
+      toast({ title: "Failed to update participant", variant: "destructive" });
+    }
   }
 
   async function handleSaveGoals() {
     if (!selectedItem?.id) return;
-    const existing = Array.isArray(selectedItem.goals) ? selectedItem.goals : [];
-    const updated = [
-      ...existing,
-      {
-        id: crypto.randomUUID(),
-        title: goalText,
-        status: "active",
-        category: "general",
-      },
-    ];
-    await updateParticipantGoals.mutateAsync({
-      participantId: selectedItem.id,
-      data: { goals: updated },
-    });
-    setGoalText("");
-    setShowGoalsEdit(false);
-    await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
-    toast({ title: "Goal saved" });
+    if (!goalText.trim()) {
+      toast({ title: "Please enter a goal description", variant: "destructive" });
+      return;
+    }
+    try {
+      const existing = Array.isArray(selectedItem.goals) ? selectedItem.goals : [];
+      const updated = [
+        ...existing,
+        {
+          id: crypto.randomUUID(),
+          title: goalText.trim(),
+          status: "active" as const,
+          category: "general" as const,
+        },
+      ];
+      await updateGoalsMutation.mutateAsync({
+        participantId: selectedItem.id,
+        data: { goals: updated },
+      });
+      setGoalText("");
+      setShowGoalsEdit(false);
+      await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
+      toast({ title: "Goal saved" });
+    } catch {
+      toast({ title: "Failed to save goal", variant: "destructive" });
+    }
   }
 
   if (error) {
-    return <EmptyState title="Couldn’t load participants" description="The participant list is unavailable right now." />;
+    return <EmptyState title="Couldn't load participants" description="The participant list is unavailable right now." />;
   }
 
   return (
@@ -309,7 +337,12 @@ export default function CareScribePatientsWorkspace() {
             <div className="mt-5 space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search participant" className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10 focus-visible:ring-2 focus-visible:ring-purple-500" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search participant"
+                  className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10 focus-visible:ring-2 focus-visible:ring-purple-500"
+                />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-11 rounded-2xl border-slate-200 bg-slate-50"><SelectValue /></SelectTrigger>
@@ -329,13 +362,16 @@ export default function CareScribePatientsWorkspace() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading participants
                 </div>
               ) : filteredParticipants.length ? (
-                filteredParticipants.map((participant: Participant) => {
+                filteredParticipants.map((participant) => {
                   const isSelected = participant.id === selectedItem?.id;
                   return (
                     <button
                       key={participant.id}
                       onClick={() => participant.id && setSelectedId(participant.id)}
-                      className={cn("group w-full rounded-3xl border p-4 text-left transition-all duration-200", isSelected ? "border-purple-200 bg-purple-50/50 shadow-sm" : "border-slate-200 bg-white hover:bg-slate-50")}
+                      className={cn(
+                        "group w-full rounded-3xl border p-4 text-left transition-all duration-200",
+                        isSelected ? "border-purple-200 bg-purple-50/50 shadow-sm" : "border-slate-200 bg-white hover:bg-slate-50",
+                      )}
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 font-semibold text-purple-700">
@@ -352,8 +388,14 @@ export default function CareScribePatientsWorkspace() {
                             </Badge>
                           </div>
                           <div className="mt-3 flex items-center gap-4 text-xs text-slate-500">
-                            <span className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5" />{participant.primary_disability ?? "No disability set"}</span>
-                            <span className="flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5" />{formatMoney(participant.total_budget)}</span>
+                            <span className="flex items-center gap-1.5">
+                              <Target className="h-3.5 w-3.5" />
+                              {participant.primary_disability ?? "No disability set"}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <DollarSign className="h-3.5 w-3.5" />
+                              {formatMoney(participant.total_budget)}
+                            </span>
                           </div>
                         </div>
                         <ChevronRight className={cn("mt-1 h-4 w-4", isSelected ? "text-purple-700" : "text-slate-400")} />
@@ -380,22 +422,41 @@ export default function CareScribePatientsWorkspace() {
                       <span>{selectedItem.full_name}</span>
                     </div>
                     <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{selectedItem.full_name}</h2>
-                    <p className="mt-1 text-sm text-slate-500">NDIS {selectedItem.ndis_number ?? "—"} · {selectedItem.primary_disability ?? "No primary disability"}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      NDIS {selectedItem.ndis_number ?? "—"} · {selectedItem.primary_disability ?? "No primary disability"}
+                    </p>
                   </div>
                   <div className="flex gap-3">
                     <Button variant="outline" className="rounded-2xl" onClick={() => setShowEdit(true)}>
                       <Edit className="mr-2 h-4 w-4" />Edit Profile
                     </Button>
-                    <Button className="rounded-2xl bg-purple-900 hover:bg-purple-800" onClick={() => navigate(`/participants/${selectedItem.id}/plan`)}>
+                    <Button
+                      className="rounded-2xl bg-purple-900 hover:bg-purple-800"
+                      onClick={() => navigate(`/participants/${selectedItem.id}/plan`)}
+                    >
                       Set Up Plan
                     </Button>
                   </div>
                 </div>
                 <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-                  <SummaryCard title="Plan Status" value={selectedItem.plan_status ?? "draft"} subtitle={selectedItem.plan_start_date ? `Starts ${format(new Date(String(selectedItem.plan_start_date)), "dd MMM yyyy")}` : undefined} />
+                  <SummaryCard
+                    title="Plan Status"
+                    value={selectedItem.plan_status ?? "draft"}
+                    subtitle={selectedItem.plan_start_date
+                      ? `Starts ${format(new Date(String(selectedItem.plan_start_date)), "dd MMM yyyy")}`
+                      : undefined}
+                  />
                   <SummaryCard title="Budget" value={formatMoney(selectedItem.total_budget)} subtitle="Total plan budget" />
-                  <SummaryCard title="Goals" value={String((selectedItem.goals ?? []).length)} subtitle="Plan-linked outcomes" />
-                  <SummaryCard title="Risk" value={selectedItem.risk_level ?? "Low"} subtitle={selectedItem.risk_management_plan ? "Management plan on file" : "No risk plan set"} />
+                  <SummaryCard
+                    title="Goals"
+                    value={String((selectedItem.goals ?? []).length)}
+                    subtitle="Plan-linked outcomes"
+                  />
+                  <SummaryCard
+                    title="Risk"
+                    value={(selectedItem as any).risk_level ?? "Low"}
+                    subtitle={(selectedItem as any).risk_management_plan ? "Management plan on file" : "No risk plan set"}
+                  />
                 </div>
               </div>
 
@@ -416,16 +477,30 @@ export default function CareScribePatientsWorkspace() {
                               <h3 className="text-sm font-semibold text-slate-900">Participant Summary</h3>
                               <p className="mt-1 text-sm text-slate-500">Pulled from live participant data</p>
                             </div>
-                            <Badge className={cn("rounded-full border", statusStyles(selectedItem.plan_status ?? "draft"))}>{selectedItem.plan_status ?? "draft"}</Badge>
+                            <Badge className={cn("rounded-full border", statusStyles(selectedItem.plan_status ?? "draft"))}>
+                              {selectedItem.plan_status ?? "draft"}
+                            </Badge>
                           </div>
                           <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
-                            <p><span className="font-medium text-slate-900">DOB:</span> {selectedItem.date_of_birth ? String(selectedItem.date_of_birth).slice(0, 10) : "—"}</p>
-                            <p><span className="font-medium text-slate-900">Sex:</span> {selectedItem.biological_sex ?? "unspecified"}</p>
-                            <p><span className="font-medium text-slate-900">Email:</span> {selectedItem.email ?? "—"}</p>
-                            <p><span className="font-medium text-slate-900">Phone:</span> {selectedItem.phone ?? "—"}</p>
+                            <p>
+                              <span className="font-medium text-slate-900">DOB: </span>
+                              {selectedItem.date_of_birth ? String(selectedItem.date_of_birth).slice(0, 10) : "—"}
+                            </p>
+                            <p>
+                              <span className="font-medium text-slate-900">Sex: </span>
+                              {selectedItem.biological_sex ?? "unspecified"}
+                            </p>
+                            <p>
+                              <span className="font-medium text-slate-900">Email: </span>
+                              {selectedItem.email ?? "—"}
+                            </p>
+                            <p>
+                              <span className="font-medium text-slate-900">Phone: </span>
+                              {selectedItem.phone ?? "—"}
+                            </p>
                           </div>
                         </div>
-                        <GoalsPanel participant={selectedItem} />
+                        <GoalsPanel participant={selectedItem} onAddGoal={() => setShowGoalsEdit(true)} />
                       </TabsContent>
 
                       <TabsContent value="plan" className="mt-5">
@@ -448,13 +523,24 @@ export default function CareScribePatientsWorkspace() {
                         <AlertTriangle className="h-4 w-4 text-amber-500" />
                       </div>
                       <div className="mt-4 space-y-3">
-                        <Button className="w-full rounded-2xl bg-purple-900 hover:bg-purple-800" onClick={() => setShowEdit(true)}>
+                        <Button
+                          className="w-full rounded-2xl bg-purple-900 hover:bg-purple-800"
+                          onClick={() => setShowEdit(true)}
+                        >
                           <Edit className="mr-2 h-4 w-4" />Edit Participant
                         </Button>
-                        <Button variant="outline" className="w-full rounded-2xl" onClick={() => setShowGoalsEdit(true)}>
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-2xl"
+                          onClick={() => setShowGoalsEdit(true)}
+                        >
                           <Target className="mr-2 h-4 w-4" />Add Goal
                         </Button>
-                        <Button variant="outline" className="w-full rounded-2xl" onClick={() => navigate(`/participants/${selectedItem.id}/plan`)}>
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-2xl"
+                          onClick={() => navigate(`/participants/${selectedItem.id}/plan`)}
+                        >
                           <PlusCircle className="mr-2 h-4 w-4" />Create / Update Plan
                         </Button>
                         <Button variant="outline" className="w-full rounded-2xl" asChild>
@@ -468,49 +554,147 @@ export default function CareScribePatientsWorkspace() {
             </div>
           ) : (
             <div className="flex h-full items-center justify-center p-10">
-              <EmptyState title="Select a participant" description="Choose a participant from the list to view live details." />
+              <EmptyState
+                title="Select a participant"
+                description="Choose a participant from the list to view live details."
+              />
             </div>
           )}
         </main>
       </div>
 
+      {/* Create participant dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Create participant</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
-            <Input placeholder="Full name" value={createName} onChange={(e) => setCreateName(e.target.value)} />
-            <Input placeholder="NDIS number" value={createNdisNumber} onChange={(e) => setCreateNdisNumber(e.target.value)} />
-            <Input type="date" value={createDob} onChange={(e) => setCreateDob(e.target.value)} />
-            <Input placeholder="Total budget" value={createBudget} onChange={(e) => setCreateBudget(e.target.value)} />
+          <DialogHeader><DialogTitle>Add participant</DialogTitle></DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="create-name">Full name *</Label>
+              <Input
+                id="create-name"
+                placeholder="e.g. Jane Smith"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="create-ndis">NDIS number *</Label>
+              <Input
+                id="create-ndis"
+                placeholder="e.g. 430123456"
+                value={createNdisNumber}
+                onChange={(e) => setCreateNdisNumber(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="create-dob">Date of birth *</Label>
+              <Input
+                id="create-dob"
+                type="date"
+                value={createDob}
+                onChange={(e) => setCreateDob(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="create-budget">Total budget (AUD)</Label>
+              <Input
+                id="create-budget"
+                placeholder="e.g. 45000"
+                value={createBudget}
+                onChange={(e) => setCreateBudget(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Close</Button>
-            <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleCreateParticipant()}>Create</Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button
+              className="bg-purple-900 hover:bg-purple-800"
+              disabled={createParticipantMutation.isPending}
+              onClick={() => void handleCreateParticipant()}
+            >
+              {createParticipantMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Edit participant dialog */}
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit participant</DialogTitle></DialogHeader>
-          <div className="grid gap-3">
-            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
-            <Input value={editNdisNumber} onChange={(e) => setEditNdisNumber(e.target.value)} />
+          <div className="grid gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-name">Full name</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-email">Email</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-phone">Phone</Label>
+              <Input
+                id="edit-phone"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-disability">Primary disability</Label>
+              <Input
+                id="edit-disability"
+                value={editDisability}
+                onChange={(e) => setEditDisability(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEdit(false)}>Close</Button>
-            <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleSaveEdit()}>Save</Button>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button
+              className="bg-purple-900 hover:bg-purple-800"
+              disabled={updateParticipantMutation.isPending}
+              onClick={() => void handleSaveEdit()}
+            >
+              {updateParticipantMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Add goal dialog */}
       <Dialog open={showGoalsEdit} onOpenChange={setShowGoalsEdit}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add goal</DialogTitle></DialogHeader>
-          <Input value={goalText} onChange={(e) => setGoalText(e.target.value)} placeholder="Goal description" />
+          <div className="grid gap-1.5">
+            <Label htmlFor="goal-text">Goal description</Label>
+            <Input
+              id="goal-text"
+              value={goalText}
+              onChange={(e) => setGoalText(e.target.value)}
+              placeholder="e.g. Improve communication skills in daily activities"
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowGoalsEdit(false)}>Close</Button>
-            <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleSaveGoals()}>Save Goal</Button>
+            <Button variant="outline" onClick={() => setShowGoalsEdit(false)}>Cancel</Button>
+            <Button
+              className="bg-purple-900 hover:bg-purple-800"
+              disabled={updateGoalsMutation.isPending}
+              onClick={() => void handleSaveGoals()}
+            >
+              {updateGoalsMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save Goal
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
