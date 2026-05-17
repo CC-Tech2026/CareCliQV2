@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import {
@@ -18,6 +19,9 @@ import {
   useGetParticipant,
   useGetParticipantSessions,
   useGetParticipants,
+  useCreateParticipant,
+  useUpdateParticipant,
+  useUpdateParticipantGoals,
 } from "@workspace/api-client-react";
 import type { Participant, Session } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -180,11 +184,23 @@ function TeamPanel({ sessions }: { sessions: Session[] }) {
 export default function CareScribePatientsWorkspace() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const createParticipant = useCreateParticipant();
+  const updateParticipant = useUpdateParticipant();
+  const updateParticipantGoals = useUpdateParticipantGoals();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [showGoalsEdit, setShowGoalsEdit] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createNdisNumber, setCreateNdisNumber] = useState("");
+  const [createDob, setCreateDob] = useState("");
+  const [createBudget, setCreateBudget] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editNdisNumber, setEditNdisNumber] = useState("");
+  const [goalText, setGoalText] = useState("");
   const { data: participants = [], isLoading, error } = useGetParticipants();
   const selectedQuery = useGetParticipant(selectedId);
   const selectedParticipant = selectedQuery.data ?? null;
@@ -208,9 +224,68 @@ export default function CareScribePatientsWorkspace() {
 
   const selectedItem = selectedParticipant ?? filteredParticipants[0] ?? null;
 
+  useEffect(() => {
+    if (!selectedItem) return;
+    setEditName(selectedItem.full_name ?? "");
+    setEditNdisNumber(selectedItem.ndis_number ?? "");
+  }, [selectedItem]);
+
   async function handleSaveEdit() {
+    if (!selectedItem?.id) return;
+    await updateParticipant.mutateAsync({
+      participantId: selectedItem.id,
+      data: {
+        full_name: editName,
+        ndis_number: editNdisNumber,
+      },
+    });
     setShowEdit(false);
     toast({ title: "Participant updated" });
+    await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+    await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
+  }
+
+  async function handleCreateParticipant() {
+    if (!createName || !createNdisNumber || !createDob) {
+      toast({ title: "Name, NDIS number, and date of birth are required", variant: "destructive" });
+      return;
+    }
+    const created = await createParticipant.mutateAsync({
+      full_name: createName,
+      ndis_number: createNdisNumber,
+      date_of_birth: createDob,
+      total_budget: createBudget ? Number(createBudget) : undefined,
+    });
+    setShowCreate(false);
+    setCreateName("");
+    setCreateNdisNumber("");
+    setCreateDob("");
+    setCreateBudget("");
+    if (created?.id) setSelectedId(created.id);
+    await queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+    toast({ title: "Participant created" });
+  }
+
+  async function handleSaveGoals() {
+    if (!selectedItem?.id) return;
+    const existing = Array.isArray(selectedItem.goals) ? selectedItem.goals : [];
+    const updated = [
+      ...existing,
+      {
+        id: crypto.randomUUID(),
+        title: goalText,
+        status: "active",
+        category: "general",
+      },
+    ];
+    await updateParticipantGoals.mutateAsync({
+      participantId: selectedItem.id,
+      data: { goals: updated },
+    });
+    setGoalText("");
+    setShowGoalsEdit(false);
+    await queryClient.invalidateQueries({ queryKey: [`/api/participants/${selectedItem.id}`] });
+    toast({ title: "Goal saved" });
   }
 
   if (error) {
@@ -376,6 +451,9 @@ export default function CareScribePatientsWorkspace() {
                         <Button className="w-full rounded-2xl bg-purple-900 hover:bg-purple-800" onClick={() => setShowEdit(true)}>
                           <Edit className="mr-2 h-4 w-4" />Edit Participant
                         </Button>
+                        <Button variant="outline" className="w-full rounded-2xl" onClick={() => setShowGoalsEdit(true)}>
+                          <Target className="mr-2 h-4 w-4" />Add Goal
+                        </Button>
                         <Button variant="outline" className="w-full rounded-2xl" onClick={() => navigate(`/participants/${selectedItem.id}/plan`)}>
                           <PlusCircle className="mr-2 h-4 w-4" />Create / Update Plan
                         </Button>
@@ -399,8 +477,15 @@ export default function CareScribePatientsWorkspace() {
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create participant</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <Input placeholder="Full name" value={createName} onChange={(e) => setCreateName(e.target.value)} />
+            <Input placeholder="NDIS number" value={createNdisNumber} onChange={(e) => setCreateNdisNumber(e.target.value)} />
+            <Input type="date" value={createDob} onChange={(e) => setCreateDob(e.target.value)} />
+            <Input placeholder="Total budget" value={createBudget} onChange={(e) => setCreateBudget(e.target.value)} />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Close</Button>
+            <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleCreateParticipant()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -408,9 +493,24 @@ export default function CareScribePatientsWorkspace() {
       <Dialog open={showEdit} onOpenChange={setShowEdit}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit participant</DialogTitle></DialogHeader>
+          <div className="grid gap-3">
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            <Input value={editNdisNumber} onChange={(e) => setEditNdisNumber(e.target.value)} />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEdit(false)}>Close</Button>
             <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleSaveEdit()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showGoalsEdit} onOpenChange={setShowGoalsEdit}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add goal</DialogTitle></DialogHeader>
+          <Input value={goalText} onChange={(e) => setGoalText(e.target.value)} placeholder="Goal description" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowGoalsEdit(false)}>Close</Button>
+            <Button className="bg-purple-900 hover:bg-purple-800" onClick={() => void handleSaveGoals()}>Save Goal</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
