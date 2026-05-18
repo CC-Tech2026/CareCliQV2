@@ -890,6 +890,50 @@ function IndependentWorkerFields({
       </div>
 
       <div>
+        <Label>Support specialties</Label>
+
+        <StyledSelect
+          name="iw_support_specialties"
+          value={form.iw_support_specialties}
+          onChange={(v) =>
+            updateField("iw_support_specialties", v)
+          }
+          placeholder="Select specialty..."
+          disabled={disabled}
+          required={false}
+          options={[
+            { value: "community_access",      label: "Community Access" },
+            { value: "personal_care",         label: "Personal Care" },
+            { value: "daily_living",          label: "Daily Living Activities" },
+            { value: "social_participation",  label: "Social & Civic Participation" },
+            { value: "skill_development",     label: "Skill Development" },
+            { value: "transport",             label: "Transport" },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Label>Years of experience</Label>
+
+        <StyledSelect
+          name="iw_years_experience"
+          value={form.iw_years_experience}
+          onChange={(v) =>
+            updateField("iw_years_experience", v)
+          }
+          placeholder="Select range..."
+          disabled={disabled}
+          required={false}
+          options={[
+            { value: "less_than_1", label: "Less than 1 year" },
+            { value: "1_3",         label: "1–3 years" },
+            { value: "3_5",         label: "3–5 years" },
+            { value: "5_plus",      label: "5+ years" },
+          ]}
+        />
+      </div>
+
+      <div>
         <Label>Mobile number</Label>
 
         <StyledInput
@@ -921,26 +965,17 @@ function AlliedHealthFields({
           name="ah_profession_type"
           value={form.ah_profession_type}
           onChange={(v) =>
-            updateField(
-              "ah_profession_type",
-              v
-            )
+            updateField("ah_profession_type", v)
           }
           placeholder="Select profession..."
           disabled={disabled}
           options={[
-            {
-              value: "occupational_therapist",
-              label: "Occupational Therapist",
-            },
-            {
-              value: "speech_pathologist",
-              label: "Speech Pathologist",
-            },
-            {
-              value: "physiotherapist",
-              label: "Physiotherapist",
-            },
+            { value: "occupational_therapist",  label: "Occupational Therapist" },
+            { value: "speech_pathologist",       label: "Speech Pathologist" },
+            { value: "physiotherapist",          label: "Physiotherapist" },
+            { value: "behaviour_support",        label: "Behaviour Support Practitioner" },
+            { value: "social_worker",            label: "Social Worker" },
+            { value: "psychologist",             label: "Psychologist" },
           ]}
         />
       </div>
@@ -952,40 +987,60 @@ function AlliedHealthFields({
           name="ah_registration_status"
           value={form.ah_registration_status}
           onChange={(v) =>
-            updateField(
-              "ah_registration_status",
-              v
-            )
+            updateField("ah_registration_status", v)
           }
           placeholder="Select status..."
           disabled={disabled}
           options={[
-            {
-              value: "ahpra_registered",
-              label: "AHPRA Registered",
-            },
-            {
-              value: "unregistered",
-              label: "Unregistered",
-            },
+            { value: "ahpra_registered",  label: "AHPRA Registered" },
+            { value: "ndis_registered",   label: "NDIS Registered Provider" },
+            { value: "unregistered",      label: "Unregistered" },
           ]}
         />
       </div>
 
       <div>
-        <Label>Clinic Name</Label>
+        <Label>AHPRA / Provider number</Label>
+
+        <StyledInput
+          name="ah_provider_number"
+          value={form.ah_provider_number}
+          onChange={(v) =>
+            updateField("ah_provider_number", v)
+          }
+          placeholder="e.g. OCC0001234"
+          disabled={disabled}
+          required={false}
+        />
+      </div>
+
+      <div>
+        <Label>Specialties</Label>
+
+        <StyledInput
+          name="ah_specialties"
+          value={form.ah_specialties}
+          onChange={(v) =>
+            updateField("ah_specialties", v)
+          }
+          placeholder="e.g. Autism, acquired brain injury"
+          disabled={disabled}
+          required={false}
+        />
+      </div>
+
+      <div>
+        <Label>Clinic / Employer name</Label>
 
         <StyledInput
           name="ah_clinic_name"
           value={form.ah_clinic_name}
           onChange={(v) =>
-            updateField(
-              "ah_clinic_name",
-              v
-            )
+            updateField("ah_clinic_name", v)
           }
           placeholder="Clinic or employer"
           disabled={disabled}
+          required={false}
         />
       </div>
     </>
@@ -1007,10 +1062,7 @@ function SmallProviderFields({
           name="sp_organisation_name"
           value={form.sp_organisation_name}
           onChange={(v) =>
-            updateField(
-              "sp_organisation_name",
-              v
-            )
+            updateField("sp_organisation_name", v)
           }
           placeholder="Care Partners Ltd"
           disabled={disabled}
@@ -1018,33 +1070,98 @@ function SmallProviderFields({
       </div>
 
       <div>
-        <Label>Team Size</Label>
+        <Label>Provider type</Label>
+
+        <StyledSelect
+          name="sp_provider_type"
+          value={form.sp_provider_type}
+          onChange={(v) =>
+            updateField("sp_provider_type", v)
+          }
+          placeholder="Select type..."
+          disabled={disabled}
+          required={false}
+          options={[
+            { value: "registered_ndis",   label: "Registered NDIS Provider" },
+            { value: "unregistered",      label: "Unregistered Provider" },
+            { value: "plan_management",   label: "Plan Management Provider" },
+            { value: "support_coord",     label: "Support Coordination Provider" },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Label>Registration status</Label>
+
+        <StyledSelect
+          name="sp_registration_status"
+          value={form.sp_registration_status}
+          onChange={(v) =>
+            updateField("sp_registration_status", v)
+          }
+          placeholder="Select status..."
+          disabled={disabled}
+          required={false}
+          options={[
+            { value: "registered",   label: "Registered with NDIS Commission" },
+            { value: "unregistered", label: "Unregistered" },
+            { value: "in_progress",  label: "Registration in Progress" },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Label>Team size</Label>
 
         <StyledSelect
           name="sp_team_size"
           value={form.sp_team_size}
           onChange={(v) =>
-            updateField(
-              "sp_team_size",
-              v
-            )
+            updateField("sp_team_size", v)
           }
           placeholder="Select size..."
           disabled={disabled}
+          required={false}
           options={[
-            {
-              value: "1_5",
-              label: "1-5 staff",
-            },
-            {
-              value: "5_20",
-              label: "5-20 staff",
-            },
-            {
-              value: "20_plus",
-              label: "20+ staff",
-            },
+            { value: "1_5",     label: "1–5 staff" },
+            { value: "5_20",    label: "5–20 staff" },
+            { value: "20_plus", label: "20+ staff" },
           ]}
+        />
+      </div>
+
+      <div>
+        <Label>Active participant volume</Label>
+
+        <StyledSelect
+          name="sp_participant_volume"
+          value={form.sp_participant_volume}
+          onChange={(v) =>
+            updateField("sp_participant_volume", v)
+          }
+          placeholder="Approx. number of participants..."
+          disabled={disabled}
+          required={false}
+          options={[
+            { value: "1_10",    label: "1–10 participants" },
+            { value: "10_50",   label: "10–50 participants" },
+            { value: "50_plus", label: "50+ participants" },
+          ]}
+        />
+      </div>
+
+      <div>
+        <Label>Contact number</Label>
+
+        <StyledInput
+          name="sp_contact_number"
+          value={form.sp_contact_number}
+          onChange={(v) =>
+            updateField("sp_contact_number", v)
+          }
+          placeholder="02 xxxx xxxx"
+          disabled={disabled}
+          required={false}
         />
       </div>
     </>
