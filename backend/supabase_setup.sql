@@ -895,6 +895,27 @@ BEGIN
 END $$;
 
 -- ============================================================
+-- ASSIGNMENTS: Expand practitioner_allocations for full assignment management
+-- Adds assigned_by (audit trail) and organization_id (org scoping).
+-- Expands allocated_role to include allied_health.
+-- Safe to run multiple times (ADD COLUMN IF NOT EXISTS).
+-- ============================================================
+ALTER TABLE public.practitioner_allocations
+    ADD COLUMN IF NOT EXISTS assigned_by      UUID REFERENCES public.users(id);
+ALTER TABLE public.practitioner_allocations
+    ADD COLUMN IF NOT EXISTS organization_id  UUID;
+
+-- Expand allocated_role to include allied_health
+ALTER TABLE public.practitioner_allocations
+    DROP CONSTRAINT IF EXISTS practitioner_allocations_allocated_role_check;
+ALTER TABLE public.practitioner_allocations
+    ADD CONSTRAINT practitioner_allocations_allocated_role_check
+    CHECK (allocated_role IN ('primary_ot', 'support_worker', 'supervisor', 'allied_health'));
+
+CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_org_id
+    ON public.practitioner_allocations(organization_id);
+
+-- ============================================================
 -- RBAC: Expand role constraint to include support_coordinator
 -- small_provider account type now maps to support_coordinator.
 -- "admin" remains valid as a legacy alias for existing rows.

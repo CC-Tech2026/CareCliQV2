@@ -1,0 +1,189 @@
+Refactor the Participants + Sessions architecture and fix data visibility/loading issues across CareScribe.
+
+Current problem:
+
+* Participants are not loading correctly
+* Sessions are not loading correctly
+* Support Coordinators (parent organisation accounts) cannot see participants or sessions
+* Support Coordinators cannot assign participants to support workers or allied health professionals
+* Support Workers and Allied Health users should NOT see all participants
+* Current role scoping and organisation filtering is broken
+
+This is a REFACTOR, not a rebuild.
+
+Platform architecture:
+
+1. Parent Account — Support Coordinator / Organisation
+
+* Business owner or team lead
+* Full visibility across organisation
+* Can:
+
+  * view ALL participants
+  * view ALL sessions
+  * assign participants to workers
+  * assign participants to allied health professionals
+  * manage workers
+  * manage compliance
+  * manage organisation-wide reports
+* Must be organisation scoped
+* Should only see data inside their own organisation
+
+2. Child Account — Support Worker
+
+* Worker belongs to parent organisation
+* Must ONLY see:
+
+  * assigned participants
+  * assigned sessions
+  * their own notes
+  * their own compliance data
+* Must NOT:
+
+  * see all organisation participants
+  * see other workers’ sessions
+  * see billing/admin data
+  * see other workers’ notes
+
+3. Allied Health Professional
+   Two modes:
+   A) Standalone CareScribe Pro account
+
+* manages own caseload independently
+* no organisation required
+
+B) Linked to organisation
+
+* can be assigned participants by Support Coordinator
+* only sees assigned caseload
+
+Critical architecture rules:
+
+* Every participant MUST belong to an organisation
+* Every session MUST belong to an organisation
+* Every worker MUST belong to an organisation
+* Parent accounts see organisation-wide data
+* Child accounts see assigned-only data
+* Allied health sees:
+
+  * assigned-only if linked to org
+  * own-only if standalone
+
+Required fixes:
+
+1. Fix participant loading
+
+* investigate why useGetParticipants() returns empty
+* verify organisation_id exists in JWT/session
+* verify API query includes organisation filtering
+* verify RLS policies are not blocking parent account access
+* ensure Support Coordinator can fetch all org participants
+
+2. Fix session loading
+
+* investigate why participant sessions are not appearing
+* verify sessions table includes:
+
+  * organisation_id
+  * participant_id
+  * assigned_worker_id
+* ensure queries correctly filter by role
+
+3. Fix organisation onboarding
+
+* verify organisation account creation properly:
+
+  * creates organisation
+  * links user.organization_id
+  * refreshes JWT/session after onboarding
+* ensure new parent accounts can immediately access participants/sessions without logout/login
+
+4. Add assignment architecture
+   Need participant assignment system:
+
+* participant_assignments table
+* participant_id
+* worker_user_id
+* assigned_by
+* organisation_id
+* role_type
+
+Support Coordinator can:
+
+* assign participant to support worker
+* assign participant to allied health professional
+* remove assignments
+
+Workers can ONLY access assigned participants.
+
+5. Refactor API access logic
+   Implement centralized role-based access:
+
+Support Coordinator:
+
+* access all organisation data
+
+Support Worker:
+
+* access assigned participant data only
+
+Allied Health:
+
+* access assigned caseload only
+* or own standalone caseload
+
+6. Verify frontend queries
+   Check:
+
+* useGetParticipants()
+* useGetParticipantSessions()
+* participant detail queries
+* dashboard summaries
+* assignment filters
+
+Ensure:
+
+* parent accounts receive organisation-wide data
+* child accounts receive assigned-only data
+
+7. Fix RLS policies
+   Current RLS likely blocks organisation access.
+
+Need policies enforcing:
+
+* organisation scoped access
+* assignment scoped access
+* parent full visibility
+* child restricted visibility
+
+8. Add debugging
+   Add logging for:
+
+* current user role
+* organisation_id
+* participant query results
+* session query results
+* assignment checks
+* JWT claims
+
+Expected final behaviour:
+Support Coordinator:
+
+* sees all organisation participants
+* sees all organisation sessions
+* can assign workers
+* can manage organisation
+
+Support Worker:
+
+* sees only assigned participants
+* sees only assigned sessions
+
+Allied Health:
+
+* sees assigned caseload or own caseload
+
+No cross-organisation leakage.
+No unassigned participant access for workers.
+
+Focus on fixing architecture and data flow, not redesigning UI.

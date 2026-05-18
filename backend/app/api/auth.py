@@ -319,6 +319,29 @@ async def login(body: LoginRequest, request: Request):
 
     await _touch_last_login(str(auth_user.id))
 
+    # Backfill: when a coordinator logs in with a known org, claim any orphan
+    # participants/sessions that were created before the org was linked.
+    # This is idempotent — rows already scoped to the org are unaffected.
+    _org_id = (profile or {}).get("organization_id")
+    if role in COORDINATOR_ROLES and _org_id:
+        try:
+            _admin = get_supabase_admin()
+            _pr = _admin.table("patients").update({"organization_id": _org_id}).is_("organization_id", "null").execute()
+            _sr = _admin.table("sessions").update({"organization_id": _org_id}).is_("organization_id", "null").execute()
+            _p_cnt, _s_cnt = len(_pr.data or []), len(_sr.data or [])
+            if _p_cnt or _s_cnt:
+                logger.info(
+                    "Login backfill: %d participant(s), %d session(s) → org %s",
+                    _p_cnt, _s_cnt, _org_id,
+                )
+        except Exception as _be:
+            logger.warning("Login backfill (non-critical): %s", _be)
+
+    logger.info(
+        "Login: user=%s role=%s org=%s onboarding=%s",
+        str(auth_user.id)[:8], role, _org_id or "none", bool(onboarding_complete),
+    )
+
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -382,7 +405,18 @@ async def complete_onboarding(
                 if org_result.data:
                     update_payload["organization_id"] = org_result.data[0]["id"]
                     org_created = True
-                    logger.info("Organisation created for user %s: %s", user_id, org_result.data[0]["id"])
+                    _new_org = org_result.data[0]["id"]
+                    logger.info("Organisation created for user %s: %s", user_id, _new_org)
+                    # Backfill: claim all orphan participants + sessions to this new org
+                    try:
+                        _pr = supabase.table("patients").update({"organization_id": _new_org}).is_("organization_id", "null").execute()
+                        _sr = supabase.table("sessions").update({"organization_id": _new_org}).is_("organization_id", "null").execute()
+                        logger.info(
+                            "Org creation backfill: %d participant(s), %d session(s) → org %s",
+                            len(_pr.data or []), len(_sr.data or []), _new_org,
+                        )
+                    except Exception as _be:
+                        logger.warning("Org creation backfill (non-critical): %s", _be)
             except Exception as e:
                 logger.warning(f"Could not create organisation for {user_id}: {e}")
 

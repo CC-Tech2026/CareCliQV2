@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments
 from .services import migration_state
 import logging
 
@@ -184,6 +184,7 @@ app.include_router(ai.router, prefix="/api")
 app.include_router(compliance.router, prefix="/api")
 app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
+app.include_router(assignments.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -17,8 +17,10 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 @router.get("")
 async def list_sessions(limit: int = 50, user: Optional[dict] = Depends(get_optional_user)):
-    org_id = (user or {}).get("organization_id")
-    return await session_service.get_all_sessions(limit, org_id=org_id)
+    if not user:
+        # Unauthenticated — return all (backward-compat)
+        return await session_service.get_all_sessions(limit)
+    return await session_service.get_scoped_sessions(user, limit=limit)
 
 
 @router.get("/recent")
