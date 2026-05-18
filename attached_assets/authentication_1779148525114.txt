@@ -1,0 +1,19 @@
+# Authentication Navigation UX Fix Prompt
+
+The authentication flow feels incomplete right now because users who land on the Sign Up page have no clear navigation back to the Sign In screen. This creates friction, especially for returning users who accidentally open the wrong form.
+
+Implement the following improvements across the authentication pages:
+
+* Add a visible “Already have an account? Sign In” link on the Sign Up page
+* Add a visible “Don’t have an account? Create Account” link on the Sign In page
+* Ensure both links are easy to notice and positioned consistently beneath the form
+* Preserve all entered form state unless the user intentionally refreshes
+* Add smooth transitions between auth screens instead of abrupt reloads
+* Ensure mobile responsiveness and accessibility
+* Use proper routing/navigation instead of full page refreshes
+* Add hover/focus states for auth navigation links
+* Keep styling aligned with the existing design system and branding
+
+## Expected UX Outcome
+
+Users should never feel trapped inside one authentication screen. Navigation between Sign In and Sign Up should feel seamless, intuitive, and production-ready.

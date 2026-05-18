@@ -44,7 +44,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden">
+    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden" style={{ animation: "authPageEnter 0.3s ease-out" }}>
       {/* ── Injection of Fluid Animation Keyframes ────────────────────────── */}
       <style
         dangerouslySetInnerHTML={{
@@ -69,6 +69,10 @@ export default function Login() {
             @keyframes softFloatDrift {
               0%, 100% { transform: translateY(0px) translateX(0px) rotate(0deg); }
               50% { transform: translateY(10px) translateX(-8px) rotate(3deg); }
+            }
+            @keyframes authPageEnter {
+              from { opacity: 0; transform: translateY(6px); }
+              to   { opacity: 1; transform: translateY(0); }
             }
             .animate-fluid-bg {
               background: linear-gradient(-45deg, #F03060, #FF5E7E, #5533CC, #9B5DE5);
@@ -234,10 +238,10 @@ export default function Login() {
             className="text-center text-[13px] font-medium mt-6"
             style={{ color: "#7A6A9E" }}
           >
-            New to our clinical platform?{" "}
+            Don't have an account?{" "}
             <button
               onClick={() => navigate("/signup")}
-              className="font-black transition-colors duration-200 hover:opacity-80"
+              className="font-black transition-all duration-200 hover:opacity-75 focus:outline-none focus-visible:underline rounded"
               style={{ color: CORAL }}
             >
               Create an account

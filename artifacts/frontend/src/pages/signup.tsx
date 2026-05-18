@@ -375,7 +375,13 @@ export default function Signup() {
     form.password.length < 8;
 
   return (
-    <div className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden">
+    <div className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden" style={{ animation: "authPageEnter 0.3s ease-out" }}>
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes authPageEnter {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      ` }} />
       {/* LEFT */}
       <div className="hidden md:flex md:w-1/2 relative h-full overflow-hidden">
         <div
@@ -815,6 +821,24 @@ export default function Signup() {
               </div>
             )}
           </div>
+
+          {/* Sign-in nav — visible on all steps except the success screen */}
+          {step < 3 && (
+            <p
+              className="text-center text-[13px] font-medium mt-5 pb-1"
+              style={{ color: "#7A6A9E" }}
+            >
+              Already have an account?{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/login")}
+                className="font-black transition-all duration-200 hover:opacity-75 focus:outline-none focus-visible:underline rounded"
+                style={{ color: CORAL }}
+              >
+                Sign In
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
