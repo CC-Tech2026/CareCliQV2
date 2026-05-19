@@ -18,7 +18,12 @@ async def list_incidents(
     user: Optional[dict] = Depends(get_optional_user),
 ):
     org_id = (user or {}).get("organization_id")
-    return await incident_service.get_all_incidents(limit, status, severity, participant_id, org_id=org_id)
+    user_role = (user or {}).get("role", "")
+    # Support workers only see incidents they created (need-to-know principle)
+    reporter_id = (user or {}).get("sub") if user_role == "support_worker" else None
+    return await incident_service.get_all_incidents(
+        limit, status, severity, participant_id, org_id=org_id, reporter_id=reporter_id
+    )
 
 
 @router.get("/stats")

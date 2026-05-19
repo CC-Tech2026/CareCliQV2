@@ -7,6 +7,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
@@ -37,45 +38,56 @@ const queryClient = new QueryClient({
   },
 });
 
+// All authenticated roles
 const ALL_ROLES = ["admin", "support_worker", "allied_health", "support_coordinator"] as const;
+
+// Admin + coordinator only — compliance dashboards, billing, reports, participant management
+const COORDINATOR_ROLES = ["admin", "support_coordinator"] as const;
+
+// Coordinator + allied health — reports contain clinical documentation allied health needs
+const COORDINATOR_AND_ALLIED = ["admin", "support_coordinator", "allied_health"] as const;
 
 function Router() {
   return (
     <Switch>
-      {/* Public */}
+      {/* ── Public routes ─────────────────────────────────────────────────── */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
-      {/* Protected */}
+      {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Dashboard /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* Participants — /new must come before /:id */}
+      {/* ── Participants ──────────────────────────────────────────────────── */}
+      {/* List: all roles (backend scopes to allocated for workers) */}
       <Route path="/patients">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
 
+      {/* Create/Edit: coordinator only — workers cannot add or edit participants */}
       <Route path="/participants/new">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><ParticipantNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/participants/:id/edit">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
             <AppLayout><ParticipantEdit id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
       </Route>
 
-      {/* Sessions */}
+      {/* ── Sessions ─────────────────────────────────────────────────────── */}
+      {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Sessions /></AppLayout>
@@ -104,7 +116,8 @@ function Router() {
         )}
       </Route>
 
-      {/* Incidents — /new must come before /:id */}
+      {/* ── Incidents ────────────────────────────────────────────────────── */}
+      {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Incidents /></AppLayout>
@@ -125,26 +138,27 @@ function Router() {
         )}
       </Route>
 
-      {/* Compliance */}
+      {/* ── Compliance — coordinator/admin only ──────────────────────────── */}
       <Route path="/compliance">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* Reports & Documentation */}
+      {/* ── Reports — coordinator/admin + allied health ───────────────────── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
+      {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Settings /></AppLayout>

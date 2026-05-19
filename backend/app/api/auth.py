@@ -117,6 +117,7 @@ async def _upsert_user_record(
     full_name: str = "",
     account_type: str = "independent_worker",
     onboarding_complete: bool = False,
+    organization_id: Optional[str] = None,
     extra: Optional[dict] = None,
 ) -> None:
     """Upsert into public.users.  Two-pass: full payload first,
@@ -136,6 +137,8 @@ async def _upsert_user_record(
         "account_type": account_type,
         "onboarding_complete": onboarding_complete,
     }
+    if organization_id:
+        extended_payload["organization_id"] = organization_id
     if extra:
         extended_payload.update(extra)
 
@@ -291,6 +294,7 @@ async def login(body: LoginRequest, request: Request):
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
     )
     account_type = profile.get("account_type") or "independent_worker"
+    _org_id = (profile or {}).get("organization_id")
 
     # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
@@ -306,39 +310,53 @@ async def login(body: LoginRequest, request: Request):
             role=role,
             full_name=full_name,
             account_type=account_type,
-            onboarding_complete=True,  # treat as complete since they pre-dated onboarding
+            onboarding_complete=True,
         )
+
+    # ---------------------------------------------------------------------------
+    # Authoritative role resolution — organization_members takes precedence.
+    # Authority MUST come from organization_members.role (not users.role) so that
+    # an admin can change a worker's role without them having to re-register.
+    # ---------------------------------------------------------------------------
+    if _org_id:
+        try:
+            _admin = get_supabase_admin()
+            _member_res = (
+                _admin.table("organization_members")
+                .select("role")
+                .eq("user_id", str(auth_user.id))
+                .eq("organization_id", _org_id)
+                .eq("is_active", True)
+                .execute()
+            )
+            if _member_res.data:
+                # Row exists — use the stored role (may differ from users.role if an
+                # admin has changed it via the team management UI).
+                role = _member_res.data[0]["role"]
+            else:
+                # First login after org was created — seed the membership row.
+                _base_role = role if role in ("admin", "manager", "support_worker", "support_coordinator", "auditor") else "support_worker"
+                _admin.table("organization_members").insert({
+                    "user_id": str(auth_user.id),
+                    "organization_id": _org_id,
+                    "role": _base_role,
+                    "is_active": True,
+                }).execute()
+                role = _base_role
+        except Exception as _ome:
+            logger.debug("org_members role resolution (non-critical): %s", _ome)
 
     token = create_access_token({
         "sub": str(auth_user.id),
         "email": str(auth_user.email),
         "role": role,
         "account_type": account_type,
-        "organization_id": profile.get("organization_id"),
+        "organization_id": _org_id,
     })
 
     await _touch_last_login(str(auth_user.id))
 
-    # Backfill: when a coordinator logs in with a known org, claim any orphan
-    # participants/sessions that were created before the org was linked.
-    # Also ensure organization_members row exists so RLS helper functions
-    # cs_user_org_id() / cs_user_role() resolve correctly.
-    # All operations are idempotent — existing rows are unaffected.
-    _org_id = (profile or {}).get("organization_id")
-    if _org_id:
-        try:
-            _admin = get_supabase_admin()
-            # Map the user's DB role to an organization_members role value
-            _member_role = role if role in ("admin", "manager", "support_worker", "support_coordinator", "auditor") else "support_worker"
-            _admin.table("organization_members").upsert({
-                "user_id": str(auth_user.id),
-                "organization_id": _org_id,
-                "role": _member_role,
-                "is_active": True,
-            }, on_conflict="user_id,organization_id").execute()
-        except Exception as _ome:
-            logger.debug("organization_members login upsert (non-critical): %s", _ome)
-
+    # Backfill orphan participants/sessions to this org (coordinator/admin only)
     if role in COORDINATOR_ROLES and _org_id:
         try:
             _admin = get_supabase_admin()
@@ -367,6 +385,7 @@ async def login(body: LoginRequest, request: Request):
             "full_name": full_name,
             "role": role,
             "account_type": account_type,
+            "organization_id": _org_id,
             "onboarding_complete": bool(onboarding_complete),
         },
     }

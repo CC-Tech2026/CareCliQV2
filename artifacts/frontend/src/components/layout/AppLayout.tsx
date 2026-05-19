@@ -31,21 +31,38 @@ const TEXT = "#1E1640";
 const APP_BG = "#F5F3FC"; 
 const ACTIVE = "#EDEAFF"; 
 
-const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/patients", label: "Participants", icon: Users },
-  { href: "/sessions", label: "Sessions", icon: CalendarDays },
-  { href: "/incidents", label: "Incidents", icon: AlertTriangle },
-  { href: "/compliance", label: "Compliance", icon: ShieldCheck },
-  { href: "/reports", label: "Reports & Docs", icon: FileBarChart2 },
-  { href: "/settings", label: "Settings", icon: Settings },
+type NavRole = "admin" | "support_worker" | "allied_health" | "support_coordinator";
+
+type NavIconProps = { size?: number; strokeWidth?: number; className?: string };
+
+const NAV_ITEMS: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<NavIconProps>;
+  roles?: NavRole[];
+}[] = [
+  { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
+  { href: "/patients",   label: "Participants",  icon: Users },
+  { href: "/sessions",   label: "Sessions",      icon: CalendarDays },
+  { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
+  // Compliance: coordinator/admin only — workers must not see org-wide audit data
+  { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
+  // Reports: coordinator/admin + allied health (they need clinical report access)
+  { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["admin", "support_coordinator", "allied_health"] },
+  { href: "/settings",   label: "Settings",      icon: Settings },
 ];
 
-const BOTTOM_NAV = [
-  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
-  { href: "/sessions", label: "Sessions", icon: CalendarDays },
-  { href: "/patients", label: "People", icon: Users },
-  { href: "/compliance", label: "Audit", icon: ShieldCheck },
+const BOTTOM_NAV: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<NavIconProps>;
+  roles?: NavRole[];
+}[] = [
+  { href: "/dashboard",  label: "Home",    icon: LayoutDashboard },
+  { href: "/sessions",   label: "Sessions", icon: CalendarDays },
+  { href: "/patients",   label: "People",   icon: Users },
+  // Audit only for coordinators in the bottom tab bar
+  { href: "/compliance", label: "Audit",    icon: ShieldCheck, roles: ["admin", "support_coordinator"] },
 ];
 
 function isActive(location: string, href: string) {
@@ -90,6 +107,11 @@ function SidebarContents({
   onLogout: () => void;
 }) {
   const compact = !isDrawer && collapsed;
+  const { user } = useAuth();
+  const userRole = user?.role as NavRole | undefined;
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -156,7 +178,7 @@ function SidebarContents({
       </div>
 
       <nav className={cn("flex-1 overflow-y-auto space-y-1 scrollbar-none", compact ? "px-2" : "px-4")}>
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
           return (
@@ -384,7 +406,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {BOTTOM_NAV.map((item) => {
+        {BOTTOM_NAV.filter(
+          (item) => !item.roles || (user?.role && item.roles.includes(user.role as NavRole))
+        ).map((item) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
           return (

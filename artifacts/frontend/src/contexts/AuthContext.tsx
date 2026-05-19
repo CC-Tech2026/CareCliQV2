@@ -11,6 +11,7 @@ export interface AuthUser {
   role: UserRole;
   account_type: AccountType;
   onboarding_complete: boolean;
+  organizationId?: string;
 }
 
 interface AuthContextType {
@@ -81,6 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: data.user.role || "support_worker",
         account_type: data.user.account_type || "independent_worker",
         onboarding_complete: data.user.onboarding_complete ?? true,
+        organizationId: data.user.organization_id ?? undefined,
       };
       persistSession(data.access_token, authUser);
       return authUser;
@@ -120,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: data.user.role || "support_worker",
           account_type: data.user.account_type || "independent_worker",
           onboarding_complete: data.user.onboarding_complete ?? true,
+          organizationId: data.user.organization_id ?? undefined,
         };
         localStorage.setItem(USER_KEY, JSON.stringify(fresh));
         setUser(fresh);

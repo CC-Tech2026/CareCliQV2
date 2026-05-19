@@ -20,9 +20,15 @@ import {
   Plus,
   X,
   Info,
+  Users2,
+  UserMinus,
+  ChevronDown,
+  Copy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { InviteModal } from "@/components/InviteModal";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
@@ -45,13 +51,14 @@ function isValidABN(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "team";
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }>; coordinatorOnly?: boolean }[] = [
   { id: "account",    label: "Account",          icon: User        },
   { id: "provider",   label: "Provider",          icon: Building2   },
   { id: "defaults",   label: "Session Defaults",  icon: Settings2   },
   { id: "compliance", label: "Compliance",        icon: ShieldCheck },
+  { id: "team",       label: "Team",              icon: Users2, coordinatorOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -132,8 +139,46 @@ function PanelCard({
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
+const ROLE_LABELS: Record<string, string> = {
+  admin:               "Admin",
+  support_coordinator: "Coordinator",
+  allied_health:       "Allied Health",
+  support_worker:      "Support Worker",
+  auditor:             "Auditor",
+};
+
+const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
+  admin:               { bg: "rgba(240,48,96,0.1)",   color: "#c41144" },
+  support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: "#5533CC" },
+  allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
+  support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
+  auditor:             { bg: "rgba(245,158,11,0.1)",  color: "#92400e" },
+};
+
+interface OrgMember {
+  id: string;
+  user_id: string;
+  role: string;
+  joined_at: string;
+  full_name: string;
+  email: string;
+}
+
+interface PendingInvite {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  invite_url?: string;
+  token?: string;
+}
+
 export default function Settings() {
   const { toast } = useToast();
+  const { user, token: authToken } = useAuth();
+  const isCoordinator = user?.role === "admin" || user?.role === "support_coordinator";
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.coordinatorOnly || isCoordinator);
+
   const [activeSection, setActiveSection] = useState<SectionId>("account");
   const [savedSignature, setSavedSignature] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"draw" | "upload">("draw");
@@ -181,6 +226,74 @@ export default function Settings() {
     "hydrotherapy", "rehabilitation", "rehab", "massage",
     "manual therapy", "sports therapy",
   ];
+
+  // ── Team state (coordinator/admin only) ────────────────────────────────────
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const fetchTeam = useCallback(async () => {
+    if (!isCoordinator || !authToken) return;
+    setLoadingTeam(true);
+    try {
+      const headers = { Authorization: `Bearer ${authToken}` };
+      const [membersRes, invitesRes] = await Promise.all([
+        fetch("/api/invitations/members", { headers }),
+        fetch("/api/invitations/list", { headers }),
+      ]);
+      if (membersRes.ok) setMembers(await membersRes.json());
+      if (invitesRes.ok) setInvites(await invitesRes.json());
+    } catch {
+      // silently skip — team data is supplementary
+    } finally {
+      setLoadingTeam(false);
+    }
+  }, [isCoordinator, authToken]);
+
+  useEffect(() => {
+    if (activeSection === "team") fetchTeam();
+  }, [activeSection, fetchTeam]);
+
+  const handleRevokeInvite = async (id: string) => {
+    if (!authToken) return;
+    try {
+      await fetch(`/api/invitations/revoke/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setInvites((prev) => prev.filter((i) => i.id !== id));
+      toast({ title: "Invitation revoked" });
+    } catch {
+      toast({ title: "Failed to revoke invitation", variant: "destructive" });
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, name: string) => {
+    if (!authToken) return;
+    if (!confirm(`Remove ${name || "this member"} from the organization?`)) return;
+    try {
+      await fetch(`/api/invitations/members/${memberId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setMembers((prev) => prev.filter((m) => m.id !== memberId));
+      toast({ title: "Member removed" });
+    } catch {
+      toast({ title: "Failed to remove member", variant: "destructive" });
+    }
+  };
+
+  const copyInviteLink = (invite: PendingInvite) => {
+    const url = invite.invite_url
+      ? `${window.location.origin}${invite.invite_url}`
+      : `${window.location.origin}/accept-invite?token=${invite.token}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedToken(invite.id);
+      setTimeout(() => setCopiedToken(null), 2000);
+    });
+  };
 
   // ── API ────────────────────────────────────────────────────────────────────
   const { data: serverSettings, isLoading: isLoadingSettings } =
@@ -483,7 +596,7 @@ export default function Settings() {
           <p className="text-[11px] font-semibold uppercase tracking-widest px-3 pb-2" style={{ color: "#7A6A8A" }}>
             Settings
           </p>
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {visibleNavItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
@@ -509,7 +622,7 @@ export default function Settings() {
 
       {/* ── Mobile nav ──────────────────────────────────────────────────────── */}
       <div className="md:hidden flex gap-1 overflow-x-auto pb-1 w-full">
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+        {visibleNavItems.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveSection(id)}
@@ -976,7 +1089,167 @@ export default function Settings() {
           </Section>
         )}
 
+        {/* ── Team section (coordinator/admin only) ───────────────────────── */}
+        {activeSection === "team" && isCoordinator && (
+          <Section
+            title="Team"
+            description="Manage your organisation's staff members and invite new practitioners."
+          >
+            {/* Active members */}
+            <PanelCard label="Active Members">
+              {loadingTeam ? (
+                <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
+                </div>
+              ) : members.length === 0 ? (
+                <p className="text-[13px] py-4 text-center" style={{ color: "#7A6A8A" }}>
+                  No members found. Invite your first staff member below.
+                </p>
+              ) : (
+                <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                  {members.map((m) => {
+                    const rc = ROLE_COLORS[m.role] ?? ROLE_COLORS.support_worker;
+                    return (
+                      <div key={m.id} className="flex items-center gap-3 py-3">
+                        {/* Avatar */}
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
+                          style={{ background: "rgba(85,51,204,0.08)", color: "#5533CC" }}
+                        >
+                          {(m.full_name || m.email || "?")[0].toUpperCase()}
+                        </div>
+
+                        {/* Name + email */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>
+                            {m.full_name || "(No name)"}
+                          </p>
+                          <p className="text-[11px] truncate" style={{ color: "#7A6A9E" }}>{m.email}</p>
+                        </div>
+
+                        {/* Role badge */}
+                        <span
+                          className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: rc.bg, color: rc.color }}
+                        >
+                          {ROLE_LABELS[m.role] ?? m.role}
+                        </span>
+
+                        {/* Joined date */}
+                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "#7A6A9E" }}>
+                          Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                        </span>
+
+                        {/* Remove — prevent removing self */}
+                        {m.user_id !== user?.id && (
+                          <button
+                            onClick={() => handleRemoveMember(m.id, m.full_name)}
+                            title="Remove member"
+                            className="p-1.5 rounded-lg transition-colors hover:bg-red-50 shrink-0"
+                            style={{ color: "#94a3b8" }}
+                          >
+                            <UserMinus size={14} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </PanelCard>
+
+            {/* Pending invitations */}
+            <PanelCard label="Pending Invitations">
+              {invites.length === 0 ? (
+                <p className="text-[13px] py-3 text-center" style={{ color: "#7A6A8A" }}>
+                  No pending invitations.
+                </p>
+              ) : (
+                <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                  {invites.map((inv) => {
+                    const rc = ROLE_COLORS[inv.role] ?? ROLE_COLORS.support_worker;
+                    const expires = new Date(inv.expires_at);
+                    const expired = expires < new Date();
+                    return (
+                      <div key={inv.id} className="flex items-center gap-3 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>{inv.email}</p>
+                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#7A6A9E" }}>
+                            {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
+                          </p>
+                        </div>
+                        <span
+                          className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: rc.bg, color: rc.color }}
+                        >
+                          {ROLE_LABELS[inv.role] ?? inv.role}
+                        </span>
+
+                        {/* Copy link */}
+                        <button
+                          onClick={() => copyInviteLink(inv)}
+                          title="Copy invite link"
+                          className="p-1.5 rounded-lg transition-colors hover:bg-[#F0EDF9] shrink-0"
+                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#7A6A9E" }}
+                        >
+                          {copiedToken === inv.id ? <Check size={13} /> : <Copy size={13} />}
+                        </button>
+
+                        {/* Revoke */}
+                        <button
+                          onClick={() => handleRevokeInvite(inv.id)}
+                          title="Revoke invitation"
+                          className="p-1.5 rounded-lg transition-colors hover:bg-red-50 shrink-0"
+                          style={{ color: "#94a3b8" }}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </PanelCard>
+
+            {/* Invite button */}
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setShowInviteModal(true)}
+                className="gap-2 rounded-xl"
+              >
+                <Plus size={15} /> Invite Staff Member
+              </Button>
+            </div>
+
+            {/* Explainer */}
+            <div
+              className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-1"
+              style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(232,213,232,0.6)", color: "#4A3D5A" }}
+            >
+              <p className="font-semibold text-[13px]" style={{ color: "#1C1626" }}>How staff invitations work</p>
+              <p>
+                Inviting a staff member generates a secure token link (7-day expiry). The invitee
+                clicks the link, sets their password, and is immediately added to your organisation
+                with the role you selected. Their access is scoped to only the participants and sessions
+                your org allocates to them.
+              </p>
+              <p>
+                Email delivery is not yet configured — copy and share the link manually. Pending invitations
+                can be revoked at any time before they are accepted.
+              </p>
+            </div>
+          </Section>
+        )}
+
       </main>
+
+      {/* ── Invite modal ────────────────────────────────────────────────────── */}
+      <InviteModal
+        open={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+        onInviteSent={fetchTeam}
+      />
+
     </div>
   );
 }

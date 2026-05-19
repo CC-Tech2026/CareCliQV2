@@ -925,3 +925,34 @@ ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE public.users
     ADD CONSTRAINT users_role_check
     CHECK (role IN ('admin', 'support_worker', 'allied_health', 'support_coordinator'));
+
+-- ============================================================
+-- INVITATIONS: Staff invitation system for multi-tenant orgs
+-- Allows admins/coordinators to invite support workers and
+-- allied health professionals into their organization.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.invitations (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    invited_by      UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    email           TEXT NOT NULL,
+    role            TEXT NOT NULL DEFAULT 'support_worker'
+                    CHECK (role IN ('support_worker','allied_health','support_coordinator','admin','auditor')),
+    token           TEXT NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
+    accepted_at     TIMESTAMPTZ,
+    accepted_by     UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_token          ON public.invitations(token);
+CREATE INDEX IF NOT EXISTS idx_invitations_org_pending    ON public.invitations(organization_id, accepted_at);
+CREATE INDEX IF NOT EXISTS idx_invitations_email          ON public.invitations(email);
+
+ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='invitations' AND policyname='service_role_all_invitations') THEN
+        CREATE POLICY service_role_all_invitations ON public.invitations FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;

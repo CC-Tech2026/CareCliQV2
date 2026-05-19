@@ -1,0 +1,285 @@
+You are refactoring the existing CareScribe authentication, onboarding, and authorization architecture into a hardened enterprise-grade NDIS multi-tenant platform.
+
+IMPORTANT:
+Do NOT create a greenfield auth system.
+You MUST inspect the existing codebase first and refactor safely around the current implementation.
+
+====================================================
+BUSINESS MODEL
+==============
+
+CareScribe has 3 platform roles:
+
+1. Support Coordinator / Organization Admin
+
+* Owns the provider organization
+* Can manage workers
+* Can view all organization participants
+* Can access compliance, billing, reports, incidents
+* Can invite staff
+
+2. Support Worker
+
+* Can ONLY access allocated participants
+* Can ONLY access their own sessions/incidents
+* Cannot access billing/admin areas
+* Cannot view other workers' notes
+
+3. Allied Health Professional
+
+* Own caseload only
+* Clinical reporting access
+* Body map + therapy reporting
+* Independent invoicing access
+
+====================================================
+TARGET AUTHENTICATION FLOW
+==========================
+
+NEW ORGANIZATION FLOW:
+
+1. Organization Admin signs up
+2. Organization record created
+3. organization_members row created
+4. Role assigned:
+
+   * admin
+     OR
+   * support_coordinator
+5. User enters admin dashboard
+
+STAFF INVITE FLOW:
+
+1. Admin creates invite
+2. Invite email/link generated
+3. Support worker clicks invite link
+4. User sets password
+5. Account activated
+6. organization_members row linked automatically
+7. Assigned role:
+
+   * support_worker
+   * allied_health
+   * compliance_officer
+     etc.
+
+====================================================
+CRITICAL SECURITY REQUIREMENTS
+==============================
+
+DO NOT rely on users.role anymore.
+
+Authority MUST come from:
+
+public.organization_members.role
+
+Multi-tenant isolation MUST be enforced using:
+
+* organization_members
+* practitioner_allocations
+* RLS policies
+
+Workers MUST NOT access:
+
+* all organization participants
+* other workers' sessions
+* billing
+* compliance dashboards
+
+Support workers MUST ONLY access:
+
+* allocated patients
+* own sessions
+* own incidents
+
+====================================================
+DATABASE ARCHITECTURE
+=====================
+
+Existing tables already exist:
+
+* users
+* organizations
+* organization_members
+* practitioner_allocations
+* patients
+* sessions
+* incidents
+* alerts
+* audit_logs
+
+You MUST inspect current schema before changes.
+
+DO NOT duplicate existing structures.
+
+====================================================
+REQUIRED REFACTOR TASKS
+=======================
+
+1. AUTH REFACTOR
+   Inspect:
+
+* signup flow
+* login flow
+* session handling
+* auth provider/context
+* route guards
+* onboarding logic
+
+Refactor to:
+
+* organization-based onboarding
+* invite-based staff creation
+* role-aware session loading
+
+====================================================
+
+2. ROLE RESOLUTION
+   Replace all usage of:
+
+* users.role
+
+With:
+
+* organization_members.role
+
+Load:
+
+* organization_id
+* role
+* membership status
+
+during auth session initialization.
+
+====================================================
+
+3. INVITATION SYSTEM
+   Implement:
+
+* invitation table if missing
+* invite token generation
+* expiry handling
+* acceptance flow
+* email link generation
+* organization linking
+
+Invite should:
+
+* pre-assign role
+* pre-assign organization
+* activate membership on completion
+
+====================================================
+
+4. ROUTE PROTECTION
+   Implement frontend RBAC.
+
+Examples:
+
+/admin/*
+→ admin/support_coordinator only
+
+/worker/*
+→ support_worker only
+
+/clinical/*
+→ allied_health only
+
+Unauthorized users:
+
+* redirect safely
+* no data leakage
+* no rendering before auth resolution
+
+====================================================
+
+5. PRACTITIONER ACCESS ENFORCEMENT
+   Refactor participant access to use:
+   public.practitioner_allocations
+
+Workers MUST ONLY see:
+
+* allocated participants
+* allocated sessions
+
+Support coordinators:
+
+* full organization visibility
+
+====================================================
+
+6. SUPABASE RLS ALIGNMENT
+   Ensure frontend queries align with existing RLS policies.
+
+Avoid:
+
+* bypassing tenancy
+* direct unrestricted selects
+* client-side filtering for security
+
+Security must be database enforced.
+
+====================================================
+
+7. REMOVE SECURITY RISKS
+   Find and refactor:
+
+* anonymous access
+* broad selects
+* unsafe admin assumptions
+* org-wide worker visibility
+* hardcoded roles
+* direct organization_id trust without allocation validation
+
+====================================================
+
+8. UI/UX REQUIREMENTS
+   Admin dashboard:
+
+* organization management
+* invite worker flow
+* worker management
+* participant oversight
+
+Worker dashboard:
+
+* only assigned participants
+* compliance score
+* notes
+* incidents
+
+Allied health:
+
+* clinical reports
+* body map
+* therapy documentation
+
+====================================================
+
+9. OUTPUT REQUIREMENTS
+   Provide:
+
+10. Architecture explanation
+
+11. Folder/file changes
+
+12. Refactored auth flow
+
+13. RBAC implementation
+
+14. Invite flow
+
+15. Updated Supabase queries
+
+16. RLS compatibility review
+
+17. Security improvements
+
+18. Migration requirements
+
+19. Remaining vulnerabilities
+
+IMPORTANT:
+Do NOT generate fake code blindly.
+Inspect existing implementation first and refactor incrementally.
+Maintain compatibility with existing CareScribe structures where possible.

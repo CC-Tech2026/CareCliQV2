@@ -185,6 +185,8 @@ app.include_router(compliance.router, prefix="/api")
 app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
+from .api import invitations as invitations_api
+app.include_router(invitations_api.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -52,6 +52,7 @@ async def get_all_incidents(
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
     org_id: Optional[str] = None,
+    reporter_id: Optional[str] = None,
 ) -> List[dict]:
     supabase = get_supabase_admin()
     q = supabase.table(TABLE).select("*").order("incident_date", desc=True).limit(limit)
@@ -63,6 +64,8 @@ async def get_all_incidents(
         q = q.eq("participant_id", participant_id)
     if org_id:
         q = q.eq("organization_id", org_id)
+    if reporter_id:
+        q = q.eq("user_id", reporter_id)
     result = q.execute()
     rows = result.data or []
 
