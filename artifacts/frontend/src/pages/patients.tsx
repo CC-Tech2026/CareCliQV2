@@ -23,7 +23,7 @@ import {
   useUpdateParticipant,
   useUpdateParticipantGoals,
 } from "@workspace/api-client-react";
-import type { Participant, Session } from "@workspace/api-client-react";
+import type { Participant, Session, NDISGoal } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -293,8 +293,8 @@ export default function CareScribePatientsWorkspace() {
       return;
     }
     try {
-      const existing = Array.isArray(selectedItem.goals) ? selectedItem.goals : [];
-      const updated = [
+      const existing = (Array.isArray(selectedItem.goals) ? selectedItem.goals : []) as NDISGoal[];
+      const updated: NDISGoal[] = [
         ...existing,
         {
           id: crypto.randomUUID(),
