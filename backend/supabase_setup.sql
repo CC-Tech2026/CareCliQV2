@@ -925,3 +925,13 @@ ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE public.users
     ADD CONSTRAINT users_role_check
     CHECK (role IN ('admin', 'support_worker', 'allied_health', 'support_coordinator'));
+
+-- ============================================================
+-- NEXT STEP: Run backend/rls_repair.sql
+-- That file completes the RLS security layer:
+--   • Creates organization_members table (RBAC)
+--   • Adds SECURITY DEFINER org-scoping helper functions
+--   • Enables RLS on patients, sessions, incidents, plans
+--   • Removes dangerous anon_read_alerts policy
+--   • Adds org-scoped authenticated policies for all tables
+-- ============================================================

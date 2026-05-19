@@ -1,0 +1,68 @@
+The database schema has already been created and most tables exist successfully. However, Row Level Security (RLS) policies are incomplete or missing on several tables.
+
+Current issue:
+
+RLS was enabled on some tables
+The schema migration partially ran
+Some policy creation statements failed or were skipped
+Supabase/Postgres is now reporting:
+“RLS enabled but no policies exist”
+Some authenticated queries are failing because policies are missing
+
+Your task is to safely audit and repair the database security layer without breaking existing data.
+
+Requirements
+Detect all tables where:
+RLS is enabled
+but no policies exist
+Generate missing policies safely for:
+SELECT
+INSERT
+UPDATE
+DELETE
+Follow CareScribe’s multi-tenant architecture:
+every protected table must be scoped by organization_id
+users must only access records belonging to their organization
+Use the organization_members table for RBAC instead of trusting JWT role fields directly.
+
+Expected structure:
+
+organization_members (
+  user_id uuid,
+  organization_id uuid,
+  role text
+)
+Policies must support roles such as:
+admin
+manager
+support_worker
+support_coordinator
+auditor
+Prevent:
+cross-tenant access
+anonymous access to sensitive data
+overly permissive USING (true) policies
+Ensure:
+audit_logs are append-only
+sensitive healthcare/compliance data is protected
+DELETE permissions are admin-only unless explicitly required
+Create idempotent migration-safe SQL:
+avoid duplicate policy creation errors
+use DROP POLICY IF EXISTS
+use conditional checks where necessary
+Audit existing policies for dangerous patterns such as:
+TO anon
+USING (true)
+missing organization filtering
+Produce:
+cleaned SQL migration file
+repaired RLS policies
+policy naming consistency
+comments explaining each policy
+Important
+
+Do NOT recreate the schema from scratch.
+
+The tables and relationships already exist.
+
+Only repair and complete the missing/incomplete RLS policy layer safely and production-ready for Supabase/PostgreSQL.
