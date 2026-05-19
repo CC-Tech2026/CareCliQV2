@@ -1,0 +1,2 @@
+-- DEMO org + patients for testing
+-- Run this in Supabase SQL editor to seed demo data

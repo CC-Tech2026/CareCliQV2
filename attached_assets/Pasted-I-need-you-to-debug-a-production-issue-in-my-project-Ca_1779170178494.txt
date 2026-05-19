@@ -1,0 +1,108 @@
+I need you to debug a production issue in my project CareScribe (NDIS compliance SaaS).
+
+🚨 PROBLEM
+
+Users are being blocked with:
+
+“Access denied — Your account does not have permission to view this page”
+
+Even though:
+
+user is logged in via Supabase Auth
+organization exists
+organization_members record exists
+RLS is enabled and supposed to allow access
+
+But access still fails.
+
+🧩 WHAT TO INVESTIGATE IN THIS CODEBASE
+
+Please inspect the full workspace:
+
+1. Authentication flow
+How supabase.auth.getUser() is used
+Where auth.uid() is assumed
+Whether user ID is passed correctly
+2. Organization onboarding flow
+
+Find where:
+
+organizations are created
+organization_members rows are inserted
+user is assigned role (admin/support_worker/etc)
+
+Check if:
+
+correct UUID is used (NOT strings like roles/emails)
+mismatches exist between auth user and stored user_id
+3. Database schema usage
+
+Check consistency between:
+
+auth.users.id
+public.users.id
+organization_members.user_id
+
+Look for:
+
+string vs uuid mismatches
+incorrect mapping between auth user and app user
+4. RLS policies
+
+Review all Row Level Security policies on:
+
+patients
+sessions
+incidents
+alerts
+audit_logs
+
+Confirm:
+
+policies use auth.uid() correctly
+policies correctly join via organization_members
+no broken OR overly restrictive rules exist
+5. Multi-tenant architecture validation
+
+Determine whether the system is using:
+
+direct organization_id column isolation
+OR
+derived tenancy via organization_members
+
+Flag any inconsistency.
+
+🚨 EXPECTED FAILURE MODE
+
+Something in this system is causing:
+
+user exists
+org exists
+membership exists
+BUT
+RLS still denies access
+
+Find EXACT reason.
+
+🎯 WHAT I NEED FROM YOU
+
+Return:
+
+Root cause of access failure
+Exact broken file(s) or SQL policy
+Identity mismatch explanation (if any)
+Fix steps in correct order
+Updated secure pattern for:
+org creation
+membership creation
+RLS policies
+🔒 CONTEXT
+
+This is a healthcare/NDIS compliance platform.
+
+Requirements:
+
+strict tenant isolation
+zero cross-org access
+RLS must be correct and enforceable
+no insecure fallback logic

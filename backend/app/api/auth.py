@@ -321,8 +321,24 @@ async def login(body: LoginRequest, request: Request):
 
     # Backfill: when a coordinator logs in with a known org, claim any orphan
     # participants/sessions that were created before the org was linked.
-    # This is idempotent — rows already scoped to the org are unaffected.
+    # Also ensure organization_members row exists so RLS helper functions
+    # cs_user_org_id() / cs_user_role() resolve correctly.
+    # All operations are idempotent — existing rows are unaffected.
     _org_id = (profile or {}).get("organization_id")
+    if _org_id:
+        try:
+            _admin = get_supabase_admin()
+            # Map the user's DB role to an organization_members role value
+            _member_role = role if role in ("admin", "manager", "support_worker", "support_coordinator", "auditor") else "support_worker"
+            _admin.table("organization_members").upsert({
+                "user_id": str(auth_user.id),
+                "organization_id": _org_id,
+                "role": _member_role,
+                "is_active": True,
+            }, on_conflict="user_id,organization_id").execute()
+        except Exception as _ome:
+            logger.debug("organization_members login upsert (non-critical): %s", _ome)
+
     if role in COORDINATOR_ROLES and _org_id:
         try:
             _admin = get_supabase_admin()
@@ -407,6 +423,19 @@ async def complete_onboarding(
                     org_created = True
                     _new_org = org_result.data[0]["id"]
                     logger.info("Organisation created for user %s: %s", user_id, _new_org)
+                    # Seed organization_members — owner gets admin role
+                    # This is required for RLS helper cs_user_org_id() to resolve correctly.
+                    try:
+                        supabase.table("organization_members").upsert({
+                            "user_id": user_id,
+                            "organization_id": _new_org,
+                            "role": "admin",
+                            "is_active": True,
+                        }, on_conflict="user_id,organization_id").execute()
+                        logger.info("organization_members seeded for owner %s → org %s", user_id, _new_org)
+                    except Exception as _ome:
+                        # organization_members table may not exist yet — non-fatal
+                        logger.warning("organization_members seed (non-critical): %s", _ome)
                     # Backfill: claim all orphan participants + sessions to this new org
                     try:
                         _pr = supabase.table("patients").update({"organization_id": _new_org}).is_("organization_id", "null").execute()

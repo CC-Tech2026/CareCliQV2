@@ -37,7 +37,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const ALL_ROLES = ["admin", "support_worker", "allied_health"] as const;
+const ALL_ROLES = ["admin", "support_worker", "allied_health", "support_coordinator"] as const;
 
 function Router() {
   return (
@@ -146,7 +146,7 @@ function Router() {
       </Route>
 
       <Route path="/settings">
-        <ProtectedRoute allowedRoles={["admin", "support_worker"]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Settings /></AppLayout>
         </ProtectedRoute>
       </Route>

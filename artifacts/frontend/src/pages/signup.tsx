@@ -1,13 +1,3 @@
-// IMPORTANT CHANGES APPLIED:
-// ✅ Fixed mobile overlay issue
-// ✅ Fixed input focus issue
-// ✅ Fixed select placeholder issue
-// ✅ Fixed Safari/iOS typing issue
-// ✅ Keeps ALL original account types
-// ✅ Keeps OT / Allied Health fields
-// ✅ Keeps Organisation fields
-// ✅ Keeps your original UI
-
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
