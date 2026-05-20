@@ -8,6 +8,12 @@ from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
 from .supabase_client import get_supabase_admin
+from ..core.access import (
+    ACCESS_METADATA_FIELDS,
+    can_access_participant,
+    is_coordinator,
+    owner_payload,
+)
 from ..schemas.participant import NDISGoal, ParticipantCreate, ParticipantUpdate
 
 logger = logging.getLogger(__name__)
@@ -28,6 +34,7 @@ _GOAL_DEFAULTS: dict[str, Any] = {
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _strip_optional_columns(payload: dict) -> dict:
     """Remove columns that require manual DB migrations and may not exist yet.
 
@@ -35,6 +42,7 @@ def _strip_optional_columns(payload: dict) -> dict:
     set at startup after probing the live schema.
     """
     from . import migration_state
+
     if migration_state.biological_sex_column_missing:
         payload.pop("biological_sex", None)
     return payload
@@ -73,7 +81,11 @@ def _normalize_goals(raw: Any) -> list:
         # Ensure progress_history entries are also complete
         history = goal.get("progress_history") or []
         goal["progress_history"] = [
-            {"date": h.get("date", ""), "percentage": h.get("percentage", 0), "note": h.get("note")}
+            {
+                "date": h.get("date", ""),
+                "percentage": h.get("percentage", 0),
+                "note": h.get("note"),
+            }
             for h in history
             if isinstance(h, dict)
         ]
@@ -93,6 +105,19 @@ def _normalize(row: dict) -> dict:
     return out
 
 
+def _access_select() -> str:
+    return "*, organization_id, assigned_worker_id, allied_health_id, clinician_id, created_by, owner_user_id"
+
+
+def _is_missing_column_error(exc: Exception) -> bool:
+    err = str(exc)
+    return "PGRST" in err or "does not exist" in err or "42703" in err
+
+
+def _strip_access_columns(payload: dict) -> dict:
+    return {k: v for k, v in payload.items() if k not in ACCESS_METADATA_FIELDS}
+
+
 def _goals_to_jsonb(goals: Optional[List[NDISGoal]]) -> Optional[list]:
     """Serialise a list of NDISGoal Pydantic models to plain dicts for PostgREST.
 
@@ -109,88 +134,62 @@ def _goals_to_jsonb(goals: Optional[List[NDISGoal]]) -> Optional[list]:
 # Service functions
 # ---------------------------------------------------------------------------
 
-async def get_scoped_participants(user: dict) -> List[dict]:
-    """Return participants visible to ``user`` based on their role.
 
-    * support_coordinator / admin  → all participants in the org
-    * support_worker               → only participants with an active allocation
-    * allied_health                → all org participants (or all if no org)
-    """
-    from . import migration_state as _ms
-
-    role   = user.get("role", "")
-    org_id = user.get("organization_id")
-    uid    = user.get("sub")
-
-    if role in ("support_coordinator", "admin"):
-        return await get_all_participants(org_id=org_id)
-
-    if role == "support_worker":
-        if not uid:
-            return []
-        if _ms.practitioner_allocations_table_missing:
-            logger.info(
-                "practitioner_allocations table missing; falling back to org scope "
-                "for support_worker %s — run supabase_setup.sql to enable assignment filtering.",
-                uid,
-            )
-            return await get_all_participants(org_id=org_id)
-        supabase = get_supabase_admin()
-        try:
-            alloc = (
-                supabase.table("practitioner_allocations")
-                .select("patient_id")
-                .eq("user_id", uid)
-                .eq("is_active", True)
-                .execute()
-            )
-            patient_ids = [r["patient_id"] for r in (alloc.data or [])]
-            if not patient_ids:
-                return []
-            result = (
-                supabase.table(TABLE)
-                .select("*")
-                .in_("id", patient_ids)
-                .order("created_at", desc=True)
-                .execute()
-            )
-            return [_normalize(r) for r in (result.data or [])]
-        except Exception as exc:
-            logger.warning(
-                "get_scoped_participants: allocation query failed (%s) — falling back to org scope", exc
-            )
-            return await get_all_participants(org_id=org_id)
-
-    # allied_health or unknown role: org-scoped (or unscoped if no org)
-    return await get_all_participants(org_id=org_id)
-
-
-async def get_all_participants(org_id: Optional[str] = None) -> List[dict]:
+async def get_all_participants(current_user: Optional[dict] = None) -> List[dict]:
     supabase = get_supabase_admin()
-    q = supabase.table(TABLE).select("*").order("created_at", desc=True)
-    if org_id:
-        q = q.eq("organization_id", org_id)
-    result = q.execute()
-    return [_normalize(r) for r in (result.data or [])]
+    try:
+        result = (
+            supabase.table(TABLE)
+            .select(_access_select())
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except Exception as exc:
+        if not _is_missing_column_error(exc):
+            raise
+        result = (
+            supabase.table(TABLE).select("*").order("created_at", desc=True).execute()
+        )
+    rows = result.data or []
+    if current_user:
+        rows = [r for r in rows if can_access_participant(r, current_user)]
+    return [_normalize(r) for r in rows]
 
 
-async def get_participant_by_id(participant_id: str) -> Optional[dict]:
+async def get_participant_by_id(
+    participant_id: str, current_user: Optional[dict] = None
+) -> Optional[dict]:
     if not participant_id:
         return None
     supabase = get_supabase_admin()
     try:
-        result = supabase.table(TABLE).select("*").eq("id", participant_id).execute()
+        try:
+            result = (
+                supabase.table(TABLE)
+                .select(_access_select())
+                .eq("id", participant_id)
+                .execute()
+            )
+        except Exception as exc:
+            if not _is_missing_column_error(exc):
+                raise
+            result = (
+                supabase.table(TABLE).select("*").eq("id", participant_id).execute()
+            )
         rows = result.data or []
-        return _normalize(rows[0]) if rows else None
+        if not rows:
+            return None
+        if current_user and not can_access_participant(rows[0], current_user):
+            return None
+        return _normalize(rows[0])
     except Exception as exc:
         logger.warning("get_participant_by_id(%s) failed: %s", participant_id, exc)
         return None
 
 
-async def create_participant(data: ParticipantCreate, org_id: Optional[str] = None) -> dict:
-    from .pii_service import generate_pseudonym, encrypt_participant
-    from datetime import date
-
+async def create_participant(
+    data: ParticipantCreate, current_user: Optional[dict] = None
+) -> dict:
     supabase = get_supabase_admin()
     # exclude_none so we rely on DB/Pydantic defaults rather than sending nulls
     payload: dict = data.model_dump(exclude_none=True)
@@ -198,35 +197,41 @@ async def create_participant(data: ParticipantCreate, org_id: Optional[str] = No
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
 
-    if org_id:
-        payload["organization_id"] = org_id
-
-    # Privacy Act 2026 — APP 2 Anonymity: auto-generate external pseudonym
-    if not payload.get("external_pseudonym"):
-        payload["external_pseudonym"] = generate_pseudonym()
-
-    # Archives Act 1983 — auto-set 7-year disposal date from today
-    if not payload.get("disposal_date"):
-        today = date.today()
-        disposal = today.replace(year=today.year + 7)
-        payload["disposal_date"] = str(disposal)
-
     # Serialize NDISGoal objects to plain dicts for JSONB
     if "goals" in payload:
         goals_raw = payload["goals"]
-        payload["goals"] = [
-            g if isinstance(g, dict) else g.model_dump()
-            for g in goals_raw
-        ] if goals_raw else []
+        payload["goals"] = (
+            [g if isinstance(g, dict) else g.model_dump() for g in goals_raw]
+            if goals_raw
+            else []
+        )
 
-    # AES-256 GCM PII encryption (Privacy Act 2026 APP 11) — no-op when disabled
-    payload = encrypt_participant(payload)
+    if current_user:
+        ownership = owner_payload(current_user)
+        for key in (
+            "created_by",
+            "organization_id",
+            "assigned_worker_id",
+            "allied_health_id",
+            "clinician_id",
+        ):
+            if key in ownership:
+                payload[key] = ownership[key]
 
-    result = supabase.table(TABLE).insert(payload).execute()
+    try:
+        result = supabase.table(TABLE).insert(payload).execute()
+    except Exception as exc:
+        if not _is_missing_column_error(exc) or not any(
+            col in str(exc) for col in ACCESS_METADATA_FIELDS
+        ):
+            raise
+        result = supabase.table(TABLE).insert(_strip_access_columns(payload)).execute()
     return _normalize(result.data[0]) if result.data else {}
 
 
-async def update_participant(participant_id: str, data: ParticipantUpdate) -> Optional[dict]:
+async def update_participant(
+    participant_id: str, data: ParticipantUpdate, current_user: Optional[dict] = None
+) -> Optional[dict]:
     """Partial update — only sends fields that were explicitly set in the request."""
     supabase = get_supabase_admin()
 
@@ -240,24 +245,30 @@ async def update_participant(participant_id: str, data: ParticipantUpdate) -> Op
     if "goals" in payload:
         goals_list = payload["goals"]
         if goals_list is None:
-            payload.pop("goals")           # don't accidentally null out goals
+            payload.pop("goals")  # don't accidentally null out goals
         else:
             payload["goals"] = [
-                g if isinstance(g, dict) else g.model_dump()
-                for g in goals_list
+                g if isinstance(g, dict) else g.model_dump() for g in goals_list
             ]
 
     if not payload:
         # Nothing to update — return current record
-        return await get_participant_by_id(participant_id)
+        return await get_participant_by_id(participant_id, current_user)
+
+    if current_user and not await get_participant_by_id(participant_id, current_user):
+        return None
 
     result = supabase.table(TABLE).update(payload).eq("id", participant_id).execute()
     return _normalize(result.data[0]) if result.data else None
 
 
-async def update_participant_goals(participant_id: str, goals: List[NDISGoal]) -> Optional[dict]:
+async def update_participant_goals(
+    participant_id: str, goals: List[NDISGoal], current_user: Optional[dict] = None
+) -> Optional[dict]:
     """Replace the entire goals list for a participant."""
     supabase = get_supabase_admin()
+    if current_user and not await get_participant_by_id(participant_id, current_user):
+        return None
     goals_data = _goals_to_jsonb(goals)
     result = (
         supabase.table(TABLE)
@@ -267,21 +278,34 @@ async def update_participant_goals(participant_id: str, goals: List[NDISGoal]) -
     )
     if not result.data:
         return None
-    return await get_participant_by_id(participant_id)
+    return await get_participant_by_id(participant_id, current_user)
 
 
-async def delete_participant(participant_id: str) -> bool:
+async def delete_participant(
+    participant_id: str, current_user: Optional[dict] = None
+) -> bool:
     supabase = get_supabase_admin()
+    if current_user and (
+        not is_coordinator(current_user)
+        or not await get_participant_by_id(participant_id, current_user)
+    ):
+        return False
     supabase.table(TABLE).delete().eq("id", participant_id).execute()
     return True
 
 
-async def get_dashboard_stats() -> dict:
+async def get_dashboard_stats(current_user: Optional[dict] = None) -> dict:
     supabase = get_supabase_admin()
     week_ago = (datetime.utcnow() - timedelta(days=7)).date().isoformat()
 
     try:
-        participants = supabase.table(TABLE).select("id, plan_status").execute()
+        participants = (
+            supabase.table(TABLE)
+            .select(
+                "id, plan_status, organization_id, assigned_worker_id, allied_health_id, clinician_id, created_by, owner_user_id"
+            )
+            .execute()
+        )
         participant_data = participants.data or []
     except Exception:
         try:
@@ -290,19 +314,36 @@ async def get_dashboard_stats() -> dict:
         except Exception:
             participant_data = []
 
+    if current_user:
+        participant_data = [
+            p for p in participant_data if can_access_participant(p, current_user)
+        ]
+    participant_ids = {p.get("id") for p in participant_data if p.get("id")}
+
     try:
         sessions_week = (
-            supabase.table("sessions").select("id").gte("session_date", week_ago).execute()
+            supabase.table("sessions")
+            .select("id, patient_id")
+            .gte("session_date", week_ago)
+            .execute()
         )
-        sessions_this_week = len(sessions_week.data or [])
+        week_rows = sessions_week.data or []
+        if current_user:
+            week_rows = [s for s in week_rows if s.get("patient_id") in participant_ids]
+        sessions_this_week = len(week_rows)
     except Exception:
         sessions_this_week = 0
 
     try:
-        sessions_all = supabase.table("sessions").select("id, status").execute()
-        notes_missing = sum(
-            1 for s in (sessions_all.data or []) if s.get("status") == "draft"
+        sessions_all = (
+            supabase.table("sessions").select("id, status, patient_id").execute()
         )
+        session_rows = sessions_all.data or []
+        if current_user:
+            session_rows = [
+                s for s in session_rows if s.get("patient_id") in participant_ids
+            ]
+        notes_missing = sum(1 for s in session_rows if s.get("status") == "draft")
     except Exception:
         notes_missing = 0
 
@@ -321,26 +362,3 @@ async def get_dashboard_stats() -> dict:
             1 for p in participant_data if p.get("plan_status") == "active"
         ),
     }
-
-
-async def force_update_participant(participant_id: str, payload: dict) -> Optional[dict]:
-    """Direct field-level update without Pydantic validation.
-
-    Used by the PII purge endpoint and the retention cron to write
-    de-identified values without triggering the full update pipeline.
-    """
-    supabase = get_supabase_admin()
-    clean: dict = {}
-    for k, v in payload.items():
-        # Convert date/datetime objects to ISO strings for PostgREST
-        if v is not None and hasattr(v, "isoformat"):
-            clean[k] = v.isoformat()
-        else:
-            clean[k] = v
-    try:
-        result = supabase.table(TABLE).update(clean).eq("id", participant_id).execute()
-        rows = result.data or []
-        return _normalize(rows[0]) if rows else None
-    except Exception as exc:
-        logger.error("force_update_participant(%s) failed: %s", participant_id, exc)
-        return None

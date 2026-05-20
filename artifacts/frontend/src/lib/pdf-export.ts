@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getStoredSignature } from "@/lib/signature-store";
+import { apiFetch } from "@/lib/api-fetch";
 
 export interface AuditPayload {
   audit_version: string;
@@ -54,7 +55,7 @@ export interface AuditPayload {
 }
 
 export async function fetchAuditData(sessionId: string): Promise<AuditPayload> {
-  const res = await fetch(`/api/sessions/${sessionId}/audit`);
+  const res = await apiFetch(`/api/sessions/${sessionId}/audit`);
   if (!res.ok) {
     throw new Error(`Failed to fetch audit record for session ${sessionId} (${res.status} ${res.statusText})`);
   }

@@ -7,7 +7,6 @@ import { exportSingleSessionPDF } from "@/lib/pdf-export";
 
 import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
-import { TranslationAuditView } from "@/components/TranslationAuditView";
 
 // Extended session type with extra DB columns not yet in the OpenAPI spec
 type ExtendedSession = Session & {
@@ -15,9 +14,6 @@ type ExtendedSession = Session & {
   support_category?: string | null;
   compliance_status?: string | null;
   body_markers?: BodyMarker[] | null;
-  original_language_input?: string | null;
-  translated_english_note?: string | null;
-  translation_metadata?: Record<string, string> | null;
 };
 
 import { Button } from "@/components/ui/button";
@@ -33,9 +29,10 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target, Lock
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiFetch } from "@/lib/api-fetch";
 
 // ---------------------------------------------------------------------------
 // Claim readiness helpers
@@ -192,7 +189,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   // Re-run compliance (POST /compliance/run/:id)
   const reRunCompliance = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`/api/compliance/run/${sessionId}`, { method: "POST" });
+      const res = await apiFetch(`/api/compliance/run/${sessionId}`, { method: "POST" });
       if (!res.ok) throw new Error("Compliance run failed");
       return res.json();
     },
@@ -240,7 +237,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     if (!sessionId) return;
     setIsExporting(true);
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/audit`);
+      const res = await apiFetch(`/api/sessions/${sessionId}/audit`);
       if (!res.ok) throw new Error("Failed to fetch audit record");
       const data = await res.json();
       const participantName = (data.participant?.full_name || "unknown")
@@ -435,11 +432,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
               </div>
-              {session.status === "completed" ? (
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
-                  <Lock className="h-3 w-3" /> Approved &amp; Locked
-                </span>
-              ) : !isEditing ? (
+              {!isEditing ? (
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
               ) : (
                 <div className="flex gap-2">
@@ -819,15 +812,6 @@ export default function SessionDetail({ id }: { id?: string }) {
               </div>
             </div>
           </div>
-
-          {/* Translation Audit Trail — Phase 6 (SCRUM-113) */}
-          {((session as ExtendedSession).original_language_input || (session as ExtendedSession).translated_english_note) && (
-            <TranslationAuditView
-              originalLanguageInput={(session as ExtendedSession).original_language_input}
-              translatedEnglishNote={(session as ExtendedSession).translated_english_note}
-              translationMetadata={(session as ExtendedSession).translation_metadata}
-            />
-          )}
 
           {/* Media Attachments & Session Evidence */}
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>

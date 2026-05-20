@@ -41,12 +41,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='updated_at') THEN
         ALTER TABLE patients ADD COLUMN updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='allergies') THEN
-        ALTER TABLE patients ADD COLUMN allergies TEXT;
-    END IF;
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='communication_preferences') THEN
-        ALTER TABLE patients ADD COLUMN communication_preferences TEXT;
-    END IF;
 END $$;
 
 -- Add missing columns to existing 'sessions' table
@@ -561,6 +555,36 @@ BEGIN
     END IF;
 END $$;
 
+-- ============================================================
+-- CARESCRIBE ROLE-BASED ACCESS METADATA
+-- Support Coordinator: organization-wide visibility.
+-- Support Worker / Allied Health: own assigned participants and sessions.
+-- ============================================================
+
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS assigned_worker_id UUID;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS allied_health_id UUID;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS clinician_id UUID;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS created_by UUID;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS worker_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS practitioner_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
+
+CREATE INDEX IF NOT EXISTS idx_patients_organization_id ON public.patients(organization_id);
+CREATE INDEX IF NOT EXISTS idx_patients_assigned_worker_id ON public.patients(assigned_worker_id);
+CREATE INDEX IF NOT EXISTS idx_patients_allied_health_id ON public.patients(allied_health_id);
+CREATE INDEX IF NOT EXISTS idx_patients_clinician_id ON public.patients(clinician_id);
+CREATE INDEX IF NOT EXISTS idx_patients_created_by ON public.patients(created_by);
+CREATE INDEX IF NOT EXISTS idx_sessions_organization_id ON public.sessions(organization_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_worker_id ON public.sessions(worker_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id ON public.sessions(practitioner_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_created_by ON public.sessions(created_by);
+
 -- NOTE: After running this SQL, create your first admin user:
 --   1. Sign up via POST /api/auth/register with role="admin"
 --   OR manually insert:
@@ -680,279 +704,3 @@ CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant
 CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
 CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
-
--- ============================================================
--- PARTICIPANT MODULE REFINEMENT (Schema Design v2)
--- Addresses circular references, adds patient_goals and
--- practitioner_allocations junction table.
--- All statements are idempotent.
--- ============================================================
-
--- 1. Remove circular ndis_plan_id from patients
---    (resolution path is ndis_plans.patient_id — no need for reverse FK)
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'patients' AND column_name = 'ndis_plan_id'
-    ) THEN
-        ALTER TABLE patients DROP COLUMN IF EXISTS ndis_plan_id;
-    END IF;
-END $$;
-
--- 2. Enforce category constraint on plan_budgets (add if not already there)
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.constraint_column_usage
-        WHERE table_name = 'plan_budgets' AND constraint_name = 'plan_budgets_category_check'
-    ) THEN
-        BEGIN
-            ALTER TABLE plan_budgets
-                ADD CONSTRAINT plan_budgets_category_check
-                CHECK (category IN ('core', 'capacity_building', 'capital'));
-        EXCEPTION WHEN others THEN
-            NULL; -- constraint may already exist under a different name
-        END;
-    END IF;
-END $$;
-
--- 3. Patient Goals — linked to ndis_plans (not stored as JSONB on patients)
-CREATE TABLE IF NOT EXISTS public.patient_goals (
-    id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    plan_id     UUID        NOT NULL REFERENCES public.ndis_plans(id) ON DELETE CASCADE,
-    goal_code   VARCHAR(50),                        -- e.g. 'GOAL-01'
-    description TEXT        NOT NULL,
-    category    TEXT        NOT NULL DEFAULT 'general'
-                            CHECK (category IN ('core', 'capacity_building', 'capital', 'general')),
-    target_date DATE,
-    is_achieved BOOLEAN     NOT NULL DEFAULT FALSE,
-    created_at  TIMESTAMPTZ DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_patient_goals_plan_id ON patient_goals(plan_id);
-
-ALTER TABLE patient_goals ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE tablename = 'patient_goals' AND policyname = 'service_role_all_patient_goals'
-    ) THEN
-        CREATE POLICY service_role_all_patient_goals ON patient_goals
-            FOR ALL TO service_role USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- Auto-update trigger for patient_goals
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_patient_goals_updated_at') THEN
-        CREATE TRIGGER update_patient_goals_updated_at
-            BEFORE UPDATE ON patient_goals
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    END IF;
-END $$;
-
--- 4. Practitioner Allocations — junction between users and patients
-CREATE TABLE IF NOT EXISTS public.practitioner_allocations (
-    id             UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
-    patient_id     UUID        NOT NULL REFERENCES public.patients(id) ON DELETE CASCADE,
-    user_id        UUID        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-    allocated_role TEXT        NOT NULL DEFAULT 'support_worker'
-                               CHECK (allocated_role IN ('primary_ot', 'support_worker', 'supervisor')),
-    is_active      BOOLEAN     NOT NULL DEFAULT TRUE,
-    assigned_at    TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT unique_patient_user_allocation UNIQUE (patient_id, user_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_patient_id ON practitioner_allocations(patient_id);
-CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_user_id ON practitioner_allocations(user_id);
-
-ALTER TABLE practitioner_allocations ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE tablename = 'practitioner_allocations'
-          AND policyname = 'service_role_all_practitioner_allocations'
-    ) THEN
-        CREATE POLICY service_role_all_practitioner_allocations ON practitioner_allocations
-            FOR ALL TO service_role USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- ============================================================
--- LIVE SESSION COMPLIANCE FIELDS (spec: assess-note + risk)
--- ============================================================
-
--- 1. Risk profile on participants
-ALTER TABLE public.patients
-    ADD COLUMN IF NOT EXISTS risk_level TEXT DEFAULT 'low'
-        CHECK (risk_level IN ('low', 'medium', 'high')),
-    ADD COLUMN IF NOT EXISTS risk_triggers TEXT,
-    ADD COLUMN IF NOT EXISTS risk_management_plan TEXT;
-
--- 2. Billing-ready flag on sessions (set when assess-note score >= 75)
-ALTER TABLE public.sessions
-    ADD COLUMN IF NOT EXISTS is_ready_for_billing BOOLEAN DEFAULT FALSE;
-
--- ============================================================
--- COMPLIANCE-GRADE MULTI-TENANCY & AUDIT HARDENING
--- Phase 2: organization_id on all domain tables (nullable, additive)
--- ============================================================
-ALTER TABLE public.patients   ADD COLUMN IF NOT EXISTS organization_id UUID;
-ALTER TABLE public.sessions   ADD COLUMN IF NOT EXISTS organization_id UUID;
-ALTER TABLE public.incidents  ADD COLUMN IF NOT EXISTS organization_id UUID;
-
-CREATE INDEX IF NOT EXISTS idx_patients_organization_id  ON public.patients(organization_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_organization_id  ON public.sessions(organization_id);
-CREATE INDEX IF NOT EXISTS idx_incidents_organization_id ON public.incidents(organization_id);
-
--- Phase 5: Extend audit_logs with compliance-grade fields (additive)
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS organization_id UUID;
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS action_type    TEXT;
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_type    TEXT;
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS entity_id      TEXT;
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS before_state   JSONB;
-ALTER TABLE public.audit_logs ADD COLUMN IF NOT EXISTS after_state    JSONB;
-
-CREATE INDEX IF NOT EXISTS idx_audit_logs_organization_id ON public.audit_logs(organization_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_entity          ON public.audit_logs(entity_type, entity_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id         ON public.audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at      ON public.audit_logs(created_at DESC);
-
--- Phase 6: Translation traceability fields on sessions
-ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS original_language_input TEXT;
-ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translated_english_note  TEXT;
-ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS translation_metadata     JSONB;
-
--- ============================================================
--- PRIVACY ACT 2026 & NDIS ACT SECRECY PROVISIONS
--- Add-on compliance hardening
--- ============================================================
-
--- External pseudonym + disposal date on participants (APP 2 Anonymity + Archives Act 1983)
-ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS external_pseudonym TEXT UNIQUE;
-ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS disposal_date       DATE;
-ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS is_purged           BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS pii_encrypted       BOOLEAN DEFAULT FALSE;
-
-CREATE INDEX IF NOT EXISTS idx_patients_disposal_date ON public.patients(disposal_date);
-CREATE INDEX IF NOT EXISTS idx_patients_is_purged     ON public.patients(is_purged);
-
--- Access Logs — NDIS Act Section 66 "Need-to-Know" Audit Trail
-CREATE TABLE IF NOT EXISTS public.access_logs (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id          TEXT,
-    participant_id   UUID,
-    action           TEXT NOT NULL DEFAULT 'READ',
-    ip_address       TEXT,
-    purpose          TEXT DEFAULT 'Provision of NDIS Supports',
-    organization_id  UUID,
-    created_at       TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_access_logs_participant_id ON public.access_logs(participant_id);
-CREATE INDEX IF NOT EXISTS idx_access_logs_user_id        ON public.access_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_access_logs_created_at     ON public.access_logs(created_at DESC);
-
-ALTER TABLE public.access_logs ENABLE ROW LEVEL SECURITY;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='access_logs' AND policyname='service_role_all_access_logs') THEN
-        CREATE POLICY service_role_all_access_logs ON access_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- Security Events — Eligible Data Breach notification (Privacy Act 2026)
-CREATE TABLE IF NOT EXISTS public.security_events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_type      TEXT NOT NULL,
-    accessor_id     TEXT,
-    participant_id  UUID,
-    ip_address      TEXT,
-    description     TEXT,
-    severity        TEXT DEFAULT 'medium' CHECK (severity IN ('low','medium','high','critical')),
-    is_reported     BOOLEAN DEFAULT FALSE,
-    organization_id UUID,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_security_events_event_type  ON public.security_events(event_type);
-CREATE INDEX IF NOT EXISTS idx_security_events_severity    ON public.security_events(severity);
-CREATE INDEX IF NOT EXISTS idx_security_events_is_reported ON public.security_events(is_reported);
-
-ALTER TABLE public.security_events ENABLE ROW LEVEL SECURITY;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='security_events' AND policyname='service_role_all_security_events') THEN
-        CREATE POLICY service_role_all_security_events ON security_events FOR ALL TO service_role USING (true) WITH CHECK (true);
-    END IF;
-END $$;
-
--- ============================================================
--- ASSIGNMENTS: Expand practitioner_allocations for full assignment management
--- Adds assigned_by (audit trail) and organization_id (org scoping).
--- Expands allocated_role to include allied_health.
--- Safe to run multiple times (ADD COLUMN IF NOT EXISTS).
--- ============================================================
-ALTER TABLE public.practitioner_allocations
-    ADD COLUMN IF NOT EXISTS assigned_by      UUID REFERENCES public.users(id);
-ALTER TABLE public.practitioner_allocations
-    ADD COLUMN IF NOT EXISTS organization_id  UUID;
-
--- Expand allocated_role to include allied_health
-ALTER TABLE public.practitioner_allocations
-    DROP CONSTRAINT IF EXISTS practitioner_allocations_allocated_role_check;
-ALTER TABLE public.practitioner_allocations
-    ADD CONSTRAINT practitioner_allocations_allocated_role_check
-    CHECK (allocated_role IN ('primary_ot', 'support_worker', 'supervisor', 'allied_health'));
-
-CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_org_id
-    ON public.practitioner_allocations(organization_id);
-
--- ============================================================
--- RBAC: Expand role constraint to include support_coordinator
--- small_provider account type now maps to support_coordinator.
--- "admin" remains valid as a legacy alias for existing rows.
--- Safe to run multiple times (DROP CONSTRAINT IF EXISTS).
--- ============================================================
-ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE public.users
-    ADD CONSTRAINT users_role_check
-    CHECK (role IN ('admin', 'support_worker', 'allied_health', 'support_coordinator'));
-
--- ============================================================
--- INVITATIONS: Staff invitation system for multi-tenant orgs
--- Allows admins/coordinators to invite support workers and
--- allied health professionals into their organization.
--- ============================================================
-CREATE TABLE IF NOT EXISTS public.invitations (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    organization_id UUID NOT NULL,
-    invited_by      UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    email           TEXT NOT NULL,
-    role            TEXT NOT NULL DEFAULT 'support_worker'
-                    CHECK (role IN ('support_worker','allied_health','support_coordinator','admin','auditor')),
-    token           TEXT NOT NULL UNIQUE,
-    expires_at      TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
-    accepted_at     TIMESTAMPTZ,
-    accepted_by     UUID REFERENCES public.users(id) ON DELETE SET NULL,
-    created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_invitations_token          ON public.invitations(token);
-CREATE INDEX IF NOT EXISTS idx_invitations_org_pending    ON public.invitations(organization_id, accepted_at);
-CREATE INDEX IF NOT EXISTS idx_invitations_email          ON public.invitations(email);
-
-ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='invitations' AND policyname='service_role_all_invitations') THEN
-        CREATE POLICY service_role_all_invitations ON public.invitations FOR ALL TO service_role USING (true) WITH CHECK (true);
-    END IF;
-END $$;

@@ -1,10 +1,28 @@
 from typing import List, Optional
 from .supabase_client import get_supabase_admin
 from ..schemas.session import SessionCreate, SessionUpdate
+from ..core.access import (
+    ACCESS_METADATA_FIELDS,
+    can_access_session,
+    owner_payload,
+)
 import logging
 import json
 
 logger = logging.getLogger(__name__)
+
+
+def _is_missing_column_error(exc: Exception) -> bool:
+    err = str(exc)
+    return "PGRST" in err or "does not exist" in err or "42703" in err
+
+
+def _strip_access_columns(payload: dict) -> dict:
+    return {k: v for k, v in payload.items() if k not in ACCESS_METADATA_FIELDS}
+
+
+def _can_access_legacy_session(row: dict, current_user: dict | None, patient: dict | None = None) -> bool:
+    return can_access_session(row, current_user, patient) if current_user else True
 
 
 def _fetch_patient_name_map(supabase, patient_ids: List[str]) -> dict:
@@ -19,99 +37,38 @@ def _fetch_patient_name_map(supabase, patient_ids: List[str]) -> dict:
         return {}
 
 
-async def get_sessions_by_participant(participant_id: str) -> List[dict]:
+async def get_sessions_by_participant(participant_id: str, current_user: dict | None = None) -> List[dict]:
     supabase = get_supabase_admin()
     result = supabase.table("sessions").select("*").eq("patient_id", participant_id).order("session_date", desc=True).execute()
-    return [_normalize(r) for r in (result.data or [])]
+    rows = result.data or []
+    participant = None
+    if current_user:
+        from . import participant_service
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+        if not participant:
+            return []
+        rows = [r for r in rows if _can_access_legacy_session(r, current_user, participant)]
+    return [_normalize(r) for r in rows]
 
 
-async def get_scoped_sessions(user: dict, limit: int = 50) -> List[dict]:
-    """Role-aware session query — mirrors get_scoped_participants logic.
-
-    * support_coordinator / admin  → all sessions in the org
-    * support_worker               → only sessions for assigned participants
-    * allied_health                → org-scoped or all if no org
-    """
-    from . import migration_state as _ms
-
-    role   = user.get("role", "")
-    org_id = user.get("organization_id")
-    uid    = user.get("sub")
-
-    logger.info(
-        "get_scoped_sessions: role=%s org=%s uid=%s",
-        role, org_id or "none", (uid or "")[:8],
-    )
-
-    if role in ("support_coordinator", "admin"):
-        return await get_all_sessions(limit=limit, org_id=org_id)
-
-    if role == "support_worker":
-        if not uid:
-            return await get_all_sessions(limit=limit, org_id=org_id)
-        if _ms.practitioner_allocations_table_missing:
-            logger.info(
-                "practitioner_allocations table missing; falling back to org scope "
-                "for support_worker %s sessions — run supabase_setup.sql.", uid
-            )
-            return await get_all_sessions(limit=limit, org_id=org_id)
-
-        supabase = get_supabase_admin()
-        try:
-            alloc = (
-                supabase.table("practitioner_allocations")
-                .select("patient_id")
-                .eq("user_id", uid)
-                .eq("is_active", True)
-                .execute()
-            )
-            patient_ids = [r["patient_id"] for r in (alloc.data or [])]
-            logger.info("support_worker %s has %d assigned participants", uid[:8], len(patient_ids))
-            if not patient_ids:
-                return []
-            q = (
-                supabase.table("sessions")
-                .select("*")
-                .in_("patient_id", patient_ids)
-                .order("session_date", desc=True)
-                .limit(limit)
-            )
-            if org_id:
-                q = q.eq("organization_id", org_id)
-            sessions = q.execute().data or []
-
-            pid_set = list({s["patient_id"] for s in sessions if s.get("patient_id")})
-            name_map = _fetch_patient_name_map(supabase, pid_set)
-            out = []
-            for s in sessions:
-                row = _normalize(s)
-                patient = name_map.get(s.get("patient_id") or "", {})
-                row["participants"] = {
-                    "full_name": patient.get("full_name", ""),
-                    "ndis_number": patient.get("ndis_number", ""),
-                } if patient else None
-                out.append(row)
-            return out
-        except Exception as exc:
-            logger.warning("get_scoped_sessions worker query failed (%s) — falling back to org scope", exc)
-            return await get_all_sessions(limit=limit, org_id=org_id)
-
-    # allied_health or unknown: org-scoped
-    return await get_all_sessions(limit=limit, org_id=org_id)
-
-
-async def get_all_sessions(limit: int = 50, org_id: Optional[str] = None) -> List[dict]:
+async def get_all_sessions(limit: int = 50, current_user: dict | None = None) -> List[dict]:
     supabase = get_supabase_admin()
-    q = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit)
-    if org_id:
-        q = q.eq("organization_id", org_id)
-    sessions = q.execute().data or []
+    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit).execute()
+    sessions = result.data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
     name_map = _fetch_patient_name_map(supabase, patient_ids)
+    participant_access_map: dict = {}
+    if current_user:
+        from . import participant_service
+        participants = await participant_service.get_all_participants(current_user)
+        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
 
     out = []
     for s in sessions:
+        patient = participant_access_map.get(s.get("patient_id") or "") if current_user else None
+        if current_user and not _can_access_legacy_session(s, current_user, patient):
+            continue
         row = _normalize(s)
         patient = name_map.get(s.get("patient_id") or "", {})
         row["participants"] = {
@@ -122,24 +79,30 @@ async def get_all_sessions(limit: int = 50, org_id: Optional[str] = None) -> Lis
     return out
 
 
-async def get_session_by_id(session_id: str) -> Optional[dict]:
+async def get_session_by_id(session_id: str, current_user: dict | None = None) -> Optional[dict]:
     supabase = get_supabase_admin()
     result = supabase.table("sessions").select("*").eq("id", session_id).single().execute()
     if not result.data:
         return None
     row = _normalize(result.data)
     pid = result.data.get("patient_id")
+    participant = None
     if pid:
+        if current_user:
+            from . import participant_service
+            participant = await participant_service.get_participant_by_id(pid, current_user)
         name_map = _fetch_patient_name_map(supabase, [pid])
         patient = name_map.get(pid, {})
         row["participants"] = {
             "full_name": patient.get("full_name", ""),
             "ndis_number": patient.get("ndis_number", ""),
         }
+    if current_user and not _can_access_legacy_session(result.data, current_user, participant):
+        return None
     return row
 
 
-async def create_session(data: SessionCreate, org_id: Optional[str] = None) -> dict:
+async def create_session(data: SessionCreate, current_user: dict | None = None) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
     if "session_date" in payload and payload["session_date"]:
@@ -152,11 +115,23 @@ async def create_session(data: SessionCreate, org_id: Optional[str] = None) -> d
     participant_id = payload.pop("participant_id", None)
     if participant_id:
         payload["patient_id"] = participant_id
+        if current_user:
+            from . import participant_service
+            if not await participant_service.get_participant_by_id(participant_id, current_user):
+                raise PermissionError("Participant not found or not accessible")
 
-    if org_id:
-        payload["organization_id"] = org_id
+    if current_user:
+        ownership = owner_payload(current_user)
+        for key in ("created_by", "organization_id", "worker_id", "practitioner_id"):
+            if key in ownership:
+                payload[key] = ownership[key]
 
-    result = supabase.table("sessions").insert(payload).execute()
+    try:
+        result = supabase.table("sessions").insert(payload).execute()
+    except Exception as exc:
+        if not _is_missing_column_error(exc) or not any(col in str(exc) for col in ACCESS_METADATA_FIELDS):
+            raise
+        result = supabase.table("sessions").insert(_strip_access_columns(payload)).execute()
     return _normalize(result.data[0]) if result.data else {}
 
 
@@ -173,8 +148,10 @@ def _prepare_session_payload(data: dict) -> dict:
     return out
 
 
-async def update_session(session_id: str, data: dict) -> Optional[dict]:
+async def update_session(session_id: str, data: dict, current_user: dict | None = None) -> Optional[dict]:
     supabase = get_supabase_admin()
+    if current_user and not await get_session_by_id(session_id, current_user):
+        return None
 
     # Extract clinical data fields.
     # structured_notes dict → also expand into individual DB columns for search/reporting.
@@ -293,19 +270,24 @@ async def update_session(session_id: str, data: dict) -> Optional[dict]:
         raise
 
 
-async def get_recent_sessions(limit: int = 10, org_id: Optional[str] = None) -> List[dict]:
+async def get_recent_sessions(limit: int = 10, current_user: dict | None = None) -> List[dict]:
     supabase = get_supabase_admin()
-    q = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit)
-    if org_id:
-        q = q.eq("organization_id", org_id)
-    result = q.execute()
+    result = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit).execute()
     sessions = result.data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
     name_map = _fetch_patient_name_map(supabase, patient_ids)
+    participant_access_map: dict = {}
+    if current_user:
+        from . import participant_service
+        participants = await participant_service.get_all_participants(current_user)
+        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
 
     out = []
     for s in sessions:
+        patient_access = participant_access_map.get(s.get("patient_id") or "") if current_user else None
+        if current_user and not _can_access_legacy_session(s, current_user, patient_access):
+            continue
         row = _normalize(s)
         patient = name_map.get(s.get("patient_id") or "", {})
         row["participants"] = {
@@ -316,16 +298,24 @@ async def get_recent_sessions(limit: int = 10, org_id: Optional[str] = None) -> 
     return out
 
 
-async def get_compliance_report() -> List[dict]:
+async def get_compliance_report(current_user: dict | None = None) -> List[dict]:
     supabase = get_supabase_admin()
     result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(100).execute()
     sessions = result.data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
     name_map = _fetch_patient_name_map(supabase, patient_ids)
+    participant_access_map: dict = {}
+    if current_user:
+        from . import participant_service
+        participants = await participant_service.get_all_participants(current_user)
+        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
 
     report = []
     for s in sessions:
+        patient_access = participant_access_map.get(s.get("patient_id") or "") if current_user else None
+        if current_user and not _can_access_legacy_session(s, current_user, patient_access):
+            continue
         patient = name_map.get(s.get("patient_id") or "", {})
         participant_name = patient.get("full_name", "Unknown")
         score = s.get("compliance_score", 0) or 0

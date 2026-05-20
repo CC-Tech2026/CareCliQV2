@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Optional
 from datetime import datetime, timezone
-from ..core.security import get_optional_user
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
-from ..services import audit_service, session_service, ai_service, alert_service, funding_service, message_service
+from ..services import session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
 from ..schemas.alert import AlertCreate
+from ..core.security import get_current_user
 import logging
 import json
 
@@ -16,138 +16,66 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions(limit: int = 50, user: Optional[dict] = Depends(get_optional_user)):
-    if not user:
-        # Unauthenticated — return all (backward-compat)
-        return await session_service.get_all_sessions(limit)
-    return await session_service.get_scoped_sessions(user, limit=limit)
+async def list_sessions(limit: int = 50, current_user: dict = Depends(get_current_user)):
+    return await session_service.get_all_sessions(limit, current_user)
 
 
 @router.get("/recent")
-async def recent_sessions(limit: int = 10, user: Optional[dict] = Depends(get_optional_user)):
-    org_id = (user or {}).get("organization_id")
-    return await session_service.get_recent_sessions(limit, org_id=org_id)
+async def recent_sessions(limit: int = 10, current_user: dict = Depends(get_current_user)):
+    return await session_service.get_recent_sessions(limit, current_user)
 
 
 @router.get("/compliance-report")
-async def compliance_report():
-    return await session_service.get_compliance_report()
+async def compliance_report(current_user: dict = Depends(get_current_user)):
+    return await session_service.get_compliance_report(current_user)
 
 
 @router.get("/participant/{participant_id}")
-async def get_participant_sessions(participant_id: str):
-    return await session_service.get_sessions_by_participant(participant_id)
+async def get_participant_sessions(participant_id: str, current_user: dict = Depends(get_current_user)):
+    return await session_service.get_sessions_by_participant(participant_id, current_user)
 
 
 @router.post("", status_code=201)
-async def create_session(body: SessionCreate, user: Optional[dict] = Depends(get_optional_user)):
+async def create_session(body: SessionCreate, current_user: dict = Depends(get_current_user)):
     try:
-        org_id = (user or {}).get("organization_id")
-        session = await session_service.create_session(body, org_id=org_id)
-        await audit_service.log_action(
-            action_type="session.created",
-            entity_type="session",
-            entity_id=session.get("id", ""),
-            user_id=(user or {}).get("sub"),
-            organization_id=org_id,
-            after_state={
-                k: session.get(k)
-                for k in ("id", "session_date", "session_type", "status", "patient_id")
-            },
-        )
+        session = await session_service.create_session(body, current_user)
         return session
+    except PermissionError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating session: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{session_id}/context")
-async def get_session_context(session_id: str):
-    """Return session + participant's active plan goals + risk profile for the live session engine."""
-    session = await session_service.get_session_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    participant_id = session.get("participant_id") or session.get("patient_id")
-    plan_goals: list[dict] = []
-    risk_profile: dict = {}
-
-    if participant_id:
-        # Goals from patient_goals table (plan-linked)
-        try:
-            from ..services import goals_service
-            from ..services.migration_state import patient_goals_table_missing
-            if not patient_goals_table_missing:
-                plan_goals = await goals_service.get_goals_for_participant(participant_id)
-        except Exception as exc:
-            logger.warning("context: goals fetch failed for %s: %s", participant_id, exc)
-
-        # Risk profile + clinical flags from patients record
-        try:
-            participant = await participant_service.get_participant_by_id(participant_id)
-            if participant:
-                risk_profile = {
-                    "risk_level": participant.get("risk_level", "low"),
-                    "triggers": participant.get("risk_triggers", "") or "",
-                    "management_plan": participant.get("risk_management_plan", "") or "",
-                    "allergies": participant.get("allergies", "") or "",
-                    "communication_preferences": participant.get("communication_preferences", "") or "",
-                }
-        except Exception as exc:
-            logger.warning("context: risk fetch failed for %s: %s", participant_id, exc)
-
-    return {
-        "session": session,
-        "plan_goals": plan_goals,
-        "risk_profile": risk_profile,
-    }
-
-
 @router.get("/{session_id}")
-async def get_session(session_id: str):
-    session = await session_service.get_session_by_id(session_id)
+async def get_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
 
 @router.patch("/{session_id}")
-async def update_session(
-    session_id: str,
-    body: SessionUpdate,
-    user: Optional[dict] = Depends(get_optional_user),
-):
+async def update_session(session_id: str, body: SessionUpdate, current_user: dict = Depends(get_current_user)):
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "session_date" in data and data["session_date"]:
         data["session_date"] = str(data["session_date"])
-    updated = await session_service.update_session(session_id, data)
+    updated = await session_service.update_session(session_id, data, current_user)
     if not updated:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    changed_fields = list(data.keys())
-    action = "session.notes_updated" if "notes" in changed_fields else "session.updated"
-    await audit_service.log_action(
-        action_type=action,
-        entity_type="session",
-        entity_id=session_id,
-        user_id=(user or {}).get("sub"),
-        organization_id=(user or {}).get("organization_id"),
-        details={"changed_fields": changed_fields},
-        after_state={k: updated.get(k) for k in ("id", "status", "compliance_score") if updated.get(k) is not None},
-    )
     return updated
 
 
 @router.post("/{session_id}/save-with-ai")
-async def save_session_with_ai(session_id: str):
-    session = await session_service.get_session_by_id(session_id)
+async def save_session_with_ai(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
     participant_id = session.get("participant_id") or session.get("patient_id")
     participant = None
     if participant_id:
-        participant = await participant_service.get_participant_by_id(participant_id)
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
 
     participant_data = {
         "full_name": participant.get("full_name", "") if participant else session.get("participant_name", ""),
@@ -159,7 +87,7 @@ async def save_session_with_ai(session_id: str):
         # 1. Run the rules-based compliance engine
         existing_sessions = []
         if participant_id:
-            existing_sessions = await session_service.get_sessions_by_participant(participant_id)
+            existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
         custom_physical_types = await get_physical_exam_session_types()
         rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
@@ -271,7 +199,7 @@ async def save_session_with_ai(session_id: str):
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
-        updated = await session_service.update_session(session_id, updates)
+        updated = await session_service.update_session(session_id, updates, current_user)
 
         # 2c. Persist RP flags + per-rule results (non-critical)
         try:
@@ -376,9 +304,9 @@ async def save_session_with_ai(session_id: str):
 
 
 @router.get("/{session_id}/compliance")
-async def get_session_compliance(session_id: str):
+async def get_session_compliance(session_id: str, current_user: dict = Depends(get_current_user)):
     """Return stored compliance results for a session — no recalculation."""
-    session = await session_service.get_session_by_id(session_id)
+    session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -425,9 +353,9 @@ async def get_session_compliance(session_id: str):
 
 
 @router.get("/{session_id}/audit")
-async def get_session_audit(session_id: str):
+async def get_session_audit(session_id: str, current_user: dict = Depends(get_current_user)):
     from datetime import datetime, timezone
-    session = await session_service.get_session_by_id(session_id)
+    session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -444,7 +372,7 @@ async def get_session_audit(session_id: str):
     participant = None
     if participant_id:
         try:
-            participant = await participant_service.get_participant_by_id(participant_id)
+            participant = await participant_service.get_participant_by_id(participant_id, current_user)
         except Exception:
             pass
 
@@ -649,7 +577,7 @@ async def get_session_audit(session_id: str):
 
 
 @router.post("/{session_id}/upload-photo")
-async def upload_photo(session_id: str, file: UploadFile = File(...)):
+async def upload_photo(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     from ..services.supabase_client import get_supabase_admin
     supabase = get_supabase_admin()
 
@@ -660,7 +588,9 @@ async def upload_photo(session_id: str, file: UploadFile = File(...)):
         supabase.storage.from_("uploaded-evidence").upload(path, contents, {"content-type": file.content_type})
         url_result = supabase.storage.from_("uploaded-evidence").get_public_url(path)
 
-        session = await session_service.get_session_by_id(session_id)
+        session = await session_service.get_session_by_id(session_id, current_user)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
         existing_photos = session.get("photo_urls") or []
         if isinstance(existing_photos, str):
             try:
@@ -668,7 +598,7 @@ async def upload_photo(session_id: str, file: UploadFile = File(...)):
             except Exception:
                 existing_photos = []
         existing_photos.append(url_result)
-        await session_service.update_session(session_id, {"photo_urls": existing_photos})
+        await session_service.update_session(session_id, {"photo_urls": existing_photos}, current_user)
 
         return {"url": url_result, "path": path}
     except Exception as e:
@@ -677,11 +607,13 @@ async def upload_photo(session_id: str, file: UploadFile = File(...)):
 
 
 @router.post("/{session_id}/transcribe-audio")
-async def transcribe_audio(session_id: str, file: UploadFile = File(...)):
+async def transcribe_audio(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
+        if not await session_service.get_session_by_id(session_id, current_user):
+            raise HTTPException(status_code=404, detail="Session not found")
         contents = await file.read()
         text = await ai_service.transcribe_audio(contents, file.filename)
-        await session_service.update_session(session_id, {"transcription": text, "notes": text})
+        await session_service.update_session(session_id, {"transcription": text, "notes": text}, current_user)
         return {"transcription": text}
     except Exception as e:
         logger.error(f"Transcription error: {str(e)}")
@@ -693,15 +625,19 @@ async def transcribe_audio(session_id: str, file: UploadFile = File(...)):
 # ---------------------------------------------------------------------------
 
 @router.get("/{session_id}/messages")
-async def get_session_messages(session_id: str):
+async def get_session_messages(session_id: str, current_user: dict = Depends(get_current_user)):
     """Return all chat messages for a session, ordered by created_at ascending."""
+    if not await session_service.get_session_by_id(session_id, current_user):
+        raise HTTPException(status_code=404, detail="Session not found")
     return await message_service.get_session_messages(session_id)
 
 
 @router.post("/{session_id}/messages", status_code=201)
-async def create_session_message(session_id: str, body: MessageCreate):
+async def create_session_message(session_id: str, body: MessageCreate, current_user: dict = Depends(get_current_user)):
     """Persist a single chat message for a session."""
     try:
+        if not await session_service.get_session_by_id(session_id, current_user):
+            raise HTTPException(status_code=404, detail="Session not found")
         result = await message_service.create_session_message(
             session_id, body.model_dump(exclude_none=True)
         )

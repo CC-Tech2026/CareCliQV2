@@ -1,18 +1,67 @@
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useMemo, useState } from "react";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Copy, CheckCircle2, UserPlus, Link2 } from "lucide-react";
+
+import {
+  Loader2,
+  Copy,
+  CheckCircle2,
+  UserPlus,
+  Link2,
+  ShieldCheck,
+} from "lucide-react";
+
 import { useAuth } from "@/contexts/AuthContext";
 
+const API_BASE =
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 const ROLE_OPTIONS = [
-  { value: "support_worker",      label: "Support Worker",          desc: "Access to allocated participants + their own sessions/incidents" },
-  { value: "allied_health",       label: "Allied Health Professional", desc: "Own caseload, clinical reporting, body map + therapy documentation" },
-  { value: "support_coordinator", label: "Support Coordinator",     desc: "Full org visibility, compliance, billing, reports" },
-];
+  {
+    value: "support_worker",
+    label: "Support Worker",
+    desc: "Access to allocated participants and own sessions/incidents only.",
+    access:
+      "Own clients · Own notes · Own incidents · Own credentials",
+  },
+
+  {
+    value: "allied_health",
+    label: "Allied Health Professional",
+    desc: "Clinical documentation, body map coding, and therapy reporting.",
+    access:
+      "Clinical reports · Body maps · Therapy documentation",
+  },
+
+  {
+    value: "support_coordinator",
+    label: "Support Coordinator",
+    desc: "Full organisation oversight, compliance, billing, and reports.",
+    access:
+      "Organisation oversight · Billing · Compliance · Team management",
+  },
+] as const;
 
 interface InviteModalProps {
   open: boolean;
@@ -21,61 +70,134 @@ interface InviteModalProps {
 }
 
 interface InviteResult {
+  id?: string;
   email: string;
   role: string;
   invite_url: string;
   token: string;
+  expires_at?: string;
 }
 
-export function InviteModal({ open, onClose, onInviteSent }: InviteModalProps) {
-  const { token } = useAuth();
+export function InviteModal({
+  open,
+  onClose,
+  onInviteSent,
+}: InviteModalProps) {
+  const { token, user } = useAuth();
+
   const { toast } = useToast();
 
-  const [email, setEmail]   = useState("");
-  const [role, setRole]     = useState("support_worker");
-  const [busy, setBusy]     = useState(false);
-  const [result, setResult] = useState<InviteResult | null>(null);
+  const [email, setEmail] = useState("");
+
+  const [role, setRole] =
+    useState<string>("support_worker");
+
+  const [busy, setBusy] = useState(false);
+
+  const [result, setResult] =
+    useState<InviteResult | null>(null);
+
   const [copied, setCopied] = useState(false);
 
-  function reset() {
+  const selectedRole = useMemo(() => {
+    return ROLE_OPTIONS.find(
+      (r) => r.value === role
+    );
+  }, [role]);
+
+  function resetState() {
     setEmail("");
     setRole("support_worker");
     setResult(null);
     setCopied(false);
+    setBusy(false);
   }
 
   function handleClose() {
-    reset();
+    resetState();
     onClose();
   }
 
+  function validateEmail(value: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      value
+    );
+  }
+
   async function handleSend() {
-    if (!email.trim() || !email.includes("@")) {
-      toast({ title: "Valid email required", variant: "destructive" });
+    const cleanedEmail = email.trim().toLowerCase();
+
+    if (!validateEmail(cleanedEmail)) {
+      toast({
+        title: "Invalid email address",
+        description:
+          "Please enter a valid staff email.",
+        variant: "destructive",
+      });
+
       return;
     }
 
     setBusy(true);
+
     try {
-      const res = await fetch("/api/invitations/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ email: email.trim(), role }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to create invitation");
+      /**
+       * Backend API
+       *
+       * POST /api/invitations/create
+       */
+      const response = await fetch(
+        `${API_BASE}/api/invitations/create`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+
+            ...(token
+              ? {
+                  Authorization: `Bearer ${token}`,
+                }
+              : {}),
+          },
+
+          body: JSON.stringify({
+            email: cleanedEmail,
+            role,
+          }),
+        }
+      );
+
+      const payload = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.detail ||
+            payload?.message ||
+            "Unable to create invitation."
+        );
       }
-      const data = await res.json();
-      setResult(data);
+
+      setResult(payload);
+
+      toast({
+        title: "Invitation created",
+        description:
+          "Secure invitation link generated successfully.",
+      });
+
       onInviteSent?.();
-    } catch (e) {
+    } catch (error) {
       toast({
         title: "Invitation failed",
-        description: e instanceof Error ? e.message : "Could not create invitation",
+
+        description:
+          error instanceof Error
+            ? error.message
+            : "Unexpected server error",
+
         variant: "destructive",
       });
     } finally {
@@ -83,104 +205,218 @@ export function InviteModal({ open, onClose, onInviteSent }: InviteModalProps) {
     }
   }
 
-  function copyLink() {
-    if (!result) return;
-    const fullUrl = `${window.location.origin}${result.invite_url}`;
-    navigator.clipboard.writeText(fullUrl).then(() => {
+  async function handleCopy() {
+    if (!result?.invite_url) return;
+
+    try {
+      const fullUrl = `${window.location.origin}${result.invite_url}`;
+
+      await navigator.clipboard.writeText(
+        fullUrl
+      );
+
       setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
+
+      toast({
+        title: "Invite link copied",
+      });
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2500);
+    } catch {
+      toast({
+        title: "Copy failed",
+
+        description:
+          "Unable to copy invite link.",
+
+        variant: "destructive",
+      });
+    }
   }
 
-  const selectedRoleOption = ROLE_OPTIONS.find((r) => r.value === role);
-  const PLUM = "#5533CC";
-
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+    <Dialog
+      open={open}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+    >
       <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg" style={{ color: "#1E1640" }}>
-            <UserPlus size={18} style={{ color: PLUM }} />
-            {result ? "Invitation Created" : "Invite Staff Member"}
+          <DialogTitle className="flex items-center gap-2 text-lg text-[#1E1640]">
+            <UserPlus
+              size={18}
+              className="text-[#5533CC]"
+            />
+
+            {result
+              ? "Invitation Created"
+              : "Invite Staff Member"}
           </DialogTitle>
+
+          <DialogDescription>
+            Securely invite team members to
+            CareScribe with role-based access
+            permissions and organisation-level
+            controls.
+          </DialogDescription>
         </DialogHeader>
 
         {!result ? (
-          <div className="space-y-4 py-2">
+          <div className="space-y-5 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="invite-email" className="text-xs font-medium" style={{ color: "#4A3D5A" }}>
-                Email Address
+              <Label
+                htmlFor="invite-email"
+                className="text-xs font-medium"
+              >
+                Staff Email Address
               </Label>
+
               <Input
                 id="invite-email"
                 type="email"
+                autoComplete="email"
                 placeholder="worker@example.com.au"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                disabled={busy}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
                 className="rounded-xl"
-                onKeyDown={(e) => e.key === "Enter" && !busy && handleSend()}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !busy
+                  ) {
+                    handleSend();
+                  }
+                }}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium" style={{ color: "#4A3D5A" }}>Role</Label>
-              <Select value={role} onValueChange={setRole}>
+              <Label className="text-xs font-medium">
+                Staff Role
+              </Label>
+
+              <Select
+                value={role}
+                onValueChange={setRole}
+                disabled={busy}
+              >
                 <SelectTrigger className="rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
+
                 <SelectContent>
-                  {ROLE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {ROLE_OPTIONS.map((option) => (
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {selectedRoleOption && (
-                <p className="text-[11px] leading-relaxed" style={{ color: "#7A6A9E" }}>
-                  {selectedRoleOption.desc}
-                </p>
+
+              {selectedRole && (
+                <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
+                  <p className="text-xs font-medium text-[#1E1640]">
+                    {selectedRole.label}
+                  </p>
+
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#6C5B8A]">
+                    {selectedRole.desc}
+                  </p>
+
+                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#5533CC]">
+                    <ShieldCheck
+                      size={13}
+                      className="mt-0.5 shrink-0"
+                    />
+
+                    <span>
+                      {selectedRole.access}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
 
-            <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: "rgba(85,51,204,0.05)", border: "1px solid rgba(209,196,244,0.6)", color: "#4A3D5A" }}>
-              The invitee will receive a link to set their password and activate their account. Links expire after <strong>7 days</strong>. Since email delivery is not yet configured, copy and share the link manually below after creating.
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
+              Invitation links expire after{" "}
+              <strong>7 days</strong>.
+              Access permissions are enforced
+              automatically based on the assigned
+              role and organisation policies.
             </div>
           </div>
         ) : (
           <div className="space-y-4 py-2">
-            <div className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.25)" }}>
-              <CheckCircle2 size={20} style={{ color: "#22c55e" }} className="shrink-0" />
+            <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+              <CheckCircle2
+                size={20}
+                className="shrink-0 text-green-600"
+              />
+
               <div>
-                <p className="text-sm font-medium" style={{ color: "#1E1640" }}>Invitation created</p>
-                <p className="text-xs mt-0.5" style={{ color: "#7A6A9E" }}>
-                  {result.email} — {ROLE_OPTIONS.find(r => r.value === result.role)?.label ?? result.role}
+                <p className="text-sm font-semibold text-gray-900">
+                  Invitation created
+                </p>
+
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {result.email} —{" "}
+                  {ROLE_OPTIONS.find(
+                    (r) =>
+                      r.value === result.role
+                  )?.label ?? result.role}
                 </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium flex items-center gap-1.5" style={{ color: "#4A3D5A" }}>
-                <Link2 size={12} /> Invite Link <span className="font-normal">(share this with the invitee)</span>
+              <Label className="flex items-center gap-1.5 text-xs font-medium">
+                <Link2 size={12} />
+                Secure Invite Link
               </Label>
+
               <div className="flex gap-2">
                 <Input
                   readOnly
                   value={`${window.location.origin}${result.invite_url}`}
-                  className="rounded-xl text-xs font-mono"
-                  style={{ color: "#4A3D5A", background: "rgba(245,243,252,1)" }}
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                  className="rounded-xl font-mono text-[11px]"
+                  onClick={(e) =>
+                    (
+                      e.target as HTMLInputElement
+                    ).select()
+                  }
                 />
+
                 <Button
+                  type="button"
                   size="sm"
                   variant="outline"
-                  className="shrink-0 rounded-xl"
-                  onClick={copyLink}
+                  className="rounded-xl"
+                  onClick={handleCopy}
                 >
-                  {copied ? <CheckCircle2 size={14} style={{ color: "#22c55e" }} /> : <Copy size={14} />}
+                  {copied ? (
+                    <CheckCircle2
+                      size={14}
+                      className="text-green-600"
+                    />
+                  ) : (
+                    <Copy size={14} />
+                  )}
                 </Button>
               </div>
-              <p className="text-[11px]" style={{ color: "#7A6A9E" }}>Link expires in 7 days.</p>
+
+              <p className="text-[11px] text-muted-foreground">
+                Share this link securely with the
+                invited staff member.
+              </p>
             </div>
           </div>
         )}
@@ -188,16 +424,52 @@ export function InviteModal({ open, onClose, onInviteSent }: InviteModalProps) {
         <DialogFooter className="gap-2">
           {!result ? (
             <>
-              <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleSend} disabled={busy || !email.trim()} className="rounded-xl gap-1.5">
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                Create Invitation
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                className="rounded-xl"
+                disabled={busy}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                onClick={handleSend}
+                disabled={
+                  busy || !email.trim()
+                }
+                className="rounded-xl gap-1.5"
+              >
+                {busy ? (
+                  <Loader2
+                    size={14}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <UserPlus size={14} />
+                )}
+
+                {busy
+                  ? "Creating..."
+                  : "Create Invitation"}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={reset} className="rounded-xl">Send Another</Button>
-              <Button onClick={handleClose} className="rounded-xl">Done</Button>
+              <Button
+                variant="outline"
+                onClick={resetState}
+                className="rounded-xl"
+              >
+                Send Another
+              </Button>
+
+              <Button
+                onClick={handleClose}
+                className="rounded-xl"
+              >
+                Done
+              </Button>
             </>
           )}
         </DialogFooter>
