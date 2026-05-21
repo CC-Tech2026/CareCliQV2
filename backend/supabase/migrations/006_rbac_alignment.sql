@@ -44,6 +44,7 @@ CREATE INDEX IF NOT EXISTS idx_organization_members_organization_id
 
 ALTER TABLE public.invitations
   ADD COLUMN IF NOT EXISTS token_hash text,
+  ADD COLUMN IF NOT EXISTS accepted_by uuid,
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending',
   ADD COLUMN IF NOT EXISTS accepted_at timestamptz,
   ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
@@ -54,6 +55,20 @@ CREATE INDEX IF NOT EXISTS idx_invitations_organization_id ON public.invitations
 CREATE INDEX IF NOT EXISTS idx_invitations_status ON public.invitations(status);
 CREATE INDEX IF NOT EXISTS idx_invitations_expires_at ON public.invitations(expires_at);
 CREATE INDEX IF NOT EXISTS idx_invitations_token_hash ON public.invitations(token_hash);
+
+CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id
+  ON public.password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at
+  ON public.password_reset_tokens(expires_at);
 
 ALTER TABLE public.practitioner_allocations
   ADD COLUMN IF NOT EXISTS organization_id uuid,

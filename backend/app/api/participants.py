@@ -154,7 +154,7 @@ async def create_participant(
 
 @router.get("/dashboard-stats")
 async def dashboard_stats(user: dict = Depends(require_coordinator)):
-    return await participant_service.get_dashboard_stats()
+    return await participant_service.get_dashboard_stats(org_id=user.get("organization_id"))
 
 
 @router.get("/{participant_id}/export")

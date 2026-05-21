@@ -16,7 +16,7 @@ AS $$
     SELECT 1
     FROM organization_members
     WHERE user_id = auth.uid()
-      AND role IN ('admin', 'manager')
+      AND role IN ('admin', 'support_coordinator')
       AND is_active = true
   );
 $$;

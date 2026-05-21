@@ -296,9 +296,12 @@ async def get_recent_sessions(limit: int = 10, org_id: Optional[str] = None) -> 
     return out
 
 
-async def get_compliance_report() -> List[dict]:
+async def get_compliance_report(org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(100).execute()
+    q = supabase.table("sessions").select("*").order("session_date", desc=True).limit(100)
+    if org_id:
+        q = q.eq("organization_id", org_id)
+    result = q.execute()
     sessions = result.data or []
 
     patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})

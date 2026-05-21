@@ -29,9 +29,9 @@ app.use(
 app.use(cors());
 
 const PYTHON_BACKEND = process.env.PYTHON_BACKEND_URL || "http://python-backend:8000";
+const AUTH_BACKEND = (process.env.AUTH_BACKEND || (process.env.SUPABASE_URL ? "python" : "local")).toLowerCase();
 
 const PYTHON_PREFIXES = [
-  "/api/participants",
   "/api/sessions",
   "/api/alerts",
   "/api/compliance",
@@ -44,6 +44,10 @@ const PYTHON_PREFIXES = [
   "/api/invitations",
   "/api/assignments",
 ];
+
+if (AUTH_BACKEND === "python") {
+  PYTHON_PREFIXES.unshift("/api/auth");
+}
 
 // Proxy must be registered BEFORE body-parsing middleware so that
 // express.json() does not consume the request body before it can be streamed.

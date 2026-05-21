@@ -32,7 +32,7 @@ async def participant_summary(participant_id: str, user: dict = Depends(require_
 
 @router.get("/compliance-overview")
 async def compliance_overview(user: dict = Depends(require_coordinator)):
-    report = await session_service.get_compliance_report()
+    report = await session_service.get_compliance_report(org_id=user.get("organization_id"))
     if not report:
         return {
             "average_score": 0,

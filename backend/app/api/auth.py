@@ -1,11 +1,16 @@
+import hashlib
+import os
+import secrets
 import time
 import logging
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel
 from ..services.supabase_client import get_supabase, get_supabase_admin
 from ..core.security import create_access_token, get_current_user
+from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,6 +34,10 @@ def _check_rate_limit(ip: str) -> None:
             detail="Too many login attempts — please wait 60 seconds",
         )
     _login_attempts[ip].append(now)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(f"{settings.secret_key}:{token}".encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +83,15 @@ class OnboardingCompleteRequest(BaseModel):
     contact_number: Optional[str] = None
 
 
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    password: str
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -87,7 +105,7 @@ async def _get_user_profile(user_id: str) -> dict:
     # Pass 1: select with all new columns (works once migration is applied)
     try:
         result = supabase.table("users").select(
-            "role, full_name, account_type, onboarding_complete, organization_id"
+            "role, full_name, account_type, onboarding_complete, organization_id, status"
         ).eq("id", user_id).maybe_single().execute()
         if result is not None and result.data:
             return result.data
@@ -509,6 +527,81 @@ async def complete_onboarding(
     }
 
 
+@router.post("/password-reset/request")
+async def request_password_reset(body: PasswordResetRequest):
+    """Create a password reset token for a Supabase Auth-backed account.
+
+    The response is intentionally generic so callers cannot enumerate users.
+    In development, EXPOSE_RESET_LINK=true returns the link for local testing.
+    Production deployments should wire email delivery around the returned token
+    generation or switch this endpoint to Supabase's hosted email template flow.
+    """
+    supabase = get_supabase_admin()
+    email = body.email.strip().lower()
+    reset_url = None
+
+    try:
+        user_result = (
+            supabase.table("users")
+            .select("id, email")
+            .eq("email", email)
+            .maybe_single()
+            .execute()
+        )
+        if user_result.data:
+            token = secrets.token_urlsafe(32)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+            supabase.table("password_reset_tokens").insert({
+                "user_id": user_result.data["id"],
+                "token_hash": _hash_reset_token(token),
+                "expires_at": expires_at.isoformat(),
+            }).execute()
+            base_url = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+            reset_url = f"{base_url}/reset-password?token={token}" if base_url else f"/reset-password?token={token}"
+    except Exception as exc:
+        logger.warning("Password reset request failed internally for %s: %s", email, exc)
+
+    return {
+        "message": "If an account exists for that email, a password reset link has been generated.",
+        **({"reset_url": reset_url} if os.environ.get("EXPOSE_RESET_LINK", "false").lower() == "true" and reset_url else {}),
+    }
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(body: PasswordResetConfirmRequest):
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    supabase = get_supabase_admin()
+    token_hash = _hash_reset_token(body.token)
+    try:
+        reset_result = (
+            supabase.table("password_reset_tokens")
+            .select("id, user_id, expires_at, used_at")
+            .eq("token_hash", token_hash)
+            .maybe_single()
+            .execute()
+        )
+        reset = reset_result.data
+        if not reset or reset.get("used_at"):
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+        expires_at = datetime.fromisoformat(str(reset["expires_at"]).replace("Z", "+00:00"))
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+        supabase.auth.admin.update_user_by_id(reset["user_id"], {"password": body.password})
+        supabase.table("password_reset_tokens").update({
+            "used_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", reset["id"]).execute()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Password reset confirmation failed: %s", exc)
+        raise HTTPException(status_code=400, detail="Could not reset password")
+
+    return {"message": "Password updated successfully"}
+
+
 @router.post("/logout")
 async def logout():
     return {"message": "Logged out successfully"}
@@ -527,6 +620,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "email": current_user.get("email"),
             "role": profile.get("role") or current_user.get("role", "support_worker"),
             "account_type": current_user.get("account_type") or profile.get("account_type") or "independent_worker",
+            "organization_id": profile.get("organization_id") or current_user.get("organization_id"),
+            "status": profile.get("status") or "active",
             "onboarding_complete": bool(onboarding_complete),
         }
     }

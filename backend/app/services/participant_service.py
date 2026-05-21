@@ -273,30 +273,40 @@ async def delete_participant(participant_id: str) -> bool:
     return True
 
 
-async def get_dashboard_stats() -> dict:
+async def get_dashboard_stats(org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     week_ago = (datetime.utcnow() - timedelta(days=7)).date().isoformat()
 
     try:
-        participants = supabase.table(TABLE).select("id, plan_status").execute()
+        q = supabase.table(TABLE).select("id, plan_status")
+        if org_id:
+            q = q.eq("organization_id", org_id)
+        participants = q.execute()
         participant_data = participants.data or []
     except Exception:
         try:
-            participants = supabase.table(TABLE).select("id").execute()
+            q = supabase.table(TABLE).select("id")
+            if org_id:
+                q = q.eq("organization_id", org_id)
+            participants = q.execute()
             participant_data = participants.data or []
         except Exception:
             participant_data = []
 
     try:
-        sessions_week = (
-            supabase.table("sessions").select("id").gte("session_date", week_ago).execute()
-        )
+        q = supabase.table("sessions").select("id").gte("session_date", week_ago)
+        if org_id:
+            q = q.eq("organization_id", org_id)
+        sessions_week = q.execute()
         sessions_this_week = len(sessions_week.data or [])
     except Exception:
         sessions_this_week = 0
 
     try:
-        sessions_all = supabase.table("sessions").select("id, status").execute()
+        q = supabase.table("sessions").select("id, status")
+        if org_id:
+            q = q.eq("organization_id", org_id)
+        sessions_all = q.execute()
         notes_missing = sum(
             1 for s in (sessions_all.data or []) if s.get("status") == "draft"
         )
@@ -304,7 +314,10 @@ async def get_dashboard_stats() -> dict:
         notes_missing = 0
 
     try:
-        alerts = supabase.table("alerts").select("id").eq("is_read", False).execute()
+        q = supabase.table("alerts").select("id").eq("is_read", False)
+        if org_id:
+            q = q.eq("organization_id", org_id)
+        alerts = q.execute()
         compliance_alerts = len(alerts.data or [])
     except Exception:
         compliance_alerts = 0

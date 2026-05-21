@@ -78,7 +78,9 @@ export default function ParticipantNew() {
     if (!payload.total_budget)               delete payload.total_budget;
 
     try {
-      await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
+      await createParticipant.mutateAsync({
+        data: payload as Parameters<typeof createParticipant.mutateAsync>[0]["data"],
+      });
       toast({ title: "Participant added successfully" });
       navigate("/patients");
     } catch (err: unknown) {

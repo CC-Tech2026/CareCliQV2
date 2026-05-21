@@ -27,7 +27,7 @@ async def recent_sessions(limit: int = 10, user: dict = Depends(require_auth)):
 
 @router.get("/compliance-report")
 async def compliance_report(user: dict = Depends(require_coordinator)):
-    return await session_service.get_compliance_report()
+    return await session_service.get_compliance_report(org_id=user.get("organization_id"))
 
 
 @router.get("/participant/{participant_id}")
