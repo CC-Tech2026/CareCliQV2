@@ -13,7 +13,6 @@ const ROLE_LABELS: Record<string, string> = {
   allied_health:      "Allied Health Professional",
   support_coordinator:"Support Coordinator",
   admin:              "Administrator",
-  auditor:            "Auditor",
 };
 
 interface InviteInfo {

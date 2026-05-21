@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: cascribe
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: artifacts/api-server/Dockerfile
+    environment:
+      PORT: 8000
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgres@db:5432/cascribe
+      PYTHON_BACKEND_URL: http://python-backend:8000
+      SESSION_SECRET: ${SESSION_SECRET:-local-dev-session-secret-change-me}
+      ENABLE_DEMO_USERS: ${ENABLE_DEMO_USERS:-true}
+      EXPOSE_RESET_LINK: ${EXPOSE_RESET_LINK:-true}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:4173}
+      LOG_LEVEL: info
+    depends_on:
+      db:
+        condition: service_healthy
+      python-backend:
+        condition: service_started
+    ports:
+      - "${API_HOST_PORT:-8001}:8000"
+
+  python-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      SESSION_SECRET: ${SESSION_SECRET:-local-dev-session-secret-change-me}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PII_ENCRYPTION_ENABLED: ${PII_ENCRYPTION_ENABLED:-false}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-}
+    ports:
+      - "${PYTHON_BACKEND_HOST_PORT:-8002}:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: artifacts/frontend/Dockerfile
+      args:
+        BASE_PATH: /
+    depends_on:
+      - api
+    ports:
+      - "4173:80"
+    environment:
+      NODE_ENV: production
+volumes:
+  db-data:

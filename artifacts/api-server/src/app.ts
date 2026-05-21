@@ -28,19 +28,21 @@ app.use(
 );
 app.use(cors());
 
-const PYTHON_BACKEND = "http://localhost:8000";
+const PYTHON_BACKEND = process.env.PYTHON_BACKEND_URL || "http://python-backend:8000";
 
 const PYTHON_PREFIXES = [
-  "/api/auth",
   "/api/participants",
   "/api/sessions",
   "/api/alerts",
   "/api/compliance",
   "/api/ai",
   "/api/reports",
+  "/api/plans",
   "/api/budget",
   "/api/admin",
   "/api/incidents",
+  "/api/invitations",
+  "/api/assignments",
 ];
 
 // Proxy must be registered BEFORE body-parsing middleware so that

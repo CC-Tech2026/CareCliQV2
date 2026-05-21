@@ -335,7 +335,7 @@ async def login(body: LoginRequest, request: Request):
                 role = _member_res.data[0]["role"]
             else:
                 # First login after org was created — seed the membership row.
-                _base_role = role if role in ("admin", "manager", "support_worker", "support_coordinator", "auditor") else "support_worker"
+                _base_role = role if role in ("admin", "support_worker", "support_coordinator", "allied_health") else "support_worker"
                 _admin.table("organization_members").insert({
                     "user_id": str(auth_user.id),
                     "organization_id": _org_id,

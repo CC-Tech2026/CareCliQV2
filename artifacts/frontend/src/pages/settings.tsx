@@ -144,7 +144,6 @@ const ROLE_LABELS: Record<string, string> = {
   support_coordinator: "Coordinator",
   allied_health:       "Allied Health",
   support_worker:      "Support Worker",
-  auditor:             "Auditor",
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
@@ -152,7 +151,6 @@ const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
   support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: "#5533CC" },
   allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
-  auditor:             { bg: "rgba(245,158,11,0.1)",  color: "#92400e" },
 };
 
 interface OrgMember {

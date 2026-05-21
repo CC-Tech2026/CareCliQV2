@@ -26,60 +26,41 @@ async def get_sessions_by_participant(participant_id: str) -> List[dict]:
 
 
 async def get_scoped_sessions(user: dict, limit: int = 50) -> List[dict]:
-    """Role-aware session query — mirrors get_scoped_participants logic.
-
-    * support_coordinator / admin  → all sessions in the org
-    * support_worker               → only sessions for assigned participants
-    * allied_health                → org-scoped or all if no org
-    """
+    """Role-aware, fail-closed session query."""
     from . import migration_state as _ms
 
-    role   = user.get("role", "")
+    role = user.get("role", "")
     org_id = user.get("organization_id")
-    uid    = user.get("sub")
-
-    logger.info(
-        "get_scoped_sessions: role=%s org=%s uid=%s",
-        role, org_id or "none", (uid or "")[:8],
-    )
+    uid = user.get("sub")
 
     if role in ("support_coordinator", "admin"):
         return await get_all_sessions(limit=limit, org_id=org_id)
 
-    if role == "support_worker":
-        if not uid:
-            return await get_all_sessions(limit=limit, org_id=org_id)
-        if _ms.practitioner_allocations_table_missing:
-            logger.info(
-                "practitioner_allocations table missing; falling back to org scope "
-                "for support_worker %s sessions — run supabase_setup.sql.", uid
-            )
-            return await get_all_sessions(limit=limit, org_id=org_id)
-
+    if role in ("support_worker", "allied_health"):
+        if not uid or not org_id or _ms.practitioner_allocations_table_missing:
+            return []
         supabase = get_supabase_admin()
         try:
             alloc = (
                 supabase.table("practitioner_allocations")
                 .select("patient_id")
                 .eq("user_id", uid)
+                .eq("organization_id", org_id)
                 .eq("is_active", True)
                 .execute()
             )
             patient_ids = [r["patient_id"] for r in (alloc.data or [])]
-            logger.info("support_worker %s has %d assigned participants", uid[:8], len(patient_ids))
             if not patient_ids:
                 return []
             q = (
                 supabase.table("sessions")
                 .select("*")
                 .in_("patient_id", patient_ids)
+                .eq("organization_id", org_id)
                 .order("session_date", desc=True)
                 .limit(limit)
             )
-            if org_id:
-                q = q.eq("organization_id", org_id)
             sessions = q.execute().data or []
-
             pid_set = list({s["patient_id"] for s in sessions if s.get("patient_id")})
             name_map = _fetch_patient_name_map(supabase, pid_set)
             out = []
@@ -93,11 +74,10 @@ async def get_scoped_sessions(user: dict, limit: int = 50) -> List[dict]:
                 out.append(row)
             return out
         except Exception as exc:
-            logger.warning("get_scoped_sessions worker query failed (%s) — falling back to org scope", exc)
-            return await get_all_sessions(limit=limit, org_id=org_id)
+            logger.warning("get_scoped_sessions assignment query failed (%s); denying session list", exc)
+            return []
 
-    # allied_health or unknown: org-scoped
-    return await get_all_sessions(limit=limit, org_id=org_id)
+    return []
 
 
 async def get_all_sessions(limit: int = 50, org_id: Optional[str] = None) -> List[dict]:

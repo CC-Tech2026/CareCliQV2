@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ..core.rbac import require_auth, require_coordinator, require_participant_access
 from ..services import ai_service, participant_service, session_service
 import logging
 import json
@@ -19,17 +20,18 @@ def _derive_status(score) -> str:
 
 
 @router.get("/participant/{participant_id}/summary")
-async def participant_summary(participant_id: str):
+async def participant_summary(participant_id: str, user: dict = Depends(require_auth)):
     participant = await participant_service.get_participant_by_id(participant_id)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
+    await require_participant_access(user, participant)
     sessions = await session_service.get_sessions_by_participant(participant_id)
     summary = await ai_service.generate_patient_summary(participant, sessions)
     return {"participant_id": participant_id, "summary": summary}
 
 
 @router.get("/compliance-overview")
-async def compliance_overview():
+async def compliance_overview(user: dict = Depends(require_coordinator)):
     report = await session_service.get_compliance_report()
     if not report:
         return {

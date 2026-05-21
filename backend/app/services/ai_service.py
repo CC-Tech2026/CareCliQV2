@@ -13,7 +13,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=settings.openai_api_key)
+_client: OpenAI | None = None
+
+
+def get_openai_client() -> OpenAI:
+    """Create the OpenAI client lazily so the API can boot without AI secrets."""
+    global _client
+    if _client is not None:
+        return _client
+    if not settings.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+    _client = OpenAI(api_key=settings.openai_api_key)
+    return _client
 
 # ---------------------------------------------------------------------------
 # CareScribe Master System Prompt (from spec)
@@ -194,7 +205,7 @@ Provide one rewrite per flagged phrase, matching the index number."""
 
     # Fallback: GPT-4o-mini with CareScribe system prompt
     try:
-        response = client.chat.completions.create(
+        response = get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -362,7 +373,7 @@ Return ONLY this JSON (no markdown, no explanation):
 
 If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty."""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -435,7 +446,7 @@ Write a concise clinical summary (3-4 sentences) covering:
 
 Use person-first language, be professional and factual, and align with NDIS Active Support principles."""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -536,7 +547,7 @@ Respond with a JSON object:
   "flags": ["flag if any"]
 }}"""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -614,7 +625,7 @@ Respond with a JSON object:
 
 Write in plain English. Be specific about what information is actually missing. Avoid jargon."""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -662,7 +673,7 @@ Respond with a JSON object:
   "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
 }}"""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -704,7 +715,7 @@ Respond with a JSON object:
   "detected_language": "ISO 639-1 language code of the input (e.g. en, fr, zh)"
 }}"""
 
-    response = client.chat.completions.create(
+    response = get_openai_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -790,7 +801,7 @@ Respond with exactly:
 }}"""
 
     try:
-        response = client.chat.completions.create(
+        response = get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -836,7 +847,7 @@ async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
 
     try:
         with open(temp_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
+            transcript = get_openai_client().audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
             )

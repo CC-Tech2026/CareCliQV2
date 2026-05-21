@@ -7,6 +7,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Signup from "@/pages/signup";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
 import Dashboard from "@/pages/dashboard";
@@ -23,6 +25,7 @@ import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
 import Settings from "@/pages/settings";
+import { ALL_ROLES, COORDINATOR_AND_ALLIED, COORDINATOR_ROLES } from "@/lib/rbac";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,21 +41,14 @@ const queryClient = new QueryClient({
   },
 });
 
-// All authenticated roles
-const ALL_ROLES = ["admin", "support_worker", "allied_health", "support_coordinator"] as const;
-
-// Admin + coordinator only — compliance dashboards, billing, reports, participant management
-const COORDINATOR_ROLES = ["admin", "support_coordinator"] as const;
-
-// Coordinator + allied health — reports contain clinical documentation allied health needs
-const COORDINATOR_AND_ALLIED = ["admin", "support_coordinator", "allied_health"] as const;
-
 function Router() {
   return (
     <Switch>
       {/* ── Public routes ─────────────────────────────────────────────────── */}
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 

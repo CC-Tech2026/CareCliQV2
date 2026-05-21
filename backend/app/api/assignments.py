@@ -12,9 +12,9 @@ Endpoints:
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
 from pydantic import BaseModel
-from ..core.security import get_current_user, get_optional_user
+from ..core.security import get_current_user
+from ..core.rbac import COORDINATOR_ROLES
 from ..services.supabase_client import get_supabase_admin
 from ..services import migration_state as _ms
 import logging
@@ -24,10 +24,8 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 TABLE = "practitioner_allocations"
 
-_COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
-
 _VALID_ROLE_TYPES = frozenset({
-    "support_worker", "allied_health", "primary_ot", "supervisor"
+    "support_worker", "allied_health"
 })
 
 
@@ -38,7 +36,7 @@ class AssignmentCreate(BaseModel):
 
 
 def _require_coordinator(user: dict) -> None:
-    if user.get("role") not in _COORDINATOR_ROLES:
+    if user.get("role") not in COORDINATOR_ROLES:
         raise HTTPException(
             status_code=403,
             detail="Only support coordinators can manage participant assignments.",
@@ -120,7 +118,7 @@ async def list_assignments(user: dict = Depends(get_current_user)):
 
     try:
         q = supabase.table(TABLE).select("*").eq("is_active", True)
-        if role in _COORDINATOR_ROLES:
+        if role in COORDINATOR_ROLES:
             if org_id:
                 q = q.eq("organization_id", org_id)
         else:

@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { normalizeRole, type UserRole } from "@/lib/rbac";
 
-export type UserRole = "admin" | "support_worker" | "allied_health" | "support_coordinator";
+export type { UserRole } from "@/lib/rbac";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
 
 export interface AuthUser {
@@ -79,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: data.user.id,
         email: data.user.email,
         full_name: data.user.full_name || "",
-        role: data.user.role || "support_worker",
+        role: normalizeRole(data.user.role),
         account_type: data.user.account_type || "independent_worker",
         onboarding_complete: data.user.onboarding_complete ?? true,
         organizationId: data.user.organization_id ?? undefined,
@@ -119,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: data.user.id,
           email: data.user.email,
           full_name: data.user.full_name || "",
-          role: data.user.role || "support_worker",
+          role: normalizeRole(data.user.role),
           account_type: data.user.account_type || "independent_worker",
           onboarding_complete: data.user.onboarding_complete ?? true,
           organizationId: data.user.organization_id ?? undefined,

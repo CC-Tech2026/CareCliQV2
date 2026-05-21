@@ -21,20 +21,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..core.security import create_access_token, get_current_user
+from ..core.rbac import COORDINATOR_ROLES, require_coordinator
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
-COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
-VALID_INVITE_ROLES = ("support_worker", "allied_health", "support_coordinator", "admin", "auditor")
+VALID_INVITE_ROLES = ("support_worker", "allied_health")
 
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
     "support_worker":     "independent_worker",
     "allied_health":      "allied_health",
-    "support_coordinator": "small_provider",
-    "admin":              "small_provider",
-    "auditor":            "independent_worker",
 }
 
 
@@ -71,13 +68,9 @@ def _parse_iso(s: str) -> datetime:
 @router.post("/create", status_code=201)
 async def create_invite(
     body: InviteCreateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_coordinator),
 ):
     """Create an invitation for a new staff member (admin/coordinator only)."""
-    user_role = current_user.get("role", "")
-    if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Only administrators can send invitations")
-
     org_id = current_user.get("organization_id")
     if not org_id:
         raise HTTPException(
@@ -152,12 +145,8 @@ async def create_invite(
 
 
 @router.get("/list")
-async def list_invites(current_user: dict = Depends(get_current_user)):
+async def list_invites(current_user: dict = Depends(require_coordinator)):
     """List all pending invitations for the current organization."""
-    user_role = current_user.get("role", "")
-    if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     org_id = current_user.get("organization_id")
     if not org_id:
         return []
@@ -178,12 +167,8 @@ async def list_invites(current_user: dict = Depends(get_current_user)):
 
 
 @router.delete("/revoke/{invite_id}", status_code=204)
-async def revoke_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+async def revoke_invite(invite_id: str, current_user: dict = Depends(require_coordinator)):
     """Revoke (delete) a pending invitation."""
-    user_role = current_user.get("role", "")
-    if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     org_id = current_user.get("organization_id")
     try:
         supabase = get_supabase_admin()
@@ -245,7 +230,7 @@ async def validate_invite(token: str):
 
 
 @router.get("/members")
-async def list_members(current_user: dict = Depends(get_current_user)):
+async def list_members(current_user: dict = Depends(require_coordinator)):
     """List all active members in the current organization."""
     org_id = current_user.get("organization_id")
     if not org_id:
@@ -287,11 +272,9 @@ async def list_members(current_user: dict = Depends(get_current_user)):
 async def update_member_role(
     member_id: str,
     body: dict,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_coordinator),
 ):
-    """Update a member's role (admin only)."""
-    if current_user.get("role") not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Access denied")
+    """Update a member's role (coordinator only)."""
 
     org_id = current_user.get("organization_id")
     new_role = (body or {}).get("role")
@@ -308,11 +291,8 @@ async def update_member_role(
 
 
 @router.delete("/members/{member_id}", status_code=204)
-async def remove_member(member_id: str, current_user: dict = Depends(get_current_user)):
+async def remove_member(member_id: str, current_user: dict = Depends(require_coordinator)):
     """Deactivate an org member (does not delete their account)."""
-    if current_user.get("role") not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Access denied")
-
     org_id = current_user.get("organization_id")
     try:
         supabase = get_supabase_admin()

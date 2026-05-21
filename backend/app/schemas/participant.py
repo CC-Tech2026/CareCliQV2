@@ -163,7 +163,7 @@ class PatientGoalUpdate(BaseModel):
 # Practitioner Allocations
 # ---------------------------------------------------------------------------
 
-AllocatedRole = Literal["primary_ot", "support_worker", "supervisor"]
+AllocatedRole = Literal["support_worker", "allied_health"]
 
 
 class PractitionerAllocationCreate(BaseModel):

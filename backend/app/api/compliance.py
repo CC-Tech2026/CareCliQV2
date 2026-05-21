@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ..core.rbac import require_auth, require_participant_access, require_session_access
 from ..services import session_service, participant_service, funding_service, ai_service
 from ..services.compliance_engine import run_compliance_check
 from ..services.settings_service import get_physical_exam_session_types
@@ -20,11 +21,12 @@ def _derive_status(score) -> str:
 
 
 @router.post("/run/{session_id}")
-async def run_compliance(session_id: str):
+async def run_compliance(session_id: str, user: dict = Depends(require_auth)):
     """Run the compliance engine on a specific session, store results, and get AI explanation."""
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
 
     participant_id = session.get("participant_id") or session.get("patient_id")
     participant = None
@@ -77,8 +79,10 @@ async def run_compliance(session_id: str):
 
 
 @router.get("/report/{patient_id}")
-async def compliance_report_for_patient(patient_id: str):
+async def compliance_report_for_patient(patient_id: str, user: dict = Depends(require_auth)):
     """Get full compliance report for a specific participant."""
+    participant = await participant_service.get_participant_by_id(patient_id)
+    await require_participant_access(user, participant)
     sessions = await session_service.get_sessions_by_participant(patient_id)
     scored = [s for s in sessions if s.get("compliance_score") is not None]
     scores = [float(s["compliance_score"]) for s in scored]

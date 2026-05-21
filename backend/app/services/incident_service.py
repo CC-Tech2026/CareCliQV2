@@ -115,6 +115,55 @@ async def get_incidents_by_participant(participant_id: str) -> List[dict]:
     return await get_all_incidents(participant_id=participant_id)
 
 
+async def get_scoped_incidents(
+    user: dict,
+    limit: int = 100,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    participant_id: Optional[str] = None,
+) -> List[dict]:
+    role = user.get("role", "")
+    org_id = user.get("organization_id")
+    uid = user.get("sub")
+
+    if role in ("support_coordinator", "admin"):
+        return await get_all_incidents(limit, status, severity, participant_id, org_id=org_id)
+
+    if role not in ("support_worker", "allied_health") or not uid or not org_id:
+        return []
+
+    supabase = get_supabase_admin()
+    try:
+        alloc = (
+            supabase.table("practitioner_allocations")
+            .select("patient_id")
+            .eq("user_id", uid)
+            .eq("organization_id", org_id)
+            .eq("is_active", True)
+            .execute()
+        )
+        patient_ids = [r["patient_id"] for r in (alloc.data or [])]
+    except Exception as exc:
+        logger.warning("get_scoped_incidents allocation query failed (%s); denying list", exc)
+        return []
+
+    if not patient_ids:
+        return []
+    if participant_id:
+        if participant_id not in patient_ids:
+            return []
+        patient_ids = [participant_id]
+
+    q = supabase.table(TABLE).select("*").order("incident_date", desc=True).limit(limit)
+    if status:
+        q = q.eq("status", status)
+    if severity:
+        q = q.eq("severity", severity)
+    q = q.eq("organization_id", org_id).in_("participant_id", patient_ids)
+    rows = q.execute().data or []
+    return [_enrich(r) for r in rows]
+
+
 async def create_incident(data: IncidentCreate, org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)

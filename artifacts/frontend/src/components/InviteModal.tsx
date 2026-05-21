@@ -11,7 +11,6 @@ import { useAuth } from "@/contexts/AuthContext";
 const ROLE_OPTIONS = [
   { value: "support_worker",      label: "Support Worker",          desc: "Access to allocated participants + their own sessions/incidents" },
   { value: "allied_health",       label: "Allied Health Professional", desc: "Own caseload, clinical reporting, body map + therapy documentation" },
-  { value: "support_coordinator", label: "Support Coordinator",     desc: "Full org visibility, compliance, billing, reports" },
 ];
 
 interface InviteModalProps {

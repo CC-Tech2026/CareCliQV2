@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import Optional
 from datetime import datetime, timezone
-from ..core.security import get_optional_user
+from ..core.rbac import require_auth, require_coordinator, require_participant_access, require_session_access
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
 from ..services import audit_service, session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check
@@ -16,33 +16,35 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 @router.get("")
-async def list_sessions(limit: int = 50, user: Optional[dict] = Depends(get_optional_user)):
-    if not user:
-        # Unauthenticated — return all (backward-compat)
-        return await session_service.get_all_sessions(limit)
+async def list_sessions(limit: int = 50, user: dict = Depends(require_auth)):
     return await session_service.get_scoped_sessions(user, limit=limit)
 
 
 @router.get("/recent")
-async def recent_sessions(limit: int = 10, user: Optional[dict] = Depends(get_optional_user)):
-    org_id = (user or {}).get("organization_id")
-    return await session_service.get_recent_sessions(limit, org_id=org_id)
+async def recent_sessions(limit: int = 10, user: dict = Depends(require_auth)):
+    return await session_service.get_scoped_sessions(user, limit=limit)
 
 
 @router.get("/compliance-report")
-async def compliance_report():
+async def compliance_report(user: dict = Depends(require_coordinator)):
     return await session_service.get_compliance_report()
 
 
 @router.get("/participant/{participant_id}")
-async def get_participant_sessions(participant_id: str):
+async def get_participant_sessions(participant_id: str, user: dict = Depends(require_auth)):
+    participant = await participant_service.get_participant_by_id(participant_id)
+    await require_participant_access(user, participant)
     return await session_service.get_sessions_by_participant(participant_id)
 
 
 @router.post("", status_code=201)
-async def create_session(body: SessionCreate, user: Optional[dict] = Depends(get_optional_user)):
+async def create_session(body: SessionCreate, user: dict = Depends(require_auth)):
     try:
         org_id = (user or {}).get("organization_id")
+        participant_id = getattr(body, "participant_id", None) or getattr(body, "patient_id", None)
+        if participant_id:
+            participant = await participant_service.get_participant_by_id(participant_id)
+            await require_participant_access(user, participant)
         session = await session_service.create_session(body, org_id=org_id)
         await audit_service.log_action(
             action_type="session.created",
@@ -56,17 +58,20 @@ async def create_session(body: SessionCreate, user: Optional[dict] = Depends(get
             },
         )
         return session
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating session: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{session_id}/context")
-async def get_session_context(session_id: str):
+async def get_session_context(session_id: str, user: dict = Depends(require_auth)):
     """Return session + participant's active plan goals + risk profile for the live session engine."""
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
 
     participant_id = session.get("participant_id") or session.get("patient_id")
     plan_goals: list[dict] = []
@@ -104,10 +109,11 @@ async def get_session_context(session_id: str):
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str):
+async def get_session(session_id: str, user: dict = Depends(require_auth)):
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
     return session
 
 
@@ -115,8 +121,10 @@ async def get_session(session_id: str):
 async def update_session(
     session_id: str,
     body: SessionUpdate,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_auth),
 ):
+    session = await session_service.get_session_by_id(session_id)
+    await require_session_access(user, session)
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "session_date" in data and data["session_date"]:
         data["session_date"] = str(data["session_date"])
@@ -139,10 +147,11 @@ async def update_session(
 
 
 @router.post("/{session_id}/save-with-ai")
-async def save_session_with_ai(session_id: str):
+async def save_session_with_ai(session_id: str, user: dict = Depends(require_auth)):
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
 
     participant_id = session.get("participant_id") or session.get("patient_id")
     participant = None
@@ -376,11 +385,12 @@ async def save_session_with_ai(session_id: str):
 
 
 @router.get("/{session_id}/compliance")
-async def get_session_compliance(session_id: str):
+async def get_session_compliance(session_id: str, user: dict = Depends(require_auth)):
     """Return stored compliance results for a session — no recalculation."""
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
 
     ai_insights = session.get("ai_insights") or {}
     if isinstance(ai_insights, str):
@@ -425,11 +435,12 @@ async def get_session_compliance(session_id: str):
 
 
 @router.get("/{session_id}/audit")
-async def get_session_audit(session_id: str):
+async def get_session_audit(session_id: str, user: dict = Depends(require_auth)):
     from datetime import datetime, timezone
     session = await session_service.get_session_by_id(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    await require_session_access(user, session)
 
     ai_insights = session.get("ai_insights") or {}
     if isinstance(ai_insights, str):
@@ -649,10 +660,12 @@ async def get_session_audit(session_id: str):
 
 
 @router.post("/{session_id}/upload-photo")
-async def upload_photo(session_id: str, file: UploadFile = File(...)):
+async def upload_photo(session_id: str, file: UploadFile = File(...), user: dict = Depends(require_auth)):
     from ..services.supabase_client import get_supabase_admin
     supabase = get_supabase_admin()
 
+    session = await session_service.get_session_by_id(session_id)
+    await require_session_access(user, session)
     contents = await file.read()
     path = f"sessions/{session_id}/{file.filename}"
 
@@ -677,8 +690,10 @@ async def upload_photo(session_id: str, file: UploadFile = File(...)):
 
 
 @router.post("/{session_id}/transcribe-audio")
-async def transcribe_audio(session_id: str, file: UploadFile = File(...)):
+async def transcribe_audio(session_id: str, file: UploadFile = File(...), user: dict = Depends(require_auth)):
     try:
+        session = await session_service.get_session_by_id(session_id)
+        await require_session_access(user, session)
         contents = await file.read()
         text = await ai_service.transcribe_audio(contents, file.filename)
         await session_service.update_session(session_id, {"transcription": text, "notes": text})
@@ -693,15 +708,19 @@ async def transcribe_audio(session_id: str, file: UploadFile = File(...)):
 # ---------------------------------------------------------------------------
 
 @router.get("/{session_id}/messages")
-async def get_session_messages(session_id: str):
+async def get_session_messages(session_id: str, user: dict = Depends(require_auth)):
     """Return all chat messages for a session, ordered by created_at ascending."""
+    session = await session_service.get_session_by_id(session_id)
+    await require_session_access(user, session)
     return await message_service.get_session_messages(session_id)
 
 
 @router.post("/{session_id}/messages", status_code=201)
-async def create_session_message(session_id: str, body: MessageCreate):
+async def create_session_message(session_id: str, body: MessageCreate, user: dict = Depends(require_auth)):
     """Persist a single chat message for a session."""
     try:
+        session = await session_service.get_session_by_id(session_id)
+        await require_session_access(user, session)
         result = await message_service.create_session_message(
             session_id, body.model_dump(exclude_none=True)
         )

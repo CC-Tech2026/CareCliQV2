@@ -8,7 +8,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ..core.security import get_optional_user
+from ..core.rbac import (
+    can_access_participant,
+    require_auth,
+    require_coordinator,
+    require_participant_access,
+)
 from ..schemas.participant import (
     GoalsUpdateBody,
     NDISPlanCreate,
@@ -76,12 +81,8 @@ async def _ndis_secrecy_audit(
     # 2. Strict secrecy check — hasClearance equivalent
     # Roles that exist in the system (from _ACCOUNT_TYPE_TO_ROLE in auth.py):
     #   support_worker (independent_worker), allied_health, admin (small_provider)
-    # Plus legacy/extended role names kept for future RBAC expansion.
     CLEARED_ROLES = {
-        "admin", "support_worker", "allied_health",
-        "authorised_officer", "support_coordinator",
-        "practitioner", "plan_manager",
-        "",  # unauthenticated — logged but permitted for backward compat
+        "admin", "support_worker", "allied_health", "support_coordinator",
     }
     role = (user or {}).get("role", "")
     if user and role not in CLEARED_ROLES:
@@ -111,16 +112,17 @@ def _slim(record: Optional[dict]) -> Optional[dict]:
     return {k: record[k] for k in keep if k in record}
 
 
+async def _load_authorized_participant(participant_id: str, user: dict) -> dict:
+    participant = await participant_service.get_participant_by_id(participant_id)
+    return await require_participant_access(user, participant)
+
+
 # ---------------------------------------------------------------------------
 # Participant CRUD
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_participants(user: Optional[dict] = Depends(get_optional_user)):
-    if not user:
-        # Unauthenticated — return all participants (backward-compat)
-        logger.info("list_participants: unauthenticated request — returning all")
-        return await participant_service.get_all_participants()
+async def list_participants(user: dict = Depends(require_auth)):
     logger.info(
         "list_participants: role=%s org=%s uid=%s",
         user.get("role", "?"), user.get("organization_id") or "none", (user.get("sub") or "")[:8],
@@ -131,10 +133,10 @@ async def list_participants(user: Optional[dict] = Depends(get_optional_user)):
 @router.post("", status_code=201)
 async def create_participant(
     body: ParticipantCreate,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_coordinator),
 ):
     try:
-        org_id = (user or {}).get("organization_id")
+        org_id = user.get("organization_id")
         result = await participant_service.create_participant(body, org_id=org_id)
         await audit_service.log_action(
             action_type="participant.created",
@@ -151,7 +153,7 @@ async def create_participant(
 
 
 @router.get("/dashboard-stats")
-async def dashboard_stats():
+async def dashboard_stats(user: dict = Depends(require_coordinator)):
     return await participant_service.get_dashboard_stats()
 
 
@@ -159,7 +161,7 @@ async def dashboard_stats():
 async def export_participant_data(
     participant_id: str,
     request: Request,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_auth),
 ):
     """Data Portability — Privacy Act 2026 APP 12.
 
@@ -169,6 +171,7 @@ async def export_participant_data(
     participant = await participant_service.get_participant_by_id(participant_id)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
+    await require_participant_access(user, participant)
 
     # Decrypt PII fields before export (no-op when encryption is disabled)
     participant = pii_service.decrypt_participant(participant)
@@ -202,7 +205,7 @@ async def export_participant_data(
 async def purge_participant_pii(
     participant_id: str,
     request: Request,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_coordinator),
 ):
     """Right-to-be-Forgotten — Privacy Act 2026 APP 3/6 update.
 
@@ -275,11 +278,12 @@ async def purge_participant_pii(
 async def get_participant(
     participant_id: str,
     request: Request,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_auth),
 ):
     participant = await participant_service.get_participant_by_id(participant_id)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
+    await require_participant_access(user, participant)
 
     # NDIS Act s.66 — log every individual record read
     await _ndis_secrecy_audit(participant_id, request, user)
@@ -292,10 +296,11 @@ async def get_participant(
 async def replace_participant(
     participant_id: str,
     body: ParticipantUpdate,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_coordinator),
 ):
     """Full replacement of participant data (all writable fields)."""
     before = await participant_service.get_participant_by_id(participant_id)
+    await require_participant_access(user, before)
     updated = await participant_service.update_participant(participant_id, body)
     if not updated:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -315,10 +320,11 @@ async def replace_participant(
 async def update_participant(
     participant_id: str,
     body: ParticipantUpdate,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_coordinator),
 ):
     """Partial update — only supplied fields are written."""
     before = await participant_service.get_participant_by_id(participant_id)
+    await require_participant_access(user, before)
     updated = await participant_service.update_participant(participant_id, body)
     if not updated:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -337,9 +343,10 @@ async def update_participant(
 @router.delete("/{participant_id}", status_code=204)
 async def delete_participant(
     participant_id: str,
-    user: Optional[dict] = Depends(get_optional_user),
+    user: dict = Depends(require_coordinator),
 ):
     before = await participant_service.get_participant_by_id(participant_id)
+    await require_participant_access(user, before)
     await participant_service.delete_participant(participant_id)
     await audit_service.log_action(
         action_type="participant.deleted",
@@ -356,12 +363,14 @@ async def delete_participant(
 # ---------------------------------------------------------------------------
 
 @router.get("/{participant_id}/goals")
-async def get_participant_goals(participant_id: str):
+async def get_participant_goals(participant_id: str, user: dict = Depends(require_auth)):
+    await _load_authorized_participant(participant_id, user)
     return await goals_service.get_goals_for_participant(participant_id)
 
 
 @router.post("/{participant_id}/goals", status_code=201)
-async def create_participant_goal(participant_id: str, body: PatientGoalCreate):
+async def create_participant_goal(participant_id: str, body: PatientGoalCreate, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     try:
         return await goals_service.create_goal(participant_id, body)
     except Exception as exc:
@@ -370,7 +379,8 @@ async def create_participant_goal(participant_id: str, body: PatientGoalCreate):
 
 
 @router.patch("/{participant_id}/goals/{goal_id}")
-async def update_participant_goal(participant_id: str, goal_id: str, body: PatientGoalUpdate):
+async def update_participant_goal(participant_id: str, goal_id: str, body: PatientGoalUpdate, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     updated = await goals_service.update_goal(goal_id, body)
     if not updated:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -378,13 +388,15 @@ async def update_participant_goal(participant_id: str, goal_id: str, body: Patie
 
 
 @router.delete("/{participant_id}/goals/{goal_id}", status_code=204)
-async def delete_participant_goal(participant_id: str, goal_id: str):
+async def delete_participant_goal(participant_id: str, goal_id: str, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     await goals_service.delete_goal(goal_id)
 
 
 @router.patch("/{participant_id}/goals-legacy")
-async def update_goals_legacy(participant_id: str, body: GoalsUpdateBody):
+async def update_goals_legacy(participant_id: str, body: GoalsUpdateBody, user: dict = Depends(require_coordinator)):
     """Update the legacy JSONB goals array on the patients row."""
+    await _load_authorized_participant(participant_id, user)
     updated = await participant_service.update_participant_goals(participant_id, body.goals)
     if not updated:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -396,7 +408,8 @@ async def update_goals_legacy(participant_id: str, body: GoalsUpdateBody):
 # ---------------------------------------------------------------------------
 
 @router.post("/{participant_id}/plan", status_code=201)
-async def create_ndis_plan(participant_id: str, body: NDISPlanCreate):
+async def create_ndis_plan(participant_id: str, body: NDISPlanCreate, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     try:
         return await funding_service.create_ndis_plan(participant_id, body)
     except Exception as exc:
@@ -405,12 +418,14 @@ async def create_ndis_plan(participant_id: str, body: NDISPlanCreate):
 
 
 @router.get("/{participant_id}/plan")
-async def get_ndis_plan(participant_id: str):
+async def get_ndis_plan(participant_id: str, user: dict = Depends(require_auth)):
+    await _load_authorized_participant(participant_id, user)
     return await funding_service.get_ndis_plan(participant_id)
 
 
 @router.get("/{participant_id}/budget-summary")
-async def budget_summary(participant_id: str):
+async def budget_summary(participant_id: str, user: dict = Depends(require_auth)):
+    await _load_authorized_participant(participant_id, user)
     return await funding_service.get_budget_summary(participant_id)
 
 
@@ -419,12 +434,14 @@ async def budget_summary(participant_id: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/{participant_id}/allocations")
-async def get_allocations(participant_id: str):
+async def get_allocations(participant_id: str, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     return await allocation_service.get_allocations_for_participant(participant_id)
 
 
 @router.post("/{participant_id}/allocations", status_code=201)
-async def create_allocation(participant_id: str, body: PractitionerAllocationCreate):
+async def create_allocation(participant_id: str, body: PractitionerAllocationCreate, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     try:
         return await allocation_service.create_allocation(participant_id, body)
     except Exception as exc:
@@ -433,5 +450,6 @@ async def create_allocation(participant_id: str, body: PractitionerAllocationCre
 
 
 @router.delete("/{participant_id}/allocations/{allocation_id}", status_code=204)
-async def delete_allocation(participant_id: str, allocation_id: str):
+async def delete_allocation(participant_id: str, allocation_id: str, user: dict = Depends(require_coordinator)):
+    await _load_authorized_participant(participant_id, user)
     await allocation_service.delete_allocation(allocation_id)

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
+from ..core.rbac import require_auth, require_participant_access, require_session_access
 from ..services import ai_service, participant_service, session_service
 import logging
 
@@ -50,10 +51,12 @@ class AssessNoteRequest(BaseModel):
 
 
 @router.post("/insight")
-async def get_insights(body: InsightRequest):
+async def get_insights(body: InsightRequest, user: dict = Depends(require_auth)):
     participant = await participant_service.get_participant_by_id(body.participant_id)
-    if not participant:
-        raise HTTPException(status_code=404, detail="Participant not found")
+    await require_participant_access(user, participant)
+    if body.session_id:
+        session = await session_service.get_session_by_id(body.session_id)
+        await require_session_access(user, session)
 
     session_data = body.model_dump()
     try:
@@ -65,7 +68,10 @@ async def get_insights(body: InsightRequest):
 
 
 @router.post("/compliance")
-async def check_compliance(body: ComplianceRequest):
+async def check_compliance(body: ComplianceRequest, user: dict = Depends(require_auth)):
+    if body.session_id:
+        session = await session_service.get_session_by_id(body.session_id)
+        await require_session_access(user, session)
     try:
         result = await ai_service.check_compliance(body.model_dump())
         return result
@@ -75,7 +81,7 @@ async def check_compliance(body: ComplianceRequest):
 
 
 @router.post("/explain-compliance")
-async def explain_compliance(body: ExplainComplianceRequest):
+async def explain_compliance(body: ExplainComplianceRequest, _user: dict = Depends(require_auth)):
     """Generate human-readable compliance explanation and actionable fix suggestions."""
     try:
         result = await ai_service.explain_compliance(body.failed_rules, body.session_notes or "")
@@ -86,12 +92,15 @@ async def explain_compliance(body: ExplainComplianceRequest):
 
 
 @router.get("/summary/{participant_id}")
-async def get_ai_summary(participant_id: str):
+async def get_ai_summary(participant_id: str, user: dict = Depends(require_auth)):
     participant = await participant_service.get_participant_by_id(participant_id)
-    if not participant:
-        raise HTTPException(status_code=404, detail="Participant not found")
+    await require_participant_access(user, participant)
 
-    sessions = await session_service.get_sessions_by_participant(participant_id)
+    sessions = [
+        session
+        for session in await session_service.get_scoped_sessions(user)
+        if str(session.get("participant_id") or session.get("patient_id")) == str(participant_id)
+    ]
 
     try:
         summary = await ai_service.generate_patient_summary(participant, sessions)
@@ -107,7 +116,7 @@ async def get_ai_summary(participant_id: str):
 
 
 @router.post("/translate")
-async def translate_text(body: TranslateRequest):
+async def translate_text(body: TranslateRequest, _user: dict = Depends(require_auth)):
     """Translate text to English, detecting source language automatically."""
     try:
         result = await ai_service.translate_to_english(body.text, body.source_language or "auto")
@@ -118,7 +127,7 @@ async def translate_text(body: TranslateRequest):
 
 
 @router.post("/clinical-rewrite")
-async def rewrite_clinical(body: ClinicalRewriteRequest):
+async def rewrite_clinical(body: ClinicalRewriteRequest, _user: dict = Depends(require_auth)):
     """Rewrite informal or dictated text into NDIS-compliant clinical documentation."""
     try:
         result = await ai_service.clinical_rewrite(body.text)
@@ -129,7 +138,7 @@ async def rewrite_clinical(body: ClinicalRewriteRequest):
 
 
 @router.post("/assess-note")
-async def assess_note(body: AssessNoteRequest):
+async def assess_note(body: AssessNoteRequest, user: dict = Depends(require_auth)):
     """Real-time 4-criteria compliance scoring for a clinical note entry.
 
     Criteria (from NDIS spec):
@@ -145,6 +154,8 @@ async def assess_note(body: AssessNoteRequest):
 
     # If participant_id supplied but no goals, try to fetch from patient_goals table
     if body.participant_id and not goals:
+        participant = await participant_service.get_participant_by_id(body.participant_id)
+        await require_participant_access(user, participant)
         try:
             from ..services import goals_service
             from ..services.migration_state import patient_goals_table_missing
@@ -167,6 +178,8 @@ async def assess_note(body: AssessNoteRequest):
     if result.get("is_ready_for_billing") and body.session_id:
         try:
             from ..services import session_service
+            session = await session_service.get_session_by_id(body.session_id)
+            await require_session_access(user, session)
             await session_service.update_session(
                 body.session_id, {"is_ready_for_billing": True}
             )
