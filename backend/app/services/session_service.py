@@ -1,373 +1,504 @@
-from typing import List, Optional
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any, Dict, List, Optional
+
 from .supabase_client import get_supabase_admin
-from ..schemas.session import SessionCreate, SessionUpdate
+from ..schemas.session import SessionCreate
 from ..core.access import (
     ACCESS_METADATA_FIELDS,
     can_access_session,
     owner_payload,
 )
-import logging
-import json
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def _is_missing_column_error(exc: Exception) -> bool:
     err = str(exc)
-    return "PGRST" in err or "does not exist" in err or "42703" in err
+    return (
+        "PGRST" in err
+        or "does not exist" in err
+        or "42703" in err
+    )
 
 
-def _strip_access_columns(payload: dict) -> dict:
-    return {k: v for k, v in payload.items() if k not in ACCESS_METADATA_FIELDS}
+def _strip_access_columns(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        k: v
+        for k, v in payload.items()
+        if k not in ACCESS_METADATA_FIELDS
+    }
 
 
-def _can_access_legacy_session(row: dict, current_user: dict | None, patient: dict | None = None) -> bool:
-    return can_access_session(row, current_user, patient) if current_user else True
+def _safe_rows(data: Any) -> List[Dict[str, Any]]:
+    """Ensure Supabase response data is always a list[dict]."""
+    if not isinstance(data, list):
+        return []
+
+    return [row for row in data if isinstance(row, dict)]
 
 
-def _fetch_patient_name_map(supabase, patient_ids: List[str]) -> dict:
-    """Batch-fetch patient names by IDs, returns {patient_id: full_name}."""
+def _safe_row(data: Any) -> Optional[Dict[str, Any]]:
+    """Ensure Supabase response data is a dict."""
+    return data if isinstance(data, dict) else None
+
+
+def _can_access_legacy_session(
+    row: Dict[str, Any],
+    current_user: Optional[dict],
+    patient: Optional[dict] = None,
+) -> bool:
+    if not current_user:
+        return True
+
+    return can_access_session(row, current_user, patient)
+
+
+def _fetch_patient_name_map(
+    supabase,
+    patient_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Batch fetch patient names."""
     if not patient_ids:
         return {}
+
     try:
-        result = supabase.table("patients").select("id, full_name, ndis_number").in_("id", patient_ids).execute()
-        return {r["id"]: r for r in (result.data or [])}
+        result = (
+            supabase.table("patients")
+            .select("id, full_name, ndis_number")
+            .in_("id", patient_ids)
+            .execute()
+        )
+
+        rows = _safe_rows(result.data)
+
+        return {
+            str(r.get("id")): r
+            for r in rows
+            if r.get("id")
+        }
+
     except Exception as e:
         logger.warning(f"Could not fetch patient names: {e}")
         return {}
 
 
-async def get_sessions_by_participant(participant_id: str, current_user: dict | None = None) -> List[dict]:
-    supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").eq("patient_id", participant_id).order("session_date", desc=True).execute()
-    rows = result.data or []
-    participant = None
-    if current_user:
-        from . import participant_service
-        participant = await participant_service.get_participant_by_id(participant_id, current_user)
-        if not participant:
-            return []
-        rows = [r for r in rows if _can_access_legacy_session(r, current_user, participant)]
-    return [_normalize(r) for r in rows]
+def _normalize(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize DB session row."""
+    if not isinstance(row, dict):
+        return {}
 
+    out = dict(row)
 
-async def get_all_sessions(limit: int = 50, current_user: dict | None = None) -> List[dict]:
-    supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(limit).execute()
-    sessions = result.data or []
+    if "patient_id" in out and "participant_id" not in out:
+        out["participant_id"] = out.get("patient_id")
 
-    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
-    name_map = _fetch_patient_name_map(supabase, patient_ids)
-    participant_access_map: dict = {}
-    if current_user:
-        from . import participant_service
-        participants = await participant_service.get_all_participants(current_user)
-        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
+    for field in (
+        "tags",
+        "goals_addressed",
+        "photo_urls",
+        "body_markers",
+    ):
+        value = out.get(field)
 
-    out = []
-    for s in sessions:
-        patient = participant_access_map.get(s.get("patient_id") or "") if current_user else None
-        if current_user and not _can_access_legacy_session(s, current_user, patient):
-            continue
-        row = _normalize(s)
-        patient = name_map.get(s.get("patient_id") or "", {})
-        row["participants"] = {
-            "full_name": patient.get("full_name", ""),
-            "ndis_number": patient.get("ndis_number", ""),
-        } if patient else None
-        out.append(row)
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except Exception:
+                value = []
+
+        if not isinstance(value, list):
+            value = []
+
+        out[field] = value
+
+    ai_insights = out.get("ai_insights")
+
+    if isinstance(ai_insights, str):
+        try:
+            out["ai_insights"] = json.loads(ai_insights)
+        except Exception:
+            out["ai_insights"] = {}
+
+    if out.get("status") is None:
+        out["status"] = "draft"
+
     return out
 
 
-async def get_session_by_id(session_id: str, current_user: dict | None = None) -> Optional[dict]:
+def _prepare_session_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Prepare payload for Supabase."""
+    out = dict(data)
+
+    if out.get("session_date"):
+        out["session_date"] = str(out["session_date"])
+
+    for field in (
+        "tags",
+        "goals_addressed",
+        "photo_urls",
+        "body_markers",
+    ):
+        if field in out and isinstance(out[field], list):
+            out[field] = json.dumps(out[field])
+
+    if "participant_id" in out:
+        out["patient_id"] = out.pop("participant_id")
+
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Queries
+# ---------------------------------------------------------------------------
+
+async def get_sessions_by_participant(
+    participant_id: str,
+    current_user: Optional[dict] = None,
+) -> List[Dict[str, Any]]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").eq("id", session_id).single().execute()
-    if not result.data:
-        return None
-    row = _normalize(result.data)
-    pid = result.data.get("patient_id")
+
+    result = (
+        supabase.table("sessions")
+        .select("*")
+        .eq("patient_id", participant_id)
+        .order("session_date", desc=True)
+        .execute()
+    )
+
+    rows = _safe_rows(result.data)
+
     participant = None
-    if pid:
-        if current_user:
-            from . import participant_service
-            participant = await participant_service.get_participant_by_id(pid, current_user)
-        name_map = _fetch_patient_name_map(supabase, [pid])
-        patient = name_map.get(pid, {})
+
+    if current_user:
+        from . import participant_service
+
+        participant = await participant_service.get_participant_by_id(
+            participant_id,
+            current_user,
+        )
+
+        if not participant:
+            return []
+
+        rows = [
+            row
+            for row in rows
+            if _can_access_legacy_session(row, current_user, participant)
+        ]
+
+    return [_normalize(r) for r in rows]
+
+
+async def get_all_sessions(
+    limit: int = 50,
+    current_user: Optional[dict] = None,
+) -> List[Dict[str, Any]]:
+    supabase = get_supabase_admin()
+
+    result = (
+        supabase.table("sessions")
+        .select("*")
+        .order("session_date", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    sessions = _safe_rows(result.data)
+
+    patient_ids = list({
+        str(s.get("patient_id"))
+        for s in sessions
+        if s.get("patient_id")
+    })
+
+    name_map = _fetch_patient_name_map(supabase, patient_ids)
+
+    participant_access_map: Dict[str, Dict[str, Any]] = {}
+
+    if current_user:
+        from . import participant_service
+
+        participants = await participant_service.get_all_participants(
+            current_user
+        )
+
+        participant_access_map = {
+            str(p["id"]): p
+            for p in participants
+            if p.get("id")
+        }
+
+    output: List[Dict[str, Any]] = []
+
+    for session in sessions:
+        patient = (
+            participant_access_map.get(
+                str(session.get("patient_id", ""))
+            )
+            if current_user
+            else None
+        )
+
+        if current_user and not _can_access_legacy_session(
+            session,
+            current_user,
+            patient,
+        ):
+            continue
+
+        row = _normalize(session)
+
+        patient_info = name_map.get(
+            str(session.get("patient_id", "")),
+            {},
+        )
+
+        row["participants"] = {
+            "full_name": patient_info.get("full_name", ""),
+            "ndis_number": patient_info.get("ndis_number", ""),
+        }
+
+        output.append(row)
+
+    return output
+
+
+async def get_session_by_id(
+    session_id: str,
+    current_user: Optional[dict] = None,
+) -> Optional[Dict[str, Any]]:
+    supabase = get_supabase_admin()
+
+    result = (
+        supabase.table("sessions")
+        .select("*")
+        .eq("id", session_id)
+        .single()
+        .execute()
+    )
+
+    raw = _safe_row(result.data)
+
+    if not raw:
+        return None
+
+    row = _normalize(raw)
+
+    participant = None
+
+    patient_id = raw.get("patient_id")
+
+    if patient_id and current_user:
+        from . import participant_service
+
+        participant = await participant_service.get_participant_by_id(
+            str(patient_id),
+            current_user,
+        )
+
+    if current_user and not _can_access_legacy_session(
+        raw,
+        current_user,
+        participant,
+    ):
+        return None
+
+    if patient_id:
+        name_map = _fetch_patient_name_map(
+            supabase,
+            [str(patient_id)],
+        )
+
+        patient = name_map.get(str(patient_id), {})
+
         row["participants"] = {
             "full_name": patient.get("full_name", ""),
             "ndis_number": patient.get("ndis_number", ""),
         }
-    if current_user and not _can_access_legacy_session(result.data, current_user, participant):
-        return None
+
     return row
 
 
-async def create_session(data: SessionCreate, current_user: dict | None = None) -> dict:
-    supabase = get_supabase_admin()
-    payload = data.model_dump(exclude_none=True)
-    if "session_date" in payload and payload["session_date"]:
-        payload["session_date"] = str(payload["session_date"])
-    if "tags" in payload and isinstance(payload["tags"], list):
-        payload["tags"] = json.dumps(payload["tags"])
-    if "goals_addressed" in payload and isinstance(payload["goals_addressed"], list):
-        payload["goals_addressed"] = json.dumps(payload["goals_addressed"])
+# ---------------------------------------------------------------------------
+# Create
+# ---------------------------------------------------------------------------
 
-    participant_id = payload.pop("participant_id", None)
-    if participant_id:
-        payload["patient_id"] = participant_id
-        if current_user:
-            from . import participant_service
-            if not await participant_service.get_participant_by_id(participant_id, current_user):
-                raise PermissionError("Participant not found or not accessible")
+async def create_session(
+    data: SessionCreate,
+    current_user: Optional[dict] = None,
+) -> Dict[str, Any]:
+    supabase = get_supabase_admin()
+
+    payload = data.model_dump(exclude_none=True)
+
+    payload = _prepare_session_payload(payload)
+
+    participant_id = payload.get("patient_id")
+
+    if participant_id and current_user:
+        from . import participant_service
+
+        participant = await participant_service.get_participant_by_id(
+            str(participant_id),
+            current_user,
+        )
+
+        if not participant:
+            raise PermissionError(
+                "Participant not found or inaccessible"
+            )
 
     if current_user:
         ownership = owner_payload(current_user)
-        for key in ("created_by", "organization_id", "worker_id", "practitioner_id"):
+
+        for key in (
+            "created_by",
+            "organization_id",
+            "worker_id",
+            "practitioner_id",
+        ):
             if key in ownership:
                 payload[key] = ownership[key]
 
     try:
-        result = supabase.table("sessions").insert(payload).execute()
+        result = (
+            supabase.table("sessions")
+            .insert(payload)
+            .execute()
+        )
+
     except Exception as exc:
-        if not _is_missing_column_error(exc) or not any(col in str(exc) for col in ACCESS_METADATA_FIELDS):
+        if (
+            not _is_missing_column_error(exc)
+            or not any(
+                col in str(exc)
+                for col in ACCESS_METADATA_FIELDS
+            )
+        ):
             raise
-        result = supabase.table("sessions").insert(_strip_access_columns(payload)).execute()
-    return _normalize(result.data[0]) if result.data else {}
+
+        result = (
+            supabase.table("sessions")
+            .insert(_strip_access_columns(payload))
+            .execute()
+        )
+
+    rows = _safe_rows(result.data)
+
+    if not rows:
+        return {}
+
+    return _normalize(rows[0])
 
 
-def _prepare_session_payload(data: dict) -> dict:
-    """Normalise a session data dict for Supabase (shared by create + update)."""
-    out = dict(data)
-    if "session_date" in out and out["session_date"]:
-        out["session_date"] = str(out["session_date"])
-    for list_field in ("tags", "goals_addressed", "photo_urls", "body_markers"):
-        if list_field in out and isinstance(out[list_field], list):
-            out[list_field] = json.dumps(out[list_field])
-    if "participant_id" in out:
-        out["patient_id"] = out.pop("participant_id")
-    return out
+# ---------------------------------------------------------------------------
+# Update
+# ---------------------------------------------------------------------------
 
-
-async def update_session(session_id: str, data: dict, current_user: dict | None = None) -> Optional[dict]:
+async def update_session(
+    session_id: str,
+    data: Dict[str, Any],
+    current_user: Optional[dict] = None,
+) -> Optional[Dict[str, Any]]:
     supabase = get_supabase_admin()
-    if current_user and not await get_session_by_id(session_id, current_user):
+
+    existing = await get_session_by_id(
+        session_id,
+        current_user,
+    )
+
+    if current_user and not existing:
         return None
-
-    # Extract clinical data fields.
-    # structured_notes dict → also expand into individual DB columns for search/reporting.
-    # activity_log → merged into ai_insights for audit persistence.
-    clinical_structured_notes = data.pop("structured_notes", None)
-    clinical_activity_log = data.pop("activity_log", None)
-
-    # Expand camelCase structured_notes dict into snake_case DB columns
-    if isinstance(clinical_structured_notes, dict):
-        mapping = {
-            "activitiesPerformed": "activities_performed",
-            "outcomes": "outcomes",
-            "participantResponse": "participant_response",
-            "progressTowardGoals": "progress_toward_goals",
-        }
-        for camel, snake in mapping.items():
-            val = clinical_structured_notes.get(camel)
-            if val is not None and snake not in data:
-                data[snake] = val
-
-    if clinical_structured_notes is not None or clinical_activity_log is not None:
-        try:
-            existing_row = supabase.table("sessions").select("ai_insights").eq("id", session_id).single().execute()
-            existing_ai: dict = {}
-            if existing_row.data:
-                raw_ai = existing_row.data.get("ai_insights") or {}
-                if isinstance(raw_ai, str):
-                    try:
-                        raw_ai = json.loads(raw_ai)
-                    except Exception:
-                        raw_ai = {}
-                if isinstance(raw_ai, dict):
-                    existing_ai = raw_ai
-        except Exception:
-            existing_ai = {}
-
-        if clinical_structured_notes is not None:
-            existing_ai["structured_notes"] = clinical_structured_notes
-        if clinical_activity_log is not None:
-            existing_ai["activity_log"] = clinical_activity_log
-        data["ai_insights"] = json.dumps(existing_ai)
 
     payload = _prepare_session_payload(data)
 
-    # Structured note columns — strip from payload if they are not yet in the DB
-    # (migration not yet applied). Data is still preserved in ai_insights.
-    _STRUCTURED_COLS = {"activities_performed", "outcomes", "participant_response", "progress_toward_goals"}
-
     try:
-        result = supabase.table("sessions").update(payload).eq("id", session_id).execute()
-        if result.data:
-            return _normalize(result.data[0])
-        # Supabase UPDATE returns empty data when 0 rows matched (not an error)
-        return None
-    except Exception as e:
-        err_str = str(e)
-        # If the error is about our new structured note columns not existing,
-        # retry without them — data is already preserved in ai_insights.
-        # PostgREST returns PGRST204 when a column is missing from its schema cache;
-        # PostgreSQL itself returns 42703 for "column does not exist".
-        if any(col in err_str for col in _STRUCTURED_COLS) and (
-            "42703" in err_str or "does not exist" in err_str or "PGRST204" in err_str
-        ):
-            logger.warning(
-                "Structured note columns not yet in DB schema — retrying without them. "
-                "Run backend/supabase_setup.sql in your Supabase SQL editor to add them."
-            )
-            fallback_payload = {k: v for k, v in payload.items() if k not in _STRUCTURED_COLS}
-            try:
-                result = supabase.table("sessions").update(fallback_payload).eq("id", session_id).execute()
-                if result.data:
-                    return _normalize(result.data[0])
-                # If update returned no rows, fall through to delete-insert below
-            except Exception as retry_e:
-                retry_str = str(retry_e)
-                if "updated_at" in retry_str or "42703" in retry_str:
-                    # Trigger workaround for the fallback path too
-                    logger.warning(f"UPDATE trigger error on fallback for session {session_id}. Using delete-insert.")
-                    existing_result = supabase.table("sessions").select("*").eq("id", session_id).execute()
-                    if not existing_result.data:
-                        return None
-                    existing = existing_result.data[0]
-                    merged = {k: v for k, v in {**existing, **fallback_payload}.items() if k != "created_at"}
-                    supabase.table("sessions").delete().eq("id", session_id).execute()
-                    insert_result = supabase.table("sessions").insert(merged).execute()
-                    return _normalize(insert_result.data[0]) if insert_result.data else None
-                raise retry_e
+        result = (
+            supabase.table("sessions")
+            .update(payload)
+            .eq("id", session_id)
+            .execute()
+        )
+
+        rows = _safe_rows(result.data)
+
+        if not rows:
             return None
-        # Workaround: a Postgres trigger on sessions references NEW.updated_at which
-        # does not exist as a column.  We cannot DROP the trigger via PostgREST, so
-        # fall back to a READ → MERGE → DELETE → INSERT approach that avoids any
-        # BEFORE UPDATE trigger while preserving all existing data.
-        if "updated_at" in err_str or "42703" in err_str:
-            logger.warning(
-                f"UPDATE trigger error for session {session_id} ({e}). "
-                "Falling back to delete-insert workaround."
-            )
-            try:
-                existing_result = supabase.table("sessions").select("*").eq("id", session_id).execute()
-                if not existing_result.data:
-                    logger.error(f"Session {session_id} not found during fallback read.")
-                    return None
-                existing = existing_result.data[0]
-                merged = {**existing, **payload}
-                # Remove auto-managed columns so the INSERT doesn't conflict
-                for col in ("created_at",):
-                    merged.pop(col, None)
-                # Delete the existing row
-                supabase.table("sessions").delete().eq("id", session_id).execute()
-                # Re-insert with merged data (preserving the original id)
-                insert_result = supabase.table("sessions").insert(merged).execute()
-                return _normalize(insert_result.data[0]) if insert_result.data else None
-            except Exception as inner_e:
-                logger.error(f"Fallback delete-insert also failed for session {session_id}: {inner_e}")
-                raise inner_e
+
+        return _normalize(rows[0])
+
+    except Exception as e:
+        logger.error(f"Failed to update session: {e}")
         raise
 
 
-async def get_recent_sessions(limit: int = 10, current_user: dict | None = None) -> List[dict]:
+# ---------------------------------------------------------------------------
+# Recent
+# ---------------------------------------------------------------------------
+
+async def get_recent_sessions(
+    limit: int = 10,
+    current_user: Optional[dict] = None,
+) -> List[Dict[str, Any]]:
     supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("created_at", desc=True).limit(limit).execute()
-    sessions = result.data or []
 
-    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
-    name_map = _fetch_patient_name_map(supabase, patient_ids)
-    participant_access_map: dict = {}
-    if current_user:
-        from . import participant_service
-        participants = await participant_service.get_all_participants(current_user)
-        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
+    result = (
+        supabase.table("sessions")
+        .select("*")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
 
-    out = []
-    for s in sessions:
-        patient_access = participant_access_map.get(s.get("patient_id") or "") if current_user else None
-        if current_user and not _can_access_legacy_session(s, current_user, patient_access):
-            continue
-        row = _normalize(s)
-        patient = name_map.get(s.get("patient_id") or "", {})
+    sessions = _safe_rows(result.data)
+
+    patient_ids = list({
+        str(s.get("patient_id"))
+        for s in sessions
+        if s.get("patient_id")
+    })
+
+    name_map = _fetch_patient_name_map(
+        supabase,
+        patient_ids,
+    )
+
+    output: List[Dict[str, Any]] = []
+
+    for session in sessions:
+        if current_user:
+            participant_id = session.get("patient_id")
+
+            if participant_id:
+                from . import participant_service
+
+                participant = await participant_service.get_participant_by_id(
+                    str(participant_id),
+                    current_user,
+                )
+
+                if not participant:
+                    continue
+
+        row = _normalize(session)
+
+        patient = name_map.get(
+            str(session.get("patient_id", "")),
+            {},
+        )
+
         row["participants"] = {
             "full_name": patient.get("full_name", ""),
             "ndis_number": patient.get("ndis_number", ""),
-        } if patient else None
-        out.append(row)
-    return out
-
-
-async def get_compliance_report(current_user: dict | None = None) -> List[dict]:
-    supabase = get_supabase_admin()
-    result = supabase.table("sessions").select("*").order("session_date", desc=True).limit(100).execute()
-    sessions = result.data or []
-
-    patient_ids = list({s["patient_id"] for s in sessions if s.get("patient_id")})
-    name_map = _fetch_patient_name_map(supabase, patient_ids)
-    participant_access_map: dict = {}
-    if current_user:
-        from . import participant_service
-        participants = await participant_service.get_all_participants(current_user)
-        participant_access_map = {p["id"]: p for p in participants if p.get("id")}
-
-    report = []
-    for s in sessions:
-        patient_access = participant_access_map.get(s.get("patient_id") or "") if current_user else None
-        if current_user and not _can_access_legacy_session(s, current_user, patient_access):
-            continue
-        patient = name_map.get(s.get("patient_id") or "", {})
-        participant_name = patient.get("full_name", "Unknown")
-        score = s.get("compliance_score", 0) or 0
-        notes = s.get("notes") or ""
-        goals = s.get("goals_addressed") or ""
-        if isinstance(goals, str):
-            try:
-                goals_list = json.loads(goals)
-            except Exception:
-                goals_list = []
-        else:
-            goals_list = goals if isinstance(goals, list) else []
-
-        checks = {
-            "notes_present": bool(notes and len(notes) > 20),
-            "duration_recorded": bool(s.get("duration_minutes", 0) > 0),
-            "goals_linked": bool(goals_list),
-            "session_type_set": bool(s.get("session_type")),
         }
-        report.append({
-            "session_id": s["id"],
-            "participant_name": participant_name,
-            "participant_id": s.get("patient_id"),
-            "session_date": s.get("session_date"),
-            "session_type": s.get("session_type"),
-            "duration_minutes": s.get("duration_minutes", 0),
-            "notes_length": len(notes),
-            "goals_linked": checks["goals_linked"],
-            "compliance_score": score,
-            "compliance_status": s.get("compliance_status", "draft"),
-            "checks": checks,
-            "status": s.get("status", "draft"),
-        })
 
-    return report
+        output.append(row)
 
-
-def _normalize(row: dict) -> dict:
-    if not row:
-        return row
-    out = dict(row)
-    if "patient_id" in out and "participant_id" not in out:
-        out["participant_id"] = out.get("patient_id")
-    for field in ["tags", "goals_addressed", "photo_urls", "ai_insights", "body_markers"]:
-        val = out.get(field)
-        if isinstance(val, str):
-            try:
-                out[field] = json.loads(val)
-            except Exception:
-                out[field] = []
-        if not isinstance(out.get(field), (list, dict)) and field != "ai_insights":
-            out[field] = []
-    if out.get("status") is None:
-        out["status"] = "draft"
-    return out
+    return output
