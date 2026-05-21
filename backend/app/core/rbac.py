@@ -62,6 +62,11 @@ def can_view_org_wide(user: Optional[dict]) -> bool:
     return is_coordinator(user)
 
 
+def can_access_organisation(user: Optional[dict], org_id: Optional[str]) -> bool:
+    org = organization_id(user)
+    return bool(org and org_id and org == str(org_id) and canonical_role(user))
+
+
 def require_auth(user: dict = Depends(get_current_user)) -> dict:
     return user
 
@@ -85,6 +90,12 @@ def require_coordinator(user: dict = Depends(get_current_user)) -> dict:
     if not is_coordinator(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return user
+
+
+async def require_organisation_access(user: dict, org_id: Optional[str]) -> str:
+    if not can_access_organisation(user, org_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    return str(org_id)
 
 
 def _same_org(user: dict, record: dict) -> bool:

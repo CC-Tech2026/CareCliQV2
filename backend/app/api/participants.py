@@ -211,14 +211,14 @@ async def purge_participant_pii(
 
     Hard-deletes PII fields (name, DOB, email, phone, NDIS number) while
     retaining an anonymised record with goals for NDIS Commission reporting.
-    Only ``admin`` / ``authorised_officer`` roles may invoke this endpoint.
+    Only coordinator-equivalent roles may invoke this endpoint.
     """
     ip = _client_ip(request)
     uid = (user or {}).get("sub")
     org = (user or {}).get("organization_id")
     role = (user or {}).get("role", "")
 
-    PURGE_ROLES = {"admin", "authorised_officer"}
+    PURGE_ROLES = {"admin", "support_coordinator"}
     if not user or role not in PURGE_ROLES:
         await access_log_service.log_security_event(
             event_type="purge_attempt_unauthorized",
