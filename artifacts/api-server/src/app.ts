@@ -32,7 +32,7 @@ const PYTHON_BACKEND = "http://localhost:8000";
 
 const PYTHON_PREFIXES = [
   "/api/auth",
-  "/api/participants",
+  "/api/patients",
   "/api/sessions",
   "/api/alerts",
   "/api/compliance",

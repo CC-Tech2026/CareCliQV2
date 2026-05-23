@@ -127,6 +127,38 @@ async def _apply_startup_migrations():
             migration_state.organizations_table_missing = True
             logger.warning("organizations table missing — run backend/supabase_setup.sql")
 
+        # --- organization_members table ---
+        ok = await _check_column(
+            supabase, "organization_members",
+            "id, user_id, organization_id, role",
+            "organization_members table",
+        )
+        if ok:
+            logger.info("organization_members table OK")
+            migration_state.organization_members_table_missing = False
+        else:
+            migration_state.organization_members_table_missing = True
+            logger.warning(
+                "organization_members table missing — "
+                "run backend/supabase_patch_missing_tables.sql"
+            )
+
+        # --- invitations table ---
+        ok = await _check_column(
+            supabase, "invitations",
+            "id, organization_id, email, token, expires_at",
+            "invitations table",
+        )
+        if ok:
+            logger.info("invitations table OK")
+            migration_state.invitations_table_missing = False
+        else:
+            migration_state.invitations_table_missing = True
+            logger.warning(
+                "invitations table missing — "
+                "run backend/supabase_patch_missing_tables.sql"
+            )
+
         # --- patient_goals table ---
         ok = await _check_column(supabase, "patient_goals", "id, plan_id, description", "patient_goals table")
         if ok:
@@ -198,18 +230,23 @@ async def health_check():
 async def migration_status_endpoint():
     """Return current migration state so operators can verify schema readiness."""
     return {
-        "biological_sex_column_missing":     migration_state.biological_sex_column_missing,
-        "users_onboarding_columns_missing":  migration_state.users_onboarding_columns_missing,
-        "organizations_table_missing":       migration_state.organizations_table_missing,
-        "session_messages_table_missing":    migration_state.session_messages_table_missing,
-        "migration_sql_file":                "backend/supabase_setup.sql",
-        "supabase_sql_editor":               _MIGRATION_URL,
+        "biological_sex_column_missing":              migration_state.biological_sex_column_missing,
+        "users_onboarding_columns_missing":           migration_state.users_onboarding_columns_missing,
+        "organizations_table_missing":                migration_state.organizations_table_missing,
+        "organization_members_table_missing":         migration_state.organization_members_table_missing,
+        "invitations_table_missing":                  migration_state.invitations_table_missing,
+        "session_messages_table_missing":             migration_state.session_messages_table_missing,
         "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
-        "practitioner_allocations_table_missing":    migration_state.practitioner_allocations_table_missing,
+        "practitioner_allocations_table_missing":     migration_state.practitioner_allocations_table_missing,
+        "migration_sql_file":                         "backend/supabase_setup.sql",
+        "patch_sql_file":                             "backend/supabase_patch_missing_tables.sql",
+        "supabase_sql_editor":                        _MIGRATION_URL,
         "all_ok": not any([
             migration_state.biological_sex_column_missing,
             migration_state.users_onboarding_columns_missing,
             migration_state.organizations_table_missing,
+            migration_state.organization_members_table_missing,
+            migration_state.invitations_table_missing,
             migration_state.session_messages_table_missing,
             migration_state.patient_goals_table_missing,
             migration_state.practitioner_allocations_table_missing,

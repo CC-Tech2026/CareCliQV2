@@ -704,3 +704,95 @@ CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant
 CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
 CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
+
+-- ============================================================
+-- ORGANIZATION MEMBERS — central RBAC table
+-- Decouples role from users row so a user can have different
+-- roles in different organisations.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.organization_members (
+    id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id         UUID        NOT NULL REFERENCES public.users(id)         ON DELETE CASCADE,
+    organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    role            TEXT        NOT NULL DEFAULT 'support_worker'
+                                CHECK (role IN (
+                                    'admin', 'manager', 'support_worker',
+                                    'support_coordinator', 'auditor'
+                                )),
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    invited_by      UUID        REFERENCES public.users(id),
+    joined_at       TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
+
+ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='organization_members' AND policyname='om_service_role_all') THEN
+        CREATE POLICY om_service_role_all ON public.organization_members
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='organization_members' AND policyname='om_self_read') THEN
+        CREATE POLICY om_self_read ON public.organization_members
+            FOR SELECT TO authenticated USING (user_id = auth.uid());
+    END IF;
+END $$;
+
+-- Backfill existing users who already have an organization_id
+INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
+SELECT
+    u.id,
+    u.organization_id,
+    CASE u.role
+        WHEN 'admin'               THEN 'admin'
+        WHEN 'support_coordinator' THEN 'support_coordinator'
+        ELSE 'support_worker'
+    END,
+    u.is_active
+FROM public.users u
+WHERE u.organization_id IS NOT NULL
+  AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
+ON CONFLICT (user_id, organization_id) DO UPDATE
+    SET role      = EXCLUDED.role,
+        is_active = EXCLUDED.is_active;
+
+-- ============================================================
+-- INVITATIONS — staff onboarding via secure token
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.invitations (
+    id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    invited_by      UUID        REFERENCES public.users(id) ON DELETE SET NULL,
+    email           TEXT        NOT NULL,
+    role            TEXT        NOT NULL DEFAULT 'support_worker'
+                                CHECK (role IN (
+                                    'admin', 'manager', 'support_worker',
+                                    'support_coordinator', 'auditor'
+                                )),
+    token           TEXT        NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    accepted_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invitations_token          ON public.invitations(token);
+CREATE INDEX IF NOT EXISTS idx_invitations_org_id         ON public.invitations(organization_id);
+CREATE INDEX IF NOT EXISTS idx_invitations_email          ON public.invitations(email);
+
+ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='invitations' AND policyname='inv_service_role_all') THEN
+        CREATE POLICY inv_service_role_all ON public.invitations
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;
