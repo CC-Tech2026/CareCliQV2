@@ -1,9 +1,12 @@
-
 packages:
   - artifacts/*
   - lib/*
   - lib/integrations/*
   - scripts
+
+allowBuilds:
+  core-js: false
+  esbuild: false
 
 autoInstallPeers: false
 

@@ -117,13 +117,31 @@ class ParticipantUpdate(BaseModel):
 
 class NDISPlanCreate(BaseModel):
     plan_number: Optional[str] = None
-    plan_start: date
-    plan_end: date
+    plan_start: date | str  # Accept both date objects and ISO strings
+    plan_end: date | str    # Accept both date objects and ISO strings
     total_funding: float = 0.0
     status: Optional[str] = None          # auto-derived from dates if not supplied
     core_budget: Optional[float] = None
     capacity_budget: Optional[float] = None
     capital_budget: Optional[float] = None
+
+    @field_validator("plan_start", mode="before")
+    @classmethod
+    def _parse_plan_start(cls, v):
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            return date.fromisoformat(v.strip())
+        raise ValueError("plan_start must be a date or ISO date string")
+
+    @field_validator("plan_end", mode="before")
+    @classmethod
+    def _parse_plan_end(cls, v):
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            return date.fromisoformat(v.strip())
+        raise ValueError("plan_end must be a date or ISO date string")
 
     @field_validator("plan_end")
     @classmethod

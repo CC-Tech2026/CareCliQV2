@@ -108,14 +108,37 @@ def has_access_metadata(row: dict, fields: Iterable[str]) -> bool:
 
 
 def can_access_participant(row: dict, user: Optional[dict]) -> bool:
+    """Check if user can access a participant record.
+    
+    Rules:
+    - Coordinators/admins: can access all participants in their org
+    - Field workers: can access participants assigned to them
+    - Legacy records without metadata: accessible to anyone (backward compat)
+    """
     if not user:
         return False
 
-    print("ROLE =", role(user))
-    print("USER ID =", user_id(user))
-    print("ROW =", row)
+    # Legacy rows without access metadata — allow access (backward compat)
+    if not has_access_metadata(
+        row,
+        (*PARTICIPANT_OWNER_FIELDS, "organization_id"),
+    ):
+        return True
 
-    return True
+    # Coordinators can access all participants in their org
+    if is_coordinator(user):
+        org_id = organization_id(user)
+        return (
+            not org_id
+            or not row.get("organization_id")
+            or record_matches_org(row, user)
+        )
+
+    # Field workers can access participants assigned to them
+    if record_matches_user(row, user, PARTICIPANT_OWNER_FIELDS):
+        return True
+
+    return False
 
 
 def can_access_session(
