@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useCreateParticipant } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -55,6 +56,7 @@ export default function ParticipantNew() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const createParticipant = useCreateParticipant();
+  const { token } = useAuth();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -78,7 +80,30 @@ export default function ParticipantNew() {
     if (!payload.total_budget)               delete payload.total_budget;
 
     try {
-      await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
+      const created = await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
+
+      // If plan dates provided, create initial NDIS plan (require both dates)
+      const start = (data.plan_start_date || "").toString().trim();
+      const end = (data.plan_end_date || "").toString().trim();
+      if (created?.id && start && end) {
+        try {
+          const headers: Record<string,string> = { "Content-Type": "application/json" };
+          if (token) headers.Authorization = `Bearer ${token}`;
+          await fetch(`/api/participants/${created.id}/plan`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              status: data.plan_status,
+              plan_start: start,
+              plan_end: end,
+              total_funding: data.total_budget ?? null,
+            }),
+          });
+        } catch (err) {
+          console.warn("Failed to create initial plan", err);
+        }
+      }
+
       toast({ title: "Participant added successfully" });
       navigate("/patients");
     } catch (err: unknown) {
