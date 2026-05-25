@@ -1,32 +1,36 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
+export default async ({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  process.env = { ...process.env, ...env };
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+  const rawPort = process.env.PORT || "8083";
 
-const port = Number(rawPort);
+  if (!rawPort) {
+    throw new Error(
+      "PORT environment variable is required but was not provided.",
+    );
+  }
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+  const port = Number(rawPort);
 
-const basePath = process.env.BASE_PATH;
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
 
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+  const basePath = process.env.BASE_PATH || "/";
 
-export default defineConfig({
+  if (!basePath) {
+    throw new Error(
+      "BASE_PATH environment variable is required but was not provided.",
+    );
+  }
+
+  return defineConfig({
   base: basePath,
   plugins: [
     react(),
@@ -85,4 +89,5 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
-});
+  });
+};

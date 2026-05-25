@@ -146,12 +146,15 @@ export default function Login() {
             {/* Email Address */}
             <div className="group relative">
               <label
+                htmlFor="login-email"
                 className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block transition-colors duration-200 group-focus-within:text-[#F03060]"
                 style={{ color: PLUM }}
               >
                 Email address
               </label>
               <input
+                id="login-email"
+                name="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -171,6 +174,7 @@ export default function Login() {
             <div className="group relative">
               <div className="flex justify-between items-center mb-1.5">
                 <label
+                  htmlFor="login-password"
                   className="text-[11px] font-bold uppercase tracking-wider transition-colors duration-200 group-focus-within:text-[#F03060]"
                   style={{ color: PLUM }}
                 >
@@ -187,6 +191,8 @@ export default function Login() {
               </div>
               <div className="relative w-full">
                 <input
+                  id="login-password"
+                  name="password"
                   type={showPass ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

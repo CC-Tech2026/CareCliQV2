@@ -9,6 +9,17 @@ from .config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer_scheme = HTTPBearer(auto_error=False)
 
+ROLE_ALIASES = {
+    "admin": "support_coordinator",
+    "allied_health": "allied_health_pro",
+}
+
+
+def normalize_role(role: Optional[str]) -> str:
+    if not role:
+        return "support_worker"
+    return ROLE_ALIASES.get(role, role)
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)

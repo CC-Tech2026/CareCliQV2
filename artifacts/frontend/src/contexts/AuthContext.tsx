@@ -1,7 +1,14 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
-export type UserRole = "admin" | "support_worker" | "allied_health" | "support_coordinator";
+/**
+ * CareScribe role-based access control (RBAC)
+ * Three roles:
+ *   - support_coordinator: Business owner/team lead. Full visibility & team management.
+ *   - support_worker: Field-based worker. Own clients & sessions only.
+ *   - allied_health_pro: Clinical professional (OT, physio, speech). Own caseload + clinical tools.
+ */
+export type UserRole = "support_coordinator" | "support_worker" | "allied_health_pro";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
 
 export interface AuthUser {
@@ -23,6 +30,11 @@ interface AuthContextType {
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   updateToken: (newToken: string) => Promise<void>;
+  // Role helper methods
+  isCoordinator: () => boolean;
+  isSupportWorker: () => boolean;
+  isAlliedHealth: () => boolean;
+  hasCapability: (capability: string) => boolean;
 }
 
 const TOKEN_KEY = "carescribe_token";
@@ -33,6 +45,70 @@ let _currentToken: string | null = null;
 setAuthTokenGetter(() => _currentToken);
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// Role capability matrix
+const ROLE_CAPABILITIES: Record<UserRole, Record<string, boolean>> = {
+  support_coordinator: {
+    "view_all_clients": true,
+    "view_all_sessions": true,
+    "view_all_workers": true,
+    "view_all_notes": true,
+    "view_all_compliance": true,
+    "view_all_incidents": true,
+    "manage_workers": true,
+    "manage_billing": true,
+    "manage_invoices": true,
+    "create_invoices": true,
+    "manage_ndis_plans": true,
+    "write_notes": true,
+    "manage_credentials": true,
+    "create_reports": true,
+    "body_map_coding": false,
+    "allied_health_reports": false,
+    "multilingual_input": true,
+    "toolkit_management": true,
+  },
+  support_worker: {
+    "view_all_clients": false,
+    "view_all_sessions": false,
+    "view_all_workers": false,
+    "view_all_notes": false,
+    "view_all_compliance": false,
+    "view_all_incidents": false,
+    "manage_workers": false,
+    "manage_billing": false,
+    "manage_invoices": false,
+    "create_invoices": false,
+    "manage_ndis_plans": false,
+    "write_notes": true,
+    "manage_credentials": true,
+    "create_reports": false,
+    "body_map_coding": false,
+    "allied_health_reports": false,
+    "multilingual_input": true,
+    "toolkit_management": false,
+  },
+  allied_health_pro: {
+    "view_all_clients": false,
+    "view_all_sessions": false,
+    "view_all_workers": false,
+    "view_all_notes": false,
+    "view_all_compliance": false,
+    "view_all_incidents": false,
+    "manage_workers": false,
+    "manage_billing": true,
+    "manage_invoices": true,
+    "create_invoices": true,
+    "manage_ndis_plans": false,
+    "write_notes": true,
+    "manage_credentials": true,
+    "create_reports": true,
+    "body_map_coding": true,
+    "allied_health_reports": true,
+    "multilingual_input": true,
+    "toolkit_management": true,
+  },
+};
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(() => {
@@ -79,8 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: data.user.id,
         email: data.user.email,
         full_name: data.user.full_name || "",
-        role: data.user.role || "support_worker",
-        account_type: data.user.account_type || "independent_worker",
+        role: (data.user.role || "support_worker") as UserRole,
+        account_type: (data.user.account_type || "independent_worker") as AccountType,
         onboarding_complete: data.user.onboarding_complete ?? true,
         organizationId: data.user.organization_id ?? undefined,
       };
@@ -119,8 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id: data.user.id,
           email: data.user.email,
           full_name: data.user.full_name || "",
-          role: data.user.role || "support_worker",
-          account_type: data.user.account_type || "independent_worker",
+          role: (data.user.role || "support_worker") as UserRole,
+          account_type: (data.user.account_type || "independent_worker") as AccountType,
           onboarding_complete: data.user.onboarding_complete ?? true,
           organizationId: data.user.organization_id ?? undefined,
         };
@@ -131,6 +207,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Non-critical: token stored, user profile refresh failed
     }
   }, []);
+
+  // Memoized helper methods
+  const isCoordinator = useCallback(() => user?.role === "support_coordinator", [user]);
+  const isSupportWorker = useCallback(() => user?.role === "support_worker", [user]);
+  const isAlliedHealth = useCallback(() => user?.role === "allied_health_pro", [user]);
+  
+  const hasCapability = useCallback((capability: string) => {
+    if (!user) return false;
+    const capabilities = ROLE_CAPABILITIES[user.role];
+    return capabilities?.[capability] ?? false;
+  }, [user]);
 
   return (
     <AuthContext.Provider
@@ -143,6 +230,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         updateUser,
         updateToken,
+        isCoordinator,
+        isSupportWorker,
+        isAlliedHealth,
+        hasCapability,
       }}
     >
       {children}
@@ -154,4 +245,63 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
+}
+
+/**
+ * Hook to check if user has a specific role
+ */
+export function useIsRole(role: UserRole): boolean {
+  const { user } = useAuth();
+  return user?.role === role;
+}
+
+/**
+ * Hook to check if user has a specific capability
+ */
+export function useHasCapability(capability: string): boolean {
+  const { hasCapability } = useAuth();
+  return hasCapability(capability);
+}
+
+/**
+ * Component wrapper for role-based rendering
+ */
+export function RequireRole({ 
+  children, 
+  roles,
+  fallback = null,
+}: {
+  children: React.ReactNode;
+  roles: UserRole | UserRole[];
+  fallback?: React.ReactNode;
+}) {
+  const { user } = useAuth();
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
+  
+  if (!user || !allowedRoles.includes(user.role)) {
+    return fallback;
+  }
+  
+  return children;
+}
+
+/**
+ * Component wrapper for capability-based rendering
+ */
+export function RequireCapability({
+  children,
+  capability,
+  fallback = null,
+}: {
+  children: React.ReactNode;
+  capability: string;
+  fallback?: React.ReactNode;
+}) {
+  const { hasCapability } = useAuth();
+  
+  if (!hasCapability(capability)) {
+    return fallback;
+  }
+  
+  return children;
 }

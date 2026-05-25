@@ -22,6 +22,10 @@ import IncidentNew from "@/pages/incident-new";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
+import Workers from "@/pages/workers";
+import Invoices from "@/pages/invoices";
+import Credentials from "@/pages/credentials";
+import Toolkit from "@/pages/toolkit";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -155,6 +159,31 @@ function Router() {
       <Route path="/documents">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Coordinator-specific pages ───────────────────────────────────── */}
+      <Route path="/workers">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><Workers /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/invoices">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><Invoices /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/credentials">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><Credentials /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/toolkit">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><Toolkit /></AppLayout>
         </ProtectedRoute>
       </Route>
 

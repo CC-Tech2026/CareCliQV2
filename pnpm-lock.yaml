@@ -25,10 +25,10 @@ catalogs:
       specifier: ^25.3.3
       version: 25.3.5
     '@types/react':
-      specifier: ^19.2.0
+      specifier: ^19.2.14
       version: 19.2.14
     '@types/react-dom':
-      specifier: ^19.2.0
+      specifier: ^19.2.3
       version: 19.2.3
     '@vitejs/plugin-react':
       specifier: ^5.0.4
@@ -745,6 +745,16 @@ importers:
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.90.21(react@19.1.0)
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.1.0(react@19.1.0)
+    devDependencies:
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.14)
 
   lib/api-spec:
     devDependencies:

@@ -47,6 +47,10 @@ const NAV_ITEMS: {
   { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
   // Compliance: coordinator/admin only — workers must not see org-wide audit data
   { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
+  { href: "/workers",    label: "Team",          icon: Users,        roles: ["admin", "support_coordinator"] },
+  { href: "/invoices",   label: "Invoices",      icon: FileBarChart2, roles: ["admin", "support_coordinator"] },
+  { href: "/credentials",label: "Credentials",   icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
+  { href: "/toolkit",    label: "Toolkit",       icon: Plus,         roles: ["admin", "support_coordinator"] },
   // Reports: coordinator/admin + allied health (they need clinical report access)
   { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["admin", "support_coordinator", "allied_health"] },
   { href: "/settings",   label: "Settings",      icon: Settings },
@@ -88,6 +92,7 @@ function SidebarContents({
   location,
   collapsed,
   isDrawer,
+  alertCount,
   displayName,
   displayRole,
   initials,

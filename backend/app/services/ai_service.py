@@ -13,7 +13,25 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=settings.openai_api_key)
+_client = None
+
+def get_openai_client():
+    """Lazy-load OpenAI client to avoid initialization errors with dummy API keys."""
+    global _client
+    if _client is None:
+        api_key = settings.openai_api_key
+        if not api_key or api_key.startswith("sk-dummy"):
+            logger.warning(
+                "OpenAI API key is not configured or is a dummy key. "
+                "AI features will be unavailable. Set a valid OPENAI_API_KEY in .env"
+            )
+            return None
+        try:
+            _client = OpenAI(api_key=api_key)
+        except Exception as e:
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+            return None
+    return _client
 
 # ---------------------------------------------------------------------------
 # CareScribe Master System Prompt (from spec)
@@ -194,7 +212,11 @@ Provide one rewrite per flagged phrase, matching the index number."""
 
     # Fallback: GPT-4o-mini with CareScribe system prompt
     try:
-        response = client.chat.completions.create(
+        openai_client = get_openai_client()
+        if not openai_client:
+            logger.warning("OpenAI client not configured — skipping RP enrichment")
+            return rp_flags
+        response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -362,7 +384,22 @@ Return ONLY this JSON (no markdown, no explanation):
 
 If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty."""
 
-    response = client.chat.completions.create(
+    openai_client = get_openai_client()
+    if not openai_client:
+        logger.warning("OpenAI client not configured — returning minimal session analysis")
+        return {
+            "session_summary": "Session analysis unavailable — OpenAI API not configured.",
+            "structured_notes": existing_structured,
+            "ndis_mapping": {"support_category": "Core Supports", "support_items": []},
+            "compliance": {"score": 0, "score_breakdown": {}, "flags": ["No API key configured"], "restrictive_practice_detected": False, "recommendations": []},
+            "budget_insights": {"estimated_cost": 0.0, "budget_status": "unknown"},
+            "key_observations": [],
+            "concerns": [],
+            "next_session_recommendations": [],
+            "progress_trend": "stable",
+        }
+
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -435,7 +472,12 @@ Write a concise clinical summary (3-4 sentences) covering:
 
 Use person-first language, be professional and factual, and align with NDIS Active Support principles."""
 
-    response = client.chat.completions.create(
+    openai_client = get_openai_client()
+    if not openai_client:
+        logger.warning("OpenAI client not configured — returning placeholder summary")
+        return "Patient summary unavailable — OpenAI API not configured."
+
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -536,7 +578,20 @@ Respond with a JSON object:
   "flags": ["flag if any"]
 }}"""
 
-    response = client.chat.completions.create(
+    openai_client = get_openai_client()
+    if not openai_client:
+        logger.warning("OpenAI client not configured — returning default compliance response")
+        return {
+            "score": 0,
+            "assessment": "Compliance check unavailable — OpenAI API not configured.",
+            "score_breakdown": {},
+            "flags": ["No API key configured"],
+            "checks": {"notes_present": False, "duration_recorded": False, "goals_linked": False, "session_type_set": False, "outcome_described": False},
+            "passed": 0,
+            "total": 0,
+        }
+
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -614,7 +669,16 @@ Respond with a JSON object:
 
 Write in plain English. Be specific about what information is actually missing. Avoid jargon."""
 
-    response = client.chat.completions.create(
+    openai_client = get_openai_client()
+    if not openai_client:
+        logger.warning("OpenAI client not configured — returning placeholder explanation")
+        return {
+            "explanation": "Compliance explanation unavailable — OpenAI API not configured.",
+            "fix_suggestion": "Please configure a valid OPENAI_API_KEY in your .env file.",
+            "priority": "critical",
+        }
+
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
@@ -662,7 +726,16 @@ Respond with a JSON object:
   "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
 }}"""
 
-    response = client.chat.completions.create(
+    openai_client = get_openai_client()
+    if not openai_client:
+        logger.warning("OpenAI client not configured — returning original text")
+        return {
+            "translated": text,
+            "detected_language": "en",
+            "confidence": 0.0,
+        }
+
+    response = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
