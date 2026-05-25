@@ -32,14 +32,19 @@ def _check_rate_limit(ip: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Account type → access role mapping
+# Account type → access role mapping (CareScribe 3-tier architecture)
 # ---------------------------------------------------------------------------
+# Three roles:
+#   - support_coordinator: Business owner/team lead. Full visibility & management.
+#   - support_worker: Field-based worker. Own clients & sessions only.
+#   - allied_health_pro: Clinical professional (OT, physio, speech). Own caseload + clinical tools.
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
-    "allied_health":      "allied_health",
-    "small_provider":     "admin",
+    "allied_health":      "allied_health_pro",
+    "small_provider":     "support_coordinator",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
+VALID_ROLES = {"support_coordinator", "support_worker", "allied_health_pro"}
 
 
 # ---------------------------------------------------------------------------

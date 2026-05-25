@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments
 from .services import migration_state
+
 import logging
 
 logging.basicConfig(level=logging.INFO)

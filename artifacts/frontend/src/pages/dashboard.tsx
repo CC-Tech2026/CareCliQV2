@@ -189,6 +189,22 @@ export default function Dashboard() {
           </p>
         </div>
 
+        {user?.role === "support_coordinator" && (
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { label: "Team", href: "/workers", description: "Manage workers and assignments", color: "#5533CC" },
+              { label: "Invoices", href: "/invoices", description: "Review billable sessions", color: "#F03060" },
+              { label: "Toolkit", href: "/toolkit", description: "Track supplies and stock levels", color: "#0F766E" },
+            ].map((card) => (
+              <a key={card.href} href={card.href} className="group rounded-[1.75rem] border border-[#E9E5F5] bg-white p-5 transition hover:shadow-[0_16px_40px_rgba(85,51,204,0.08)]">
+                <p className="text-[12px] uppercase tracking-[0.25em] font-bold" style={{ color: card.color }}>{card.label}</p>
+                <p className="mt-3 text-lg font-bold text-[#1E1640]">{card.description}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#5533CC] group-hover:underline">Open <ArrowRight size={14} /></span>
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* CRITICAL ACTIONS / ACTIVE LIVE INSTANCE */}
         {activeSession && (
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-5 sm:p-6 rounded-[2rem] bg-white/90 backdrop-blur-md border border-solid border-[#F03060]/30 shadow-[0_8px_32px_-4px_rgba(240,48,96,0.08)] gap-4">

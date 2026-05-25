@@ -1,5 +1,12 @@
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+# Explicitly load .env file from backend directory
+_backend_dir = Path(__file__).parent.parent.parent
+_env_file = _backend_dir / ".env"
+load_dotenv(_env_file)
 
 
 class Settings(BaseSettings):
@@ -18,7 +25,6 @@ class Settings(BaseSettings):
     pii_encryption_key: str = os.environ.get("PII_ENCRYPTION_KEY", "")
 
     class Config:
-        env_file = ".env"
         extra = "ignore"
 
 
