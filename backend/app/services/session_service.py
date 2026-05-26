@@ -156,7 +156,6 @@ def _normalize(row: Dict[str, Any]) -> Dict[str, Any]:
     legal_record_text = (
         out.get("translated_english_note")
         or out.get("compliance_input_text")
-        or out.get("notes")
         or ""
     )
     out["legal_record_text"] = legal_record_text
@@ -671,7 +670,6 @@ async def get_compliance_report(
         legal_note = (
             session.get("translated_english_note")
             or session.get("compliance_input_text")
-            or session.get("notes")
             or ""
         )
         report.append(

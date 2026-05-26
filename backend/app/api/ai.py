@@ -65,6 +65,10 @@ async def get_insights(body: InsightRequest, current_user: dict = Depends(get_cu
     try:
         insights = await ai_service.generate_clinical_insights(session_data, participant)
         return insights
+    except ValueError as e:
+        if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"AI insight error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -80,7 +84,10 @@ async def check_compliance(body: ComplianceRequest, current_user: dict = Depends
     session = await session_service.get_session_by_id(body.session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if not (session.get("compliance_input_text") or session.get("translated_english_note") or "").strip():
+    if (
+        session.get("translation_status") in ai_service.BLOCKING_TRANSLATION_STATUSES
+        or not (session.get("compliance_input_text") or session.get("translated_english_note") or "").strip()
+    ):
         raise HTTPException(
             status_code=422,
             detail="Compliance blocked: English legal record is missing or translation failed.",
@@ -88,6 +95,10 @@ async def check_compliance(body: ComplianceRequest, current_user: dict = Depends
     try:
         result = await ai_service.check_compliance(session)
         return result
+    except ValueError as e:
+        if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Compliance check error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -195,9 +206,21 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
     if result.get("is_ready_for_billing") and body.session_id:
         try:
             from ..services import session_service
-            await session_service.update_session(
-                body.session_id, {"is_ready_for_billing": True}, current_user
+            session = await session_service.get_session_by_id(body.session_id, current_user)
+            legal_ready = bool(
+                session
+                and session.get("translation_status") not in ai_service.BLOCKING_TRANSLATION_STATUSES
+                and (session.get("compliance_input_text") or session.get("translated_english_note") or "").strip()
             )
+            if legal_ready:
+                await session_service.update_session(
+                    body.session_id, {"is_ready_for_billing": True}, current_user
+                )
+            else:
+                logger.warning(
+                    "Skipped billing-ready flag for session %s because English legal record is not ready",
+                    body.session_id,
+                )
         except Exception as exc:
             logger.warning("Failed to flag is_ready_for_billing on session %s: %s", body.session_id, exc)
 

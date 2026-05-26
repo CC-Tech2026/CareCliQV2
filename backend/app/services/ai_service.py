@@ -23,6 +23,24 @@ class TranslationProviderUnavailable(RuntimeError):
 class TranslationProviderFailure(RuntimeError):
     """Raised when a configured translation provider cannot translate."""
 
+
+BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
+LEGAL_RECORD_REQUIRED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
+
+
+def _legal_record_text_or_raise(session_data: dict) -> str:
+    """Return the English legal record text, failing closed on raw/source notes."""
+    translation_status = str(session_data.get("translation_status") or "not_required")
+    legal_text = (
+        session_data.get("compliance_input_text")
+        or session_data.get("translated_english_note")
+        or ""
+    )
+    if translation_status in BLOCKING_TRANSLATION_STATUSES or not str(legal_text).strip():
+        raise ValueError(LEGAL_RECORD_REQUIRED_MESSAGE)
+    return str(legal_text).strip()
+
+
 # ---------------------------------------------------------------------------
 # CareScribe Master System Prompt (from spec)
 # ---------------------------------------------------------------------------
@@ -285,16 +303,24 @@ async def generate_session_analysis(
             for f in rp_flags
         )
 
-    # Build structured notes context
-    existing_structured = {
+    legal_record_text = _legal_record_text_or_raise(session_data)
+
+    # Build structured notes context only when those fields are already part of
+    # the English legal record. Raw source-language structured fields are audit
+    # context, not compliance input.
+    raw_structured = {
         "activities_performed": session_data.get("activities_performed") or "",
         "participant_response": session_data.get("participant_response") or "",
         "outcomes": session_data.get("outcomes") or "",
         "progress_toward_goals": session_data.get("progress_toward_goals") or "",
     }
+    existing_structured = {
+        key: value if str(value).strip() and str(value).strip() in legal_record_text else ""
+        for key, value in raw_structured.items()
+    }
     has_structured = any(v.strip() for v in existing_structured.values())
 
-    notes_section = f"Session Notes: {session_data.get('notes', 'No notes provided')}"
+    notes_section = f"Session Notes: {legal_record_text}"
     if has_structured:
         notes_section += f"""
 Structured Fields Already Completed:
@@ -424,7 +450,7 @@ async def generate_patient_summary(participant_data: dict, sessions: list) -> st
     sessions_text = "\n".join([
         f"- {s.get('session_date', 'Unknown date')}: {s.get('session_type', 'Session')} "
         f"({s.get('duration_minutes', 0)} min) — "
-        f"{(s.get('translated_english_note') or s.get('compliance_input_text') or s.get('notes') or 'No notes')[:200]}"
+        f"{(s.get('translated_english_note') or s.get('compliance_input_text') or 'English legal record unavailable')[:200]}"
         for s in sessions[-5:]
     ])
 
@@ -500,15 +526,9 @@ async def check_compliance(session_data: dict) -> dict:
     Kept for backward compatibility with the /compliance endpoints.
     For new code, prefer generate_session_analysis() which returns the full spec.
     """
-    # Quick local pre-assessment for context
-    notes = (session_data.get("notes") or "").strip()
-    structured_text = " ".join(filter(None, [
-        session_data.get("activities_performed") or "",
-        session_data.get("outcomes") or "",
-        session_data.get("participant_response") or "",
-        session_data.get("progress_toward_goals") or "",
-    ]))
-    effective_text = structured_text if len(structured_text) > len(notes) else notes
+    # Quick local pre-assessment for context. Compliance AI is allowed to see
+    # only the English legal record, never the raw source-language note.
+    effective_text = _legal_record_text_or_raise(session_data)
     goals = session_data.get("goals_addressed") or []
     if isinstance(goals, str):
         try:

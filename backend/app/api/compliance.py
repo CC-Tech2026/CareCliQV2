@@ -118,7 +118,7 @@ async def compliance_report_for_patient(patient_id: str, current_user: dict = De
             "compliance_score": score,
             "compliance_status": status,
             "duration_minutes": s.get("duration_minutes"),
-            "notes_length": len(s.get("notes") or ""),
+            "notes_length": len(s.get("compliance_input_text") or s.get("translated_english_note") or ""),
             "goals_linked": bool(goals),
             "status": s.get("status"),
         })

@@ -515,7 +515,6 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
     legal_record_text = (
         session.get("translated_english_note")
         or session.get("compliance_input_text")
-        or session.get("notes")
         or ""
     )
     notes_text = legal_record_text
@@ -546,12 +545,23 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
         structured_notes = ai_insights.get("structured_notes") or {}
     activity_log = ai_insights.get("activity_log") or []
 
+    if isinstance(structured_notes, dict):
+        structured_notes = {
+            key: value
+            for key, value in structured_notes.items()
+            if str(value or "").strip()
+            and str(value or "").strip() in legal_record_text
+        }
+    else:
+        structured_notes = {}
+
     # Deterministic compliance re-computed from saved data (mirrors the frontend gate)
     has_participant = bool(participant_id)
     duration_minutes_val = session.get("duration_minutes") or 0
     duration_ok = duration_minutes_val > 0
     has_activities = len(activity_log) > 0 if isinstance(activity_log, list) else False
-    any_note_filled = has_db_structured or any(
+    has_legal_structured = bool(structured_notes)
+    any_note_filled = bool(notes_text.strip()) or has_legal_structured or any(
         (structured_notes.get(k) or "").strip()
         for k in ["activitiesPerformed", "outcomes", "participantResponse", "progressTowardGoals"]
     ) if isinstance(structured_notes, dict) else False
