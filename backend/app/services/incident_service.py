@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from .supabase_client import get_supabase_admin
+from .documentation_normalization_service import normalize_documentation_for_legal_record
+from .compliance_engine import BLOCKING_TRANSLATION_STATUSES, COMPLIANCE_BLOCKED_MESSAGE
 from ..core.access import can_access_session, is_coordinator_role, user_id
 from ..schemas.incident import (
     IncidentCreate,
@@ -18,6 +20,14 @@ from ..schemas.incident import (
 logger = logging.getLogger(__name__)
 
 TABLE = "incidents"
+LEGAL_TEXT_FIELDS = (
+    "title",
+    "description",
+    "participant_impact",
+    "worker_actions",
+    "investigation_notes",
+    "corrective_actions",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +67,17 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
         return row
 
     enriched = dict(row)
+
+    legal_record_text = (
+        enriched.get("translated_english_report")
+        or enriched.get("compliance_input_text")
+        or ""
+    )
+    enriched["legal_record_text"] = legal_record_text
+    enriched["display_description"] = legal_record_text
+    if legal_record_text:
+        enriched["original_description"] = enriched.get("description")
+        enriched["description"] = legal_record_text
 
     incident_type = str(
         enriched.get("incident_type") or "other"
@@ -111,6 +132,66 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     )
 
     return enriched
+
+
+def _build_legal_source_text(
+    source_data: dict[str, Any],
+    existing: Optional[dict[str, Any]] = None,
+) -> str:
+    source = {**(existing or {}), **source_data}
+    sections: list[str] = []
+    labels = {
+        "title": "Title",
+        "description": "Description",
+        "participant_impact": "Participant impact",
+        "worker_actions": "Worker actions",
+        "investigation_notes": "Investigation notes",
+        "corrective_actions": "Corrective actions",
+    }
+    for field in LEGAL_TEXT_FIELDS:
+        value = str(source.get(field) or "").strip()
+        if value:
+            sections.append(f"{labels[field]}: {value}")
+    return "\n\n".join(sections).strip()
+
+
+async def _apply_legal_record_normalization(
+    payload: dict[str, Any],
+    source_data: dict[str, Any],
+    existing: Optional[dict[str, Any]] = None,
+    current_user: Optional[dict] = None,
+    incident_id: Optional[str] = None,
+) -> None:
+    should_normalize = bool(source_data.get("status") in {"reported", "under_investigation", "resolved", "closed"}) or any(
+        field in source_data for field in LEGAL_TEXT_FIELDS
+    )
+    if not should_normalize:
+        return
+
+    source_text = _build_legal_source_text(source_data, existing)
+    normalized = await normalize_documentation_for_legal_record(
+        source_text=source_text,
+        requested_language=source_data.get("input_language") or source_data.get("detected_language"),
+        user=current_user,
+        session_id=incident_id,
+    )
+    payload.update(
+        {
+            "original_language_input": normalized.get("original_language_input"),
+            "detected_language": normalized.get("detected_language"),
+            "translated_english_report": normalized.get("translated_english_note"),
+            "compliance_input_text": normalized.get("compliance_input_text"),
+            "translation_status": normalized.get("translation_status"),
+            "translation_provider": normalized.get("translation_provider"),
+            "translation_confidence": normalized.get("translation_confidence"),
+            "translation_metadata": normalized.get("translation_metadata"),
+            "translation_error": normalized.get("translation_error"),
+        }
+    )
+    if normalized.get("translation_status") not in BLOCKING_TRANSLATION_STATUSES:
+        payload["translation_completed_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        raise ValueError(COMPLIANCE_BLOCKED_MESSAGE)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +428,12 @@ async def create_incident(
         exclude_none=True
     )
 
+    await _apply_legal_record_normalization(
+        payload,
+        payload,
+        current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
+    )
+
     if org_id:
         payload["organization_id"] = org_id
     if user_id:
@@ -414,6 +501,28 @@ async def update_incident(
     supabase = get_supabase_admin()
 
     payload = dict(updates)
+
+    existing = None
+    try:
+        existing_result = (
+            supabase
+            .table(TABLE)
+            .select("*")
+            .eq("id", incident_id)
+            .execute()
+        )
+        existing_rows = _safe_rows(existing_result.data)
+        existing = existing_rows[0] if existing_rows else None
+    except Exception as exc:
+        logger.warning("Could not fetch incident before normalization: %s", exc)
+
+    await _apply_legal_record_normalization(
+        payload,
+        payload,
+        existing=existing,
+        current_user=current_user,
+        incident_id=incident_id,
+    )
 
     for key in (
         "incident_date",

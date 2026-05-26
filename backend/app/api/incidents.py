@@ -79,6 +79,10 @@ async def create_incident(
             after_state={"id": result.get("id"), "title": result.get("title"), "severity": result.get("severity")},
         )
         return result
+    except ValueError as e:
+        if "Compliance blocked" in str(e):
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Error creating incident: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -96,7 +100,12 @@ async def update_incident(
     if not is_coordinator_role(user) and existing.get("user_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Access denied")
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    updated = await incident_service.update_incident(incident_id, updates, current_user=user)
+    try:
+        updated = await incident_service.update_incident(incident_id, updates, current_user=user)
+    except ValueError as e:
+        if "Compliance blocked" in str(e):
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     if not updated:
         raise HTTPException(status_code=404, detail="Incident not found")
     await audit_service.log_action(
