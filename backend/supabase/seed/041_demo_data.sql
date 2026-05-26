@@ -96,91 +96,163 @@ CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_patient_id ON public.pra
 CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_user_id ON public.practitioner_allocations(user_id);
 CREATE INDEX IF NOT EXISTS idx_practitioner_allocations_org_id ON public.practitioner_allocations(organization_id);
 
-WITH demo_users(id, email, password, full_name, role_name, account_type) AS (
-    VALUES
-        ('10000000-0000-4000-8000-000000000101'::uuid, 'sarah@sunshine-demo.com',  'Sarahsunshine#2026',  'Sarah Mitchell', 'support_coordinator', 'small_provider'),
-        ('10000000-0000-4000-8000-000000000102'::uuid, 'amara@sunshine-demo.com',  'Amarasunshine#2026',  'Amara Okafor',   'support_worker',      'independent_worker'),
-        ('10000000-0000-4000-8000-000000000103'::uuid, 'daniel@sunshine-demo.com', 'Danielsunshine#2026', 'Daniel Hart',   'allied_health',       'allied_health')
-)
-INSERT INTO auth.users (
-    instance_id,
-    id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    confirmation_token,
-    email_change,
-    email_change_token_new,
-    recovery_token
-)
-SELECT
-    '00000000-0000-0000-0000-000000000000'::uuid,
-    id,
-    'authenticated',
-    'authenticated',
-    email,
-    crypt(password, gen_salt('bf')),
-    now(),
-    '{"provider":"email","providers":["email"]}'::jsonb,
-    jsonb_build_object('full_name', full_name),
-    now(),
-    now(),
-    '',
-    '',
-    '',
-    ''
-FROM demo_users
-ON CONFLICT (id) DO UPDATE
-SET
-    email = EXCLUDED.email,
-    encrypted_password = EXCLUDED.encrypted_password,
-    email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
-    raw_app_meta_data = EXCLUDED.raw_app_meta_data,
-    raw_user_meta_data = EXCLUDED.raw_user_meta_data,
-    updated_at = now();
+DO $$
+DECLARE
+    demo record;
+    identities_id_type text;
+    provider_id_exists boolean;
+    provider_id_generated text;
+    identity_payload jsonb;
+BEGIN
+    SELECT data_type
+    INTO identities_id_type
+    FROM information_schema.columns
+    WHERE table_schema = 'auth'
+      AND table_name = 'identities'
+      AND column_name = 'id';
 
-WITH demo_users(id, email, full_name) AS (
-    VALUES
-        ('10000000-0000-4000-8000-000000000101'::uuid, 'sarah@sunshine-demo.com',  'Sarah Mitchell'),
-        ('10000000-0000-4000-8000-000000000102'::uuid, 'amara@sunshine-demo.com',  'Amara Okafor'),
-        ('10000000-0000-4000-8000-000000000103'::uuid, 'daniel@sunshine-demo.com', 'Daniel Hart')
-)
-INSERT INTO auth.identities (
-    id,
-    user_id,
-    provider_id,
-    identity_data,
-    provider,
-    last_sign_in_at,
-    created_at,
-    updated_at
-)
-SELECT
-    id::text,
-    id,
-    id::text,
-    jsonb_build_object(
-        'sub', id::text,
-        'email', email,
-        'email_verified', true,
-        'phone_verified', false,
-        'full_name', full_name
-    ),
-    'email',
-    now(),
-    now(),
-    now()
-FROM demo_users
-ON CONFLICT (provider, provider_id) DO UPDATE
-SET
-    identity_data = EXCLUDED.identity_data,
-    updated_at = now();
+    SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'auth'
+          AND table_name = 'identities'
+          AND column_name = 'provider_id'
+    )
+    INTO provider_id_exists;
+
+    SELECT COALESCE(MAX(is_generated), 'NEVER')
+    INTO provider_id_generated
+    FROM information_schema.columns
+    WHERE table_schema = 'auth'
+      AND table_name = 'identities'
+      AND column_name = 'provider_id';
+
+    -- Reset only these deterministic demo identities if the seed is rerun.
+    DELETE FROM auth.identities
+    WHERE user_id IN (
+        '10000000-0000-4000-8000-000000000101'::uuid,
+        '10000000-0000-4000-8000-000000000102'::uuid,
+        '10000000-0000-4000-8000-000000000103'::uuid
+    );
+
+    DELETE FROM auth.users
+    WHERE lower(email) IN (
+        'sarah@sunshine-demo.com',
+        'amara@sunshine-demo.com',
+        'daniel@sunshine-demo.com'
+    )
+      AND id NOT IN (
+        '10000000-0000-4000-8000-000000000101'::uuid,
+        '10000000-0000-4000-8000-000000000102'::uuid,
+        '10000000-0000-4000-8000-000000000103'::uuid
+    );
+
+    FOR demo IN
+        SELECT *
+        FROM (VALUES
+            ('10000000-0000-4000-8000-000000000101'::uuid, 'sarah@sunshine-demo.com',  'Sarahsunshine#2026',  'Sarah Mitchell', 'support_coordinator', 'small_provider'),
+            ('10000000-0000-4000-8000-000000000102'::uuid, 'amara@sunshine-demo.com',  'Amarasunshine#2026',  'Amara Okafor',   'support_worker',      'independent_worker'),
+            ('10000000-0000-4000-8000-000000000103'::uuid, 'daniel@sunshine-demo.com', 'Danielsunshine#2026', 'Daniel Hart',   'allied_health',       'allied_health')
+        ) AS demo_users(id, email, password, full_name, role_name, account_type)
+    LOOP
+        INSERT INTO auth.users (
+            instance_id,
+            id,
+            aud,
+            role,
+            email,
+            encrypted_password,
+            email_confirmed_at,
+            raw_app_meta_data,
+            raw_user_meta_data,
+            created_at,
+            updated_at,
+            confirmation_token,
+            email_change,
+            email_change_token_new,
+            recovery_token
+        )
+        VALUES (
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            demo.id,
+            'authenticated',
+            'authenticated',
+            demo.email,
+            crypt(demo.password, gen_salt('bf')),
+            now(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('full_name', demo.full_name),
+            now(),
+            now(),
+            '',
+            '',
+            '',
+            ''
+        )
+        ON CONFLICT (id) DO UPDATE
+        SET
+            email = EXCLUDED.email,
+            encrypted_password = EXCLUDED.encrypted_password,
+            email_confirmed_at = COALESCE(auth.users.email_confirmed_at, now()),
+            raw_app_meta_data = EXCLUDED.raw_app_meta_data,
+            raw_user_meta_data = EXCLUDED.raw_user_meta_data,
+            updated_at = now();
+
+        identity_payload := jsonb_build_object(
+            'sub', demo.id::text,
+            'email', demo.email,
+            'email_verified', true,
+            'phone_verified', false,
+            'full_name', demo.full_name
+        );
+
+        IF provider_id_exists AND provider_id_generated <> 'ALWAYS' THEN
+            IF identities_id_type = 'uuid' THEN
+                INSERT INTO auth.identities (
+                    id, user_id, provider_id, identity_data, provider,
+                    last_sign_in_at, created_at, updated_at
+                )
+                VALUES (
+                    gen_random_uuid(), demo.id, demo.id::text, identity_payload, 'email',
+                    now(), now(), now()
+                )
+                ON CONFLICT DO NOTHING;
+            ELSE
+                INSERT INTO auth.identities (
+                    id, user_id, provider_id, identity_data, provider,
+                    last_sign_in_at, created_at, updated_at
+                )
+                VALUES (
+                    demo.id::text, demo.id, demo.id::text, identity_payload, 'email',
+                    now(), now(), now()
+                )
+                ON CONFLICT DO NOTHING;
+            END IF;
+        ELSE
+            IF identities_id_type = 'uuid' THEN
+                INSERT INTO auth.identities (
+                    id, user_id, identity_data, provider,
+                    last_sign_in_at, created_at, updated_at
+                )
+                VALUES (
+                    gen_random_uuid(), demo.id, identity_payload, 'email',
+                    now(), now(), now()
+                )
+                ON CONFLICT DO NOTHING;
+            ELSE
+                INSERT INTO auth.identities (
+                    id, user_id, identity_data, provider,
+                    last_sign_in_at, created_at, updated_at
+                )
+                VALUES (
+                    demo.id::text, demo.id, identity_payload, 'email',
+                    now(), now(), now()
+                )
+                ON CONFLICT DO NOTHING;
+            END IF;
+        END IF;
+    END LOOP;
+END $$;
 
 INSERT INTO public.organizations (
     id,
