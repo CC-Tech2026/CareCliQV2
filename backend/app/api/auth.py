@@ -37,7 +37,7 @@ def _check_rate_limit(ip: str) -> None:
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
     "allied_health":      "allied_health",
-    "small_provider":     "admin",
+    "small_provider":     "support_coordinator",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 

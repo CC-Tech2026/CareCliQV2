@@ -5,6 +5,7 @@ import {
   useGetSessions,
   useGetParticipants,
   useGetComplianceOverview,
+  getGetComplianceOverviewQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -106,10 +107,16 @@ function MetricCard({
 export default function Dashboard() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
+  const isCoordinator = user?.role === "support_coordinator";
 
   const { data: sessions = [], isLoading: sLoad } = useGetSessions({ limit: 50 });
   const { data: participants = [], isLoading: pLoad } = useGetParticipants();
-  const { data: rawOverview, isLoading: oLoad } = useGetComplianceOverview();
+  const { data: rawOverview, isLoading: oLoad } = useGetComplianceOverview({
+    query: {
+      queryKey: getGetComplianceOverviewQueryKey(),
+      enabled: isCoordinator,
+    },
+  });
 
   const now = new Date();
   const thisWeek = sessions.filter(s => isAfter(parseISO(s.session_date), subDays(now, 7)));
@@ -262,13 +269,15 @@ export default function Dashboard() {
             icon={FileText}
             loading={sLoad}
           />
-          <MetricCard
-            label="Audit Score"
-            value={oLoad ? "..." : complianceScore ? `${Math.round(complianceScore)}%` : "N/A"}
-            description="QA aggregate rating"
-            icon={ShieldCheck}
-            loading={oLoad}
-          />
+          {isCoordinator && (
+            <MetricCard
+              label="Audit Score"
+              value={oLoad ? "..." : complianceScore ? `${Math.round(complianceScore)}%` : "N/A"}
+              description="QA aggregate rating"
+              icon={ShieldCheck}
+              loading={oLoad}
+            />
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -355,41 +364,42 @@ export default function Dashboard() {
           {/* SIDEBAR METRIC PANELS */}
           <div className="space-y-6">
 
-            {/* QUALITY AUDIT REGULATORY WIDGET */}
-            <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 sm:p-8 border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)]">
-              <h3 className="text-[11px] font-black uppercase tracking-widest mb-4" style={{ color: COLORS.TEXT_MUTED }}>
-                System Quality Index
-              </h3>
-              <div className="relative">
-                 <div className="flex items-end gap-1 mb-2">
-                   <span className="text-4xl sm:text-5xl font-black tracking-tighter" style={{ color: PLUM }}>
-                     {complianceScore ? Math.round(complianceScore) : "—"}
-                   </span>
-                   <span className="text-md font-bold pb-1 sm:pb-1.5 opacity-40" style={{ color: COLORS.TEXT_MUTED }}>/100</span>
-                 </div>
-                 <div className="w-full h-3 bg-[#F5F3FC] rounded-full overflow-hidden mb-5 p-[2px] border border-[#D8D0F0]/40">
-                   <div 
-                     className="h-full rounded-full transition-all duration-1000 ease-out" 
-                     style={{ 
-                       width: `${complianceScore || 0}%`, 
-                       background: (complianceScore || 0) > 80 
-                         ? `linear-gradient(90deg, ${PLUM}, ${COLORS.SUCCESS})`
-                         : `linear-gradient(90deg, ${CORAL}, ${COLORS.WARNING})`
-                     }} 
-                   />
-                 </div>
-                 <p className="text-[13px] font-medium leading-relaxed" style={{ color: COLORS.TEXT_MAIN }}>
-                   {complianceScore && complianceScore > 80 
-                      ? "Your end-to-end encrypted documentation protocols exceed target NDIS metrics safely."
-                      : "Finalize trailing notes to restore target platform assurance rankings."}
-                 </p>
-                 <Link href="/compliance">
-                   <button className="mt-6 w-full h-11 rounded-xl border border-[#D8D0F0] bg-white text-[11px] font-black uppercase tracking-widest text-[#5533CC] transition-all duration-200 hover:bg-[#F5F3FC] active:scale-[0.99]">
-                     Review Entire Audit Log
-                   </button>
-                 </Link>
+            {isCoordinator && (
+              <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 sm:p-8 border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)]">
+                <h3 className="text-[11px] font-black uppercase tracking-widest mb-4" style={{ color: COLORS.TEXT_MUTED }}>
+                  System Quality Index
+                </h3>
+                <div className="relative">
+                   <div className="flex items-end gap-1 mb-2">
+                     <span className="text-4xl sm:text-5xl font-black tracking-tighter" style={{ color: PLUM }}>
+                       {complianceScore ? Math.round(complianceScore) : "—"}
+                     </span>
+                     <span className="text-md font-bold pb-1 sm:pb-1.5 opacity-40" style={{ color: COLORS.TEXT_MUTED }}>/100</span>
+                   </div>
+                   <div className="w-full h-3 bg-[#F5F3FC] rounded-full overflow-hidden mb-5 p-[2px] border border-[#D8D0F0]/40">
+                     <div
+                       className="h-full rounded-full transition-all duration-1000 ease-out"
+                       style={{
+                         width: `${complianceScore || 0}%`,
+                         background: (complianceScore || 0) > 80
+                           ? `linear-gradient(90deg, ${PLUM}, ${COLORS.SUCCESS})`
+                           : `linear-gradient(90deg, ${CORAL}, ${COLORS.WARNING})`
+                       }}
+                     />
+                   </div>
+                   <p className="text-[13px] font-medium leading-relaxed" style={{ color: COLORS.TEXT_MAIN }}>
+                     {complianceScore && complianceScore > 80
+                        ? "Your end-to-end encrypted documentation protocols exceed target NDIS metrics safely."
+                        : "Finalize trailing notes to restore target platform assurance rankings."}
+                   </p>
+                   <Link href="/compliance">
+                     <button className="mt-6 w-full h-11 rounded-xl border border-[#D8D0F0] bg-white text-[11px] font-black uppercase tracking-widest text-[#5533CC] transition-all duration-200 hover:bg-[#F5F3FC] active:scale-[0.99]">
+                       Review Entire Audit Log
+                     </button>
+                   </Link>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
         </div>

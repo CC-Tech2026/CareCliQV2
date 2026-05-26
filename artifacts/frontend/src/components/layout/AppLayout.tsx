@@ -31,7 +31,7 @@ const TEXT = "#1E1640";
 const APP_BG = "#F5F3FC"; 
 const ACTIVE = "#EDEAFF"; 
 
-type NavRole = "admin" | "support_worker" | "allied_health" | "support_coordinator";
+type NavRole = "support_coordinator" | "support_worker" | "allied_health";
 
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string };
 
@@ -45,10 +45,10 @@ const NAV_ITEMS: {
   { href: "/patients",   label: "Participants",  icon: Users },
   { href: "/sessions",   label: "Sessions",      icon: CalendarDays },
   { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
-  // Compliance: coordinator/admin only — workers must not see org-wide audit data
-  { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
-  // Reports: coordinator/admin + allied health (they need clinical report access)
-  { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["admin", "support_coordinator", "allied_health"] },
+  // Compliance: support coordinator only — workers must not see org-wide audit data
+  { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["support_coordinator"] },
+  // Reports: support coordinator + allied health (they need clinical report access)
+  { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["support_coordinator", "allied_health"] },
   { href: "/settings",   label: "Settings",      icon: Settings },
 ];
 
@@ -61,8 +61,8 @@ const BOTTOM_NAV: {
   { href: "/dashboard",  label: "Home",    icon: LayoutDashboard },
   { href: "/sessions",   label: "Sessions", icon: CalendarDays },
   { href: "/patients",   label: "People",   icon: Users },
-  // Audit only for coordinators in the bottom tab bar
-  { href: "/compliance", label: "Audit",    icon: ShieldCheck, roles: ["admin", "support_coordinator"] },
+  // Audit only for support coordinators in the bottom tab bar
+  { href: "/compliance", label: "Audit",    icon: ShieldCheck, roles: ["support_coordinator"] },
 ];
 
 function isActive(location: string, href: string) {

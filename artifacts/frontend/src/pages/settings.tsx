@@ -140,19 +140,15 @@ function PanelCard({
 // Main component
 // ---------------------------------------------------------------------------
 const ROLE_LABELS: Record<string, string> = {
-  admin:               "Admin",
-  support_coordinator: "Coordinator",
-  allied_health:       "Allied Health",
-  support_worker:      "Support Worker",
-  auditor:             "Auditor",
+  support_coordinator: "CareScribe Parent",
+  allied_health:       "CareScribe Pro",
+  support_worker:      "CareScribe Child",
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  admin:               { bg: "rgba(240,48,96,0.1)",   color: "#c41144" },
   support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: "#5533CC" },
   allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
-  auditor:             { bg: "rgba(245,158,11,0.1)",  color: "#92400e" },
 };
 
 interface OrgMember {
@@ -176,7 +172,7 @@ interface PendingInvite {
 export default function Settings() {
   const { toast } = useToast();
   const { user, token: authToken } = useAuth();
-  const isCoordinator = user?.role === "admin" || user?.role === "support_coordinator";
+  const isCoordinator = user?.role === "support_coordinator";
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.coordinatorOnly || isCoordinator);
 
   const [activeSection, setActiveSection] = useState<SectionId>("account");
@@ -227,7 +223,7 @@ export default function Settings() {
     "manual therapy", "sports therapy",
   ];
 
-  // ── Team state (coordinator/admin only) ────────────────────────────────────
+  // ── Team state (support coordinator only) ──────────────────────────────────
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
@@ -1089,7 +1085,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Team section (coordinator/admin only) ───────────────────────── */}
+        {/* ── Team section (support coordinator only) ─────────────────────── */}
         {activeSection === "team" && isCoordinator && (
           <Section
             title="Team"

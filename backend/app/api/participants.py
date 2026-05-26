@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from ..core.access import is_coordinator_role
 from ..core.security import get_current_user
 from ..schemas.participant import (
     GoalsUpdateBody,
@@ -89,6 +90,12 @@ async def create_participant(
     Create participant within current user's organization.
     """
 
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can create participants",
+        )
+
     try:
         return await participant_service.create_participant(
             body,
@@ -140,6 +147,12 @@ async def replace_participant(
     Full replacement update.
     """
 
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can update participant records",
+        )
+
     await _require_participant_access(
         participant_id,
         current_user,
@@ -169,6 +182,12 @@ async def update_participant(
     """
     Partial update.
     """
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can update participant records",
+        )
 
     await _require_participant_access(
         participant_id,
@@ -201,8 +220,14 @@ async def delete_participant(
     """
     Delete participant.
 
-    Usually coordinator/admin only.
+    Usually support coordinator only.
     """
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can delete participants",
+        )
 
     await _require_participant_access(
         participant_id,
@@ -237,6 +262,12 @@ async def update_participant_goals(
     """
     Replace full participant goals array.
     """
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can update participant goals",
+        )
 
     await _require_participant_access(
         participant_id,
@@ -320,6 +351,12 @@ async def create_participant_plan(
     """
     Create or update participant NDIS plan.
     """
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can create or update NDIS plans",
+        )
 
     await _require_participant_access(
         participant_id,

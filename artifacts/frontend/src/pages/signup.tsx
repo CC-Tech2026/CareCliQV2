@@ -227,8 +227,8 @@ export default function Signup() {
     },
     {
       value: "small_provider" as AccountType,
-      title: "Small Provider / Care Team",
-      sub: "Small care company or NDIS provider organisation",
+      title: "Support Coordinator",
+      sub: "CareScribe Parent with organisation oversight and team management",
       dot: PLUM,
     },
   ] as const;
@@ -416,7 +416,7 @@ export default function Signup() {
               Write beautiful notes,
               <br />
               <span className="text-[#FFD2DA]">
-                minus the heavy admin.
+                minus the heavy paperwork.
               </span>
             </h1>
 

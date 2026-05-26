@@ -19,10 +19,9 @@ interface ProtectedRouteProps {
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  admin: "Administrator",
-  support_coordinator: "Support Coordinator",
-  support_worker: "Support Worker",
-  allied_health: "Allied Health Professional",
+  support_coordinator: "Support Coordinator (CareScribe Parent)",
+  support_worker: "Support Worker (CareScribe Child)",
+  allied_health: "Allied Health Professional (CareScribe Pro)",
 };
 
 /**

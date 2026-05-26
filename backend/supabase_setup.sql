@@ -274,9 +274,6 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'audit_logs' AND policyname = 'service_role_all_audit_logs') THEN
         CREATE POLICY "service_role_all_audit_logs" ON audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'alerts' AND policyname = 'anon_read_alerts') THEN
-        CREATE POLICY "anon_read_alerts" ON alerts FOR SELECT TO anon USING (true);
-    END IF;
 END $$;
 
 -- Update existing seed data to add missing fields
@@ -518,7 +515,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     email        TEXT NOT NULL,
     full_name    TEXT DEFAULT '',
     role         TEXT NOT NULL DEFAULT 'support_worker'
-                   CHECK (role IN ('admin', 'support_worker', 'allied_health')),
+                   CHECK (role IN ('support_worker', 'support_coordinator', 'allied_health')),
     is_active    BOOLEAN NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_login   TIMESTAMPTZ
@@ -585,10 +582,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_worker_id ON public.sessions(worker_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id ON public.sessions(practitioner_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_created_by ON public.sessions(created_by);
 
--- NOTE: After running this SQL, create your first admin user:
---   1. Sign up via POST /api/auth/register with role="admin"
+-- NOTE: After running this SQL, create your first support coordinator user:
+--   1. Sign up via POST /api/auth/register with account_type="small_provider"
 --   OR manually insert:
---   INSERT INTO public.users (id, email, role) VALUES ('<auth_user_id>', 'you@example.com', 'admin');
+--   INSERT INTO public.users (id, email, role) VALUES ('<auth_user_id>', 'you@example.com', 'support_coordinator');
 
 -- ============================================================
 -- Session Messages — chat-based session documentation (Sprint 1)
@@ -674,6 +671,8 @@ END $$;
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS incidents (
     id                  UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    organization_id     UUID,
+    user_id             UUID,
     participant_id      UUID        REFERENCES patients(id) ON DELETE SET NULL,
     session_id          UUID        REFERENCES sessions(id) ON DELETE SET NULL,
     title               TEXT        NOT NULL,
@@ -701,6 +700,8 @@ CREATE TABLE IF NOT EXISTS incidents (
 );
 
 CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant_id);
+CREATE INDEX IF NOT EXISTS incidents_organization_id_idx ON incidents(organization_id);
+CREATE INDEX IF NOT EXISTS incidents_user_id_idx ON incidents(user_id);
 CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
 CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
 CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
@@ -717,8 +718,8 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
-                                    'admin', 'manager', 'support_worker',
-                                    'support_coordinator', 'auditor'
+                                    'support_worker',
+                                    'support_coordinator', 'allied_health'
                                 )),
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     invited_by      UUID        REFERENCES public.users(id),
@@ -752,8 +753,10 @@ SELECT
     u.id,
     u.organization_id,
     CASE u.role
-        WHEN 'admin'               THEN 'admin'
+        WHEN 'admin'               THEN 'support_coordinator'
+        WHEN 'manager'             THEN 'support_coordinator'
         WHEN 'support_coordinator' THEN 'support_coordinator'
+        WHEN 'allied_health'       THEN 'allied_health'
         ELSE 'support_worker'
     END,
     u.is_active
@@ -775,8 +778,8 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     email           TEXT        NOT NULL,
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
-                                    'admin', 'manager', 'support_worker',
-                                    'support_coordinator', 'auditor'
+                                    'support_worker',
+                                    'support_coordinator', 'allied_health'
                                 )),
     token           TEXT        NOT NULL UNIQUE,
     expires_at      TIMESTAMPTZ NOT NULL,

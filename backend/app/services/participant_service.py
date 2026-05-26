@@ -321,6 +321,8 @@ async def create_participant(
 
     if not current_user or not user_id(current_user) or not organization_id(current_user):
         raise PermissionError("Authenticated organization membership is required")
+    if not is_coordinator(current_user):
+        raise PermissionError("Only support coordinators can create participants")
 
     supabase = get_supabase_admin()
 

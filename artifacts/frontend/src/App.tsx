@@ -39,13 +39,13 @@ const queryClient = new QueryClient({
 });
 
 // All authenticated roles
-const ALL_ROLES = ["admin", "support_worker", "allied_health", "support_coordinator"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health"] as const;
 
-// Admin + coordinator only — compliance dashboards, billing, reports, participant management
-const COORDINATOR_ROLES = ["admin", "support_coordinator"] as const;
+// Support Coordinator / CareScribe Parent only — oversight, billing, team, compliance.
+const COORDINATOR_ROLES = ["support_coordinator"] as const;
 
-// Coordinator + allied health — reports contain clinical documentation allied health needs
-const COORDINATOR_AND_ALLIED = ["admin", "support_coordinator", "allied_health"] as const;
+// Coordinator + allied health — reports contain clinical documentation allied health needs.
+const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 
 function Router() {
   return (
@@ -138,14 +138,14 @@ function Router() {
         )}
       </Route>
 
-      {/* ── Compliance — coordinator/admin only ──────────────────────────── */}
+      {/* ── Compliance — support coordinator only ────────────────────────── */}
       <Route path="/compliance">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* ── Reports — coordinator/admin + allied health ───────────────────── */}
+      {/* ── Reports — support coordinator + allied health ────────────────── */}
       <Route path="/reports">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>

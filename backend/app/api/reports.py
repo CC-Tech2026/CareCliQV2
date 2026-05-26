@@ -7,6 +7,13 @@ import json
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+REPORT_ROLES = {"support_coordinator", "allied_health"}
+
+
+def _require_report_access(current_user: dict) -> None:
+    if current_user.get("role") not in REPORT_ROLES:
+        raise HTTPException(status_code=403, detail="Reports are restricted to support coordinators and allied health professionals")
+
 
 def _derive_status(score) -> str:
     if score is None:
@@ -21,6 +28,7 @@ def _derive_status(score) -> str:
 
 @router.get("/participant/{participant_id}/summary")
 async def participant_summary(participant_id: str, current_user: dict = Depends(get_current_user)):
+    _require_report_access(current_user)
     participant = await participant_service.get_participant_by_id(participant_id, current_user)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
@@ -31,6 +39,7 @@ async def participant_summary(participant_id: str, current_user: dict = Depends(
 
 @router.get("/compliance-overview")
 async def compliance_overview(current_user: dict = Depends(get_current_user)):
+    _require_report_access(current_user)
     report = await session_service.get_compliance_report(current_user)
     if not report:
         return {

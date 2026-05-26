@@ -7,7 +7,7 @@ from typing import Iterable, Optional
 from fastapi import HTTPException, status
 
 
-COORDINATOR_ROLES = {"admin", "support_coordinator"}
+COORDINATOR_ROLES = {"support_coordinator"}
 SCOPED_ROLES = {"support_worker", "allied_health"}
 VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES
 
