@@ -71,6 +71,47 @@ import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 
 type TranslationView = "original" | "translated" | "both";
 
+const SUPPORTED_DOCUMENTATION_LANGUAGES = [
+  { code: "en", label: "English", speechTag: "en-AU" },
+  { code: "es", label: "Spanish", speechTag: "es-ES" },
+  { code: "fr", label: "French", speechTag: "fr-FR" },
+  { code: "ar", label: "Arabic", speechTag: "ar-SA" },
+  { code: "sw", label: "Swahili", speechTag: "sw-KE" },
+  { code: "zh", label: "Chinese", speechTag: "zh-CN" },
+  { code: "hi", label: "Hindi", speechTag: "hi-IN" },
+  { code: "pt", label: "Portuguese", speechTag: "pt-PT" },
+  { code: "de", label: "German", speechTag: "de-DE" },
+  { code: "it", label: "Italian", speechTag: "it-IT" },
+  { code: "ja", label: "Japanese", speechTag: "ja-JP" },
+  { code: "ko", label: "Korean", speechTag: "ko-KR" },
+  { code: "vi", label: "Vietnamese", speechTag: "vi-VN" },
+  { code: "tl", label: "Tagalog", speechTag: "tl-PH" },
+  { code: "ur", label: "Urdu", speechTag: "ur-PK" },
+  { code: "fa", label: "Persian", speechTag: "fa-IR" },
+  { code: "ru", label: "Russian", speechTag: "ru-RU" },
+  { code: "uk", label: "Ukrainian", speechTag: "uk-UA" },
+  { code: "nl", label: "Dutch", speechTag: "nl-NL" },
+  { code: "tr", label: "Turkish", speechTag: "tr-TR" },
+  { code: "id", label: "Indonesian", speechTag: "id-ID" },
+  { code: "ms", label: "Malay", speechTag: "ms-MY" },
+  { code: "th", label: "Thai", speechTag: "th-TH" },
+  { code: "pl", label: "Polish", speechTag: "pl-PL" },
+  { code: "ro", label: "Romanian", speechTag: "ro-RO" },
+  { code: "el", label: "Greek", speechTag: "el-GR" },
+] as const;
+
+function normalizeLanguageCode(value?: string | null): string | null {
+  const code = value?.trim().toLowerCase().replace("_", "-").split("-")[0];
+  return code || null;
+}
+
+function supportedLanguageCode(value?: string | null): string | null {
+  const code = normalizeLanguageCode(value);
+  return SUPPORTED_DOCUMENTATION_LANGUAGES.some((language) => language.code === code)
+    ? code
+    : null;
+}
+
 interface ChatMessage {
   id: string;
   type: "text" | "voice" | "image" | "file" | "activity" | "goal_update" | "system";
@@ -446,9 +487,13 @@ export default function SessionLive() {
   // ── Voice ──
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState("");
+  const [selectedDocumentationLanguage, setSelectedDocumentationLanguage] = useState(
+    () => supportedLanguageCode(typeof navigator !== "undefined" ? navigator.language : null) || "en",
+  );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const stopIntentRef = useRef(false);
+  const languageManuallySelectedRef = useRef(false);
 
   // ── Body markers ──
   const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
@@ -509,11 +554,21 @@ export default function SessionLive() {
   const voiceMessages = messages.filter((m) => m.type === "voice");
   const imageMessages = messages.filter((m) => m.type === "image");
   const imageUrls = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
-  const documentationLanguage =
-    ((session as unknown as { input_language?: string; detected_language?: string })?.input_language ||
-      (session as unknown as { detected_language?: string })?.detected_language ||
-      (typeof navigator !== "undefined" ? navigator.language : "") ||
-      "en-AU");
+  const selectedLanguage =
+    SUPPORTED_DOCUMENTATION_LANGUAGES.find((language) => language.code === selectedDocumentationLanguage) ||
+    SUPPORTED_DOCUMENTATION_LANGUAGES[0];
+  const documentationLanguage = selectedLanguage.code;
+  const speechRecognitionLanguage =
+    selectedLanguage.speechTag || (typeof navigator !== "undefined" ? navigator.language : "") || "en-AU";
+
+  useEffect(() => {
+    if (languageManuallySelectedRef.current) return;
+    const sessionLanguage = supportedLanguageCode(
+      (session as unknown as { input_language?: string; detected_language?: string })?.input_language ||
+        (session as unknown as { detected_language?: string })?.detected_language,
+    );
+    if (sessionLanguage) setSelectedDocumentationLanguage(sessionLanguage);
+  }, [session]);
 
   // ── addMessage helper ──
   const addMessage = useCallback(
@@ -941,7 +996,7 @@ export default function SessionLive() {
     const recognition: any = new SpeechRecognitionClass();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = documentationLanguage || navigator.language || "en-AU";
+    recognition.lang = speechRecognitionLanguage;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       let transcript = "";
@@ -1391,6 +1446,24 @@ export default function SessionLive() {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <select
+              aria-label="Dictation language"
+              title="Dictation language"
+              value={selectedDocumentationLanguage}
+              disabled={isRecording}
+              onChange={(event) => {
+                languageManuallySelectedRef.current = true;
+                setSelectedDocumentationLanguage(event.target.value);
+              }}
+              className="h-7 max-w-[92px] sm:max-w-[150px] rounded-full border border-white/20 bg-white/10 px-2 text-[10px] font-semibold text-white outline-none hover:bg-white/15 disabled:opacity-50"
+            >
+              {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code} className="bg-[#0D0D55] text-white">
+                  {language.label}
+                </option>
+              ))}
+            </select>
+
             <div className="flex items-center gap-1">
               <Globe className="h-3 w-3 text-white/35 shrink-0" />
               <div className="flex rounded-md border border-white/20 overflow-hidden">
