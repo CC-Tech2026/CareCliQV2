@@ -27,11 +27,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
 COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
-VALID_INVITE_ROLES = ("support_worker", "allied_health", "support_coordinator", "admin", "auditor")
+VALID_INVITE_ROLES = ("support_worker", "allied_health", "allied_health_pro", "support_coordinator", "admin", "auditor")
 
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
     "support_worker":     "independent_worker",
     "allied_health":      "allied_health",
+    "allied_health_pro":  "allied_health",
     "support_coordinator": "small_provider",
     "admin":              "small_provider",
     "auditor":            "independent_worker",

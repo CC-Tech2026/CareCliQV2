@@ -14,6 +14,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='phone') THEN
         ALTER TABLE patients ADD COLUMN phone TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='emergency_contact') THEN
+        ALTER TABLE patients ADD COLUMN emergency_contact TEXT;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='address') THEN
         ALTER TABLE patients ADD COLUMN address TEXT;
     END IF;
@@ -518,7 +521,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     email        TEXT NOT NULL,
     full_name    TEXT DEFAULT '',
     role         TEXT NOT NULL DEFAULT 'support_worker'
-                   CHECK (role IN ('admin', 'support_worker', 'allied_health')),
+                   CHECK (role IN ('admin', 'support_worker', 'allied_health', 'allied_health_pro')),
     is_active    BOOLEAN NOT NULL DEFAULT TRUE,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_login   TIMESTAMPTZ

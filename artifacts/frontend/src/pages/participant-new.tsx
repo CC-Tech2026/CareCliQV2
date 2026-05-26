@@ -30,6 +30,7 @@ const schema = z.object({
   date_of_birth:              z.string().min(1, "Date of birth is required"),
   email:                      z.string().email("Invalid email").optional().or(z.literal("")),
   phone:                      z.string().optional(),
+  emergency_contact:          z.string().optional(),
   primary_disability:         z.string().optional(),
   allergies:                  z.string().optional(),
   communication_preferences:  z.string().optional(),
@@ -61,7 +62,7 @@ export default function ParticipantNew() {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
+      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "", emergency_contact: "",
       primary_disability: "", allergies: "", communication_preferences: "",
       biological_sex: "unspecified", plan_status: "active",
       plan_start_date: "", plan_end_date: "", total_budget: 0,
@@ -70,45 +71,80 @@ export default function ParticipantNew() {
 
   async function onSubmit(data: FormValues) {
     const payload: Record<string, unknown> = { ...data };
-    if (!payload.email)                      delete payload.email;
-    if (!payload.phone)                      delete payload.phone;
-    if (!payload.primary_disability)         delete payload.primary_disability;
-    if (!payload.allergies)                  delete payload.allergies;
-    if (!payload.communication_preferences)  delete payload.communication_preferences;
-    if (!payload.plan_start_date)            delete payload.plan_start_date;
-    if (!payload.plan_end_date)              delete payload.plan_end_date;
-    if (!payload.total_budget)               delete payload.total_budget;
+
+    if (!payload.email) delete payload.email;
+    if (!payload.phone) delete payload.phone;
+    if (!payload.emergency_contact) delete payload.emergency_contact;
+    if (!payload.primary_disability) delete payload.primary_disability;
+    if (!payload.allergies) delete payload.allergies;
+    if (!payload.communication_preferences) {
+      delete payload.communication_preferences;
+    }
+    if (!payload.plan_start_date) delete payload.plan_start_date;
+    if (!payload.plan_end_date) delete payload.plan_end_date;
+    if (!payload.total_budget) delete payload.total_budget;
+
+    console.log("PAYLOAD =>", payload);
+    console.log("TOKEN =>", token);
 
     try {
-      const created = await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
 
-      // If plan dates provided, create initial NDIS plan (require both dates)
-      const start = (data.plan_start_date || "").toString().trim();
-      const end = (data.plan_end_date || "").toString().trim();
-      if (created?.id && start && end) {
-        try {
-          const headers: Record<string,string> = { "Content-Type": "application/json" };
-          if (token) headers.Authorization = `Bearer ${token}`;
-          await fetch(`/api/participants/${created.id}/plan`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              status: data.plan_status,
-              plan_start: start,
-              plan_end: end,
-              total_funding: data.total_budget ?? null,
-            }),
-          });
-        } catch (err) {
-          console.warn("Failed to create initial plan", err);
-        }
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
       }
 
-      toast({ title: "Participant added successfully" });
+      const response = await fetch("/api/participants", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      console.log("CREATE PARTICIPANT RESPONSE =>", result);
+
+      if (!response.ok) {
+        throw new Error(
+          result?.detail || "Failed to create participant"
+        );
+      }
+
+      // Create plan if dates exist
+      const start = (data.plan_start_date || "").trim();
+      const end = (data.plan_end_date || "").trim();
+
+      if (result?.id && start && end) {
+        await fetch(`/api/participants/${result.id}/plan`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            status: data.plan_status,
+            plan_start: start,
+            plan_end: end,
+            total_funding: data.total_budget ?? null,
+          }),
+        });
+      }
+
+      toast({
+        title: "Participant added successfully",
+      });
+
       navigate("/patients");
+
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to add participant";
-      toast({ title: msg, variant: "destructive" });
+      console.error(err);
+
+      toast({
+        title:
+          err instanceof Error
+            ? err.message
+            : "Failed to add participant",
+        variant: "destructive",
+      });
     }
   }
 
@@ -140,46 +176,53 @@ export default function ParticipantNew() {
         </div>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <Form {...(form as any)}>
+        <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-5">
 
           <FormCard title="Personal Details">
-            <FormField control={form.control} name="full_name" render={({ field }) => (
+            <FormField control={form.control as any} name="full_name" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Full Name <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="ndis_number" render={({ field }) => (
+            <FormField control={form.control as any} name="ndis_number" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="date_of_birth" render={({ field }) => (
+            <FormField control={form.control as any} name="date_of_birth" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input type="date" data-testid="input-date-of-birth" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="email" render={({ field }) => (
+            <FormField control={form.control as any} name="email" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Email</FormLabel>
                 <FormControl><Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="phone" render={({ field }) => (
+            <FormField control={form.control as any} name="phone" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Phone</FormLabel>
                 <FormControl><Input placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="primary_disability" render={({ field }) => (
+            <FormField control={form.control as any} name="emergency_contact" render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel style={{ color: T2, fontSize: 12 }}>Emergency Contact</FormLabel>
+                <FormControl><Input placeholder="Name / Phone / Relationship" data-testid="input-emergency-contact" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control as any} name="primary_disability" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Primary Disability</FormLabel>
                 <FormControl>
@@ -193,7 +236,7 @@ export default function ParticipantNew() {
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="allergies" render={({ field }) => (
+            <FormField control={form.control as any} name="allergies" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Known Allergies / Contraindications</FormLabel>
                 <FormControl>
@@ -208,7 +251,7 @@ export default function ParticipantNew() {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="communication_preferences" render={({ field }) => (
+            <FormField control={form.control as any} name="communication_preferences" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Communication Preferences</FormLabel>
                 <FormControl>
@@ -223,7 +266,7 @@ export default function ParticipantNew() {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="biological_sex" render={({ field }) => (
+            <FormField control={form.control as any} name="biological_sex" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Biological Sex</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
@@ -242,7 +285,7 @@ export default function ParticipantNew() {
           </FormCard>
 
           <FormCard title="NDIS Plan">
-            <FormField control={form.control} name="plan_status" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_status" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
@@ -259,21 +302,21 @@ export default function ParticipantNew() {
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="plan_start_date" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_start_date" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Start Date</FormLabel>
                 <FormControl><Input type="date" data-testid="input-plan-start-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="plan_end_date" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_end_date" render={({ field }) => (
               <FormItem>
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Plan End Date</FormLabel>
                 <FormControl><Input type="date" data-testid="input-plan-end-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
-            <FormField control={form.control} name="total_budget" render={({ field }) => (
+            <FormField control={form.control as any} name="total_budget" render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel style={{ color: T2, fontSize: 12 }}>Total Budget ($)</FormLabel>
                 <FormControl><Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>

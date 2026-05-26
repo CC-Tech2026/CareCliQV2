@@ -15,6 +15,7 @@ backend/app/api/participants.py
 backend/app/api/plans.py
 backend/app/api/reports.py
 backend/app/api/sessions.py
+backend/app/api/settings.py
 backend/app/core/__init__.py
 backend/app/core/access.py
 backend/app/core/config.py
