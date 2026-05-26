@@ -1,3 +1,5 @@
+import { getRequestContext } from "./request-context";
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };

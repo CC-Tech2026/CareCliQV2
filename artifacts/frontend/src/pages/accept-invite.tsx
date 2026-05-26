@@ -26,7 +26,7 @@ interface InviteInfo {
 export default function AcceptInvite() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const { login } = useAuth();
+  const { updateToken } = useAuth();
 
   const token = new URLSearchParams(window.location.search).get("token") ?? "";
 
@@ -100,6 +100,7 @@ export default function AcceptInvite() {
           organizationId: data.user.organization_id,
           onboarding_complete: true,
         }));
+        await updateToken(data.access_token);
       }
 
       setStep("done");

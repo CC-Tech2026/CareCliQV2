@@ -35,9 +35,46 @@ async def create_session_message(session_id: str, data: dict) -> dict | None:
             record["media_url"] = data["media_url"]
         if data.get("created_at"):
             record["created_at"] = data["created_at"]
+        for field in (
+            "translated_content",
+            "detected_language",
+            "translation_status",
+            "translation_metadata",
+            "attachment_id",
+        ):
+            if data.get(field) is not None:
+                record[field] = data[field]
 
         response = supabase.table("session_messages").insert(record).execute()
         return response.data[0] if response.data else None
     except Exception as e:
         logger.error(f"create_session_message failed: {e}")
+        raise
+
+
+async def update_session_message(session_id: str, message_id: str, data: dict) -> dict | None:
+    """Patch translation/attachment metadata for a persisted session message."""
+    allowed = {
+        "translated_content",
+        "detected_language",
+        "translation_status",
+        "translation_metadata",
+        "attachment_id",
+        "media_url",
+    }
+    record = {k: v for k, v in data.items() if k in allowed}
+    if not record:
+        return None
+    try:
+        supabase = get_supabase_admin()
+        response = (
+            supabase.table("session_messages")
+            .update(record)
+            .eq("id", message_id)
+            .eq("session_id", session_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.error(f"update_session_message failed: {e}")
         raise

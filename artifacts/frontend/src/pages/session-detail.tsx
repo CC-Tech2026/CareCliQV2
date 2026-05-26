@@ -14,6 +14,12 @@ type ExtendedSession = Session & {
   support_category?: string | null;
   compliance_status?: string | null;
   body_markers?: BodyMarker[] | null;
+  translated_english_note?: string | null;
+  compliance_input_text?: string | null;
+  original_language_input?: string | null;
+  detected_language?: string | null;
+  translation_status?: string | null;
+  translation_metadata?: Record<string, unknown> | null;
 };
 
 import { Button } from "@/components/ui/button";
@@ -129,10 +135,24 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
 
   useEffect(() => {
-    if (session && !isEditing) setNotes(session.notes || "");
+    const extended = session as ExtendedSession | undefined;
+    const legalNote = extended?.translated_english_note || extended?.compliance_input_text || session?.notes || "";
+    if (session && !isEditing) setNotes(legalNote);
   }, [session, isEditing]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    apiFetch(`/api/sessions/${sessionId}/attachments`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Failed to load attachments");
+        return res.json();
+      })
+      .then((data) => setAttachments(Array.isArray(data) ? data : []))
+      .catch(() => setAttachments([]));
+  }, [sessionId]);
 
   // Parse ai_insights JSON to get rules breakdown
   const aiInsights = useMemo(() => {
@@ -274,14 +294,31 @@ export default function SessionDetail({ id }: { id?: string }) {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    setTimeout(() => {
-      toast({ title: "Photo uploaded", description: file.name });
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await apiFetch(`/api/sessions/${sessionId}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      setAttachments((prev) => [...prev, data]);
+      toast({ title: "Attachment uploaded", description: file.name });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
       setIsUploading(false);
-    }, 1500);
+      e.target.value = "";
+    }
   };
 
   if (isLoading) {
@@ -436,7 +473,11 @@ export default function SessionDetail({ id }: { id?: string }) {
                 <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
               ) : (
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => { setIsEditing(false); setNotes(session.notes || ""); }}>Cancel</Button>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    const extended = session as ExtendedSession;
+                    setIsEditing(false);
+                    setNotes(extended.translated_english_note || extended.compliance_input_text || session.notes || "");
+                  }}>Cancel</Button>
                   <Button size="sm" onClick={handleSaveNotes} disabled={updateSession.isPending}>
                     {updateSession.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
                     Save
@@ -496,8 +537,8 @@ export default function SessionDetail({ id }: { id?: string }) {
                 </div>
               ) : (
                 <div className="max-w-none text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
-                  {session.notes ? (
-                    <div className="whitespace-pre-wrap">{session.notes}</div>
+                  {notes ? (
+                    <div className="whitespace-pre-wrap">{notes}</div>
                   ) : (
                     <p className="italic" style={{ color: "#7A6A8A" }}>No notes recorded yet. Click Edit to add clinical notes.</p>
                   )}
@@ -843,6 +884,22 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </>
                 )}
               </Button>
+              {attachments.length > 0 && (
+                <div className="space-y-2">
+                  {attachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      href={attachment.public_url || attachment.file_path || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="truncate">{attachment.file_name}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -394,7 +394,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             full_name=body.full_name,
             account_type=account_type,
             onboarding_complete=True,
-            organization_id=org_id,
+            extra={"organization_id": org_id},
         )
     except Exception as e:
         logger.error("accept_invite _upsert_user_record error: %s", e)

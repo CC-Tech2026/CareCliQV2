@@ -19,6 +19,13 @@ import re
 
 logger = logging.getLogger(__name__)
 
+BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
+COMPLIANCE_BLOCKED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
+
+
+class ComplianceBlockedError(ValueError):
+    """Raised when compliance is attempted without a valid English legal record."""
+
 
 def _parse_list(value) -> list:
     if isinstance(value, list):
@@ -568,6 +575,24 @@ def run_compliance_check(
             "restrictive_practice_types": [...],
         }
     """
+    translation_status = str(session.get("translation_status") or "not_required")
+    legal_text = (
+        session.get("compliance_input_text")
+        or session.get("translated_english_note")
+        or ""
+    )
+    if translation_status in BLOCKING_TRANSLATION_STATUSES or not str(legal_text).strip():
+        raise ComplianceBlockedError(COMPLIANCE_BLOCKED_MESSAGE)
+
+    session = {
+        **session,
+        "notes": str(legal_text).strip(),
+        "activities_performed": "",
+        "outcomes": "",
+        "participant_response": "",
+        "progress_toward_goals": "",
+    }
+
     plan_start = participant.get("plan_start_date") if participant else None
     plan_end = participant.get("plan_end_date") if participant else None
 

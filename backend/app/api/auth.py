@@ -310,6 +310,7 @@ async def login(body: LoginRequest, request: Request):
             "full_name": full_name,
             "role": role,
             "account_type": account_type,
+            "organization_id": profile.get("organization_id"),
             "onboarding_complete": bool(onboarding_complete),
         },
     }
@@ -363,7 +364,11 @@ async def complete_onboarding(
             logger.error(f"Could not complete onboarding for {user_id}: {e}")
             raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
 
-    return {"success": True, "message": "Onboarding complete."}
+    return {
+        "success": True,
+        "message": "Onboarding complete.",
+        "organization_id": update_payload.get("organization_id") or current_user.get("organization_id"),
+    }
 
 
 @router.post("/logout")

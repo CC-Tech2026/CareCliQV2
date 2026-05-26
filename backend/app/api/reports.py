@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from ..services import ai_service, participant_service, session_service
+from ..core.security import get_current_user
 import logging
 import json
 
@@ -19,18 +20,18 @@ def _derive_status(score) -> str:
 
 
 @router.get("/participant/{participant_id}/summary")
-async def participant_summary(participant_id: str):
-    participant = await participant_service.get_participant_by_id(participant_id)
+async def participant_summary(participant_id: str, current_user: dict = Depends(get_current_user)):
+    participant = await participant_service.get_participant_by_id(participant_id, current_user)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
-    sessions = await session_service.get_sessions_by_participant(participant_id)
+    sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
     summary = await ai_service.generate_patient_summary(participant, sessions)
     return {"participant_id": participant_id, "summary": summary}
 
 
 @router.get("/compliance-overview")
-async def compliance_overview():
-    report = await session_service.get_compliance_report()
+async def compliance_overview(current_user: dict = Depends(get_current_user)):
+    report = await session_service.get_compliance_report(current_user)
     if not report:
         return {
             "average_score": 0,

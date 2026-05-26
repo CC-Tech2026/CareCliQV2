@@ -44,7 +44,6 @@ import {
   BookOpen,
   ShieldCheck,
   Radio,
-  Send,
   Paperclip,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +79,9 @@ interface ChatMessage {
   mediaUrl?: string;
   translated?: string;
   detectedLanguage?: string;
+  translationStatus?: "not_required" | "pending" | "translated" | "failed" | "unsupported" | "manually_confirmed";
+  translationMetadata?: Record<string, unknown>;
+  attachmentId?: string;
   isTranslating?: boolean;
   activityType?: string;
   goalId?: string;
@@ -361,20 +363,28 @@ function MessageBubble({
                   )}
                 </div>
               )}
-              {(translationView === "original" || translationView === "both" || msg.type === "text") && (
+              {(msg.type === "text" || msg.type === "voice") && (
                 <p className="text-white text-sm leading-relaxed">{msg.content}</p>
               )}
-              {msg.type === "voice" && translationView !== "original" && (
-                <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-white/10")}>
+              {msg.type === "voice" && (
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="mb-1">
+                    {msg.isTranslating ? (
+                      <span className="text-[9px] text-white/40">Translating...</span>
+                    ) : msg.translationStatus === "translated" ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103]">Translated to English</span>
+                    ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
+                      <span className="text-[9px] font-semibold text-red-300">Translation failed - retry</span>
+                    ) : msg.translationStatus === "not_required" ? (
+                      <span className="text-[9px] text-white/40">English legal output</span>
+                    ) : null}
+                  </div>
                   {msg.translated ? (
                     <>
-                      {translationView === "both" && (
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103] mb-0.5">EN</p>
-                      )}
                       <p className="text-white/80 text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-white/30 text-xs italic">Translation unavailable</p>
+                    <p className="text-white/30 text-xs italic">English translation unavailable</p>
                   ) : null}
                 </div>
               )}
@@ -424,6 +434,7 @@ export default function SessionLive() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [inputText, setInputText] = useState("");
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   // ── Timer ──
   const [isActive, setIsActive] = useState(false);
@@ -498,6 +509,11 @@ export default function SessionLive() {
   const voiceMessages = messages.filter((m) => m.type === "voice");
   const imageMessages = messages.filter((m) => m.type === "image");
   const imageUrls = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
+  const documentationLanguage =
+    ((session as unknown as { input_language?: string; detected_language?: string })?.input_language ||
+      (session as unknown as { detected_language?: string })?.detected_language ||
+      (typeof navigator !== "undefined" ? navigator.language : "") ||
+      "en-AU");
 
   // ── addMessage helper ──
   const addMessage = useCallback(
@@ -514,17 +530,40 @@ export default function SessionLive() {
             media_url: (msg as ChatMessage).mediaUrl ?? null,
             sender_role: ["activity", "goal_update", "system"].includes(msg.type) ? "system" : "worker",
             created_at: msg.timestamp.toISOString(),
+            translated_content: (msg as ChatMessage).translated ?? null,
+            detected_language: (msg as ChatMessage).detectedLanguage ?? null,
+            translation_status: (msg as ChatMessage).translationStatus ?? null,
+            translation_metadata: (msg as ChatMessage).translationMetadata ?? null,
+            attachment_id: (msg as ChatMessage).attachmentId ?? null,
           }),
-        }).catch(() => {});
+        }).catch((error) => {
+          console.error("message persistence failed", error);
+          toast({ title: "Message was not saved", variant: "destructive" });
+        });
       }
       return newMsg;
     },
-    [id],
+    [id, toast],
   );
 
   const updateMessage = useCallback((msgId: string, updates: Partial<ChatMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, ...updates } : m)));
-  }, []);
+    if (!id || msgId.startsWith("attachment-")) return;
+    const payload: Record<string, unknown> = {};
+    if ("translated" in updates) payload.translated_content = updates.translated ?? null;
+    if ("detectedLanguage" in updates) payload.detected_language = updates.detectedLanguage ?? null;
+    if ("translationStatus" in updates) payload.translation_status = updates.translationStatus ?? null;
+    if ("translationMetadata" in updates) payload.translation_metadata = updates.translationMetadata ?? {};
+    if ("attachmentId" in updates) payload.attachment_id = updates.attachmentId ?? null;
+    if (Object.keys(payload).length === 0) return;
+    apiFetch(`/api/sessions/${id}/messages/${msgId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch((error) => {
+      console.error("message update failed", error);
+    });
+  }, [id]);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -553,6 +592,11 @@ export default function SessionLive() {
                 content: string;
                 created_at: string;
                 media_url?: string;
+                translated_content?: string;
+                detected_language?: string;
+                translation_status?: ChatMessage["translationStatus"];
+                translation_metadata?: Record<string, unknown>;
+                attachment_id?: string;
               }>
             ).map((m) => ({
               id: m.id,
@@ -560,6 +604,11 @@ export default function SessionLive() {
               content: m.content || "",
               timestamp: new Date(m.created_at),
               mediaUrl: m.media_url || undefined,
+              translated: m.translated_content || undefined,
+              detectedLanguage: m.detected_language || undefined,
+              translationStatus: m.translation_status,
+              translationMetadata: m.translation_metadata,
+              attachmentId: m.attachment_id,
             })),
           );
         } else {
@@ -584,6 +633,39 @@ export default function SessionLive() {
         ]);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    apiFetch(`/api/sessions/${session.id}/attachments`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`attachments ${r.status}`);
+        return r.json();
+      })
+      .then((data: unknown) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.attachmentId).filter(Boolean));
+          const attachmentMessages = (data as Array<Record<string, unknown>>)
+            .filter((a) => a.id && !existingIds.has(String(a.id)))
+            .map((a) => {
+              const mime = String(a.mime_type || "");
+              const isImage = mime.startsWith("image/");
+              return {
+                id: `attachment-${String(a.id)}`,
+                type: isImage ? "image" : "file",
+                content: String(a.file_name || "Attachment"),
+                timestamp: a.created_at ? new Date(String(a.created_at)) : new Date(),
+                mediaUrl: String(a.public_url || a.file_path || ""),
+                attachmentId: String(a.id),
+              } as ChatMessage;
+            });
+          return attachmentMessages.length ? [...prev, ...attachmentMessages] : prev;
+        });
+      })
+      .catch((error) => {
+        console.error("attachment load failed", error);
+      });
   }, [session?.id]);
 
   // ── Init body markers ──
@@ -613,8 +695,8 @@ export default function SessionLive() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ body_markers: bodyMarkers }),
         });
-      } catch {
-        // silent
+      } catch (error) {
+        console.error("body marker save failed", error);
       }
     }, 1500);
     return () => {
@@ -782,21 +864,65 @@ export default function SessionLive() {
     });
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    addMessage({ type: "image", content: "Photo evidence", timestamp: new Date(), mediaUrl: url });
-    toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
-    e.target.value = "";
+  const uploadAttachment = async (file: File, type: "image" | "file") => {
+    if (!id) throw new Error("Missing session id");
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await apiFetch(`/api/sessions/${id}/attachments`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Upload failed (${res.status})`);
+    }
+    const attachment = await res.json();
+    addMessage({
+      type,
+      content: attachment.file_name || file.name,
+      timestamp: new Date(attachment.created_at || Date.now()),
+      mediaUrl: attachment.public_url || attachment.file_path,
+      attachmentId: attachment.id,
+    });
+    return attachment;
   };
 
-  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    addMessage({ type: "file", content: file.name, timestamp: new Date() });
-    toast({ title: "File attached", description: file.name });
-    e.target.value = "";
+    setIsUploadingAttachment(true);
+    try {
+      await uploadAttachment(file, "image");
+      toast({ title: "Photo uploaded", description: format(new Date(), "HH:mm:ss") });
+    } catch (error) {
+      toast({
+        title: "Photo upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAttachment(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingAttachment(true);
+    try {
+      await uploadAttachment(file, file.type.startsWith("image/") ? "image" : "file");
+      toast({ title: "File uploaded", description: file.name });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAttachment(false);
+      e.target.value = "";
+    }
   };
 
   const startRecording = () => {
@@ -815,7 +941,7 @@ export default function SessionLive() {
     const recognition: any = new SpeechRecognitionClass();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "en-AU";
+    recognition.lang = documentationLanguage || navigator.language || "en-AU";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       let transcript = "";
@@ -844,33 +970,38 @@ export default function SessionLive() {
     const text = recordingText.trim();
     if (!text) return;
 
-    const needsTranslation = translationView !== "original";
     const newMsg = addMessage({
       type: "voice",
       content: text,
       timestamp: new Date(),
-      isTranslating: needsTranslation,
+      isTranslating: true,
+      translationStatus: "pending",
     });
     setRecordingText("");
     toast({ title: "Voice note saved" });
 
-    if (needsTranslation) {
-      try {
-        const result = await translateToEnglish(text);
-        updateMessage(newMsg.id, {
-          isTranslating: false,
-          translated: result.translated,
-          detectedLanguage: result.detectedLanguage,
-        });
-      } catch {
-        updateMessage(newMsg.id, { isTranslating: false });
-        toast({
-          title: "Translation unavailable",
-          description: "Original text preserved.",
-          variant: "destructive",
-        });
-      }
+    const result = await translateToEnglish(text, documentationLanguage);
+    if (result.status === "failed" || result.status === "unsupported") {
+      updateMessage(newMsg.id, {
+        isTranslating: false,
+        translationStatus: result.status,
+        detectedLanguage: result.detectedLanguage,
+        translationMetadata: result.metadata,
+      });
+      toast({
+        title: "Translation failed",
+        description: result.error || "Edit or retry before completing the session.",
+        variant: "destructive",
+      });
+      return;
     }
+    updateMessage(newMsg.id, {
+      isTranslating: false,
+      translated: result.translated,
+      detectedLanguage: result.detectedLanguage,
+      translationStatus: result.status,
+      translationMetadata: result.metadata,
+    });
   };
 
   const handleStop = useCallback(async () => {
@@ -887,6 +1018,17 @@ export default function SessionLive() {
     const vMsgs = messages.filter((m) => m.type === "voice");
     const tMsgs = messages.filter((m) => m.type === "text");
     const activityTypes = [...new Set(actMsgs.map((m) => m.activityType || m.content))];
+    const blockedTranslation = vMsgs.find(
+      (m) => m.isTranslating || m.translationStatus === "pending" || m.translationStatus === "failed" || m.translationStatus === "unsupported",
+    );
+    if (blockedTranslation) {
+      toast({
+        title: "Translation required",
+        description: "Resolve failed or pending voice translation before completing the session.",
+        variant: "destructive",
+      });
+      return;
+    }
     const achievedGoals = goals.filter((g) => g.status === "achieved");
     const inProgressGoals = goals.filter((g) => g.status === "in_progress");
     const voiceTexts = vMsgs
@@ -963,6 +1105,17 @@ export default function SessionLive() {
     const vMsgs = messages.filter((m) => m.type === "voice");
     const iMsgs = messages.filter((m) => m.type === "image");
     const iUrls = iMsgs.map((m) => m.mediaUrl!).filter(Boolean);
+    const blockedTranslation = vMsgs.find(
+      (m) => m.isTranslating || m.translationStatus === "pending" || m.translationStatus === "failed" || m.translationStatus === "unsupported",
+    );
+    if (blockedTranslation) {
+      toast({
+        title: "Session cannot be approved: translation failed",
+        description: "Retry or edit the voice note before saving the legal record.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (compSettings?.requireActivity && actMsgs.length === 0) {
       toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
@@ -1021,6 +1174,7 @@ export default function SessionLive() {
         structured_notes: structuredNotes,
         activity_log: activityLog,
         body_markers: bodyMarkers,
+        input_language: documentationLanguage,
       };
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
 
@@ -1053,13 +1207,11 @@ export default function SessionLive() {
         rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
       };
 
-      try {
-        const aiRes = await Promise.race<Response | null>([
-          apiFetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
-        ]);
-        if (aiRes) {
-          const aiData = await aiRes.json().catch(() => ({}));
+      const aiRes = await apiFetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" });
+      const aiData = await aiRes.json().catch(() => ({}));
+      if (!aiRes.ok) {
+        throw new Error(aiData.detail || "AI/compliance analysis failed");
+      }
           if (typeof aiData?.compliance?.score === "number") {
             localResult.score = aiData.compliance.score;
             localResult.status = aiData.compliance.assessment ?? localResult.status;
@@ -1077,10 +1229,6 @@ export default function SessionLive() {
                 (f.suggestion as string | undefined),
             }));
           }
-        }
-      } catch {
-        // timeout/error — use local
-      }
 
       setIsSaving(false);
       setPostSaveResult(localResult);
@@ -1090,7 +1238,7 @@ export default function SessionLive() {
       console.error("session save failed", err);
       toast({
         title: "Save failed",
-        description: "Could not save. Please try again.",
+        description: err instanceof Error ? err.message : "Could not save. Please try again.",
         variant: "destructive",
       });
     }
@@ -1262,6 +1410,17 @@ export default function SessionLive() {
                 ))}
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!isActive || isUploadingAttachment}
+              aria-label="Add photo evidence"
+              title="Add photo evidence"
+              className="h-7 w-7 rounded-full border border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white disabled:opacity-40 flex items-center justify-center transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </button>
 
             {elapsed > 0 && (
               <button
@@ -1490,37 +1649,9 @@ export default function SessionLive() {
       )}
 
       {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-[#0D0D55] border-t border-white/10 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          {/* Activity picker */}
-          <button
-            onClick={() => setShowActivitySheet(true)}
-            title="Log activity"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-[#D9F103]/15 text-[#D9F103] hover:bg-[#D9F103]/25 transition-all shrink-0"
-          >
-            <Activity className="h-4 w-4" />
-          </button>
-
-          {/* Camera */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Take photo"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Camera className="h-4 w-4" />
-          </button>
-
-          {/* Attachment */}
-          <button
-            onClick={() => fileAttachRef.current?.click()}
-            title="Attach file"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-
-          {/* Text input */}
-          <div className="flex-1 bg-white/8 border border-white/10 rounded-2xl px-4 py-2 min-h-[36px] flex items-center">
+      <div className="shrink-0 bg-white px-3 sm:px-5 py-3 border-t border-[#dbe7ff] shadow-[0_-8px_28px_rgba(30,91,211,0.08)]">
+        <div className="client-translation-composer flex items-center gap-3 sm:gap-4">
+          <div className="message-pill min-w-0 flex-1 h-[58px] sm:h-[64px] rounded-full bg-white border border-[#bcd2ff] shadow-[0_8px_26px_rgba(21,87,216,0.14)] flex items-center pl-6 sm:pl-8 pr-2">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -1530,10 +1661,19 @@ export default function SessionLive() {
                   sendTextMessage();
                 }
               }}
-              placeholder={isActive ? "Type a note…" : "Start session to add notes"}
+              placeholder="Message"
               disabled={!isActive}
-              className="w-full bg-transparent text-white text-sm placeholder-white/20 outline-none disabled:opacity-30"
+              className="min-w-0 flex-1 bg-transparent text-slate-700 text-[18px] sm:text-[22px] placeholder:text-slate-400 outline-none disabled:opacity-50"
             />
+            <button
+              type="button"
+              aria-label="Attach file"
+              onClick={() => fileAttachRef.current?.click()}
+              disabled={!isActive || isUploadingAttachment}
+              className="h-12 w-12 rounded-full flex items-center justify-center text-[#1557d8] hover:bg-[#eef6ff] transition-colors disabled:opacity-40 shrink-0"
+            >
+              {isUploadingAttachment ? <Loader2 className="h-6 w-6 animate-spin" /> : <Paperclip className="h-7 w-7" />}
+            </button>
           </div>
 
           {/* Mic */}
@@ -1542,22 +1682,13 @@ export default function SessionLive() {
             disabled={!isActive}
             title={isRecording ? "Stop recording" : "Start voice note"}
             className={cn(
-              "h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
+              "voice-circle h-[64px] w-[64px] sm:h-[76px] sm:w-[76px] rounded-full flex items-center justify-center text-white shadow-[0_10px_28px_rgba(21,87,216,0.32)] ring-4 ring-white border border-[#dbe7ff] transition-all shrink-0 disabled:opacity-45",
               isRecording
-                ? "bg-red-500 text-white animate-pulse"
-                : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
+                ? "bg-red-500 animate-pulse"
+                : "bg-gradient-to-br from-[#1768ff] to-[#0643c8] hover:scale-[1.02]",
             )}
           >
-            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </button>
-
-          {/* Send */}
-          <button
-            onClick={sendTextMessage}
-            disabled={!inputText.trim() || !isActive}
-            className="h-9 w-9 bg-[#D9F103] rounded-full flex items-center justify-center disabled:opacity-20 hover:bg-[#D9F103]/90 transition-all shrink-0"
-          >
-            <Send className="h-4 w-4 text-[#0D0D55]" />
+            {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
           </button>
         </div>
       </div>
@@ -1574,7 +1705,7 @@ export default function SessionLive() {
       <input
         ref={fileAttachRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt"
+        accept=".pdf,.doc,.docx,.txt,image/*"
         className="hidden"
         onChange={handleFileAttach}
       />

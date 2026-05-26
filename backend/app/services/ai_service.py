@@ -124,10 +124,15 @@ def _libretranslate_sync(text: str) -> dict:
     with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     detected = data.get("detectedLanguage", {}).get("language", "")
+    translated_text = (data.get("translatedText") or "").strip()
+    if not translated_text:
+        raise RuntimeError("LibreTranslate returned empty translation")
     return {
-        "translated": data.get("translatedText", text),
+        "translated": translated_text,
         "detected_language": detected or "en",
         "confidence": data.get("detectedLanguage", {}).get("confidence", 0.9),
+        "provider": "libretranslate",
+        "model": None,
     }
 
 
@@ -410,7 +415,8 @@ If structured_notes are already completed above, preserve them exactly (do not r
 async def generate_patient_summary(participant_data: dict, sessions: list) -> str:
     sessions_text = "\n".join([
         f"- {s.get('session_date', 'Unknown date')}: {s.get('session_type', 'Session')} "
-        f"({s.get('duration_minutes', 0)} min) — {s.get('notes', 'No notes')[:200]}"
+        f"({s.get('duration_minutes', 0)} min) — "
+        f"{(s.get('translated_english_note') or s.get('compliance_input_text') or s.get('notes') or 'No notes')[:200]}"
         for s in sessions[-5:]
     ])
 
@@ -634,14 +640,24 @@ Write in plain English. Be specific about what information is actually missing. 
 # ---------------------------------------------------------------------------
 
 async def translate_to_english(text: str, source_language: str = "auto") -> dict:
-    """Translate text into fluent English. Tries LibreTranslate first, falls back to OpenAI."""
+    """Translate text into fluent English.
+
+    Raises when no provider can produce an English translation. Callers must not
+    silently save raw non-English text as the legal record.
+    """
     if not text or not text.strip():
-        return {"translated": "", "detected_language": "en", "confidence": 1.0}
+        return {
+            "translated": "",
+            "detected_language": "en",
+            "confidence": 1.0,
+            "provider": "none",
+            "model": None,
+        }
 
     try:
         return _libretranslate_sync(text)
-    except Exception:
-        pass
+    except Exception as libre_exc:
+        logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
 
     lang_hint = (
         f"The source language is {source_language}."
@@ -673,10 +689,17 @@ Respond with a JSON object:
         response_format={"type": "json_object"},
     )
     result = json.loads(response.choices[0].message.content)
+    translated = (result.get("translated") or "").strip()
+    detected = (result.get("detected_language") or "").strip().lower()
+    if not translated or not detected:
+        raise RuntimeError("OpenAI translation returned incomplete data")
     return {
-        "translated": result.get("translated", text),
-        "detected_language": result.get("detected_language", "en"),
+        "translated": translated,
+        "detected_language": detected,
         "confidence": 0.95,
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "fallback_used": bool(_LIBRETRANSLATE_URL),
     }
 
 

@@ -4,15 +4,109 @@ from datetime import datetime, timezone
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
 from ..services import session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check
+from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
 import logging
 import json
+import os
+import uuid
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+ATTACHMENT_BUCKET = "session-attachments"
+MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024
+ALLOWED_ATTACHMENT_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/wav",
+    "audio/webm",
+}
+
+
+def _attachment_url(bucket, path: str) -> Optional[str]:
+    try:
+        signed = bucket.create_signed_url(path, 60 * 60 * 24 * 7)
+        if isinstance(signed, dict):
+            return (
+                signed.get("signedURL")
+                or signed.get("signed_url")
+                or signed.get("signedUrl")
+                or (signed.get("data") or {}).get("signedUrl")
+                or (signed.get("data") or {}).get("signedURL")
+            )
+    except Exception:
+        pass
+    try:
+        public_url = bucket.get_public_url(path)
+        return str(public_url) if public_url else None
+    except Exception:
+        return None
+
+
+def _safe_filename(filename: str) -> str:
+    name = os.path.basename(filename or "attachment").replace("\\", "_").replace("/", "_")
+    return name or "attachment"
+
+
+async def _persist_session_attachment(
+    *,
+    session: dict,
+    session_id: str,
+    file: UploadFile,
+    current_user: dict,
+    attachment_type: str = "file",
+) -> dict:
+    from ..services.supabase_client import get_supabase_admin
+
+    if file.content_type not in ALLOWED_ATTACHMENT_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported attachment type")
+
+    contents = await file.read()
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Attachment is empty")
+    if len(contents) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Attachment exceeds 15 MB limit")
+
+    supabase = get_supabase_admin()
+    original_name = _safe_filename(file.filename or "attachment")
+    storage_name = f"{uuid.uuid4()}-{original_name}"
+    path = f"{session.get('organization_id')}/{session_id}/{storage_name}"
+    bucket = supabase.storage.from_(ATTACHMENT_BUCKET)
+
+    bucket.upload(path, contents, {"content-type": file.content_type, "upsert": "false"})
+    url = _attachment_url(bucket, path)
+
+    record = {
+        "session_id": session_id,
+        "organization_id": session.get("organization_id"),
+        "uploaded_by": current_user.get("sub"),
+        "file_name": original_name,
+        "file_path": path,
+        "public_url": url,
+        "mime_type": file.content_type,
+        "size_bytes": len(contents),
+        "attachment_type": attachment_type,
+    }
+    result = supabase.table("session_attachments").insert(record).execute()
+    if not result.data:
+        try:
+            bucket.remove([path])
+        except Exception:
+            logger.warning("Could not clean up uploaded attachment after DB insert failure")
+        raise HTTPException(status_code=500, detail="Failed to persist attachment")
+
+    return result.data[0]
 
 
 @router.get("")
@@ -60,7 +154,12 @@ async def update_session(session_id: str, body: SessionUpdate, current_user: dic
     data = {k: v for k, v in body.model_dump().items() if v is not None}
     if "session_date" in data and data["session_date"]:
         data["session_date"] = str(data["session_date"])
-    updated = await session_service.update_session(session_id, data, current_user)
+    try:
+        updated = await session_service.update_session(session_id, data, current_user)
+    except ValueError as exc:
+        if str(exc) == COMPLIANCE_BLOCKED_MESSAGE:
+            raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
+        raise HTTPException(status_code=400, detail=str(exc))
     if not updated:
         raise HTTPException(status_code=404, detail="Session not found")
     return updated
@@ -84,19 +183,36 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
     }
 
     try:
+        compliance_input_text = (
+            session.get("compliance_input_text")
+            or session.get("translated_english_note")
+            or ""
+        ).strip()
+        if session.get("translation_status") in {"failed", "unsupported", "pending"} or not compliance_input_text:
+            raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
+
+        session_for_analysis = {
+            **session,
+            "notes": compliance_input_text,
+            "activities_performed": "",
+            "outcomes": "",
+            "participant_response": "",
+            "progress_toward_goals": "",
+        }
+
         # 1. Run the rules-based compliance engine
         existing_sessions = []
         if participant_id:
             existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
         custom_physical_types = await get_physical_exam_session_types()
-        rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
+        rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
 
         # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
         analysis = await ai_service.generate_session_analysis(
-            session, participant_data, rp_flags=rp_flags_for_ai
+            session_for_analysis, participant_data, rp_flags=rp_flags_for_ai
         )
 
         # AI spec compliance score (from weighted 5-dimension breakdown)
@@ -298,6 +414,10 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             },
             "insights": insights,
         }
+    except HTTPException:
+        raise
+    except ComplianceBlockedError:
+        raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -392,7 +512,13 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
             participant_ndis = participants_obj.get("ndis_number")
 
     generated_at = datetime.now(timezone.utc).isoformat()
-    notes_text = session.get("notes") or ""
+    legal_record_text = (
+        session.get("translated_english_note")
+        or session.get("compliance_input_text")
+        or session.get("notes")
+        or ""
+    )
+    notes_text = legal_record_text
     goals = session.get("goals_addressed") or []
     photos = session.get("photo_urls") or []
     compliance_score = session.get("compliance_score")
@@ -547,6 +673,14 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
         },
         "structured_notes": structured_notes,
         "clinical_notes": notes_text,
+        "legal_record_text": legal_record_text,
+        "compliance_input_text": session.get("compliance_input_text"),
+        "original_language_input": session.get("original_language_input"),
+        "detected_language": session.get("detected_language"),
+        "translation_status": session.get("translation_status"),
+        "translation_metadata": session.get("translation_metadata") or {},
+        "translation_provider": session.get("translation_provider"),
+        "translation_completed_at": session.get("translation_completed_at"),
         "activity_log": activity_log if isinstance(activity_log, list) else [],
         "transcription": session.get("transcription"),
         "goals_addressed": goals if isinstance(goals, list) else [],
@@ -576,31 +710,110 @@ async def get_session_audit(session_id: str, current_user: dict = Depends(get_cu
     return audit
 
 
+@router.post("/{session_id}/attachments", status_code=201)
+async def upload_session_attachment(
+    session_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    attachment_type = "image" if (file.content_type or "").startswith("image/") else "file"
+    return await _persist_session_attachment(
+        session=session,
+        session_id=session_id,
+        file=file,
+        current_user=current_user,
+        attachment_type=attachment_type,
+    )
+
+
+@router.get("/{session_id}/attachments")
+async def list_session_attachments(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services.supabase_client import get_supabase_admin
+
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("session_attachments")
+        .select("*")
+        .eq("session_id", session_id)
+        .eq("organization_id", session.get("organization_id"))
+        .order("created_at", desc=False)
+        .execute()
+    )
+    rows = result.data or []
+    bucket = supabase.storage.from_(ATTACHMENT_BUCKET)
+    for row in rows:
+        if isinstance(row, dict) and row.get("file_path") and not row.get("public_url"):
+            row["public_url"] = _attachment_url(bucket, row["file_path"])
+    return rows
+
+
+@router.delete("/{session_id}/attachments/{attachment_id}", status_code=204)
+async def delete_session_attachment(
+    session_id: str,
+    attachment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services.supabase_client import get_supabase_admin
+
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("session_attachments")
+        .select("*")
+        .eq("id", attachment_id)
+        .eq("session_id", session_id)
+        .eq("organization_id", session.get("organization_id"))
+        .execute()
+    )
+    rows = result.data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    attachment = rows[0]
+    try:
+        supabase.storage.from_(ATTACHMENT_BUCKET).remove([attachment["file_path"]])
+    except Exception as exc:
+        logger.warning("Attachment storage delete failed: %s", exc)
+    supabase.table("session_attachments").delete().eq("id", attachment_id).execute()
+    return None
+
+
 @router.post("/{session_id}/upload-photo")
 async def upload_photo(session_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    from ..services.supabase_client import get_supabase_admin
-    supabase = get_supabase_admin()
-
-    contents = await file.read()
-    path = f"sessions/{session_id}/{file.filename}"
-
     try:
-        supabase.storage.from_("uploaded-evidence").upload(path, contents, {"content-type": file.content_type})
-        url_result = supabase.storage.from_("uploaded-evidence").get_public_url(path)
-
         session = await session_service.get_session_by_id(session_id, current_user)
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+        attachment = await _persist_session_attachment(
+            session=session,
+            session_id=session_id,
+            file=file,
+            current_user=current_user,
+            attachment_type="image",
+        )
         existing_photos = session.get("photo_urls") or []
         if isinstance(existing_photos, str):
             try:
                 existing_photos = json.loads(existing_photos)
             except Exception:
                 existing_photos = []
+        url_result = attachment.get("public_url") or attachment.get("file_path")
         existing_photos.append(url_result)
         await session_service.update_session(session_id, {"photo_urls": existing_photos}, current_user)
 
-        return {"url": url_result, "path": path}
+        return {"url": url_result, "path": attachment.get("file_path"), "attachment": attachment}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Photo upload error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -648,4 +861,26 @@ async def create_session_message(session_id: str, body: MessageCreate, current_u
         raise
     except Exception as e:
         logger.error(f"create_session_message error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{session_id}/messages/{message_id}")
+async def update_session_message(
+    session_id: str,
+    message_id: str,
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Persist translated content/metadata for a chat message."""
+    try:
+        if not await session_service.get_session_by_id(session_id, current_user):
+            raise HTTPException(status_code=404, detail="Session not found")
+        result = await message_service.update_session_message(session_id, message_id, body or {})
+        if result is None:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"update_session_message error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
