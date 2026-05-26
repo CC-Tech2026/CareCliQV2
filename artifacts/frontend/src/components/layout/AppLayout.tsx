@@ -13,6 +13,7 @@ import {
   Settings,
   AlertTriangle,
   FileBarChart2,
+  CreditCard,
   LogOut,
   Search,
   Bell,
@@ -49,6 +50,7 @@ const NAV_ITEMS: {
   { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["support_coordinator"] },
   // Reports: support coordinator + allied health (they need clinical report access)
   { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["support_coordinator", "allied_health"] },
+  { href: "/billing",    label: "Billing",       icon: CreditCard, roles: ["support_coordinator", "allied_health"] },
   { href: "/settings",   label: "Settings",      icon: Settings },
 ];
 
@@ -63,6 +65,7 @@ const BOTTOM_NAV: {
   { href: "/patients",   label: "People",   icon: Users },
   // Audit only for support coordinators in the bottom tab bar
   { href: "/compliance", label: "Audit",    icon: ShieldCheck, roles: ["support_coordinator"] },
+  { href: "/billing",    label: "Billing",  icon: CreditCard, roles: ["support_coordinator", "allied_health"] },
 ];
 
 function isActive(location: string, href: string) {

@@ -6,6 +6,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -22,6 +24,7 @@ import IncidentNew from "@/pages/incident-new";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
+import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -52,6 +55,8 @@ function Router() {
     <Switch>
       {/* ── Public routes ─────────────────────────────────────────────────── */}
       <Route path="/login" component={Login} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
@@ -155,6 +160,12 @@ function Router() {
       <Route path="/documents">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/billing">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+          <AppLayout><Billing /></AppLayout>
         </ProtectedRoute>
       </Route>
 
