@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=settings.openai_api_key)
 
+
+class TranslationProviderUnavailable(RuntimeError):
+    """Raised when no server-side translation provider is configured."""
+
+
+class TranslationProviderFailure(RuntimeError):
+    """Raised when a configured translation provider cannot translate."""
+
 # ---------------------------------------------------------------------------
 # CareScribe Master System Prompt (from spec)
 # ---------------------------------------------------------------------------
@@ -659,6 +667,11 @@ async def translate_to_english(text: str, source_language: str = "auto") -> dict
     except Exception as libre_exc:
         logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
 
+    if not (settings.openai_api_key or "").strip():
+        raise TranslationProviderUnavailable(
+            "Translation provider is not configured. Add OPENAI_API_KEY or LIBRETRANSLATE_URL on the backend."
+        )
+
     lang_hint = (
         f"The source language is {source_language}."
         if source_language != "auto"
@@ -678,16 +691,22 @@ Respond with a JSON object:
   "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
 }}"""
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=500,
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=500,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:
+        logger.error("OpenAI translation provider failed", exc_info=True)
+        raise TranslationProviderFailure(
+            "Translation provider failed. Check backend translation configuration."
+        ) from exc
     result = json.loads(response.choices[0].message.content)
     translated = (result.get("translated") or "").strip()
     detected = (result.get("detected_language") or "").strip().lower()

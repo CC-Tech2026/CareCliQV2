@@ -131,9 +131,15 @@ async def translate_text(body: TranslateRequest, current_user: dict = Depends(ge
     try:
         result = await ai_service.translate_to_english(body.text, body.source_language or "auto")
         return result
+    except ai_service.TranslationProviderUnavailable as e:
+        logger.warning("Translation provider unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except ai_service.TranslationProviderFailure as e:
+        logger.error("Translation provider failed: %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         logger.error(f"Translation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Translation failed. Please try again.")
 
 
 @router.post("/clinical-rewrite")

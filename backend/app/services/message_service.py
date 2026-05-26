@@ -74,7 +74,17 @@ async def update_session_message(session_id: str, message_id: str, data: dict) -
             .eq("session_id", session_id)
             .execute()
         )
-        return response.data[0] if response.data else None
+        if response.data:
+            return response.data[0]
+        lookup = (
+            supabase.table("session_messages")
+            .select("*")
+            .eq("id", message_id)
+            .eq("session_id", session_id)
+            .limit(1)
+            .execute()
+        )
+        return lookup.data[0] if lookup.data else None
     except Exception as e:
         logger.error(f"update_session_message failed: {e}")
         raise

@@ -214,10 +214,10 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-slate-700 text-white/50 border-slate-600", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Activity },
-  achieved: { label: "Achieved", cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
-  needs_review: { label: "Needs Review", cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
+  not_started: { label: "Not Started", cls: "bg-white/10 text-white/60 border-white/20", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-[#F1738A]/20 text-[#FFD6DE] border-[#F1738A]/35", icon: Activity },
+  achieved: { label: "Achieved", cls: "bg-[#FF2D6F]/20 text-[#FFD6E5] border-[#FF2D6F]/35", icon: CheckCircle2 },
+  needs_review: { label: "Needs Review", cls: "bg-amber-400/20 text-amber-100 border-amber-300/30", icon: AlertCircle },
 };
 
 // ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ function MessageBubble({
     return (
       <div className="flex justify-center my-1.5">
         <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1">
-          <AIcon className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <AIcon className="h-2.5 w-2.5 text-[#FFD6E5] shrink-0" />
           <span className="text-[10px] text-white/60 font-medium">{msg.activityType || msg.content}</span>
           <span className="text-[9px] text-white/25">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
@@ -347,10 +347,10 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#D9F103]/8 border border-[#D9F103]/15 rounded-full px-3 py-1">
-          <Target className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
-          <span className="text-[10px] text-[#D9F103]/70 font-medium">{msg.content}</span>
-          <span className="text-[9px] text-[#D9F103]/30">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-[#FF2D6F]/10 border border-[#FF2D6F]/20 rounded-full px-3 py-1">
+          <Target className="h-2.5 w-2.5 text-[#FFD6E5] shrink-0" />
+          <span className="text-[10px] text-[#FFD6E5]/85 font-medium">{msg.content}</span>
+          <span className="text-[9px] text-[#FFD6E5]/45">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -360,7 +360,7 @@ function MessageBubble({
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-[#1a1a6e] border border-[#5271FF]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-[#542269] border border-[#F1738A]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
@@ -374,8 +374,8 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#5271FF]/20 rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#5271FF]" />
+              <div className="h-9 w-9 bg-[#F1738A]/20 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#FFD6DE]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white text-sm font-medium leading-tight truncate">{msg.content}</p>
@@ -387,7 +387,7 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#D9F103]">
+                  <div className="flex items-center gap-1 text-[#FFD6E5]">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
@@ -413,7 +413,7 @@ function MessageBubble({
                     {msg.isTranslating ? (
                       <span className="text-[9px] text-white/40">Translating...</span>
                     ) : msg.translationStatus === "translated" ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103]">Translated to English</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#FFD6E5]">Translated to English</span>
                     ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
                       <span className="text-[9px] font-semibold text-red-300">Translation failed - retry</span>
                     ) : msg.translationStatus === "not_required" ? (
@@ -1369,15 +1369,15 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0D0D55]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#D9F103]" />
+      <div className="h-screen flex items-center justify-center bg-[#542269]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FFD6E5]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#0D0D55]">
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#542269]">
         <p className="text-white/50">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
@@ -1421,13 +1421,13 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="h-screen flex flex-col bg-[#050520] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#1C0F2C] overflow-hidden">
 
       {/* ── Top control bar ── */}
       <div
         className={cn(
           "shrink-0 border-b border-white/10 transition-colors duration-300",
-          isActive ? "bg-[#0D0D55]" : "bg-slate-900",
+          isActive ? "bg-gradient-to-r from-[#542269] via-[#6D35D8] to-[#FF2D6F]" : "bg-[#542269]",
         )}
       >
         <div className="flex items-center justify-between px-4 py-3">
@@ -1458,7 +1458,7 @@ export default function SessionLive() {
               className="h-7 max-w-[92px] sm:max-w-[150px] rounded-full border border-white/20 bg-white/10 px-2 text-[10px] font-semibold text-white outline-none hover:bg-white/15 disabled:opacity-50"
             >
               {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
-                <option key={language.code} value={language.code} className="bg-[#0D0D55] text-white">
+                <option key={language.code} value={language.code} className="bg-[#542269] text-white">
                   {language.label}
                 </option>
               ))}
@@ -1648,7 +1648,7 @@ export default function SessionLive() {
 
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
-        <div className="shrink-0 bg-[#050520] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
+        <div className="shrink-0 bg-[#26123A] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
@@ -1687,8 +1687,8 @@ export default function SessionLive() {
         {/* Live recording bubble */}
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
-            <div className="max-w-[82%] bg-red-950/50 border border-red-800/40 rounded-2xl rounded-tr-sm px-4 py-3">
-              <div className="flex items-center gap-2 mb-1.5 text-red-400">
+            <div className="max-w-[82%] bg-[#FF2D6F]/15 border border-[#FF2D6F]/35 rounded-2xl rounded-tr-sm px-4 py-3">
+              <div className="flex items-center gap-2 mb-1.5 text-[#FFD6E5]">
                 <Radio className="h-3 w-3 animate-pulse" />
                 <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
               </div>
@@ -1704,17 +1704,17 @@ export default function SessionLive() {
 
       {/* ── RP warning (above input) ── */}
       {rpFlags.length > 0 && !showSummary && (
-        <div className="shrink-0 bg-red-950/50 border-t border-red-800/30 px-3 py-2 flex items-center gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-          <p className="text-red-300 text-xs flex-1">
+        <div className="shrink-0 bg-[#FF2D6F]/15 border-t border-[#FF2D6F]/30 px-3 py-2 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-[#FFD6E5] shrink-0" />
+          <p className="text-[#FFD6E5] text-xs flex-1">
             <span className="font-semibold">Possible RP language detected</span>
-            <span className="text-red-400/70 ml-1">
+            <span className="text-[#FFD6E5]/70 ml-1">
               ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
             </span>
           </p>
           <button
             onClick={() => setShowRpBottomSheet(true)}
-            className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0"
+            className="text-[#FFD6E5] hover:text-white text-[10px] underline shrink-0"
           >
             Review
           </button>
@@ -1757,8 +1757,8 @@ export default function SessionLive() {
             className={cn(
               "voice-circle h-[64px] w-[64px] sm:h-[76px] sm:w-[76px] rounded-full flex items-center justify-center text-white shadow-[0_10px_28px_rgba(21,87,216,0.32)] ring-4 ring-white border border-[#dbe7ff] transition-all shrink-0 disabled:opacity-45",
               isRecording
-                ? "bg-red-500 animate-pulse"
-                : "bg-gradient-to-br from-[#1768ff] to-[#0643c8] hover:scale-[1.02]",
+                ? "bg-[#FF2D6F] animate-pulse"
+                : "bg-gradient-to-br from-[#6D35D8] to-[#FF2D6F] hover:scale-[1.02]",
             )}
           >
             {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
@@ -1790,7 +1790,7 @@ export default function SessionLive() {
           onClick={() => setShowActivitySheet(false)}
         >
           <div
-            className="w-full bg-[#0D0D55] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full bg-[#542269] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
