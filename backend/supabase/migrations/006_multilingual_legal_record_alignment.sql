@@ -312,6 +312,8 @@ CREATE INDEX IF NOT EXISTS idx_session_messages_session_id ON public.session_mes
 CREATE INDEX IF NOT EXISTS idx_session_messages_attachment_id ON public.session_messages(attachment_id);
 
 DO $$
+DECLARE
+    constraint_name text;
 BEGIN
     UPDATE public.users
     SET role = CASE
