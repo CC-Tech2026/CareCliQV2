@@ -6,7 +6,8 @@ from typing import Iterable, Optional
 
 
 COORDINATOR_ROLES = {"admin", "support_coordinator"}
-FIELD_WORKER_ROLES = {"support_worker", "allied_health"}
+FIELD_WORKER_ROLES = {"support_worker", "allied_health", "allied_health_pro"}
+ALLIED_HEALTH_ROLES = {"allied_health", "allied_health_pro"}
 
 PARTICIPANT_OWNER_FIELDS = (
     "assigned_worker_id",
@@ -60,6 +61,10 @@ def is_coordinator(user: Optional[dict]) -> bool:
 
 def is_field_role(user: Optional[dict]) -> bool:
     return role(user) in FIELD_WORKER_ROLES
+
+
+def is_allied_health_role(user: Optional[dict]) -> bool:
+    return role(user) in ALLIED_HEALTH_ROLES
 
 
 def record_matches_user(row: dict, user: Optional[dict], fields: Iterable[str]) -> bool:
@@ -171,7 +176,7 @@ def owner_payload(user: Optional[dict]) -> dict:
     if role(user) == "support_worker" and uid:
         payload["assigned_worker_id"] = uid
         payload["worker_id"] = uid
-    if role(user) == "allied_health" and uid:
+    if role(user) in ALLIED_HEALTH_ROLES and uid:
         payload["allied_health_id"] = uid
         payload["clinician_id"] = uid
         payload["practitioner_id"] = uid

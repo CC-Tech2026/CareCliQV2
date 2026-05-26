@@ -1,19 +1,18 @@
-"""FastAPI router for participant (patient) endpoints."""
+"""FastAPI router for participant (patient) endpoints aligned to Supabase schema."""
 
 from __future__ import annotations
 
 import logging
+from typing import Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..core.security import get_current_user
 from ..schemas.participant import (
     GoalsUpdateBody,
-    NDISPlanCreate,
-    ParticipantCreate,
     ParticipantUpdate,
 )
-from ..services import funding_service, participant_service
+from ..services import participant_service, funding_service
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +26,10 @@ router = APIRouter(
 # Helpers
 # ============================================================================
 
-
 async def _require_participant_access(
     participant_id: str,
     current_user: dict,
 ):
-    """
-    Ensures:
-    - participant exists
-    - current user has access
-    """
-
     participant = await participant_service.get_participant_by_id(
         participant_id,
         current_user,
@@ -53,112 +45,101 @@ async def _require_participant_access(
 
 
 # ============================================================================
-# Participant CRUD
+# LIST
 # ============================================================================
-
 
 @router.get("")
 async def list_participants(
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Returns participants visible to current user.
-
-    Coordinator:
-        - all organization participants
-
-    Support worker:
-        - assigned participants only
-
-    Allied health:
-        - allocated caseload only
-    """
-
     return await participant_service.get_all_participants(current_user)
 
 
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-)
+# ============================================================================
+# CREATE (DB ALIGNED)
+# ============================================================================
+
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_participant(
-    body: ParticipantCreate,
+    body: Dict[str, Any],
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Create participant within current user's organization.
+    FULL DB ALIGNMENT:
+    Matches Supabase participants table exactly.
     """
 
-    try:
-        return await participant_service.create_participant(
-            body,
-            current_user,
-        )
+    normalized = {
+        # identity
+        "full_name": body.get("full_name") or body.get("fullName"),
+        "ndis_number": body.get("ndis_number") or body.get("ndisNumber"),
+        "external_pseudonym": body.get("external_pseudonym"),
 
-    except Exception as exc:
-        logger.exception("create_participant failed")
+        # contact
+        "email": body.get("email"),
+        "phone": body.get("phone"),
+        "address": body.get("address"),
+        "emergency_contact": body.get("emergency_contact") or body.get("emergencyContact"),
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        )
+        # demographics
+        "date_of_birth": body.get("date_of_birth") or body.get("dateOfBirth"),
+        "biological_sex": body.get("biological_sex") or body.get("gender"),
+
+        # plan
+        "ndis_plan_id": body.get("ndis_plan_id") or body.get("ndisPlanId"),
+        "plan_status": body.get("plan_status") or body.get("planStatus"),
+        "plan_start_date": body.get("plan_start_date") or body.get("planStartDate"),
+        "plan_end_date": body.get("plan_end_date") or body.get("planEndDate"),
+        "total_budget": body.get("total_budget") or body.get("totalBudget"),
+        "used_budget": body.get("used_budget") or body.get("usedBudget"),
+
+        # clinical
+        "primary_disability": body.get("primary_disability") or body.get("primaryDisability"),
+        "goals": body.get("goals") or [],
+        "allergies": body.get("allergies"),
+        "communication_preferences": body.get("communication_preferences") or body.get("communicationPreferences"),
+
+        # risk
+        "risk_level": body.get("risk_level") or body.get("riskLevel"),
+        "risk_triggers": body.get("risk_triggers") or body.get("riskTriggers"),
+        "risk_management_plan": body.get("risk_management_plan") or body.get("riskManagementPlan"),
+
+        # assignments
+        "assigned_worker_id": body.get("assigned_worker_id") or body.get("assignedWorkerId"),
+        "allied_health_id": body.get("allied_health_id") or body.get("alliedHealthId"),
+        "clinician_id": body.get("clinician_id") or body.get("clinicianId"),
+
+        # ownership (security-critical)
+        "organization_id": current_user.get("organization_id"),
+        "created_by": current_user.get("id"),
+        "owner_user_id": current_user.get("id"),
+    }
+
+    cleaned = {k: v for k, v in normalized.items() if v is not None}
+
+    logger.info("CREATE PARTICIPANT (DB ALIGNED) => %s", cleaned)
+
+    return await participant_service.create_participant(
+        cleaned,
+        current_user,
+    )
 
 
-@router.get("/dashboard-stats")
-async def dashboard_stats(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Dashboard statistics scoped to visible participants.
-    """
-
-    return await participant_service.get_dashboard_stats(current_user)
-
+# ============================================================================
+# GET
+# ============================================================================
 
 @router.get("/{participant_id}")
 async def get_participant(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Retrieve single participant.
-    """
-
-    return await _require_participant_access(
-        participant_id,
-        current_user,
-    )
+    return await _require_participant_access(participant_id, current_user)
 
 
-@router.put("/{participant_id}")
-async def replace_participant(
-    participant_id: str,
-    body: ParticipantUpdate,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Full replacement update.
-    """
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    updated = await participant_service.update_participant(
-        participant_id,
-        body,
-        current_user,
-    )
-
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Participant not found",
-        )
-
-    return updated
-
+# ============================================================================
+# UPDATE (DB SAFE)
+# ============================================================================
 
 @router.patch("/{participant_id}")
 async def update_participant(
@@ -166,235 +147,65 @@ async def update_participant(
     body: ParticipantUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Partial update.
-    """
+    await _require_participant_access(participant_id, current_user)
 
-    await _require_participant_access(
+    return await participant_service.update_participant(
         participant_id,
+        body.model_dump(exclude_unset=True),
         current_user,
     )
 
-    updated = await participant_service.update_participant(
-        participant_id,
-        body,
-        current_user,
-    )
 
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Participant not found",
-        )
+# ============================================================================
+# DELETE
+# ============================================================================
 
-    return updated
-
-
-@router.delete(
-    "/{participant_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/{participant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_participant(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Delete participant.
+    await _require_participant_access(participant_id, current_user)
 
-    Usually coordinator/admin only.
-    """
-
-    await _require_participant_access(
+    await participant_service.delete_participant(
         participant_id,
         current_user,
     )
-
-    deleted = await participant_service.delete_participant(
-        participant_id,
-        current_user,
-    )
-
-    if not deleted:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Participant not found",
-        )
 
     return None
 
 
 # ============================================================================
-# Goals
+# GOALS
 # ============================================================================
 
-
 @router.patch("/{participant_id}/goals")
-async def update_participant_goals(
+async def update_goals(
     participant_id: str,
     body: GoalsUpdateBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Replace full participant goals array.
-    """
+    await _require_participant_access(participant_id, current_user)
 
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    updated = await participant_service.update_participant_goals(
+    return await participant_service.update_participant_goals(
         participant_id,
         body.goals,
         current_user,
     )
 
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update goals",
-        )
-
-    return updated
-
 
 # ============================================================================
-# NDIS Plans
+# FUNDING (SIMPLIFIED TO YOUR REAL SCHEMA)
 # ============================================================================
 
-
-@router.get("/{participant_id}/plan")
-async def get_participant_plan(
+@router.get("/{participant_id}/budget")
+async def get_budget(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Return active NDIS plan.
-    """
+    await _require_participant_access(participant_id, current_user)
 
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    plan = await funding_service.get_plan_for_participant(
-        participant_id,
-    )
-
-    if not plan:
-        return {
-            "has_plan": False,
-        }
-
-    return plan
-
-
-@router.get("/{participant_id}/plans")
-async def get_all_participant_plans(
-    participant_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Return all participant plans.
-    """
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    return await funding_service.get_all_plans_for_participant(
-        participant_id,
-    )
-
-
-@router.post(
-    "/{participant_id}/plan",
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_participant_plan(
-    participant_id: str,
-    body: NDISPlanCreate,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Create or update participant NDIS plan.
-    """
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    plan_data = {
-        "plan_number": body.plan_number,
-        "plan_start": str(body.plan_start),
-        "plan_end": str(body.plan_end),
-        "total_funding": body.total_funding,
-        "status": body.status,
-    }
-
-    try:
-        plan = await funding_service.create_or_update_plan(
-            participant_id,
-            plan_data,
-        )
-
-        plan_id = plan.get("id")
-
-        if plan_id:
-            budget_updates = [
-                ("core", body.core_budget),
-                ("capacity_building", body.capacity_budget),
-                ("capital", body.capital_budget),
-            ]
-
-            for category, amount in budget_updates:
-                if amount and amount > 0:
-                    await funding_service.upsert_plan_budget(
-                        plan_id,
-                        category,
-                        amount,
-                    )
-
-        return await funding_service.get_budget_summary(
-            participant_id,
-        )
-
-    except Exception as exc:
-        logger.exception(
-            "create_participant_plan(%s) failed",
-            participant_id,
-        )
-
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        )
-
-
-# ============================================================================
-# Budgets
-# ============================================================================
-
-
-@router.get("/{participant_id}/budget-summary")
-async def get_budget_summary(
-    participant_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Budget totals + usage summary.
-    """
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    return await funding_service.get_budget_summary(
-        participant_id,
-    )
+    return await funding_service.get_budget_summary(participant_id)
 
 
 @router.get("/{participant_id}/budget-usage")
@@ -402,68 +213,6 @@ async def get_budget_usage(
     participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Detailed budget usage history.
-    """
+    await _require_participant_access(participant_id, current_user)
 
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    return await funding_service.get_budget_usage_history(
-        participant_id,
-    )
-
-
-# ============================================================================
-# Compliance History
-# ============================================================================
-
-
-@router.get("/{participant_id}/compliance-history")
-async def get_compliance_history(
-    participant_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Compliance audit history for participant sessions.
-    """
-
-    from ..services.funding_service import (
-        get_compliance_audit_logs,
-    )
-    from ..services.session_service import (
-        get_sessions_by_participant,
-    )
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    sessions = await get_sessions_by_participant(
-        participant_id,
-        current_user,
-    )
-
-    history = []
-
-    for session in sessions[:20]:
-        logs = await get_compliance_audit_logs(
-            session["id"],
-        )
-
-        if not logs:
-            continue
-
-        history.append(
-            {
-                "session_id": session["id"],
-                "session_date": session.get("session_date"),
-                "session_type": session.get("session_type"),
-                "latest_audit": logs[0],
-            }
-        )
-
-    return history
+    return await funding_service.get_budget_usage_history(participant_id)

@@ -76,12 +76,14 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5 hover:bg-[#F6F4FB] transition-colors">
+    <div className="flex items-center justify-between gap-6 rounded-2xl px-6 py-4 hover:bg-[#F6F4FB] transition-colors">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>{title}</p>
-        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>{description}</p>
+        <p className="text-[16px] font-semibold" style={{ color: "#1C1626" }}>{title}</p>
+        <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "#7A6A8A" }}>{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <div className="scale-125">
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      </div>
     </div>
   );
 }

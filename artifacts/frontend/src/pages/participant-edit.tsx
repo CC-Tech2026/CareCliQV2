@@ -33,6 +33,7 @@ const schema = z.object({
   date_of_birth:      z.string().min(1, "Date of birth is required"),
   email:              z.string().email("Invalid email").optional().or(z.literal("")),
   phone:              z.string().optional(),
+  emergency_contact:  z.string().optional(),
   primary_disability: z.string().optional(),
   biological_sex:     z.string().optional(),
   plan_status:        z.string().min(1, "Plan status is required"),
@@ -64,7 +65,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "",
+      full_name: "", ndis_number: "", date_of_birth: "", email: "", phone: "", emergency_contact: "",
       primary_disability: "", biological_sex: "unspecified", plan_status: "active",
       plan_start_date: "", plan_end_date: "", total_budget: 0,
     },
@@ -78,6 +79,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
       date_of_birth:      participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
       email:              String(participant.email ?? ""),
       phone:              String(participant.phone ?? ""),
+      emergency_contact:  String(participant.emergency_contact ?? ""),
       primary_disability: String(participant.primary_disability ?? ""),
       biological_sex:     String(participant.biological_sex ?? "unspecified"),
       plan_status:        String(participant.plan_status ?? "active"),
@@ -92,6 +94,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
       const payload: Record<string, unknown> = { ...data };
       if (!payload.email)              delete payload.email;
       if (!payload.phone)              delete payload.phone;
+      if (!payload.emergency_contact)  delete payload.emergency_contact;
       if (!payload.primary_disability) delete payload.primary_disability;
       if (!payload.plan_start_date)    delete payload.plan_start_date;
       if (!payload.plan_end_date)      delete payload.plan_end_date;
@@ -172,12 +175,12 @@ export default function ParticipantEdit({ id }: { id: string }) {
         </div>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit((d) => updateMutation.mutate(d))} className="space-y-5">
+      <Form {...(form as any)}>
+        <form onSubmit={form.handleSubmit((d: any) => updateMutation.mutate(d))} className="space-y-5">
 
           {/* SECTION 1: Personal Details */}
           <FormCard title="Personal Details">
-            <FormField control={form.control} name="full_name" render={({ field }) => (
+            <FormField control={form.control as any} name="full_name" render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Full Name <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
@@ -185,7 +188,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="ndis_number" render={({ field }) => (
+            <FormField control={form.control as any} name="ndis_number" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
@@ -193,7 +196,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="date_of_birth" render={({ field }) => (
+            <FormField control={form.control as any} name="date_of_birth" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-date-of-birth" {...field} /></FormControl>
@@ -201,7 +204,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="email" render={({ field }) => (
+            <FormField control={form.control as any} name="email" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Email</FormLabel>
                 <FormControl><Input type="email" className="h-10 text-[14px] rounded-xl" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
@@ -209,7 +212,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="phone" render={({ field }) => (
+            <FormField control={form.control as any} name="phone" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Phone</FormLabel>
                 <FormControl><Input type="tel" className="h-10 text-[14px] rounded-xl" placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
@@ -217,7 +220,15 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="primary_disability" render={({ field }) => (
+            <FormField control={form.control as any} name="emergency_contact" render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Emergency Contact</FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="Name / Phone / Relationship" data-testid="input-emergency-contact" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control as any} name="primary_disability" render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Primary Disability</FormLabel>
                 <FormControl>
@@ -232,7 +243,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="biological_sex" render={({ field }) => (
+            <FormField control={form.control as any} name="biological_sex" render={({ field }) => (
               <FormItem className="sm:col-span-2 md:col-span-1">
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Biological Sex</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
@@ -254,7 +265,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
           {/* SECTION 2: NDIS Plan */}
           <FormCard title="NDIS Plan">
-            <FormField control={form.control} name="plan_status" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_status" render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
@@ -274,7 +285,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="plan_start_date" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_start_date" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Start Date</FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-start-date" {...field} /></FormControl>
@@ -282,7 +293,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="plan_end_date" render={({ field }) => (
+            <FormField control={form.control as any} name="plan_end_date" render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan End Date</FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-end-date" {...field} /></FormControl>
@@ -290,7 +301,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="total_budget" render={({ field }) => (
+            <FormField control={form.control as any} name="total_budget" render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Total Budget ($)</FormLabel>
                 <FormControl><Input type="number" className="h-10 text-[14px] rounded-xl" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>

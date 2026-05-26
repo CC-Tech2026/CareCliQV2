@@ -40,20 +40,26 @@ const NAV_ITEMS: {
   label: string;
   icon: React.ComponentType<NavIconProps>;
   roles?: NavRole[];
+  group?: string;
 }[] = [
-  { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard },
-  { href: "/patients",   label: "Participants",  icon: Users },
-  { href: "/sessions",   label: "Sessions",      icon: CalendarDays },
-  { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
-  // Compliance: coordinator/admin only — workers must not see org-wide audit data
-  { href: "/compliance", label: "Compliance",    icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
-  { href: "/workers",    label: "Team",          icon: Users,        roles: ["admin", "support_coordinator"] },
-  { href: "/invoices",   label: "Invoices",      icon: FileBarChart2, roles: ["admin", "support_coordinator"] },
-  { href: "/credentials",label: "Credentials",   icon: ShieldCheck,  roles: ["admin", "support_coordinator"] },
-  { href: "/toolkit",    label: "Toolkit",       icon: Plus,         roles: ["admin", "support_coordinator"] },
-  // Reports: coordinator/admin + allied health (they need clinical report access)
-  { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2, roles: ["admin", "support_coordinator", "allied_health"] },
-  { href: "/settings",   label: "Settings",      icon: Settings },
+  // Main area
+  { href: "/dashboard",  label: "Dashboard",    icon: LayoutDashboard, group: "Main" },
+  { href: "/patients",   label: "Participants",  icon: Users,            group: "Main" },
+  { href: "/sessions",   label: "Sessions",      icon: CalendarDays,     group: "Main" },
+
+  // Clinical area
+  { href: "/incidents",  label: "Incidents",     icon: AlertTriangle,    group: "Clinical" },
+  { href: "/reports",    label: "Reports & Docs", icon: FileBarChart2,   roles: ["admin", "support_coordinator", "allied_health"], group: "Clinical" },
+
+  // Team / org items (coordinator + admin)
+  { href: "/workers",    label: "Team",          icon: Users,           roles: ["admin", "support_coordinator"], group: "Team" },
+  { href: "/credentials",label: "Credentials",   icon: ShieldCheck,     roles: ["admin", "support_coordinator"], group: "Team" },
+  { href: "/invoices",   label: "Invoices",      icon: FileBarChart2,   roles: ["admin", "support_coordinator"], group: "Team" },
+
+  // Utilities / admin
+  { href: "/toolkit",    label: "Toolkit",       icon: Plus,            roles: ["admin", "support_coordinator"], group: "Admin" },
+  { href: "/compliance", label: "Compliance",    icon: ShieldCheck,     roles: ["admin", "support_coordinator"], group: "Admin" },
+  { href: "/settings",   label: "Settings",      icon: Settings,        group: "Admin" },
 ];
 
 const BOTTOM_NAV: {
@@ -117,6 +123,15 @@ function SidebarContents({
   const visibleNavItems = NAV_ITEMS.filter(
     (item) => !item.roles || (userRole && item.roles.includes(userRole))
   );
+
+  // group visible items by group name for clearer sections
+  const grouped: Record<string, typeof visibleNavItems> = visibleNavItems.reduce((acc, it) => {
+    const g = it.group || "Main";
+    acc[g] = acc[g] || [];
+    acc[g].push(it);
+    return acc;
+  }, {} as Record<string, typeof visibleNavItems>);
+  const groupOrder = ["Main", "Clinical", "Team", "Admin"];
 
   return (
     <div className="flex flex-col h-full">
@@ -182,27 +197,44 @@ function SidebarContents({
         </Link>
       </div>
 
-      <nav className={cn("flex-1 overflow-y-auto space-y-1 scrollbar-none", compact ? "px-2" : "px-4")}>
-        {visibleNavItems.map((item) => {
-          const active = isActive(location, item.href);
-          const Icon = item.icon;
+      <nav className={cn("flex-1 overflow-y-auto space-y-3 pr-2", compact ? "px-2" : "px-4")}>
+        {groupOrder.map((group) => {
+          const items = grouped[group];
+          if (!items || items.length === 0) return null;
           return (
-            <Link key={item.href} href={item.href} onClick={onNav} title={compact ? item.label : undefined}>
-              <div
-                className={cn(
-                  "flex items-center rounded-2xl text-[14px] transition-all w-full cursor-pointer",
-                  compact ? "h-11 justify-center px-0" : "gap-3.5 px-4 py-3",
-                )}
-                style={{
-                  background: active ? ACTIVE : "transparent",
-                  color: active ? PLUM : MUTED,
-                  fontWeight: active ? 700 : 500,
-                }}
-              >
-                <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                {!compact && item.label}
+            <div key={group} className={cn("space-y-1", compact ? "" : "") }>
+              {/* show section label only when expanded and not in drawer */}
+              {!compact && !isDrawer && (
+                <div className="px-2 text-[11px] font-bold uppercase text-[#9A88B8] tracking-wider">
+                  {group}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {items.map((item) => {
+                  const active = isActive(location, item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link key={item.href} href={item.href} onClick={onNav} title={compact ? item.label : undefined}>
+                      <div
+                        className={cn(
+                          "flex items-center rounded-2xl text-[14px] transition-all w-full cursor-pointer",
+                          compact ? "h-11 justify-center px-0" : "gap-3.5 px-4 py-3",
+                        )}
+                        style={{
+                          background: active ? ACTIVE : "transparent",
+                          color: active ? PLUM : MUTED,
+                          fontWeight: active ? 700 : 500,
+                        }}
+                      >
+                        <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                        {!compact && item.label}
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
-            </Link>
+            </div>
           );
         })}
       </nav>

@@ -62,7 +62,7 @@ function Router() {
 
       {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><Dashboard /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -70,21 +70,21 @@ function Router() {
       {/* ── Participants ──────────────────────────────────────────────────── */}
       {/* List: all roles (backend scopes to allocated for workers) */}
       <Route path="/patients">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       {/* Create/Edit: coordinator only — workers cannot add or edit participants */}
       <Route path="/participants/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><ParticipantNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/participants/:id/edit">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
             <AppLayout><ParticipantEdit id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
@@ -93,20 +93,20 @@ function Router() {
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><Sessions /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><SessionNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/:id/live">
         {() => (
-          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
             <SessionLive />
           </ProtectedRoute>
         )}
@@ -114,7 +114,7 @@ function Router() {
 
       <Route path="/sessions/:id">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
             <AppLayout><SessionDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
@@ -123,20 +123,20 @@ function Router() {
       {/* ── Incidents ────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><Incidents /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/new">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><IncidentNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/:id">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
             <AppLayout><IncidentDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
@@ -144,52 +144,52 @@ function Router() {
 
       {/* ── Compliance — coordinator/admin only ──────────────────────────── */}
       <Route path="/compliance">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       {/* ── Reports — coordinator/admin + allied health ───────────────────── */}
       <Route path="/reports">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_AND_ALLIED as unknown as any}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/documents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_AND_ALLIED as unknown as any}>
           <AppLayout><Reports /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       {/* ── Coordinator-specific pages ───────────────────────────────────── */}
       <Route path="/workers">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><Workers /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/invoices">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><Invoices /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/credentials">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><Credentials /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/toolkit">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+        <ProtectedRoute allowedRoles={COORDINATOR_ROLES as unknown as any}>
           <AppLayout><Toolkit /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={ALL_ROLES as unknown as any}>
           <AppLayout><Settings /></AppLayout>
         </ProtectedRoute>
       </Route>
