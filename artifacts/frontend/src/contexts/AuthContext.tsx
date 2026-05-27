@@ -90,10 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         account_type: data.user.account_type || "independent_worker",
         onboarding_complete: data.user.onboarding_complete ?? true,
         organizationId: data.user.organization_id ?? undefined,
-        email_verified: data.user.email_verified ?? true,
-        profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? true,
-        onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? true,
-        role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? true,
+        email_verified: data.user.email_verified ?? false,
+        profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
+        onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
+        role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
         profile_photo_url: data.user.profile_photo_url ?? null,
       };
       persistSession(data.access_token, authUser);
@@ -135,10 +135,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           account_type: data.user.account_type || "independent_worker",
           onboarding_complete: data.user.onboarding_complete ?? true,
           organizationId: data.user.organization_id ?? undefined,
-          email_verified: data.user.email_verified ?? true,
-          profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? true,
-          onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? true,
-          role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? true,
+          email_verified: data.user.email_verified ?? false,
+          profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
+          onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
+          role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
           profile_photo_url: data.user.profile_photo_url ?? null,
         };
         localStorage.setItem(USER_KEY, JSON.stringify(fresh));

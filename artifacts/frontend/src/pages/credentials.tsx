@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useReAuth } from "@/hooks/useReAuth";
 import {
   createCredential,
   deleteCredential,
@@ -127,6 +128,7 @@ function CredentialRow({
 export default function Credentials() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { requireReAuth, modal } = useReAuth();
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
   const credentialTypes = user?.role === "allied_health" ? ALLIED_TYPES : WORKER_TYPES;
@@ -182,7 +184,8 @@ export default function Credentials() {
   });
 
   const reviewMutation = useMutation({
-    mutationFn: ({ credential, status }: { credential: Credential; status: "valid" | "rejected" }) => reviewCredential(credential.id, { status }),
+    mutationFn: ({ credential, status }: { credential: Credential; status: "valid" | "rejected" }) =>
+      requireReAuth(() => reviewCredential(credential.id, { status })),
     onSuccess: () => {
       invalidate();
       toast({ title: "Credential review saved" });
@@ -209,6 +212,7 @@ export default function Credentials() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
+      {modal}
       <div>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Allied Health" : "Support Worker"}

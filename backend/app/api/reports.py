@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from ..services import ai_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
@@ -39,9 +40,83 @@ REPORT_TYPES = {
 }
 
 
-def _minimal_pdf_bytes(title: str, content: dict) -> bytes:
-    text = (title + "\\n" + json.dumps(content, ensure_ascii=True)[:2500]).replace("(", "\\(").replace(")", "\\)")
-    stream = f"BT /F1 10 Tf 50 780 Td ({text}) Tj ET"
+def _pdf_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _wrap(value: str, width: int = 88) -> list[str]:
+    words = str(value or "").replace("\n", " ").split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) > width and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or ["Not recorded."]
+
+
+def _report_pdf_bytes(title: str, content: dict) -> bytes:
+    participant = content.get("participant") or {}
+    clinician = content.get("clinician") or {}
+    sections = content.get("clinical_sections") or {}
+    sessions = content.get("sessions") or []
+    goals = content.get("goals") or []
+    flags = sections.get("risk_compliance_flags") or []
+    lines = [
+        "CareScribe Allied Health Report",
+        title,
+        f"Generated: {content.get('generated_at')}",
+        "",
+        f"Client: {participant.get('full_name', 'Participant')}",
+        f"NDIS Number: {participant.get('ndis_number', 'Not recorded')}",
+        f"Primary Disability: {participant.get('primary_disability', 'Not recorded')}",
+        "",
+        f"Clinician: {clinician.get('full_name', 'Not recorded')}",
+        f"Discipline: {clinician.get('discipline', 'Not recorded')}",
+        f"AHPRA: {clinician.get('ahpra_registration_number', 'Not applicable')}",
+        "",
+        "Referral Reason:",
+        *_wrap(sections.get("referral_reason")),
+        "",
+        "Background:",
+        *_wrap(sections.get("background")),
+        "",
+        "Assessment Summary:",
+        *_wrap(sections.get("assessment_summary")),
+        "",
+        "Goals:",
+    ]
+    for goal in goals[:8]:
+        if isinstance(goal, dict):
+            lines.append(f"- {goal.get('title') or goal.get('description') or goal.get('id')}")
+        else:
+            lines.append(f"- {goal}")
+    lines.extend(["", "Interventions:"])
+    lines.extend(_wrap(sections.get("interventions")))
+    lines.extend(["", "Progress Summary:"])
+    lines.extend(_wrap(f"{len(sessions)} session records reviewed."))
+    lines.extend(["", "Recommendations:"])
+    lines.extend(_wrap(sections.get("recommendations")))
+    lines.extend(["", "Risk and Compliance Flags:"])
+    if flags:
+        for flag in flags[:8]:
+            lines.append(f"- Session {flag.get('id', '')}: compliance score {flag.get('compliance_score', 'not scored')}")
+    else:
+        lines.append("- No active compliance flags in reviewed records.")
+    lines.extend(["", "Clinician Signature:", clinician.get("full_name", "CareScribe clinician")])
+    text_ops = []
+    y = 790
+    for line in lines[:70]:
+        text_ops.append(f"1 0 0 1 50 {y} Tm ({_pdf_escape(line[:110])}) Tj")
+        y -= 12
+        if y < 60:
+            break
+    stream = "BT /F1 9 Tf\n" + "\n".join(text_ops) + "\nET"
     pdf = (
         "%PDF-1.4\n"
         "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
@@ -49,7 +124,7 @@ def _minimal_pdf_bytes(title: str, content: dict) -> bytes:
         "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n"
         f"4 0 obj << /Length {len(stream)} >> stream\n{stream}\nendstream endobj\n"
         "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
-        "trailer << /Root 1 0 R /Size 6 >>\n%%EOF\n"
+        "xref\n0 6\n0000000000 65535 f \ntrailer << /Root 1 0 R /Size 6 >>\nstartxref\n0\n%%EOF\n"
     )
     return pdf.encode("utf-8")
 
@@ -143,11 +218,22 @@ async def generate_participant_report(
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
     sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
+    profile_result = (
+        get_supabase_admin()
+        .table("users")
+        .select("full_name, discipline, ahpra_registration_number, business_name")
+        .eq("id", get_user_id(current_user))
+        .maybe_single()
+        .execute()
+    )
+    clinician = profile_result.data if profile_result and profile_result.data else {}
     content = {
         "report_type": report_type,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "participant": participant,
         "goals": participant.get("goals") or [],
         "sessions": sessions[:50],
+        "clinician": clinician,
         "clinical_sections": {
             "referral_reason": body.get("referral_reason"),
             "background": body.get("background"),
@@ -164,7 +250,7 @@ async def generate_participant_report(
     file_url = None
     try:
         file_path = f"{get_user_organization_id(current_user)}/{participant_id}/{report_type}.pdf"
-        pdf_bytes = _minimal_pdf_bytes(title, content)
+        pdf_bytes = _report_pdf_bytes(title, content)
         supabase = get_supabase_admin()
         supabase.storage.from_("report-files").upload(
             file_path,
@@ -174,6 +260,7 @@ async def generate_participant_report(
         file_url = supabase.storage.from_("report-files").get_public_url(file_path)
     except Exception as exc:
         logger.warning("Report PDF storage unavailable: %s", exc)
+        raise HTTPException(status_code=502, detail=f"Report PDF storage is not configured: {exc}")
 
     payload = {
         "organization_id": get_user_organization_id(current_user),

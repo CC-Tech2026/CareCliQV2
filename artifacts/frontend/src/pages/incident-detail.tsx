@@ -25,6 +25,8 @@ import {
   Users,
   User,
 } from "lucide-react";
+import { getIncident, updateIncident } from "@/services/incidentService";
+import { useReAuth } from "@/hooks/useReAuth";
 
 const SEVERITIES = [
   { value: "low", label: "Low", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
@@ -89,23 +91,15 @@ function getStatusConfig(st: string) {
   return STATUSES.find((s) => s.value === st) ?? STATUSES[0];
 }
 
-async function apiFetch(path: string, opts?: RequestInit) {
-  const res = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
-}
-
 export default function IncidentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { requireReAuth, modal } = useReAuth();
 
   const { data: incident, isLoading } = useQuery<Incident>({
     queryKey: ["incident", id],
-    queryFn: () => apiFetch(`/incidents/${id}`),
+    queryFn: () => getIncident<Incident>(id),
   });
 
   const [investigationNotes, setInvestigationNotes] = useState("");
@@ -119,8 +113,15 @@ export default function IncidentDetail({ id }: { id: string }) {
   }, [incident]);
 
   const updateMutation = useMutation({
-    mutationFn: (updates: Record<string, unknown>) =>
-      apiFetch(`/incidents/${id}`, { method: "PATCH", body: JSON.stringify(updates) }),
+    mutationFn: async (updates: Record<string, unknown>) => {
+      const statusChange = typeof updates.status === "string";
+      const closesOrReports = statusChange && ["closed", "resolved", "reported"].includes(updates.status as string);
+      const ndisReport = typeof updates.ndis_reported_at === "string";
+      if (closesOrReports || ndisReport) {
+        return requireReAuth(() => updateIncident(id, updates));
+      }
+      return updateIncident(id, updates);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["incident", id] });
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
@@ -163,6 +164,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      {modal}
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-[13px]">
         <button

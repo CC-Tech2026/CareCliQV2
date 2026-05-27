@@ -7,7 +7,9 @@ from backend.app.core.access import can_access_participant, can_access_session
 from backend.app.core.config import settings
 from backend.app.core.security import create_access_token
 from backend.app.api.security import require_recent_reauth
+from backend.app.api.auth import _is_auth_user_email_verified
 from backend.app.services import ai_service
+from backend.app.services import billing_service
 from backend.app.services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from backend.app.services.documentation_normalization_service import (
     normalize_documentation_for_legal_record,
@@ -235,6 +237,49 @@ class RecentReauthTests(unittest.TestCase):
         )
         with self.assertRaises(HTTPException) as ctx:
             require_recent_reauth(self._request(token), self.user)
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_expired_reauth_token_is_blocked(self):
+        token = create_access_token(
+            {
+                "sub": WORKER_ID,
+                "email": "worker@example.com",
+                "role": "support_worker",
+                "organization_id": ORG_A,
+                "reauth": True,
+            },
+            expires_delta=timedelta(minutes=-1),
+        )
+        with self.assertRaises(HTTPException) as ctx:
+            require_recent_reauth(self._request(token), self.user)
+        self.assertEqual(ctx.exception.status_code, 403)
+
+
+class AuthVerificationTests(unittest.TestCase):
+    def test_auth_user_without_provider_confirmation_is_not_verified(self):
+        class User:
+            email_confirmed_at = None
+            confirmed_at = None
+            email_verified = False
+
+        self.assertFalse(_is_auth_user_email_verified(User()))
+
+    def test_auth_user_with_provider_confirmation_is_verified(self):
+        class User:
+            email_confirmed_at = "2026-05-28T00:00:00Z"
+            confirmed_at = None
+            email_verified = False
+
+        self.assertTrue(_is_auth_user_email_verified(User()))
+
+
+class SensitiveEndpointGuardTests(unittest.TestCase):
+    def test_support_worker_cannot_access_billing_service(self):
+        user = {"sub": WORKER_ID, "role": "support_worker", "organization_id": ORG_A}
+        with self.assertRaises(HTTPException) as ctx:
+            import asyncio
+
+            asyncio.run(billing_service.list_invoices(user))
         self.assertEqual(ctx.exception.status_code, 403)
 
 

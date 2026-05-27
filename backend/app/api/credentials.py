@@ -4,11 +4,12 @@ import mimetypes
 from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
+from ..api.security import require_recent_reauth
 from ..services.supabase_client import get_supabase_admin
 
 router = APIRouter(prefix="/credentials", tags=["credentials"])
@@ -166,10 +167,12 @@ async def list_team_credentials(current_user: dict = Depends(get_current_user)):
 async def review_credential(
     credential_id: str,
     body: CredentialReviewBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     if not is_coordinator_role(current_user):
         raise HTTPException(status_code=403, detail="Only support coordinators can review credentials.")
+    require_recent_reauth(request, current_user)
     if body.status not in {"valid", "rejected", "pending_review"}:
         raise HTTPException(status_code=422, detail="Invalid review status.")
     existing = _get_credential_for_user(credential_id, current_user)

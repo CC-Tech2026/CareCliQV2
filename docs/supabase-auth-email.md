@@ -15,8 +15,10 @@ Supabase dashboard settings:
 3. Add redirect URLs:
    - `http://localhost:3000/login?verified=1`
    - `http://localhost:3000/reset-password`
+   - `http://localhost:3000/verify-email`
    - your production `/login?verified=1`
    - your production `/reset-password`
+   - your production `/verify-email`
 4. Open Authentication > SMTP if using custom mail and configure the provider.
 5. Create storage buckets:
    - `profile-photos`

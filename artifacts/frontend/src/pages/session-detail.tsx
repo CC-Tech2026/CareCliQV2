@@ -194,7 +194,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     queryFn: async () => {
       const failed = rulesResult?.failed_rules ?? [];
       if (!failed.length) return null;
-      const res = await fetch("/api/ai/explain-compliance", {
+      const res = await apiFetch("/api/ai/explain-compliance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ failed_rules: failed, session_notes: session?.notes ?? "" }),

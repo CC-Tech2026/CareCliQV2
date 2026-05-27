@@ -27,10 +27,23 @@ CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON public.access_logs(crea
 
 UPDATE public.users
 SET
-    email_verified = true,
     profile_completed = true,
     onboarding_completed = true,
-    role_specific_profile_completed = true
+    role_specific_profile_completed = true,
+    email_verified = CASE
+        WHEN id IN (
+            '10000000-0000-4000-8000-000000000101'::uuid,
+            '10000000-0000-4000-8000-000000000102'::uuid,
+            '10000000-0000-4000-8000-000000000103'::uuid
+        )
+        OR lower(email) IN (
+            'sarah@sunshine-demo.com',
+            'amara@sunshine-demo.com',
+            'daniel@sunshine-demo.com'
+        )
+        THEN true
+        ELSE email_verified
+    END
 WHERE onboarding_complete IS TRUE
    OR id IN (
         '10000000-0000-4000-8000-000000000101'::uuid,

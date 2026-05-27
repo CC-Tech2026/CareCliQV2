@@ -10,6 +10,7 @@ from ..core.access import get_user_id, get_user_organization_id, is_support_work
 from ..core.security import get_current_user
 from ..schemas.session import SessionCreate
 from ..services import audit_service, funding_service, participant_service, session_service
+from ..services.supabase_client import get_supabase_admin
 
 
 router = APIRouter(prefix="/worker", tags=["worker"])
@@ -39,6 +40,23 @@ class WorkerNoteCreate(BaseModel):
 def _require_worker(user: dict) -> None:
     if not is_support_worker(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
+
+
+def _require_worker_ready_for_sessions(user: dict) -> None:
+    result = (
+        get_supabase_admin()
+        .table("users")
+        .select("onboarding_completed, onboarding_complete")
+        .eq("id", get_user_id(user))
+        .maybe_single()
+        .execute()
+    )
+    profile = result.data if result else {}
+    if not bool(profile.get("onboarding_completed") or profile.get("onboarding_complete")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Complete the worker onboarding checklist before starting sessions or creating notes.",
+        )
 
 
 async def _assigned_participant(participant_id: str, user: dict) -> dict:
@@ -224,6 +242,7 @@ async def create_my_client_session(
     current_user: dict = Depends(get_current_user),
 ):
     await _assigned_participant(participant_id, current_user)
+    _require_worker_ready_for_sessions(current_user)
     payload = SessionCreate(
         participant_id=participant_id,
         session_date=body.session_date,
@@ -259,6 +278,7 @@ async def create_my_client_note(
     current_user: dict = Depends(get_current_user),
 ):
     await _assigned_participant(participant_id, current_user)
+    _require_worker_ready_for_sessions(current_user)
     payload = SessionCreate(
         participant_id=participant_id,
         session_date=body.session_date,

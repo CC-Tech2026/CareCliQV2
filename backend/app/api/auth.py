@@ -74,6 +74,14 @@ def _supabase_auth_request(
         raise HTTPException(status_code=502, detail="Authentication provider is unavailable.")
 
 
+def _is_auth_user_email_verified(auth_user) -> bool:
+    return bool(
+        getattr(auth_user, "email_confirmed_at", None)
+        or getattr(auth_user, "confirmed_at", None)
+        or getattr(auth_user, "email_verified", False)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Account type → access role mapping
 # ---------------------------------------------------------------------------
@@ -117,7 +125,8 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    access_token: str
+    access_token: str = ""
+    token_hash: str = ""
     password: str
 
 
@@ -243,9 +252,10 @@ async def register(body: RegisterRequest):
     """Create a new user account.
 
     Uses the service-role admin API to create the Supabase Auth user
-    so that the FK constraint (public.users.id → auth.users.id) is
-    satisfied before we upsert the profile row.  Email confirmation is
-    auto-granted for MVP; remove `email_confirm=True` to re-enable it.
+    so that the FK constraint (public.users.id -> auth.users.id) is
+    satisfied before we upsert the profile row. Email verification is
+    not bypassed unless AUTH_AUTO_CONFIRM_EMAIL is explicitly enabled
+    for local/demo environments.
     """
     if body.account_type not in VALID_ACCOUNT_TYPES:
         raise HTTPException(
@@ -375,7 +385,9 @@ async def login(body: LoginRequest, request: Request):
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
     )
     account_type = profile.get("account_type") or "independent_worker"
-    email_verified = True
+    email_verified = _is_auth_user_email_verified(auth_user)
+    if not email_verified:
+        email_verified = bool(profile.get("email_verified")) and settings.auth_auto_confirm_email
 
     # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
@@ -403,10 +415,11 @@ async def login(body: LoginRequest, request: Request):
     })
 
     await _touch_last_login(str(auth_user.id))
-    try:
-        get_supabase_admin().table("users").update({"email_verified": True}).eq("id", str(auth_user.id)).execute()
-    except Exception as e:
-        logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
+    if email_verified != bool(profile.get("email_verified")):
+        try:
+            get_supabase_admin().table("users").update({"email_verified": email_verified}).eq("id", str(auth_user.id)).execute()
+        except Exception as e:
+            logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
     return {
         "access_token": token,
@@ -509,11 +522,19 @@ async def request_password_reset(body: PasswordResetRequest):
 async def confirm_password_reset(body: PasswordResetConfirmRequest):
     """Set a new password using the Supabase recovery access token."""
     token = body.access_token.strip()
+    token_hash = body.token_hash.strip()
     password = body.password
-    if not token:
-        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+    if not token and token_hash:
+        verify_result = _supabase_auth_request(
+            "verify",
+            {"type": "recovery", "token_hash": token_hash},
+            method="POST",
+        )
+        token = verify_result.get("access_token") or verify_result.get("session", {}).get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
 
     _supabase_auth_request(
         "user",

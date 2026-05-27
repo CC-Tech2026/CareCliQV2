@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { apiFetch as authenticatedFetch } from "@/lib/api-fetch";
+import { jsonFetch } from "@/services/http";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
@@ -34,13 +35,8 @@ const CARD   = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)"
 const BG     = "#F7F5FC";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-async function apiFetch(path: string) {
-  const headers = new Headers();
-  const token = localStorage.getItem("carescribe_token");
-  if (token) headers.set("authorization", `Bearer ${token}`);
-  const r = await fetch(`/api${path}`, { headers });
-  if (!r.ok) throw new Error(String(r.status));
-  return r.json();
+async function apiFetch<T = unknown>(path: string): Promise<T> {
+  return jsonFetch<T>(`/api${path}`);
 }
 
 function scoreColor(s: number) {
@@ -265,8 +261,8 @@ function HubSection() {
   const { data: sessions = [] } = useGetSessions({ limit: 100 });
   const { data: alerts = [] }   = useGetUnreadAlerts();
   const { data: rawOv }         = useGetComplianceOverview();
-  const { data: incidents = [] } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch("/incidents") });
-  const { data: iStats }         = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch("/incidents/stats") });
+  const { data: incidents = [] } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch<any[]>("/incidents") });
+  const { data: iStats }         = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch<any>("/incidents/stats") });
 
   const ov = rawOv as any;
   const now = new Date();
@@ -453,8 +449,8 @@ function SessionReportsSection() {
 function IncidentReportsSection() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
-  const { data: incidents = [], isLoading } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch("/incidents") });
-  const { data: stats } = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch("/incidents/stats") });
+  const { data: incidents = [], isLoading } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch<any[]>("/incidents") });
+  const { data: stats } = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch<any>("/incidents/stats") });
 
   const filtered = useMemo(() => (incidents as any[]).filter(i => {
     if (!search) return true;

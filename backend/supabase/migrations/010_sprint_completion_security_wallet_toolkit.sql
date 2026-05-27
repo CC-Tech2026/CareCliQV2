@@ -26,7 +26,6 @@ ADD COLUMN IF NOT EXISTS onboarding_policy jsonb DEFAULT '{}'::jsonb;
 
 UPDATE public.users
 SET
-  email_verified = true,
   profile_completed = true,
   onboarding_completed = true,
   role_specific_profile_completed = true

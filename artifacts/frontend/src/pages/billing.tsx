@@ -138,7 +138,7 @@ export default function Billing() {
   async function createInvoice() {
     setCreatingInvoice(true);
     try {
-      const res = await requireReAuth(() => apiFetch("/api/billing/invoices", {
+      const res = await apiFetch("/api/billing/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -146,15 +146,14 @@ export default function Billing() {
           recipient_email: invoiceForm.recipient_email || null,
           due_date: invoiceForm.due_date || null,
           notes: invoiceForm.notes || null,
-          status: "issued",
+          status: "draft",
           line_items: [{
             description: invoiceForm.description,
             quantity: Number(invoiceForm.quantity || 1),
             unit_amount: Number(invoiceForm.unit_amount || 0),
           }],
         }),
-      }));
-      if (!res) return;
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || "Could not create invoice.");
@@ -162,7 +161,7 @@ export default function Billing() {
       const invoice = await res.json();
       setInvoices((prev) => [invoice, ...prev]);
       setInvoiceForm((prev) => ({ ...prev, recipient_name: "", recipient_email: "", notes: "" }));
-      toast({ title: "Invoice issued", description: invoice.invoice_number });
+      toast({ title: "Invoice draft created", description: invoice.invoice_number });
     } catch (error) {
       toast({
         title: "Invoice failed",
@@ -185,6 +184,27 @@ export default function Billing() {
     } catch (error) {
       toast({
         title: "Update failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function invoiceAction(invoice: Invoice, action: "finalize" | "mark-sent" | "cancel" | "pdf") {
+    try {
+      const res = await requireReAuth(() => apiFetch(`/api/billing/invoices/${invoice.id}/${action}`, { method: "POST" }));
+      if (!res) return;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || "Invoice action failed.");
+      }
+      const updated = await res.json();
+      setInvoices((prev) => prev.map((item) => item.id === updated.id ? updated : item));
+      toast({ title: "Invoice updated", description: updated.invoice_number });
+      if (action === "pdf" && updated.pdf_url) window.open(updated.pdf_url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      toast({
+        title: "Invoice action failed",
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -350,7 +370,7 @@ export default function Billing() {
               style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
             >
               {creatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Issue Invoice
+              Create Draft Invoice
             </Button>
           </div>
         </Panel>
@@ -377,11 +397,23 @@ export default function Billing() {
                     <p className="text-sm font-black" style={{ color: TEXT }}>{cents(invoice.total_cents, invoice.currency)}</p>
                     <p className="text-[11px]" style={{ color: MUTED }}>{invoice.due_date ? `Due ${invoice.due_date}` : "No due date"}</p>
                   </div>
-                  {invoice.status !== "paid" && invoice.status !== "void" && (
-                    <Button variant="outline" size="sm" onClick={() => markPaid(invoice)} className="gap-1.5">
-                      <CreditCard className="h-3.5 w-3.5" /> Mark paid
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {invoice.status === "draft" && (
+                      <Button variant="outline" size="sm" onClick={() => invoiceAction(invoice, "finalize")}>Finalize</Button>
+                    )}
+                    {["finalized", "issued"].includes(invoice.status) && (
+                      <Button variant="outline" size="sm" onClick={() => invoiceAction(invoice, "mark-sent")}>Mark sent</Button>
+                    )}
+                    {!["paid", "void", "cancelled"].includes(invoice.status) && (
+                      <Button variant="outline" size="sm" onClick={() => markPaid(invoice)} className="gap-1.5">
+                        <CreditCard className="h-3.5 w-3.5" /> Mark paid
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => invoiceAction(invoice, "pdf")}>PDF</Button>
+                    {!["paid", "void", "cancelled"].includes(invoice.status) && (
+                      <Button variant="ghost" size="sm" className="text-[#F03060]" onClick={() => invoiceAction(invoice, "cancel")}>Cancel</Button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

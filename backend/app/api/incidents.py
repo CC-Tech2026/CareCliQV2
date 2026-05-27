@@ -102,7 +102,7 @@ async def update_incident(
     if not is_coordinator_role(user) and existing.get("user_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Access denied")
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
-    if updates.get("status") in {"closed", "resolved", "reported"}:
+    if updates.get("status") in {"closed", "resolved", "reported"} or updates.get("ndis_reported_at"):
         require_recent_reauth(request, user)
     try:
         updated = await incident_service.update_incident(incident_id, updates, current_user=user)

@@ -56,7 +56,36 @@ def _get_item(item_id: str, user: dict) -> dict:
 
 
 def _with_low_stock(row: dict) -> dict:
-    return {**row, "low_stock": float(row.get("quantity") or 0) <= float(row.get("minimum_quantity") or 0)}
+    expiry_warning = False
+    if row.get("expiry_date"):
+        try:
+            expiry = datetime.fromisoformat(str(row["expiry_date"])[:10]).date()
+            expiry_warning = (expiry - datetime.now(timezone.utc).date()).days <= 30
+        except Exception:
+            expiry_warning = False
+    return {
+        **row,
+        "low_stock": float(row.get("quantity") or 0) <= float(row.get("minimum_quantity") or 0),
+        "expiry_warning": expiry_warning,
+    }
+
+
+def _movements_for_user(user: dict, limit: int = 50) -> list[dict]:
+    supabase = get_supabase_admin()
+    query = supabase.table("toolkit_movements").select("*").order("created_at", desc=True).limit(limit)
+    if not is_coordinator_role(user):
+        item_ids_result = (
+            supabase.table("toolkit_items")
+            .select("id")
+            .eq("organization_id", get_user_organization_id(user))
+            .eq("assigned_user_id", get_user_id(user))
+            .execute()
+        )
+        item_ids = [row["id"] for row in (item_ids_result.data or [])]
+        if not item_ids:
+            return []
+        query = query.in_("item_id", item_ids)
+    return query.execute().data or []
 
 
 @router.get("/me")
@@ -72,7 +101,7 @@ async def get_my_toolkit(current_user: dict = Depends(get_current_user)):
         .limit(50)
         .execute()
     )
-    return {"items": items, "restock_requests": requests.data or []}
+    return {"items": items, "movements": _movements_for_user(current_user), "restock_requests": requests.data or []}
 
 
 @router.post("/me/use-item")
@@ -119,7 +148,11 @@ async def get_team_toolkit(current_user: dict = Depends(get_current_user)):
     supabase = get_supabase_admin()
     items = supabase.table("toolkit_items").select("*").eq("organization_id", org_id).order("name").execute()
     requests = supabase.table("restock_requests").select("*").eq("organization_id", org_id).order("created_at", desc=True).execute()
-    return {"items": [_with_low_stock(row) for row in (items.data or [])], "restock_requests": requests.data or []}
+    return {
+        "items": [_with_low_stock(row) for row in (items.data or [])],
+        "movements": _movements_for_user(current_user, limit=100),
+        "restock_requests": requests.data or [],
+    }
 
 
 @router.post("/items", status_code=201)
@@ -129,7 +162,17 @@ async def create_toolkit_item(body: ToolkitItemBody, current_user: dict = Depend
     payload = body.model_dump()
     payload["organization_id"] = get_user_organization_id(current_user)
     result = get_supabase_admin().table("toolkit_items").insert(payload).execute()
-    return _with_low_stock(result.data[0] if result.data else payload)
+    created = result.data[0] if result.data else payload
+    get_supabase_admin().table("toolkit_movements").insert(
+        {
+            "item_id": created.get("id"),
+            "user_id": get_user_id(current_user),
+            "movement_type": "adjust",
+            "quantity": created.get("quantity") or 0,
+            "notes": "Initial stock entry",
+        }
+    ).execute()
+    return _with_low_stock(created)
 
 
 @router.patch("/items/{item_id}")
@@ -194,8 +237,9 @@ async def update_restock_request(request_id: str, body: dict, current_user: dict
     status_value = body.get("status")
     if status_value not in {"pending", "approved", "rejected", "fulfilled"}:
         raise HTTPException(status_code=422, detail="Invalid restock request status.")
+    supabase = get_supabase_admin()
     result = (
-        get_supabase_admin()
+        supabase
         .table("restock_requests")
         .update({"status": status_value, "notes": body.get("notes"), "updated_at": _now()})
         .eq("id", request_id)
@@ -204,4 +248,27 @@ async def update_restock_request(request_id: str, body: dict, current_user: dict
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Restock request not found")
-    return result.data[0]
+    updated = result.data[0]
+    if status_value == "fulfilled" and updated.get("item_id"):
+        item_result = (
+            supabase.table("toolkit_items")
+            .select("*")
+            .eq("id", updated["item_id"])
+            .eq("organization_id", get_user_organization_id(current_user))
+            .maybe_single()
+            .execute()
+        )
+        item = item_result.data if item_result else None
+        if item:
+            quantity = float(item.get("quantity") or 0) + float(updated.get("quantity_requested") or 0)
+            supabase.table("toolkit_items").update({"quantity": quantity, "updated_at": _now()}).eq("id", item["id"]).execute()
+            supabase.table("toolkit_movements").insert(
+                {
+                    "item_id": item["id"],
+                    "user_id": get_user_id(current_user),
+                    "movement_type": "restock",
+                    "quantity": updated.get("quantity_requested") or 0,
+                    "notes": body.get("notes") or "Restock request fulfilled",
+                }
+            ).execute()
+    return updated

@@ -8,8 +8,10 @@ If your database already has the earlier MVP tables and the app is currently run
 
 1. `backend/supabase/migrations/010_sprint_completion_security_wallet_toolkit.sql`
 2. `backend/supabase/migrations/011_fix_legacy_onboarding_flags.sql`
+3. `backend/supabase/migrations/012_sprint_feature_rls_hardening.sql`
 
 Migration `011` also re-applies the access-log alignment columns used by the live dashboard audit trail, so it is safe to run if dashboard reads log `access_logs.participant_id` schema warnings.
+Migration `012` enables service-role-only RLS policies for the sprint feature tables, adds missing indexes, and aligns invoice statuses with the production lifecycle.
 
 If you are not sure whether the latest billing and incident migrations were applied, run these in order. They are written to be safe to rerun where possible:
 
@@ -17,6 +19,7 @@ If you are not sure whether the latest billing and incident migrations were appl
 2. `backend/supabase/migrations/009_incident_legal_record_alignment.sql`
 3. `backend/supabase/migrations/010_sprint_completion_security_wallet_toolkit.sql`
 4. `backend/supabase/migrations/011_fix_legacy_onboarding_flags.sql`
+5. `backend/supabase/migrations/012_sprint_feature_rls_hardening.sql`
 
 After those migrations, rerun the demo seed only if you want the Sunshine demo users and sample data refreshed:
 
@@ -38,6 +41,7 @@ Run these files in Supabase SQL Editor in this exact order:
 10. `backend/supabase/migrations/009_incident_legal_record_alignment.sql`
 11. `backend/supabase/migrations/010_sprint_completion_security_wallet_toolkit.sql`
 12. `backend/supabase/migrations/011_fix_legacy_onboarding_flags.sql`
+13. `backend/supabase/migrations/012_sprint_feature_rls_hardening.sql`
 
 Then run seeds, if needed:
 
@@ -68,9 +72,20 @@ The SQL files directly under `backend/` are older/manual repair or setup scripts
 - Toolkit movement log table
 - Restock request table
 
+Migration `011` backfills legacy profile/onboarding flags without marking real non-demo users as email verified. Only the deterministic Sunshine demo users are forced verified because the seed creates confirmed Supabase Auth records.
+
+Migration `012` adds the final RLS and index hardening for:
+
+- Credentials
+- Report history
+- Toolkit items
+- Toolkit movements
+- Restock requests
+- Finalized invoice status support
+
 ## Post-Migration Verification SQL
 
-Run this after migrations 010 and 011:
+Run this after migrations 010, 011, and 012:
 
 ```sql
 select
@@ -136,8 +151,10 @@ Add redirect URLs:
 ```text
 http://localhost:3000/login?verified=1
 http://localhost:3000/reset-password
+http://localhost:3000/verify-email
 https://your-production-domain/login?verified=1
 https://your-production-domain/reset-password
+https://your-production-domain/verify-email
 ```
 
 Set `AUTH_AUTO_CONFIRM_EMAIL=false` in production so users must verify email before full access.
@@ -208,7 +225,7 @@ corepack pnpm run build
 Backend in Docker:
 
 ```powershell
-docker compose exec -T backend python -m unittest backend.tests.test_security_and_legal_record
+docker compose exec -T backend sh -c "uv pip install pytest && python -m pytest -q"
 docker compose exec -T backend python -m compileall backend/app
 ```
 

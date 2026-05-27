@@ -17,6 +17,7 @@ import {
   useToolkitItem,
   type RestockRequest,
   type ToolkitItem,
+  type ToolkitMovement,
 } from "@/services/toolkitService";
 
 const PLUM = "#5533CC";
@@ -92,6 +93,7 @@ export default function Toolkit() {
     enabled: isCoordinator,
   });
   const items = data?.items || [];
+  const movements = (data?.movements || []) as ToolkitMovement[];
   const [newItem, setNewItem] = useState({
     name: "",
     category: "Clinical supplies",
@@ -284,6 +286,30 @@ export default function Toolkit() {
           )}
         </section>
       )}
+
+      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <RotateCcw className="h-5 w-5 text-[#5533CC]" />
+          <h2 className="font-black" style={{ color: TEXT }}>Movement history</h2>
+        </div>
+        {movements.length === 0 ? (
+          <p className="mt-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm font-medium" style={{ color: MUTED }}>
+            No toolkit movements have been recorded yet.
+          </p>
+        ) : (
+          <div className="mt-3 divide-y divide-[#EEEAFB]">
+            {movements.slice(0, 8).map((movement) => (
+              <div key={movement.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
+                <span className="rounded-full bg-[#F5F3FC] px-3 py-1 text-xs font-black uppercase text-[#5533CC]">
+                  {movement.movement_type}
+                </span>
+                <span className="font-bold text-[#1E1640]">{movement.quantity}</span>
+                <span className="text-[#7A6A9E]">{movement.notes || movement.item_id}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

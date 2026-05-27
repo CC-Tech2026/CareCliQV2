@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, AlertTriangle, Loader2, Siren } from "lucide-react";
+import { createIncident } from "@/services/incidentService";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#542269";
@@ -100,17 +101,11 @@ export default function IncidentNew() {
     }
     setSaving(true);
     try {
-      const res = await fetch("/api/incidents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          participant_id: form.participant_id || undefined,
-          incident_date: new Date(form.incident_date).toISOString(),
-        }),
+      const data = await createIncident<{ id: string }>({
+        ...form,
+        participant_id: form.participant_id || undefined,
+        incident_date: new Date(form.incident_date).toISOString(),
       });
-      if (!res.ok) throw new Error("Failed to log incident");
-      const data = await res.json();
       toast({ title: "Incident logged successfully" });
       navigate(`/incidents/${data.id}`);
     } catch {

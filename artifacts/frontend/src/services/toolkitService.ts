@@ -28,7 +28,17 @@ export type RestockRequest = {
   item?: ToolkitItem;
 };
 
-export async function getMyToolkit(): Promise<{ items: ToolkitItem[]; movements: unknown[]; restock_requests: RestockRequest[] }> {
+export type ToolkitMovement = {
+  id: string;
+  item_id: string;
+  user_id?: string | null;
+  movement_type: "assign" | "use" | "restock" | "adjust";
+  quantity: number;
+  notes?: string | null;
+  created_at?: string;
+};
+
+export async function getMyToolkit(): Promise<{ items: ToolkitItem[]; movements: ToolkitMovement[]; restock_requests: RestockRequest[] }> {
   return jsonFetch("/api/toolkit/me");
 }
 
@@ -46,7 +56,7 @@ export async function requestRestock(payload: { item_id: string; quantity_reques
   });
 }
 
-export async function getTeamToolkit(): Promise<{ items: ToolkitItem[]; movements: unknown[] }> {
+export async function getTeamToolkit(): Promise<{ items: ToolkitItem[]; movements: ToolkitMovement[]; restock_requests: RestockRequest[] }> {
   return jsonFetch("/api/toolkit/team");
 }
 
