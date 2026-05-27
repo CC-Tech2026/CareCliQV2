@@ -189,7 +189,7 @@ function Router() {
       <Route path="/sessions/:id/live">
         {() => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <SessionLive />
+            <AppLayout><SessionLive /></AppLayout>
           </ProtectedRoute>
         )}
       </Route>
