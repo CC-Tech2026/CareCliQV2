@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
-export type UserRole = "admin" | "support_worker" | "allied_health" | "support_coordinator";
+export type UserRole = "support_coordinator" | "support_worker" | "allied_health";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
 
 export interface AuthUser {

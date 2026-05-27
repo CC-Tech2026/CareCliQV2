@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from .supabase_client import get_supabase_admin
+from .documentation_normalization_service import normalize_documentation_for_legal_record
+from .compliance_engine import BLOCKING_TRANSLATION_STATUSES, COMPLIANCE_BLOCKED_MESSAGE
+from ..core.access import can_access_session, is_coordinator_role, user_id
 from ..schemas.incident import (
     IncidentCreate,
     IncidentUpdate,
@@ -17,6 +20,14 @@ from ..schemas.incident import (
 logger = logging.getLogger(__name__)
 
 TABLE = "incidents"
+LEGAL_TEXT_FIELDS = (
+    "title",
+    "description",
+    "participant_impact",
+    "worker_actions",
+    "investigation_notes",
+    "corrective_actions",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +67,17 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
         return row
 
     enriched = dict(row)
+
+    legal_record_text = (
+        enriched.get("translated_english_report")
+        or enriched.get("compliance_input_text")
+        or ""
+    )
+    enriched["legal_record_text"] = legal_record_text
+    enriched["display_description"] = legal_record_text
+    if legal_record_text:
+        enriched["original_description"] = enriched.get("description")
+        enriched["description"] = legal_record_text
 
     incident_type = str(
         enriched.get("incident_type") or "other"
@@ -112,6 +134,66 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     return enriched
 
 
+def _build_legal_source_text(
+    source_data: dict[str, Any],
+    existing: Optional[dict[str, Any]] = None,
+) -> str:
+    source = {**(existing or {}), **source_data}
+    sections: list[str] = []
+    labels = {
+        "title": "Title",
+        "description": "Description",
+        "participant_impact": "Participant impact",
+        "worker_actions": "Worker actions",
+        "investigation_notes": "Investigation notes",
+        "corrective_actions": "Corrective actions",
+    }
+    for field in LEGAL_TEXT_FIELDS:
+        value = str(source.get(field) or "").strip()
+        if value:
+            sections.append(f"{labels[field]}: {value}")
+    return "\n\n".join(sections).strip()
+
+
+async def _apply_legal_record_normalization(
+    payload: dict[str, Any],
+    source_data: dict[str, Any],
+    existing: Optional[dict[str, Any]] = None,
+    current_user: Optional[dict] = None,
+    incident_id: Optional[str] = None,
+) -> None:
+    should_normalize = bool(source_data.get("status") in {"reported", "under_investigation", "resolved", "closed"}) or any(
+        field in source_data for field in LEGAL_TEXT_FIELDS
+    )
+    if not should_normalize:
+        return
+
+    source_text = _build_legal_source_text(source_data, existing)
+    normalized = await normalize_documentation_for_legal_record(
+        source_text=source_text,
+        requested_language=source_data.get("input_language") or source_data.get("detected_language"),
+        user=current_user,
+        session_id=incident_id,
+    )
+    payload.update(
+        {
+            "original_language_input": normalized.get("original_language_input"),
+            "detected_language": normalized.get("detected_language"),
+            "translated_english_report": normalized.get("translated_english_note"),
+            "compliance_input_text": normalized.get("compliance_input_text"),
+            "translation_status": normalized.get("translation_status"),
+            "translation_provider": normalized.get("translation_provider"),
+            "translation_confidence": normalized.get("translation_confidence"),
+            "translation_metadata": normalized.get("translation_metadata"),
+            "translation_error": normalized.get("translation_error"),
+        }
+    )
+    if normalized.get("translation_status") not in BLOCKING_TRANSLATION_STATUSES:
+        payload["translation_completed_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        raise ValueError(COMPLIANCE_BLOCKED_MESSAGE)
+
+
 # ---------------------------------------------------------------------------
 # Queries
 # ---------------------------------------------------------------------------
@@ -123,6 +205,7 @@ async def get_all_incidents(
     participant_id: Optional[str] = None,
     org_id: Optional[str] = None,
     reporter_id: Optional[str] = None,
+    current_user: Optional[dict] = None,
 ) -> List[dict[str, Any]]:
     supabase = get_supabase_admin()
 
@@ -193,8 +276,25 @@ async def get_all_incidents(
             )
 
     enriched_rows: List[dict[str, Any]] = []
+    visible_participant_ids: set[str] = set()
+    if current_user:
+        try:
+            from . import participant_service
+            visible_participants = await participant_service.get_all_participants(current_user)
+            visible_participant_ids = {
+                str(p.get("id"))
+                for p in visible_participants
+                if p.get("id")
+            }
+        except Exception:
+            visible_participant_ids = set()
 
     for row in rows:
+        if current_user and not is_coordinator_role(current_user):
+            participant_id = row.get("participant_id")
+            if not participant_id or str(participant_id) not in visible_participant_ids:
+                continue
+
         participant_key = str(
             row.get("participant_id") or ""
         )
@@ -211,6 +311,7 @@ async def get_all_incidents(
 
 async def get_incident_by_id(
     incident_id: str,
+    current_user: Optional[dict] = None,
 ) -> Optional[dict[str, Any]]:
     supabase = get_supabase_admin()
 
@@ -230,10 +331,24 @@ async def get_incident_by_id(
 
         row = rows[0]
 
+        if current_user:
+            org_id = current_user.get("organization_id")
+            if not org_id or str(row.get("organization_id") or "") != str(org_id):
+                return None
+
         participant_id = row.get("participant_id")
 
         if isinstance(participant_id, str):
             try:
+                if current_user:
+                    from . import participant_service
+                    participant_access = await participant_service.get_participant_by_id(
+                        participant_id,
+                        current_user,
+                    )
+                    if not participant_access:
+                        return None
+
                 participant_result = (
                     supabase
                     .table("patients")
@@ -263,6 +378,18 @@ async def get_incident_by_id(
                     exc,
                 )
 
+        elif current_user and not is_coordinator_role(current_user):
+            session_id = row.get("session_id")
+            if not session_id:
+                return None
+            try:
+                from . import session_service
+                session = await session_service.get_session_by_id(str(session_id), current_user)
+                if not session or not can_access_session(session, current_user):
+                    return None
+            except Exception:
+                return None
+
         return _enrich(row)
 
     except Exception as exc:
@@ -277,9 +404,12 @@ async def get_incident_by_id(
 
 async def get_incidents_by_participant(
     participant_id: str,
+    current_user: Optional[dict] = None,
 ) -> List[dict[str, Any]]:
     return await get_all_incidents(
-        participant_id=participant_id
+        participant_id=participant_id,
+        org_id=(current_user or {}).get("organization_id"),
+        current_user=current_user,
     )
 
 
@@ -290,6 +420,7 @@ async def get_incidents_by_participant(
 async def create_incident(
     data: IncidentCreate,
     org_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> dict[str, Any]:
     supabase = get_supabase_admin()
 
@@ -297,8 +428,17 @@ async def create_incident(
         exclude_none=True
     )
 
+    await _apply_legal_record_normalization(
+        payload,
+        payload,
+        current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
+    )
+
     if org_id:
         payload["organization_id"] = org_id
+    if user_id:
+        payload["user_id"] = user_id
+        payload["created_by"] = user_id
 
     # Convert date fields
     for key in (
@@ -356,10 +496,33 @@ async def create_incident(
 async def update_incident(
     incident_id: str,
     updates: dict[str, Any],
+    current_user: Optional[dict] = None,
 ) -> Optional[dict[str, Any]]:
     supabase = get_supabase_admin()
 
     payload = dict(updates)
+
+    existing = None
+    try:
+        existing_result = (
+            supabase
+            .table(TABLE)
+            .select("*")
+            .eq("id", incident_id)
+            .execute()
+        )
+        existing_rows = _safe_rows(existing_result.data)
+        existing = existing_rows[0] if existing_rows else None
+    except Exception as exc:
+        logger.warning("Could not fetch incident before normalization: %s", exc)
+
+    await _apply_legal_record_normalization(
+        payload,
+        payload,
+        existing=existing,
+        current_user=current_user,
+        incident_id=incident_id,
+    )
 
     for key in (
         "incident_date",
@@ -421,7 +584,8 @@ async def update_incident(
             return None
 
         return await get_incident_by_id(
-            incident_id
+            incident_id,
+            current_user=current_user,
         )
 
     except Exception as exc:
@@ -440,6 +604,7 @@ async def update_incident(
 
 async def get_incident_stats(
     org_id: Optional[str] = None,
+    current_user: Optional[dict] = None,
 ) -> dict[str, int]:
     supabase = get_supabase_admin()
 
@@ -448,7 +613,7 @@ async def get_incident_stats(
             supabase
             .table(TABLE)
             .select(
-                "id, status, severity, "
+                "id, participant_id, status, severity, "
                 "ndis_reportable, "
                 "ndis_reported_at, "
                 "incident_date"
@@ -480,6 +645,24 @@ async def get_incident_stats(
         }
 
     now = datetime.now(timezone.utc)
+
+    if current_user and not is_coordinator_role(current_user):
+        visible_participant_ids: set[str] = set()
+        try:
+            from . import participant_service
+            visible_participants = await participant_service.get_all_participants(current_user)
+            visible_participant_ids = {
+                str(p.get("id"))
+                for p in visible_participants
+                if p.get("id")
+            }
+        except Exception:
+            visible_participant_ids = set()
+        rows = [
+            r
+            for r in rows
+            if r.get("participant_id") and str(r.get("participant_id")) in visible_participant_ids
+        ]
 
     total = len(rows)
 

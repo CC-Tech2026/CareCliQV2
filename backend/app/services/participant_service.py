@@ -12,7 +12,10 @@ from .supabase_client import get_supabase_admin
 from ..core.access import (
     ACCESS_METADATA_FIELDS,
     can_access_participant,
+    get_user_role,
+    is_allied_health,
     is_coordinator,
+    is_support_worker,
     owner_payload,
     user_id,
     organization_id,
@@ -175,79 +178,52 @@ async def get_all_participants(
     current_user: Optional[dict] = None,
 ) -> List[dict]:
 
+    if not current_user or not user_id(current_user) or not get_user_role(current_user):
+        return []
+
+    org_id = organization_id(current_user)
+    if not org_id:
+        return []
+
     supabase = get_supabase_admin()
 
     try:
-        result = (
+        query = (
             supabase.table(TABLE)
             .select(_access_select())
             .order("created_at", desc=True)
-            .execute()
         )
+        query = query.eq("organization_id", org_id)
+        result = query.execute()
 
     except Exception as exc:
 
-        if not _is_missing_column_error(exc):
-            raise
-
-        result = (
-            supabase.table(TABLE)
-            .select("*")
-            .order("created_at", desc=True)
-            .execute()
-        )
+        if _is_missing_column_error(exc):
+            logger.warning("Participant access metadata missing; list failed closed")
+            return []
+        raise
 
     rows: List[dict] = [
         r for r in (result.data or [])
         if isinstance(r, dict)
     ]
 
-    logger.warning("TOTAL PARTICIPANTS => %s", len(rows))
-    logger.warning("CURRENT USER => %s", current_user)
+    support_ids, clinical_ids = await _get_assignment_ids(current_user)
 
     filtered_rows: List[dict] = []
 
     for row in rows:
-
-        logger.warning(
-            "PARTICIPANT => id=%s org=%s assigned=%s allied=%s created_by=%s owner=%s",
-            row.get("id"),
-            row.get("organization_id"),
-            row.get("assigned_worker_id"),
-            row.get("allied_health_id"),
-            row.get("created_by"),
-            row.get("owner_user_id"),
+        scoped_row = _annotate_assignment_scope(
+            row,
+            current_user,
+            support_ids,
+            clinical_ids,
         )
 
-        # TEMP DEBUG
-        allowed = can_access_participant(row, current_user)
-
-        logger.warning(
-            "ACCESS RESULT => participant=%s allowed=%s user_org=%s row_org=%s",
-            row.get("id"),
-            allowed,
-            organization_id(current_user),
-            row.get("organization_id"),
-        )
-
-        # TEMPORARY DEBUG BYPASS
-        # Uncomment this to test if access logic is the issue
-        # allowed = True
-
-        if not allowed:
-
-            await log_security_event(
-                event_type="unauthorized_access",
-                description="Unauthorized participant list access attempt",
-                accessor_id=user_id(current_user),
-                participant_id=str(row.get("id")),
-                organization_id=organization_id(current_user),
-                severity="medium",
-            )
-
+        if not can_access_participant(scoped_row, current_user):
             continue
 
-        participant_id = str(row.get("id"))
+        participant_id = str(scoped_row.get("id"))
 
         await log_participant_read(
             participant_id,
@@ -256,12 +232,7 @@ async def get_all_participants(
             purpose="Participant List Access",
         )
 
-        filtered_rows.append(row)
-
-    logger.warning(
-        "FILTERED PARTICIPANTS => %s",
-        len(filtered_rows),
-    )
+        filtered_rows.append(scoped_row)
 
     return [_normalize(r) for r in filtered_rows]
 
@@ -271,32 +242,24 @@ async def get_participant_by_id(
     current_user: Optional[dict] = None,
 ) -> Optional[dict]:
 
-    if not participant_id:
+    if (
+        not participant_id
+        or not current_user
+        or not user_id(current_user)
+        or not get_user_role(current_user)
+    ):
         return None
 
     supabase = get_supabase_admin()
 
     try:
 
-        try:
-            result = (
-                supabase.table(TABLE)
-                .select(_access_select())
-                .eq("id", participant_id)
-                .execute()
-            )
-
-        except Exception as exc:
-
-            if not _is_missing_column_error(exc):
-                raise
-
-            result = (
-                supabase.table(TABLE)
-                .select("*")
-                .eq("id", participant_id)
-                .execute()
-            )
+        result = (
+            supabase.table(TABLE)
+            .select(_access_select())
+            .eq("id", participant_id)
+            .execute()
+        )
 
         rows: List[dict] = [
             r for r in (result.data or [])
@@ -307,20 +270,15 @@ async def get_participant_by_id(
             return None
 
         participant = rows[0]
-
-        allowed = (
-            can_access_participant(participant, current_user)
-            if current_user
-            else False
+        support_ids, clinical_ids = await _get_assignment_ids(current_user)
+        participant = _annotate_assignment_scope(
+            participant,
+            current_user,
+            support_ids,
+            clinical_ids,
         )
 
-        logger.warning(
-            "GET PARTICIPANT ACCESS => participant=%s allowed=%s",
-            participant_id,
-            allowed,
-        )
-
-        if not allowed:
+        if not can_access_participant(participant, current_user):
 
             await log_security_event(
                 event_type="unauthorized_access",
@@ -344,6 +302,10 @@ async def get_participant_by_id(
 
     except Exception as exc:
 
+        if _is_missing_column_error(exc):
+            logger.warning("Participant access metadata missing; detail failed closed")
+            return None
+
         logger.exception(
             "get_participant_by_id(%s) failed",
             participant_id,
@@ -356,6 +318,11 @@ async def create_participant(
     data: ParticipantCreate,
     current_user: Optional[dict] = None,
 ) -> Optional[dict]:
+
+    if not current_user or not user_id(current_user) or not organization_id(current_user):
+        raise PermissionError("Authenticated organization membership is required")
+    if not is_coordinator(current_user):
+        raise PermissionError("Only support coordinators can create participants")
 
     supabase = get_supabase_admin()
 
@@ -380,28 +347,18 @@ async def create_participant(
             else []
         )
 
-    # ownership metadata
-    if current_user:
+    ownership = owner_payload(current_user)
 
-        ownership = owner_payload(current_user)
-
-        logger.warning(
-            "OWNERSHIP PAYLOAD => %s",
-            ownership,
-        )
-
-        for key in (
-            "created_by",
-            "organization_id",
-            "assigned_worker_id",
-            "allied_health_id",
-            "clinician_id",
-            "owner_user_id",
-        ):
-            if key in ownership:
-                payload[key] = ownership[key]
-
-    logger.warning("CREATE PAYLOAD => %s", payload)
+    for key in (
+        "created_by",
+        "organization_id",
+        "assigned_worker_id",
+        "allied_health_id",
+        "clinician_id",
+        "owner_user_id",
+    ):
+        if key in ownership:
+            payload[key] = ownership[key]
 
     try:
 
@@ -414,15 +371,7 @@ async def create_participant(
     except Exception as exc:
 
         logger.exception("CREATE PARTICIPANT FAILED")
-
-        if not _is_missing_column_error(exc):
-            raise
-
-        result = (
-            supabase.table(TABLE)
-            .insert(_strip_access_columns(payload))
-            .execute()
-        )
+        raise
 
     rows: List[dict] = [
         r for r in (result.data or [])
@@ -566,6 +515,9 @@ async def get_dashboard_stats(
     current_user: Optional[dict] = None,
 ) -> dict:
 
+    if not current_user or not user_id(current_user) or not organization_id(current_user):
+        return _empty_dashboard_stats()
+
     supabase = get_supabase_admin()
 
     week_ago = (
@@ -588,6 +540,7 @@ async def get_dashboard_stats(
                 owner_user_id
                 """
             )
+            .eq("organization_id", organization_id(current_user))
             .execute()
         )
 
@@ -598,15 +551,19 @@ async def get_dashboard_stats(
 
     except Exception:
 
-        participant_data = []
+        return _empty_dashboard_stats()
 
-    if current_user:
+    support_ids, clinical_ids = await _get_assignment_ids(current_user)
 
-        participant_data = [
-            p
-            for p in participant_data
-            if can_access_participant(p, current_user)
-        ]
+    participant_data = [
+        _annotate_assignment_scope(p, current_user, support_ids, clinical_ids)
+        for p in participant_data
+    ]
+    participant_data = [
+        p
+        for p in participant_data
+        if can_access_participant(p, current_user)
+    ]
 
     participant_ids = {
         p.get("id")
@@ -620,6 +577,7 @@ async def get_dashboard_stats(
             supabase.table("sessions")
             .select("id, patient_id")
             .gte("session_date", week_ago)
+            .eq("organization_id", organization_id(current_user))
             .execute()
         )
 
@@ -628,12 +586,11 @@ async def get_dashboard_stats(
             if isinstance(s, dict)
         ]
 
-        if current_user:
-            week_rows = [
-                s
-                for s in week_rows
-                if s.get("patient_id") in participant_ids
-            ]
+        week_rows = [
+            s
+            for s in week_rows
+            if s.get("patient_id") in participant_ids
+        ]
 
         sessions_this_week = len(week_rows)
 
@@ -646,6 +603,7 @@ async def get_dashboard_stats(
         sessions_all = (
             supabase.table("sessions")
             .select("id, status, patient_id")
+            .eq("organization_id", organization_id(current_user))
             .execute()
         )
 
@@ -654,12 +612,11 @@ async def get_dashboard_stats(
             if isinstance(s, dict)
         ]
 
-        if current_user:
-            session_rows = [
-                s
-                for s in session_rows
-                if s.get("patient_id") in participant_ids
-            ]
+        session_rows = [
+            s
+            for s in session_rows
+            if s.get("patient_id") in participant_ids
+        ]
 
         notes_missing = sum(
             1
@@ -676,6 +633,7 @@ async def get_dashboard_stats(
         alerts = (
             supabase.table("alerts")
             .select("id")
+            .eq("organization_id", organization_id(current_user))
             .eq("is_read", False)
             .execute()
         )
@@ -696,4 +654,86 @@ async def get_dashboard_stats(
             for p in participant_data
             if p.get("plan_status") == "active"
         ),
+    }
+
+
+async def _get_assignment_ids(current_user: Optional[dict]) -> tuple[set[str], set[str]]:
+    """Return active assignment patient IDs for the current scoped user.
+
+    The first set is support-worker scope, the second set is clinical/allied
+    health scope. Fail closed on missing assignment metadata.
+    """
+    if not current_user or not (is_support_worker(current_user) or is_allied_health(current_user)):
+        return set(), set()
+
+    uid = user_id(current_user)
+    org_id = organization_id(current_user)
+    if not uid or not org_id:
+        return set(), set()
+
+    try:
+        supabase = get_supabase_admin()
+        result = (
+            supabase.table("practitioner_allocations")
+            .select("patient_id, allocated_role, organization_id")
+            .eq("user_id", uid)
+            .eq("organization_id", org_id)
+            .eq("is_active", True)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("Participant assignment lookup failed closed: %s", exc)
+        return set(), set()
+
+    support_ids: set[str] = set()
+    clinical_ids: set[str] = set()
+    for row in result.data or []:
+        if not isinstance(row, dict) or str(row.get("organization_id")) != org_id:
+            continue
+        patient_id = row.get("patient_id")
+        if not patient_id:
+            continue
+        allocated_role = str(row.get("allocated_role") or "")
+        if allocated_role in {"support_worker", "supervisor"}:
+            support_ids.add(str(patient_id))
+        if allocated_role in {"allied_health", "primary_ot"}:
+            clinical_ids.add(str(patient_id))
+
+    return support_ids, clinical_ids
+
+
+def _annotate_assignment_scope(
+    row: dict,
+    current_user: Optional[dict],
+    support_ids: set[str],
+    clinical_ids: set[str],
+) -> dict:
+    if not current_user or not row:
+        return row
+
+    uid = user_id(current_user)
+    org_id = organization_id(current_user)
+    participant_id = str(row.get("id") or "")
+    annotated = dict(row)
+
+    if uid and participant_id in support_ids:
+        annotated["_support_assignment_user_ids"] = [uid]
+        annotated["_assignment_user_ids"] = [uid]
+        annotated["_assignment_org_id"] = org_id
+
+    if uid and participant_id in clinical_ids:
+        annotated["_clinical_assignment_user_ids"] = [uid]
+        annotated["_assignment_user_ids"] = [uid]
+        annotated["_assignment_org_id"] = org_id
+
+    return annotated
+
+
+def _empty_dashboard_stats() -> dict:
+    return {
+        "total_participants": 0,
+        "sessions_this_week": 0,
+        "notes_missing": 0,
+        "compliance_alerts": 0,
+        "active_participants": 0,
     }

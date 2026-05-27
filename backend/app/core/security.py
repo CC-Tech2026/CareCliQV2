@@ -74,7 +74,7 @@ def require_role(allowed_roles: list[str]):
 
     Usage:
         @router.get("/protected")
-        async def endpoint(user=Depends(require_role(["admin", "support_worker"]))):
+        async def endpoint(user=Depends(require_role(["support_coordinator", "support_worker"]))):
             ...
     """
     def dependency(user: dict = Depends(get_current_user)) -> dict:

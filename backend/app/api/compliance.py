@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ..core.security import get_current_user
 from ..services import session_service, participant_service, funding_service, ai_service
-from ..services.compliance_engine import run_compliance_check
+from ..services.compliance_engine import (
+    COMPLIANCE_BLOCKED_MESSAGE,
+    ComplianceBlockedError,
+    run_compliance_check,
+)
 from ..services.settings_service import get_physical_exam_session_types
 import logging
 
@@ -36,7 +40,10 @@ async def run_compliance(session_id: str, current_user: dict = Depends(get_curre
         existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
     custom_physical_types = await get_physical_exam_session_types()
-    rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
+    try:
+        rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
+    except ComplianceBlockedError:
+        raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
     score = rules_result["score"]
     status = _derive_status(score)
 
@@ -64,7 +71,10 @@ async def run_compliance(session_id: str, current_user: dict = Depends(get_curre
     failed = rules_result.get("failed_rules", [])
     if failed:
         try:
-            explanation = await ai_service.explain_compliance(failed, session.get("notes", ""))
+            explanation = await ai_service.explain_compliance(
+                failed,
+                session.get("compliance_input_text") or session.get("translated_english_note") or "",
+            )
         except Exception as e:
             logger.warning(f"AI explanation failed: {e}")
 
@@ -108,7 +118,7 @@ async def compliance_report_for_patient(patient_id: str, current_user: dict = De
             "compliance_score": score,
             "compliance_status": status,
             "duration_minutes": s.get("duration_minutes"),
-            "notes_length": len(s.get("notes") or ""),
+            "notes_length": len(s.get("compliance_input_text") or s.get("translated_english_note") or ""),
             "goals_linked": bool(goals),
             "status": s.get("status"),
         })

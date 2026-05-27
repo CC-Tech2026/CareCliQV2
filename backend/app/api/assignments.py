@@ -24,7 +24,7 @@ router = APIRouter(prefix="/assignments", tags=["assignments"])
 
 TABLE = "practitioner_allocations"
 
-_COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
+_COORDINATOR_ROLES = frozenset({"support_coordinator"})
 
 _VALID_ROLE_TYPES = frozenset({
     "support_worker", "allied_health", "primary_ot", "supervisor"

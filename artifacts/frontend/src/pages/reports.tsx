@@ -17,7 +17,7 @@ import {
   CheckCircle2, XCircle, Clock, ArrowRight, Plus,
   Download, FileBarChart2, Siren, TrendingUp,
   ChevronRight, Sparkles, Target, Search, Filter,
-  ClipboardList, Lightbulb, Package, Star,
+  ClipboardList, Lightbulb, Star,
 } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
@@ -32,7 +32,10 @@ const BG     = "#F7F5FC";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 async function apiFetch(path: string) {
-  const r = await fetch(`/api${path}`);
+  const headers = new Headers();
+  const token = localStorage.getItem("carescribe_token");
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const r = await fetch(`/api${path}`, { headers });
   if (!r.ok) throw new Error(String(r.status));
   return r.json();
 }
@@ -45,6 +48,16 @@ function scoreBg(s: number) {
 }
 function scoreLabel(s: number) {
   return s >= 85 ? "Compliant" : s >= 60 ? "At Risk" : "Non-Compliant";
+}
+
+function legalNoteText(s: any) {
+  return (
+    s?.translated_english_note ??
+    s?.compliance_input_text ??
+    s?.legal_record_text ??
+    s?.notes ??
+    ""
+  );
 }
 
 function ComplianceBadge({ score }: { score?: number | null }) {
@@ -142,7 +155,7 @@ function HubSection() {
   const now = new Date();
   const missingNotes = (sessions as any[]).filter(s =>
     s.status !== "in_progress" && s.status !== "cancelled" &&
-    (!s.notes || (s.notes as string).length < 20) &&
+    legalNoteText(s).length < 20 &&
     differenceInDays(now, parseISO(s.session_date)) <= 14
   );
   const auditRisks = (sessions as any[]).filter(s => s.compliance_score != null && s.compliance_score < 60);
@@ -460,12 +473,12 @@ function ParticipantNotesSection() {
                           <p className="text-[13px] font-semibold" style={{ color: T1 }}>
                             {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min
                           </p>
-                          {s.notes && (
+                          {legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 line-clamp-2" style={{ color: T2 }}>
-                              {s.notes.slice(0, 200)}{s.notes.length > 200 ? "…" : ""}
+                              {legalNoteText(s).slice(0, 200)}{legalNoteText(s).length > 200 ? "..." : ""}
                             </p>
                           )}
-                          {!s.notes && (
+                          {!legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 italic" style={{ color: CORAL }}>No notes recorded</p>
                           )}
                         </div>
@@ -608,7 +621,7 @@ function AuditReadinessSection() {
 
   const now = new Date();
   const recentSessions = (sessions as any[]).filter(s => isAfter(parseISO(s.session_date), subDays(now, 30)));
-  const notedSessions  = recentSessions.filter(s => s.notes && (s.notes as string).length >= 20);
+  const notedSessions  = recentSessions.filter(s => legalNoteText(s).length >= 20);
   const noteRate       = recentSessions.length > 0 ? (notedSessions.length / recentSessions.length) * 100 : 100;
   const compliantPct   = (ov?.total_sessions ?? 0) > 0 ? ((ov?.compliant ?? 0) / ov.total_sessions) * 100 : 0;
 
@@ -872,7 +885,6 @@ function ExportCentreSection() {
 
   async function handleExport(type: string) {
     setExporting(type);
-    await new Promise(r => setTimeout(r, 1200));
 
     if (type === "compliance_bundle") {
       const sessions_list: any[] = ov?.sessions ?? [];
@@ -904,11 +916,12 @@ function ExportCentreSection() {
         (s.session_type ?? "").replace(/_/g, " "), s.duration_minutes ?? "",
         s.compliance_score != null ? `${Math.round(s.compliance_score)}%` : "Draft",
         s.status ?? "",
+        legalNoteText(s),
       ]);
       const csv = [
-        ["Session ID", "Participant", "Date", "Type", "Duration (min)", "Compliance", "Status"],
+        ["Session ID", "Participant", "Date", "Type", "Duration (min)", "Compliance", "Status", "English Legal Record"],
         ...rows,
-      ].map(r => r.join(",")).join("\n");
+      ].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
@@ -923,8 +936,6 @@ function ExportCentreSection() {
   const EXPORT_TYPES = [
     { id: "compliance_bundle", label: "Compliance Bundle",   desc: "Full PDF report of all session compliance scores and audit outcomes.", icon: ShieldCheck,   color: PLUM    },
     { id: "session_csv",       label: "Sessions CSV",         desc: "Spreadsheet export of all sessions with compliance metadata for analysis.", icon: FileBarChart2, color: "#2563EB" },
-    { id: "incident_summary",  label: "Incident Summary",    desc: "Incident report PDF covering all logged incidents and their resolution status.", icon: AlertTriangle, color: "#D97706" },
-    { id: "participant_pack",  label: "Participant History", desc: "Per-participant documentation pack including all sessions, notes, and goals.", icon: Package,       color: "#16A34A" },
   ];
 
   return (

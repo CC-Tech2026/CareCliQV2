@@ -15,6 +15,32 @@ logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=settings.openai_api_key)
 
+
+class TranslationProviderUnavailable(RuntimeError):
+    """Raised when no server-side translation provider is configured."""
+
+
+class TranslationProviderFailure(RuntimeError):
+    """Raised when a configured translation provider cannot translate."""
+
+
+BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
+LEGAL_RECORD_REQUIRED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
+
+
+def _legal_record_text_or_raise(session_data: dict) -> str:
+    """Return the English legal record text, failing closed on raw/source notes."""
+    translation_status = str(session_data.get("translation_status") or "not_required")
+    legal_text = (
+        session_data.get("compliance_input_text")
+        or session_data.get("translated_english_note")
+        or ""
+    )
+    if translation_status in BLOCKING_TRANSLATION_STATUSES or not str(legal_text).strip():
+        raise ValueError(LEGAL_RECORD_REQUIRED_MESSAGE)
+    return str(legal_text).strip()
+
+
 # ---------------------------------------------------------------------------
 # CareScribe Master System Prompt (from spec)
 # ---------------------------------------------------------------------------
@@ -124,10 +150,15 @@ def _libretranslate_sync(text: str) -> dict:
     with urllib.request.urlopen(req, timeout=8) as resp:
         data = json.loads(resp.read())
     detected = data.get("detectedLanguage", {}).get("language", "")
+    translated_text = (data.get("translatedText") or "").strip()
+    if not translated_text:
+        raise RuntimeError("LibreTranslate returned empty translation")
     return {
-        "translated": data.get("translatedText", text),
+        "translated": translated_text,
         "detected_language": detected or "en",
         "confidence": data.get("detectedLanguage", {}).get("confidence", 0.9),
+        "provider": "libretranslate",
+        "model": None,
     }
 
 
@@ -272,16 +303,24 @@ async def generate_session_analysis(
             for f in rp_flags
         )
 
-    # Build structured notes context
-    existing_structured = {
+    legal_record_text = _legal_record_text_or_raise(session_data)
+
+    # Build structured notes context only when those fields are already part of
+    # the English legal record. Raw source-language structured fields are audit
+    # context, not compliance input.
+    raw_structured = {
         "activities_performed": session_data.get("activities_performed") or "",
         "participant_response": session_data.get("participant_response") or "",
         "outcomes": session_data.get("outcomes") or "",
         "progress_toward_goals": session_data.get("progress_toward_goals") or "",
     }
+    existing_structured = {
+        key: value if str(value).strip() and str(value).strip() in legal_record_text else ""
+        for key, value in raw_structured.items()
+    }
     has_structured = any(v.strip() for v in existing_structured.values())
 
-    notes_section = f"Session Notes: {session_data.get('notes', 'No notes provided')}"
+    notes_section = f"Session Notes: {legal_record_text}"
     if has_structured:
         notes_section += f"""
 Structured Fields Already Completed:
@@ -410,7 +449,8 @@ If structured_notes are already completed above, preserve them exactly (do not r
 async def generate_patient_summary(participant_data: dict, sessions: list) -> str:
     sessions_text = "\n".join([
         f"- {s.get('session_date', 'Unknown date')}: {s.get('session_type', 'Session')} "
-        f"({s.get('duration_minutes', 0)} min) — {s.get('notes', 'No notes')[:200]}"
+        f"({s.get('duration_minutes', 0)} min) — "
+        f"{(s.get('translated_english_note') or s.get('compliance_input_text') or 'English legal record unavailable')[:200]}"
         for s in sessions[-5:]
     ])
 
@@ -486,15 +526,9 @@ async def check_compliance(session_data: dict) -> dict:
     Kept for backward compatibility with the /compliance endpoints.
     For new code, prefer generate_session_analysis() which returns the full spec.
     """
-    # Quick local pre-assessment for context
-    notes = (session_data.get("notes") or "").strip()
-    structured_text = " ".join(filter(None, [
-        session_data.get("activities_performed") or "",
-        session_data.get("outcomes") or "",
-        session_data.get("participant_response") or "",
-        session_data.get("progress_toward_goals") or "",
-    ]))
-    effective_text = structured_text if len(structured_text) > len(notes) else notes
+    # Quick local pre-assessment for context. Compliance AI is allowed to see
+    # only the English legal record, never the raw source-language note.
+    effective_text = _legal_record_text_or_raise(session_data)
     goals = session_data.get("goals_addressed") or []
     if isinstance(goals, str):
         try:
@@ -634,14 +668,29 @@ Write in plain English. Be specific about what information is actually missing. 
 # ---------------------------------------------------------------------------
 
 async def translate_to_english(text: str, source_language: str = "auto") -> dict:
-    """Translate text into fluent English. Tries LibreTranslate first, falls back to OpenAI."""
+    """Translate text into fluent English.
+
+    Raises when no provider can produce an English translation. Callers must not
+    silently save raw non-English text as the legal record.
+    """
     if not text or not text.strip():
-        return {"translated": "", "detected_language": "en", "confidence": 1.0}
+        return {
+            "translated": "",
+            "detected_language": "en",
+            "confidence": 1.0,
+            "provider": "none",
+            "model": None,
+        }
 
     try:
         return _libretranslate_sync(text)
-    except Exception:
-        pass
+    except Exception as libre_exc:
+        logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
+
+    if not (settings.openai_api_key or "").strip():
+        raise TranslationProviderUnavailable(
+            "Translation provider is not configured. Add OPENAI_API_KEY or LIBRETRANSLATE_URL on the backend."
+        )
 
     lang_hint = (
         f"The source language is {source_language}."
@@ -662,21 +711,34 @@ Respond with a JSON object:
   "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
 }}"""
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=500,
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=500,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:
+        logger.error("OpenAI translation provider failed", exc_info=True)
+        raise TranslationProviderFailure(
+            "Translation provider failed. Check backend translation configuration."
+        ) from exc
     result = json.loads(response.choices[0].message.content)
+    translated = (result.get("translated") or "").strip()
+    detected = (result.get("detected_language") or "").strip().lower()
+    if not translated or not detected:
+        raise RuntimeError("OpenAI translation returned incomplete data")
     return {
-        "translated": result.get("translated", text),
-        "detected_language": result.get("detected_language", "en"),
+        "translated": translated,
+        "detected_language": detected,
         "confidence": 0.95,
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "fallback_used": bool(_LIBRETRANSLATE_URL),
     }
 
 

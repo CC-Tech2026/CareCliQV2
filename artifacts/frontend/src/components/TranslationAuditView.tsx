@@ -16,6 +16,8 @@ interface TranslationMetadata {
   model?: string;
   source_language?: string;
   source_language_name?: string;
+  provider?: string;
+  created_at?: string;
   translated_at?: string;
   confidence?: number;
 }
@@ -24,12 +26,16 @@ interface TranslationAuditViewProps {
   originalLanguageInput?: string | null;
   translatedEnglishNote?: string | null;
   translationMetadata?: TranslationMetadata | null;
+  translationStatus?: string | null;
+  translationProvider?: string | null;
 }
 
 export function TranslationAuditView({
   originalLanguageInput,
   translatedEnglishNote,
   translationMetadata,
+  translationStatus,
+  translationProvider,
 }: TranslationAuditViewProps) {
   if (!originalLanguageInput && !translatedEnglishNote) return null;
 
@@ -37,9 +43,11 @@ export function TranslationAuditView({
     ?? translationMetadata?.source_language
     ?? "Original";
 
-  const model = translationMetadata?.model ?? "AI";
-  const translatedAt = translationMetadata?.translated_at
-    ? new Date(translationMetadata.translated_at).toLocaleString()
+  const model = translationMetadata?.model ?? translationProvider ?? "AI";
+  const provider = translationProvider ?? translationMetadata?.provider ?? "AI";
+  const translatedAtRaw = translationMetadata?.translated_at || translationMetadata?.created_at;
+  const translatedAt = translatedAtRaw
+    ? new Date(translatedAtRaw).toLocaleString()
     : null;
 
   return (
@@ -55,7 +63,7 @@ export function TranslationAuditView({
             variant="outline"
             className="text-[10px] py-0 px-1.5 border-[#542269]/30 text-[#542269] bg-[#542269]/5"
           >
-            SCRUM-113
+            {translationStatus ?? "audit"}
           </Badge>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] text-[#7A6A8A]">
@@ -71,6 +79,7 @@ export function TranslationAuditView({
             <Info className="h-3 w-3" />
             Source: <strong className="text-[#4A3D5A] ml-0.5">{lang}</strong>
           </span>
+          <span>Provider: <strong className="text-[#4A3D5A]">{provider}</strong></span>
           <span>Model: <strong className="text-[#4A3D5A]">{model}</strong></span>
           {translatedAt && (
             <span>Translated: <strong className="text-[#4A3D5A]">{translatedAt}</strong></span>

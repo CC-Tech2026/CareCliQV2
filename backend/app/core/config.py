@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    frontend_base_url: str = os.environ.get(
+        "FRONTEND_BASE_URL",
+        os.environ.get("APP_BASE_URL", "http://localhost:3000"),
+    )
     secret_key: str = os.environ.get("SESSION_SECRET", "changeme-in-production")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24

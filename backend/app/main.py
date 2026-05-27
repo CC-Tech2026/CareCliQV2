@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing
+from .core.security import get_current_user
 from .services import migration_state
 import logging
 
@@ -217,6 +218,7 @@ app.include_router(compliance.router, prefix="/api")
 app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
+app.include_router(billing.router, prefix="/api")
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 
@@ -226,9 +228,14 @@ async def health_check():
     return {"status": "healthy", "service": "AI Clinical Companion API"}
 
 
-@app.get("/api/admin/migration-status")
-async def migration_status_endpoint():
+@app.get("/api/system/migration-status")
+async def migration_status_endpoint(current_user: dict = Depends(get_current_user)):
     """Return current migration state so operators can verify schema readiness."""
+    if current_user.get("role") != "support_coordinator":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can view migration status",
+        )
     return {
         "biological_sex_column_missing":              migration_state.biological_sex_column_missing,
         "users_onboarding_columns_missing":           migration_state.users_onboarding_columns_missing,

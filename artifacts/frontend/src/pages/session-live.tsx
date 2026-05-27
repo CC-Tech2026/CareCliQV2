@@ -44,7 +44,6 @@ import {
   BookOpen,
   ShieldCheck,
   Radio,
-  Send,
   Paperclip,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +71,47 @@ import { ComplianceResultPanel } from "@/components/ComplianceResultPanel";
 
 type TranslationView = "original" | "translated" | "both";
 
+const SUPPORTED_DOCUMENTATION_LANGUAGES = [
+  { code: "en", label: "English", speechTag: "en-AU" },
+  { code: "es", label: "Spanish", speechTag: "es-ES" },
+  { code: "fr", label: "French", speechTag: "fr-FR" },
+  { code: "ar", label: "Arabic", speechTag: "ar-SA" },
+  { code: "sw", label: "Swahili", speechTag: "sw-KE" },
+  { code: "zh", label: "Chinese", speechTag: "zh-CN" },
+  { code: "hi", label: "Hindi", speechTag: "hi-IN" },
+  { code: "pt", label: "Portuguese", speechTag: "pt-PT" },
+  { code: "de", label: "German", speechTag: "de-DE" },
+  { code: "it", label: "Italian", speechTag: "it-IT" },
+  { code: "ja", label: "Japanese", speechTag: "ja-JP" },
+  { code: "ko", label: "Korean", speechTag: "ko-KR" },
+  { code: "vi", label: "Vietnamese", speechTag: "vi-VN" },
+  { code: "tl", label: "Tagalog", speechTag: "tl-PH" },
+  { code: "ur", label: "Urdu", speechTag: "ur-PK" },
+  { code: "fa", label: "Persian", speechTag: "fa-IR" },
+  { code: "ru", label: "Russian", speechTag: "ru-RU" },
+  { code: "uk", label: "Ukrainian", speechTag: "uk-UA" },
+  { code: "nl", label: "Dutch", speechTag: "nl-NL" },
+  { code: "tr", label: "Turkish", speechTag: "tr-TR" },
+  { code: "id", label: "Indonesian", speechTag: "id-ID" },
+  { code: "ms", label: "Malay", speechTag: "ms-MY" },
+  { code: "th", label: "Thai", speechTag: "th-TH" },
+  { code: "pl", label: "Polish", speechTag: "pl-PL" },
+  { code: "ro", label: "Romanian", speechTag: "ro-RO" },
+  { code: "el", label: "Greek", speechTag: "el-GR" },
+] as const;
+
+function normalizeLanguageCode(value?: string | null): string | null {
+  const code = value?.trim().toLowerCase().replace("_", "-").split("-")[0];
+  return code || null;
+}
+
+function supportedLanguageCode(value?: string | null): string | null {
+  const code = normalizeLanguageCode(value);
+  return SUPPORTED_DOCUMENTATION_LANGUAGES.some((language) => language.code === code)
+    ? code
+    : null;
+}
+
 interface ChatMessage {
   id: string;
   type: "text" | "voice" | "image" | "file" | "activity" | "goal_update" | "system";
@@ -80,6 +120,9 @@ interface ChatMessage {
   mediaUrl?: string;
   translated?: string;
   detectedLanguage?: string;
+  translationStatus?: "not_required" | "pending" | "translated" | "failed" | "unsupported" | "manually_confirmed";
+  translationMetadata?: Record<string, unknown>;
+  attachmentId?: string;
   isTranslating?: boolean;
   activityType?: string;
   goalId?: string;
@@ -171,10 +214,10 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-slate-700 text-white/50 border-slate-600", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300 border-blue-500/30", icon: Activity },
-  achieved: { label: "Achieved", cls: "bg-[#D9F103]/20 text-[#D9F103] border-[#D9F103]/30", icon: CheckCircle2 },
-  needs_review: { label: "Needs Review", cls: "bg-amber-500/20 text-amber-300 border-amber-500/30", icon: AlertCircle },
+  not_started: { label: "Not Started", cls: "bg-white/10 text-white/60 border-white/20", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-[#F1738A]/20 text-[#FFD6DE] border-[#F1738A]/35", icon: Activity },
+  achieved: { label: "Achieved", cls: "bg-[#FF2D6F]/20 text-[#FFD6E5] border-[#FF2D6F]/35", icon: CheckCircle2 },
+  needs_review: { label: "Needs Review", cls: "bg-amber-400/20 text-amber-100 border-amber-300/30", icon: AlertCircle },
 };
 
 // ---------------------------------------------------------------------------
@@ -293,7 +336,7 @@ function MessageBubble({
     return (
       <div className="flex justify-center my-1.5">
         <div className="flex items-center gap-1.5 bg-white/5 border border-white/8 rounded-full px-3 py-1">
-          <AIcon className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
+          <AIcon className="h-2.5 w-2.5 text-[#FFD6E5] shrink-0" />
           <span className="text-[10px] text-white/60 font-medium">{msg.activityType || msg.content}</span>
           <span className="text-[9px] text-white/25">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
@@ -304,10 +347,10 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#D9F103]/8 border border-[#D9F103]/15 rounded-full px-3 py-1">
-          <Target className="h-2.5 w-2.5 text-[#D9F103] shrink-0" />
-          <span className="text-[10px] text-[#D9F103]/70 font-medium">{msg.content}</span>
-          <span className="text-[9px] text-[#D9F103]/30">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-[#FF2D6F]/10 border border-[#FF2D6F]/20 rounded-full px-3 py-1">
+          <Target className="h-2.5 w-2.5 text-[#FFD6E5] shrink-0" />
+          <span className="text-[10px] text-[#FFD6E5]/85 font-medium">{msg.content}</span>
+          <span className="text-[9px] text-[#FFD6E5]/45">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -317,7 +360,7 @@ function MessageBubble({
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-[#1a1a6e] border border-[#5271FF]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-[#542269] border border-[#F1738A]/25 rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
@@ -331,8 +374,8 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#5271FF]/20 rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#5271FF]" />
+              <div className="h-9 w-9 bg-[#F1738A]/20 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#FFD6DE]" />
               </div>
               <div className="min-w-0">
                 <p className="text-white text-sm font-medium leading-tight truncate">{msg.content}</p>
@@ -344,7 +387,7 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#D9F103]">
+                  <div className="flex items-center gap-1 text-[#FFD6E5]">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
@@ -361,20 +404,28 @@ function MessageBubble({
                   )}
                 </div>
               )}
-              {(translationView === "original" || translationView === "both" || msg.type === "text") && (
+              {(msg.type === "text" || msg.type === "voice") && (
                 <p className="text-white text-sm leading-relaxed">{msg.content}</p>
               )}
-              {msg.type === "voice" && translationView !== "original" && (
-                <div className={cn(translationView === "both" && "mt-2 pt-2 border-t border-white/10")}>
+              {msg.type === "voice" && (
+                <div className="mt-2 pt-2 border-t border-white/10">
+                  <div className="mb-1">
+                    {msg.isTranslating ? (
+                      <span className="text-[9px] text-white/40">Translating...</span>
+                    ) : msg.translationStatus === "translated" ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#FFD6E5]">Translated to English</span>
+                    ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
+                      <span className="text-[9px] font-semibold text-red-300">Translation failed - retry</span>
+                    ) : msg.translationStatus === "not_required" ? (
+                      <span className="text-[9px] text-white/40">English legal output</span>
+                    ) : null}
+                  </div>
                   {msg.translated ? (
                     <>
-                      {translationView === "both" && (
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-[#D9F103] mb-0.5">EN</p>
-                      )}
                       <p className="text-white/80 text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-white/30 text-xs italic">Translation unavailable</p>
+                    <p className="text-white/30 text-xs italic">English translation unavailable</p>
                   ) : null}
                 </div>
               )}
@@ -424,6 +475,7 @@ export default function SessionLive() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [inputText, setInputText] = useState("");
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
 
   // ── Timer ──
   const [isActive, setIsActive] = useState(false);
@@ -435,9 +487,13 @@ export default function SessionLive() {
   // ── Voice ──
   const [isRecording, setIsRecording] = useState(false);
   const [recordingText, setRecordingText] = useState("");
+  const [selectedDocumentationLanguage, setSelectedDocumentationLanguage] = useState(
+    () => supportedLanguageCode(typeof navigator !== "undefined" ? navigator.language : null) || "en",
+  );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recognitionRef = useRef<any>(null);
   const stopIntentRef = useRef(false);
+  const languageManuallySelectedRef = useRef(false);
 
   // ── Body markers ──
   const [bodyMarkers, setBodyMarkers] = useState<BodyMarker[]>([]);
@@ -498,6 +554,21 @@ export default function SessionLive() {
   const voiceMessages = messages.filter((m) => m.type === "voice");
   const imageMessages = messages.filter((m) => m.type === "image");
   const imageUrls = imageMessages.map((m) => m.mediaUrl!).filter(Boolean);
+  const selectedLanguage =
+    SUPPORTED_DOCUMENTATION_LANGUAGES.find((language) => language.code === selectedDocumentationLanguage) ||
+    SUPPORTED_DOCUMENTATION_LANGUAGES[0];
+  const documentationLanguage = selectedLanguage.code;
+  const speechRecognitionLanguage =
+    selectedLanguage.speechTag || (typeof navigator !== "undefined" ? navigator.language : "") || "en-AU";
+
+  useEffect(() => {
+    if (languageManuallySelectedRef.current) return;
+    const sessionLanguage = supportedLanguageCode(
+      (session as unknown as { input_language?: string; detected_language?: string })?.input_language ||
+        (session as unknown as { detected_language?: string })?.detected_language,
+    );
+    if (sessionLanguage) setSelectedDocumentationLanguage(sessionLanguage);
+  }, [session]);
 
   // ── addMessage helper ──
   const addMessage = useCallback(
@@ -514,17 +585,40 @@ export default function SessionLive() {
             media_url: (msg as ChatMessage).mediaUrl ?? null,
             sender_role: ["activity", "goal_update", "system"].includes(msg.type) ? "system" : "worker",
             created_at: msg.timestamp.toISOString(),
+            translated_content: (msg as ChatMessage).translated ?? null,
+            detected_language: (msg as ChatMessage).detectedLanguage ?? null,
+            translation_status: (msg as ChatMessage).translationStatus ?? null,
+            translation_metadata: (msg as ChatMessage).translationMetadata ?? null,
+            attachment_id: (msg as ChatMessage).attachmentId ?? null,
           }),
-        }).catch(() => {});
+        }).catch((error) => {
+          console.error("message persistence failed", error);
+          toast({ title: "Message was not saved", variant: "destructive" });
+        });
       }
       return newMsg;
     },
-    [id],
+    [id, toast],
   );
 
   const updateMessage = useCallback((msgId: string, updates: Partial<ChatMessage>) => {
     setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, ...updates } : m)));
-  }, []);
+    if (!id || msgId.startsWith("attachment-")) return;
+    const payload: Record<string, unknown> = {};
+    if ("translated" in updates) payload.translated_content = updates.translated ?? null;
+    if ("detectedLanguage" in updates) payload.detected_language = updates.detectedLanguage ?? null;
+    if ("translationStatus" in updates) payload.translation_status = updates.translationStatus ?? null;
+    if ("translationMetadata" in updates) payload.translation_metadata = updates.translationMetadata ?? {};
+    if ("attachmentId" in updates) payload.attachment_id = updates.attachmentId ?? null;
+    if (Object.keys(payload).length === 0) return;
+    apiFetch(`/api/sessions/${id}/messages/${msgId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch((error) => {
+      console.error("message update failed", error);
+    });
+  }, [id]);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -553,6 +647,11 @@ export default function SessionLive() {
                 content: string;
                 created_at: string;
                 media_url?: string;
+                translated_content?: string;
+                detected_language?: string;
+                translation_status?: ChatMessage["translationStatus"];
+                translation_metadata?: Record<string, unknown>;
+                attachment_id?: string;
               }>
             ).map((m) => ({
               id: m.id,
@@ -560,6 +659,11 @@ export default function SessionLive() {
               content: m.content || "",
               timestamp: new Date(m.created_at),
               mediaUrl: m.media_url || undefined,
+              translated: m.translated_content || undefined,
+              detectedLanguage: m.detected_language || undefined,
+              translationStatus: m.translation_status,
+              translationMetadata: m.translation_metadata,
+              attachmentId: m.attachment_id,
             })),
           );
         } else {
@@ -584,6 +688,39 @@ export default function SessionLive() {
         ]);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.id) return;
+    apiFetch(`/api/sessions/${session.id}/attachments`)
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`attachments ${r.status}`);
+        return r.json();
+      })
+      .then((data: unknown) => {
+        if (!Array.isArray(data) || data.length === 0) return;
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.attachmentId).filter(Boolean));
+          const attachmentMessages = (data as Array<Record<string, unknown>>)
+            .filter((a) => a.id && !existingIds.has(String(a.id)))
+            .map((a) => {
+              const mime = String(a.mime_type || "");
+              const isImage = mime.startsWith("image/");
+              return {
+                id: `attachment-${String(a.id)}`,
+                type: isImage ? "image" : "file",
+                content: String(a.file_name || "Attachment"),
+                timestamp: a.created_at ? new Date(String(a.created_at)) : new Date(),
+                mediaUrl: String(a.public_url || a.file_path || ""),
+                attachmentId: String(a.id),
+              } as ChatMessage;
+            });
+          return attachmentMessages.length ? [...prev, ...attachmentMessages] : prev;
+        });
+      })
+      .catch((error) => {
+        console.error("attachment load failed", error);
+      });
   }, [session?.id]);
 
   // ── Init body markers ──
@@ -613,8 +750,8 @@ export default function SessionLive() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ body_markers: bodyMarkers }),
         });
-      } catch {
-        // silent
+      } catch (error) {
+        console.error("body marker save failed", error);
       }
     }, 1500);
     return () => {
@@ -782,21 +919,65 @@ export default function SessionLive() {
     });
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    addMessage({ type: "image", content: "Photo evidence", timestamp: new Date(), mediaUrl: url });
-    toast({ title: "Photo captured", description: format(new Date(), "HH:mm:ss") });
-    e.target.value = "";
+  const uploadAttachment = async (file: File, type: "image" | "file") => {
+    if (!id) throw new Error("Missing session id");
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await apiFetch(`/api/sessions/${id}/attachments`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Upload failed (${res.status})`);
+    }
+    const attachment = await res.json();
+    addMessage({
+      type,
+      content: attachment.file_name || file.name,
+      timestamp: new Date(attachment.created_at || Date.now()),
+      mediaUrl: attachment.public_url || attachment.file_path,
+      attachmentId: attachment.id,
+    });
+    return attachment;
   };
 
-  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    addMessage({ type: "file", content: file.name, timestamp: new Date() });
-    toast({ title: "File attached", description: file.name });
-    e.target.value = "";
+    setIsUploadingAttachment(true);
+    try {
+      await uploadAttachment(file, "image");
+      toast({ title: "Photo uploaded", description: format(new Date(), "HH:mm:ss") });
+    } catch (error) {
+      toast({
+        title: "Photo upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAttachment(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingAttachment(true);
+    try {
+      await uploadAttachment(file, file.type.startsWith("image/") ? "image" : "file");
+      toast({ title: "File uploaded", description: file.name });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAttachment(false);
+      e.target.value = "";
+    }
   };
 
   const startRecording = () => {
@@ -815,7 +996,7 @@ export default function SessionLive() {
     const recognition: any = new SpeechRecognitionClass();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "en-AU";
+    recognition.lang = speechRecognitionLanguage;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     recognition.onresult = (event: any) => {
       let transcript = "";
@@ -844,33 +1025,38 @@ export default function SessionLive() {
     const text = recordingText.trim();
     if (!text) return;
 
-    const needsTranslation = translationView !== "original";
     const newMsg = addMessage({
       type: "voice",
       content: text,
       timestamp: new Date(),
-      isTranslating: needsTranslation,
+      isTranslating: true,
+      translationStatus: "pending",
     });
     setRecordingText("");
     toast({ title: "Voice note saved" });
 
-    if (needsTranslation) {
-      try {
-        const result = await translateToEnglish(text);
-        updateMessage(newMsg.id, {
-          isTranslating: false,
-          translated: result.translated,
-          detectedLanguage: result.detectedLanguage,
-        });
-      } catch {
-        updateMessage(newMsg.id, { isTranslating: false });
-        toast({
-          title: "Translation unavailable",
-          description: "Original text preserved.",
-          variant: "destructive",
-        });
-      }
+    const result = await translateToEnglish(text, documentationLanguage);
+    if (result.status === "failed" || result.status === "unsupported") {
+      updateMessage(newMsg.id, {
+        isTranslating: false,
+        translationStatus: result.status,
+        detectedLanguage: result.detectedLanguage,
+        translationMetadata: result.metadata,
+      });
+      toast({
+        title: "Translation failed",
+        description: result.error || "Edit or retry before completing the session.",
+        variant: "destructive",
+      });
+      return;
     }
+    updateMessage(newMsg.id, {
+      isTranslating: false,
+      translated: result.translated,
+      detectedLanguage: result.detectedLanguage,
+      translationStatus: result.status,
+      translationMetadata: result.metadata,
+    });
   };
 
   const handleStop = useCallback(async () => {
@@ -887,6 +1073,17 @@ export default function SessionLive() {
     const vMsgs = messages.filter((m) => m.type === "voice");
     const tMsgs = messages.filter((m) => m.type === "text");
     const activityTypes = [...new Set(actMsgs.map((m) => m.activityType || m.content))];
+    const blockedTranslation = vMsgs.find(
+      (m) => m.isTranslating || m.translationStatus === "pending" || m.translationStatus === "failed" || m.translationStatus === "unsupported",
+    );
+    if (blockedTranslation) {
+      toast({
+        title: "Translation required",
+        description: "Resolve failed or pending voice translation before completing the session.",
+        variant: "destructive",
+      });
+      return;
+    }
     const achievedGoals = goals.filter((g) => g.status === "achieved");
     const inProgressGoals = goals.filter((g) => g.status === "in_progress");
     const voiceTexts = vMsgs
@@ -963,6 +1160,17 @@ export default function SessionLive() {
     const vMsgs = messages.filter((m) => m.type === "voice");
     const iMsgs = messages.filter((m) => m.type === "image");
     const iUrls = iMsgs.map((m) => m.mediaUrl!).filter(Boolean);
+    const blockedTranslation = vMsgs.find(
+      (m) => m.isTranslating || m.translationStatus === "pending" || m.translationStatus === "failed" || m.translationStatus === "unsupported",
+    );
+    if (blockedTranslation) {
+      toast({
+        title: "Session cannot be approved: translation failed",
+        description: "Retry or edit the voice note before saving the legal record.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (compSettings?.requireActivity && actMsgs.length === 0) {
       toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
@@ -1021,6 +1229,7 @@ export default function SessionLive() {
         structured_notes: structuredNotes,
         activity_log: activityLog,
         body_markers: bodyMarkers,
+        input_language: documentationLanguage,
       };
       Object.keys(patchBody).forEach((k) => patchBody[k] === undefined && delete patchBody[k]);
 
@@ -1053,13 +1262,11 @@ export default function SessionLive() {
         rpFlags: rpFlags.length > 0 ? rpFlags : undefined,
       };
 
-      try {
-        const aiRes = await Promise.race<Response | null>([
-          apiFetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" }),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
-        ]);
-        if (aiRes) {
-          const aiData = await aiRes.json().catch(() => ({}));
+      const aiRes = await apiFetch(`/api/sessions/${id}/save-with-ai`, { method: "POST" });
+      const aiData = await aiRes.json().catch(() => ({}));
+      if (!aiRes.ok) {
+        throw new Error(aiData.detail || "AI/compliance analysis failed");
+      }
           if (typeof aiData?.compliance?.score === "number") {
             localResult.score = aiData.compliance.score;
             localResult.status = aiData.compliance.assessment ?? localResult.status;
@@ -1077,10 +1284,6 @@ export default function SessionLive() {
                 (f.suggestion as string | undefined),
             }));
           }
-        }
-      } catch {
-        // timeout/error — use local
-      }
 
       setIsSaving(false);
       setPostSaveResult(localResult);
@@ -1090,7 +1293,7 @@ export default function SessionLive() {
       console.error("session save failed", err);
       toast({
         title: "Save failed",
-        description: "Could not save. Please try again.",
+        description: err instanceof Error ? err.message : "Could not save. Please try again.",
         variant: "destructive",
       });
     }
@@ -1166,15 +1369,15 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#0D0D55]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#D9F103]" />
+      <div className="h-screen flex items-center justify-center bg-[#542269]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FFD6E5]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#0D0D55]">
+      <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#542269]">
         <p className="text-white/50">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
@@ -1218,13 +1421,13 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="h-screen flex flex-col bg-[#050520] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#1C0F2C] overflow-hidden">
 
       {/* ── Top control bar ── */}
       <div
         className={cn(
           "shrink-0 border-b border-white/10 transition-colors duration-300",
-          isActive ? "bg-[#0D0D55]" : "bg-slate-900",
+          isActive ? "bg-gradient-to-r from-[#542269] via-[#6D35D8] to-[#FF2D6F]" : "bg-[#542269]",
         )}
       >
         <div className="flex items-center justify-between px-4 py-3">
@@ -1243,6 +1446,24 @@ export default function SessionLive() {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <select
+              aria-label="Dictation language"
+              title="Dictation language"
+              value={selectedDocumentationLanguage}
+              disabled={isRecording}
+              onChange={(event) => {
+                languageManuallySelectedRef.current = true;
+                setSelectedDocumentationLanguage(event.target.value);
+              }}
+              className="h-7 max-w-[92px] sm:max-w-[150px] rounded-full border border-white/20 bg-white/10 px-2 text-[10px] font-semibold text-white outline-none hover:bg-white/15 disabled:opacity-50"
+            >
+              {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
+                <option key={language.code} value={language.code} className="bg-[#542269] text-white">
+                  {language.label}
+                </option>
+              ))}
+            </select>
+
             <div className="flex items-center gap-1">
               <Globe className="h-3 w-3 text-white/35 shrink-0" />
               <div className="flex rounded-md border border-white/20 overflow-hidden">
@@ -1262,6 +1483,17 @@ export default function SessionLive() {
                 ))}
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!isActive || isUploadingAttachment}
+              aria-label="Add photo evidence"
+              title="Add photo evidence"
+              className="h-7 w-7 rounded-full border border-white/20 bg-white/10 text-white/70 hover:bg-white/20 hover:text-white disabled:opacity-40 flex items-center justify-center transition-colors"
+            >
+              <Camera className="h-3.5 w-3.5" />
+            </button>
 
             {elapsed > 0 && (
               <button
@@ -1416,7 +1648,7 @@ export default function SessionLive() {
 
       {/* ── Body map (collapsible) ── */}
       {bodyMapOpen && (
-        <div className="shrink-0 bg-[#050520] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
+        <div className="shrink-0 bg-[#26123A] border-b border-white/10 px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
@@ -1455,8 +1687,8 @@ export default function SessionLive() {
         {/* Live recording bubble */}
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
-            <div className="max-w-[82%] bg-red-950/50 border border-red-800/40 rounded-2xl rounded-tr-sm px-4 py-3">
-              <div className="flex items-center gap-2 mb-1.5 text-red-400">
+            <div className="max-w-[82%] bg-[#FF2D6F]/15 border border-[#FF2D6F]/35 rounded-2xl rounded-tr-sm px-4 py-3">
+              <div className="flex items-center gap-2 mb-1.5 text-[#FFD6E5]">
                 <Radio className="h-3 w-3 animate-pulse" />
                 <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
               </div>
@@ -1472,17 +1704,17 @@ export default function SessionLive() {
 
       {/* ── RP warning (above input) ── */}
       {rpFlags.length > 0 && !showSummary && (
-        <div className="shrink-0 bg-red-950/50 border-t border-red-800/30 px-3 py-2 flex items-center gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
-          <p className="text-red-300 text-xs flex-1">
+        <div className="shrink-0 bg-[#FF2D6F]/15 border-t border-[#FF2D6F]/30 px-3 py-2 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-[#FFD6E5] shrink-0" />
+          <p className="text-[#FFD6E5] text-xs flex-1">
             <span className="font-semibold">Possible RP language detected</span>
-            <span className="text-red-400/70 ml-1">
+            <span className="text-[#FFD6E5]/70 ml-1">
               ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
             </span>
           </p>
           <button
             onClick={() => setShowRpBottomSheet(true)}
-            className="text-red-400 hover:text-red-300 text-[10px] underline shrink-0"
+            className="text-[#FFD6E5] hover:text-white text-[10px] underline shrink-0"
           >
             Review
           </button>
@@ -1490,37 +1722,9 @@ export default function SessionLive() {
       )}
 
       {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-[#0D0D55] border-t border-white/10 px-3 py-2">
-        <div className="flex items-center gap-1.5">
-          {/* Activity picker */}
-          <button
-            onClick={() => setShowActivitySheet(true)}
-            title="Log activity"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-[#D9F103]/15 text-[#D9F103] hover:bg-[#D9F103]/25 transition-all shrink-0"
-          >
-            <Activity className="h-4 w-4" />
-          </button>
-
-          {/* Camera */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Take photo"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Camera className="h-4 w-4" />
-          </button>
-
-          {/* Attachment */}
-          <button
-            onClick={() => fileAttachRef.current?.click()}
-            title="Attach file"
-            className="h-9 w-9 rounded-full flex items-center justify-center bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70 transition-all shrink-0"
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
-
-          {/* Text input */}
-          <div className="flex-1 bg-white/8 border border-white/10 rounded-2xl px-4 py-2 min-h-[36px] flex items-center">
+      <div className="shrink-0 bg-white px-3 sm:px-5 py-3 border-t border-[#dbe7ff] shadow-[0_-8px_28px_rgba(30,91,211,0.08)]">
+        <div className="client-translation-composer flex items-center gap-3 sm:gap-4">
+          <div className="message-pill min-w-0 flex-1 h-[58px] sm:h-[64px] rounded-full bg-white border border-[#bcd2ff] shadow-[0_8px_26px_rgba(21,87,216,0.14)] flex items-center pl-6 sm:pl-8 pr-2">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -1530,10 +1734,19 @@ export default function SessionLive() {
                   sendTextMessage();
                 }
               }}
-              placeholder={isActive ? "Type a note…" : "Start session to add notes"}
+              placeholder="Message"
               disabled={!isActive}
-              className="w-full bg-transparent text-white text-sm placeholder-white/20 outline-none disabled:opacity-30"
+              className="min-w-0 flex-1 bg-transparent text-slate-700 text-[18px] sm:text-[22px] placeholder:text-slate-400 outline-none disabled:opacity-50"
             />
+            <button
+              type="button"
+              aria-label="Attach file"
+              onClick={() => fileAttachRef.current?.click()}
+              disabled={!isActive || isUploadingAttachment}
+              className="h-12 w-12 rounded-full flex items-center justify-center text-[#1557d8] hover:bg-[#eef6ff] transition-colors disabled:opacity-40 shrink-0"
+            >
+              {isUploadingAttachment ? <Loader2 className="h-6 w-6 animate-spin" /> : <Paperclip className="h-7 w-7" />}
+            </button>
           </div>
 
           {/* Mic */}
@@ -1542,22 +1755,13 @@ export default function SessionLive() {
             disabled={!isActive}
             title={isRecording ? "Stop recording" : "Start voice note"}
             className={cn(
-              "h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 disabled:opacity-25",
+              "voice-circle h-[64px] w-[64px] sm:h-[76px] sm:w-[76px] rounded-full flex items-center justify-center text-white shadow-[0_10px_28px_rgba(21,87,216,0.32)] ring-4 ring-white border border-[#dbe7ff] transition-all shrink-0 disabled:opacity-45",
               isRecording
-                ? "bg-red-500 text-white animate-pulse"
-                : "bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70",
+                ? "bg-[#FF2D6F] animate-pulse"
+                : "bg-gradient-to-br from-[#6D35D8] to-[#FF2D6F] hover:scale-[1.02]",
             )}
           >
-            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </button>
-
-          {/* Send */}
-          <button
-            onClick={sendTextMessage}
-            disabled={!inputText.trim() || !isActive}
-            className="h-9 w-9 bg-[#D9F103] rounded-full flex items-center justify-center disabled:opacity-20 hover:bg-[#D9F103]/90 transition-all shrink-0"
-          >
-            <Send className="h-4 w-4 text-[#0D0D55]" />
+            {isRecording ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
           </button>
         </div>
       </div>
@@ -1574,7 +1778,7 @@ export default function SessionLive() {
       <input
         ref={fileAttachRef}
         type="file"
-        accept=".pdf,.doc,.docx,.txt"
+        accept=".pdf,.doc,.docx,.txt,image/*"
         className="hidden"
         onChange={handleFileAttach}
       />
@@ -1586,7 +1790,7 @@ export default function SessionLive() {
           onClick={() => setShowActivitySheet(false)}
         >
           <div
-            className="w-full bg-[#0D0D55] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full bg-[#542269] border-t border-white/10 rounded-t-3xl shadow-2xl px-4 pt-4 pb-10 animate-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

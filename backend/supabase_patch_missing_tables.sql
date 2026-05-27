@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
-                                    'admin', 'manager', 'support_worker',
-                                    'support_coordinator', 'auditor'
+                                    'support_worker',
+                                    'support_coordinator', 'allied_health'
                                 )),
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     invited_by      UUID        REFERENCES public.users(id),
@@ -76,8 +76,10 @@ SELECT
     u.id,
     u.organization_id,
     CASE u.role
-        WHEN 'admin'               THEN 'admin'
+        WHEN 'admin'               THEN 'support_coordinator'
+        WHEN 'manager'             THEN 'support_coordinator'
         WHEN 'support_coordinator' THEN 'support_coordinator'
+        WHEN 'allied_health'       THEN 'allied_health'
         ELSE 'support_worker'
     END,
     u.is_active
@@ -96,8 +98,8 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     email           TEXT        NOT NULL,
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
-                                    'admin', 'manager', 'support_worker',
-                                    'support_coordinator', 'auditor'
+                                    'support_worker',
+                                    'support_coordinator', 'allied_health'
                                 )),
     token           TEXT        NOT NULL UNIQUE,
     expires_at      TIMESTAMPTZ NOT NULL,

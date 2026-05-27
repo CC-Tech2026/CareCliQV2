@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { cn } from "@/lib/utils";
 import { Mic, MicOff, Loader2, Globe } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
@@ -81,7 +82,7 @@ function speechSupported(): boolean {
 }
 
 async function apiTranslate(text: string): Promise<{ translated: string; detected_language: string }> {
-  const res = await fetch("/api/ai/translate", {
+  const res = await apiFetch("/api/ai/translate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -91,7 +92,7 @@ async function apiTranslate(text: string): Promise<{ translated: string; detecte
 }
 
 async function apiClinical(text: string): Promise<{ clinical: string; detected_language: string }> {
-  const res = await fetch("/api/ai/clinical-rewrite", {
+  const res = await apiFetch("/api/ai/clinical-rewrite", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),

@@ -1,9 +1,9 @@
 """Invitation system — create and accept staff invitations.
 
 Flow:
-  1. Admin/coordinator calls POST /invitations/create with email + role.
+  1. Support coordinator calls POST /invitations/create with email + role.
   2. Backend stores invite record with a secure token; returns invite_url.
-  3. Admin shares the invite URL with the staff member (copy/email).
+  3. Coordinator shares the invite URL with the staff member (copy/email).
   4. Staff member opens /accept-invite?token=X in browser.
   5. Frontend calls GET /invitations/validate/{token} to show org + role info.
   6. Staff member sets their name + password.
@@ -26,15 +26,13 @@ from ..services.supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 
-COORDINATOR_ROLES = frozenset({"support_coordinator", "admin"})
-VALID_INVITE_ROLES = ("support_worker", "allied_health", "support_coordinator", "admin", "auditor")
+COORDINATOR_ROLES = frozenset({"support_coordinator"})
+VALID_INVITE_ROLES = ("support_worker", "allied_health", "support_coordinator")
 
 _INVITE_ROLE_TO_ACCOUNT_TYPE: dict[str, str] = {
     "support_worker":     "independent_worker",
     "allied_health":      "allied_health",
     "support_coordinator": "small_provider",
-    "admin":              "small_provider",
-    "auditor":            "independent_worker",
 }
 
 
@@ -73,10 +71,10 @@ async def create_invite(
     body: InviteCreateRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create an invitation for a new staff member (admin/coordinator only)."""
+    """Create an invitation for a new staff member (support coordinator only)."""
     user_role = current_user.get("role", "")
     if user_role not in COORDINATOR_ROLES:
-        raise HTTPException(status_code=403, detail="Only administrators can send invitations")
+        raise HTTPException(status_code=403, detail="Only support coordinators can send invitations")
 
     org_id = current_user.get("organization_id")
     if not org_id:
@@ -247,6 +245,9 @@ async def validate_invite(token: str):
 @router.get("/members")
 async def list_members(current_user: dict = Depends(get_current_user)):
     """List all active members in the current organization."""
+    if current_user.get("role") not in COORDINATOR_ROLES:
+        raise HTTPException(status_code=403, detail="Only support coordinators can view team members")
+
     org_id = current_user.get("organization_id")
     if not org_id:
         return []
@@ -289,7 +290,7 @@ async def update_member_role(
     body: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    """Update a member's role (admin only)."""
+    """Update a member's role (support coordinator only)."""
     if current_user.get("role") not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -375,7 +376,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
         if "already" in err or "exists" in err:
             raise HTTPException(
                 status_code=409,
-                detail="An account with this email already exists. Please sign in and contact your administrator to link you to the organization.",
+                detail="An account with this email already exists. Please sign in and contact your support coordinator to link you to the organization.",
             )
         logger.error("accept_invite create_user error: %s", e)
         raise HTTPException(status_code=400, detail="Failed to create account — please try again")
@@ -394,7 +395,7 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             full_name=body.full_name,
             account_type=account_type,
             onboarding_complete=True,
-            organization_id=org_id,
+            extra={"organization_id": org_id},
         )
     except Exception as e:
         logger.error("accept_invite _upsert_user_record error: %s", e)

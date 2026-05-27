@@ -6,6 +6,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -22,6 +24,7 @@ import IncidentNew from "@/pages/incident-new";
 import IncidentDetail from "@/pages/incident-detail";
 import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
+import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
 
 const queryClient = new QueryClient({
@@ -39,19 +42,21 @@ const queryClient = new QueryClient({
 });
 
 // All authenticated roles
-const ALL_ROLES = ["admin", "support_worker", "allied_health", "support_coordinator"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health"] as const;
 
-// Admin + coordinator only — compliance dashboards, billing, reports, participant management
-const COORDINATOR_ROLES = ["admin", "support_coordinator"] as const;
+// Support Coordinator / CareScribe Parent only — oversight, billing, team, compliance.
+const COORDINATOR_ROLES = ["support_coordinator"] as const;
 
-// Coordinator + allied health — reports contain clinical documentation allied health needs
-const COORDINATOR_AND_ALLIED = ["admin", "support_coordinator", "allied_health"] as const;
+// Coordinator + allied health — reports contain clinical documentation allied health needs.
+const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 
 function Router() {
   return (
     <Switch>
       {/* ── Public routes ─────────────────────────────────────────────────── */}
       <Route path="/login" component={Login} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
@@ -138,14 +143,14 @@ function Router() {
         )}
       </Route>
 
-      {/* ── Compliance — coordinator/admin only ──────────────────────────── */}
+      {/* ── Compliance — support coordinator only ────────────────────────── */}
       <Route path="/compliance">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Compliance /></AppLayout>
         </ProtectedRoute>
       </Route>
 
-      {/* ── Reports — coordinator/admin + allied health ───────────────────── */}
+      {/* ── Reports — support coordinator + allied health ────────────────── */}
       <Route path="/reports">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
@@ -155,6 +160,12 @@ function Router() {
       <Route path="/documents">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Reports /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/billing">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+          <AppLayout><Billing /></AppLayout>
         </ProtectedRoute>
       </Route>
 

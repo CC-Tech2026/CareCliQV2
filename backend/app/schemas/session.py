@@ -9,6 +9,11 @@ class MessageCreate(BaseModel):
     media_url: Optional[str] = None
     sender_role: str = "worker"
     created_at: Optional[str] = None
+    translated_content: Optional[str] = None
+    detected_language: Optional[str] = None
+    translation_status: Optional[str] = None
+    translation_metadata: Optional[Dict] = None
+    attachment_id: Optional[str] = None
 
 
 class SessionCreate(BaseModel):
@@ -56,5 +61,12 @@ class SessionUpdate(BaseModel):
     incident_language_detected: Optional[bool] = None
     # Phase 6 — Translation traceability (SCRUM-113)
     original_language_input: Optional[str] = None
+    detected_language: Optional[str] = None
     translated_english_note: Optional[str] = None
+    compliance_input_text: Optional[str] = None
+    translation_status: Optional[str] = None
+    translation_provider: Optional[str] = None
+    translation_confidence: Optional[float] = None
     translation_metadata: Optional[Dict] = None
+    translation_error: Optional[str] = None
+    translation_completed_at: Optional[str] = None

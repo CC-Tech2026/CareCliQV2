@@ -4,6 +4,7 @@
     "composite": true,
     "declarationMap": true,
     "emitDeclarationOnly": true,
+    "jsx": "react-jsx",
     "outDir": "dist",
     "rootDir": "src",
     "lib": ["dom", "es2022"]

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from ..services import ai_service, participant_service, session_service
+from ..core.security import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -50,32 +51,61 @@ class AssessNoteRequest(BaseModel):
 
 
 @router.post("/insight")
-async def get_insights(body: InsightRequest):
-    participant = await participant_service.get_participant_by_id(body.participant_id)
+async def get_insights(body: InsightRequest, current_user: dict = Depends(get_current_user)):
+    participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
 
     session_data = body.model_dump()
+    if body.session_id:
+        session = await session_service.get_session_by_id(body.session_id, current_user)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session_data.update(session)
     try:
         insights = await ai_service.generate_clinical_insights(session_data, participant)
         return insights
+    except ValueError as e:
+        if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"AI insight error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/compliance")
-async def check_compliance(body: ComplianceRequest):
+async def check_compliance(body: ComplianceRequest, current_user: dict = Depends(get_current_user)):
+    if not body.session_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Compliance blocked: English legal record is missing or translation failed.",
+        )
+    session = await session_service.get_session_by_id(body.session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if (
+        session.get("translation_status") in ai_service.BLOCKING_TRANSLATION_STATUSES
+        or not (session.get("compliance_input_text") or session.get("translated_english_note") or "").strip()
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Compliance blocked: English legal record is missing or translation failed.",
+        )
     try:
-        result = await ai_service.check_compliance(body.model_dump())
+        result = await ai_service.check_compliance(session)
         return result
+    except ValueError as e:
+        if str(e) == ai_service.LEGAL_RECORD_REQUIRED_MESSAGE:
+            raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Compliance check error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/explain-compliance")
-async def explain_compliance(body: ExplainComplianceRequest):
+async def explain_compliance(body: ExplainComplianceRequest, current_user: dict = Depends(get_current_user)):
     """Generate human-readable compliance explanation and actionable fix suggestions."""
     try:
         result = await ai_service.explain_compliance(body.failed_rules, body.session_notes or "")
@@ -86,12 +116,12 @@ async def explain_compliance(body: ExplainComplianceRequest):
 
 
 @router.get("/summary/{participant_id}")
-async def get_ai_summary(participant_id: str):
-    participant = await participant_service.get_participant_by_id(participant_id)
+async def get_ai_summary(participant_id: str, current_user: dict = Depends(get_current_user)):
+    participant = await participant_service.get_participant_by_id(participant_id, current_user)
     if not participant:
         raise HTTPException(status_code=404, detail="Participant not found")
 
-    sessions = await session_service.get_sessions_by_participant(participant_id)
+    sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
     try:
         summary = await ai_service.generate_patient_summary(participant, sessions)
@@ -107,18 +137,24 @@ async def get_ai_summary(participant_id: str):
 
 
 @router.post("/translate")
-async def translate_text(body: TranslateRequest):
+async def translate_text(body: TranslateRequest, current_user: dict = Depends(get_current_user)):
     """Translate text to English, detecting source language automatically."""
     try:
         result = await ai_service.translate_to_english(body.text, body.source_language or "auto")
         return result
+    except ai_service.TranslationProviderUnavailable as e:
+        logger.warning("Translation provider unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except ai_service.TranslationProviderFailure as e:
+        logger.error("Translation provider failed: %s", e)
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         logger.error(f"Translation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Translation failed. Please try again.")
 
 
 @router.post("/clinical-rewrite")
-async def rewrite_clinical(body: ClinicalRewriteRequest):
+async def rewrite_clinical(body: ClinicalRewriteRequest, current_user: dict = Depends(get_current_user)):
     """Rewrite informal or dictated text into NDIS-compliant clinical documentation."""
     try:
         result = await ai_service.clinical_rewrite(body.text)
@@ -129,7 +165,7 @@ async def rewrite_clinical(body: ClinicalRewriteRequest):
 
 
 @router.post("/assess-note")
-async def assess_note(body: AssessNoteRequest):
+async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_current_user)):
     """Real-time 4-criteria compliance scoring for a clinical note entry.
 
     Criteria (from NDIS spec):
@@ -145,6 +181,9 @@ async def assess_note(body: AssessNoteRequest):
 
     # If participant_id supplied but no goals, try to fetch from patient_goals table
     if body.participant_id and not goals:
+        participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
         try:
             from ..services import goals_service
             from ..services.migration_state import patient_goals_table_missing
@@ -167,9 +206,21 @@ async def assess_note(body: AssessNoteRequest):
     if result.get("is_ready_for_billing") and body.session_id:
         try:
             from ..services import session_service
-            await session_service.update_session(
-                body.session_id, {"is_ready_for_billing": True}
+            session = await session_service.get_session_by_id(body.session_id, current_user)
+            legal_ready = bool(
+                session
+                and session.get("translation_status") not in ai_service.BLOCKING_TRANSLATION_STATUSES
+                and (session.get("compliance_input_text") or session.get("translated_english_note") or "").strip()
             )
+            if legal_ready:
+                await session_service.update_session(
+                    body.session_id, {"is_ready_for_billing": True}, current_user
+                )
+            else:
+                logger.warning(
+                    "Skipped billing-ready flag for session %s because English legal record is not ready",
+                    body.session_id,
+                )
         except Exception as exc:
             logger.warning("Failed to flag is_ready_for_billing on session %s: %s", body.session_id, exc)
 

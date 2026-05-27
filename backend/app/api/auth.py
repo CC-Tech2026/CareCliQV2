@@ -2,8 +2,13 @@ import time
 import logging
 from collections import defaultdict
 from typing import Optional
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
 from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel
+from ..core.config import settings
 from ..services.supabase_client import get_supabase, get_supabase_admin
 from ..core.security import create_access_token, get_current_user
 
@@ -31,13 +36,51 @@ def _check_rate_limit(ip: str) -> None:
     _login_attempts[ip].append(now)
 
 
+def _supabase_auth_request(
+    path: str,
+    payload: dict,
+    *,
+    bearer_token: str | None = None,
+    method: str = "POST",
+) -> dict:
+    """Call Supabase Auth directly for recovery flows not covered by supabase-py."""
+    if not settings.supabase_url or not settings.supabase_anon_key:
+        raise HTTPException(status_code=500, detail="Authentication provider is not configured.")
+
+    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/{path.lstrip('/')}"
+    headers = {
+        "Content-Type": "application/json",
+        "apikey": settings.supabase_anon_key,
+    }
+    if bearer_token:
+        headers["Authorization"] = f"Bearer {bearer_token}"
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.warning("Supabase auth request failed: %s %s", exc.code, body)
+        raise HTTPException(status_code=502, detail="Authentication provider rejected the request.")
+    except Exception as exc:
+        logger.error("Supabase auth request failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Authentication provider is unavailable.")
+
+
 # ---------------------------------------------------------------------------
 # Account type → access role mapping
 # ---------------------------------------------------------------------------
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
     "allied_health":      "allied_health",
-    "small_provider":     "admin",
+    "small_provider":     "support_coordinator",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
@@ -67,6 +110,15 @@ class OnboardingCompleteRequest(BaseModel):
     team_size: Optional[str] = None
     participant_volume: Optional[str] = None
     contact_number: Optional[str] = None
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    access_token: str
+    password: str
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +362,7 @@ async def login(body: LoginRequest, request: Request):
             "full_name": full_name,
             "role": role,
             "account_type": account_type,
+            "organization_id": profile.get("organization_id"),
             "onboarding_complete": bool(onboarding_complete),
         },
     }
@@ -363,7 +416,49 @@ async def complete_onboarding(
             logger.error(f"Could not complete onboarding for {user_id}: {e}")
             raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
 
-    return {"success": True, "message": "Onboarding complete."}
+    return {
+        "success": True,
+        "message": "Onboarding complete.",
+        "organization_id": update_payload.get("organization_id") or current_user.get("organization_id"),
+    }
+
+
+@router.post("/password-reset/request")
+async def request_password_reset(body: PasswordResetRequest):
+    """Send a Supabase recovery email without revealing whether the account exists."""
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+
+    redirect_to = f"{settings.frontend_base_url.rstrip('/')}/reset-password"
+    encoded_redirect = urllib.parse.quote(redirect_to, safe="")
+    _supabase_auth_request(
+        f"recover?redirect_to={encoded_redirect}",
+        {"email": email},
+        method="POST",
+    )
+    return {
+        "message": "If an account exists for this email, a password reset link has been sent.",
+    }
+
+
+@router.post("/password-reset/confirm")
+async def confirm_password_reset(body: PasswordResetConfirmRequest):
+    """Set a new password using the Supabase recovery access token."""
+    token = body.access_token.strip()
+    password = body.password
+    if not token:
+        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+
+    _supabase_auth_request(
+        "user",
+        {"password": password},
+        bearer_token=token,
+        method="PUT",
+    )
+    return {"message": "Password updated successfully. You can now sign in."}
 
 
 @router.post("/logout")

@@ -34,8 +34,9 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
-                                    'admin', 'manager', 'support_worker',
-                                    'support_coordinator', 'auditor'
+                                    'support_worker',
+                                    'support_coordinator',
+                                    'allied_health'
                                 )),
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     invited_by      UUID        REFERENCES public.users(id),
@@ -65,7 +66,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Admins/managers can see all members in their organisation
+-- Support coordinators can see all members in their organisation
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='organization_members' AND policyname='om_admin_read_org') THEN
         CREATE POLICY om_admin_read_org ON public.organization_members
@@ -75,13 +76,13 @@ DO $$ BEGIN
                     SELECT organization_id FROM public.organization_members
                     WHERE user_id = auth.uid()
                       AND is_active = TRUE
-                      AND role IN ('admin', 'manager')
+                      AND role = 'support_coordinator'
                 )
             );
     END IF;
 END $$;
 
--- Admins can insert/update/delete org members
+-- Support coordinators can insert/update/delete org members
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='organization_members' AND policyname='om_admin_write') THEN
         CREATE POLICY om_admin_write ON public.organization_members
@@ -91,7 +92,7 @@ DO $$ BEGIN
                     SELECT organization_id FROM public.organization_members
                     WHERE user_id = auth.uid()
                       AND is_active = TRUE
-                      AND role = 'admin'
+                      AND role = 'support_coordinator'
                 )
             )
             WITH CHECK (
@@ -99,7 +100,7 @@ DO $$ BEGIN
                     SELECT organization_id FROM public.organization_members
                     WHERE user_id = auth.uid()
                       AND is_active = TRUE
-                      AND role = 'admin'
+                      AND role = 'support_coordinator'
                 )
             );
     END IF;
@@ -118,9 +119,11 @@ SELECT
     u.organization_id,
     -- Map users.role to the organization_members role domain
     CASE u.role
-        WHEN 'admin'               THEN 'admin'
+        WHEN 'admin'               THEN 'support_coordinator'
+        WHEN 'manager'             THEN 'support_coordinator'
         WHEN 'support_coordinator' THEN 'support_coordinator'
-        WHEN 'allied_health'       THEN 'support_worker'  -- closest valid role
+        WHEN 'allied_health'       THEN 'allied_health'
+        WHEN 'auditor'             THEN 'support_worker'
         ELSE 'support_worker'
     END,
     u.is_active
@@ -165,7 +168,8 @@ AS $$
     LIMIT  1;
 $$;
 
--- TRUE if the user holds an administrative role
+-- Legacy helper name retained for older policies. In CareScribe, the only
+-- organization-wide oversight role is support_coordinator.
 CREATE OR REPLACE FUNCTION public.cs_is_admin()
 RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -175,11 +179,11 @@ AS $$
         SELECT 1 FROM public.organization_members
         WHERE  user_id   = auth.uid()
           AND  is_active = TRUE
-          AND  role IN ('admin', 'manager')
+          AND  role = 'support_coordinator'
     );
 $$;
 
--- TRUE if the user can manage participants/sessions (admin, coordinator, manager)
+-- TRUE if the user can manage participants/sessions
 CREATE OR REPLACE FUNCTION public.cs_is_coordinator()
 RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -189,11 +193,12 @@ AS $$
         SELECT 1 FROM public.organization_members
         WHERE  user_id   = auth.uid()
           AND  is_active = TRUE
-          AND  role IN ('admin', 'manager', 'support_coordinator')
+          AND  role = 'support_coordinator'
     );
 $$;
 
--- TRUE if user is an auditor or admin (read-only audit access)
+-- Legacy helper name retained for audit policies. Support coordinators hold
+-- organization audit oversight; scoped roles do not browse the audit trail.
 CREATE OR REPLACE FUNCTION public.cs_is_auditor()
 RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER
@@ -203,7 +208,62 @@ AS $$
         SELECT 1 FROM public.organization_members
         WHERE  user_id   = auth.uid()
           AND  is_active = TRUE
-          AND  role IN ('admin', 'manager', 'auditor')
+          AND  role = 'support_coordinator'
+    );
+$$;
+
+-- TRUE when the authenticated user can access a participant.
+CREATE OR REPLACE FUNCTION public.cs_can_access_patient(target_patient_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.patients p
+        WHERE p.id = target_patient_id
+          AND p.organization_id = public.cs_user_org_id()
+          AND (
+              public.cs_is_coordinator()
+              OR (
+                  public.cs_user_role() = 'support_worker'
+                  AND p.assigned_worker_id = auth.uid()
+              )
+              OR (
+                  public.cs_user_role() = 'allied_health'
+                  AND (p.allied_health_id = auth.uid() OR p.clinician_id = auth.uid())
+              )
+          )
+    );
+$$;
+
+-- TRUE when the authenticated user can access a session.
+CREATE OR REPLACE FUNCTION public.cs_can_access_session(target_session_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM public.sessions s
+        LEFT JOIN public.patients p ON p.id = s.patient_id
+        WHERE s.id = target_session_id
+          AND COALESCE(s.organization_id, p.organization_id) = public.cs_user_org_id()
+          AND (
+              public.cs_is_coordinator()
+              OR (
+                  public.cs_user_role() = 'support_worker'
+                  AND (s.worker_id = auth.uid() OR p.assigned_worker_id = auth.uid())
+              )
+              OR (
+                  public.cs_user_role() = 'allied_health'
+                  AND (
+                      s.practitioner_id = auth.uid()
+                      OR p.allied_health_id = auth.uid()
+                      OR p.clinician_id = auth.uid()
+                  )
+              )
+          )
     );
 $$;
 
@@ -265,11 +325,22 @@ DO $$ BEGIN
             USING (
                 organization_id IS NOT NULL
                 AND organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (
+                        public.cs_user_role() = 'support_worker'
+                        AND assigned_worker_id = auth.uid()
+                    )
+                    OR (
+                        public.cs_user_role() = 'allied_health'
+                        AND (allied_health_id = auth.uid() OR clinician_id = auth.uid())
+                    )
+                )
             );
     END IF;
 END $$;
 
--- INSERT: only admins and coordinators can create participants
+-- INSERT: only support coordinators can create participants.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='patients' AND policyname='patients_coordinator_insert') THEN
         CREATE POLICY patients_coordinator_insert ON public.patients
@@ -281,22 +352,43 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- UPDATE: admins, coordinators, and support workers can update their participants
+-- UPDATE: support coordinators can update org records; scoped roles can update assigned participants only.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='patients' AND policyname='patients_worker_update') THEN
         CREATE POLICY patients_worker_update ON public.patients
             FOR UPDATE TO authenticated
             USING (
                 organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (
+                        public.cs_user_role() = 'support_worker'
+                        AND assigned_worker_id = auth.uid()
+                    )
+                    OR (
+                        public.cs_user_role() = 'allied_health'
+                        AND (allied_health_id = auth.uid() OR clinician_id = auth.uid())
+                    )
+                )
             )
             WITH CHECK (
                 organization_id = public.cs_user_org_id()
-                AND public.cs_user_role() IN ('admin', 'manager', 'support_coordinator', 'support_worker')
+                AND (
+                    public.cs_is_coordinator()
+                    OR (
+                        public.cs_user_role() = 'support_worker'
+                        AND assigned_worker_id = auth.uid()
+                    )
+                    OR (
+                        public.cs_user_role() = 'allied_health'
+                        AND (allied_health_id = auth.uid() OR clinician_id = auth.uid())
+                    )
+                )
             );
     END IF;
 END $$;
 
--- DELETE: admin-only — prevents accidental participant removal
+-- DELETE: support-coordinator-only; prevents accidental participant removal.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='patients' AND policyname='patients_admin_delete') THEN
         CREATE POLICY patients_admin_delete ON public.patients
@@ -321,7 +413,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- SELECT: any org member can read sessions in their organisation
+-- SELECT: coordinators see org sessions; scoped roles see assigned sessions only.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='sessions' AND policyname='sessions_org_member_select') THEN
         CREATE POLICY sessions_org_member_select ON public.sessions
@@ -329,32 +421,92 @@ DO $$ BEGIN
             USING (
                 organization_id IS NOT NULL
                 AND organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (
+                        public.cs_user_role() = 'support_worker'
+                        AND (
+                            worker_id = auth.uid()
+                            OR patient_id IN (
+                                SELECT id FROM public.patients
+                                WHERE organization_id = public.cs_user_org_id()
+                                  AND assigned_worker_id = auth.uid()
+                            )
+                        )
+                    )
+                    OR (
+                        public.cs_user_role() = 'allied_health'
+                        AND (
+                            practitioner_id = auth.uid()
+                            OR patient_id IN (
+                                SELECT id FROM public.patients
+                                WHERE organization_id = public.cs_user_org_id()
+                                  AND (allied_health_id = auth.uid() OR clinician_id = auth.uid())
+                            )
+                        )
+                    )
+                )
             );
     END IF;
 END $$;
 
--- INSERT: any active org member can create a session
+-- INSERT: active org members can create sessions only inside their own scope.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='sessions' AND policyname='sessions_member_insert') THEN
         CREATE POLICY sessions_member_insert ON public.sessions
             FOR INSERT TO authenticated
             WITH CHECK (
                 organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (
+                        public.cs_user_role() = 'support_worker'
+                        AND worker_id = auth.uid()
+                        AND patient_id IN (
+                            SELECT id FROM public.patients
+                            WHERE organization_id = public.cs_user_org_id()
+                              AND assigned_worker_id = auth.uid()
+                        )
+                    )
+                    OR (
+                        public.cs_user_role() = 'allied_health'
+                        AND practitioner_id = auth.uid()
+                        AND patient_id IN (
+                            SELECT id FROM public.patients
+                            WHERE organization_id = public.cs_user_org_id()
+                              AND (allied_health_id = auth.uid() OR clinician_id = auth.uid())
+                        )
+                    )
+                )
             );
     END IF;
 END $$;
 
--- UPDATE: any org member can update sessions (notes, status changes, etc.)
+-- UPDATE: members can update only sessions they can access.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='sessions' AND policyname='sessions_member_update') THEN
         CREATE POLICY sessions_member_update ON public.sessions
             FOR UPDATE TO authenticated
-            USING (organization_id = public.cs_user_org_id())
-            WITH CHECK (organization_id = public.cs_user_org_id());
+            USING (
+                organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (public.cs_user_role() = 'support_worker' AND worker_id = auth.uid())
+                    OR (public.cs_user_role() = 'allied_health' AND practitioner_id = auth.uid())
+                )
+            )
+            WITH CHECK (
+                organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR (public.cs_user_role() = 'support_worker' AND worker_id = auth.uid())
+                    OR (public.cs_user_role() = 'allied_health' AND practitioner_id = auth.uid())
+                )
+            );
     END IF;
 END $$;
 
--- DELETE: admin-only — sessions are legal records; deletion should be rare
+-- DELETE: support-coordinator-only; sessions are legal records.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='sessions' AND policyname='sessions_admin_delete') THEN
         CREATE POLICY sessions_admin_delete ON public.sessions
@@ -379,7 +531,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- SELECT: any org member can read incidents for their organisation
+-- SELECT: coordinators see org incidents; scoped roles see incidents linked to assigned participants/sessions.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='incidents' AND policyname='incidents_org_member_select') THEN
         CREATE POLICY incidents_org_member_select ON public.incidents
@@ -387,22 +539,60 @@ DO $$ BEGIN
             USING (
                 organization_id IS NOT NULL
                 AND organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR participant_id IN (
+                        SELECT id FROM public.patients
+                        WHERE organization_id = public.cs_user_org_id()
+                          AND (
+                              (public.cs_user_role() = 'support_worker' AND assigned_worker_id = auth.uid())
+                              OR (public.cs_user_role() = 'allied_health' AND (allied_health_id = auth.uid() OR clinician_id = auth.uid()))
+                          )
+                    )
+                    OR session_id IN (
+                        SELECT id FROM public.sessions
+                        WHERE organization_id = public.cs_user_org_id()
+                          AND (
+                              (public.cs_user_role() = 'support_worker' AND worker_id = auth.uid())
+                              OR (public.cs_user_role() = 'allied_health' AND practitioner_id = auth.uid())
+                          )
+                    )
+                )
             );
     END IF;
 END $$;
 
--- INSERT: any org member can report an incident
+-- INSERT: members can report incidents only inside their assigned scope.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='incidents' AND policyname='incidents_member_insert') THEN
         CREATE POLICY incidents_member_insert ON public.incidents
             FOR INSERT TO authenticated
             WITH CHECK (
                 organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR participant_id IN (
+                        SELECT id FROM public.patients
+                        WHERE organization_id = public.cs_user_org_id()
+                          AND (
+                              (public.cs_user_role() = 'support_worker' AND assigned_worker_id = auth.uid())
+                              OR (public.cs_user_role() = 'allied_health' AND (allied_health_id = auth.uid() OR clinician_id = auth.uid()))
+                          )
+                    )
+                    OR session_id IN (
+                        SELECT id FROM public.sessions
+                        WHERE organization_id = public.cs_user_org_id()
+                          AND (
+                              (public.cs_user_role() = 'support_worker' AND worker_id = auth.uid())
+                              OR (public.cs_user_role() = 'allied_health' AND practitioner_id = auth.uid())
+                          )
+                    )
+                )
             );
     END IF;
 END $$;
 
--- UPDATE: coordinators and admins can update/investigate incidents
+-- UPDATE: support coordinators can update/investigate incidents.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='incidents' AND policyname='incidents_coordinator_update') THEN
         CREATE POLICY incidents_coordinator_update ON public.incidents
@@ -415,7 +605,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- DELETE: admin-only — incidents are compliance records
+-- DELETE: support-coordinator-only; incidents are compliance records.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='incidents' AND policyname='incidents_admin_delete') THEN
         CREATE POLICY incidents_admin_delete ON public.incidents
@@ -440,10 +630,7 @@ DO $$ BEGIN
         CREATE POLICY alerts_org_member_select ON public.alerts
             FOR SELECT TO authenticated
             USING (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
             );
     END IF;
 END $$;
@@ -463,60 +650,45 @@ DO $$ BEGIN
         CREATE POLICY ndis_plans_org_member_select ON public.ndis_plans
             FOR SELECT TO authenticated
             USING (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
             );
     END IF;
 END $$;
 
--- INSERT: coordinators and admins can create plans
+-- INSERT: support coordinators can create plans.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='ndis_plans' AND policyname='ndis_plans_coordinator_insert') THEN
         CREATE POLICY ndis_plans_coordinator_insert ON public.ndis_plans
             FOR INSERT TO authenticated
             WITH CHECK (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
                 AND public.cs_is_coordinator()
             );
     END IF;
 END $$;
 
--- UPDATE: coordinators and admins can update plans
+-- UPDATE: support coordinators can update plans.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='ndis_plans' AND policyname='ndis_plans_coordinator_update') THEN
         CREATE POLICY ndis_plans_coordinator_update ON public.ndis_plans
             FOR UPDATE TO authenticated
             USING (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
             )
             WITH CHECK (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
                 AND public.cs_is_coordinator()
             );
     END IF;
 END $$;
 
--- DELETE: admin-only
+-- DELETE: support-coordinator-only.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='ndis_plans' AND policyname='ndis_plans_admin_delete') THEN
         CREATE POLICY ndis_plans_admin_delete ON public.ndis_plans
             FOR DELETE TO authenticated
             USING (
-                patient_id IN (
-                    SELECT id FROM public.patients
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_patient(patient_id)
                 AND public.cs_is_admin()
             );
     END IF;
@@ -536,8 +708,7 @@ DO $$ BEGIN
             USING (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
             );
     END IF;
@@ -551,16 +722,14 @@ DO $$ BEGIN
             USING (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
                 AND public.cs_is_coordinator()
             )
             WITH CHECK (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
                 AND public.cs_is_coordinator()
             );
@@ -580,8 +749,7 @@ DO $$ BEGIN
             USING (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
             );
     END IF;
@@ -603,8 +771,7 @@ DO $$ BEGIN
             USING (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
             );
     END IF;
@@ -617,16 +784,14 @@ DO $$ BEGIN
             USING (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
                 AND public.cs_is_coordinator()
             )
             WITH CHECK (
                 plan_id IN (
                     SELECT np.id FROM public.ndis_plans np
-                    INNER JOIN public.patients p ON p.id = np.patient_id
-                    WHERE p.organization_id = public.cs_user_org_id()
+                    WHERE public.cs_can_access_patient(np.patient_id)
                 )
                 AND public.cs_is_coordinator()
             );
@@ -639,7 +804,7 @@ END $$;
 -- Has both patient_id and organization_id (use direct org_id).
 -- ============================================================
 
--- SELECT: any org member can see allocations in their org
+-- SELECT: coordinators see org allocations; scoped roles see only their own/assigned allocations.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='practitioner_allocations' AND policyname='pa_org_member_select') THEN
         CREATE POLICY pa_org_member_select ON public.practitioner_allocations
@@ -647,11 +812,16 @@ DO $$ BEGIN
             USING (
                 organization_id IS NOT NULL
                 AND organization_id = public.cs_user_org_id()
+                AND (
+                    public.cs_is_coordinator()
+                    OR user_id = auth.uid()
+                    OR public.cs_can_access_patient(patient_id)
+                )
             );
     END IF;
 END $$;
 
--- INSERT/UPDATE: coordinators and admins manage allocations
+-- INSERT/UPDATE: support coordinators manage allocations.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='practitioner_allocations' AND policyname='pa_coordinator_write') THEN
         CREATE POLICY pa_coordinator_write ON public.practitioner_allocations
@@ -673,16 +843,13 @@ END $$;
 -- Append-only audit trail. Scoped via session_id → sessions.
 -- ============================================================
 
--- SELECT: auditors, coordinators, and admins in org
+-- SELECT: support coordinators can view audit records in their org.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='compliance_audit_logs' AND policyname='cal_auditor_select') THEN
         CREATE POLICY cal_auditor_select ON public.compliance_audit_logs
             FOR SELECT TO authenticated
             USING (
-                session_id IN (
-                    SELECT id FROM public.sessions
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_session(session_id)
                 AND public.cs_is_auditor()
             );
     END IF;
@@ -701,10 +868,7 @@ DO $$ BEGIN
         CREATE POLICY crr_org_member_select ON public.compliance_rule_results
             FOR SELECT TO authenticated
             USING (
-                session_id IN (
-                    SELECT id FROM public.sessions
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_session(session_id)
             );
     END IF;
 END $$;
@@ -720,10 +884,7 @@ DO $$ BEGIN
         CREATE POLICY rpf_org_member_select ON public.restrictive_practice_flags
             FOR SELECT TO authenticated
             USING (
-                session_id IN (
-                    SELECT id FROM public.sessions
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_session(session_id)
             );
     END IF;
 END $$;
@@ -740,10 +901,7 @@ DO $$ BEGIN
         CREATE POLICY sm_org_member_select ON public.session_messages
             FOR SELECT TO authenticated
             USING (
-                session_id IN (
-                    SELECT id FROM public.sessions
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_session(session_id)
             );
     END IF;
 END $$;
@@ -754,10 +912,7 @@ DO $$ BEGIN
         CREATE POLICY sm_member_insert ON public.session_messages
             FOR INSERT TO authenticated
             WITH CHECK (
-                session_id IN (
-                    SELECT id FROM public.sessions
-                    WHERE organization_id = public.cs_user_org_id()
-                )
+                public.cs_can_access_session(session_id)
             );
     END IF;
 END $$;
@@ -765,10 +920,10 @@ END $$;
 
 -- ============================================================
 -- SECTION 19 — audit_logs TABLE POLICIES
--- Append-only. Admin/auditor read. Direct organization_id.
+-- Append-only. Support-coordinator read. Direct organization_id.
 -- ============================================================
 
--- SELECT: admin and auditors only — audit logs are sensitive
+-- SELECT: support coordinators only; audit logs are sensitive.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='audit_logs' AND policyname='audit_logs_auditor_select') THEN
         CREATE POLICY audit_logs_auditor_select ON public.audit_logs
@@ -799,7 +954,7 @@ END $$;
 -- NDIS Act s.66 "need-to-know" audit trail. Append-only.
 -- ============================================================
 
--- SELECT: admin/auditor only — this is a sensitive access trail
+-- SELECT: support coordinators only; this is a sensitive access trail.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='access_logs' AND policyname='access_logs_auditor_select') THEN
         CREATE POLICY access_logs_auditor_select ON public.access_logs
@@ -828,7 +983,7 @@ END $$;
 -- Privacy Act 2026 breach notification log. Append-only.
 -- ============================================================
 
--- SELECT: admin/auditor only
+-- SELECT: support coordinators only.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='security_events' AND policyname='security_events_auditor_select') THEN
         CREATE POLICY security_events_auditor_select ON public.security_events
@@ -863,7 +1018,7 @@ END $$;
 -- ============================================================
 -- SECTION 23 — users TABLE SUPPLEMENTARY POLICIES
 -- Existing: service_role_all, users_self_read (from supabase_setup.sql)
--- Add: org admins can read all members in their organisation.
+-- Add: support coordinators can read all members in their organisation.
 -- ============================================================
 
 DO $$ BEGIN
@@ -871,7 +1026,7 @@ DO $$ BEGIN
         CREATE POLICY users_admin_org_read ON public.users
             FOR SELECT TO authenticated
             USING (
-                -- Admin/manager can see all users in their organisation
+                -- Support coordinators can see all users in their organisation.
                 id IN (
                     SELECT om.user_id FROM public.organization_members om
                     WHERE om.organization_id = public.cs_user_org_id()
