@@ -21,6 +21,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- support_coordinator, support_worker, allied_health.
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS account_type text DEFAULT 'independent_worker';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS onboarding_complete boolean DEFAULT true;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified boolean DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS profile_completed boolean DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS onboarding_completed boolean DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role_specific_profile_completed boolean DEFAULT false;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS organization_id uuid;
 
 DO $$
@@ -296,6 +300,10 @@ INSERT INTO public.users (
     role,
     account_type,
     onboarding_complete,
+    email_verified,
+    profile_completed,
+    onboarding_completed,
+    role_specific_profile_completed,
     organization_id,
     is_active
 )
@@ -305,6 +313,10 @@ SELECT
     full_name,
     role_name,
     account_type,
+    true,
+    true,
+    true,
+    true,
     true,
     '20000000-0000-4000-8000-000000000001'::uuid,
     true
@@ -316,6 +328,10 @@ SET
     role = EXCLUDED.role,
     account_type = EXCLUDED.account_type,
     onboarding_complete = true,
+    email_verified = true,
+    profile_completed = true,
+    onboarding_completed = true,
+    role_specific_profile_completed = true,
     organization_id = EXCLUDED.organization_id,
     is_active = true;
 

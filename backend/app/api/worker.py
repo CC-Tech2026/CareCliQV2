@@ -1,0 +1,285 @@
+from __future__ import annotations
+
+from datetime import date
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from ..core.access import get_user_id, get_user_organization_id, is_support_worker
+from ..core.security import get_current_user
+from ..schemas.session import SessionCreate
+from ..services import audit_service, funding_service, participant_service, session_service
+
+
+router = APIRouter(prefix="/worker", tags=["worker"])
+
+
+class WorkerSessionCreate(BaseModel):
+    session_date: date = Field(default_factory=date.today)
+    duration_minutes: int = Field(default=60, ge=1)
+    session_type: str = "support_work"
+    notes: Optional[str] = None
+    goals_addressed: list[str] = Field(default_factory=list)
+    status: str = "draft"
+    activities_performed: Optional[str] = None
+    outcomes: Optional[str] = None
+    participant_response: Optional[str] = None
+    progress_toward_goals: Optional[str] = None
+
+
+class WorkerNoteCreate(BaseModel):
+    notes: str = Field(min_length=1)
+    session_date: date = Field(default_factory=date.today)
+    session_type: str = "progress_note"
+    duration_minutes: int = Field(default=1, ge=1)
+    goals_addressed: list[str] = Field(default_factory=list)
+
+
+def _require_worker(user: dict) -> None:
+    if not is_support_worker(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Support worker access required.")
+
+
+async def _assigned_participant(participant_id: str, user: dict) -> dict:
+    _require_worker(user)
+    participant = await participant_service.get_participant_by_id(participant_id, user)
+    if not participant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    return participant
+
+
+def _score_status(score) -> str:
+    if score is None:
+        return "at_risk"
+    value = float(score)
+    if value >= 85:
+        return "compliant"
+    if value >= 60:
+        return "at_risk"
+    return "non_compliant"
+
+
+def _limited_participant(participant: dict) -> dict:
+    return {
+        "id": participant.get("id"),
+        "full_name": participant.get("full_name"),
+        "ndis_number": participant.get("ndis_number"),
+        "date_of_birth": participant.get("date_of_birth"),
+        "plan_status": participant.get("plan_status"),
+        "plan_start_date": participant.get("plan_start_date"),
+        "plan_end_date": participant.get("plan_end_date"),
+        "plan_management_type": (
+            participant.get("plan_management_type")
+            or participant.get("plan_management")
+            or participant.get("plan_status")
+            or "Not recorded"
+        ),
+        "primary_disability": participant.get("primary_disability"),
+        "goals": participant.get("goals") or [],
+        "limited_medical_history": {
+            "primary_disability": participant.get("primary_disability"),
+            "biological_sex": participant.get("biological_sex"),
+        },
+    }
+
+
+def _session_payload(session: dict) -> dict:
+    note_text = session.get("translated_english_note") or session.get("compliance_input_text") or session.get("notes")
+    return {
+        "id": session.get("id"),
+        "participant_id": session.get("participant_id") or session.get("patient_id"),
+        "session_date": session.get("session_date"),
+        "session_type": session.get("session_type"),
+        "duration_minutes": session.get("duration_minutes"),
+        "status": session.get("status"),
+        "notes": note_text,
+        "legal_record_text": session.get("legal_record_text") or note_text,
+        "compliance_score": session.get("compliance_score"),
+        "compliance_status": _score_status(session.get("compliance_score")),
+        "goals_addressed": session.get("goals_addressed") or [],
+        "translation_status": session.get("translation_status"),
+    }
+
+
+def _client_row(participant: dict, sessions: list[dict]) -> dict:
+    scores = [float(s["compliance_score"]) for s in sessions if s.get("compliance_score") is not None]
+    worst_score = min(scores) if scores else None
+    last_seen = sessions[0].get("session_date") if sessions else None
+    return {
+        **_limited_participant(participant),
+        "last_seen": last_seen,
+        "compliance_score": round(worst_score, 1) if worst_score is not None else None,
+        "compliance_status": _score_status(worst_score),
+    }
+
+
+async def _worker_sessions_for_participant(participant_id: str, user: dict) -> list[dict]:
+    participant = await _assigned_participant(participant_id, user)
+    sessions = await session_service.get_sessions_by_participant(participant_id, user)
+    current_user_id = get_user_id(user)
+    own_sessions = [
+        session
+        for session in sessions
+        if current_user_id in {
+            str(session.get("worker_id") or ""),
+            str(session.get("support_worker_id") or ""),
+            str(session.get("owner_user_id") or ""),
+            str(session.get("created_by") or ""),
+        }
+    ]
+    if not own_sessions:
+        return []
+    await audit_service.log_action(
+        action_type="worker.sessions.viewed",
+        entity_type="participant",
+        entity_id=participant_id,
+        user_id=current_user_id,
+        organization_id=get_user_organization_id(user),
+        details={"participant_name": participant.get("full_name")},
+    )
+    return own_sessions
+
+
+@router.get("/my-clients")
+async def my_clients(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    participants = await participant_service.get_all_participants(current_user)
+    rows: list[dict] = []
+    for participant in participants:
+        participant_id = str(participant.get("id"))
+        sessions = await _worker_sessions_for_participant(participant_id, current_user)
+        rows.append(_client_row(participant, sessions))
+    return rows
+
+
+@router.get("/my-clients/{participant_id}")
+async def my_client_detail(participant_id: str, current_user: dict = Depends(get_current_user)):
+    participant = await _assigned_participant(participant_id, current_user)
+    sessions = await _worker_sessions_for_participant(participant_id, current_user)
+    await audit_service.log_action(
+        action_type="worker.participant.viewed",
+        entity_type="participant",
+        entity_id=participant_id,
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+    )
+    return {
+        "participant": _client_row(participant, sessions),
+        "sessions": [_session_payload(session) for session in sessions],
+        "notes": [_session_payload(session) for session in sessions if session.get("notes")],
+        "compliance": [
+            _session_payload(session)
+            for session in sessions
+            if session.get("compliance_score") is not None or session.get("translation_status") in {"failed", "pending", "unsupported"}
+        ],
+    }
+
+
+@router.get("/my-clients/{participant_id}/sessions")
+async def my_client_sessions(participant_id: str, current_user: dict = Depends(get_current_user)):
+    sessions = await _worker_sessions_for_participant(participant_id, current_user)
+    return [_session_payload(session) for session in sessions]
+
+
+@router.get("/my-clients/{participant_id}/ndis-plan")
+async def my_client_ndis_plan(participant_id: str, current_user: dict = Depends(get_current_user)):
+    participant = await _assigned_participant(participant_id, current_user)
+    plan = await funding_service.get_plan_for_participant(participant_id)
+    return {
+        "participant_id": participant_id,
+        "participant_name": participant.get("full_name"),
+        "read_only": True,
+        "goals": participant.get("goals") or [],
+        "plan": plan or {
+            "has_plan": False,
+            "plan_status": participant.get("plan_status"),
+            "plan_start_date": participant.get("plan_start_date"),
+            "plan_end_date": participant.get("plan_end_date"),
+        },
+    }
+
+
+@router.get("/my-compliance")
+async def my_compliance(current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    sessions = await session_service.get_all_sessions(500, current_user)
+    scored = [s for s in sessions if s.get("compliance_score") is not None]
+    scores = [float(s["compliance_score"]) for s in scored]
+    average = round(sum(scores) / len(scores), 1) if scores else 0
+    return {
+        "average_score": average,
+        "status": _score_status(average),
+        "total_sessions": len(sessions),
+        "reviewed_sessions": len(scored),
+        "at_risk": sum(1 for score in scores if score < 85),
+        "sessions": [_session_payload(session) for session in sessions],
+    }
+
+
+@router.post("/my-clients/{participant_id}/sessions", status_code=status.HTTP_201_CREATED)
+async def create_my_client_session(
+    participant_id: str,
+    body: WorkerSessionCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    await _assigned_participant(participant_id, current_user)
+    payload = SessionCreate(
+        participant_id=participant_id,
+        session_date=body.session_date,
+        duration_minutes=body.duration_minutes,
+        session_type=body.session_type,
+        notes=body.notes,
+        goals_addressed=body.goals_addressed,
+        status=body.status,
+        activities_performed=body.activities_performed,
+        outcomes=body.outcomes,
+        participant_response=body.participant_response,
+        progress_toward_goals=body.progress_toward_goals,
+    )
+    try:
+        session = await session_service.create_session(payload, current_user)
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    await audit_service.log_action(
+        action_type="worker.session.created",
+        entity_type="session",
+        entity_id=session.get("id", ""),
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        after_state={"participant_id": participant_id, "session_type": body.session_type},
+    )
+    return _session_payload(session)
+
+
+@router.post("/my-clients/{participant_id}/notes", status_code=status.HTTP_201_CREATED)
+async def create_my_client_note(
+    participant_id: str,
+    body: WorkerNoteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    await _assigned_participant(participant_id, current_user)
+    payload = SessionCreate(
+        participant_id=participant_id,
+        session_date=body.session_date,
+        duration_minutes=body.duration_minutes,
+        session_type=body.session_type,
+        notes=body.notes,
+        goals_addressed=body.goals_addressed,
+        status="completed",
+    )
+    try:
+        session = await session_service.create_session(payload, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except PermissionError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    await audit_service.log_action(
+        action_type="worker.note.created",
+        entity_type="session",
+        entity_id=session.get("id", ""),
+        user_id=get_user_id(current_user),
+        organization_id=get_user_organization_id(current_user),
+        after_state={"participant_id": participant_id, "session_type": body.session_type},
+    )
+    return _session_payload(session)

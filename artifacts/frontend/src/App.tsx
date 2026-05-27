@@ -11,6 +11,7 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
 import ParticipantNew from "@/pages/participant-new";
@@ -26,6 +27,17 @@ import Compliance from "@/pages/compliance";
 import Reports from "@/pages/reports";
 import Billing from "@/pages/billing";
 import Settings from "@/pages/settings";
+import MyClients from "@/pages/my-clients";
+import MyClientDetail from "@/pages/my-client-detail";
+import MyCompliance from "@/pages/my-compliance";
+import WorkerNdisPlan from "@/pages/worker-ndis-plan";
+import Team from "@/pages/team";
+import AuditPack from "@/pages/audit-pack";
+import Credentials from "@/pages/credentials";
+import Toolkit from "@/pages/toolkit";
+import VerifyEmail from "@/pages/verify-email";
+import ProfileCompletion from "@/pages/profile-completion";
+import WorkerOnboarding from "@/pages/worker-onboarding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +61,7 @@ const COORDINATOR_ROLES = ["support_coordinator"] as const;
 
 // Coordinator + allied health — reports contain clinical documentation allied health needs.
 const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
+const WORKER_ROLES = ["support_worker"] as const;
 
 function Router() {
   return (
@@ -61,6 +74,24 @@ function Router() {
       <Route path="/accept-invite" component={AcceptInvite} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
+      <Route path="/verify-email">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><VerifyEmail /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/profile-completion">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><ProfileCompletion /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker-onboarding">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerOnboarding /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* ── Dashboard — all roles ─────────────────────────────────────────── */}
       <Route path="/dashboard">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
@@ -70,8 +101,58 @@ function Router() {
 
       {/* ── Participants ──────────────────────────────────────────────────── */}
       {/* List: all roles (backend scopes to allocated for workers) */}
-      <Route path="/patients">
+      <Route path="/my-clients">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><MyClients /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-clients/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyClientDetail id={params.id} /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/my-compliance">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><MyCompliance /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker-ndis-plan">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerNdisPlan /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/credentials">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><Credentials /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/toolkit">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><Toolkit /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/team">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><Team /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/audit-pack">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><AuditPack /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/patients">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Patients /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -94,13 +175,13 @@ function Router() {
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to allocated for workers */}
       <Route path="/sessions">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Sessions /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/sessions/new">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><SessionNew /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -124,20 +205,20 @@ function Router() {
       {/* ── Incidents ────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Incidents /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/new">
-        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><IncidentNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/:id">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
             <AppLayout><IncidentDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}
@@ -187,6 +268,7 @@ function App() {
       <TooltipProvider>
         <AuthProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AuthSessionGuards />
             <Router />
           </WouterRouter>
           <Toaster />

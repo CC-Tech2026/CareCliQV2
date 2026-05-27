@@ -33,9 +33,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
-
-const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:8000";
+import { apiFetch } from "@/lib/api-fetch";
+import { useReAuth } from "@/hooks/useReAuth";
 
 const ROLE_OPTIONS = [
   {
@@ -76,6 +75,11 @@ interface InviteResult {
   invite_url: string;
   token: string;
   expires_at?: string;
+  email_delivery?: {
+    status: "queued" | "disabled" | "not_configured" | string;
+    provider?: string;
+    message?: string;
+  };
 }
 
 export function InviteModal({
@@ -83,7 +87,8 @@ export function InviteModal({
   onClose,
   onInviteSent,
 }: InviteModalProps) {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
+  const { requireReAuth, modal } = useReAuth();
 
   const { toast } = useToast();
 
@@ -146,8 +151,8 @@ export function InviteModal({
        *
        * POST /api/invitations/create
        */
-      const response = await fetch(
-        `${API_BASE}/api/invitations/create`,
+      const response = await requireReAuth(() => apiFetch(
+        "/api/invitations/create",
         {
           method: "POST",
 
@@ -166,7 +171,9 @@ export function InviteModal({
             role,
           }),
         }
-      );
+      ));
+
+      if (!response) return;
 
       const payload = await response
         .json()
@@ -182,10 +189,14 @@ export function InviteModal({
 
       setResult(payload);
 
+      const deliveryStatus = payload?.email_delivery?.status;
+
       toast({
-        title: "Invitation created",
+        title: deliveryStatus === "queued" ? "Invitation sent" : "Invitation created",
         description:
-          "Secure invitation link generated successfully.",
+          deliveryStatus === "queued"
+            ? "The secure invite link was emailed automatically."
+            : "Secure invitation link generated. Copy it if email is not configured.",
       });
 
       onInviteSent?.();
@@ -237,13 +248,15 @@ export function InviteModal({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(open) => {
-        if (!open) handleClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-md rounded-2xl">
+    <>
+      {modal}
+      <Dialog
+        open={open}
+        onOpenChange={(open) => {
+          if (!open) handleClose();
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg text-[#1E1640]">
             <UserPlus
@@ -364,7 +377,9 @@ export function InviteModal({
 
               <div>
                 <p className="text-sm font-semibold text-gray-900">
-                  Invitation created
+                  {result.email_delivery?.status === "queued"
+                    ? "Invitation emailed"
+                    : "Invitation created"}
                 </p>
 
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -376,6 +391,14 @@ export function InviteModal({
                 </p>
               </div>
             </div>
+
+            {result.email_delivery && result.email_delivery.status !== "queued" && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
+                Automatic email status: <strong>{result.email_delivery.status}</strong>.
+                {" "}
+                {result.email_delivery.message || "Copy and share the link manually."}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-xs font-medium">
@@ -473,7 +496,8 @@ export function InviteModal({
             </>
           )}
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

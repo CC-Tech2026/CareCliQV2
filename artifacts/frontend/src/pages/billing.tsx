@@ -3,6 +3,7 @@ import { Check, CreditCard, FileText, Loader2, Plus, ReceiptText } from "lucide-
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,7 @@ function Panel({ label, children }: { label: string; children: React.ReactNode }
 export default function Billing() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const canInvoice = user?.role === "support_coordinator" || user?.role === "allied_health";
   const [loading, setLoading] = useState(true);
@@ -110,11 +112,12 @@ export default function Billing() {
     if (!subscription) return;
     setSavingSubscription(true);
     try {
-      const res = await apiFetch("/api/billing/subscription", {
+      const res = await requireReAuth(() => apiFetch("/api/billing/subscription", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subscription),
-      });
+      }));
+      if (!res) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || "Could not save subscription.");
@@ -135,7 +138,7 @@ export default function Billing() {
   async function createInvoice() {
     setCreatingInvoice(true);
     try {
-      const res = await apiFetch("/api/billing/invoices", {
+      const res = await requireReAuth(() => apiFetch("/api/billing/invoices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,7 +153,8 @@ export default function Billing() {
             unit_amount: Number(invoiceForm.unit_amount || 0),
           }],
         }),
-      });
+      }));
+      if (!res) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || "Could not create invoice.");
@@ -172,7 +176,8 @@ export default function Billing() {
 
   async function markPaid(invoice: Invoice) {
     try {
-      const res = await apiFetch(`/api/billing/invoices/${invoice.id}/mark-paid`, { method: "POST" });
+      const res = await requireReAuth(() => apiFetch(`/api/billing/invoices/${invoice.id}/mark-paid`, { method: "POST" }));
+      if (!res) return;
       if (!res.ok) throw new Error("Could not mark invoice paid.");
       const updated = await res.json();
       setInvoices((prev) => prev.map((item) => item.id === updated.id ? updated : item));
@@ -204,6 +209,8 @@ export default function Billing() {
   }
 
   return (
+    <>
+    {modal}
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
@@ -382,6 +389,6 @@ export default function Billing() {
         </Panel>
       </div>
     </div>
+    </>
   );
 }
-

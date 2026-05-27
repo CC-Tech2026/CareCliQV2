@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from ..core.security import get_current_user
+from ..api.security import require_recent_reauth
 from ..services import billing_service
 
 
@@ -65,8 +66,10 @@ async def get_subscription(current_user: dict = Depends(get_current_user)):
 @router.put("/subscription")
 async def update_subscription(
     body: SubscriptionUpdate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
+    require_recent_reauth(request, current_user)
     return await billing_service.upsert_subscription(current_user, body.model_dump())
 
 
@@ -81,8 +84,11 @@ async def list_invoices(
 @router.post("/invoices", status_code=201)
 async def create_invoice(
     body: InvoiceCreate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
+    if body.status and body.status != "draft":
+        require_recent_reauth(request, current_user)
     return await billing_service.create_invoice(current_user, body.model_dump(exclude_none=True))
 
 
@@ -95,8 +101,11 @@ async def get_invoice(invoice_id: str, current_user: dict = Depends(get_current_
 async def update_invoice(
     invoice_id: str,
     body: InvoiceUpdate,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
+    if body.status and body.status != "draft":
+        require_recent_reauth(request, current_user)
     return await billing_service.update_invoice(
         invoice_id,
         current_user,
@@ -104,7 +113,31 @@ async def update_invoice(
     )
 
 
+@router.post("/invoices/{invoice_id}/finalize")
+async def finalize_invoice(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await billing_service.finalize_invoice(invoice_id, current_user)
+
+
+@router.post("/invoices/{invoice_id}/mark-sent")
+async def mark_invoice_sent(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await billing_service.mark_invoice_sent(invoice_id, current_user)
+
+
 @router.post("/invoices/{invoice_id}/mark-paid")
-async def mark_invoice_paid(invoice_id: str, current_user: dict = Depends(get_current_user)):
+async def mark_invoice_paid(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
     return await billing_service.mark_invoice_paid(invoice_id, current_user)
 
+
+@router.post("/invoices/{invoice_id}/pdf")
+async def generate_invoice_pdf(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await billing_service.generate_invoice_pdf(invoice_id, current_user)
+
+
+@router.post("/invoices/{invoice_id}/cancel")
+async def cancel_invoice(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
+    require_recent_reauth(request, current_user)
+    return await billing_service.cancel_invoice(invoice_id, current_user)

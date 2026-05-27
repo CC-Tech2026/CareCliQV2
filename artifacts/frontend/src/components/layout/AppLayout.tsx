@@ -3,11 +3,11 @@ import { useState } from "react";
 import {
   Menu,
   X,
-  Plus,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
   Users,
+  UserRound,
   CalendarDays,
   ShieldCheck,
   Settings,
@@ -17,6 +17,10 @@ import {
   LogOut,
   Search,
   Bell,
+  FileCheck2,
+  ClipboardList,
+  BadgeCheck,
+  Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
@@ -36,7 +40,7 @@ type NavRole = "support_coordinator" | "support_worker" | "allied_health";
 
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string };
 
-const NAV_ITEMS: {
+const LEGACY_NAV_ITEMS: {
   href: string;
   label: string;
   icon: React.ComponentType<NavIconProps>;
@@ -54,7 +58,7 @@ const NAV_ITEMS: {
   { href: "/settings",   label: "Settings",      icon: Settings },
 ];
 
-const BOTTOM_NAV: {
+const LEGACY_BOTTOM_NAV: {
   href: string;
   label: string;
   icon: React.ComponentType<NavIconProps>;
@@ -68,13 +72,79 @@ const BOTTOM_NAV: {
   { href: "/billing",    label: "Billing",  icon: CreditCard, roles: ["support_coordinator", "allied_health"] },
 ];
 
+type RoleNavItem = {
+  href: string;
+  label: string;
+  icon: React.ComponentType<NavIconProps>;
+};
+
+const ROLE_NAV_ITEMS: Record<NavRole, RoleNavItem[]> = {
+  support_coordinator: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/team", label: "Team", icon: Users },
+    { href: "/credentials", label: "Credentials", icon: BadgeCheck },
+    { href: "/toolkit", label: "Toolkit", icon: Wrench },
+    { href: "/patients", label: "Participants", icon: UserRound },
+    { href: "/sessions", label: "All Sessions", icon: CalendarDays },
+    { href: "/compliance", label: "Compliance", icon: ShieldCheck },
+    { href: "/audit-pack", label: "Audit Pack", icon: FileCheck2 },
+    { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+    { href: "/billing", label: "Invoices", icon: CreditCard },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ],
+  support_worker: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/my-clients", label: "My Clients", icon: UserRound },
+    { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck },
+    { href: "/worker-ndis-plan", label: "NDIS Plan", icon: ClipboardList },
+    { href: "/credentials", label: "Credentials", icon: BadgeCheck },
+    { href: "/toolkit", label: "Toolkit", icon: Wrench },
+  ],
+  allied_health: [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/patients", label: "Caseload", icon: UserRound },
+    { href: "/sessions", label: "Clinical Sessions", icon: CalendarDays },
+    { href: "/incidents", label: "Incidents", icon: AlertTriangle },
+    { href: "/reports", label: "Reports", icon: FileBarChart2 },
+    { href: "/billing", label: "Invoices", icon: CreditCard },
+    { href: "/credentials", label: "Credentials", icon: BadgeCheck },
+    { href: "/toolkit", label: "Toolkit", icon: Wrench },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ],
+};
+
+const ROLE_BOTTOM_NAV: Record<NavRole, RoleNavItem[]> = {
+  support_coordinator: [
+    { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+    { href: "/team", label: "Team", icon: Users },
+    { href: "/patients", label: "People", icon: UserRound },
+    { href: "/credentials", label: "Creds", icon: BadgeCheck },
+    { href: "/billing", label: "Invoices", icon: CreditCard },
+  ],
+  support_worker: [
+    { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+    { href: "/my-clients", label: "Clients", icon: UserRound },
+    { href: "/my-compliance", label: "Compliance", icon: ShieldCheck },
+    { href: "/toolkit", label: "Toolkit", icon: Wrench },
+  ],
+  allied_health: [
+    { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+    { href: "/patients", label: "Caseload", icon: UserRound },
+    { href: "/sessions", label: "Sessions", icon: CalendarDays },
+    { href: "/reports", label: "Reports", icon: FileBarChart2 },
+    { href: "/credentials", label: "Creds", icon: BadgeCheck },
+    { href: "/toolkit", label: "Toolkit", icon: Wrench },
+  ],
+};
+
 function isActive(location: string, href: string) {
   return (
     location === href ||
     location.startsWith(href + "/") ||
     (href === "/patients" &&
       (location.startsWith("/patients") ||
-        location.startsWith("/participants")))
+        location.startsWith("/participants"))) ||
+    (href === "/my-clients" && location.startsWith("/my-clients"))
   );
 }
 
@@ -91,6 +161,7 @@ function SidebarContents({
   location,
   collapsed,
   isDrawer,
+  alertCount,
   displayName,
   displayRole,
   initials,
@@ -112,10 +183,7 @@ function SidebarContents({
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
   const userRole = user?.role as NavRole | undefined;
-  const visibleNavItems = NAV_ITEMS.filter(
-    (item) => !item.roles || (userRole && item.roles.includes(userRole))
-  );
-
+  const visibleNavItems = userRole ? ROLE_NAV_ITEMS[userRole] : ROLE_NAV_ITEMS.support_worker;
   return (
     <div className="flex flex-col h-full">
       <div
@@ -162,24 +230,6 @@ function SidebarContents({
         </div>
       )}
 
-      <div className={cn("pt-2 pb-4 shrink-0", compact ? "px-3" : "px-5")}>
-        <Link href="/sessions/new" onClick={onNav}>
-          <div
-            className={cn(
-              "flex items-center justify-center rounded-2xl text-white text-[14px] font-bold h-11 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
-              compact ? "w-full" : "gap-2 px-4",
-            )}
-            style={{
-              background: PLUM,
-              boxShadow: "0 8px 16px -4px rgba(106, 64, 125, 0.2)",
-            }}
-          >
-            <Plus size={18} strokeWidth={2.5} />
-            {!compact && "New Session"}
-          </div>
-        </Link>
-      </div>
-
       <nav className={cn("flex-1 overflow-y-auto space-y-1 scrollbar-none", compact ? "px-2" : "px-4")}>
         {visibleNavItems.map((item) => {
           const active = isActive(location, item.href);
@@ -199,6 +249,11 @@ function SidebarContents({
               >
                 <Icon size={20} strokeWidth={active ? 2.5 : 2} />
                 {!compact && item.label}
+                {!compact && alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
+                  <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center">
+                    {alertCount}
+                  </span>
+                )}
               </div>
             </Link>
           );
@@ -265,6 +320,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
   const initials = getInitials(displayName);
   const alertCount = Array.isArray(alerts) ? alerts.length : 0;
+  const userRole = user?.role as NavRole | undefined;
+  const isWorker = userRole === "support_worker";
+  const topbarAlertHref = isWorker ? "/my-compliance" : "/compliance";
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -308,11 +366,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <CareScribeLogoSm />
             </Link>
             <div className="flex items-center gap-2">
-              <Link href="/sessions/new">
-                <button className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-[13px] font-bold" style={{ background: PLUM }}>
-                  <Plus size={14} strokeWidth={2.5} /> New
-                </button>
-              </Link>
               <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
                 <Menu size={22} />
               </button>
@@ -330,7 +383,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A6A9E]/60" />
                 <input 
                   type="text"
-                  placeholder="Search records, global files, or logs..."
+                  placeholder={isWorker ? "Search your clients, sessions, or notes..." : "Search records, team files, or logs..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-11 pl-11 pr-4 rounded-full bg-white text-[13px] font-medium placeholder:text-[#7A6A9E]/40 border border-[#E2DEF2] focus:outline-none focus:border-[#5533CC] transition-all"
@@ -338,7 +391,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* 2. Notification Bell (With Floating Red Counter Circle) */}
-              <Link href="/compliance" className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+              <Link href={topbarAlertHref} className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
                 <Bell size={18} style={{ color: PLUM }} strokeWidth={2} />
                 {alertCount > 0 && (
                   <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center border-2 border-white">
@@ -347,30 +400,28 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 )}
               </Link>
 
-              {/* 3. Manage Participants Action Button */}
-              <Link href="/patients" className="shrink-0">
-                <button className="h-11 px-5 rounded-full text-[13px] font-bold bg-white border border-[#E2DEF2] text-[#1E1640] hover:bg-[#F5F3FC] transition-all whitespace-nowrap">
-                  Manage Participants
-                </button>
-              </Link>
-
-              {/* 4. New Session Action Button with Smooth Gradient */}
-              <Link href="/sessions/new" className="shrink-0">
-                <button 
-                  className="flex items-center justify-center gap-2 h-11 px-6 rounded-full text-white text-[13px] font-bold shadow-sm hover:opacity-95 transition-all active:scale-[0.99] whitespace-nowrap"
-                  style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
-                >
-                  <Plus size={14} strokeWidth={3} fill="white" className="shrink-0" />
-                  <span>New Session</span>
-                </button>
-              </Link>
+              {isWorker ? (
+                <Link href="/my-clients" className="shrink-0">
+                  <button className="h-11 px-5 rounded-full text-[13px] font-bold bg-white border border-[#E2DEF2] text-[#1E1640] hover:bg-[#F5F3FC] transition-all whitespace-nowrap">
+                    My Clients
+                  </button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/patients" className="shrink-0">
+                    <button className="h-11 px-5 rounded-full text-[13px] font-bold bg-white border border-[#E2DEF2] text-[#1E1640] hover:bg-[#F5F3FC] transition-all whitespace-nowrap">
+                      Manage Participants
+                    </button>
+                  </Link>
+                </>
+              )}
 
               {/* Thin Elegant Vertical Divider */}
               <div className="h-6 w-[1px] bg-[#E2DEF2] mx-1 shrink-0" />
 
               {/* 5. Action Items Crimson Tracker Capsule Badge */}
               {alertCount > 0 && (
-                <Link href="/compliance" className="shrink-0">
+                <Link href={topbarAlertHref} className="shrink-0">
                   <button className="flex items-center gap-1.5 px-4 h-11 rounded-full text-[13px] font-bold transition-all hover:opacity-90 whitespace-nowrap" style={{ background: "#FFE8EE", color: CORAL }}>
                     <AlertTriangle size={14} strokeWidth={2.5} />
                     <span>{alertCount} Action Item{alertCount !== 1 ? "s" : ""}</span>
@@ -409,9 +460,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {BOTTOM_NAV.filter(
-          (item) => !item.roles || (user?.role && item.roles.includes(user.role as NavRole))
-        ).map((item) => {
+        {(userRole ? ROLE_BOTTOM_NAV[userRole] : ROLE_BOTTOM_NAV.support_worker).map((item) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
           return (

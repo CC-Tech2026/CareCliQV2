@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { apiFetch as authenticatedFetch } from "@/lib/api-fetch";
+import { useToast } from "@/hooks/use-toast";
+import { useReAuth } from "@/hooks/useReAuth";
 import {
   LayoutDashboard, FileText, AlertTriangle, Users, ShieldCheck,
   ShieldAlert, Brain, FileDown, Layout, BookOpen,
@@ -124,6 +127,120 @@ function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title
       <p className="text-[14px] font-bold" style={{ color: T1 }}>{title}</p>
       <p className="text-[12px] max-w-xs" style={{ color: T3 }}>{sub}</p>
     </div>
+  );
+}
+
+function ClinicalReportGenerator() {
+  const { data: participants = [] } = useGetParticipants();
+  const { data: history = [], refetch } = useQuery<any[]>({
+    queryKey: ["report-history"],
+    queryFn: async () => {
+      const response = await authenticatedFetch("/api/reports/history");
+      if (!response.ok) throw new Error("Could not load report history");
+      return response.json();
+    },
+  });
+  const { toast } = useToast();
+  const { requireReAuth, modal } = useReAuth();
+  const [participantId, setParticipantId] = useState("");
+  const [reportType, setReportType] = useState("therapy_progress_report");
+  const [busy, setBusy] = useState(false);
+
+  async function generateReport() {
+    if (!participantId) {
+      toast({ title: "Select a participant", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await requireReAuth(() => authenticatedFetch(`/api/reports/participant/${participantId}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_type: reportType }),
+      }));
+      if (!response) return;
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || "Could not generate report");
+      toast({ title: "Report generated", description: payload.title });
+      refetch();
+      if (payload.file_url) window.open(payload.file_url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      toast({
+        title: "Report generation failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {modal}
+      <Card className="mb-6">
+        <CardHeader title="Allied Health Report Generator" />
+        <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+          <div>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Participant</p>
+            <select
+              value={participantId}
+              onChange={(event) => setParticipantId(event.target.value)}
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+              style={{ borderColor: BORDER, color: T1 }}
+            >
+              <option value="">Select participant</option>
+              {(participants as any[]).map((participant) => (
+                <option key={participant.id} value={participant.id}>{participant.full_name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Report type</p>
+            <select
+              value={reportType}
+              onChange={(event) => setReportType(event.target.value)}
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+              style={{ borderColor: BORDER, color: T1 }}
+            >
+              <option value="functional_capacity_assessment">Functional Capacity Assessment</option>
+              <option value="therapy_progress_report">Therapy Progress Report</option>
+              <option value="assistive_technology_assessment">Assistive Technology Assessment</option>
+              <option value="home_modification_report">Home Modification Report</option>
+              <option value="goal_review_report">Goal Review Report</option>
+              <option value="annual_review_report">Annual Review Report / RAG</option>
+            </select>
+          </div>
+          <Button onClick={generateReport} disabled={busy || !participantId} className="gap-2 rounded-xl">
+            {busy ? <Clock className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Generate PDF
+          </Button>
+        </div>
+        <div className="border-t px-5 py-4" style={{ borderColor: BORDER }}>
+          <p className="mb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Saved report history</p>
+          {history.length === 0 ? (
+            <p className="text-[12px]" style={{ color: T3 }}>No generated reports yet.</p>
+          ) : (
+            <div className="grid gap-2">
+              {history.slice(0, 5).map((report: any) => (
+                <div key={report.id} className="flex items-center gap-3 rounded-xl bg-[#F7F5FC] px-3 py-2">
+                  <FileText className="h-4 w-4" style={{ color: PLUM }} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-bold" style={{ color: T1 }}>{report.title || report.report_type}</p>
+                    <p className="text-[11px]" style={{ color: T3 }}>{report.created_at ? format(parseISO(report.created_at), "dd MMM yyyy") : "Saved"}</p>
+                  </div>
+                  {report.file_url && (
+                    <a href={report.file_url} target="_blank" rel="noreferrer" className="text-[12px] font-bold" style={{ color: PLUM }}>
+                      Download
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    </>
   );
 }
 
@@ -1083,6 +1200,7 @@ export default function Reports() {
 
           {/* Content */}
           <main className="flex-1 min-w-0">
+            {activeTab === "hub" && <ClinicalReportGenerator />}
             {SECTION_MAP[activeTab]}
           </main>
         </div>
