@@ -19,7 +19,6 @@ import ParticipantEdit from "@/pages/participant-edit";
 import Sessions from "@/pages/sessions";
 import SessionNew from "@/pages/session-new";
 import SessionDetail from "@/pages/session-detail";
-import SessionLive from "@/pages/session-live";
 import Incidents from "@/pages/incidents";
 import IncidentNew from "@/pages/incident-new";
 import IncidentDetail from "@/pages/incident-detail";
@@ -38,6 +37,7 @@ import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
+import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +62,11 @@ const COORDINATOR_ROLES = ["support_coordinator"] as const;
 // Coordinator + allied health — reports contain clinical documentation allied health needs.
 const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 const WORKER_ROLES = ["support_worker"] as const;
+
+function LegacyLiveRedirect({ sessionId }: { sessionId: string }) {
+  const { user } = useAuth();
+  return <Redirect to={user?.role === "support_worker" ? "/my-clients" : `/sessions/${sessionId}`} />;
+}
 
 function Router() {
   return (
@@ -187,9 +192,9 @@ function Router() {
       </Route>
 
       <Route path="/sessions/:id/live">
-        {() => (
+        {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <AppLayout><SessionLive /></AppLayout>
+            <LegacyLiveRedirect sessionId={params.id} />
           </ProtectedRoute>
         )}
       </Route>
