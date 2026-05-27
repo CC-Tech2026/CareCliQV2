@@ -210,20 +210,20 @@ function Router() {
       {/* ── Incidents ────────────────────────────────────────────────────── */}
       {/* All roles — backend scopes to own incidents for workers */}
       <Route path="/incidents">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Incidents /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/new">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><IncidentNew /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/incidents/:id">
         {(params) => (
-          <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
+          <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
             <AppLayout><IncidentDetail id={params.id} /></AppLayout>
           </ProtectedRoute>
         )}

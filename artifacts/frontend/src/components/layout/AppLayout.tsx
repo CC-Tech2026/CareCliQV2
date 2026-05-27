@@ -18,7 +18,6 @@ import {
   Search,
   Bell,
   FileCheck2,
-  ClipboardList,
   BadgeCheck,
   Wrench,
 } from "lucide-react";
@@ -96,7 +95,7 @@ const ROLE_NAV_ITEMS: Record<NavRole, RoleNavItem[]> = {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/my-clients", label: "My Clients", icon: UserRound },
     { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck },
-    { href: "/worker-ndis-plan", label: "NDIS Plan", icon: ClipboardList },
+    { href: "/incidents", label: "Incident", icon: AlertTriangle },
     { href: "/credentials", label: "Credentials", icon: BadgeCheck },
     { href: "/toolkit", label: "Toolkit", icon: Wrench },
   ],
