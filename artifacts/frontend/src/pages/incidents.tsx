@@ -10,6 +10,7 @@ import {
   AlertTriangle, Plus, Search, Clock, Activity,
   ClipboardList, Siren, AlertCircle, ChevronRight, Loader2,
 } from "lucide-react";
+import { getIncidentStats, listIncidents } from "@/services/incidentService";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM  = "#542269";
@@ -56,12 +57,6 @@ interface IncidentStats {
   total: number; open: number; ndis_pending: number; overdue: number; critical: number;
 }
 
-async function apiFetch(path: string) {
-  const res = await fetch(`/api${path}`);
-  if (!res.ok) throw new Error(`${res.status}`);
-  return res.json();
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Incidents() {
   const [, navigate] = useLocation();
@@ -71,11 +66,11 @@ export default function Incidents() {
 
   const { data: incidents = [], isLoading } = useQuery<Incident[]>({
     queryKey: ["incidents"],
-    queryFn: () => apiFetch("/incidents"),
+    queryFn: () => listIncidents<Incident[]>(),
   });
   const { data: stats } = useQuery<IncidentStats>({
     queryKey: ["incident-stats"],
-    queryFn: () => apiFetch("/incidents/stats"),
+    queryFn: () => getIncidentStats<IncidentStats>(),
   });
 
   const filtered = useMemo(() => incidents.filter(i => {

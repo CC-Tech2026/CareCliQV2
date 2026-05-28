@@ -199,6 +199,12 @@ def can_access_session(
     if session_assigned:
         return session_assigned
 
+    # Support workers can view their assigned participant profile, but session
+    # notes remain worker-owned. Assignment to the same participant must not
+    # expose another worker's session record.
+    if is_support_worker(user):
+        return False
+
     if participant:
         session_participant_id = _row_value(row, "patient_id", "participant_id")
         participant_id = _row_value(participant, "id", "patient_id", "participant_id")

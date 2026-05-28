@@ -7,16 +7,20 @@ const PLUM = "#5533CC";
 const CORAL = "#F03060";
 const BORDER = "#D8D0F0";
 
-function readRecoveryToken(): string {
+function readRecoveryParams(): { access_token: string; token_hash: string } {
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const query = new URLSearchParams(window.location.search);
-  return hash.get("access_token") || query.get("access_token") || "";
+  return {
+    access_token: hash.get("access_token") || query.get("access_token") || "",
+    token_hash: hash.get("token_hash") || query.get("token_hash") || "",
+  };
 }
 
 export default function ResetPassword() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const token = useMemo(readRecoveryToken, []);
+  const recovery = useMemo(readRecoveryParams, []);
+  const hasRecoveryToken = !!(recovery.access_token || recovery.token_hash);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -25,7 +29,7 @@ export default function ResetPassword() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!token) {
+    if (!hasRecoveryToken) {
       toast({ title: "Reset link expired", description: "Request a new reset link.", variant: "destructive" });
       return;
     }
@@ -42,7 +46,7 @@ export default function ResetPassword() {
       const res = await fetch("/api/auth/password-reset/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ access_token: token, password }),
+        body: JSON.stringify({ access_token: recovery.access_token, token_hash: recovery.token_hash, password }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -104,7 +108,7 @@ export default function ResetPassword() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
-              {!token && (
+              {!hasRecoveryToken && (
                 <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   This reset link is missing its recovery token. Request a new password reset link.
                 </div>
@@ -151,7 +155,7 @@ export default function ResetPassword() {
               </div>
               <button
                 type="submit"
-                disabled={busy || !token || password.length < 8 || password !== confirm}
+                disabled={busy || !hasRecoveryToken || password.length < 8 || password !== confirm}
                 className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
               >
@@ -173,4 +177,3 @@ export default function ResetPassword() {
     </div>
   );
 }
-

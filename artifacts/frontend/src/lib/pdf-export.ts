@@ -69,7 +69,7 @@ export interface ProviderInfo {
 
 async function fetchProviderSettings(): Promise<ProviderInfo> {
   try {
-    const res = await fetch("/api/settings/practitioner");
+    const res = await apiFetch("/api/settings/practitioner");
     if (!res.ok) return {};
     const data = (await res.json()) as { provider?: ProviderInfo | null };
     return (data.provider as ProviderInfo) ?? {};

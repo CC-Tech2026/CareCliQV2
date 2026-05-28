@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from typing import Optional
 from datetime import datetime, timezone
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
@@ -9,6 +9,7 @@ from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
+from .security import require_recent_reauth
 import logging
 import json
 import os
@@ -121,6 +122,8 @@ async def recent_sessions(limit: int = 10, current_user: dict = Depends(get_curr
 
 @router.get("/compliance-report")
 async def compliance_report(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") == "support_worker":
+        raise HTTPException(status_code=403, detail="Use /api/worker/my-compliance for scoped worker compliance.")
     return await session_service.get_compliance_report(current_user)
 
 
@@ -768,6 +771,7 @@ async def list_session_attachments(
 
 @router.delete("/{session_id}/attachments/{attachment_id}", status_code=204)
 async def delete_session_attachment(
+    request: Request,
     session_id: str,
     attachment_id: str,
     current_user: dict = Depends(get_current_user),
@@ -777,6 +781,7 @@ async def delete_session_attachment(
     session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    require_recent_reauth(request, current_user)
     supabase = get_supabase_admin()
     result = (
         supabase.table("session_attachments")

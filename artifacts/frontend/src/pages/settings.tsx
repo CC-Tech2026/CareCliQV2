@@ -29,6 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { InviteModal } from "@/components/InviteModal";
+import { apiFetch } from "@/lib/api-fetch";
+import { useReAuth } from "@/hooks/useReAuth";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
@@ -172,6 +174,7 @@ interface PendingInvite {
 export default function Settings() {
   const { toast } = useToast();
   const { user, token: authToken } = useAuth();
+  const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.coordinatorOnly || isCoordinator);
 
@@ -234,10 +237,9 @@ export default function Settings() {
     if (!isCoordinator || !authToken) return;
     setLoadingTeam(true);
     try {
-      const headers = { Authorization: `Bearer ${authToken}` };
       const [membersRes, invitesRes] = await Promise.all([
-        fetch("/api/invitations/members", { headers }),
-        fetch("/api/invitations/list", { headers }),
+        apiFetch("/api/invitations/members"),
+        apiFetch("/api/invitations/list"),
       ]);
       if (membersRes.ok) setMembers(await membersRes.json());
       if (invitesRes.ok) setInvites(await invitesRes.json());
@@ -255,10 +257,7 @@ export default function Settings() {
   const handleRevokeInvite = async (id: string) => {
     if (!authToken) return;
     try {
-      await fetch(`/api/invitations/revoke/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      await requireReAuth(() => apiFetch(`/api/invitations/revoke/${id}`, { method: "DELETE" }));
       setInvites((prev) => prev.filter((i) => i.id !== id));
       toast({ title: "Invitation revoked" });
     } catch {
@@ -270,10 +269,7 @@ export default function Settings() {
     if (!authToken) return;
     if (!confirm(`Remove ${name || "this member"} from the organization?`)) return;
     try {
-      await fetch(`/api/invitations/members/${memberId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
+      await requireReAuth(() => apiFetch(`/api/invitations/members/${memberId}`, { method: "DELETE" }));
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
       toast({ title: "Member removed" });
     } catch {
@@ -585,6 +581,7 @@ export default function Settings() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex gap-8 min-h-full">
+      {modal}
 
       {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-52 shrink-0">

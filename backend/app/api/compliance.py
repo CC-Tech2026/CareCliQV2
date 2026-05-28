@@ -90,6 +90,8 @@ async def run_compliance(session_id: str, current_user: dict = Depends(get_curre
 @router.get("/report/{patient_id}")
 async def compliance_report_for_patient(patient_id: str, current_user: dict = Depends(get_current_user)):
     """Get full compliance report for a specific participant."""
+    if current_user.get("role") == "support_worker":
+        raise HTTPException(status_code=403, detail="Use the worker compliance endpoint for scoped compliance data.")
     sessions = await session_service.get_sessions_by_participant(patient_id, current_user)
     scored = [s for s in sessions if s.get("compliance_score") is not None]
     scores = [float(s["compliance_score"]) for s in scored]

@@ -74,6 +74,14 @@ def _supabase_auth_request(
         raise HTTPException(status_code=502, detail="Authentication provider is unavailable.")
 
 
+def _is_auth_user_email_verified(auth_user) -> bool:
+    return bool(
+        getattr(auth_user, "email_confirmed_at", None)
+        or getattr(auth_user, "confirmed_at", None)
+        or getattr(auth_user, "email_verified", False)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Account type → access role mapping
 # ---------------------------------------------------------------------------
@@ -117,8 +125,13 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordResetConfirmRequest(BaseModel):
-    access_token: str
+    access_token: str = ""
+    token_hash: str = ""
     password: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +147,9 @@ async def _get_user_profile(user_id: str) -> dict:
     # Pass 1: select with all new columns (works once migration is applied)
     try:
         result = supabase.table("users").select(
-            "role, full_name, account_type, onboarding_complete, organization_id"
+            "role, full_name, account_type, onboarding_complete, organization_id, "
+            "email_verified, profile_completed, onboarding_completed, "
+            "role_specific_profile_completed, profile_photo_url"
         ).eq("id", user_id).maybe_single().execute()
         if result is not None and result.data:
             return result.data
@@ -147,7 +162,7 @@ async def _get_user_profile(user_id: str) -> dict:
     # Pass 2: base columns only (always available)
     try:
         result = supabase.table("users").select(
-            "role, full_name"
+            "role, full_name, email_verified, onboarding_complete"
         ).eq("id", user_id).maybe_single().execute()
         if result is not None and result.data:
             return result.data
@@ -182,6 +197,10 @@ async def _upsert_user_record(
         **base_payload,
         "account_type": account_type,
         "onboarding_complete": onboarding_complete,
+        "email_verified": bool(extra.get("email_verified")) if extra and "email_verified" in extra else False,
+        "profile_completed": bool(extra.get("profile_completed")) if extra and "profile_completed" in extra else onboarding_complete,
+        "onboarding_completed": bool(extra.get("onboarding_completed")) if extra and "onboarding_completed" in extra else onboarding_complete,
+        "role_specific_profile_completed": bool(extra.get("role_specific_profile_completed")) if extra and "role_specific_profile_completed" in extra else onboarding_complete,
     }
     if extra:
         extended_payload.update(extra)
@@ -233,9 +252,10 @@ async def register(body: RegisterRequest):
     """Create a new user account.
 
     Uses the service-role admin API to create the Supabase Auth user
-    so that the FK constraint (public.users.id → auth.users.id) is
-    satisfied before we upsert the profile row.  Email confirmation is
-    auto-granted for MVP; remove `email_confirm=True` to re-enable it.
+    so that the FK constraint (public.users.id -> auth.users.id) is
+    satisfied before we upsert the profile row. Email verification is
+    not bypassed unless AUTH_AUTO_CONFIRM_EMAIL is explicitly enabled
+    for local/demo environments.
     """
     if body.account_type not in VALID_ACCOUNT_TYPES:
         raise HTTPException(
@@ -249,12 +269,13 @@ async def register(body: RegisterRequest):
     try:
         # Admin create_user guarantees the auth.users row is fully committed
         # before we upsert into public.users, eliminating the FK race condition.
-        result = supabase_admin.auth.admin.create_user({
+        create_payload = {
             "email": body.email,
             "password": body.password,
             "user_metadata": {"full_name": body.full_name},
-            "email_confirm": True,   # auto-confirm for MVP friction-free onboarding
-        })
+            "email_confirm": settings.auth_auto_confirm_email,
+        }
+        result = supabase_admin.auth.admin.create_user(create_payload)
         auth_user = result.user
         if not auth_user:
             raise HTTPException(status_code=400, detail="Registration failed — please try again")
@@ -282,14 +303,35 @@ async def register(body: RegisterRequest):
         full_name=body.full_name,
         account_type=body.account_type,
         onboarding_complete=False,
+        extra={
+            "email_verified": settings.auth_auto_confirm_email,
+            "profile_completed": False,
+            "onboarding_completed": False,
+            "role_specific_profile_completed": False,
+        },
     )
 
+    if not settings.auth_auto_confirm_email:
+        try:
+            redirect_to = f"{settings.frontend_base_url.rstrip('/')}/login?verified=1"
+            _supabase_auth_request(
+                "resend",
+                {
+                    "type": "signup",
+                    "email": body.email,
+                    "options": {"email_redirect_to": redirect_to},
+                },
+                method="POST",
+            )
+        except Exception as exc:
+            logger.warning("Could not send verification email for %s: %s", body.email, exc)
+
     return {
-        "message": "Account created successfully.",
+        "message": "Account created successfully. Verify your email before signing in.",
         "user_id": str(auth_user.id),
         "account_type": body.account_type,
         "role": role,
-        "email_confirmed": True,
+        "email_confirmed": settings.auth_auto_confirm_email,
     }
 
 
@@ -316,6 +358,24 @@ async def login(body: LoginRequest, request: Request):
                 status_code=401,
                 detail="Please verify your email address before signing in.",
             )
+        provider_unavailable_markers = (
+            "no address associated with hostname",
+            "name or service not known",
+            "temporary failure in name resolution",
+            "connection refused",
+            "timed out",
+            "connecterror",
+            "network is unreachable",
+        )
+        if any(marker in msg for marker in provider_unavailable_markers):
+            logger.error("Authentication provider unreachable for %s: %s", body.email, e)
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Authentication provider is unreachable. Check Docker internet/DNS "
+                    "and Supabase configuration, then try again."
+                ),
+            )
         logger.warning(f"Login failed for {body.email}: {e}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -325,6 +385,9 @@ async def login(body: LoginRequest, request: Request):
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
     )
     account_type = profile.get("account_type") or "independent_worker"
+    email_verified = _is_auth_user_email_verified(auth_user)
+    if not email_verified:
+        email_verified = bool(profile.get("email_verified")) and settings.auth_auto_confirm_email
 
     # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
@@ -352,6 +415,11 @@ async def login(body: LoginRequest, request: Request):
     })
 
     await _touch_last_login(str(auth_user.id))
+    if email_verified != bool(profile.get("email_verified")):
+        try:
+            get_supabase_admin().table("users").update({"email_verified": email_verified}).eq("id", str(auth_user.id)).execute()
+        except Exception as e:
+            logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
     return {
         "access_token": token,
@@ -364,6 +432,11 @@ async def login(body: LoginRequest, request: Request):
             "account_type": account_type,
             "organization_id": profile.get("organization_id"),
             "onboarding_complete": bool(onboarding_complete),
+            "email_verified": email_verified,
+            "profile_completed": bool(profile.get("profile_completed")),
+            "onboarding_completed": bool(profile.get("onboarding_completed") or onboarding_complete),
+            "role_specific_profile_completed": bool(profile.get("role_specific_profile_completed")),
+            "profile_photo_url": profile.get("profile_photo_url"),
         },
     }
 
@@ -383,6 +456,9 @@ async def complete_onboarding(
         "account_type": body.account_type,
         "onboarding_data": body.onboarding_data,
         "onboarding_complete": True,
+        "profile_completed": True,
+        "role_specific_profile_completed": True,
+        "onboarding_completed": True,
     }
 
     # For small providers: create an organisation row and link it
@@ -446,11 +522,19 @@ async def request_password_reset(body: PasswordResetRequest):
 async def confirm_password_reset(body: PasswordResetConfirmRequest):
     """Set a new password using the Supabase recovery access token."""
     token = body.access_token.strip()
+    token_hash = body.token_hash.strip()
     password = body.password
-    if not token:
-        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+    if not token and token_hash:
+        verify_result = _supabase_auth_request(
+            "verify",
+            {"type": "recovery", "token_hash": token_hash},
+            method="POST",
+        )
+        token = verify_result.get("access_token") or verify_result.get("session", {}).get("access_token", "")
+    if not token:
+        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
 
     _supabase_auth_request(
         "user",
@@ -459,6 +543,28 @@ async def confirm_password_reset(body: PasswordResetConfirmRequest):
         method="PUT",
     )
     return {"message": "Password updated successfully. You can now sign in."}
+
+
+@router.post("/verification/resend")
+async def resend_verification(body: ResendVerificationRequest):
+    email = body.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    redirect_to = f"{settings.frontend_base_url.rstrip('/')}/login?verified=1"
+    try:
+        _supabase_auth_request(
+            "resend",
+            {
+                "type": "signup",
+                "email": email,
+                "options": {"email_redirect_to": redirect_to},
+            },
+            method="POST",
+        )
+    except HTTPException:
+        # Do not leak whether an account exists.
+        pass
+    return {"message": "If the account exists, a verification email has been sent."}
 
 
 @router.post("/logout")
@@ -481,5 +587,10 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "account_type": current_user.get("account_type") or profile.get("account_type") or "independent_worker",
             "organization_id": profile.get("organization_id") or current_user.get("organization_id"),
             "onboarding_complete": bool(onboarding_complete),
+            "email_verified": bool(profile.get("email_verified")),
+            "profile_completed": bool(profile.get("profile_completed")),
+            "onboarding_completed": bool(profile.get("onboarding_completed") or onboarding_complete),
+            "role_specific_profile_completed": bool(profile.get("role_specific_profile_completed")),
+            "profile_photo_url": profile.get("profile_photo_url"),
         }
     }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health";
@@ -11,6 +11,11 @@ export interface AuthUser {
   role: UserRole;
   account_type: AccountType;
   onboarding_complete: boolean;
+  email_verified?: boolean;
+  profile_completed?: boolean;
+  onboarding_completed?: boolean;
+  role_specific_profile_completed?: boolean;
+  profile_photo_url?: string | null;
   organizationId?: string;
 }
 
@@ -27,6 +32,7 @@ interface AuthContextType {
 
 const TOKEN_KEY = "carescribe_token";
 const USER_KEY = "carescribe_user";
+const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
 // Wire the token getter immediately on module load so API calls always have the latest token
 let _currentToken: string | null = null;
@@ -58,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(REAUTH_TOKEN_KEY);
     setToken(null);
     setUser(null);
   }, []);
@@ -83,6 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         account_type: data.user.account_type || "independent_worker",
         onboarding_complete: data.user.onboarding_complete ?? true,
         organizationId: data.user.organization_id ?? undefined,
+        email_verified: data.user.email_verified ?? false,
+        profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
+        onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
+        role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
+        profile_photo_url: data.user.profile_photo_url ?? null,
       };
       persistSession(data.access_token, authUser);
       return authUser;
@@ -123,6 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           account_type: data.user.account_type || "independent_worker",
           onboarding_complete: data.user.onboarding_complete ?? true,
           organizationId: data.user.organization_id ?? undefined,
+          email_verified: data.user.email_verified ?? false,
+          profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
+          onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
+          role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
+          profile_photo_url: data.user.profile_photo_url ?? null,
         };
         localStorage.setItem(USER_KEY, JSON.stringify(fresh));
         setUser(fresh);
@@ -131,6 +148,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Non-critical: token stored, user profile refresh failed
     }
   }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      clearSession();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login");
+      }
+    };
+    window.addEventListener("carescribe:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("carescribe:unauthorized", handleUnauthorized);
+  }, [clearSession]);
 
   return (
     <AuthContext.Provider

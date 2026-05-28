@@ -3,7 +3,7 @@
 Flow:
   1. Support coordinator calls POST /invitations/create with email + role.
   2. Backend stores invite record with a secure token; returns invite_url.
-  3. Coordinator shares the invite URL with the staff member (copy/email).
+  3. Backend emails the invite link when SMTP is configured; link is also returned.
   4. Staff member opens /accept-invite?token=X in browser.
   5. Frontend calls GET /invitations/validate/{token} to show org + role info.
   6. Staff member sets their name + password.
@@ -17,10 +17,13 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from ..core.config import settings
 from ..core.security import create_access_token, get_current_user
+from ..api.security import require_recent_reauth
+from ..services.email_service import queue_invitation_email
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -69,12 +72,15 @@ def _parse_iso(s: str) -> datetime:
 @router.post("/create", status_code=201)
 async def create_invite(
     body: InviteCreateRequest,
+    background_tasks: BackgroundTasks,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Create an invitation for a new staff member (support coordinator only)."""
     user_role = current_user.get("role", "")
     if user_role not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Only support coordinators can send invitations")
+    require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
     if not org_id:
@@ -129,9 +135,36 @@ async def create_invite(
             raise HTTPException(status_code=500, detail="Failed to create invitation")
 
         invite = result.data[0]
+        invite_url = f"/accept-invite?token={token}"
+        full_invite_url = f"{settings.frontend_base_url.rstrip('/')}{invite_url}"
+        organization_name = None
+        try:
+            org_res = (
+                supabase.table("organizations")
+                .select("organization_name")
+                .eq("id", org_id)
+                .maybe_single()
+                .execute()
+            )
+            if org_res and org_res.data:
+                organization_name = org_res.data.get("organization_name")
+        except Exception as org_error:
+            logger.debug("Could not load organization name for invite email: %s", org_error)
+
+        email_delivery = queue_invitation_email(
+            background_tasks,
+            to_email=email,
+            invite_url=full_invite_url,
+            organization_name=organization_name,
+            role=body.role,
+        )
         logger.info(
-            "Invite created: org=%s email=%s role=%s by=%s",
-            org_id[:8], email, body.role, (current_user.get("sub") or "")[:8],
+            "Invite created: org=%s email=%s role=%s by=%s email_status=%s",
+            org_id[:8],
+            email,
+            body.role,
+            (current_user.get("sub") or "")[:8],
+            email_delivery.get("status"),
         )
         return {
             "id": invite["id"],
@@ -139,7 +172,8 @@ async def create_invite(
             "role": invite["role"],
             "token": token,
             "expires_at": invite["expires_at"],
-            "invite_url": f"/accept-invite?token={token}",
+            "invite_url": invite_url,
+            "email_delivery": email_delivery,
         }
 
     except HTTPException:
@@ -176,11 +210,12 @@ async def list_invites(current_user: dict = Depends(get_current_user)):
 
 
 @router.delete("/revoke/{invite_id}", status_code=204)
-async def revoke_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+async def revoke_invite(invite_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """Revoke (delete) a pending invitation."""
     user_role = current_user.get("role", "")
     if user_role not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
+    require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
     try:
@@ -288,11 +323,13 @@ async def list_members(current_user: dict = Depends(get_current_user)):
 async def update_member_role(
     member_id: str,
     body: dict,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Update a member's role (support coordinator only)."""
     if current_user.get("role") not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
+    require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
     new_role = (body or {}).get("role")
@@ -309,10 +346,11 @@ async def update_member_role(
 
 
 @router.delete("/members/{member_id}", status_code=204)
-async def remove_member(member_id: str, current_user: dict = Depends(get_current_user)):
+async def remove_member(member_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """Deactivate an org member (does not delete their account)."""
     if current_user.get("role") not in COORDINATOR_ROLES:
         raise HTTPException(status_code=403, detail="Access denied")
+    require_recent_reauth(request, current_user)
 
     org_id = current_user.get("organization_id")
     try:
@@ -395,7 +433,13 @@ async def accept_invite(token: str, body: InviteAcceptRequest):
             full_name=body.full_name,
             account_type=account_type,
             onboarding_complete=True,
-            extra={"organization_id": org_id},
+            extra={
+                "organization_id": org_id,
+                "email_verified": True,
+                "profile_completed": False,
+                "onboarding_completed": False,
+                "role_specific_profile_completed": False,
+            },
         )
     except Exception as e:
         logger.error("accept_invite _upsert_user_record error: %s", e)

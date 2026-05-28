@@ -1,4 +1,5 @@
 const TOKEN_KEY = "carescribe_token";
+const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
 export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
@@ -6,5 +7,13 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
-  return fetch(input, { ...init, headers });
+  const reauthToken = localStorage.getItem(REAUTH_TOKEN_KEY);
+  if (reauthToken && !headers.has("x-reauth-token")) {
+    headers.set("x-reauth-token", reauthToken);
+  }
+  const response = await fetch(input, { ...init, headers });
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent("carescribe:unauthorized"));
+  }
+  return response;
 }

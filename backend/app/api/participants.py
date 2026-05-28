@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from ..core.access import is_coordinator_role
 from ..core.security import get_current_user
+from ..api.security import require_recent_reauth
 from ..schemas.participant import (
     GoalsUpdateBody,
     NDISPlanCreate,
@@ -215,6 +216,7 @@ async def update_participant(
 )
 async def delete_participant(
     participant_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -228,6 +230,8 @@ async def delete_participant(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only support coordinators can delete participants",
         )
+
+    require_recent_reauth(request, current_user)
 
     await _require_participant_access(
         participant_id,
