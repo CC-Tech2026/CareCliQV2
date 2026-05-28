@@ -101,7 +101,7 @@ async function apiClinical(text: string): Promise<{ clinical: string; detected_l
   return res.json();
 }
 
-function useDictation(onChange: (val: string) => void) {
+function useDictation(onChange: (val: string) => void, speechLang?: string) {
   const [st, setSt] = useState<DictationState>(INITIAL);
   const recRef = useRef<SpeechRecognitionInstance | null>(null);
   const accumRef = useRef<string>("");
@@ -169,6 +169,9 @@ function useDictation(onChange: (val: string) => void) {
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
+    if (speechLang) {
+      rec.lang = speechLang;
+    }
 
     accumRef.current = "";
 
@@ -208,7 +211,7 @@ function useDictation(onChange: (val: string) => void) {
     rec.start();
     recRef.current = rec;
     setSt((s) => ({ ...s, isListening: true, hasDictated: false }));
-  }, [onChange]);
+  }, [onChange, speechLang]);
 
   const reset = useCallback(() => {
     recRef.current?.stop();
@@ -319,11 +322,12 @@ export interface SmartInputProps extends Omit<InputHTMLAttributes<HTMLInputEleme
   value: string;
   onChange: (val: string) => void;
   containerClassName?: string;
+  speechLang?: string;
 }
 
 export const SmartInput = forwardRef<HTMLInputElement, SmartInputProps>(
-  ({ value, onChange, className, containerClassName, disabled, ...rest }, ref) => {
-    const { st, toggleListening, handleModeClick } = useDictation(onChange);
+  ({ value, onChange, className, containerClassName, disabled, speechLang, ...rest }, ref) => {
+    const { st, toggleListening, handleModeClick } = useDictation(onChange, speechLang);
 
     return (
       <div className={cn("w-full", containerClassName)}>
@@ -361,11 +365,12 @@ export interface SmartTextareaProps extends Omit<TextareaHTMLAttributes<HTMLText
   value: string;
   onChange: (val: string) => void;
   containerClassName?: string;
+  speechLang?: string;
 }
 
 export const SmartTextarea = forwardRef<HTMLTextAreaElement, SmartTextareaProps>(
-  ({ value, onChange, className, containerClassName, rows = 4, disabled, ...rest }, ref) => {
-    const { st, toggleListening, handleModeClick } = useDictation(onChange);
+  ({ value, onChange, className, containerClassName, rows = 4, disabled, speechLang, ...rest }, ref) => {
+    const { st, toggleListening, handleModeClick } = useDictation(onChange, speechLang);
     const innerRef = useRef<HTMLTextAreaElement>(null);
 
     const setRefs = useCallback(
