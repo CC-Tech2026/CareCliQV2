@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
-from ..core.access import is_coordinator_role
+from ..core.access import is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.incident import IncidentCreate, IncidentUpdate
 from ..services import audit_service, incident_service, participant_service, session_service
@@ -25,15 +25,31 @@ async def list_incidents(
         participant = await participant_service.get_participant_by_id(participant_id, user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
+
+    # Support workers only see incidents they created — not all incidents for
+    # their allocated participants. Coordinators and allied health see the full
+    # org scope (allied health are further filtered by participant allocation in
+    # the service layer).
+    reporter_id = user.get("sub") if is_support_worker(user) else None
+
     return await incident_service.get_all_incidents(
-        limit, status, severity, participant_id, org_id=org_id, current_user=user
+        limit, status, severity, participant_id,
+        org_id=org_id,
+        reporter_id=reporter_id,
+        current_user=user,
     )
 
 
 @router.get("/stats")
 async def get_stats(user: dict = Depends(get_current_user)):
     org_id = user.get("organization_id")
-    return await incident_service.get_incident_stats(org_id=org_id, current_user=user)
+    # Support workers only count their own incidents in stats as well
+    reporter_id = user.get("sub") if is_support_worker(user) else None
+    return await incident_service.get_incident_stats(
+        org_id=org_id,
+        reporter_id=reporter_id,
+        current_user=user,
+    )
 
 
 @router.get("/participant/{participant_id}")

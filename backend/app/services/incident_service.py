@@ -604,6 +604,7 @@ async def update_incident(
 
 async def get_incident_stats(
     org_id: Optional[str] = None,
+    reporter_id: Optional[str] = None,
     current_user: Optional[dict] = None,
 ) -> dict[str, int]:
     supabase = get_supabase_admin()
@@ -621,10 +622,11 @@ async def get_incident_stats(
         )
 
         if org_id:
-            query = query.eq(
-                "organization_id",
-                org_id,
-            )
+            query = query.eq("organization_id", org_id)
+
+        # Support workers are pre-filtered to their own incidents at the SQL level
+        if reporter_id:
+            query = query.eq("user_id", reporter_id)
 
         result = query.execute()
 
@@ -646,7 +648,9 @@ async def get_incident_stats(
 
     now = datetime.now(timezone.utc)
 
-    if current_user and not is_coordinator_role(current_user):
+    # Allied health: filter to their allocated participants (support workers are
+    # already filtered by reporter_id at SQL level so skip participant-scope pass)
+    if current_user and not is_coordinator_role(current_user) and not reporter_id:
         visible_participant_ids: set[str] = set()
         try:
             from . import participant_service

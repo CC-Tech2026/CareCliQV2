@@ -40,8 +40,8 @@ _SESSION_MESSAGES_BANNER = """
 """
 
 
-async def _check_column(supabase, table: str, columns: str, label: str) -> bool:
-    """Probe a table select.  Returns True if columns exist, False otherwise."""
+def _sync_check_column(supabase, table: str, columns: str) -> bool:
+    """Probe a table select synchronously. Returns True if columns exist."""
     try:
         supabase.table(table).select(columns).limit(1).execute()
         return True
@@ -49,138 +49,65 @@ async def _check_column(supabase, table: str, columns: str, label: str) -> bool:
         err = str(e)
         if "does not exist" in err or "42703" in err or "PGRST" in err:
             return False
-        logger.warning(f"Could not verify {label}: {e}")
-        return True   # assume OK on unknown errors
+        return True  # assume OK on unknown errors
 
 
 async def _apply_startup_migrations():
-    """Verify schema on startup, set migration_state flags, print banners for missing pieces."""
+    """Verify schema on startup in parallel, set migration_state flags."""
+    import asyncio
     try:
         from .services.supabase_client import get_supabase_admin
         supabase = get_supabase_admin()
 
-        # --- sessions structured note columns ---
-        ok = await _check_column(
-            supabase, "sessions",
-            "activities_performed, outcomes, participant_response, progress_toward_goals",
-            "sessions structured note columns",
+        # Define all probes as (flag_name, table, columns, ok_msg, warn_msg)
+        _PROBES = [
+            ("sessions_notes",       "sessions",                "activities_performed, outcomes, participant_response, progress_toward_goals", "sessions: structured note columns OK",  "sessions: structured note columns missing"),
+            ("sessions_rp",          "sessions",                "restrictive_practice_detected, compliance_flags",                             None,                                    None),
+            ("biological_sex",       "patients",                "biological_sex",                                                              "patients.biological_sex column OK",     _BIOLOGICAL_SEX_BANNER),
+            ("users_onboarding",     "users",                   "account_type, onboarding_complete, organization_id",                          "users: onboarding columns OK",          _USERS_COLUMNS_BANNER),
+            ("session_messages",     "session_messages",        "id, session_id, message_type, content",                                       "session_messages table OK",             _SESSION_MESSAGES_BANNER),
+            ("organizations",        "organizations",           "id, owner_user_id, organization_name",                                        "organizations table OK",                "organizations table missing — run backend/supabase_patch_missing_tables.sql"),
+            ("org_members",          "organization_members",    "id, user_id, organization_id, role",                                          "organization_members table OK",         "organization_members table missing — run backend/supabase_patch_missing_tables.sql"),
+            ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
+            ("patient_goals",        "patient_goals",           "id, plan_id, description",                                                    "patient_goals table OK",                "patient_goals table missing — run backend/supabase_setup.sql"),
+            ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
+        ]
+
+        # Fire all probes in parallel via thread pool (supabase client is sync)
+        results = await asyncio.gather(
+            *[
+                asyncio.to_thread(_sync_check_column, supabase, table, columns)
+                for _, table, columns, _, _ in _PROBES
+            ],
+            return_exceptions=True,
         )
-        if ok:
-            logger.info("sessions: structured note columns OK")
-        else:
-            logger.warning(
-                "sessions: structured note columns missing — "
-                "run backend/supabase_setup.sql to add them."
-            )
 
-        # --- sessions RP + compliance columns ---
-        await _check_column(
-            supabase, "sessions",
-            "restrictive_practice_detected, compliance_flags",
-            "sessions compliance columns",
-        )
+        for (key, _, _, ok_msg, warn_msg), result in zip(_PROBES, results):
+            ok = result if isinstance(result, bool) else True
 
-        # --- patients.biological_sex ---
-        ok = await _check_column(supabase, "patients", "biological_sex", "patients.biological_sex")
-        if ok:
-            logger.info("patients.biological_sex column OK")
-            migration_state.biological_sex_column_missing = False
-        else:
-            migration_state.biological_sex_column_missing = True
-            logger.warning(_BIOLOGICAL_SEX_BANNER)
+            if ok_msg:
+                if ok:
+                    logger.info(ok_msg)
+                elif warn_msg:
+                    logger.warning(warn_msg)
 
-        # --- users onboarding columns ---
-        ok = await _check_column(
-            supabase, "users",
-            "account_type, onboarding_complete, organization_id",
-            "users onboarding columns",
-        )
-        if ok:
-            logger.info("users: onboarding columns OK")
-            migration_state.users_onboarding_columns_missing = False
-        else:
-            migration_state.users_onboarding_columns_missing = True
-            logger.warning(_USERS_COLUMNS_BANNER)
-
-        # --- session_messages table ---
-        ok = await _check_column(
-            supabase, "session_messages",
-            "id, session_id, message_type, content",
-            "session_messages table",
-        )
-        if ok:
-            logger.info("session_messages table OK")
-            migration_state.session_messages_table_missing = False
-        else:
-            migration_state.session_messages_table_missing = True
-            logger.warning(_SESSION_MESSAGES_BANNER)
-
-        # --- organizations table ---
-        ok = await _check_column(
-            supabase, "organizations",
-            "id, owner_user_id, organization_name",
-            "organizations table",
-        )
-        if ok:
-            logger.info("organizations table OK")
-            migration_state.organizations_table_missing = False
-        else:
-            migration_state.organizations_table_missing = True
-            logger.warning("organizations table missing — run backend/supabase_setup.sql")
-
-        # --- organization_members table ---
-        ok = await _check_column(
-            supabase, "organization_members",
-            "id, user_id, organization_id, role",
-            "organization_members table",
-        )
-        if ok:
-            logger.info("organization_members table OK")
-            migration_state.organization_members_table_missing = False
-        else:
-            migration_state.organization_members_table_missing = True
-            logger.warning(
-                "organization_members table missing — "
-                "run backend/supabase_patch_missing_tables.sql"
-            )
-
-        # --- invitations table ---
-        ok = await _check_column(
-            supabase, "invitations",
-            "id, organization_id, email, token, expires_at",
-            "invitations table",
-        )
-        if ok:
-            logger.info("invitations table OK")
-            migration_state.invitations_table_missing = False
-        else:
-            migration_state.invitations_table_missing = True
-            logger.warning(
-                "invitations table missing — "
-                "run backend/supabase_patch_missing_tables.sql"
-            )
-
-        # --- patient_goals table ---
-        ok = await _check_column(supabase, "patient_goals", "id, plan_id, description", "patient_goals table")
-        if ok:
-            logger.info("patient_goals table OK")
-            migration_state.patient_goals_table_missing = False
-        else:
-            migration_state.patient_goals_table_missing = True
-            logger.warning("patient_goals table missing — run backend/supabase_setup.sql")
-
-        # --- practitioner_allocations table ---
-        ok = await _check_column(
-            supabase, "practitioner_allocations",
-            "id, patient_id, user_id, allocated_role",
-            "practitioner_allocations table",
-        )
-        if ok:
-            logger.info("practitioner_allocations table OK")
-            migration_state.practitioner_allocations_table_missing = False
-        else:
-            migration_state.practitioner_allocations_table_missing = True
-            logger.warning("practitioner_allocations table missing — run backend/supabase_setup.sql")
+            # Update migration_state flags
+            if key == "biological_sex":
+                migration_state.biological_sex_column_missing = not ok
+            elif key == "users_onboarding":
+                migration_state.users_onboarding_columns_missing = not ok
+            elif key == "session_messages":
+                migration_state.session_messages_table_missing = not ok
+            elif key == "organizations":
+                migration_state.organizations_table_missing = not ok
+            elif key == "org_members":
+                migration_state.organization_members_table_missing = not ok
+            elif key == "invitations":
+                migration_state.invitations_table_missing = not ok
+            elif key == "patient_goals":
+                migration_state.patient_goals_table_missing = not ok
+            elif key == "practitioner_allocs":
+                migration_state.practitioner_allocations_table_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")

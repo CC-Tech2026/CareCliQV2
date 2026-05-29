@@ -10,7 +10,7 @@ name = "API Server"
 paths = ["/api"]
 
 [services.development]
-run = "pnpm --filter @workspace/api-server run dev"
+run = "PORT=8080 node --enable-source-maps dist/index.mjs"
 
 [services.production]
 

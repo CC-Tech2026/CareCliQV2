@@ -224,6 +224,44 @@ async def _touch_last_login(user_id: str) -> None:
         logger.debug(f"Could not update last_login for {user_id}: {e}")
 
 
+async def _resolve_org_member_role(user_id: str, org_id: str, fallback_role: str) -> str:
+    """Upsert into organization_members and return the authoritative role.
+
+    If a membership already exists we trust its role (admin may have changed it
+    in the Team panel). If no row exists (first login after onboarding), we
+    create one with the fallback_role derived from users.role.
+    Returns the final role to embed in the JWT.
+    """
+    try:
+        supabase = get_supabase_admin()
+
+        # Look up an existing active membership first
+        existing = (
+            supabase.table("organization_members")
+            .select("role")
+            .eq("user_id", user_id)
+            .eq("organization_id", org_id)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return existing.data[0].get("role") or fallback_role
+
+        # No row yet — create it (idempotent via UNIQUE constraint)
+        supabase.table("organization_members").insert({
+            "user_id": user_id,
+            "organization_id": org_id,
+            "role": fallback_role,
+            "is_active": True,
+        }).execute()
+        return fallback_role
+
+    except Exception as e:
+        logger.debug(f"_resolve_org_member_role({user_id}): {e}")
+        return fallback_role
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -325,6 +363,7 @@ async def login(body: LoginRequest, request: Request):
         auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
     )
     account_type = profile.get("account_type") or "independent_worker"
+    organization_id = profile.get("organization_id")
 
     # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
@@ -343,12 +382,19 @@ async def login(body: LoginRequest, request: Request):
             onboarding_complete=True,  # treat as complete since they pre-dated onboarding
         )
 
+    # T001: Resolve authoritative role from organization_members.
+    # If the user belongs to an org, their membership row is the source of truth
+    # (an admin may have changed their role in the Team panel since last login).
+    # This also seeds the membership row on first login after onboarding.
+    if organization_id:
+        role = await _resolve_org_member_role(str(auth_user.id), organization_id, role)
+
     token = create_access_token({
         "sub": str(auth_user.id),
         "email": str(auth_user.email),
         "role": role,
         "account_type": account_type,
-        "organization_id": profile.get("organization_id"),
+        "organization_id": organization_id,
     })
 
     await _touch_last_login(str(auth_user.id))
@@ -362,7 +408,7 @@ async def login(body: LoginRequest, request: Request):
             "full_name": full_name,
             "role": role,
             "account_type": account_type,
-            "organization_id": profile.get("organization_id"),
+            "organization_id": organization_id,
             "onboarding_complete": bool(onboarding_complete),
         },
     }
