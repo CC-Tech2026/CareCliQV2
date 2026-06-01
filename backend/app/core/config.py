@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    google_cloud_project_id: str = os.environ.get("GOOGLE_CLOUD_PROJECT_ID", "")
+    google_application_credentials: str = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    google_translate_location: str = os.environ.get("GOOGLE_TRANSLATE_LOCATION", "global")
     frontend_base_url: str = os.environ.get(
         "FRONTEND_BASE_URL",
         os.environ.get("FRONTEND_URL", os.environ.get("APP_BASE_URL", "http://localhost:3000")),

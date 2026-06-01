@@ -9,6 +9,8 @@ services:
     environment:
       PYTHONPATH: /app
       PORT: "8000"
+    volumes:
+      - ./secrets/google-translate-key.json:/app/secrets/google-translate-key.json:ro
     ports:
       - "8000:8000"
     healthcheck:

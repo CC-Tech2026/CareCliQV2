@@ -148,6 +148,9 @@ async def translate_text(body: TranslateRequest, current_user: dict = Depends(ge
     except ai_service.TranslationProviderFailure as e:
         logger.error("Translation provider failed: %s", e)
         raise HTTPException(status_code=502, detail=str(e))
+    except ai_service.UnsupportedTranslationLanguage as e:
+        logger.warning("Unsupported translation language: %s", e)
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Translation error: {str(e)}")
         raise HTTPException(status_code=500, detail="Translation failed. Please try again.")

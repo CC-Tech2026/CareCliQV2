@@ -63,12 +63,15 @@ const INITIAL: DictationState = {
 };
 
 const LANG_LABELS: Record<string, string> = {
-  en: "EN", fr: "FR", es: "ES", de: "DE", it: "IT", pt: "PT",
-  nl: "NL", sv: "SV", no: "NO", da: "DA", pl: "PL", cs: "CS",
-  ru: "RU", uk: "UA", tr: "TR", el: "EL", zh: "ZH", ja: "JA",
-  ko: "KO", ar: "AR", he: "HE", hi: "HI", ur: "UR", bn: "BN",
-  th: "TH", vi: "VI", id: "ID", ms: "MS", tl: "TL", km: "KM",
-  lo: "LO", sw: "SW", zu: "ZU", am: "AM", so: "SO",
+  en: "EN",
+  hi: "HI",
+  tl: "TL",
+  ne: "NE",
+  ar: "AR",
+  sw: "SW",
+  zh: "ZH",
+  vi: "VI",
+  pa: "PA",
 };
 
 function langLabel(code: string): string {

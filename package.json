@@ -5,6 +5,7 @@
   "scripts": {
     "preinstall": "node scripts/verify-pnpm-install.cjs",
     "build": "corepack pnpm run typecheck && corepack pnpm -r --filter \"@workspace/api-server\" --filter \"@workspace/frontend\" --if-present run build",
+    "test:translation": "node scripts/verify-translation-languages.cjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },

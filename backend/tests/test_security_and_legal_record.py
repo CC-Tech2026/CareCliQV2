@@ -8,13 +8,16 @@ from backend.app.core.config import settings
 from backend.app.core.security import create_access_token
 from backend.app.api.security import require_recent_reauth
 from backend.app.api.auth import _is_auth_user_email_verified
+from backend.app.api import ai as ai_api
 from backend.app.services import ai_service
 from backend.app.services import billing_service
+from backend.app.services import google_translate_service
 from backend.app.services.compliance_engine import ComplianceBlockedError, run_compliance_check
 from backend.app.services.documentation_normalization_service import (
     normalize_documentation_for_legal_record,
 )
 from backend.app.services.email_service import delivery_state, queue_invitation_email
+from backend.app.services.supported_languages import normalize_language_code, is_supported_language
 
 
 ORG_A = "11111111-1111-1111-1111-111111111111"
@@ -83,6 +86,28 @@ class AccessControlTests(unittest.TestCase):
 
 
 class LegalRecordNormalizationTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self._project_id = settings.google_cloud_project_id
+        self._credentials = settings.google_application_credentials
+        self._google_translate = google_translate_service._translate_with_google_sync
+        settings.google_cloud_project_id = "carecribe-test-project"
+        settings.google_application_credentials = ""
+
+    def tearDown(self):
+        settings.google_cloud_project_id = self._project_id
+        settings.google_application_credentials = self._credentials
+        google_translate_service._translate_with_google_sync = self._google_translate
+
+    def _mock_google(self, translated: str, detected: str):
+        def fake_google(text: str, source_code: str | None, project_id: str, location: str):
+            return {
+                "translated": translated,
+                "detected_language": detected or source_code,
+                "response_metadata": {"mocked": True},
+            }
+
+        google_translate_service._translate_with_google_sync = fake_google
+
     async def test_english_note_becomes_legal_record(self):
         result = await normalize_documentation_for_legal_record(
             "The participant completed a meal preparation task with support."
@@ -90,55 +115,82 @@ class LegalRecordNormalizationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["translation_status"], "not_required")
         self.assertEqual(result["translated_english_note"], result["compliance_input_text"])
 
-    async def test_supported_non_english_note_is_translated(self):
-        original = ai_service.translate_to_english
+    async def test_hindi_note_is_translated_with_google_provider(self):
+        self._mock_google("The participant completed the activity.", "hi")
+        result = await normalize_documentation_for_legal_record(
+            "प्रतिभागी ने गतिविधि पूरी की।",
+            requested_language="hi",
+        )
 
-        async def fake_translate(text: str, source_language: str = "auto"):
-            return {
-                "translated": "The participant completed the activity.",
-                "detected_language": "fr",
-                "confidence": 0.96,
-                "provider": "openai",
-                "model": "gpt-4o-mini",
-            }
-
-        ai_service.translate_to_english = fake_translate
-        try:
-            result = await normalize_documentation_for_legal_record(
-                "Le participant a termine l'activite.",
-                requested_language="fr",
-            )
-        finally:
-            ai_service.translate_to_english = original
-
-        self.assertEqual(result["original_language_input"], "Le participant a termine l'activite.")
-        self.assertEqual(result["detected_language"], "fr")
+        self.assertEqual(result["original_language_input"], "प्रतिभागी ने गतिविधि पूरी की।")
+        self.assertEqual(result["detected_language"], "hi")
         self.assertEqual(result["translated_english_note"], "The participant completed the activity.")
         self.assertEqual(result["translation_status"], "translated")
+        self.assertEqual(result["translation_provider"], "google_cloud_translate")
+
+    async def test_nepali_and_punjabi_are_supported(self):
+        self.assertTrue(is_supported_language("nepali"))
+        self.assertTrue(is_supported_language("punjabi"))
+        self.assertEqual(normalize_language_code("nepali"), "ne")
+        self.assertEqual(normalize_language_code("panjabi"), "pa")
+
+    async def test_mandarin_normalizes_to_zh_cn(self):
+        self.assertEqual(normalize_language_code("zh"), "zh-CN")
+        self.assertEqual(normalize_language_code("zh_CN"), "zh-CN")
+        self.assertEqual(normalize_language_code("mandarin"), "zh-CN")
 
     async def test_unsupported_language_blocks_compliance(self):
         result = await normalize_documentation_for_legal_record("Test", requested_language="xx")
         self.assertEqual(result["translation_status"], "unsupported")
         self.assertIsNone(result["compliance_input_text"])
 
-    async def test_translation_failure_blocks_compliance(self):
-        original = ai_service.translate_to_english
+    async def test_detected_unsupported_language_blocks_compliance(self):
+        self._mock_google("Bonjour", "fr")
+        result = await normalize_documentation_for_legal_record("नमस्ते", requested_language="auto")
+        self.assertEqual(result["translation_status"], "unsupported")
+        self.assertIsNone(result["compliance_input_text"])
 
-        async def failing_translate(text: str, source_language: str = "auto"):
+    async def test_translation_failure_blocks_compliance(self):
+        def failing_translate(text: str, source_code: str | None, project_id: str, location: str):
             raise RuntimeError("provider unavailable")
 
-        ai_service.translate_to_english = failing_translate
-        try:
-            result = await normalize_documentation_for_legal_record("Bonjour", requested_language="fr")
-        finally:
-            ai_service.translate_to_english = original
+        google_translate_service._translate_with_google_sync = failing_translate
+        result = await normalize_documentation_for_legal_record("नमस्ते", requested_language="hi")
 
         self.assertEqual(result["translation_status"], "failed")
         self.assertIsNone(result["compliance_input_text"])
 
+    async def test_translate_endpoint_returns_google_provider(self):
+        self._mock_google("The participant had lunch.", "hi")
+        body = ai_api.TranslateRequest(text="प्रतिभागी ने दोपहर का भोजन किया।", source_language="hi")
+        result = await ai_api.translate_text(body, current_user={"sub": WORKER_ID})
+        self.assertEqual(result["provider"], "google_cloud_translate")
+        self.assertEqual(result["model"], "google-cloud-translate-v3")
+
+    def test_translation_path_is_google_service_only(self):
+        self.assertEqual(
+            ai_service.translate_to_english.__module__,
+            "backend.app.services.google_translate_service",
+        )
+
     def test_raw_source_direct_compliance_is_rejected(self):
         with self.assertRaises(ComplianceBlockedError):
             run_compliance_check({"notes": "Bonjour", "translation_status": "pending"})
+
+
+class ClinicalRewriteTests(unittest.IsolatedAsyncioTestCase):
+    async def test_placeholder_openai_key_uses_safe_formatter(self):
+        original_key = settings.openai_api_key
+        settings.openai_api_key = "your-openai-api-key"
+        try:
+            result = await ai_service.clinical_rewrite("Participant practised meal preparation.")
+        finally:
+            settings.openai_api_key = original_key
+
+        self.assertEqual(result["provider"], "deterministic_ndis_formatter")
+        self.assertTrue(result["fallback_used"])
+        self.assertIn("Participant practised meal preparation.", result["clinical"])
+        self.assertIn("Not specified in the source note.", result["clinical"])
 
 
 class EmailDeliveryTests(unittest.TestCase):

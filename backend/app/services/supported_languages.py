@@ -5,39 +5,58 @@ from __future__ import annotations
 
 SUPPORTED_LANGUAGES: dict[str, str] = {
     "en": "English",
-    "es": "Spanish",
-    "fr": "French",
+    "hi": "Hindi",
+    "tl": "Tagalog",
+    "ne": "Nepali",
     "ar": "Arabic",
     "sw": "Swahili",
-    "zh": "Chinese",
-    "hi": "Hindi",
-    "pt": "Portuguese",
-    "de": "German",
-    "it": "Italian",
-    "ja": "Japanese",
-    "ko": "Korean",
+    "zh-CN": "Mandarin",
     "vi": "Vietnamese",
-    "tl": "Tagalog",
-    "ur": "Urdu",
-    "fa": "Persian",
-    "ru": "Russian",
-    "uk": "Ukrainian",
-    "nl": "Dutch",
-    "tr": "Turkish",
-    "id": "Indonesian",
-    "ms": "Malay",
-    "th": "Thai",
-    "pl": "Polish",
-    "ro": "Romanian",
-    "el": "Greek",
+    "pa": "Punjabi",
+}
+
+LANGUAGE_ALIASES: dict[str, str] = {
+    "auto": "auto",
+    "detect": "auto",
+    "auto-detect": "auto",
+    "autodetect": "auto",
+    "english": "en",
+    "hindi": "hi",
+    "tagalog": "tl",
+    "fil": "tl",
+    "filipino": "tl",
+    "nepali": "ne",
+    "arabic": "ar",
+    "swahili": "sw",
+    "zh": "zh-CN",
+    "zh-cn": "zh-CN",
+    "zh_cn": "zh-CN",
+    "cmn": "zh-CN",
+    "mandarin": "zh-CN",
+    "chinese": "zh-CN",
+    "vietnamese": "vi",
+    "punjabi": "pa",
+    "panjabi": "pa",
 }
 
 
 def normalize_language_code(value: str | None) -> str | None:
     if not value:
         return None
-    code = value.strip().lower().replace("_", "-").split("-")[0]
-    return code or None
+
+    raw = value.strip()
+    if not raw:
+        return None
+
+    alias_key = raw.lower().replace("_", "-")
+    if alias_key in LANGUAGE_ALIASES:
+        return LANGUAGE_ALIASES[alias_key]
+
+    if alias_key.startswith("zh-"):
+        return "zh-CN"
+
+    base = alias_key.split("-")[0]
+    return LANGUAGE_ALIASES.get(base, base)
 
 
 def is_supported_language(value: str | None) -> bool:

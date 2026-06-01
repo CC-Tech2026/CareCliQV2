@@ -24,11 +24,12 @@ function friendlyTranslationError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error || "Translation failed.");
   const lower = message.toLowerCase();
   if (
-    lower.includes("api key") ||
-    lower.includes("authorization header") ||
+    lower.includes("google cloud translate is not configured") ||
+    lower.includes("credentials") ||
+    lower.includes("project_id") ||
     lower.includes("translation provider is not configured")
   ) {
-    return "Translation provider is not configured on the backend. Add OPENAI_API_KEY or LIBRETRANSLATE_URL and restart the backend.";
+    return "Google Cloud Translate is not configured on the backend. Set GOOGLE_CLOUD_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS, then restart the backend.";
   }
   if (lower.includes("translation provider failed")) {
     return "Translation provider failed. Check the backend translation settings and retry.";
@@ -76,7 +77,7 @@ export async function translateToEnglish(
       detectedLanguage: data.detected_language || data.detectedLanguage || "en",
       confidence: Number(data.confidence ?? 0.95),
       status: translated === text.trim() ? "not_required" : "translated",
-      provider: data.provider || "openai",
+      provider: data.provider || "google_cloud_translate",
       metadata: data.metadata || {},
       error: null,
     };

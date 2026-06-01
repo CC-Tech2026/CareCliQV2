@@ -134,6 +134,36 @@ Create these buckets in Supabase Storage:
 
 The backend uses the Supabase service role for uploads. For production, keep the service role key server-side only.
 
+## Google Cloud Translation
+
+Legal-record translation uses Google Cloud Translation v3 only. Do not configure
+any alternate provider, browser translation, or frontend API keys for
+legal/compliance translation.
+
+1. In Google Cloud, enable the Cloud Translation API for the production project.
+2. Create a service account with permission to call Cloud Translation.
+3. Download the JSON key onto the backend server only, for example:
+
+```text
+/secure/carescribe/google-credentials.json
+```
+
+4. Never commit the JSON key. The repo ignores `google-credentials*.json`,
+`service-account*.json`, and `*google*.json`.
+5. Set these backend environment variables and restart the backend:
+
+```env
+GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/secure/carescribe/google-credentials.json
+GOOGLE_TRANSLATE_LOCATION=global
+```
+
+Supported legal-record translation languages are exactly:
+
+```text
+English, Hindi, Tagalog, Nepali, Arabic, Swahili, Mandarin, Vietnamese, Punjabi
+```
+
 ## Supabase Auth Configuration
 
 In Supabase Dashboard, open Authentication > URL Configuration.
@@ -174,6 +204,9 @@ AUTH_AUTO_CONFIRM_EMAIL=false
 REAUTH_TOKEN_EXPIRE_MINUTES=10
 VITE_IDLE_TIMEOUT_MINUTES=15
 VITE_IDLE_WARNING_SECONDS=120
+GOOGLE_CLOUD_PROJECT_ID=your-google-cloud-project-id
+GOOGLE_APPLICATION_CREDENTIALS=/secure/carescribe/google-credentials.json
+GOOGLE_TRANSLATE_LOCATION=global
 ```
 
 For automatic Google Workspace/Gmail invite email:

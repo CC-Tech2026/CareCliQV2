@@ -7,25 +7,71 @@ to be NDIS-compliant, person-centred, and audit-ready.
 from openai import OpenAI
 from ..core.config import settings
 import json
-import os
-import urllib.request
 import logging
+from .google_translate_service import (
+    TranslationProviderFailure,
+    TranslationProviderUnavailable,
+    UnsupportedTranslationLanguage,
+    translate_to_english,
+)
 
 logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=settings.openai_api_key)
 
 
-class TranslationProviderUnavailable(RuntimeError):
-    """Raised when no server-side translation provider is configured."""
-
-
-class TranslationProviderFailure(RuntimeError):
-    """Raised when a configured translation provider cannot translate."""
-
-
 BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
 LEGAL_RECORD_REQUIRED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
+
+
+def _has_real_openai_key() -> bool:
+    """Return true only when optional OpenAI-backed helpers are actually configured."""
+    key = (settings.openai_api_key or "").strip()
+    if not key:
+        return False
+    lower = key.lower()
+    placeholder_markers = ("your-", "replace-", "changeme", "example", "placeholder")
+    if any(marker in lower for marker in placeholder_markers):
+        return False
+    return key.startswith("sk-")
+
+
+def _fallback_clinical_rewrite(text: str) -> dict:
+    """Format the worker's own words without inventing facts when optional AI is unavailable."""
+    cleaned = " ".join(str(text or "").split())
+    if not cleaned:
+        return {
+            "clinical": "",
+            "translated": "",
+            "detected_language": "en",
+            "provider": "deterministic_ndis_formatter",
+        }
+
+    clinical = "\n".join(
+        [
+            "Activities Performed",
+            f"- {cleaned}",
+            "",
+            "Participant Response",
+            "- Not specified in the source note.",
+            "",
+            "Outcomes",
+            "- Not specified in the source note.",
+            "",
+            "Progress Toward NDIS Goals",
+            "- Select and link the relevant NDIS goal before finalising this record.",
+            "",
+            "Risk / Incident Flags",
+            "- No additional risk or incident details were added by the formatter.",
+        ]
+    )
+    return {
+        "clinical": clinical,
+        "translated": clinical,
+        "detected_language": "en",
+        "provider": "deterministic_ndis_formatter",
+        "fallback_used": True,
+    }
 
 
 def _legal_record_text_or_raise(session_data: dict) -> str:
@@ -127,39 +173,6 @@ def get_anthropic_client():
     except Exception as e:
         logger.warning(f"Failed to create Anthropic client: {e}")
         return None
-
-
-# ---------------------------------------------------------------------------
-# LibreTranslate helper
-# ---------------------------------------------------------------------------
-
-_LIBRETRANSLATE_URL = os.getenv("LIBRETRANSLATE_URL", "").rstrip("/")
-
-
-def _libretranslate_sync(text: str) -> dict:
-    """Try LibreTranslate via LIBRETRANSLATE_URL env var. Raises on failure."""
-    if not _LIBRETRANSLATE_URL:
-        raise RuntimeError("LIBRETRANSLATE_URL not configured")
-    payload = json.dumps({"q": text, "source": "auto", "target": "en", "format": "text"}).encode()
-    req = urllib.request.Request(
-        f"{_LIBRETRANSLATE_URL}/translate",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        data = json.loads(resp.read())
-    detected = data.get("detectedLanguage", {}).get("language", "")
-    translated_text = (data.get("translatedText") or "").strip()
-    if not translated_text:
-        raise RuntimeError("LibreTranslate returned empty translation")
-    return {
-        "translated": translated_text,
-        "detected_language": detected or "en",
-        "confidence": data.get("detectedLanguage", {}).get("confidence", 0.9),
-        "provider": "libretranslate",
-        "model": None,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -664,88 +677,17 @@ Write in plain English. Be specific about what information is actually missing. 
 
 
 # ---------------------------------------------------------------------------
-# Translation & clinical rewrite
+# Clinical rewrite
 # ---------------------------------------------------------------------------
-
-async def translate_to_english(text: str, source_language: str = "auto") -> dict:
-    """Translate text into fluent English.
-
-    Raises when no provider can produce an English translation. Callers must not
-    silently save raw non-English text as the legal record.
-    """
-    if not text or not text.strip():
-        return {
-            "translated": "",
-            "detected_language": "en",
-            "confidence": 1.0,
-            "provider": "none",
-            "model": None,
-        }
-
-    try:
-        return _libretranslate_sync(text)
-    except Exception as libre_exc:
-        logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
-
-    if not (settings.openai_api_key or "").strip():
-        raise TranslationProviderUnavailable(
-            "Translation provider is not configured. Add OPENAI_API_KEY or LIBRETRANSLATE_URL on the backend."
-        )
-
-    lang_hint = (
-        f"The source language is {source_language}."
-        if source_language != "auto"
-        else "Detect the source language automatically."
-    )
-
-    prompt = f"""You are a multilingual clinical translator.
-{lang_hint}
-
-Translate the following text into fluent, natural English. Preserve clinical and medical meaning exactly. Do not paraphrase — only translate.
-
-Input: {text}
-
-Respond with a JSON object:
-{{
-  "translated": "the English translation",
-  "detected_language": "ISO 639-1 language code of the source text (e.g. fr, es, zh)"
-}}"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            max_tokens=500,
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
-    except Exception as exc:
-        logger.error("OpenAI translation provider failed", exc_info=True)
-        raise TranslationProviderFailure(
-            "Translation provider failed. Check backend translation configuration."
-        ) from exc
-    result = json.loads(response.choices[0].message.content)
-    translated = (result.get("translated") or "").strip()
-    detected = (result.get("detected_language") or "").strip().lower()
-    if not translated or not detected:
-        raise RuntimeError("OpenAI translation returned incomplete data")
-    return {
-        "translated": translated,
-        "detected_language": detected,
-        "confidence": 0.95,
-        "provider": "openai",
-        "model": "gpt-4o-mini",
-        "fallback_used": bool(_LIBRETRANSLATE_URL),
-    }
-
 
 async def clinical_rewrite(text: str) -> dict:
     """Rewrite dictated or informal text into structured NDIS clinical documentation."""
     if not text or not text.strip():
-        return {"clinical": "", "translated": "", "detected_language": "en"}
+        return _fallback_clinical_rewrite("")
+
+    if not _has_real_openai_key():
+        logger.info("OpenAI clinical rewrite is not configured; using deterministic NDIS formatter.")
+        return _fallback_clinical_rewrite(text)
 
     prompt = f"""You are a clinical documentation specialist for NDIS providers in Australia.
 
@@ -763,24 +705,31 @@ Input: {text}
 Respond with a JSON object:
 {{
   "clinical": "the clinical rewrite in professional NDIS documentation style",
-  "detected_language": "ISO 639-1 language code of the input (e.g. en, fr, zh)"
+  "detected_language": "ISO language code of the input (e.g. en, hi, zh-CN)"
 }}"""
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=600,
-        temperature=0.2,
-        response_format={"type": "json_object"},
-    )
-    result = json.loads(response.choices[0].message.content)
-    return {
-        "clinical": result.get("clinical", text),
-        "detected_language": result.get("detected_language", "en"),
-    }
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=600,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return {
+            "clinical": result.get("clinical", text),
+            "translated": result.get("clinical", text),
+            "detected_language": result.get("detected_language", "en"),
+            "provider": "openai",
+            "fallback_used": False,
+        }
+    except Exception as exc:
+        logger.warning("OpenAI clinical rewrite failed; using deterministic NDIS formatter: %s", exc)
+        return _fallback_clinical_rewrite(text)
 
 
 # ---------------------------------------------------------------------------

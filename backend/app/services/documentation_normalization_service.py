@@ -63,20 +63,12 @@ def _script_language_hint(text: str) -> str | None:
         code = ord(ch)
         if 0x0600 <= code <= 0x06FF:
             return "ar"
-        if 0x0400 <= code <= 0x04FF:
-            return "ru"
         if 0x4E00 <= code <= 0x9FFF:
-            return "zh"
-        if 0x3040 <= code <= 0x30FF:
-            return "ja"
-        if 0xAC00 <= code <= 0xD7AF:
-            return "ko"
+            return "zh-CN"
         if 0x0900 <= code <= 0x097F:
             return "hi"
-        if 0x0E00 <= code <= 0x0E7F:
-            return "th"
-        if 0x0370 <= code <= 0x03FF:
-            return "el"
+        if 0x0A00 <= code <= 0x0A7F:
+            return "pa"
     return None
 
 
@@ -115,6 +107,8 @@ async def normalize_documentation_for_legal_record(
         return _empty_result(source_text or "", "Source documentation is empty.")
 
     requested_code = normalize_language_code(requested_language)
+    if requested_code == "auto":
+        requested_code = None
     if requested_code and not is_supported_language(requested_code):
         return {
             **_empty_result(text, f"Unsupported source language: {requested_code}."),
@@ -150,6 +144,19 @@ async def normalize_documentation_for_legal_record(
 
     try:
         translated = await ai_service.translate_to_english(text, source_hint)
+    except ai_service.UnsupportedTranslationLanguage as exc:
+        detected_code = normalize_language_code(getattr(exc, "language_code", None)) or requested_code or script_hint
+        return {
+            **_empty_result(text, f"Unsupported source language: {detected_code}."),
+            "detected_language": detected_code,
+            "translation_status": "unsupported",
+            "translation_metadata": _base_metadata(
+                source_language=detected_code,
+                provider="google_cloud_translate",
+                model="google-cloud-translate-v3",
+                warnings=["Unsupported source language."],
+            ),
+        }
     except Exception as exc:
         return {
             **_empty_result(text, "Translation provider failed."),
@@ -170,7 +177,7 @@ async def normalize_documentation_for_legal_record(
             "translation_status": "unsupported",
             "translation_metadata": _base_metadata(
                 source_language=detected,
-                provider=translated.get("provider") or "openai",
+                provider=translated.get("provider") or "google_cloud_translate",
                 model=translated.get("model"),
                 warnings=["Unsupported source language."],
             ),
@@ -180,10 +187,21 @@ async def normalize_documentation_for_legal_record(
     if not english_text:
         return _empty_result(text, "Translation provider returned empty English text.")
 
-    provider = translated.get("provider") or "openai"
+    provider = translated.get("provider") or "google_cloud_translate"
     confidence = float(translated.get("confidence") or 0.95)
     model = translated.get("model")
     status = "not_required" if detected == "en" and english_text == text else "translated"
+
+    provider_metadata = translated.get("metadata") if isinstance(translated.get("metadata"), dict) else {}
+    metadata = _base_metadata(
+        source_language=detected,
+        provider=provider,
+        model=model,
+        fallback_used=bool(translated.get("fallback_used", False)),
+        warnings=list(translated.get("warnings") or []),
+    )
+    metadata.update(provider_metadata)
+    metadata["source_language"] = detected
 
     return {
         "original_language_input": text,
@@ -193,12 +211,6 @@ async def normalize_documentation_for_legal_record(
         "translation_status": status,
         "translation_provider": provider,
         "translation_confidence": max(0.0, min(1.0, confidence)),
-        "translation_metadata": _base_metadata(
-            source_language=detected,
-            provider=provider,
-            model=model,
-            fallback_used=bool(translated.get("fallback_used", False)),
-            warnings=list(translated.get("warnings") or []),
-        ),
+        "translation_metadata": metadata,
         "translation_error": None,
     }
