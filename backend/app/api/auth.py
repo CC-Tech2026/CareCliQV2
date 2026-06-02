@@ -45,7 +45,9 @@ def _supabase_auth_request(
 ) -> dict:
     """Call Supabase Auth directly for recovery flows not covered by supabase-py."""
     if not settings.supabase_url or not settings.supabase_anon_key:
-        raise HTTPException(status_code=500, detail="Authentication provider is not configured.")
+        raise HTTPException(
+            status_code=500, detail="Authentication provider is not configured."
+        )
 
     url = f"{settings.supabase_url.rstrip('/')}/auth/v1/{path.lstrip('/')}"
     headers = {
@@ -68,10 +70,14 @@ def _supabase_auth_request(
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         logger.warning("Supabase auth request failed: %s %s", exc.code, body)
-        raise HTTPException(status_code=502, detail="Authentication provider rejected the request.")
+        raise HTTPException(
+            status_code=502, detail="Authentication provider rejected the request."
+        )
     except Exception as exc:
         logger.error("Supabase auth request failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Authentication provider is unavailable.")
+        raise HTTPException(
+            status_code=502, detail="Authentication provider is unavailable."
+        )
 
 
 def _is_auth_user_email_verified(auth_user) -> bool:
@@ -87,8 +93,8 @@ def _is_auth_user_email_verified(auth_user) -> bool:
 # ---------------------------------------------------------------------------
 _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
-    "allied_health":      "allied_health",
-    "small_provider":     "support_coordinator",
+    "allied_health": "allied_health",
+    "small_provider": "support_coordinator",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
@@ -96,6 +102,7 @@ VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -138,6 +145,7 @@ class ResendVerificationRequest(BaseModel):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_user_profile(user_id: str) -> dict:
     """Fetch the user's public.users row.  Two-pass: try new columns first,
     fall back to base columns so the function never crashes if the
@@ -146,11 +154,17 @@ async def _get_user_profile(user_id: str) -> dict:
 
     # Pass 1: select with all new columns (works once migration is applied)
     try:
-        result = supabase.table("users").select(
-            "role, full_name, account_type, onboarding_complete, organization_id, "
-            "email_verified, profile_completed, onboarding_completed, "
-            "role_specific_profile_completed, profile_photo_url"
-        ).eq("id", user_id).maybe_single().execute()
+        result = (
+            supabase.table("users")
+            .select(
+                "role, full_name, account_type, onboarding_complete, organization_id, "
+                "email_verified, profile_completed, onboarding_completed, "
+                "role_specific_profile_completed, profile_photo_url"
+            )
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
         if result is not None and result.data:
             return result.data
         if result is not None and result.data is None:
@@ -161,9 +175,13 @@ async def _get_user_profile(user_id: str) -> dict:
 
     # Pass 2: base columns only (always available)
     try:
-        result = supabase.table("users").select(
-            "role, full_name, email_verified, onboarding_complete"
-        ).eq("id", user_id).maybe_single().execute()
+        result = (
+            supabase.table("users")
+            .select("role, full_name, email_verified, onboarding_complete")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
         if result is not None and result.data:
             return result.data
     except Exception as e2:
@@ -197,19 +215,27 @@ async def _upsert_user_record(
         **base_payload,
         "account_type": account_type,
         "onboarding_complete": onboarding_complete,
-        "email_verified": bool(extra.get("email_verified")) if extra and "email_verified" in extra else False,
-        "profile_completed": bool(extra.get("profile_completed")) if extra and "profile_completed" in extra else onboarding_complete,
-        "onboarding_completed": bool(extra.get("onboarding_completed")) if extra and "onboarding_completed" in extra else onboarding_complete,
-        "role_specific_profile_completed": bool(extra.get("role_specific_profile_completed")) if extra and "role_specific_profile_completed" in extra else onboarding_complete,
+        "email_verified": bool(extra.get("email_verified"))
+        if extra and "email_verified" in extra
+        else False,
+        "profile_completed": bool(extra.get("profile_completed"))
+        if extra and "profile_completed" in extra
+        else onboarding_complete,
+        "onboarding_completed": bool(extra.get("onboarding_completed"))
+        if extra and "onboarding_completed" in extra
+        else onboarding_complete,
+        "role_specific_profile_completed": bool(
+            extra.get("role_specific_profile_completed")
+        )
+        if extra and "role_specific_profile_completed" in extra
+        else onboarding_complete,
     }
     if extra:
         extended_payload.update(extra)
 
     # Pass 1: with new columns
     try:
-        supabase.table("users").upsert(
-            extended_payload, on_conflict="id"
-        ).execute()
+        supabase.table("users").upsert(extended_payload, on_conflict="id").execute()
         return
     except Exception as e1:
         err = str(e1)
@@ -225,9 +251,7 @@ async def _upsert_user_record(
 
     # Pass 2: base columns only
     try:
-        supabase.table("users").upsert(
-            base_payload, on_conflict="id"
-        ).execute()
+        supabase.table("users").upsert(base_payload, on_conflict="id").execute()
     except Exception as e2:
         logger.warning(f"Base upsert also failed for {user_id}: {e2}")
 
@@ -235,6 +259,7 @@ async def _upsert_user_record(
 async def _touch_last_login(user_id: str) -> None:
     try:
         from datetime import datetime, timezone
+
         supabase = get_supabase_admin()
         supabase.table("users").update(
             {"last_login": datetime.now(timezone.utc).isoformat()}
@@ -243,7 +268,9 @@ async def _touch_last_login(user_id: str) -> None:
         logger.debug(f"Could not update last_login for {user_id}: {e}")
 
 
-async def _resolve_org_member_role(user_id: str, org_id: str, fallback_role: str) -> str:
+async def _resolve_org_member_role(
+    user_id: str, org_id: str, fallback_role: str
+) -> str:
     """Upsert into organization_members and return the authoritative role.
 
     If a membership already exists we trust its role (admin may have changed it
@@ -268,12 +295,14 @@ async def _resolve_org_member_role(user_id: str, org_id: str, fallback_role: str
             return existing.data[0].get("role") or fallback_role
 
         # No row yet — create it (idempotent via UNIQUE constraint)
-        supabase.table("organization_members").insert({
-            "user_id": user_id,
-            "organization_id": org_id,
-            "role": fallback_role,
-            "is_active": True,
-        }).execute()
+        supabase.table("organization_members").insert(
+            {
+                "user_id": user_id,
+                "organization_id": org_id,
+                "role": fallback_role,
+                "is_active": True,
+            }
+        ).execute()
         return fallback_role
 
     except Exception as e:
@@ -284,6 +313,7 @@ async def _resolve_org_member_role(user_id: str, org_id: str, fallback_role: str
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post("/register", status_code=201)
 async def register(body: RegisterRequest):
@@ -316,14 +346,20 @@ async def register(body: RegisterRequest):
         result = supabase_admin.auth.admin.create_user(create_payload)
         auth_user = result.user
         if not auth_user:
-            raise HTTPException(status_code=400, detail="Registration failed — please try again")
+            raise HTTPException(
+                status_code=400, detail="Registration failed — please try again"
+            )
 
     except HTTPException:
         raise
     except Exception as e:
         err_msg = str(e)
         logger.error(f"Admin create_user failed for {body.email}: {err_msg}")
-        if "already registered" in err_msg.lower() or "already been registered" in err_msg.lower() or "already exists" in err_msg.lower():
+        if (
+            "already registered" in err_msg.lower()
+            or "already been registered" in err_msg.lower()
+            or "already exists" in err_msg.lower()
+        ):
             raise HTTPException(
                 status_code=409,
                 detail="An account with this email already exists. Please sign in.",
@@ -362,7 +398,9 @@ async def register(body: RegisterRequest):
                 method="POST",
             )
         except Exception as exc:
-            logger.warning("Could not send verification email for %s: %s", body.email, exc)
+            logger.warning(
+                "Could not send verification email for %s: %s", body.email, exc
+            )
 
     return {
         "message": "Account created successfully. Verify your email before signing in.",
@@ -380,10 +418,12 @@ async def login(body: LoginRequest, request: Request):
 
     supabase = get_supabase()
     try:
-        result = supabase.auth.sign_in_with_password({
-            "email": body.email,
-            "password": body.password,
-        })
+        result = supabase.auth.sign_in_with_password(
+            {
+                "email": body.email,
+                "password": body.password,
+            }
+        )
         auth_user = result.user
         if not auth_user or not result.session:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -406,7 +446,9 @@ async def login(body: LoginRequest, request: Request):
             "network is unreachable",
         )
         if any(marker in msg for marker in provider_unavailable_markers):
-            logger.error("Authentication provider unreachable for %s: %s", body.email, e)
+            logger.error(
+                "Authentication provider unreachable for %s: %s", body.email, e
+            )
             raise HTTPException(
                 status_code=503,
                 detail=(
@@ -426,7 +468,9 @@ async def login(body: LoginRequest, request: Request):
     organization_id = profile.get("organization_id")
     email_verified = _is_auth_user_email_verified(auth_user)
     if not email_verified:
-        email_verified = bool(profile.get("email_verified")) and settings.auth_auto_confirm_email
+        email_verified = (
+            bool(profile.get("email_verified")) and settings.auth_auto_confirm_email
+        )
 
     # Existing users who pre-date the onboarding system are treated as complete
     onboarding_complete = profile.get("onboarding_complete")
@@ -452,18 +496,22 @@ async def login(body: LoginRequest, request: Request):
     if organization_id:
         role = await _resolve_org_member_role(str(auth_user.id), organization_id, role)
 
-    token = create_access_token({
-        "sub": str(auth_user.id),
-        "email": str(auth_user.email),
-        "role": role,
-        "account_type": account_type,
-        "organization_id": organization_id,
-    })
+    token = create_access_token(
+        {
+            "sub": str(auth_user.id),
+            "email": str(auth_user.email),
+            "role": role,
+            "account_type": account_type,
+            "organization_id": organization_id,
+        }
+    )
 
     await _touch_last_login(str(auth_user.id))
     if email_verified != bool(profile.get("email_verified")):
         try:
-            get_supabase_admin().table("users").update({"email_verified": email_verified}).eq("id", str(auth_user.id)).execute()
+            get_supabase_admin().table("users").update(
+                {"email_verified": email_verified}
+            ).eq("id", str(auth_user.id)).execute()
         except Exception as e:
             logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
@@ -480,8 +528,12 @@ async def login(body: LoginRequest, request: Request):
             "onboarding_complete": bool(onboarding_complete),
             "email_verified": email_verified,
             "profile_completed": bool(profile.get("profile_completed")),
-            "onboarding_completed": bool(profile.get("onboarding_completed") or onboarding_complete),
-            "role_specific_profile_completed": bool(profile.get("role_specific_profile_completed")),
+            "onboarding_completed": bool(
+                profile.get("onboarding_completed") or onboarding_complete
+            ),
+            "role_specific_profile_completed": bool(
+                profile.get("role_specific_profile_completed")
+            ),
             "profile_photo_url": profile.get("profile_photo_url"),
         },
     }
@@ -532,16 +584,21 @@ async def complete_onboarding(
     except Exception as e:
         err = str(e)
         if "42703" in err or "does not exist" in err:
-            logger.warning(f"Onboarding columns missing — skipping extended update for {user_id}")
+            logger.warning(
+                f"Onboarding columns missing — skipping extended update for {user_id}"
+            )
             # At minimum record that onboarding happened (if base column exists)
         else:
             logger.error(f"Could not complete onboarding for {user_id}: {e}")
-            raise HTTPException(status_code=500, detail="Could not save your profile. Please try again.")
+            raise HTTPException(
+                status_code=500, detail="Could not save your profile. Please try again."
+            )
 
     return {
         "success": True,
         "message": "Onboarding complete.",
-        "organization_id": update_payload.get("organization_id") or current_user.get("organization_id"),
+        "organization_id": update_payload.get("organization_id")
+        or current_user.get("organization_id"),
     }
 
 
@@ -571,16 +628,22 @@ async def confirm_password_reset(body: PasswordResetConfirmRequest):
     token_hash = body.token_hash.strip()
     password = body.password
     if len(password) < 8:
-        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+        raise HTTPException(
+            status_code=422, detail="Password must be at least 8 characters."
+        )
     if not token and token_hash:
         verify_result = _supabase_auth_request(
             "verify",
             {"type": "recovery", "token_hash": token_hash},
             method="POST",
         )
-        token = verify_result.get("access_token") or verify_result.get("session", {}).get("access_token", "")
+        token = verify_result.get("access_token") or verify_result.get(
+            "session", {}
+        ).get("access_token", "")
     if not token:
-        raise HTTPException(status_code=422, detail="Reset token is missing or expired.")
+        raise HTTPException(
+            status_code=422, detail="Reset token is missing or expired."
+        )
 
     _supabase_auth_request(
         "user",
@@ -630,13 +693,20 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "id": user_id,
             "email": current_user.get("email"),
             "role": profile.get("role") or current_user.get("role", "support_worker"),
-            "account_type": current_user.get("account_type") or profile.get("account_type") or "independent_worker",
-            "organization_id": profile.get("organization_id") or current_user.get("organization_id"),
+            "account_type": current_user.get("account_type")
+            or profile.get("account_type")
+            or "independent_worker",
+            "organization_id": profile.get("organization_id")
+            or current_user.get("organization_id"),
             "onboarding_complete": bool(onboarding_complete),
             "email_verified": bool(profile.get("email_verified")),
             "profile_completed": bool(profile.get("profile_completed")),
-            "onboarding_completed": bool(profile.get("onboarding_completed") or onboarding_complete),
-            "role_specific_profile_completed": bool(profile.get("role_specific_profile_completed")),
+            "onboarding_completed": bool(
+                profile.get("onboarding_completed") or onboarding_complete
+            ),
+            "role_specific_profile_completed": bool(
+                profile.get("role_specific_profile_completed")
+            ),
             "profile_photo_url": profile.get("profile_photo_url"),
         }
     }
