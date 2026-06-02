@@ -20,18 +20,39 @@ from ..core.access import (
 
 logger = logging.getLogger(__name__)
 
+OPTIONAL_SESSION_COLUMNS = {
+    "original_language_input",
+    "detected_language",
+    "translated_english_note",
+    "compliance_input_text",
+    "translation_status",
+    "translation_provider",
+    "translation_confidence",
+    "translation_metadata",
+    "translation_error",
+    "translation_completed_at",
+    "legal_record_text",
+    "display_notes",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _is_missing_column_error(exc: Exception) -> bool:
-    err = str(exc)
+    err = str(exc).lower()
     return (
-        "PGRST" in err
+        "pgrst" in err
         or "does not exist" in err
         or "42703" in err
+        or "could not find" in err
+        or "column of" in err
     )
+
+
+def _remove_optional_session_columns(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in payload.items() if k not in OPTIONAL_SESSION_COLUMNS}
 
 
 def _strip_access_columns(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -211,8 +232,9 @@ async def _apply_legal_record_normalization(
     session_id: Optional[str],
     existing: Optional[Dict[str, Any]] = None,
 ) -> None:
+    effective_status = source_data.get("status") or (existing or {}).get("status")
     should_normalize = (
-        source_data.get("status") == "completed"
+        effective_status == "completed"
         or bool(source_data.get("notes"))
         or any(
             source_data.get(field)
@@ -247,7 +269,7 @@ async def _apply_legal_record_normalization(
         payload["translation_completed_at"] = datetime.now(timezone.utc).isoformat()
 
     if (
-        source_data.get("status") == "completed"
+        effective_status == "completed"
         and normalized.get("translation_status") in BLOCKING_TRANSLATION_STATUSES
     ):
         raise ValueError(COMPLIANCE_BLOCKED_MESSAGE)
@@ -518,9 +540,18 @@ async def create_session(
             .insert(payload)
             .execute()
         )
-
-    except Exception:
-        raise
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning(
+                "Session table missing optional columns; retrying insert without optional metadata"
+            )
+            result = (
+                supabase.table("sessions")
+                .insert(_remove_optional_session_columns(payload))
+                .execute()
+            )
+        else:
+            raise
 
     rows = _safe_rows(result.data)
 
@@ -570,17 +601,28 @@ async def update_session(
             .eq("organization_id", org_id)
             .execute()
         )
-
-        rows = _safe_rows(result.data)
-
-        if not rows:
-            return None
-
-        return _normalize(rows[0])
-
     except Exception as e:
-        logger.error(f"Failed to update session: {e}")
-        raise
+        if _is_missing_column_error(e):
+            logger.warning(
+                "Session table missing optional columns; retrying update without optional metadata"
+            )
+            result = (
+                supabase.table("sessions")
+                .update(_remove_optional_session_columns(payload))
+                .eq("id", session_id)
+                .eq("organization_id", org_id)
+                .execute()
+            )
+        else:
+            logger.error(f"Failed to update session: {e}")
+            raise
+
+    rows = _safe_rows(result.data)
+
+    if not rows:
+        return None
+
+    return _normalize(rows[0])
 
 
 # ---------------------------------------------------------------------------

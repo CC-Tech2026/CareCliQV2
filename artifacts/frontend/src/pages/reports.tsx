@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { apiFetch as authenticatedFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import { useToast } from "@/hooks/use-toast";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
   LayoutDashboard, FileText, AlertTriangle, Users, ShieldCheck,
@@ -590,6 +591,17 @@ function ParticipantNotesSection() {
                             <p className="text-[12px] mt-1.5 line-clamp-2" style={{ color: T2 }}>
                               {legalNoteText(s).slice(0, 200)}{legalNoteText(s).length > 200 ? "..." : ""}
                             </p>
+                          )}
+                          {(s.original_language_input || s.translated_english_note) && (
+                            <div className="mt-3">
+                              <TranslationAuditView
+                                originalLanguageInput={s.original_language_input ?? undefined}
+                                translatedEnglishNote={s.translated_english_note ?? undefined}
+                                translationMetadata={s.translation_metadata as Record<string, unknown> | null}
+                                translationStatus={s.translation_status ?? undefined}
+                                translationProvider={s.translation_provider ?? undefined}
+                              />
+                            </div>
                           )}
                           {!legalNoteText(s) && (
                             <p className="text-[12px] mt-1.5 italic" style={{ color: CORAL }}>No notes recorded</p>

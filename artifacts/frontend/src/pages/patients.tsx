@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   Select,
@@ -113,6 +114,10 @@ type SessionRecord = {
   notes?: string | null;
   translated_english_note?: string | null;
   compliance_input_text?: string | null;
+  original_language_input?: string | null;
+  translation_status?: string | null;
+  translation_metadata?: Record<string, unknown> | null;
+  translation_provider?: string | null;
   goals_addressed?: unknown;
   participant_name?: string | null;
 };
@@ -906,6 +911,17 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7A6A8A]">
                       {session.translated_english_note || session.compliance_input_text || session.notes}
                     </p>
+                  )}
+                  {(session.original_language_input || session.translated_english_note) && (
+                    <div className="mt-4">
+                      <TranslationAuditView
+                        originalLanguageInput={session.original_language_input ?? undefined}
+                        translatedEnglishNote={session.translated_english_note ?? undefined}
+                        translationMetadata={session.translation_metadata ?? null}
+                        translationStatus={session.translation_status ?? undefined}
+                        translationProvider={session.translation_provider ?? undefined}
+                      />
+                    </div>
                   )}
                 </div>
               ))}

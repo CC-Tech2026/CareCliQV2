@@ -45,17 +45,21 @@ def _looks_english(text: str) -> bool:
     if not text:
         return False
     ascii_chars = sum(1 for ch in text if ord(ch) < 128)
-    letters = sum(1 for ch in text if ch.isalpha())
     common_words = {
         "the", "and", "participant", "support", "with", "was", "were",
         "session", "goal", "goals", "assisted", "completed", "progress",
+        "participant", "is", "are", "to", "for", "on", "in", "at",
     }
     tokens = {
         token.strip(".,;:!?()[]{}\"'").lower()
         for token in text.split()
     }
     word_hits = len(common_words & tokens)
-    return ascii_chars / max(len(text), 1) > 0.92 and (word_hits > 0 or letters < 20)
+    if ascii_chars / max(len(text), 1) <= 0.92:
+        return False
+    if word_hits > 0:
+        return True
+    return len(text.strip()) <= 2
 
 
 def _script_language_hint(text: str) -> str | None:

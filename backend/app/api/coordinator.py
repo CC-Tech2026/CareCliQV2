@@ -119,9 +119,12 @@ async def _team(org_id: str) -> list[dict]:
             .execute()
         )
     except Exception:
-        return []
+        return await _team_fallback(org_id)
 
     rows = [row for row in memberships.data or [] if isinstance(row, dict)]
+    if not rows:
+        return await _team_fallback(org_id)
+
     user_ids = [row.get("user_id") for row in rows if row.get("user_id")]
     profiles_by_id: dict[str, dict] = {}
     if user_ids:
@@ -152,6 +155,35 @@ async def _team(org_id: str) -> list[dict]:
             "is_active": bool(row.get("is_active")),
             "joined_at": row.get("joined_at"),
             "last_login": profile.get("last_login"),
+        })
+    return output
+
+
+async def _team_fallback(org_id: str) -> list[dict]:
+    supabase = get_supabase_admin()
+    try:
+        profiles = (
+            supabase.table("users")
+            .select("id, email, full_name, role, is_active, last_login, organization_id")
+            .eq("organization_id", org_id)
+            .in_("role", ["support_worker", "allied_health", "support_coordinator"])
+            .execute()
+        )
+    except Exception:
+        return []
+
+    output = []
+    for row in profiles.data or []:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        output.append({
+            "id": row.get("id"),
+            "full_name": row.get("full_name") or row.get("email") or "Team member",
+            "email": row.get("email"),
+            "role": row.get("role"),
+            "is_active": bool(row.get("is_active")),
+            "joined_at": None,
+            "last_login": row.get("last_login"),
         })
     return output
 

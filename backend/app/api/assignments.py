@@ -45,6 +45,59 @@ def _require_coordinator(user: dict) -> None:
         )
 
 
+def _worker_membership_profiles(org_id: Optional[str]) -> list[dict]:
+    if not org_id:
+        return []
+
+    supabase = get_supabase_admin()
+    try:
+        memberships = (
+            supabase.table("organization_members")
+            .select("user_id, role, is_active, joined_at")
+            .eq("organization_id", org_id)
+            .in_("role", ["support_worker", "allied_health"])
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("worker membership lookup failed: %s", exc)
+        return []
+
+    rows = [row for row in (memberships.data or []) if isinstance(row, dict) and row.get("user_id")]
+    if not rows:
+        return []
+
+    user_ids = [row["user_id"] for row in rows]
+    try:
+        profiles = (
+            supabase.table("users")
+            .select("id, full_name, email, role, account_type, is_active")
+            .in_("id", user_ids)
+            .execute()
+        )
+        profiles_by_id = {
+            str(profile.get("id")): profile
+            for profile in (profiles.data or [])
+            if isinstance(profile, dict) and profile.get("id")
+        }
+    except Exception as exc:
+        logger.warning("worker profile lookup failed: %s", exc)
+        profiles_by_id = {}
+
+    output: list[dict] = []
+    for row in rows:
+        profile = profiles_by_id.get(str(row["user_id"]), {})
+        output.append({
+            "id": row["user_id"],
+            "full_name": profile.get("full_name") or profile.get("email") or "Worker",
+            "email": profile.get("email"),
+            "role": row.get("role") or profile.get("role"),
+            "account_type": profile.get("account_type"),
+            "is_active": bool(row.get("is_active")),
+            "joined_at": row.get("joined_at"),
+        })
+    return output
+
+
 # ---------------------------------------------------------------------------
 # GET /assignments/my-participants  — must be BEFORE /{id} to avoid shadowing
 # ---------------------------------------------------------------------------
@@ -83,8 +136,13 @@ async def get_my_participants(user: dict = Depends(get_current_user)):
 async def list_org_workers(user: dict = Depends(get_current_user)):
     """Return all users (workers) in the coordinator's organisation."""
     _require_coordinator(user)
-    supabase = get_supabase_admin()
     org_id = user.get("organization_id")
+
+    workers = _worker_membership_profiles(org_id)
+    if workers:
+        return workers
+
+    supabase = get_supabase_admin()
     try:
         q = (
             supabase.table("users")

@@ -42,7 +42,7 @@ async def get_allocations_for_participant(participant_id: str) -> List[Dict[str,
             supabase.table(TABLE)
             .select("*")
             .eq("patient_id", participant_id)
-            .order("assigned_at", desc=True)
+            .order("created_at", desc=True)
             .execute()
         )
 
@@ -105,7 +105,7 @@ async def get_allocations_for_user(user_id: str) -> List[Dict[str, Any]]:
             .select("*")
             .eq("user_id", user_id)
             .eq("is_active", True)
-            .order("assigned_at", desc=True)
+            .order("created_at", desc=True)
             .execute()
         )
 
@@ -124,6 +124,8 @@ async def create_allocation(
     participant_id: str,
     user_id: str,
     allocated_role: str = "support_worker",
+    organization_id: Optional[str] = None,
+    assigned_by: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Assign a practitioner to a participant (upserts on conflict)."""
 
@@ -135,6 +137,11 @@ async def create_allocation(
         "allocated_role": allocated_role,
         "is_active": True,
     }
+
+    if organization_id:
+        payload["organization_id"] = organization_id
+    if assigned_by:
+        payload["assigned_by"] = assigned_by
 
     try:
         result = (

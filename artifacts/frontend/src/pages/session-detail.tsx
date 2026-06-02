@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -539,6 +540,23 @@ export default function SessionDetail({ id }: { id?: string }) {
               )}
             </div>
           </div>
+
+          {(session.original_language_input || session.translated_english_note) && (
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Translation Audit Trail</p>
+              </div>
+              <div className="p-5">
+                <TranslationAuditView
+                  originalLanguageInput={session.original_language_input ?? undefined}
+                  translatedEnglishNote={session.translated_english_note ?? undefined}
+                  translationMetadata={session.translation_metadata as Record<string, unknown> | null}
+                  translationStatus={session.translation_status ?? undefined}
+                  translationProvider={session.translation_provider ?? undefined}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Structured Clinical Note Fields */}
           {(() => {
