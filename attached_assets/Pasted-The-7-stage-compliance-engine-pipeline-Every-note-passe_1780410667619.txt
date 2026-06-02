@@ -1,0 +1,44 @@
+The 7-stage compliance engine pipeline
+Every note passes through 7 stages. Stages 1-3 run client-side in real time. Stages 4-7 run server-side on save. The worker sees real-time feedback as they type, and a full compliance report after they save.
+
+1
+Real-time keyword scanner (client-side, runs as they type)
+Every keystroke triggers a lightweight JavaScript scan. Detects: RP phrases (highlighted red), subjective phrases (highlighted orange), person-first violations (highlighted orange). No API call — pure client-side regex. Results shown as inline text highlights with tooltips. The worker sees the issue the moment they type it.
+
+2
+Live compliance status bar (client-side, runs every 3 seconds)
+A status bar below the note textarea updates every 3 seconds showing: goal referenced (✓/✗), minimum length met (✓/✗), RP detected (🚨 if yes), time since session (warns if approaching 48 hours). Gives the worker a live dashboard without waiting to save.
+
+3
+Pre-save gate (client-side, on tap of Save/Approve button)
+Before calling the API, client-side checks run. If RP detected: mandatory acknowledgement modal appears. Worker cannot proceed without checking the acknowledgement box. If note is over 48 hours late: separate acknowledgement required. This creates an auditable record of the worker's awareness.
+
+4
+Rule engine (server-side Python, runs on save)
+All 12 rules execute in sequence against the saved note. Each rule returns: status (pass/warn/fail), message, static suggestion. Results stored in compliance_rule_results table with session_id. Duplicate detection runs here — similarity check against last 5 notes for this participant + worker using cosine similarity on the note embeddings.
+
+5
+RP deep scan (server-side Python, runs on save)
+Full regex scan across all 5 RP categories with context extraction (60 chars before and after each match). Context stored in restrictive_practice_flags table. Severity assigned. If any critical RP detected: Support Coordinator notified immediately via in-app alert. If seclusion detected: NDIS Commission notification workflow triggered.
+
+6
+AI suggestion layer (Claude API, runs on any fail or warn)
+Single Claude API call with all failing rules and RP detections. Returns: specific rewrite suggestion per rule, RP-compliant rewrite per detected phrase, an overall "improved note" that fixes all issues. The worker can accept any individual suggestion with one tap, or accept the full improved note. This is the time-saving layer.
+
+7
+Score calculation and status assignment
+Final score calculated from rule results. Status assigned. Results written to sessions table. Note embedding generated and stored in note_embeddings for RAG and duplicate detection. Session summary regenerated for the participant. Support Coordinator notified if score is below 60 or RP was detected.
+
+What happens after the note is saved
+Immediate
+Score shown to worker
+Immediate
+Coordinator alerted if <60 or RP
+Background
+Embedding generated
+Background
+Client summary updated
+If incident
+Draft incident report created
+Audit log
+Full audit trail written

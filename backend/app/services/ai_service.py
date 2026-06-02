@@ -719,6 +719,88 @@ Write in plain English. Be specific about what information is actually missing. 
     return result
 
 
+async def improve_note(notes: str, failed_rules: list[dict], rp_flags: list[dict] | None = None) -> dict:
+    """Generate an improved clinical note that fixes all failed compliance rules.
+
+    Returns:
+        improved_note: str  — full rewrite of the note
+        rule_suggestions: list[{rule, issue, suggestion}]  — per-rule targeted fixes
+    """
+    if not notes or not notes.strip():
+        return {
+            "improved_note": "",
+            "rule_suggestions": [],
+        }
+
+    rules_text = "\n".join([
+        f"- {r.get('rule', '').replace('_', ' ').title()}: {r.get('message', '')}"
+        for r in failed_rules
+    ]) or "No specific rule failures"
+
+    rp_text = ""
+    if rp_flags:
+        rp_text = "\nRestrictive Practice flags (must be documented correctly):\n" + "\n".join([
+            f"- {f.get('phrase', '')} ({f.get('category', '')})"
+            for f in rp_flags[:5]
+        ])
+
+    prompt = f"""You are an expert NDIS clinical documentation specialist. Rewrite the clinical note below to fix all NDIS compliance issues.
+
+ORIGINAL NOTE:
+{notes[:2000]}
+
+FAILED COMPLIANCE RULES:
+{rules_text}{rp_text}
+
+Requirements for the improved note:
+- Use objective, observable, third-person language (no "I think", "seems", "probably")
+- Use person-first language (e.g. "participant" not "the disabled person")
+- Include what was done (activities), how the participant responded, and what was achieved (outcome)
+- Reference NDIS goals or support category where relevant
+- Mention next steps or follow-up actions
+- Keep it professional and concise (3-6 sentences typical)
+
+Respond with JSON:
+{{
+  "improved_note": "the complete rewritten clinical note",
+  "rule_suggestions": [
+    {{
+      "rule": "rule_name_from_failed_list",
+      "issue": "brief description of the specific problem",
+      "suggestion": "specific one-sentence fix or addition to the original note"
+    }}
+  ]
+}}"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=700,
+        temperature=0.3,
+        response_format={"type": "json_object"},
+    )
+    result = json.loads(response.choices[0].message.content)
+    return {
+        "improved_note": result.get("improved_note", ""),
+        "rule_suggestions": result.get("rule_suggestions", []),
+    }
+
+
+async def generate_note_embedding(text: str) -> list[float]:
+    """Generate a text-embedding-3-small vector for a clinical note."""
+    if not text or not text.strip():
+        return []
+    truncated = text[:8000]
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=truncated,
+    )
+    return response.data[0].embedding
+
+
 # ---------------------------------------------------------------------------
 # Translation & clinical rewrite
 # ---------------------------------------------------------------------------

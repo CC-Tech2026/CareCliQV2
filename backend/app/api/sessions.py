@@ -362,6 +362,23 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         except Exception as side_e:
             logger.warning(f"Audit log failed (non-critical): {side_e}")
 
+        # Stage 7: Generate and store note embedding for semantic search (non-critical)
+        try:
+            embedding_vector = await ai_service.generate_note_embedding(compliance_input_text)
+            if embedding_vector:
+                from ..services.supabase_client import get_supabase_admin as _get_admin
+                supabase_emb = _get_admin()
+                supabase_emb.table("note_embeddings").upsert(
+                    {
+                        "session_id": session_id,
+                        "embedding": embedding_vector,
+                        "model": "text-embedding-3-small",
+                    },
+                    on_conflict="session_id",
+                ).execute()
+        except Exception as emb_err:
+            logger.warning(f"Note embedding generation failed (non-critical): {emb_err}")
+
         # 4. Record budget usage (non-critical)
         try:
             duration = session.get("duration_minutes") or 0

@@ -799,3 +799,35 @@ DO $$ BEGIN
             FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 END $$;
+
+
+-- ============================================================
+-- Note Embeddings (Stage 7: semantic search layer)
+-- text-embedding-3-small vectors stored as JSONB arrays
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.note_embeddings (
+    id             UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
+    session_id     UUID        NOT NULL,
+    embedding      JSONB       NOT NULL,
+    model          TEXT        NOT NULL DEFAULT 'text-embedding-3-small',
+    token_count    INTEGER,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_note_embeddings_session_id
+    ON public.note_embeddings(session_id);
+
+ALTER TABLE public.note_embeddings ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE tablename = 'note_embeddings'
+          AND policyname = 'ne_service_role_all'
+    ) THEN
+        CREATE POLICY ne_service_role_all ON public.note_embeddings
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+END $$;

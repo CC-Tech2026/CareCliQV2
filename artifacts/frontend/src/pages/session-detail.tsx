@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useGetSession, useUpdateSession, useSaveSessionWithAI, useGetParticipant } from "@workspace/api-client-react";
@@ -40,6 +40,91 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
+import { scanNoteHighlights, buildHighlightedHtml, type Highlight } from "@/lib/note-scanner";
+
+// ---------------------------------------------------------------------------
+// Stage 1: Highlighted note editor (inline compliance overlay)
+// ---------------------------------------------------------------------------
+
+const _NOTE_EDITOR_STYLE: React.CSSProperties = {
+  fontFamily: "ui-sans-serif, system-ui, -apple-system, sans-serif",
+  fontSize: "13px",
+  lineHeight: "1.625",
+  padding: "8px 12px",
+  borderRadius: "12px",
+  border: "1px solid rgba(232,213,232,0.5)",
+  width: "100%",
+  minHeight: "280px",
+  boxSizing: "border-box",
+  overflowWrap: "break-word",
+  wordBreak: "break-word",
+  whiteSpace: "pre-wrap",
+};
+
+function HighlightedNoteEditor({
+  value,
+  onChange,
+  highlights,
+  placeholder,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  highlights: Highlight[];
+  placeholder?: string;
+}) {
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const syncScroll = useCallback(() => {
+    if (mirrorRef.current && textareaRef.current) {
+      mirrorRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }, []);
+
+  const html = useMemo(() => buildHighlightedHtml(value, highlights), [value, highlights]);
+
+  return (
+    <div className="relative">
+      <div
+        ref={mirrorRef}
+        aria-hidden
+        style={{
+          ..._NOTE_EDITOR_STYLE,
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          color: "transparent",
+          overflow: "hidden",
+          pointerEvents: "none",
+          userSelect: "none",
+          zIndex: 0,
+        }}
+        dangerouslySetInnerHTML={{ __html: html + "\u200b" }}
+      />
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onScroll={syncScroll}
+        style={{
+          ..._NOTE_EDITOR_STYLE,
+          position: "relative",
+          background: "transparent",
+          caretColor: "#1E1640",
+          color: "#4A3D5A",
+          zIndex: 1,
+          outline: "none",
+          resize: "vertical",
+          display: "block",
+        }}
+        className="focus-visible:ring-1 focus-visible:ring-ring"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Claim readiness helpers
@@ -74,7 +159,8 @@ interface LiveIssue {
 function checkLiveCompliance(
   notes: string,
   durationMinutes?: number,
-  goalsAddressed?: string[]
+  goalsAddressed?: string[],
+  sessionDate?: string
 ): LiveIssue[] {
   const issues: LiveIssue[] = [];
   if (!notes || notes.length === 0) {
@@ -93,6 +179,17 @@ function checkLiveCompliance(
   const outcomeKeywords = ["achieved", "improved", "able to", "completed", "progressed", "demonstrated", "engaged", "participated", "outcome", "result", "progress"];
   if (notes.length > 0 && !outcomeKeywords.some(kw => notes.toLowerCase().includes(kw))) {
     issues.push({ type: "warning", rule: "no_outcome", msg: "Notes should describe measurable outcomes (e.g. 'participant achieved...', 'improved...')" });
+  }
+  // Stage 2: 48-hour documentation rule
+  if (sessionDate) {
+    const sessionMs = new Date(sessionDate).getTime();
+    const nowMs = Date.now();
+    const deltaDays = (nowMs - sessionMs) / (1000 * 60 * 60 * 24);
+    if (deltaDays > 7) {
+      issues.push({ type: "error", rule: "48_hour_overdue", msg: `Notes are ${Math.floor(deltaDays)} days overdue — NDIS requires documentation within 48 hours of service` });
+    } else if (deltaDays > 2) {
+      issues.push({ type: "warning", rule: "48_hour_warning", msg: `Session was ${Math.floor(deltaDays)} days ago — NDIS recommends documenting within 48 hours` });
+    }
   }
   return issues;
 }
@@ -136,6 +233,9 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [showSaveWarning, setShowSaveWarning] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showRpAcknowledge, setShowRpAcknowledge] = useState(false);
+  const [rpAcknowledged, setRpAcknowledged] = useState(false);
+  const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
 
   useEffect(() => {
@@ -170,15 +270,32 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   const rulesResult = aiInsights?.rules_result ?? null;
 
-  // Live compliance issues while editing
+  // Stage 2: 3-second polling for live compliance (catches time-based rules)
+  useEffect(() => {
+    if (!isEditing) return;
+    const timer = setInterval(() => setPollTick((t) => t + 1), 3000);
+    return () => clearInterval(timer);
+  }, [isEditing]);
+
+  // Stage 1: Inline highlights for RP / subjective / person-first language
+  const liveHighlights = useMemo<Highlight[]>(() => {
+    if (!isEditing || !notes) return [];
+    return scanNoteHighlights(notes);
+  }, [notes, isEditing]);
+
+  const liveRpFlags = useMemo(() => liveHighlights.filter((h) => h.type === "rp"), [liveHighlights]);
+
+  // Live compliance issues while editing (includes 48-hour check via pollTick dependency)
   const liveIssues = useMemo(() => {
+    void pollTick;
     if (!isEditing) return [];
     return checkLiveCompliance(
       notes,
       session?.duration_minutes,
-      session?.goals_addressed as string[] | undefined
+      session?.goals_addressed as string[] | undefined,
+      session?.session_date as string | undefined
     );
-  }, [notes, isEditing, session?.duration_minutes, session?.goals_addressed]);
+  }, [notes, isEditing, session?.duration_minutes, session?.goals_addressed, session?.session_date, pollTick]);
 
   const criticalLiveIssues = liveIssues.filter(i => i.type === "error");
 
@@ -205,6 +322,29 @@ export default function SessionDetail({ id }: { id?: string }) {
     },
     enabled: false,
     staleTime: 1000 * 60 * 5,
+  });
+
+  // Stage 6: AI note improvement — per-rule suggestions + full rewrite
+  const improveNoteMutation = useMutation({
+    mutationFn: async () => {
+      const failed = rulesResult?.failed_rules ?? [];
+      const rp = (aiInsights?.rp_flags as Array<{ phrase: string; category: string }>) ?? [];
+      const res = await apiFetch("/api/ai/improve-note", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notes: session?.notes ?? notes,
+          failed_rules: failed,
+          rp_flags: rp,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to generate improved note");
+      return res.json() as Promise<{
+        improved_note: string;
+        rule_suggestions: Array<{ rule: string; issue: string; suggestion: string }>;
+      }>;
+    },
+    onError: () => toast({ title: "AI note improvement failed", variant: "destructive" }),
   });
 
   // Re-run compliance (POST /compliance/run/:id)
@@ -235,7 +375,10 @@ export default function SessionDetail({ id }: { id?: string }) {
   };
 
   const handleSaveNotes = () => {
-    if (criticalLiveIssues.length > 0) {
+    // Stage 3: RP gate — must acknowledge before saving if RP detected
+    if (liveRpFlags.length > 0 && !rpAcknowledged) {
+      setShowRpAcknowledge(true);
+    } else if (criticalLiveIssues.length > 0) {
       setShowSaveWarning(true);
     } else {
       doSaveNotes();
@@ -379,6 +522,61 @@ export default function SessionDetail({ id }: { id?: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Stage 3: RP Acknowledgement Gate */}
+      <AlertDialog open={showRpAcknowledge} onOpenChange={setShowRpAcknowledge}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-700">
+              <Shield className="h-5 w-5" /> Restrictive Practice Detected
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left">
+                <p className="text-slate-600 text-sm">The following phrases in your notes may indicate restrictive practices:</p>
+                <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {liveRpFlags.slice(0, 6).map((flag, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-red-700 bg-red-50 rounded-md px-2 py-1.5">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span><strong>"{flag.phrase}"</strong> — {flag.message}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex items-start gap-2.5 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="rp-confirm-chk"
+                    checked={rpAcknowledged}
+                    onChange={(e) => setRpAcknowledged(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-red-600 cursor-pointer shrink-0"
+                  />
+                  <label htmlFor="rp-confirm-chk" className="text-sm text-amber-800 cursor-pointer leading-relaxed">
+                    I confirm these restrictive practices are documented in the participant's NDIS Behaviour Support Plan and have prior authorisation from the appropriate authority.
+                  </label>
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setShowRpAcknowledge(false); setRpAcknowledged(false); }}>
+              Go Back &amp; Review
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!rpAcknowledged}
+              onClick={() => {
+                setShowRpAcknowledge(false);
+                if (criticalLiveIssues.length > 0) {
+                  setShowSaveWarning(true);
+                } else {
+                  doSaveNotes();
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+            >
+              Acknowledged — Save Notes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -482,13 +680,36 @@ export default function SessionDetail({ id }: { id?: string }) {
             <div className="p-5">
               {isEditing ? (
                 <div className="space-y-3">
-                  <Textarea
+                  {/* Stage 1: Highlighted note editor with inline RP/subjective/person-first overlays */}
+                  <HighlightedNoteEditor
                     value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="min-h-[280px] text-[13px] leading-relaxed resize-y rounded-xl"
-                    style={{ borderColor: "rgba(232,213,232,0.5)" }}
+                    onChange={setNotes}
+                    highlights={liveHighlights}
                     placeholder="Enter clinical notes here. Include: what was done, participant response, measurable outcomes linked to NDIS goals..."
                   />
+                  {/* Highlight legend */}
+                  {liveHighlights.length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      {liveRpFlags.length > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
+                          <span className="inline-block w-2 h-2 rounded-sm bg-red-400" />
+                          {liveRpFlags.length} restrictive practice{liveRpFlags.length > 1 ? "s" : ""} detected
+                        </span>
+                      )}
+                      {liveHighlights.filter(h => h.type === "subjective").length > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                          <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" />
+                          {liveHighlights.filter(h => h.type === "subjective").length} subjective phrase{liveHighlights.filter(h => h.type === "subjective").length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                      {liveHighlights.filter(h => h.type === "person_first").length > 0 && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                          <span className="inline-block w-2 h-2 rounded-sm bg-amber-400" />
+                          {liveHighlights.filter(h => h.type === "person_first").length} person-first issue{liveHighlights.filter(h => h.type === "person_first").length > 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* Live compliance bar */}
                   {liveIssues.length > 0 && (
                     <div className="border rounded-lg overflow-hidden">
@@ -798,6 +1019,84 @@ export default function SessionDetail({ id }: { id?: string }) {
                         </div>
                       ) : (
                         <p className="text-slate-500">Failed to pull explanation details.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Stage 6: AI Note Improvement — per-rule suggestions + full rewrite */}
+              {rulesResult?.failed_rules?.length > 0 && (
+                <div className="pt-2">
+                  {!improveNoteMutation.data ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs gap-1"
+                      onClick={() => improveNoteMutation.mutate()}
+                      disabled={improveNoteMutation.isPending}
+                    >
+                      {improveNoteMutation.isPending
+                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating improved note…</>
+                        : <><Sparkles className="h-3.5 w-3.5 text-purple-500" /> Improve Note with AI</>}
+                    </Button>
+                  ) : (
+                    <div className="bg-purple-50/60 border border-purple-200/50 rounded-xl p-3.5 space-y-3 text-xs animate-in fade-in duration-150">
+                      <div className="flex justify-between items-center">
+                        <p className="font-bold flex items-center gap-1 text-purple-900">
+                          <Sparkles className="h-3.5 w-3.5 text-purple-600" /> AI-Improved Note
+                        </p>
+                        <Button variant="ghost" className="h-5 p-1 text-slate-400" onClick={() => improveNoteMutation.reset()}>Dismiss</Button>
+                      </div>
+
+                      {/* Per-rule suggestions */}
+                      {improveNoteMutation.data.rule_suggestions?.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Per-Rule Fixes</p>
+                          {improveNoteMutation.data.rule_suggestions.map((s, i) => (
+                            <div key={i} className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
+                              <p className="font-semibold text-purple-800 capitalize">{s.rule.replace(/_/g, " ")}</p>
+                              <p className="text-slate-500 text-[11px]">{s.issue}</p>
+                              <div className="flex items-start gap-2">
+                                <p className="flex-1 text-slate-700 italic leading-relaxed">"{s.suggestion}"</p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-[10px] text-purple-700 hover:bg-purple-100 shrink-0"
+                                  onClick={() => {
+                                    setNotes((prev) => prev ? `${prev}\n\n${s.suggestion}` : s.suggestion);
+                                    setIsEditing(true);
+                                    toast({ title: "Suggestion added", description: "Review and save when ready." });
+                                  }}
+                                >
+                                  Accept
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Full improved note accept */}
+                      {improveNoteMutation.data.improved_note && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Full Rewrite</p>
+                          <div className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 text-slate-700 leading-relaxed max-h-40 overflow-y-auto">
+                            {improveNoteMutation.data.improved_note}
+                          </div>
+                          <Button
+                            size="sm"
+                            className="w-full text-xs gap-1.5 bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => {
+                              setNotes(improveNoteMutation.data!.improved_note);
+                              setIsEditing(true);
+                              improveNoteMutation.reset();
+                              toast({ title: "Improved note accepted", description: "Review and save when ready." });
+                            }}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" /> Accept Full Improved Note
+                          </Button>
+                        </div>
                       )}
                     </div>
                   )}

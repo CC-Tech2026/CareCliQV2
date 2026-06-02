@@ -431,6 +431,113 @@ def check_budget_not_exceeded(
 
 
 # ---------------------------------------------------------------------------
+# Rule 11: Person-first language
+# ---------------------------------------------------------------------------
+
+PERSON_FIRST_VIOLATIONS: list[tuple[str, str]] = [
+    (r"\bautistic\s+(?:person|child|adult|individual|client|man|woman|boy|girl)\b", "person with autism"),
+    (r"\bwheelchair[- ]?bound\b", "person who uses a wheelchair"),
+    (r"\bconfined\s+to\s+(?:a\s+)?wheelchair\b", "person who uses a wheelchair"),
+    (r"\bsuffers?\s+from\b", "has a diagnosis of"),
+    (r"\bthe\s+disabled\b", "person with disability"),
+    (r"\bspecial\s+needs\b", "support needs"),
+    (r"\bmental(?:ly)?\s+retard\w*\b", "person with intellectual disability"),
+    (r"\bblind\s+(?:person|people|client)\b", "person who is blind"),
+    (r"\bdeaf\s+(?:person|people|client)\b", "person who is deaf"),
+    (r"\bepilept(?:ic|ics)\b", "person with epilepsy"),
+]
+
+
+def check_person_first_language(session: dict) -> dict:
+    """Warn if non-person-first language is detected in clinical notes."""
+    notes = (session.get("notes") or "").lower()
+    structured_text = _structured_fields_text(session).lower()
+    full_text = notes + " " + structured_text
+
+    violations = []
+    for pattern, suggestion in PERSON_FIRST_VIOLATIONS:
+        if re.search(pattern, full_text, re.IGNORECASE):
+            violations.append(f"use '{suggestion}'")
+
+    if violations:
+        return {
+            "rule": "person_first_language",
+            "status": "warning",
+            "message": f"Non-person-first language detected — {violations[0]}",
+            "severity": "medium",
+        }
+    return {
+        "rule": "person_first_language",
+        "status": "pass",
+        "message": "Person-first language used throughout",
+        "severity": "low",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Rule 12: 48-hour documentation rule
+# ---------------------------------------------------------------------------
+
+def check_48_hour_documentation(session: dict) -> dict:
+    """Warn if the session was documented more than 48 hours after it occurred.
+
+    Uses compliance_checked_at vs session_date as the proxy for documentation
+    latency. If compliance_checked_at is not set, skips the check.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    session_date = _parse_date(session.get("session_date"))
+    checked_at_raw = session.get("compliance_checked_at") or ""
+
+    if not session_date:
+        return {
+            "rule": "48_hour_documentation",
+            "status": "warning",
+            "message": "Session date not set — cannot check 48-hour documentation rule",
+            "severity": "medium",
+        }
+
+    if not checked_at_raw:
+        # Use today as the proxy if we haven't got a checked_at yet
+        checked_at = datetime.now(timezone.utc).date()
+    else:
+        try:
+            checked_at = datetime.fromisoformat(str(checked_at_raw)[:19]).date()
+        except Exception:
+            checked_at = datetime.now(timezone.utc).date()
+
+    delta_days = (checked_at - session_date).days
+
+    if delta_days <= 0:
+        return {
+            "rule": "48_hour_documentation",
+            "status": "pass",
+            "message": "Session documented on the day of service",
+            "severity": "low",
+        }
+    if delta_days <= 2:
+        return {
+            "rule": "48_hour_documentation",
+            "status": "pass",
+            "message": f"Session documented within 48 hours ({delta_days} day(s) after service)",
+            "severity": "low",
+        }
+    if delta_days <= 7:
+        return {
+            "rule": "48_hour_documentation",
+            "status": "warning",
+            "message": f"Session documented {delta_days} days after service — NDIS recommends within 48 hours",
+            "severity": "medium",
+        }
+    return {
+        "rule": "48_hour_documentation",
+        "status": "fail",
+        "message": f"Session documented {delta_days} days after service — significantly overdue (48-hour rule)",
+        "severity": "high",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Restrictive Practice (RP) Detection
 # ---------------------------------------------------------------------------
 
@@ -607,6 +714,8 @@ def run_compliance_check(
         check_budget_not_exceeded(session, participant),
         check_body_examination_documented(session, custom_physical_types),
         check_pain_markers_have_notes(session),
+        check_person_first_language(session),
+        check_48_hour_documentation(session),
     ]
 
     total = len(rules)

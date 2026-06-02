@@ -115,6 +115,31 @@ async def explain_compliance(body: ExplainComplianceRequest, current_user: dict 
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/improve-note")
+async def improve_note_endpoint(
+    body: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate an AI-improved clinical note fixing all failed compliance rules.
+
+    Body: { notes: str, failed_rules: list, rp_flags: list }
+    Returns: { improved_note: str, rule_suggestions: [{rule, issue, suggestion}] }
+    """
+    notes = (body.get("notes") or "").strip()
+    failed_rules = body.get("failed_rules") or []
+    rp_flags = body.get("rp_flags") or []
+
+    if not notes:
+        raise HTTPException(status_code=422, detail="notes field is required")
+
+    try:
+        result = await ai_service.improve_note(notes, failed_rules, rp_flags)
+        return result
+    except Exception as e:
+        logger.error(f"Improve-note error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/summary/{participant_id}")
 async def get_ai_summary(participant_id: str, current_user: dict = Depends(get_current_user)):
     participant = await participant_service.get_participant_by_id(participant_id, current_user)
