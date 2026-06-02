@@ -1,0 +1,1 @@
+- [CareScribe architecture](carescribe-architecture.md) — Supabase auth+DB kept on purpose (not Replit Auth); api-server is a gateway proxying /api/* to Python except local Replit-Postgres routes; AI via Replit Integrations.

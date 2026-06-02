@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { practitionerSettingsTable } from "@workspace/db/schema";
 import {
@@ -6,13 +7,23 @@ import {
   SavePractitionerSettingsBody,
   SavePractitionerSettingsResponse,
 } from "@workspace/api-zod";
+import { requireAuth } from "../lib/auth";
 
 const router: IRouter = Router();
 
+// All practitioner-settings routes require a valid backend-issued session and
+// are scoped to the authenticated user (rows keyed by the user id).
+router.use(requireAuth);
+
 router.get("/settings/practitioner", async (req, res) => {
-  const rows = await db.select().from(practitionerSettingsTable).limit(1);
+  const userId = req.userId!;
+  const rows = await db
+    .select()
+    .from(practitionerSettingsTable)
+    .where(eq(practitionerSettingsTable.id, userId))
+    .limit(1);
   if (rows.length === 0) {
-    const data = GetPractitionerSettingsResponse.parse({ id: "default" });
+    const data = GetPractitionerSettingsResponse.parse({ id: userId });
     res.json(data);
     return;
   }
@@ -32,11 +43,13 @@ router.get("/settings/practitioner", async (req, res) => {
 });
 
 router.put("/settings/practitioner", async (req, res) => {
+  const userId = req.userId!;
   const body = SavePractitionerSettingsBody.parse(req.body);
 
   const existing = await db
     .select()
     .from(practitionerSettingsTable)
+    .where(eq(practitionerSettingsTable.id, userId))
     .limit(1);
 
   const current = existing[0] ?? {
@@ -76,7 +89,7 @@ router.put("/settings/practitioner", async (req, res) => {
 
   const upserted = await db
     .insert(practitionerSettingsTable)
-    .values({ id: "default", ...merged })
+    .values({ id: userId, ...merged })
     .onConflictDoUpdate({
       target: practitionerSettingsTable.id,
       set: { ...merged, updatedAt: new Date() },
