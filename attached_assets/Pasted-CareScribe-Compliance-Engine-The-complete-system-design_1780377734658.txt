@@ -1,0 +1,48 @@
+CareScribe — Compliance Engine
+The complete system design for CareScribe's compliance core. This is not a feature — it is the product. Everything else (invoicing, scheduling, toolkit) supports this engine.
+
+Why it matters
+The 12 rules
+Restrictive practices
+Engine pipeline
+Scoring system
+AI layer
+Multilingual
+Audit pack
+vs Competitors
+Multilingual compliance — the differentiator
+The pipeline: any language → compliant English note
+This is the feature that no competitor offers. The worker thinks, speaks, and documents in their first language. CareScribe handles the translation AND the compliance formatting in a single step. The compliance engine then runs on the English output — not the source language.
+
+1
+Worker speaks or types in any language
+Web Speech API transcribes voice. Language is auto-detected. Worker sees the transcription in their own language in the input field.
+
+2
+Claude translates AND reformats in one call
+Single API call: translate from [detected language] to English AND reformat as a compliant NDIS progress note. Not two steps — one. This keeps latency low and cost manageable.
+
+3
+Compliance engine runs on the English output
+The 12 rules and 5 RP categories run on the translated English note. The source language is stored as session.input_language for audit trail — it is never the primary record.
+
+4
+The English note is the legal record. The source language is the audit trail.
+The NDIS requires English documentation. The source language input is stored for audit transparency — it proves the note was genuinely produced by this worker describing this session.
+
+Supported languages (launch)
+🇮🇳 Hindi
+🇵🇭 Tagalog
+🇳🇵 Nepali
+🇸🇦 Arabic
+🇰🇪 Swahili
+🇨🇳 Mandarin
+🇻🇳 Vietnamese
+🇵🇰 Punjabi
+🇸🇴 Somali
+🇪🇹 Amharic
+What is stored for audit
+session.input_language — language detected
+session.original_input — raw input text in source language
+session.notes — final English compliant note
+audit_log — who translated, when, which model version

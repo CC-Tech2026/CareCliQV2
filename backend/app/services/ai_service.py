@@ -13,7 +13,26 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-client = OpenAI(api_key=settings.openai_api_key)
+def _openai_configured() -> bool:
+    """True when either Replit AI Integrations or a direct OpenAI key is available."""
+    if os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") and os.environ.get(
+        "AI_INTEGRATIONS_OPENAI_API_KEY"
+    ):
+        return True
+    return bool((settings.openai_api_key or "").strip())
+
+
+def _build_openai_client() -> OpenAI:
+    """Prefer Replit AI Integrations (OpenAI-compatible, no user key required);
+    fall back to a direct OPENAI_API_KEY when the integration is not configured."""
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    integ_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
+    if base_url and integ_key:
+        return OpenAI(api_key=integ_key, base_url=base_url)
+    return OpenAI(api_key=settings.openai_api_key)
+
+
+client = _build_openai_client()
 
 
 class TranslationProviderUnavailable(RuntimeError):
@@ -117,12 +136,18 @@ Always respond with valid JSON matching the exact output format requested."""
 # ---------------------------------------------------------------------------
 
 def get_anthropic_client():
-    """Return an Anthropic client if ANTHROPIC_API_KEY is configured, else None."""
+    """Return an Anthropic client. Prefers Replit AI Integrations (no user key
+    required); falls back to a direct ANTHROPIC_API_KEY. Returns None if neither
+    is configured."""
+    base_url = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_BASE_URL")
+    integ_key = os.environ.get("AI_INTEGRATIONS_ANTHROPIC_API_KEY")
     api_key = settings.anthropic_api_key
-    if not api_key:
+    if not ((base_url and integ_key) or api_key):
         return None
     try:
         import anthropic
+        if base_url and integ_key:
+            return anthropic.Anthropic(api_key=integ_key, base_url=base_url)
         return anthropic.Anthropic(api_key=api_key)
     except Exception as e:
         logger.warning(f"Failed to create Anthropic client: {e}")
@@ -687,7 +712,7 @@ async def translate_to_english(text: str, source_language: str = "auto") -> dict
     except Exception as libre_exc:
         logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
 
-    if not (settings.openai_api_key or "").strip():
+    if not _openai_configured():
         raise TranslationProviderUnavailable(
             "Translation provider is not configured. Add OPENAI_API_KEY or LIBRETRANSLATE_URL on the backend."
         )
