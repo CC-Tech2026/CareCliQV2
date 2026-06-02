@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from ..core.access import is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
+from .security import require_recent_reauth
 from ..schemas.incident import IncidentCreate, IncidentUpdate
 from ..services import audit_service, incident_service, participant_service, session_service
 import logging
@@ -106,6 +107,7 @@ async def create_incident(
 
 @router.patch("/{incident_id}")
 async def update_incident(
+    request: Request,
     incident_id: str,
     body: IncidentUpdate,
     user: dict = Depends(get_current_user),
@@ -116,6 +118,8 @@ async def update_incident(
     if not is_coordinator_role(user) and existing.get("user_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Access denied")
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if updates.get("status") in {"closed", "resolved", "reported"} or updates.get("ndis_reported_at"):
+        require_recent_reauth(request, user)
     try:
         updated = await incident_service.update_incident(incident_id, updates, current_user=user)
     except ValueError as e:

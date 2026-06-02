@@ -130,8 +130,8 @@ export default function SessionNew() {
       },
       {
         onSuccess: (res) => {
-          toast({ title: "Session Ready", description: startNow ? "Starting live session…" : "Session saved" });
-          setLocation(startNow ? `/sessions/${res.id}/live` : `/sessions/${res.id}`);
+          toast({ title: "Session Ready", description: startNow ? "Session opened for review" : "Session saved" });
+          setLocation(`/sessions/${res.id}`);
         },
       },
     );

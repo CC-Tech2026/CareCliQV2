@@ -1,409 +1,485 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
-import { format, parseISO, isAfter, subDays, differenceInDays } from "date-fns";
+import { Link } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
+import { useState, type ComponentType } from "react";
 import {
-  useGetSessions,
-  useGetParticipants,
-  useGetComplianceOverview,
-  getGetComplianceOverviewQueryKey,
-} from "@workspace/api-client-react";
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  ShieldCheck,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { InviteModal } from "@/components/InviteModal";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  ShieldCheck,
-  Calendar,
-  Users,
-  FileText,
-  CircleDot,
-  ArrowRight,
-  AlertTriangle,
-  ClipboardList,
-  Bell,
-  ChevronRight,
-} from "lucide-react";
+  getCoordinatorDashboard,
+  getWorkerDashboard,
+  type CoordinatorDashboard,
+  type DashboardClient,
+  type DashboardSession,
+  type WorkerDashboard,
+} from "@/services/dashboardService";
 
-// ── Palette Alignment (Matched Exactly with Brand Identity) ──────────────────
-const PLUM = "#5533CC"; // Brand Purple
-const CORAL = "#F03060"; // Brand Coral
+const PLUM = "#5533CC";
+const CORAL = "#F03060";
+const TEXT = "#1E1640";
+const MUTED = "#7A6A9E";
+const BORDER = "#E2DEF2";
+const SOFT = "#F5F3FC";
 
-const COLORS = {
-  TEXT_MAIN: "#1A151E",
-  TEXT_MUTED: "#7A6A9E",
-  SUCCESS: "#10B981",
-  WARNING: "#F59E0B",
-  DANGER: "#EF4444",
-};
-
-// ── Shared Subcomponents ──────────────────────────────────────────────────────
-
-function ComplianceStatus({ score, status }: { score?: number | null; status?: string }) {
-  if (status === "draft" || (!score && !status)) {
-    return (
-      <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold bg-[#F5F3FC] text-[#7A6A9E] uppercase tracking-wider border border-[#D8D0F0]/40 whitespace-nowrap">
-        Draft
-      </span>
-    );
+function safeDate(value?: string | null, fallback = "Not recorded") {
+  if (!value) return fallback;
+  try {
+    return format(parseISO(value), "MMM d");
+  } catch {
+    return value;
   }
-
-  const config = score != null 
-    ? score >= 85 
-      ? { bg: "rgba(16, 185, 129, 0.1)", text: COLORS.SUCCESS, label: "Compliant" }
-      : score >= 60 
-      ? { bg: "rgba(245, 158, 11, 0.1)", text: COLORS.WARNING, label: "At Risk" }
-      : { bg: "rgba(239, 68, 68, 0.1)", text: COLORS.DANGER, label: "Action Required" }
-    : null;
-
-  if (!config) return null;
-
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-current/10 whitespace-nowrap"
-      style={{ background: config.bg, color: config.text }}
-    >
-      <ShieldCheck size={11} strokeWidth={2.5} />
-      {config.label}
-    </span>
-  );
 }
 
-function MetricCard({
+function statusTone(status?: string) {
+  if (status === "compliant") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "non_compliant") return "bg-red-50 text-red-700 border-red-200";
+  if (status === "draft") return "bg-slate-50 text-slate-600 border-slate-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+function DashboardStatCard({
   label,
   value,
-  description,
+  caption,
   icon: Icon,
-  loading,
+  valueColor = TEXT,
+  captionColor = MUTED,
 }: {
   label: string;
   value: number | string;
-  description: string;
-  icon: any;
-  loading?: boolean;
+  caption: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number }>;
+  valueColor?: string;
+  captionColor?: string;
 }) {
   return (
-    <div className="bg-white/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-[#D8D0F0] shadow-[0_4px_20px_rgba(85,51,204,0.03)] transition-all duration-300 hover:shadow-[0_12px_24px_rgba(85,51,204,0.06)] hover:translate-y-[-2px]">
-      <div className="flex items-center justify-between mb-4">
-        <div className="w-10 h-10 rounded-2xl bg-[#F5F3FC] flex items-center justify-center" style={{ color: PLUM }}>
-          <Icon size={18} strokeWidth={2.5} />
+    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: valueColor }}>
+            {value}
+          </p>
+        </div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
+          <Icon size={20} strokeWidth={2.5} />
         </div>
       </div>
-      {loading ? (
-        <div className="h-8 w-20 bg-[#F5F3FC] animate-pulse rounded-xl" />
-      ) : (
-        <p className="text-2xl sm:text-3xl font-black tracking-tight" style={{ color: COLORS.TEXT_MAIN }}>
-          {value}
+      <p className="mt-3 text-sm font-medium" style={{ color: captionColor }}>
+        {caption}
+      </p>
+    </section>
+  );
+}
+
+function ComplianceScoreCard({
+  score,
+  status,
+  title = "Compliance Score",
+}: {
+  score: number;
+  status: string;
+  title?: string;
+}) {
+  const pct = Math.max(0, Math.min(100, score || 0));
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="flex items-center justify-between gap-5">
+        <div>
+          <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Calculated from completed legal records.</p>
+          <span className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${statusTone(status)}`}>
+            {status.replace("_", " ")}
+          </span>
+        </div>
+        <div
+          className="relative grid h-28 w-28 place-items-center rounded-full"
+          style={{ background: `conic-gradient(${PLUM} ${pct * 3.6}deg, #EEEAFB 0deg)` }}
+        >
+          <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
+            <span className="text-2xl font-black" style={{ color: PLUM }}>{pct}%</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ClientListCard({ clients }: { clients: DashboardClient[] }) {
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Clients</h2>
+        <Link href="/my-clients" className="text-sm font-bold" style={{ color: CORAL }}>My Clients</Link>
+      </div>
+      <div className="space-y-3">
+        {clients.length === 0 && (
+          <p className="rounded-lg bg-[#F5F3FC] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            No assigned sessions are scheduled for today.
+          </p>
+        )}
+        {clients.map((client) => (
+          <Link key={client.id} href={`/my-clients/${client.id}`}>
+            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]">
+              <div className="grid h-10 w-10 place-items-center rounded-full text-sm font-black text-white" style={{ background: PLUM }}>
+                {client.full_name?.split(" ").map((p) => p[0]).join("").slice(0, 2)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{client.full_name}</p>
+                <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
+                  {client.plan_management_type} · Last seen {safeDate(client.last_seen)}
+                </p>
+              </div>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusTone(client.compliance_status)}`}>
+                {client.compliance_status?.replace("_", " ")}
+              </span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SessionListCard({ title, sessions }: { title: string; sessions: DashboardSession[] }) {
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <h2 className="mb-4 text-lg font-black" style={{ color: TEXT }}>{title}</h2>
+      <div className="space-y-3">
+        {sessions.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No records need attention.</p>}
+        {sessions.map((session) => (
+          <div key={session.id} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold" style={{ color: TEXT }}>
+                  {session.participant_name || "Participant"}
+                </p>
+                <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>
+                  {safeDate(session.session_date)} · {(session.session_type || "session").replace("_", " ")}
+                </p>
+              </div>
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusTone(session.compliance_status)}`}>
+                {session.compliance_score ?? "Draft"}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function initials(name?: string | null) {
+  return (name || "Participant")
+    .split(" ")
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function sessionTime(value?: string | null) {
+  if (!value) return "Time not recorded";
+  try {
+    return format(parseISO(value), "h:mm a");
+  } catch {
+    return safeDate(value);
+  }
+}
+
+function statusLabel(session: DashboardSession) {
+  if (session.status && session.status !== "completed") return session.status.replace("_", " ");
+  if (session.compliance_status === "compliant") return "Done";
+  if (session.compliance_status === "non_compliant") return "RP Flag";
+  if (session.compliance_status === "at_risk") return "Note Due";
+  return "Upcoming";
+}
+
+function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard }) {
+  const breakdown = data.team_compliance_breakdown ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
+  const score = Math.max(0, Math.min(100, data.team_compliance_score || 0));
+  const status =
+    score >= 85 ? "Compliant" : score >= 60 ? "At Risk" : "Non-Compliant";
+
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-black" style={{ color: TEXT }}>Team Compliance</h2>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Calculated from completed legal records.</p>
+        </div>
+        <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#FFE8EE", color: CORAL }}>
+          {score}/100
+        </span>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-[140px_1fr]">
+        <div
+          className="relative mx-auto grid h-28 w-28 place-items-center rounded-full"
+          style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #EEEAFB 0deg)` }}
+        >
+          <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
+            <div className="text-center">
+              <span className="block text-2xl font-black" style={{ color: PLUM }}>{score}</span>
+              <span className="block text-[10px] font-bold uppercase" style={{ color: MUTED }}>score</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2 text-sm font-bold">
+          <div className="flex items-center justify-between gap-3">
+            <span style={{ color: MUTED }}>{status}</span>
+            <span className="text-emerald-600">{breakdown.compliant}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span style={{ color: MUTED }}>At Risk</span>
+            <span className="text-amber-600">{breakdown.at_risk}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span style={{ color: MUTED }}>Non-Compliant</span>
+            <span className="text-red-600">{breakdown.non_compliant}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+          Workers Needing Attention
         </p>
-      )}
-      <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mt-1.5" style={{ color: COLORS.TEXT_MUTED }}>
-        {label}
-      </p>
-      <p className="text-[12px] sm:text-[13px] font-medium mt-1 opacity-70" style={{ color: COLORS.TEXT_MAIN }}>
-        {description}
-      </p>
+        <div className="space-y-3">
+          {data.workers_needing_attention.length === 0 && (
+            <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+              No worker compliance issues are currently open.
+            </p>
+          )}
+          {data.workers_needing_attention.slice(0, 4).map((worker) => (
+            <div key={worker.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
+                {initials(worker.full_name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{worker.full_name}</p>
+                <p className="truncate text-xs font-medium" style={{ color: MUTED }}>{worker.reason || "Compliance review required"}</p>
+              </div>
+              <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFE8EE", color: CORAL }}>
+                Review
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] }) {
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Sessions</h2>
+        <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: SOFT, color: PLUM }}>
+          {sessions.length} total
+        </span>
+      </div>
+      <div className="space-y-3">
+        {sessions.length === 0 && (
+          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            No sessions are scheduled for today.
+          </p>
+        )}
+        {sessions.slice(0, 8).map((session) => (
+          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
+              {initials(session.participant_name)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black" style={{ color: TEXT }}>{session.participant_name || "Participant"}</p>
+              <p className="truncate text-xs font-medium capitalize" style={{ color: MUTED }}>
+                {(session.session_type || "session").replace("_", " ")} - {sessionTime(session.session_date)}
+              </p>
+            </div>
+            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black capitalize ${statusTone(session.compliance_status)}`}>
+              {statusLabel(session)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard["common_issues"] }) {
+  const max = Math.max(...issues.map((issue) => issue.count), 1);
+  return (
+    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
+        <Link href="/compliance" className="text-sm font-bold" style={{ color: PLUM }}>View full report</Link>
+      </div>
+      <div className="space-y-3">
+        {issues.length === 0 && (
+          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            No recurring failed compliance rules have been recorded.
+          </p>
+        )}
+        {issues.map((issue, index) => (
+          <div key={issue.issue} className="grid grid-cols-[150px_1fr_32px] items-center gap-3 text-sm">
+            <p className="truncate font-bold" style={{ color: TEXT }}>{issue.issue}</p>
+            <div className="h-2 overflow-hidden rounded-full bg-[#EEEAFB]">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(8, Math.round((issue.count / max) * 100))}%`,
+                  background: index === issues.length - 1 ? "#F8A51B" : PLUM,
+                }}
+              />
+            </div>
+            <span className="text-right text-xs font-black" style={{ color: MUTED }}>{issue.count}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
+  const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 pb-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+        </div>
+        <Link href="/my-clients">
+          <button className="rounded-full px-5 py-3 text-sm font-black text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
+            Open My Clients
+          </button>
+        </Link>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <DashboardStatCard label="My Sessions Today" value={data.sessions_today} caption="Worker-owned sessions only" icon={CalendarDays} />
+        <DashboardStatCard label="Notes Due" value={data.notes_due} caption="Draft or compliance-risk notes" icon={FileText} />
+        <DashboardStatCard label="My Clients" value={data.assigned_clients.length} caption="Assigned participants only" icon={Users} />
+        <DashboardStatCard label="Pending Fixes" value={data.pending_compliance_fixes.length} caption="Items needing review" icon={AlertTriangle} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <ComplianceScoreCard score={data.compliance_score} status={data.compliance_status} title="My Compliance Score" />
+        <ClientListCard clients={todayClients} />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 6)} />
+        <SessionListCard title="Pending Compliance Fixes" sessions={data.pending_compliance_fixes.slice(0, 6)} />
+      </div>
     </div>
   );
 }
 
-// ── Core Dashboard Layout ─────────────────────────────────────────────────────
-
-export default function Dashboard() {
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const isCoordinator = user?.role === "support_coordinator";
-
-  const { data: sessions = [], isLoading: sLoad } = useGetSessions({ limit: 50 });
-  const { data: participants = [], isLoading: pLoad } = useGetParticipants();
-  const { data: rawOverview, isLoading: oLoad } = useGetComplianceOverview({
-    query: {
-      queryKey: getGetComplianceOverviewQueryKey(),
-      enabled: isCoordinator,
-    },
-  });
-
-  const now = new Date();
-  const thisWeek = sessions.filter(s => isAfter(parseISO(s.session_date), subDays(now, 7)));
-  const pendingNotes = sessions.filter(s => !s.notes || (s.notes as string).length < 20);
-  const activeSession = sessions.find(s => s.status === "in_progress");
-  const complianceScore = (rawOverview as any)?.average_score ?? null;
-
-  // Priority items — derived from already-fetched data
-  const overdueNotes = sessions.filter(s =>
-    s.status !== "in_progress" && s.status !== "cancelled" &&
-    (!s.notes || (s.notes as string).length < 20) &&
-    differenceInDays(now, parseISO(s.session_date)) >= 1
-  );
-  const expiringPlans = (participants as any[]).filter((p: any) => {
-    if (!p.plan_end_date) return false;
-    const days = differenceInDays(parseISO(p.plan_end_date), now);
-    return days >= 0 && days <= 30;
-  });
-  const priorityItems: Array<{ label: string; detail: string; href: string; color: string }> = [
-    ...overdueNotes.slice(0, 2).map(s => ({
-      label: "Overdue note",
-      detail: `${format(parseISO(s.session_date), "MMM d")} · ${(s.session_type ?? "Session").replace("_", " ")}`,
-      href: `/sessions/${s.id}`,
-      color: CORAL,
-    })),
-    ...expiringPlans.slice(0, 2).map((p: any) => ({
-      label: "Plan expiring soon",
-      detail: `${p.full_name} · ends ${format(parseISO(p.plan_end_date), "MMM d")}`,
-      href: `/patients`,
-      color: "#D97706",
-    })),
-  ];
+function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   return (
-    <div className="w-full relative min-h-full selection:bg-[#5533CC]/20">
+    <>
+      <div className="mx-auto max-w-7xl space-y-6 pb-10">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Coordinator</p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+          </div>
+          <button
+            type="button"
+            onClick={() => setInviteOpen(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          >
+            <UserPlus size={16} strokeWidth={2.5} />
+            Invite Worker
+          </button>
+        </div>
 
-      {/* ── Dynamic Backdrop Layer Matrix ───────────────────────────────────── */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-            @keyframes fluidMesh {
-              0% { background-position: 0% 50%; }
-              50% { background-position: 100% 50%; }
-              100% { background-position: 0% 50%; }
-            }
-            .animate-fluid-bg {
-              background: linear-gradient(-45deg, #F03060, #FF5E7E, #5533CC, #9B5DE5);
-              background-size: 400% 400%;
-              animation: fluidMesh 16s ease infinite;
-            }
-          `,
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <DashboardStatCard label="Active Workers" value={data.active_workers} caption="Current active child accounts" icon={Users} valueColor={PLUM} />
+          <DashboardStatCard label="Compliant Today" value={data.compliant_today} caption="Sessions passing today" icon={CheckCircle2} valueColor="#059669" />
+          <DashboardStatCard label="Notes At Risk" value={data.notes_at_risk} caption="Notes needing review" icon={ClipboardList} valueColor="#D97706" />
+          <DashboardStatCard label="RP Flags" value={data.rp_flags} caption="Restrictive practice flags" icon={AlertTriangle} valueColor={CORAL} />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <CoordinatorTeamComplianceCard data={data} />
+          <CoordinatorSessionsCard sessions={data.todays_sessions} />
+        </div>
+
+        <CoordinatorCommonIssuesCard issues={data.common_issues} />
+      </div>
+
+      <InviteModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        onInviteSent={() => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard", "coordinator"] });
+          queryClient.invalidateQueries({ queryKey: ["coordinator", "team"] });
         }}
       />
+    </>
+  );
+}
 
-      {/* Canvas Dynamic Ambient Elements */}
-      <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none fixed animate-fluid-bg" />
-      <div
-        className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none fixed"
-        style={{
-          backgroundImage: `linear-gradient(to right, ${PLUM} 1px, transparent 1px), linear-gradient(to bottom, ${PLUM} 1px, transparent 1px)`,
-          backgroundSize: "48px 48px",
-        }}
-      />
-
-      <div className="space-y-6 sm:space-y-8 max-w-7xl mx-auto pb-12 relative z-10">
-
-        {/* WELCOME BANNER SUMMARY HEADER */}
-        <div className="max-w-xl">
-          <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] mb-1 whitespace-nowrap block" style={{ color: CORAL }}>
-            {format(now, "EEEE, MMMM do")}
-          </p>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-none" style={{ color: PLUM }}>
-            Welcome back, {user?.full_name?.split(" ")[0] || "Jane"}
-          </h1>
-          <p className="font-medium mt-2 text-sm sm:text-[15px]" style={{ color: COLORS.TEXT_MUTED }}>
-            You have <span className="font-black" style={{ color: CORAL }}>{pendingNotes.length}</span> clinical notes awaiting completion.
-          </p>
-        </div>
-
-        {/* CRITICAL ACTIONS / ACTIVE LIVE INSTANCE */}
-        {activeSession && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between p-5 sm:p-6 rounded-[2rem] bg-white/90 backdrop-blur-md border border-solid border-[#F03060]/30 shadow-[0_8px_32px_-4px_rgba(240,48,96,0.08)] gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#F03060]/10 flex items-center justify-center shrink-0 animate-pulse">
-                <CircleDot size={20} style={{ color: CORAL }} strokeWidth={2.5} />
-              </div>
-              <div>
-                <p className="font-black text-sm sm:text-[15px] tracking-tight" style={{ color: COLORS.TEXT_MAIN }}>Active Container Running</p>
-                <p className="text-[12px] sm:text-[13px] font-medium" style={{ color: COLORS.TEXT_MUTED }}>Started {format(parseISO(activeSession.session_date), "p")}</p>
-              </div>
-            </div>
-            <Link href={`/sessions/${activeSession.id}/live`}>
-              <button className="w-full sm:w-auto h-10 px-5 rounded-xl text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 hover:opacity-95 shadow-sm" style={{ background: CORAL }}>
-                <span>Resume</span>
-                <ArrowRight size={12} strokeWidth={3} />
-              </button>
-            </Link>
-          </div>
-        )}
-
-        {/* PRIORITY ACTIONS */}
-        {priorityItems.length > 0 && (
-          <div className="bg-white/90 backdrop-blur-md rounded-[2rem] border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)] overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#D8D0F0]/60 flex items-center gap-2.5">
-              <Bell size={15} style={{ color: CORAL }} />
-              <h2 className="text-[13px] font-black tracking-tight" style={{ color: COLORS.TEXT_MAIN }}>Priority Actions</h2>
-              <span className="ml-auto text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: `${CORAL}18`, color: CORAL }}>
-                {priorityItems.length} item{priorityItems.length > 1 ? "s" : ""}
-              </span>
-            </div>
-            <div className="divide-y divide-[#F5F3FC]">
-              {priorityItems.map((item, i) => (
-                <Link key={i} href={item.href}>
-                  <div className="flex items-center gap-3 px-6 py-3.5 hover:bg-[#F5F3FC]/60 transition-colors cursor-pointer group">
-                    <div className="h-7 w-7 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${item.color}14` }}>
-                      <AlertTriangle size={13} style={{ color: item.color }} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold truncate" style={{ color: COLORS.TEXT_MAIN }}>{item.label}</p>
-                      <p className="text-[11px] font-medium truncate" style={{ color: COLORS.TEXT_MUTED }}>{item.detail}</p>
-                    </div>
-                    <ChevronRight size={14} className="shrink-0 opacity-40 group-hover:opacity-70 transition-opacity" style={{ color: COLORS.TEXT_MUTED }} />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* METRICS GRID */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          <MetricCard
-            label="Participants"
-            value={pLoad ? "..." : participants.length}
-            description="Active files"
-            icon={Users}
-            loading={pLoad}
-          />
-          <MetricCard
-            label="Sessions"
-            value={sLoad ? "..." : thisWeek.length}
-            description="This calendar week"
-            icon={Calendar}
-            loading={sLoad}
-          />
-          <MetricCard
-            label="Pending Notes"
-            value={sLoad ? "..." : pendingNotes.length}
-            description="Awaiting context"
-            icon={FileText}
-            loading={sLoad}
-          />
-          {isCoordinator && (
-            <MetricCard
-              label="Audit Score"
-              value={oLoad ? "..." : complianceScore ? `${Math.round(complianceScore)}%` : "N/A"}
-              description="QA aggregate rating"
-              icon={ShieldCheck}
-              loading={oLoad}
-            />
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-
-          {/* RECENT ACTIVITY CONTAINER */}
-          <div className="lg:col-span-2 bg-white/90 backdrop-blur-md rounded-[2.5rem] border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)] overflow-hidden">
-            <div className="p-6 sm:p-8 pb-3 sm:pb-4 flex items-center justify-between">
-              <h2 className="text-lg sm:text-xl font-black tracking-tight" style={{ color: PLUM }}>Recent Activity</h2>
-              <Link href="/sessions" className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-colors hover:opacity-80" style={{ color: CORAL }}>
-                View All
-              </Link>
-            </div>
-
-            {/* Desktop Table View Structure */}
-            <div className="hidden sm:block px-6 pb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-separate border-spacing-y-2.5 table-fixed">
-                  <thead>
-                    <tr className="text-[10px] font-bold uppercase tracking-widest" style={{ color: COLORS.TEXT_MUTED }}>
-                      <th className="px-4 pb-1 w-[35%]">Date Stamp</th>
-                      <th className="px-4 pb-1 w-[40%]">Session Protocol</th>
-                      <th className="px-4 pb-1 text-right w-[25%]">Security Audit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sessions.slice(0, 8).map((session) => (
-                      <tr 
-                        key={session.id} 
-                        className="group cursor-pointer"
-                        onClick={() => navigate(`/sessions/${session.id}`)}
-                      >
-                        <td className="bg-[#F5F3FC]/50 group-hover:bg-[#F5F3FC] px-4 py-3.5 rounded-l-2xl transition-all border-y border-l border-transparent group-hover:border-[#D8D0F0]/50 overflow-hidden text-ellipsis whitespace-nowrap">
-                          <div className="text-[14px] font-black text-slate-900">
-                            {format(parseISO(session.session_date), "MMM d, yyyy")}
-                          </div>
-                          <div className="text-[11px] font-bold uppercase tracking-wider opacity-60" style={{ color: COLORS.TEXT_MUTED }}>
-                            {format(parseISO(session.session_date), "p")}
-                          </div>
-                        </td>
-                        <td className="bg-[#F5F3FC]/50 group-hover:bg-[#F5F3FC] px-4 py-3.5 transition-all border-y border-transparent group-hover:border-[#D8D0F0]/50 overflow-hidden text-ellipsis whitespace-nowrap">
-                          <div className="text-[14px] font-bold text-slate-800 capitalize overflow-hidden text-ellipsis">
-                            {session.session_type?.replace("_", " ") || "General Session"}
-                          </div>
-                        </td>
-                        <td className="bg-[#F5F3FC]/50 group-hover:bg-[#F5F3FC] px-4 py-3.5 rounded-r-2xl text-right transition-all border-y border-r border-transparent group-hover:border-[#D8D0F0]/50">
-                          <div className="flex justify-end">
-                            <ComplianceStatus score={session.compliance_score} status={session.status} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Mobile Stacked Variant */}
-            <div className="block sm:hidden px-6 pb-6 space-y-3">
-              {sessions.slice(0, 6).map((session) => (
-                <div 
-                  key={session.id}
-                  onClick={() => navigate(`/sessions/${session.id}`)}
-                  className="bg-[#F5F3FC]/60 rounded-2xl p-4 border border-solid border-transparent active:border-[#D8D0F0] active:bg-[#F5F3FC] transition-all"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="text-[13px] font-black text-slate-900">
-                      {format(parseISO(session.session_date), "MMM d, yyyy")}
-                    </div>
-                    <ComplianceStatus score={session.compliance_score} status={session.status} />
-                  </div>
-                  <div className="flex items-center justify-between text-[12px] font-medium">
-                    <span className="text-slate-700 capitalize">
-                      {session.session_type?.replace("_", " ") || "General Session"}
-                    </span>
-                    <span className="opacity-50 uppercase tracking-wide text-[10px] font-bold" style={{ color: COLORS.TEXT_MUTED }}>
-                      {format(parseISO(session.session_date), "p")}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* SIDEBAR METRIC PANELS */}
-          <div className="space-y-6">
-
-            {isCoordinator && (
-              <div className="bg-white/90 backdrop-blur-md rounded-[2.5rem] p-6 sm:p-8 border border-[#D8D0F0] shadow-[0_8px_32px_rgba(0,0,0,0.02)]">
-                <h3 className="text-[11px] font-black uppercase tracking-widest mb-4" style={{ color: COLORS.TEXT_MUTED }}>
-                  System Quality Index
-                </h3>
-                <div className="relative">
-                   <div className="flex items-end gap-1 mb-2">
-                     <span className="text-4xl sm:text-5xl font-black tracking-tighter" style={{ color: PLUM }}>
-                       {complianceScore ? Math.round(complianceScore) : "—"}
-                     </span>
-                     <span className="text-md font-bold pb-1 sm:pb-1.5 opacity-40" style={{ color: COLORS.TEXT_MUTED }}>/100</span>
-                   </div>
-                   <div className="w-full h-3 bg-[#F5F3FC] rounded-full overflow-hidden mb-5 p-[2px] border border-[#D8D0F0]/40">
-                     <div
-                       className="h-full rounded-full transition-all duration-1000 ease-out"
-                       style={{
-                         width: `${complianceScore || 0}%`,
-                         background: (complianceScore || 0) > 80
-                           ? `linear-gradient(90deg, ${PLUM}, ${COLORS.SUCCESS})`
-                           : `linear-gradient(90deg, ${CORAL}, ${COLORS.WARNING})`
-                       }}
-                     />
-                   </div>
-                   <p className="text-[13px] font-medium leading-relaxed" style={{ color: COLORS.TEXT_MAIN }}>
-                     {complianceScore && complianceScore > 80
-                        ? "Your end-to-end encrypted documentation protocols exceed target NDIS metrics safely."
-                        : "Finalize trailing notes to restore target platform assurance rankings."}
-                   </p>
-                   <Link href="/compliance">
-                     <button className="mt-6 w-full h-11 rounded-xl border border-[#D8D0F0] bg-white text-[11px] font-black uppercase tracking-widest text-[#5533CC] transition-all duration-200 hover:bg-[#F5F3FC] active:scale-[0.99]">
-                       Review Entire Audit Log
-                     </button>
-                   </Link>
-                </div>
-              </div>
-            )}
-          </div>
-
-        </div>
+function AlliedFallbackDashboard() {
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 pb-10">
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Allied Health Professional</p>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Link href="/patients"><DashboardStatCard label="Caseload" value="Open" caption="View allocated participants" icon={Users} /></Link>
+        <Link href="/sessions"><DashboardStatCard label="Sessions" value="Open" caption="Clinical session records" icon={CalendarDays} /></Link>
+        <Link href="/reports"><DashboardStatCard label="Reports" value="Open" caption="Clinical report builder" icon={ShieldCheck} /></Link>
       </div>
     </div>
   );
+}
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const workerQuery = useQuery({
+    queryKey: ["dashboard", "worker"],
+    queryFn: getWorkerDashboard,
+    enabled: user?.role === "support_worker",
+  });
+  const coordinatorQuery = useQuery({
+    queryKey: ["dashboard", "coordinator"],
+    queryFn: getCoordinatorDashboard,
+    enabled: user?.role === "support_coordinator",
+  });
+
+  if (user?.role === "support_worker") {
+    if (workerQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
+    if (workerQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(workerQuery.error as Error).message}</div>;
+    return <WorkerDashboardView data={workerQuery.data as WorkerDashboard} />;
+  }
+
+  if (user?.role === "support_coordinator") {
+    if (coordinatorQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
+    if (coordinatorQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(coordinatorQuery.error as Error).message}</div>;
+    return <CoordinatorDashboardView data={coordinatorQuery.data as CoordinatorDashboard} />;
+  }
+
+  return <AlliedFallbackDashboard />;
 }

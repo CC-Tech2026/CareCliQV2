@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -35,7 +36,7 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Play, Download, Tags, Target
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -194,7 +195,7 @@ export default function SessionDetail({ id }: { id?: string }) {
     queryFn: async () => {
       const failed = rulesResult?.failed_rules ?? [];
       if (!failed.length) return null;
-      const res = await fetch("/api/ai/explain-compliance", {
+      const res = await apiFetch("/api/ai/explain-compliance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ failed_rules: failed, session_notes: session?.notes ?? "" }),
@@ -405,13 +406,6 @@ export default function SessionDetail({ id }: { id?: string }) {
           <Link href="/patients">
             <Button variant="outline" size="sm">View Participant</Button>
           </Link>
-          <Link href={`/sessions/${sessionId}/live`}>
-            <Button variant="outline" size="sm" className="gap-1.5 rounded-xl"
-              style={{ color: "#542269", borderColor: "rgba(84,34,105,0.25)" }}>
-              <Play className="h-3.5 w-3.5" style={{ fill: "#542269" }} />
-              Start Live
-            </Button>
-          </Link>
           <Button
             variant="outline"
             size="sm"
@@ -546,6 +540,23 @@ export default function SessionDetail({ id }: { id?: string }) {
               )}
             </div>
           </div>
+
+          {(session.original_language_input || session.translated_english_note) && (
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Translation Audit Trail</p>
+              </div>
+              <div className="p-5">
+                <TranslationAuditView
+                  originalLanguageInput={session.original_language_input ?? undefined}
+                  translatedEnglishNote={session.translated_english_note ?? undefined}
+                  translationMetadata={session.translation_metadata as Record<string, unknown> | null}
+                  translationStatus={session.translation_status ?? undefined}
+                  translationProvider={session.translation_provider ?? undefined}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Structured Clinical Note Fields */}
           {(() => {

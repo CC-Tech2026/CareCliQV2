@@ -101,8 +101,8 @@ async function apiClinical(text: string): Promise<{ clinical: string; detected_l
   return res.json();
 }
 
-function useDictation(onChange: (val: string) => void) {
-  const [st, setSt] = useState<DictationState>(INITIAL);
+function useDictation(onChange: (val: string) => void, speechLang?: string, currentValue = "") {
+  const [st, setSt] = useState<DictationState>({ ...INITIAL, rawTranscript: currentValue });
   const recRef = useRef<SpeechRecognitionInstance | null>(null);
   const accumRef = useRef<string>("");
 
@@ -149,11 +149,27 @@ function useDictation(onChange: (val: string) => void) {
   const handleModeClick = useCallback(
     (mode: SmartMode) => {
       setSt((s) => {
-        switchMode(mode, s.rawTranscript, s.cache, s.detectedLanguage);
+        const raw = s.rawTranscript || currentValue;
+        if (!raw.trim()) return s;
+        switchMode(mode, raw, s.cache, s.detectedLanguage);
         return s;
       });
     },
-    [switchMode],
+    [switchMode, currentValue],
+  );
+
+  const handleTextChange = useCallback(
+    (value: string) => {
+      setSt((s) => ({
+        ...s,
+        rawTranscript: value,
+        cache: {},
+        mode: "raw",
+        hasDictated: false,
+      }));
+      onChange(value);
+    },
+    [onChange],
   );
 
   const toggleListening = useCallback(() => {
@@ -169,6 +185,9 @@ function useDictation(onChange: (val: string) => void) {
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
+    if (speechLang) {
+      rec.lang = speechLang;
+    }
 
     accumRef.current = "";
 
@@ -208,7 +227,7 @@ function useDictation(onChange: (val: string) => void) {
     rec.start();
     recRef.current = rec;
     setSt((s) => ({ ...s, isListening: true, hasDictated: false }));
-  }, [onChange]);
+  }, [onChange, speechLang]);
 
   const reset = useCallback(() => {
     recRef.current?.stop();
@@ -216,7 +235,7 @@ function useDictation(onChange: (val: string) => void) {
     setSt(INITIAL);
   }, []);
 
-  return { st, toggleListening, handleModeClick, reset };
+  return { st, toggleListening, handleModeClick, handleTextChange, reset };
 }
 
 interface ModePillsProps {
@@ -225,9 +244,9 @@ interface ModePillsProps {
 }
 
 function ModePills({ st, onMode }: ModePillsProps) {
-  const { isListening, isProcessing, hasDictated, detectedLanguage, mode } = st;
+  const { isListening, isProcessing, hasDictated, detectedLanguage, mode, rawTranscript } = st;
 
-  if (!isListening && !hasDictated) return null;
+  if (!isListening && !hasDictated && !rawTranscript.trim()) return null;
 
   return (
     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap select-none">
@@ -319,11 +338,12 @@ export interface SmartInputProps extends Omit<InputHTMLAttributes<HTMLInputEleme
   value: string;
   onChange: (val: string) => void;
   containerClassName?: string;
+  speechLang?: string;
 }
 
 export const SmartInput = forwardRef<HTMLInputElement, SmartInputProps>(
-  ({ value, onChange, className, containerClassName, disabled, ...rest }, ref) => {
-    const { st, toggleListening, handleModeClick } = useDictation(onChange);
+  ({ value, onChange, className, containerClassName, disabled, speechLang, ...rest }, ref) => {
+    const { st, toggleListening, handleModeClick, handleTextChange } = useDictation(onChange, speechLang, value);
 
     return (
       <div className={cn("w-full", containerClassName)}>
@@ -331,7 +351,7 @@ export const SmartInput = forwardRef<HTMLInputElement, SmartInputProps>(
           <input
             ref={ref}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             disabled={disabled}
             className={cn(
               "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm",
@@ -361,11 +381,12 @@ export interface SmartTextareaProps extends Omit<TextareaHTMLAttributes<HTMLText
   value: string;
   onChange: (val: string) => void;
   containerClassName?: string;
+  speechLang?: string;
 }
 
 export const SmartTextarea = forwardRef<HTMLTextAreaElement, SmartTextareaProps>(
-  ({ value, onChange, className, containerClassName, rows = 4, disabled, ...rest }, ref) => {
-    const { st, toggleListening, handleModeClick } = useDictation(onChange);
+  ({ value, onChange, className, containerClassName, rows = 4, disabled, speechLang, ...rest }, ref) => {
+    const { st, toggleListening, handleModeClick, handleTextChange } = useDictation(onChange, speechLang, value);
     const innerRef = useRef<HTMLTextAreaElement>(null);
 
     const setRefs = useCallback(
@@ -393,7 +414,7 @@ export const SmartTextarea = forwardRef<HTMLTextAreaElement, SmartTextareaProps>
             ref={setRefs}
             value={value}
             rows={rows}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => handleTextChange(e.target.value)}
             disabled={disabled}
             className={cn(
               "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm",

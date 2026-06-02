@@ -19,11 +19,12 @@ from ..core.access import (
     is_coordinator_role,
 )
 from .supabase_client import get_supabase_admin
+from . import audit_service
 
 
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
 SUBSCRIPTION_PLANS = {"starter", "team", "pro", "enterprise"}
-INVOICE_STATUSES = {"draft", "issued", "paid", "void", "overdue"}
+INVOICE_STATUSES = {"draft", "finalized", "issued", "sent", "paid", "void", "overdue", "cancelled"}
 BILLING_ROLES = {"support_coordinator", "allied_health"}
 
 
@@ -216,6 +217,16 @@ async def create_invoice(user: dict, data: dict) -> dict:
     status_value = data.get("status") or "draft"
     if status_value not in INVOICE_STATUSES:
         raise HTTPException(status_code=422, detail="Invalid invoice status.")
+    if data.get("session_id"):
+        existing = (
+            get_supabase_admin()
+            .table("invoices")
+            .select("id, status")
+            .eq("session_id", data["session_id"])
+            .execute()
+        )
+        if any(row.get("status") not in {"void", "cancelled"} for row in (existing.data or [])):
+            raise HTTPException(status_code=409, detail="This session already has an active invoice.")
 
     payload = {
         "organization_id": org_id,
@@ -232,15 +243,27 @@ async def create_invoice(user: dict, data: dict) -> dict:
         "currency": data.get("currency") or "AUD",
         "status": status_value,
         "due_date": data.get("due_date") or None,
-        "issued_at": _now_iso() if status_value in {"issued", "paid"} else data.get("issued_at"),
+        "issued_at": _now_iso() if status_value in {"issued", "sent", "paid"} else data.get("issued_at"),
+        "finalized_at": _now_iso() if status_value in {"finalized", "issued", "sent", "paid"} else None,
         "paid_at": _now_iso() if status_value == "paid" else None,
+        "payment_date": data.get("payment_date") or None,
+        "payment_reference": data.get("payment_reference") or None,
         "notes": data.get("notes") or None,
     }
     supabase = get_supabase_admin()
     result = supabase.table("invoices").insert(payload).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Invoice could not be created.")
-    return result.data[0]
+    created = result.data[0]
+    await audit_service.log_action(
+        action_type="invoice.created",
+        entity_type="invoice",
+        entity_id=created.get("id", ""),
+        user_id=get_user_id(user),
+        organization_id=org_id,
+        after_state={"status": created.get("status"), "total_cents": created.get("total_cents")},
+    )
+    return created
 
 
 async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
@@ -264,10 +287,15 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
             "tax_cents": tax,
             "total_cents": total,
         })
-    if status_value in {"issued", "paid"} and not existing.get("issued_at"):
+    if status_value in {"issued", "sent", "paid"} and not existing.get("issued_at"):
         payload["issued_at"] = _now_iso()
+    if status_value in {"finalized", "issued", "sent", "paid"} and not existing.get("finalized_at"):
+        payload["finalized_at"] = _now_iso()
     if status_value == "paid" and not existing.get("paid_at"):
         payload["paid_at"] = _now_iso()
+        payload["payment_date"] = data.get("payment_date") or datetime.now(timezone.utc).date().isoformat()
+    if "payment_reference" in data:
+        payload["payment_reference"] = data.get("payment_reference")
 
     supabase = get_supabase_admin()
     result = (
@@ -277,9 +305,120 @@ async def update_invoice(invoice_id: str, user: dict, data: dict) -> dict:
         .eq("organization_id", existing["organization_id"])
         .execute()
     )
-    return result.data[0] if result.data else await get_invoice(invoice_id, user)
+    updated = result.data[0] if result.data else await get_invoice(invoice_id, user)
+    if payload.get("status") != existing.get("status"):
+        await audit_service.log_action(
+            action_type="invoice.status_changed",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            user_id=get_user_id(user),
+            organization_id=existing.get("organization_id"),
+            before_state={"status": existing.get("status")},
+            after_state={"status": updated.get("status")},
+        )
+    else:
+        await audit_service.log_action(
+            action_type="invoice.updated",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            user_id=get_user_id(user),
+            organization_id=existing.get("organization_id"),
+            after_state={"status": updated.get("status")},
+        )
+    return updated
 
 
 async def mark_invoice_paid(invoice_id: str, user: dict) -> dict:
     return await update_invoice(invoice_id, user, {"status": "paid"})
 
+
+async def finalize_invoice(invoice_id: str, user: dict) -> dict:
+    return await update_invoice(invoice_id, user, {"status": "finalized"})
+
+
+async def mark_invoice_sent(invoice_id: str, user: dict) -> dict:
+    return await update_invoice(invoice_id, user, {"status": "sent"})
+
+
+async def cancel_invoice(invoice_id: str, user: dict) -> dict:
+    existing = await get_invoice(invoice_id, user)
+    payload = {
+        "status": "cancelled",
+        "cancelled_at": _now_iso(),
+        "cancelled_by": get_user_id(user),
+        "updated_at": _now_iso(),
+    }
+    result = (
+        get_supabase_admin()
+        .table("invoices")
+        .update(payload)
+        .eq("id", invoice_id)
+        .eq("organization_id", existing["organization_id"])
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**existing, **payload}
+    await audit_service.log_action(
+        action_type="invoice.cancelled",
+        entity_type="invoice",
+        entity_id=invoice_id,
+        user_id=get_user_id(user),
+        organization_id=existing.get("organization_id"),
+        before_state={"status": existing.get("status")},
+        after_state={"status": "cancelled"},
+    )
+    return updated
+
+
+def _minimal_pdf_bytes(invoice: dict) -> bytes:
+    lines = [
+        "CareScribe Invoice",
+        f"Invoice: {invoice.get('invoice_number', '')}",
+        f"Recipient: {invoice.get('recipient_name', '')}",
+        f"Status: {invoice.get('status', '')}",
+        f"Total: {(invoice.get('total_cents') or 0) / 100:.2f} {invoice.get('currency') or 'AUD'}",
+    ]
+    text = "\\n".join(lines).replace("(", "\\(").replace(")", "\\)")
+    stream = f"BT /F1 12 Tf 72 740 Td ({text}) Tj ET"
+    pdf = (
+        "%PDF-1.4\n"
+        "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+        "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+        "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n"
+        f"4 0 obj << /Length {len(stream)} >> stream\n{stream}\nendstream endobj\n"
+        "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
+        "xref\n0 6\n0000000000 65535 f \ntrailer << /Root 1 0 R /Size 6 >>\nstartxref\n0\n%%EOF\n"
+    )
+    return pdf.encode("utf-8")
+
+
+async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
+    invoice = await get_invoice(invoice_id, user)
+    pdf_bytes = _minimal_pdf_bytes(invoice)
+    path = f"{invoice['organization_id']}/{invoice['id']}/{invoice['invoice_number']}.pdf"
+    supabase = get_supabase_admin()
+    try:
+        supabase.storage.from_("invoice-files").upload(
+            path,
+            pdf_bytes,
+            {"content-type": "application/pdf", "upsert": "true"},
+        )
+        url = supabase.storage.from_("invoice-files").get_public_url(path)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Invoice PDF storage is not configured: {exc}")
+    result = (
+        supabase.table("invoices")
+        .update({"pdf_path": path, "pdf_url": url, "updated_at": _now_iso()})
+        .eq("id", invoice_id)
+        .eq("organization_id", invoice["organization_id"])
+        .execute()
+    )
+    updated = result.data[0] if result.data else {**invoice, "pdf_path": path, "pdf_url": url}
+    await audit_service.log_action(
+        action_type="invoice.pdf_generated",
+        entity_type="invoice",
+        entity_id=invoice_id,
+        user_id=get_user_id(user),
+        organization_id=invoice.get("organization_id"),
+        after_state={"pdf_path": path},
+    )
+    return updated

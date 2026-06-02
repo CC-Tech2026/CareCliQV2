@@ -6,7 +6,7 @@ import {
 import { useLocation } from "wouter";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
-  ChevronRight, Play, FileDown, Loader2, X, ArrowUpDown, Users,
+  ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
   AlertTriangle,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -367,14 +367,6 @@ export default function Sessions() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-all duration-150 hover:bg-[#F1738A]/10 shrink-0"
-              style={{ borderColor: `${CORAL}40`, color: CORAL, background: `${CORAL}08` }}
-              onClick={() => navigate(`/sessions/${session.id}/live`)}
-              title="Start live session"
-            >
-              <Play size={10} fill={CORAL} /> Live
-            </button>
             <button
               className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-400 transition-all hover:text-slate-700 shrink-0"
               style={{ borderColor: BORDER }}

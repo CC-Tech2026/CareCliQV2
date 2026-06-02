@@ -17,6 +17,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  CalendarDays,
+  ClipboardList,
+  FileText,
+  ShieldCheck,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -24,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
+import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   Select,
@@ -80,6 +85,73 @@ const planSchema = z.object({
 });
 type PlanFormValues = z.infer<typeof planSchema>;
 
+type ParticipantRecord = {
+  id: string;
+  full_name: string;
+  ndis_number?: string;
+  date_of_birth?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  primary_disability?: string | null;
+  biological_sex?: string | null;
+  plan_status?: string;
+  plan_start_date?: string | null;
+  plan_end_date?: string | null;
+  total_budget?: number | string | null;
+  used_budget?: number | string | null;
+  goals?: Array<Record<string, unknown>>;
+  assigned_worker_id?: string | null;
+  allied_health_id?: string | null;
+};
+
+type SessionRecord = {
+  id: string;
+  session_date?: string | null;
+  session_type?: string | null;
+  duration_minutes?: number | null;
+  status?: string | null;
+  compliance_score?: number | null;
+  notes?: string | null;
+  translated_english_note?: string | null;
+  compliance_input_text?: string | null;
+  original_language_input?: string | null;
+  translation_status?: string | null;
+  translation_metadata?: Record<string, unknown> | null;
+  translation_provider?: string | null;
+  goals_addressed?: unknown;
+  participant_name?: string | null;
+};
+
+type BudgetSummary = {
+  has_plan: boolean;
+  plan_number?: string;
+  plan_start?: string | null;
+  plan_end?: string | null;
+  status?: string | null;
+  total_funding?: number | string | null;
+  budgets?: Array<{
+    category?: string;
+    category_label?: string;
+    allocated?: number;
+    used?: number;
+    remaining?: number;
+    percent_used?: number;
+  }>;
+};
+
+type ComplianceHistoryItem = {
+  session_id: string;
+  session_date?: string | null;
+  session_type?: string | null;
+  latest_audit?: {
+    score?: number;
+    compliance_score?: number;
+    status?: string;
+    created_at?: string;
+    checked_at?: string;
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -93,14 +165,47 @@ function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
   }
 }
 
+function money(value?: number | string | null) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("en-AU", {
+    style: "currency",
+    currency: "AUD",
+    maximumFractionDigits: 0,
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     active: "bg-emerald-50 text-emerald-700 border-emerald-200",
     pending: "bg-amber-50 text-amber-700 border-amber-200",
     inactive: "bg-slate-100 text-slate-600 border-slate-200",
     expired: "bg-red-50 text-red-700 border-red-200",
+    review: "bg-sky-50 text-sky-700 border-sky-200",
+    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    draft: "bg-slate-100 text-slate-600 border-slate-200",
+    cancelled: "bg-red-50 text-red-700 border-red-200",
   };
   return map[status] ?? "bg-slate-100 text-slate-600 border-slate-200";
+}
+
+function complianceTone(score?: number | null) {
+  if (score == null) return "bg-slate-100 text-slate-600 border-slate-200";
+  if (score >= 85) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (score >= 60) return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-red-50 text-red-700 border-red-200";
+}
+
+function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
+  return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
+}
+
+async function fetchJson<T>(path: string): Promise<T> {
+  const res = await apiFetch(path);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { detail?: string; message?: string }).detail ?? (err as { message?: string }).message ?? `Request failed with ${res.status}`);
+  }
+  return res.json() as Promise<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -576,19 +681,284 @@ function SetupPlanDialog({
 // ---------------------------------------------------------------------------
 
 function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
+  const participantQuery = useQuery({
+    queryKey: ["participant", id],
+    queryFn: () => fetchJson<ParticipantRecord>(`/api/participants/${id}`),
+  });
+  const sessionsQuery = useQuery({
+    queryKey: ["participant", id, "sessions"],
+    queryFn: () => fetchJson<SessionRecord[]>(`/api/sessions/participant/${id}`),
+  });
+  const budgetQuery = useQuery({
+    queryKey: ["participant", id, "budget-summary"],
+    queryFn: () => fetchJson<BudgetSummary>(`/api/participants/${id}/budget-summary`),
+  });
+  const complianceQuery = useQuery({
+    queryKey: ["participant", id, "compliance-history"],
+    queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
+  });
+
+  if (participantQuery.isLoading) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-48 w-full rounded-2xl" />
+      </div>
+    );
+  }
+
+  if (participantQuery.error || !participantQuery.data) {
+    return (
+      <div className="p-6">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
+          {(participantQuery.error as Error)?.message || "Unable to load participant details."}
+        </div>
+      </div>
+    );
+  }
+
+  const participant = participantQuery.data;
+  const sessions = sessionsQuery.data ?? [];
+  const budget = budgetQuery.data;
+  const complianceHistory = complianceQuery.data ?? [];
+  const goals = Array.isArray(participant.goals) ? participant.goals : [];
+  const usedBudget = Number(participant.used_budget ?? 0);
+  const totalBudget = Number(participant.total_budget ?? budget?.total_funding ?? 0);
+  const remainingBudget = Math.max(totalBudget - usedBudget, 0);
+  const scoredSessions = sessions.filter((session) => session.compliance_score != null);
+  const averageCompliance = scoredSessions.length
+    ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
+    : null;
+  const latestSessions = sessions.slice(0, 5);
+
+  const metricCards = [
+    {
+      label: "Plan Status",
+      value: participant.plan_status || "Not recorded",
+      icon: CheckCircle2,
+      tone: statusBadge(participant.plan_status || ""),
+    },
+    {
+      label: "Budget Remaining",
+      value: money(remainingBudget),
+      icon: DollarSign,
+      tone: "bg-purple-50 text-[#542269] border-purple-100",
+    },
+    {
+      label: "Sessions",
+      value: String(sessions.length),
+      icon: CalendarDays,
+      tone: "bg-sky-50 text-sky-700 border-sky-100",
+    },
+    {
+      label: "Compliance",
+      value: averageCompliance == null ? "No score" : `${averageCompliance}%`,
+      icon: ShieldCheck,
+      tone: complianceTone(averageCompliance),
+    },
+  ];
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between border-b pb-4 border-purple-100/50">
         <div>
-          <h3 className="text-lg font-bold text-slate-900">Clinical Profile & History</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Manage practitioner documentation and funding tracking.</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#F03060]">Participant Profile</p>
+          <h3 className="mt-1 text-xl font-black text-slate-900">{participant.full_name}</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            NDIS {participant.ndis_number || "not recorded"} · Clinical profile, NDIS plan, sessions, and compliance history.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <EditParticipantDialog participant={participant} onSaved={() => {
+            participantQuery.refetch();
+            onRefreshList();
+          }} />
           <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
         </div>
       </div>
-      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 text-center text-sm text-slate-600">
-        Clinical case details, analytics tabs, and historical timelines for entry reference ID #{id}.
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metricCards.map((metric) => {
+          const Icon = metric.icon;
+          return (
+            <div key={metric.label} className={`rounded-2xl border p-4 ${metric.tone}`}>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-75">{metric.label}</p>
+                <Icon className="h-4 w-4" />
+              </div>
+              <p className="mt-3 text-xl font-black capitalize">{metric.value}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <ClipboardList className="h-4 w-4 text-[#5533CC]" />
+            <h4 className="font-black text-[#1C1626]">Basic Profile</h4>
+          </div>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            {[
+              ["Date of birth", safeFormat(participant.date_of_birth)],
+              ["Biological sex", participant.biological_sex || "Not recorded"],
+              ["Primary disability", participant.primary_disability || "Not recorded"],
+              ["Phone", participant.phone || "Not recorded"],
+              ["Email", participant.email || "Not recorded"],
+              ["Plan period", `${safeFormat(participant.plan_start_date)} - ${safeFormat(participant.plan_end_date)}`],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-[#F6F4FB] p-3">
+                <dt className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">{label}</dt>
+                <dd className="mt-1 text-sm font-bold text-[#1C1626]">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-[#5533CC]" />
+            <h4 className="font-black text-[#1C1626]">NDIS Funding</h4>
+          </div>
+          {!budgetQuery.isLoading && budget?.has_plan === false ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+              No active NDIS plan has been saved for this participant yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl bg-[#F6F4FB] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Total</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(totalBudget || budget?.total_funding)}</p>
+                </div>
+                <div className="rounded-xl bg-[#F6F4FB] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Used</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(usedBudget)}</p>
+                </div>
+                <div className="rounded-xl bg-[#F6F4FB] p-3">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Remaining</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(remainingBudget)}</p>
+                </div>
+              </div>
+              {(budget?.budgets || []).map((item) => (
+                <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/70 p-3">
+                  <div className="flex items-center justify-between gap-3 text-sm font-bold">
+                    <span className="text-[#1C1626]">{item.category_label || item.category}</span>
+                    <span className="text-[#7A6A8A]">{item.percent_used ?? 0}% used</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full bg-[#EEEAFB]">
+                    <div className="h-2 rounded-full bg-[#5533CC]" style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }} />
+                  </div>
+                  <p className="mt-2 text-xs font-medium text-[#7A6A8A]">
+                    {money(item.used)} used of {money(item.allocated)} · {money(item.remaining)} remaining
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-[#5533CC]" />
+          <h4 className="font-black text-[#1C1626]">NDIS Goals</h4>
+        </div>
+        {goals.length === 0 ? (
+          <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No goals have been recorded for this participant.</p>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {goals.map((goal, index) => (
+              <div key={String(goal.id || index)} className="rounded-xl border border-purple-100/70 p-4">
+                <p className="font-black text-[#1C1626]">{normalizeGoalTitle(goal, index)}</p>
+                <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[#7A6A8A]">{String(goal.status || "active")}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-[#5533CC]" />
+              <h4 className="font-black text-[#1C1626]">Session History</h4>
+            </div>
+            <span className="rounded-full bg-[#F6F4FB] px-3 py-1 text-xs font-black text-[#5533CC]">{sessions.length} total</span>
+          </div>
+          {sessionsQuery.isLoading ? (
+            <Skeleton className="h-28 w-full rounded-2xl" />
+          ) : latestSessions.length === 0 ? (
+            <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No sessions have been recorded for this participant.</p>
+          ) : (
+            <div className="space-y-3">
+              {latestSessions.map((session) => (
+                <div key={session.id} className="rounded-xl border border-purple-100/70 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-black capitalize text-[#1C1626]">{(session.session_type || "session").replace("_", " ")}</p>
+                      <p className="mt-1 text-xs font-medium text-[#7A6A8A]">
+                        {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
+                      </p>
+                    </div>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                      {session.status || "draft"}
+                    </span>
+                  </div>
+                  {(session.translated_english_note || session.compliance_input_text || session.notes) && (
+                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7A6A8A]">
+                      {session.translated_english_note || session.compliance_input_text || session.notes}
+                    </p>
+                  )}
+                  {(session.original_language_input || session.translated_english_note) && (
+                    <div className="mt-4">
+                      <TranslationAuditView
+                        originalLanguageInput={session.original_language_input ?? undefined}
+                        translatedEnglishNote={session.translated_english_note ?? undefined}
+                        translationMetadata={session.translation_metadata ?? null}
+                        translationStatus={session.translation_status ?? undefined}
+                        translationProvider={session.translation_provider ?? undefined}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#5533CC]" />
+            <h4 className="font-black text-[#1C1626]">Compliance History</h4>
+          </div>
+          {complianceQuery.isLoading ? (
+            <Skeleton className="h-28 w-full rounded-2xl" />
+          ) : complianceHistory.length === 0 ? (
+            <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No compliance audit history has been recorded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {complianceHistory.slice(0, 5).map((item) => {
+                const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
+                return (
+                  <div key={item.session_id} className="rounded-xl border border-purple-100/70 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black capitalize text-[#1C1626]">{(item.session_type || "session").replace("_", " ")}</p>
+                        <p className="mt-1 text-xs font-medium text-[#7A6A8A]">{safeFormat(item.session_date)}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${complianceTone(score)}`}>
+                        {score == null ? "Audit" : `${score}%`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

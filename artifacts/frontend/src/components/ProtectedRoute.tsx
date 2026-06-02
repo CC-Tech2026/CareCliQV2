@@ -1,4 +1,4 @@
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
 
@@ -38,12 +38,31 @@ export function ProtectedRoute({
   redirectTo,
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuth();
+  const [location] = useLocation();
 
   /**
    * Not logged in
    */
   if (!isAuthenticated || !user) {
     return <Redirect to="/login" />;
+  }
+
+  if (user.email_verified === false && location !== "/verify-email") {
+    return <Redirect to="/verify-email" />;
+  }
+
+  const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/settings"];
+  const isProfileGatePath = profileGatePaths.some((path) => location === path || location.startsWith(path + "/"));
+  const needsRoleProfile =
+    (user.role === "support_worker" || user.role === "allied_health") &&
+    (user.profile_completed === false || user.role_specific_profile_completed === false);
+
+  if (needsRoleProfile && !isProfileGatePath) {
+    return <Redirect to="/profile-completion" />;
+  }
+
+  if (user.role === "support_worker" && user.onboarding_completed === false && location === "/dashboard") {
+    return <Redirect to="/worker-onboarding" />;
   }
 
   /**
