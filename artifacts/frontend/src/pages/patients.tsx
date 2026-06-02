@@ -760,16 +760,17 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   ];
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between border-b pb-4 border-purple-100/50">
-        <div>
+    <div className="p-5 md:p-6 space-y-5 md:space-y-6">
+      {/* Header: stacks on small right-panel widths, goes side-by-side on wider */}
+      <div className="flex flex-col gap-3 border-b pb-4 border-purple-100/50 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#F03060]">Participant Profile</p>
-          <h3 className="mt-1 text-xl font-black text-slate-900">{participant.full_name}</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            NDIS {participant.ndis_number || "not recorded"} · Clinical profile, NDIS plan, sessions, and compliance history.
+          <h3 className="mt-1 text-xl font-black text-slate-900 break-words">{participant.full_name}</h3>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+            NDIS {participant.ndis_number || "not recorded"} · Profile, plan &amp; sessions.
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <EditParticipantDialog participant={participant} onSaved={() => {
             participantQuery.refetch();
             onRefreshList();
@@ -778,7 +779,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {metricCards.map((metric) => {
           const Icon = metric.icon;
           return (
@@ -793,13 +794,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         })}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
           <div className="mb-4 flex items-center gap-2">
             <ClipboardList className="h-4 w-4 text-[#5533CC]" />
             <h4 className="font-black text-[#1C1626]">Basic Profile</h4>
           </div>
-          <dl className="grid gap-3 sm:grid-cols-2">
+          <dl className="grid gap-3 grid-cols-1 sm:grid-cols-2">
             {[
               ["Date of birth", safeFormat(participant.date_of_birth)],
               ["Biological sex", participant.biological_sex || "Not recorded"],
@@ -827,18 +828,18 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-[#F6F4FB] p-3">
                   <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Total</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(totalBudget || budget?.total_funding)}</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(totalBudget || budget?.total_funding)}</p>
                 </div>
                 <div className="rounded-xl bg-[#F6F4FB] p-3">
                   <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Used</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(usedBudget)}</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(usedBudget)}</p>
                 </div>
                 <div className="rounded-xl bg-[#F6F4FB] p-3">
                   <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Remaining</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626]">{money(remainingBudget)}</p>
+                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(remainingBudget)}</p>
                 </div>
               </div>
               {(budget?.budgets || []).map((item) => (
@@ -879,7 +880,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         )}
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -896,14 +897,14 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="space-y-3">
               {latestSessions.map((session) => (
                 <div key={session.id} className="rounded-xl border border-purple-100/70 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-black capitalize text-[#1C1626]">{(session.session_type || "session").replace("_", " ")}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-black capitalize text-[#1C1626] truncate">{(session.session_type || "session").replace("_", " ")}</p>
                       <p className="mt-1 text-xs font-medium text-[#7A6A8A]">
                         {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
                       </p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize shrink-0 ${statusBadge(session.status || "")}`}>
                       {session.status || "draft"}
                     </span>
                   </div>
@@ -944,12 +945,12 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
                 return (
                   <div key={item.session_id} className="rounded-xl border border-purple-100/70 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-black capitalize text-[#1C1626]">{(item.session_type || "session").replace("_", " ")}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black capitalize text-[#1C1626] truncate">{(item.session_type || "session").replace("_", " ")}</p>
                         <p className="mt-1 text-xs font-medium text-[#7A6A8A]">{safeFormat(item.session_date)}</p>
                       </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${complianceTone(score)}`}>
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
                         {score == null ? "Audit" : `${score}%`}
                       </span>
                     </div>
@@ -985,10 +986,11 @@ export default function Patients() {
     }) || [];
 
   return (
-    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 md:gap-6 overflow-hidden">
+    <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 overflow-hidden">
       {/* Left panel — participant list */}
+      {/* Hidden on mobile/tablet when detail is open; always shown on lg+ */}
       <div
-        className={`${showMobileDetail ? "hidden md:flex" : "flex"} w-full md:w-1/3 flex-col bg-white rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[320px] shrink-0 flex-col bg-white rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
       >
         <div className="p-4 border-b border-purple-100/50 space-y-4">
           <div className="flex items-center justify-between">
@@ -1064,7 +1066,7 @@ export default function Patients() {
                   }}
                   data-testid={`button-participant-${p.id}`}
                   className={`w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border ${
-                    isSelected ? "bg-purple-900/10 border-purple-900/20" : "bg-transparent border-transparent"
+                    isSelected ? "bg-purple-900/10 border-purple-900/20" : "bg-transparent border-transparent hover:bg-[#F6F4FB]"
                   }`}
                 >
                   <div
@@ -1075,15 +1077,15 @@ export default function Patients() {
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-1">
-                      <span className={`text-[13px] font-semibold truncate ${isSelected ? "text-[#542269]" : "text-[#1C1626]"}`}>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[13px] font-semibold truncate flex-1 min-w-0 ${isSelected ? "text-[#542269]" : "text-[#1C1626]"}`}>
                         {p.full_name}
                       </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium shrink-0 ${statusBadge(p.plan_status)}`}>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(p.plan_status)}`}>
                         {p.plan_status}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono block mt-0.5 text-[#7A6A8A]">
+                    <span className="text-[11px] font-mono block text-[#7A6A8A]">
                       {p.ndis_number}
                     </span>
                   </div>
@@ -1096,12 +1098,12 @@ export default function Patients() {
 
       {/* Right panel — participant detail workspace view */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden md:flex"} flex-1 flex-col bg-white rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col bg-white rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
       >
         {selectedId ? (
           <>
             <button
-              className="md:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-purple-100/50 hover:bg-gray-50 shrink-0 transition-colors text-[#542269]"
+              className="lg:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-purple-100/50 hover:bg-gray-50 shrink-0 transition-colors text-[#542269]"
               onClick={() => setShowMobileDetail(false)}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
