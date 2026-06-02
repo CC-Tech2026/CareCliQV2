@@ -15,11 +15,8 @@ import {
   DollarSign,
   PlusCircle,
   CheckCircle2,
-  AlertTriangle,
-  XCircle,
   CalendarDays,
   ClipboardList,
-  FileText,
   ShieldCheck,
   UserCircle,
   Target,
@@ -734,8 +731,6 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   const averageCompliance = scoredSessions.length
     ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
     : null;
-  const latestSessions = sessions.slice(0, 5);
-
   const metricCards = [
     {
       label: "Plan Status",
@@ -896,14 +891,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               <Skeleton className="h-24 w-full rounded-xl" />
             ) : budget?.has_plan === false ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-                No active NDIS plan saved yet.{" "}
-                <button
-                  className="underline font-bold ml-1"
-                  onClick={() => setActiveTab("overview")}
-                >
-                  Set up a plan
-                </button>{" "}
-                using the button above.
+                No active NDIS plan saved yet. Use the <strong>Set Up Plan</strong> button at the top to create one.
               </div>
             ) : (
               <div className="space-y-3">
