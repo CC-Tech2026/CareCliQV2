@@ -700,6 +700,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
 
+  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance">("overview");
+
   if (participantQuery.isLoading) {
     return (
       <div className="p-6 space-y-4">
@@ -767,8 +769,6 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     .map((w) => w[0] ?? "")
     .join("")
     .toUpperCase();
-
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance">("overview");
 
   const TABS = [
     { id: "overview"    as const, label: "Overview",    icon: UserCircle   },
