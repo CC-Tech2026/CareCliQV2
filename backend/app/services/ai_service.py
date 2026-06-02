@@ -160,6 +160,37 @@ def get_anthropic_client():
 
 _LIBRETRANSLATE_URL = os.getenv("LIBRETRANSLATE_URL", "").rstrip("/")
 
+# ---------------------------------------------------------------------------
+# Google Cloud Translation helper (v2 Basic REST — no SDK dependency)
+# ---------------------------------------------------------------------------
+
+_GOOGLE_CLOUD_TRANSLATION_API_KEY = settings.google_cloud_translation_api_key.strip()
+_GOOGLE_TRANSLATE_URL = settings.google_translate_url.rstrip("/")
+
+
+def _google_cloud_translate_sync(text: str) -> dict:
+    """Translate text via Google Cloud Translation API v2. Raises on failure."""
+    if not _GOOGLE_CLOUD_TRANSLATION_API_KEY:
+        raise RuntimeError("GOOGLE_CLOUD_TRANSLATION_API_KEY not configured")
+    payload = json.dumps({"q": text, "target": "en", "format": "text"}).encode()
+    req = urllib.request.Request(
+        f"{_GOOGLE_TRANSLATE_URL}?key={_GOOGLE_CLOUD_TRANSLATION_API_KEY}",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        data = json.loads(resp.read())
+    translation = (data.get("data", {}).get("translations") or [{}])[0]
+    translated_text = (translation.get("translatedText") or "").strip()
+    if not translated_text:
+        raise RuntimeError("Google Cloud Translation returned empty translation")
+    return {
+        "translated": translated_text,
+        "detected_language": (translation.get("detectedSourceLanguage") or "en").lower(),
+        "confidence": 0.98,
+    }
+
 
 def _libretranslate_sync(text: str) -> dict:
     """Try LibreTranslate via LIBRETRANSLATE_URL env var. Raises on failure."""
@@ -710,11 +741,16 @@ async def translate_to_english(text: str, source_language: str = "auto") -> dict
     try:
         return _libretranslate_sync(text)
     except Exception as libre_exc:
-        logger.info("LibreTranslate unavailable, using OpenAI translation: %s", libre_exc)
+        logger.info("LibreTranslate unavailable, trying Google Cloud Translation: %s", libre_exc)
+
+    try:
+        return _google_cloud_translate_sync(text)
+    except Exception as google_exc:
+        logger.info("Google Cloud Translation unavailable, using OpenAI translation: %s", google_exc)
 
     if not _openai_configured():
         raise TranslationProviderUnavailable(
-            "Translation provider is not configured. Add OPENAI_API_KEY or LIBRETRANSLATE_URL on the backend."
+            "Translation provider is not configured. Add GOOGLE_CLOUD_TRANSLATION_API_KEY, OPENAI_API_KEY, or LIBRETRANSLATE_URL on the backend."
         )
 
     lang_hint = (
