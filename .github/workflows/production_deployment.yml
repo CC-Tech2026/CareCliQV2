@@ -1,0 +1,122 @@
+# name: Deploy → Production
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Triggers:
+# #   push to main      → CI + build + push images + manual approval gate + deploy
+# #   PR to main        → CI + build only (no push, no deploy)
+# # Flow: CI → Docker build & push → manual approval gate → SSH deploy.
+# #
+# # IMPORTANT — set up a GitHub Environment named "production" with:
+# #   • "Required reviewers" enabled (Settings → Environments → production)
+# #     so every production deploy needs explicit approval before it runs.
+# #   • Protection rule: only allow deployments from the `main` branch.
+# #
+# # Images are tagged with BOTH a stable `production` label AND a unique
+# # `production-<sha>` tag so rollbacks are trivial:
+# #   docker pull ghcr.io/<org>/<repo>/backend:production-abc1234
+# #
+# # Required GitHub Environment "production" secrets:
+# #   SUPABASE_URL              – production Supabase project URL
+# #   SUPABASE_ANON_KEY
+# #   SUPABASE_SERVICE_ROLE_KEY
+# #   SESSION_SECRET
+# #   OPENAI_API_KEY
+# #   ANTHROPIC_API_KEY
+# #   DEPLOY_HOST
+# #   DEPLOY_USER
+# #   DEPLOY_SSH_KEY
+# #   DEPLOY_PATH
+# #
+# # Required GitHub Environment "production" variables:
+# #   APP_URL                   – e.g. https://app.carescribe.app
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# on:
+#   push:
+#     branches:
+#       - main
+#   pull_request:
+#     branches:
+#       - main
+#     types: [opened, synchronize, reopened, ready_for_review]
+
+# permissions:
+#   contents: read
+
+# jobs:
+#   # ── CI + build (+ push only on direct push to main) ──────────────────────
+#   ci-and-build:
+#     name: CI & Build
+#     uses: ./.github/workflows/deploy.yml
+#     with:
+#       environment: production
+#       push_images: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+#     secrets: inherit
+
+#   # ── Deploy to production (skipped for PRs — approval gate on push only) ───
+#   deploy:
+#     name: Deploy to production
+#     runs-on: ubuntu-latest
+#     needs: ci-and-build
+#     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+#     environment:
+#       name: production        # ← approval gate lives here
+#       url: ${{ vars.APP_URL }}
+#     steps:
+#       - name: Authenticate AWS
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ap-northeast-1
+
+#       - name: Get ECR login token
+#         id: ecr-token
+#         run: |
+#           TOKEN=$(aws ecr get-login-password --region ap-northeast-1)
+#           echo "::add-mask::$TOKEN"
+#           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+#       - name: Deploy via SSH
+#         uses: appleboy/ssh-action@v1
+#         env:
+#           ECR_TOKEN: ${{ steps.ecr-token.outputs.token }}
+#           ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+#           # Use the immutable sha-tagged image for production — easy to rollback.
+#           BACKEND_IMAGE: ${{ vars.ECR_REGISTRY }}/backend:${{ needs.ci-and-build.outputs.image_tag }}
+#           FRONTEND_IMAGE: ${{ vars.ECR_REGISTRY }}/frontend:${{ needs.ci-and-build.outputs.image_tag }}
+#           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+#         with:
+#           host: ${{ secrets.DEPLOY_HOST }}
+#           username: ${{ secrets.DEPLOY_USER }}
+#           key: ${{ secrets.DEPLOY_SSH_KEY }}
+#           envs: ECR_TOKEN,ECR_REGISTRY,BACKEND_IMAGE,FRONTEND_IMAGE,DEPLOY_PATH
+#           script: |
+#             set -euo pipefail
+
+#             echo "$ECR_TOKEN" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+#             docker pull "$BACKEND_IMAGE"
+#             docker pull "$FRONTEND_IMAGE"
+
+#             cd "$DEPLOY_PATH"
+
+#             # --wait keeps old containers running until new ones are healthy.
+#             BACKEND_IMAGE="$BACKEND_IMAGE" \
+#             FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+#             docker compose -f docker-compose.prod.yml up -d --remove-orphans --wait
+
+#             docker logout "$ECR_REGISTRY"
+
+#             # Audit trail — print active container state after deploy.
+#             docker ps --filter "name=carescribe" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+
+#       - name: Deployment summary
+#         run: |
+#           echo "### Production deployment complete :white_check_mark:" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+#           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+#           echo "| Image tag | \`${{ needs.ci-and-build.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Deployed by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+#           echo "| URL | ${{ vars.APP_URL }} |" >> $GITHUB_STEP_SUMMARY
