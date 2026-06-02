@@ -1,0 +1,146 @@
+# name: CI — Lint · Test · Build
+
+# ─────────────────────────────────────────────────────────────────────────────
+# This is the single source of truth for CI.
+#
+# Triggered in two ways:
+#   1. Directly – on every PR targeting develop / staging / main.
+#   2. As a reusable workflow – called by the environment-specific deploy
+#      workflows (develop_deployment.yml, staging_deployment.yml,
+#      production_deployment.yml) so they never skip CI.
+#
+# Required repo / environment secrets:
+#   SUPABASE_URL              – used only by integration tests (optional for CI)
+#   SUPABASE_SERVICE_ROLE_KEY – same
+# ─────────────────────────────────────────────────────────────────────────────
+
+# on:
+#   # ── Called by environment deploy workflows ────────────────────────────────
+#   workflow_call:
+#     inputs:
+#       environment:
+#         description: "Target environment (develop | staging | production)"
+#         type: string
+#         required: false
+#         default: pr
+#       push_images:
+#         description: "Push built images to GHCR"
+#         type: boolean
+#         required: false
+#         default: false
+#     outputs:
+#       image_tag:
+#         description: "Full image tag produced (e.g. develop-abc1234)"
+#         value: ${{ jobs.build.outputs.image_tag }}
+
+#   # ── PR gate ───────────────────────────────────────────────────────────────
+#   pull_request:
+#     branches: [develop, staging, main]
+
+#   # ── Manual trigger ────────────────────────────────────────────────────────
+#   workflow_dispatch:
+
+# jobs:
+#   # ── 1. Lint · Typecheck · Test ────────────────────────────────────────────
+#   ci:
+#     name: Lint, Typecheck & Test
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       # ── Python (uv) ───────────────────────────────────────────────────────
+#       - name: Install uv
+#         uses: astral-sh/setup-uv@v5
+#         with:
+#           enable-cache: true
+#           cache-dependency-glob: uv.lock
+
+#       - name: Install Python deps
+#         run: uv sync --frozen --no-dev
+
+#       - name: Run pytest
+#         run: uv run pytest
+#         env:
+#           # Integration tests use these; unit tests run without them.
+#           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+#           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+#       # ── Node / pnpm ───────────────────────────────────────────────────────
+#       - name: Set up pnpm
+#         uses: pnpm/action-setup@v4
+
+#       - name: Set up Node 22
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "22"
+#           cache: pnpm
+
+#       - name: Install Node deps
+#         run: corepack pnpm install --frozen-lockfile
+
+#       - name: Typecheck
+#         run: corepack pnpm run typecheck
+
+#   # ── 2. Build Docker images (+ optional push to GHCR) ─────────────────────
+#   build:
+#     name: Build Docker images
+#     runs-on: ubuntu-latest
+#     needs: ci
+#     outputs:
+#       image_tag: ${{ steps.vars.outputs.image_tag }}
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Compute image metadata
+#         id: vars
+#         run: |
+#           REGISTRY="${{ vars.ECR_REGISTRY }}"
+#           SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+#           ENV="${{ inputs.environment }}"
+#           ENV="${ENV:-pr}"
+#           {
+#             echo "backend=${REGISTRY}/backend"
+#             echo "frontend=${REGISTRY}/frontend"
+#             echo "image_tag=${ENV}-${SHORT}"
+#             echo "env_label=${ENV}"
+#           } >> "$GITHUB_OUTPUT"
+
+#       - name: Set up Docker Buildx
+#         uses: docker/setup-buildx-action@v3
+
+#       # ── AWS auth + ECR login (only when pushing images) ───────────────────
+#       - name: Authenticate AWS
+#         if: ${{ inputs.push_images == true }}
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ vars.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ap-northeast-1
+
+#       - name: Login to Amazon ECR
+#         if: ${{ inputs.push_images == true }}
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       - name: Build backend image
+#         uses: docker/build-push-action@v6
+#         with:
+#           context: .
+#           file: backend/Dockerfile
+#           push: ${{ inputs.push_images == true }}
+#           tags: |
+#             ${{ steps.vars.outputs.backend }}:${{ steps.vars.outputs.image_tag }}
+#             ${{ steps.vars.outputs.backend }}:${{ steps.vars.outputs.env_label }}
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
+
+#       - name: Build frontend image
+#         uses: docker/build-push-action@v6
+#         with:
+#           context: .
+#           file: artifacts/frontend/Dockerfile
+#           push: ${{ inputs.push_images == true }}
+#           tags: |
+#             ${{ steps.vars.outputs.frontend }}:${{ steps.vars.outputs.image_tag }}
+#             ${{ steps.vars.outputs.frontend }}:${{ steps.vars.outputs.env_label }}
+#           cache-from: type=gha
+#           cache-to: type=gha,mode=max
