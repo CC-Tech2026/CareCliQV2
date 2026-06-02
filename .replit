@@ -22,10 +22,6 @@ args = "Python Backend"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "API Server"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Frontend"
 
 [[workflows.workflow]]
@@ -39,18 +35,6 @@ outputType = "console"
 task = "shell.exec"
 args = "cd backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 waitForPort = 8000
-
-[[workflows.workflow]]
-name = "API Server"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PORT=8080 NODE_ENV=development corepack pnpm --filter @workspace/api-server run dev"
-waitForPort = 8080
-
-[workflows.workflow.metadata]
-outputType = "console"
 
 [[workflows.workflow]]
 name = "Frontend"
@@ -75,11 +59,7 @@ timeoutMs = 20000
 
 [[ports]]
 localPort = 5000
-externalPort = 5173
-
-[[ports]]
-localPort = 8000
-externalPort = 8000
+externalPort = 80
 
 [[ports]]
 localPort = 8080

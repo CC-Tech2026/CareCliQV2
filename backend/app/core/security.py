@@ -32,11 +32,13 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
-def get_current_user(
+async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> dict:
     """FastAPI dependency — decodes JWT from Authorization header.
 
+    Async so FastAPI runs it directly in the event loop (not a thread pool),
+    preventing thread exhaustion on high-concurrency routes.
     Raises HTTP 401 when the token is missing or invalid.
     Returns the decoded payload dict (includes sub, email, role).
     """
@@ -56,7 +58,7 @@ def get_current_user(
     return payload
 
 
-def get_optional_user(
+async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> Optional[dict]:
     """Like get_current_user but returns None instead of raising 401.
@@ -77,7 +79,7 @@ def require_role(allowed_roles: list[str]):
         async def endpoint(user=Depends(require_role(["support_coordinator", "support_worker"]))):
             ...
     """
-    def dependency(user: dict = Depends(get_current_user)) -> dict:
+    async def dependency(user: dict = Depends(get_current_user)) -> dict:
         role = user.get("role", "support_worker")
         if role not in allowed_roles:
             raise HTTPException(

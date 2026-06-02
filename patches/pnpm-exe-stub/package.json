@@ -1,0 +1,9 @@
+{
+  "name": "@pnpm/exe",
+  "version": "10.33.2",
+  "description": "NixOS-compatible stub: delegates to corepack pnpm (no native binary needed)",
+  "bin": {
+    "pnpm": "pnpm.sh"
+  },
+  "scripts": {}
+}

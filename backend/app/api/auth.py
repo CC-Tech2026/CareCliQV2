@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 from collections import defaultdict
@@ -154,8 +155,8 @@ async def _get_user_profile(user_id: str) -> dict:
 
     # Pass 1: select with all new columns (works once migration is applied)
     try:
-        result = (
-            supabase.table("users")
+        result = await asyncio.to_thread(
+            lambda: supabase.table("users")
             .select(
                 "role, full_name, account_type, onboarding_complete, organization_id, "
                 "email_verified, profile_completed, onboarding_completed, "
@@ -175,8 +176,8 @@ async def _get_user_profile(user_id: str) -> dict:
 
     # Pass 2: base columns only (always available)
     try:
-        result = (
-            supabase.table("users")
+        result = await asyncio.to_thread(
+            lambda: supabase.table("users")
             .select("role, full_name, email_verified, onboarding_complete")
             .eq("id", user_id)
             .maybe_single()
@@ -235,7 +236,9 @@ async def _upsert_user_record(
 
     # Pass 1: with new columns
     try:
-        supabase.table("users").upsert(extended_payload, on_conflict="id").execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("users").upsert(extended_payload, on_conflict="id").execute()
+        )
         return
     except Exception as e1:
         err = str(e1)
@@ -251,7 +254,9 @@ async def _upsert_user_record(
 
     # Pass 2: base columns only
     try:
-        supabase.table("users").upsert(base_payload, on_conflict="id").execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("users").upsert(base_payload, on_conflict="id").execute()
+        )
     except Exception as e2:
         logger.warning(f"Base upsert also failed for {user_id}: {e2}")
 
@@ -261,9 +266,11 @@ async def _touch_last_login(user_id: str) -> None:
         from datetime import datetime, timezone
 
         supabase = get_supabase_admin()
-        supabase.table("users").update(
-            {"last_login": datetime.now(timezone.utc).isoformat()}
-        ).eq("id", user_id).execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("users").update(
+                {"last_login": datetime.now(timezone.utc).isoformat()}
+            ).eq("id", user_id).execute()
+        )
     except Exception as e:
         logger.debug(f"Could not update last_login for {user_id}: {e}")
 
@@ -282,8 +289,8 @@ async def _resolve_org_member_role(
         supabase = get_supabase_admin()
 
         # Look up an existing active membership first
-        existing = (
-            supabase.table("organization_members")
+        existing = await asyncio.to_thread(
+            lambda: supabase.table("organization_members")
             .select("role")
             .eq("user_id", user_id)
             .eq("organization_id", org_id)
@@ -295,14 +302,16 @@ async def _resolve_org_member_role(
             return existing.data[0].get("role") or fallback_role
 
         # No row yet — create it (idempotent via UNIQUE constraint)
-        supabase.table("organization_members").insert(
-            {
-                "user_id": user_id,
-                "organization_id": org_id,
-                "role": fallback_role,
-                "is_active": True,
-            }
-        ).execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("organization_members").insert(
+                {
+                    "user_id": user_id,
+                    "organization_id": org_id,
+                    "role": fallback_role,
+                    "is_active": True,
+                }
+            ).execute()
+        )
         return fallback_role
 
     except Exception as e:
@@ -418,11 +427,12 @@ async def login(body: LoginRequest, request: Request):
 
     supabase = get_supabase()
     try:
-        result = supabase.auth.sign_in_with_password(
+        result = await asyncio.to_thread(
+            supabase.auth.sign_in_with_password,
             {
                 "email": body.email,
                 "password": body.password,
-            }
+            },
         )
         auth_user = result.user
         if not auth_user or not result.session:
@@ -509,9 +519,12 @@ async def login(body: LoginRequest, request: Request):
     await _touch_last_login(str(auth_user.id))
     if email_verified != bool(profile.get("email_verified")):
         try:
-            get_supabase_admin().table("users").update(
-                {"email_verified": email_verified}
-            ).eq("id", str(auth_user.id)).execute()
+            _admin = get_supabase_admin()
+            await asyncio.to_thread(
+                lambda: _admin.table("users").update(
+                    {"email_verified": email_verified}
+                ).eq("id", str(auth_user.id)).execute()
+            )
         except Exception as e:
             logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
