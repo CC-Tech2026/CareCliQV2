@@ -759,207 +759,275 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
   ];
 
+  const initials = participant.full_name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase();
+
   return (
-    <div className="p-5 md:p-6 space-y-5 md:space-y-6">
-      {/* Header: stacks on small right-panel widths, goes side-by-side on wider */}
-      <div className="flex flex-col gap-3 border-b pb-4 border-purple-100/50 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#F03060]">Participant Profile</p>
-          <h3 className="mt-1 text-xl font-black text-slate-900 break-words">{participant.full_name}</h3>
-          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-            NDIS {participant.ndis_number || "not recorded"} · Profile, plan &amp; sessions.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <EditParticipantDialog participant={participant} onSaved={() => {
-            participantQuery.refetch();
-            onRefreshList();
-          }} />
-          <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
-        </div>
-      </div>
+    <div className="flex flex-col min-h-full">
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        {metricCards.map((metric) => {
-          const Icon = metric.icon;
-          return (
-            <div key={metric.label} className={`rounded-2xl border p-4 ${metric.tone}`}>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] opacity-75">{metric.label}</p>
-                <Icon className="h-4 w-4" />
-              </div>
-              <p className="mt-3 text-xl font-black capitalize">{metric.value}</p>
-            </div>
-          );
-        })}
-      </div>
+      {/* ── Sticky header ─────────────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-4">
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <ClipboardList className="h-4 w-4 text-[#5533CC]" />
-            <h4 className="font-black text-[#1C1626]">Basic Profile</h4>
+        {/* Avatar + name + action buttons — always one row */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F1738A] to-[#542269] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+            {initials}
           </div>
-          <dl className="grid gap-3 grid-cols-1 sm:grid-cols-2">
-            {[
-              ["Date of birth", safeFormat(participant.date_of_birth)],
-              ["Biological sex", participant.biological_sex || "Not recorded"],
-              ["Primary disability", participant.primary_disability || "Not recorded"],
-              ["Phone", participant.phone || "Not recorded"],
-              ["Email", participant.email || "Not recorded"],
-              ["Plan period", `${safeFormat(participant.plan_start_date)} - ${safeFormat(participant.plan_end_date)}`],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-xl bg-[#F6F4FB] p-3">
-                <dt className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">{label}</dt>
-                <dd className="mt-1 text-sm font-bold text-[#1C1626]">{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
 
-        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <DollarSign className="h-4 w-4 text-[#5533CC]" />
-            <h4 className="font-black text-[#1C1626]">NDIS Funding</h4>
+          <div className="flex-1 min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#F03060] leading-none mb-0.5">
+              Participant Profile
+            </p>
+            <h3 className="text-[16px] font-black text-[#1C1626] leading-tight truncate">
+              {participant.full_name}
+            </h3>
           </div>
-          {!budgetQuery.isLoading && budget?.has_plan === false ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-              No active NDIS plan has been saved for this participant yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-[#F6F4FB] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Total</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(totalBudget || budget?.total_funding)}</p>
-                </div>
-                <div className="rounded-xl bg-[#F6F4FB] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Used</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(usedBudget)}</p>
-                </div>
-                <div className="rounded-xl bg-[#F6F4FB] p-3">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A8A]">Remaining</p>
-                  <p className="mt-1 text-sm font-black text-[#1C1626] truncate">{money(remainingBudget)}</p>
-                </div>
-              </div>
-              {(budget?.budgets || []).map((item) => (
-                <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/70 p-3">
-                  <div className="flex items-center justify-between gap-3 text-sm font-bold">
-                    <span className="text-[#1C1626]">{item.category_label || item.category}</span>
-                    <span className="text-[#7A6A8A]">{item.percent_used ?? 0}% used</span>
-                  </div>
-                  <div className="mt-2 h-2 rounded-full bg-[#EEEAFB]">
-                    <div className="h-2 rounded-full bg-[#5533CC]" style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }} />
-                  </div>
-                  <p className="mt-2 text-xs font-medium text-[#7A6A8A]">
-                    {money(item.used)} used of {money(item.allocated)} · {money(item.remaining)} remaining
+
+          {/* Action buttons — compact, never wrap */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <EditParticipantDialog
+              participant={participant}
+              onSaved={() => {
+                participantQuery.refetch();
+                onRefreshList();
+              }}
+            />
+            <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
+          </div>
+        </div>
+
+        {/* NDIS number + plan dates subtitle */}
+        <p className="text-[11px] text-[#7A6A8A] mt-2 ml-[52px] leading-relaxed">
+          NDIS {participant.ndis_number || "not recorded"}
+          {participant.plan_start_date && participant.plan_end_date && (
+            <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
+          )}
+        </p>
+
+        {/* Compact 4-stat strip */}
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {metricCards.map((metric) => {
+            const Icon = metric.icon;
+            return (
+              <div key={metric.label} className={`rounded-xl border px-2.5 py-2 ${metric.tone}`}>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <Icon className="h-3 w-3 shrink-0 opacity-70" />
+                  <p className="text-[8px] font-black uppercase tracking-[0.13em] opacity-70 leading-none truncate">
+                    {metric.label}
                   </p>
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
+                <p className="text-[13px] font-black capitalize leading-tight truncate">{metric.value}</p>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-[#5533CC]" />
-          <h4 className="font-black text-[#1C1626]">NDIS Goals</h4>
-        </div>
-        {goals.length === 0 ? (
-          <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No goals have been recorded for this participant.</p>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {goals.map((goal, index) => (
-              <div key={String(goal.id || index)} className="rounded-xl border border-purple-100/70 p-4">
-                <p className="font-black text-[#1C1626]">{normalizeGoalTitle(goal, index)}</p>
-                <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[#7A6A8A]">{String(goal.status || "active")}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* ── Scrollable content ────────────────────────────────────────── */}
+      <div className="p-5 space-y-4">
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-[#5533CC]" />
-              <h4 className="font-black text-[#1C1626]">Session History</h4>
+        {/* Basic Profile + NDIS Funding */}
+        <div className="grid gap-4 lg:grid-cols-2">
+
+          {/* Basic Profile */}
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
+              <h4 className="text-[13px] font-black text-[#1C1626]">Basic Profile</h4>
             </div>
-            <span className="rounded-full bg-[#F6F4FB] px-3 py-1 text-xs font-black text-[#5533CC]">{sessions.length} total</span>
-          </div>
-          {sessionsQuery.isLoading ? (
-            <Skeleton className="h-28 w-full rounded-2xl" />
-          ) : latestSessions.length === 0 ? (
-            <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No sessions have been recorded for this participant.</p>
-          ) : (
-            <div className="space-y-3">
-              {latestSessions.map((session) => (
-                <div key={session.id} className="rounded-xl border border-purple-100/70 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-black capitalize text-[#1C1626] truncate">{(session.session_type || "session").replace("_", " ")}</p>
-                      <p className="mt-1 text-xs font-medium text-[#7A6A8A]">
-                        {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
-                      </p>
+            <dl className="grid grid-cols-2 gap-2">
+              {[
+                ["Date of birth", safeFormat(participant.date_of_birth)],
+                ["Biological sex", participant.biological_sex || "Not set"],
+                ["Primary disability", participant.primary_disability || "Not set"],
+                ["Phone", participant.phone || "Not set"],
+                ["Email", participant.email || "Not set"],
+                ["Plan period", participant.plan_start_date
+                  ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
+                  : "Not set"],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#7A6A8A] leading-none mb-1">
+                    {label}
+                  </dt>
+                  <dd className="text-[12px] font-bold text-[#1C1626] truncate" title={String(value)}>
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+
+          {/* NDIS Funding */}
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <DollarSign className="h-3.5 w-3.5 text-[#5533CC]" />
+              <h4 className="text-[13px] font-black text-[#1C1626]">NDIS Funding</h4>
+            </div>
+            {!budgetQuery.isLoading && budget?.has_plan === false ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+                No active NDIS plan has been saved for this participant yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Total / Used / Remaining */}
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ["Total", money(totalBudget || budget?.total_funding)],
+                    ["Used", money(usedBudget)],
+                    ["Remaining", money(remainingBudget)],
+                  ].map(([lbl, val]) => (
+                    <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A8A] leading-none mb-1">{lbl}</p>
+                      <p className="text-[12px] font-black text-[#1C1626] truncate">{val}</p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold capitalize shrink-0 ${statusBadge(session.status || "")}`}>
-                      {session.status || "draft"}
-                    </span>
-                  </div>
-                  {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                    <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#7A6A8A]">
-                      {session.translated_english_note || session.compliance_input_text || session.notes}
-                    </p>
-                  )}
-                  {(session.original_language_input || session.translated_english_note) && (
-                    <div className="mt-4">
-                      <TranslationAuditView
-                        originalLanguageInput={session.original_language_input ?? undefined}
-                        translatedEnglishNote={session.translated_english_note ?? undefined}
-                        translationMetadata={session.translation_metadata ?? null}
-                        translationStatus={session.translation_status ?? undefined}
-                        translationProvider={session.translation_provider ?? undefined}
+                  ))}
+                </div>
+                {/* Category bars */}
+                {(budget?.budgets || []).map((item) => (
+                  <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-[12px] font-bold text-[#1C1626] truncate">{item.category_label || item.category}</span>
+                      <span className="text-[11px] font-black text-[#7A6A8A] shrink-0">{item.percent_used ?? 0}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6]"
+                        style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
                       />
                     </div>
-                  )}
+                    <p className="mt-1.5 text-[10px] font-medium text-[#7A6A8A]">
+                      {money(item.used)} used · {money(item.remaining)} left
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* NDIS Goals */}
+        <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
+            <h4 className="text-[13px] font-black text-[#1C1626]">NDIS Goals</h4>
+          </div>
+          {goals.length === 0 ? (
+            <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
+              No goals have been recorded for this participant.
+            </p>
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {goals.map((goal, index) => (
+                <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5 flex items-start gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#5533CC] mt-1.5 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-bold text-[#1C1626] leading-snug">{normalizeGoalTitle(goal, index)}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6A8A] mt-0.5 capitalize">{String(goal.status || "active")}</p>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </section>
 
-        <section className="rounded-2xl border border-purple-100/70 bg-white p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-[#5533CC]" />
-            <h4 className="font-black text-[#1C1626]">Compliance History</h4>
-          </div>
-          {complianceQuery.isLoading ? (
-            <Skeleton className="h-28 w-full rounded-2xl" />
-          ) : complianceHistory.length === 0 ? (
-            <p className="rounded-xl bg-[#F6F4FB] p-4 text-sm font-medium text-[#7A6A8A]">No compliance audit history has been recorded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {complianceHistory.slice(0, 5).map((item) => {
-                const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
-                return (
-                  <div key={item.session_id} className="rounded-xl border border-purple-100/70 p-4">
-                    <div className="flex items-start justify-between gap-2">
+        {/* Session History + Compliance History */}
+        <div className="grid gap-4 lg:grid-cols-2">
+
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="h-3.5 w-3.5 text-[#5533CC]" />
+                <h4 className="text-[13px] font-black text-[#1C1626]">Session History</h4>
+              </div>
+              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+                {sessions.length}
+              </span>
+            </div>
+            {sessionsQuery.isLoading ? (
+              <Skeleton className="h-24 w-full rounded-xl" />
+            ) : latestSessions.length === 0 ? (
+              <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
+                No sessions recorded yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {latestSessions.map((session) => (
+                  <div key={session.id} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="font-black capitalize text-[#1C1626] truncate">{(item.session_type || "session").replace("_", " ")}</p>
-                        <p className="mt-1 text-xs font-medium text-[#7A6A8A]">{safeFormat(item.session_date)}</p>
+                        <p className="text-[12px] font-bold text-[#1C1626] capitalize truncate">
+                          {(session.session_type || "session").replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[10px] text-[#7A6A8A] mt-0.5">
+                          {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
+                        </p>
                       </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
-                        {score == null ? "Audit" : `${score}%`}
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize shrink-0 ${statusBadge(session.status || "")}`}>
+                        {session.status || "draft"}
                       </span>
                     </div>
+                    {(session.translated_english_note || session.compliance_input_text || session.notes) && (
+                      <p className="mt-2 text-[11px] text-[#7A6A8A] line-clamp-2 leading-relaxed">
+                        {session.translated_english_note || session.compliance_input_text || session.notes}
+                      </p>
+                    )}
+                    {(session.original_language_input || session.translated_english_note) && (
+                      <div className="mt-2">
+                        <TranslationAuditView
+                          originalLanguageInput={session.original_language_input ?? undefined}
+                          translatedEnglishNote={session.translated_english_note ?? undefined}
+                          translationMetadata={session.translation_metadata ?? null}
+                          translationStatus={session.translation_status ?? undefined}
+                          translationProvider={session.translation_provider ?? undefined}
+                        />
+                      </div>
+                    )}
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5 text-[#5533CC]" />
+              <h4 className="text-[13px] font-black text-[#1C1626]">Compliance History</h4>
             </div>
-          )}
-        </section>
+            {complianceQuery.isLoading ? (
+              <Skeleton className="h-24 w-full rounded-xl" />
+            ) : complianceHistory.length === 0 ? (
+              <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
+                No compliance audits recorded yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {complianceHistory.slice(0, 5).map((item) => {
+                  const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
+                  return (
+                    <div key={item.session_id} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-bold text-[#1C1626] capitalize truncate">
+                            {(item.session_type || "session").replace(/_/g, " ")}
+                          </p>
+                          <p className="text-[10px] text-[#7A6A8A] mt-0.5">{safeFormat(item.session_date)}</p>
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black shrink-0 ${complianceTone(score)}`}>
+                          {score == null ? "–" : `${score}%`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );
