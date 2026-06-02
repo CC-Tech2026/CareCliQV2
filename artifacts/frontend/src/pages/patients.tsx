@@ -21,6 +21,8 @@ import {
   ClipboardList,
   FileText,
   ShieldCheck,
+  UserCircle,
+  Target,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -766,268 +768,383 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     .join("")
     .toUpperCase();
 
+  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance">("overview");
+
+  const TABS = [
+    { id: "overview"    as const, label: "Overview",    icon: UserCircle   },
+    { id: "plan"        as const, label: "NDIS Plan",   icon: DollarSign   },
+    { id: "goals"       as const, label: "Goals",       icon: Target       },
+    { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
+    { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
+  ];
+
   return (
     <div className="flex flex-col min-h-full">
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-4">
+      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-0">
 
-        {/* Avatar + name + action buttons — always one row */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F1738A] to-[#542269] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+        {/* Avatar + name + action buttons */}
+        <div className="flex items-center gap-3 pb-4">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F03060] to-[#5533CC] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
             {initials}
           </div>
-
           <div className="flex-1 min-w-0">
             <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#F03060] leading-none mb-0.5">
               Participant Profile
             </p>
-            <h3 className="text-[16px] font-black text-[#1C1626] leading-tight truncate">
+            <h3 className="text-[16px] font-black text-[#1E1640] leading-tight truncate">
               {participant.full_name}
             </h3>
           </div>
-
-          {/* Action buttons — compact, never wrap */}
           <div className="flex items-center gap-1.5 shrink-0">
             <EditParticipantDialog
               participant={participant}
-              onSaved={() => {
-                participantQuery.refetch();
-                onRefreshList();
-              }}
+              onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
             />
             <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
           </div>
         </div>
 
-        {/* NDIS number + plan dates subtitle */}
-        <p className="text-[11px] text-[#7A6A8A] mt-2 ml-[52px] leading-relaxed">
+        {/* NDIS number + plan dates */}
+        <p className="text-[11px] text-[#7A6A9E] ml-[52px] -mt-2 mb-3 leading-relaxed">
           NDIS {participant.ndis_number || "not recorded"}
           {participant.plan_start_date && participant.plan_end_date && (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
           )}
         </p>
 
-        {/* Compact 4-stat strip */}
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        {/* 4-stat strip */}
+        <div className="grid grid-cols-4 gap-2 mb-3">
           {metricCards.map((metric) => {
             const Icon = metric.icon;
             return (
               <div key={metric.label} className={`rounded-xl border px-2.5 py-2 ${metric.tone}`}>
                 <div className="flex items-center gap-1 mb-1.5">
                   <Icon className="h-3 w-3 shrink-0 opacity-70" />
-                  <p className="text-[8px] font-black uppercase tracking-[0.13em] opacity-70 leading-none truncate">
-                    {metric.label}
-                  </p>
+                  <p className="text-[8px] font-black uppercase tracking-[0.13em] opacity-70 leading-none truncate">{metric.label}</p>
                 </div>
                 <p className="text-[13px] font-black capitalize leading-tight truncate">{metric.value}</p>
               </div>
             );
           })}
         </div>
+
+        {/* Tab bar */}
+        <div className="flex gap-0 -mb-px overflow-x-auto scrollbar-none">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
+                  active
+                    ? "border-[#5533CC] text-[#5533CC]"
+                    : "border-transparent text-[#7A6A9E] hover:text-[#1E1640] hover:border-[#E2DEF2]"
+                }`}
+              >
+                <Icon size={13} strokeWidth={active ? 2.5 : 2} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Scrollable content ────────────────────────────────────────── */}
-      <div className="p-5 space-y-4">
+      {/* ── Tab content ───────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
 
-        {/* Basic Profile + NDIS Funding */}
-        <div className="grid gap-4 lg:grid-cols-2">
-
-          {/* Basic Profile */}
+        {/* OVERVIEW TAB */}
+        {activeTab === "overview" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1C1626]">Basic Profile</h4>
+              <h4 className="text-[13px] font-black text-[#1E1640]">Personal Details</h4>
             </div>
             <dl className="grid grid-cols-2 gap-2">
               {[
-                ["Date of birth", safeFormat(participant.date_of_birth)],
-                ["Biological sex", participant.biological_sex || "Not set"],
+                ["Date of birth",     safeFormat(participant.date_of_birth)],
+                ["Biological sex",    participant.biological_sex || "Not set"],
                 ["Primary disability", participant.primary_disability || "Not set"],
-                ["Phone", participant.phone || "Not set"],
-                ["Email", participant.email || "Not set"],
-                ["Plan period", participant.plan_start_date
+                ["Phone",             participant.phone || "Not set"],
+                ["Email",             participant.email || "Not set"],
+                ["Plan period",       participant.plan_start_date
                   ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
                   : "Not set"],
+                ["Plan status",       participant.plan_status || "Not set"],
+                ["Total budget",      money(totalBudget || budget?.total_funding)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#7A6A8A] leading-none mb-1">
-                    {label}
-                  </dt>
-                  <dd className="text-[12px] font-bold text-[#1C1626] truncate" title={String(value)}>
-                    {value}
-                  </dd>
+                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{label}</dt>
+                  <dd className="text-[12px] font-bold text-[#1E1640] truncate" title={String(value)}>{value}</dd>
                 </div>
               ))}
             </dl>
           </section>
+        )}
 
-          {/* NDIS Funding */}
+        {/* NDIS PLAN TAB */}
+        {activeTab === "plan" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1C1626]">NDIS Funding</h4>
+              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Funding</h4>
             </div>
-            {!budgetQuery.isLoading && budget?.has_plan === false ? (
+            {budgetQuery.isLoading ? (
+              <Skeleton className="h-24 w-full rounded-xl" />
+            ) : budget?.has_plan === false ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-                No active NDIS plan has been saved for this participant yet.
+                No active NDIS plan saved yet.{" "}
+                <button
+                  className="underline font-bold ml-1"
+                  onClick={() => setActiveTab("overview")}
+                >
+                  Set up a plan
+                </button>{" "}
+                using the button above.
               </div>
             ) : (
               <div className="space-y-3">
+                {/* Plan meta */}
+                {budget?.plan_number && (
+                  <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] mb-1">Plan Number</p>
+                    <p className="text-[12px] font-bold text-[#1E1640]">{budget.plan_number}</p>
+                  </div>
+                )}
                 {/* Total / Used / Remaining */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    ["Total", money(totalBudget || budget?.total_funding)],
-                    ["Used", money(usedBudget)],
+                    ["Total",     money(totalBudget || budget?.total_funding)],
+                    ["Used",      money(usedBudget)],
                     ["Remaining", money(remainingBudget)],
                   ].map(([lbl, val]) => (
                     <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A8A] leading-none mb-1">{lbl}</p>
-                      <p className="text-[12px] font-black text-[#1C1626] truncate">{val}</p>
+                      <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{lbl}</p>
+                      <p className="text-[12px] font-black text-[#1E1640] truncate">{val}</p>
                     </div>
                   ))}
                 </div>
-                {/* Category bars */}
-                {(budget?.budgets || []).map((item) => (
-                  <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-[12px] font-bold text-[#1C1626] truncate">{item.category_label || item.category}</span>
-                      <span className="text-[11px] font-black text-[#7A6A8A] shrink-0">{item.percent_used ?? 0}%</span>
+                {/* Budget utilisation bar */}
+                {totalBudget > 0 && (
+                  <div className="rounded-xl border border-purple-100/60 bg-white p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[12px] font-bold text-[#1E1640]">Overall utilisation</span>
+                      <span className="text-[11px] font-black text-[#7A6A9E]">
+                        {Math.round((usedBudget / totalBudget) * 100)}%
+                      </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
+                    <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6]"
-                        style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
+                        className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6] transition-all"
+                        style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
                       />
                     </div>
-                    <p className="mt-1.5 text-[10px] font-medium text-[#7A6A8A]">
-                      {money(item.used)} used · {money(item.remaining)} left
-                    </p>
+                  </div>
+                )}
+                {/* Category breakdown */}
+                {(budget?.budgets ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A9E]">By Support Category</p>
+                    {(budget?.budgets ?? []).map((item) => (
+                      <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[12px] font-bold text-[#1E1640] truncate">{item.category_label || item.category}</span>
+                          <span className="text-[11px] font-black text-[#7A6A9E] shrink-0">{item.percent_used ?? 0}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6]"
+                            style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[10px] font-medium text-[#7A6A9E]">
+                          {money(item.used)} used · {money(item.remaining)} left of {money(item.allocated)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* GOALS TAB */}
+        {activeTab === "goals" && (
+          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Target className="h-3.5 w-3.5 text-[#5533CC]" />
+              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Goals</h4>
+              {goals.length > 0 && (
+                <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+                  {goals.length}
+                </span>
+              )}
+            </div>
+            {goals.length === 0 ? (
+              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
+                <Target className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#1E1640]">No goals recorded</p>
+                <p className="text-[11px] text-[#7A6A9E] mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {goals.map((goal, index) => (
+                  <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-4 py-3 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-[#EEEAFB] flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-[10px] font-black text-[#5533CC]">{index + 1}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-bold text-[#1E1640] leading-snug">{normalizeGoalTitle(goal, index)}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6A9E] mt-1 capitalize">
+                        {String(goal.status || "active")}
+                        {goal.category ? ` · ${String(goal.category)}` : ""}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(String(goal.status || "active"))}`}>
+                      {String(goal.status || "active")}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
           </section>
-        </div>
+        )}
 
-        {/* NDIS Goals */}
-        <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
-            <h4 className="text-[13px] font-black text-[#1C1626]">NDIS Goals</h4>
-          </div>
-          {goals.length === 0 ? (
-            <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
-              No goals have been recorded for this participant.
-            </p>
-          ) : (
-            <div className="grid gap-2 lg:grid-cols-2">
-              {goals.map((goal, index) => (
-                <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5 flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#5533CC] mt-1.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[12px] font-bold text-[#1C1626] leading-snug">{normalizeGoalTitle(goal, index)}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6A8A] mt-0.5 capitalize">{String(goal.status || "active")}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Session History + Compliance History */}
-        <div className="grid gap-4 lg:grid-cols-2">
-
+        {/* SESSIONS TAB */}
+        {activeTab === "sessions" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-[#5533CC]" />
-                <h4 className="text-[13px] font-black text-[#1C1626]">Session History</h4>
+                <h4 className="text-[13px] font-black text-[#1E1640]">Session History</h4>
               </div>
               <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
                 {sessions.length}
               </span>
             </div>
             {sessionsQuery.isLoading ? (
-              <Skeleton className="h-24 w-full rounded-xl" />
-            ) : latestSessions.length === 0 ? (
-              <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
-                No sessions recorded yet.
-              </p>
+              <div className="space-y-2">
+                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+              </div>
+            ) : sessions.length === 0 ? (
+              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
+                <CalendarDays className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#1E1640]">No sessions yet</p>
+                <p className="text-[11px] text-[#7A6A9E] mt-1">Sessions with this participant will appear here.</p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {latestSessions.map((session) => (
-                  <div key={session.id} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-bold text-[#1C1626] capitalize truncate">
-                          {(session.session_type || "session").replace(/_/g, " ")}
-                        </p>
-                        <p className="text-[10px] text-[#7A6A8A] mt-0.5">
-                          {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
-                        </p>
+                {sessions.map((session) => (
+                  <Link key={session.id} href={`/sessions/${session.id}`}>
+                    <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                            {(session.session_type || "session").replace(/_/g, " ")}
+                          </p>
+                          <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                            {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {session.compliance_score != null && (
+                            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${complianceTone(session.compliance_score)}`}>
+                              {session.compliance_score}%
+                            </span>
+                          )}
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${statusBadge(session.status || "")}`}>
+                            {session.status || "draft"}
+                          </span>
+                        </div>
                       </div>
-                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize shrink-0 ${statusBadge(session.status || "")}`}>
-                        {session.status || "draft"}
-                      </span>
+                      {(session.translated_english_note || session.compliance_input_text || session.notes) && (
+                        <p className="mt-1.5 text-[11px] text-[#7A6A9E] line-clamp-2 leading-relaxed">
+                          {session.translated_english_note || session.compliance_input_text || session.notes}
+                        </p>
+                      )}
+                      {(session.original_language_input || session.translated_english_note) && (
+                        <div className="mt-2">
+                          <TranslationAuditView
+                            originalLanguageInput={session.original_language_input ?? undefined}
+                            translatedEnglishNote={session.translated_english_note ?? undefined}
+                            translationMetadata={session.translation_metadata ?? null}
+                            translationStatus={session.translation_status ?? undefined}
+                            translationProvider={session.translation_provider ?? undefined}
+                          />
+                        </div>
+                      )}
                     </div>
-                    {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                      <p className="mt-2 text-[11px] text-[#7A6A8A] line-clamp-2 leading-relaxed">
-                        {session.translated_english_note || session.compliance_input_text || session.notes}
-                      </p>
-                    )}
-                    {(session.original_language_input || session.translated_english_note) && (
-                      <div className="mt-2">
-                        <TranslationAuditView
-                          originalLanguageInput={session.original_language_input ?? undefined}
-                          translatedEnglishNote={session.translated_english_note ?? undefined}
-                          translationMetadata={session.translation_metadata ?? null}
-                          translationStatus={session.translation_status ?? undefined}
-                          translationProvider={session.translation_provider ?? undefined}
-                        />
-                      </div>
-                    )}
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
           </section>
+        )}
 
+        {/* COMPLIANCE TAB */}
+        {activeTab === "compliance" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1C1626]">Compliance History</h4>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-[#5533CC]" />
+                <h4 className="text-[13px] font-black text-[#1E1640]">Compliance Audit History</h4>
+              </div>
+              {complianceHistory.length > 0 && averageCompliance != null && (
+                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
+                  Avg {averageCompliance}%
+                </span>
+              )}
             </div>
             {complianceQuery.isLoading ? (
-              <Skeleton className="h-24 w-full rounded-xl" />
+              <div className="space-y-2">
+                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+              </div>
             ) : complianceHistory.length === 0 ? (
-              <p className="rounded-xl bg-white border border-purple-100/60 p-4 text-[12px] font-medium text-[#7A6A8A]">
-                No compliance audits recorded yet.
-              </p>
+              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
+                <ShieldCheck className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#1E1640]">No compliance audits yet</p>
+                <p className="text-[11px] text-[#7A6A9E] mt-1">Audits run automatically when sessions are saved with AI.</p>
+              </div>
             ) : (
               <div className="space-y-2">
-                {complianceHistory.slice(0, 5).map((item) => {
+                {complianceHistory.map((item) => {
                   const score = item.latest_audit?.score ?? item.latest_audit?.compliance_score;
+                  const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
                   return (
-                    <div key={item.session_id} className="rounded-xl bg-white border border-purple-100/60 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-bold text-[#1C1626] capitalize truncate">
-                            {(item.session_type || "session").replace(/_/g, " ")}
-                          </p>
-                          <p className="text-[10px] text-[#7A6A8A] mt-0.5">{safeFormat(item.session_date)}</p>
+                    <Link key={item.session_id} href={`/sessions/${item.session_id}`}>
+                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                              {(item.session_type || "session").replace(/_/g, " ")}
+                            </p>
+                            <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                              Session {safeFormat(item.session_date)}
+                              {auditDate ? ` · Audited ${safeFormat(auditDate, "MMM d")}` : ""}
+                            </p>
+                          </div>
+                          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
+                            {score == null ? "–" : `${score}%`}
+                          </span>
                         </div>
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black shrink-0 ${complianceTone(score)}`}>
-                          {score == null ? "–" : `${score}%`}
-                        </span>
+                        {item.latest_audit?.status && (
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#7A6A9E]">
+                            {item.latest_audit.status.replace(/_/g, " ")}
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
             )}
           </section>
-        </div>
+        )}
+
       </div>
     </div>
   );
