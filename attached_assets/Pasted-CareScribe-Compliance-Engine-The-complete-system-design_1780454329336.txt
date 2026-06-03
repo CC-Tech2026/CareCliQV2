@@ -1,0 +1,126 @@
+CareScribe — Compliance Engine
+The complete system design for CareScribe's compliance core. This is not a feature — it is the product. Everything else (invoicing, scheduling, toolkit) supports this engine.
+
+Why it matters
+The 12 rules
+Restrictive practices
+Engine pipeline
+Scoring system
+AI layer
+Multilingual
+Audit pack
+vs Competitors
+CareScribe enforces 12 compliance rules — not just 8
+The original design had 8 rules. Based on actual NDIS audit findings and the NDIS Practice Standards Core Module, we extend to 12. Every rule is enforced at both the client-side (real-time as they type) and server-side (on save). Rules have severity levels: Block (cannot save), Warn (must acknowledge), Info (advisory).
+
+Group A — Documentation integrity (4 rules)
+R1 — DOCUMENTATION
+Date, Time & Duration
+Blocks save
+Session date, start time, end time, and duration must all be present. Duration must be calculable and non-zero. Duration over 8 hours triggers a data entry warning. This is the most fundamental requirement — without it the note cannot be claimed.
+
+Fails if
+Date, start time, or end time is missing. Duration = 0 or negative.
+Warns if
+Duration exceeds 8 hours — likely a data entry error.
+R2 — DOCUMENTATION
+Note Submitted Within 48 Hours
+Blocks approval
+NDIS Practice Standards require notes to be completed within 48 hours of support delivery. CareScribe tracks the session date and flags any note being written or approved more than 48 hours later. The note can still be saved as a draft but approval is blocked until the worker acknowledges the late submission.
+
+Fails if
+Note approved more than 48 hours after session date.
+Action required
+Worker must check: "I acknowledge this note was completed late and understand this may affect compliance records."
+R3 — DOCUMENTATION
+Minimum Note Length & Specificity
+Warning
+Notes must be sufficiently specific to be audit-ready. Vague entries like "good session" or "did shopping" are consistently flagged by NDIS auditors as non-conformant. CareScribe checks for minimum meaningful content. The engine scans for filler-only notes.
+
+Warns if
+Note is under 80 words OR contains only generic phrases with no specific activity described.
+Blocked phrases
+good session did shopping all went well no issues as the entire note.
+R4 — DOCUMENTATION
+Support Type Documented
+Blocks save
+The support type (NDIS registration group) must be recorded. Every support must be traceable to a documented plan and a service agreement. Without the support type, the note cannot be matched to a fundable line item.
+
+Fails if
+Session type field is empty or null.
+Valid values
+Daily Living, Community Participation, Personal Care, Support Coordination, Capacity Building, other NDIS registration groups.
+Group B — Clinical language standards (4 rules)
+R5 — LANGUAGE
+Goal Referenced (Minimum 1)
+Blocks approval
+Every progress note must reference at least one of the participant's active NDIS goals. This is the single most common audit finding. The engine checks for: exact goal text match (from NDIS Goals tab), goal number reference (Goal 1, Goal 2), or approved goal-language phrases.
+
+Passes if
+Goal text substring found in note, OR goal number mentioned (Goal 1, G2), OR phrases: "goal", "ndis goal", "working toward", "progress toward", "support plan objective".
+AI suggestion
+AI inserts the exact goal text at the relevant point in the note: "Support was provided to address Goal 2: independence in daily living."
+R6 — LANGUAGE
+Objective Language Only
+Blocks approval (2+ instances)
+Notes must contain only observable facts — not worker opinions, feelings, or interpretations. Auditors flag subjective language as evidence that the worker is documenting impressions rather than facts. Two or more instances blocks approval. One instance is a warning.
+
+Flagged phrases
+I think I believe I feel I suspect seemed to appeared to be probably maybe I reckon in my opinion
+AI rewrite
+Replaces with observable equivalents: "Participant reported feeling fatigued" instead of "I think she was tired"
+R7 — LANGUAGE
+Person-First Language
+Blocks approval
+NDIS Practice Standards require person-first, non-judgmental language in all documentation. The person comes before the disability. This is both a legal requirement and a participant rights obligation under the Core Module.
+
+Flagged terms
+the disabled person wheelchair-bound suffers from afflicted by the autistic mentally ill victim of
+Correct form
+"person who uses a wheelchair" · "participant has a diagnosis of" · "participant experiences"
+R8 — LANGUAGE
+Scope of Practice (Support Workers)
+Blocks approval for support workers
+Support workers must not document clinical assessments, diagnoses, medication administration details, or anything outside their registration scope. Allied health professionals have separate scope rules per their discipline. This rule is role-aware — it applies differently to support workers vs allied health.
+
+Blocks for SW
+diagnosed with prescribed administered medication X mg I assessed clinical assessment indicates
+Rewrite suggestion
+"Participant's nurse was contacted regarding medication" — document the referral, not the clinical action.
+Group C — Safety and incident rules (4 rules)
+R9 — SAFETY
+Incident Language Detected
+Triggers incident workflow
+When incident-related language is detected in a note, the system automatically creates a draft incident report and alerts the worker. NDIS serious incidents must be reported to the Commission within 24 hours. The note is flagged but not blocked — the worker must acknowledge the detection.
+
+Trigger words
+fell fall aggressive hit hospital ambulance self-harm missing police overdose seizure refused care
+Auto-action
+Draft incident report created and linked to this session. Support Coordinator notified immediately. Worker must acknowledge before note is approved.
+R10 — SAFETY
+Restrictive Practice Detection
+Critical — blocks approval
+All 5 categories of regulated restrictive practices are detected. This is the most serious compliance obligation in the NDIS framework. Breaches carry the most severe regulatory consequences. The note cannot be approved until the worker explicitly acknowledges the detection and confirms they have reviewed the RP guidance.
+
+5 categories
+Chemical Restraint · Physical Restraint · Mechanical Restraint · Environmental Restraint · Seclusion
+Action required
+Mandatory acknowledgement checkbox. Support Coordinator notified immediately. Link to NDIS Commission RP reporting page. AI provides compliant rewrite.
+R11 — SAFETY
+Duplicate Note Detection
+Warning — audit risk
+NDIS auditors specifically flag copy-pasted or templated notes across multiple shifts as evidence that genuine, individualised support was not being delivered or documented. CareScribe runs a similarity check against the same worker's last 5 notes for this participant.
+
+Detection method
+Cosine similarity check against last 5 approved notes for this participant + worker. Similarity above 85% triggers warning.
+Warning message
+"This note is very similar to a previous note. NDIS auditors flag templated notes. Ensure this reflects today's specific session."
+R12 — SAFETY
+Participant Response Documented
+Warning
+Under Quality Indicator 2.4 and Practice Standard Outcome 3.2, auditors specifically look for evidence that the participant's response to supports is recorded. A note that only describes what the worker did — with no participant response — is incomplete.
+
+Passes if
+Note contains participant response language: "participant reported" · "participant demonstrated" · "participant engaged" · "participant declined" · "participant expressed"
+AI suggestion
+Inserts a participant response sentence at the appropriate point: "Participant engaged positively throughout the session, reporting satisfaction with the support provided."
