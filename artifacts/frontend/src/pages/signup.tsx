@@ -27,11 +27,6 @@ interface FormData {
   password: string;
   confirm_password: string;
 
-  iw_registration_status: string;
-  iw_support_specialties: string;
-  iw_years_experience: string;
-  iw_mobile: string;
-
   ah_profession_type: string;
   ah_registration_status: string;
   ah_provider_number: string;
@@ -52,11 +47,6 @@ const EMPTY: FormData = {
   email: "",
   password: "",
   confirm_password: "",
-
-  iw_registration_status: "",
-  iw_support_specialties: "",
-  iw_years_experience: "",
-  iw_mobile: "",
 
   ah_profession_type: "",
   ah_registration_status: "",
@@ -228,13 +218,6 @@ export default function Signup() {
       dot: "#9B5DE5",
       badge: null,
     },
-    {
-      value: "independent_worker" as AccountType,
-      title: "Independent Practitioner",
-      sub: "Sole trader or unregistered provider working without an organisation",
-      dot: CORAL,
-      badge: null,
-    },
   ] as const;
 
   function step1Valid() {
@@ -247,13 +230,6 @@ export default function Signup() {
   }
 
   function step2Valid() {
-    if (form.account_type === "independent_worker") {
-      return (
-        form.iw_registration_status !== "" &&
-        form.iw_mobile.trim() !== ""
-      );
-    }
-
     if (form.account_type === "allied_health") {
       return (
         form.ah_profession_type !== "" &&
@@ -724,15 +700,6 @@ export default function Signup() {
                 className="space-y-4"
               >
                 {form.account_type ===
-                  "independent_worker" && (
-                  <IndependentWorkerFields
-                    form={form}
-                    updateField={updateField}
-                    disabled={busy}
-                  />
-                )}
-
-                {form.account_type ===
                   "allied_health" && (
                   <AlliedHealthFields
                     form={form}
@@ -876,13 +843,6 @@ function buildPayload(form: FormData) {
     if (form.sp_team_size)           base.team_size           = form.sp_team_size;
     if (form.sp_participant_volume)  base.participant_volume  = form.sp_participant_volume;
     if (form.sp_contact_number)      base.contact_number      = form.sp_contact_number;
-  } else if (form.account_type === "independent_worker") {
-    base.onboarding_data = {
-      registration_status:  form.iw_registration_status,
-      support_specialties:  form.iw_support_specialties,
-      years_experience:     form.iw_years_experience,
-      mobile:               form.iw_mobile,
-    };
   } else if (form.account_type === "allied_health") {
     base.onboarding_data = {
       profession_type:      form.ah_profession_type,
@@ -894,102 +854,6 @@ function buildPayload(form: FormData) {
   }
 
   return base;
-}
-
-// ── Independent Worker ────────────────────────────────────────────────────────
-function IndependentWorkerFields({
-  form,
-  updateField,
-  disabled,
-}: any) {
-  return (
-    <>
-      <div>
-        <Label>Registration status</Label>
-
-        <StyledSelect
-          name="iw_registration_status"
-          value={form.iw_registration_status}
-          onChange={(v) =>
-            updateField(
-              "iw_registration_status",
-              v
-            )
-          }
-          placeholder="Select status..."
-          disabled={disabled}
-          options={[
-            {
-              value: "registered_ndis",
-              label: "Registered NDIS Provider",
-            },
-            {
-              value: "unregistered",
-              label: "Unregistered Provider",
-            },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Label>Support specialties</Label>
-
-        <StyledSelect
-          name="iw_support_specialties"
-          value={form.iw_support_specialties}
-          onChange={(v) =>
-            updateField("iw_support_specialties", v)
-          }
-          placeholder="Select specialty..."
-          disabled={disabled}
-          required={false}
-          options={[
-            { value: "community_access",      label: "Community Access" },
-            { value: "personal_care",         label: "Personal Care" },
-            { value: "daily_living",          label: "Daily Living Activities" },
-            { value: "social_participation",  label: "Social & Civic Participation" },
-            { value: "skill_development",     label: "Skill Development" },
-            { value: "transport",             label: "Transport" },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Label>Years of experience</Label>
-
-        <StyledSelect
-          name="iw_years_experience"
-          value={form.iw_years_experience}
-          onChange={(v) =>
-            updateField("iw_years_experience", v)
-          }
-          placeholder="Select range..."
-          disabled={disabled}
-          required={false}
-          options={[
-            { value: "less_than_1", label: "Less than 1 year" },
-            { value: "1_3",         label: "1–3 years" },
-            { value: "3_5",         label: "3–5 years" },
-            { value: "5_plus",      label: "5+ years" },
-          ]}
-        />
-      </div>
-
-      <div>
-        <Label>Mobile number</Label>
-
-        <StyledInput
-          name="iw_mobile"
-          value={form.iw_mobile}
-          onChange={(v) =>
-            updateField("iw_mobile", v)
-          }
-          placeholder="04xx xxx xxx"
-          disabled={disabled}
-        />
-      </div>
-    </>
-  );
 }
 
 // ── Allied Health ─────────────────────────────────────────────────────────────
