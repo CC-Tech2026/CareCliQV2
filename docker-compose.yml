@@ -11,6 +11,8 @@ services:
       PORT: "8000"
     ports:
       - "8000:8000"
+    expose:
+      - "8000"
     healthcheck:
       test:
         [
@@ -32,6 +34,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8000
+      PORT: "80"
     ports:
       - "3000:80"
     restart: unless-stopped
