@@ -94,6 +94,10 @@ def _limited_participant(participant: dict) -> dict:
             or "Not recorded"
         ),
         "primary_disability": participant.get("primary_disability"),
+        "allergies": participant.get("allergies"),
+        "communication_preferences": participant.get("communication_preferences"),
+        "behaviour_support_plan": participant.get("behaviour_support_plan"),
+        "restricted_behavioural_notes": participant.get("restricted_behavioural_notes"),
         "goals": participant.get("goals") or [],
         "limited_medical_history": {
             "primary_disability": participant.get("primary_disability"),

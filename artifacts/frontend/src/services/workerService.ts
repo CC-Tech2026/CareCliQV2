@@ -4,6 +4,10 @@ import type { DashboardClient, DashboardSession } from "@/services/dashboardServ
 export type WorkerClient = DashboardClient & {
   date_of_birth?: string;
   primary_disability?: string;
+  allergies?: string | null;
+  communication_preferences?: string | null;
+  behaviour_support_plan?: string | null;
+  restricted_behavioural_notes?: string | null;
   plan_start_date?: string;
   plan_end_date?: string;
   goals?: Array<Record<string, unknown>>;

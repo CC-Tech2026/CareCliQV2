@@ -6,20 +6,25 @@ import {
   AlertTriangle,
   CalendarDays,
   Camera,
+  CheckCircle2,
+  Circle,
   ClipboardList,
   FileText,
   GripVertical,
-  HeartPulse,
   Languages,
+  ListChecks,
   Loader2,
+  MessageCircle,
   Mic,
   MicOff,
   Paperclip,
   Plus,
   Save,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   StopCircle,
+  Target,
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -164,17 +169,49 @@ function Section({ title, icon: Icon, children }: { title: string; icon: Compone
   );
 }
 
-function BasicProfilePanel({ client }: { client: ClientSummary }) {
+function goalLabel(goal: Record<string, unknown>, index: number) {
+  return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
+}
+
+function activeGoals(goals?: Array<Record<string, unknown>>) {
+  if (!goals || goals.length === 0) return [];
+  return goals.filter((goal) => {
+    const status = String(goal.status || "active").toLowerCase();
+    return status !== "completed" && status !== "achieved" && status !== "archived";
+  });
+}
+
+function ProminentAlertCard({
+  title,
+  icon: Icon,
+  text,
+}: {
+  title: string;
+  icon: ComponentType<{ size?: number; className?: string }>;
+  text: string;
+}) {
   return (
-    <Section title="Basic Profile" icon={ClipboardList}>
+    <section className="rounded-lg border-2 border-red-200 bg-red-50 p-5 shadow-sm">
+      <div className="mb-2 flex items-center gap-2 text-red-700">
+        <Icon size={18} />
+        <h2 className="text-lg font-black">{title}</h2>
+      </div>
+      <p className="whitespace-pre-wrap text-sm font-semibold leading-6 text-red-800">{text}</p>
+    </section>
+  );
+}
+
+function ParticipantSnapshotCard({ client }: { client: ClientSummary }) {
+  return (
+    <Section title="Participant Snapshot" icon={ClipboardList}>
       <dl className="grid gap-3 sm:grid-cols-2">
         {[
+          ["Name", client.full_name],
           ["NDIS Number", client.ndis_number],
-          ["Date of Birth", safeDate(client.date_of_birth)],
+          ["Date of Birth", client.date_of_birth ? safeDate(client.date_of_birth) : ""],
           ["Plan Status", client.plan_status],
-          ["Plan Management", client.plan_management_type],
-          ["Plan Start", safeDate(client.plan_start_date)],
-          ["Plan End", safeDate(client.plan_end_date)],
+          ["Plan Start", client.plan_start_date ? safeDate(client.plan_start_date) : ""],
+          ["Plan End", client.plan_end_date ? safeDate(client.plan_end_date) : ""],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg bg-[#F8F6FE] p-3">
             <dt className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>{label}</dt>
@@ -186,16 +223,117 @@ function BasicProfilePanel({ client }: { client: ClientSummary }) {
   );
 }
 
-function LimitedMedicalPanel({ client }: { client: ClientSummary }) {
+function SessionConfidenceCard({ client }: { client: ClientSummary }) {
+  const goals = activeGoals(client.goals);
+  const items: Array<{ label: string; ready: boolean }> = [
+    { label: "NDIS goals reviewed", ready: goals.length > 0 },
+    { label: "Allergies checked", ready: Boolean(client.allergies?.trim()) },
+    { label: "Support preferences reviewed", ready: Boolean(client.communication_preferences?.trim()) },
+    {
+      label: "Behaviour support reviewed",
+      ready: Boolean(client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim()),
+    },
+  ];
+  const readyCount = items.filter((item) => item.ready).length;
   return (
-    <Section title="Limited Medical History" icon={HeartPulse}>
-      <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 p-4">
-        <p className="text-sm font-bold text-amber-900">Limited clinical profile access</p>
-        <p className="mt-1 text-sm leading-6 text-amber-800">
-          {client.primary_disability || "No primary disability has been recorded for the limited worker view."}
-        </p>
-      </div>
+    <Section title="Session Confidence" icon={ListChecks}>
+      <p className="mb-3 text-sm font-medium" style={{ color: MUTED }}>
+        {readyCount} of {items.length} key participant details on file. Review before you begin.
+      </p>
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item.label} className="flex items-center gap-2 text-sm font-bold" style={{ color: item.ready ? TEXT : MUTED }}>
+            {item.ready ? (
+              <CheckCircle2 size={18} className="shrink-0 text-emerald-500" />
+            ) : (
+              <Circle size={18} className="shrink-0" style={{ color: BORDER }} />
+            )}
+            <span>{item.label}</span>
+            {!item.ready && <span className="text-xs font-bold" style={{ color: MUTED }}>· Not recorded</span>}
+          </li>
+        ))}
+      </ul>
     </Section>
+  );
+}
+
+function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; columns?: 1 | 2 }) {
+  const goals = activeGoals(client.goals);
+  const wrapClass = columns === 2 ? "grid items-start gap-6 lg:grid-cols-2" : "space-y-6";
+  return (
+    <div className={wrapClass}>
+      <ParticipantSnapshotCard client={client} />
+
+      {client.primary_disability?.trim() && (
+        <ProminentAlertCard title="Medical Alerts" icon={ShieldAlert} text={client.primary_disability} />
+      )}
+
+      {client.allergies?.trim() && (
+        <ProminentAlertCard title="Allergies" icon={AlertTriangle} text={client.allergies} />
+      )}
+
+      {client.communication_preferences?.trim() && (
+        <Section title="Support Preferences & Sensitivities" icon={MessageCircle}>
+          <p className="whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+            {client.communication_preferences}
+          </p>
+        </Section>
+      )}
+
+      {(client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim()) && (
+        <Section title="Behaviour Support" icon={ShieldCheck}>
+          <div className="space-y-3">
+            {client.behaviour_support_plan?.trim() && (
+              <div className="rounded-lg bg-[#F8F6FE] p-3">
+                <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behaviour Support Plan</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+                  {client.behaviour_support_plan}
+                </p>
+              </div>
+            )}
+            {client.restricted_behavioural_notes?.trim() && (
+              <div className="rounded-lg bg-[#F8F6FE] p-3">
+                <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behavioural Notes</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+                  {client.restricted_behavioural_notes}
+                </p>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
+      {goals.length > 0 && (
+        <Section title="Active NDIS Goals" icon={Target}>
+          <div className="space-y-3">
+            {goals.map((goal, index) => (
+              <div key={String(goal.id || index)} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
+                <p className="font-black" style={{ color: TEXT }}>{goalLabel(goal, index)}</p>
+                <p className="mt-1 text-sm font-medium capitalize" style={{ color: MUTED }}>{String(goal.status || "active")}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {goals.length > 0 && (
+        <Section title="Today's Support Focus" icon={CheckCircle2}>
+          <div className="flex flex-wrap gap-2">
+            {goals.map((goal, index) => (
+              <span
+                key={String(goal.id || index)}
+                className="rounded-full border px-3 py-1.5 text-sm font-bold"
+                style={{ borderColor: BORDER, background: SOFT, color: PLUM }}
+              >
+                {goalLabel(goal, index)}
+              </span>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      <SessionConfidenceCard client={client} />
+    </div>
   );
 }
 
@@ -821,12 +959,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           <SplitSessionLayout
             split={sessionSplit}
             onSplitChange={setSessionSplit}
-            left={
-              <>
-                <BasicProfilePanel client={client} />
-                <LimitedMedicalPanel client={client} />
-              </>
-            }
+            left={<ParticipantReadiness client={client} columns={1} />}
             right={
               <InlineSessionComposer
                 clientName={client.full_name}
@@ -857,10 +990,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             }
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-            <BasicProfilePanel client={client} />
-            <LimitedMedicalPanel client={client} />
-          </div>
+          <ParticipantReadiness client={client} columns={2} />
         )
       )}
 
