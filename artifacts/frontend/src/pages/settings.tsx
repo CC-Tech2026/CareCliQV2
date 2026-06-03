@@ -78,10 +78,10 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5 hover:bg-[#F6F4FB] transition-colors">
+    <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-[#F8F6FE] transition-colors rounded-xl group">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>{title}</p>
-        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>{description}</p>
+        <p className="text-[14px] font-semibold" style={{ color: "#1E1640" }}>{title}</p>
+        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -94,17 +94,27 @@ function SettingRow({
 function Section({
   title,
   description,
+  icon: Icon,
   children,
 }: {
   title: string;
   description: string;
+  icon: React.ComponentType<{ className?: string }>;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-[20px] font-bold tracking-tight" style={{ color: "#1C1626" }}>{title}</h2>
-        <p className="text-[14px] mt-1 leading-relaxed" style={{ color: "#4A3D5A" }}>{description}</p>
+      <div className="flex items-center gap-3.5 pb-1">
+        <div
+          className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ background: "linear-gradient(135deg, rgba(85,51,204,0.12), rgba(85,51,204,0.06))" }}
+        >
+          <Icon className="h-[18px] w-[18px]" style={{ color: "#5533CC" }} />
+        </div>
+        <div>
+          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>{title}</h2>
+          <p className="text-[12px] leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
+        </div>
       </div>
       {children}
     </div>
@@ -126,14 +136,23 @@ function PanelCard({
   return (
     <div
       className={cn("bg-white rounded-2xl overflow-hidden", className)}
-      style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
+      style={{
+        border: "1px solid #EBE5F6",
+        boxShadow: "0 2px 12px rgba(85,51,204,0.05), 0 1px 3px rgba(0,0,0,0.03)",
+      }}
     >
       {label && (
-        <div className="px-5 pt-5 pb-0">
-          <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#7A6A8A" }}>{label}</p>
+        <div
+          className="px-5 py-3 border-b flex items-center gap-2"
+          style={{
+            background: "linear-gradient(to right, rgba(85,51,204,0.05), transparent)",
+            borderColor: "#EBE5F6",
+          }}
+        >
+          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#5533CC" }}>{label}</p>
         </div>
       )}
-      <div className={cn("p-5", label && "pt-3")}>{children}</div>
+      <div className="p-5">{children}</div>
     </div>
   );
 }
@@ -580,32 +599,77 @@ export default function Settings() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex gap-8 min-h-full">
+    <div className="flex flex-col gap-5 min-h-full pb-12">
       {modal}
+
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div
+        className="rounded-2xl px-6 py-4 flex items-center gap-4"
+        style={{
+          background: "linear-gradient(135deg, rgba(85,51,204,0.07) 0%, rgba(240,48,96,0.03) 100%)",
+          border: "1px solid rgba(85,51,204,0.1)",
+        }}
+      >
+        <div
+          className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ background: "rgba(85,51,204,0.1)" }}
+        >
+          <Settings2 className="h-5 w-5" style={{ color: "#5533CC" }} />
+        </div>
+        <div>
+          <h1 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>Workspace Settings</h1>
+          <p className="text-[12px] mt-0.5" style={{ color: "#7A6A9E" }}>
+            Manage your account, provider details, session defaults and compliance rules
+          </p>
+        </div>
+      </div>
+
+      {/* ── Mobile nav (outside flex row — stacks vertically on mobile) ────── */}
+      <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
+        {visibleNavItems.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setActiveSection(id)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
+            style={{
+              background: activeSection === id ? "#5533CC" : "rgba(85,51,204,0.06)",
+              color: activeSection === id ? "white" : "#4A3D5A",
+            }}
+          >
+            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#7A6A9E" }} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-6">
 
       {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
       <aside className="hidden md:flex flex-col w-52 shrink-0">
-        <div className="sticky top-0 space-y-0.5 pt-1">
-          <p className="text-[11px] font-semibold uppercase tracking-widest px-3 pb-2" style={{ color: "#7A6A8A" }}>
-            Settings
+        <div
+          className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
+          style={{
+            background: "white",
+            border: "1px solid #EBE5F6",
+            boxShadow: "0 2px 12px rgba(85,51,204,0.05)",
+          }}
+        >
+          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "#7A6A9E" }}>
+            Navigation
           </p>
           {visibleNavItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-150 text-left border-l-2"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-150 text-left"
               style={{
-                background: activeSection === id ? "rgba(84,34,105,0.07)" : "transparent",
-                color:      activeSection === id ? "#542269" : "#4A3D5A",
-                borderLeftColor: activeSection === id ? "#542269" : "transparent",
-                paddingLeft: 10,
+                background: activeSection === id ? "#5533CC" : "transparent",
+                color: activeSection === id ? "white" : "#4A3D5A",
               }}
             >
               <Icon
-                className={cn(
-                  "h-4 w-4 shrink-0",
-                  activeSection === id ? "text-[#542269]" : "text-[#7A6A8A]"
-                )}
+                className="h-4 w-4 shrink-0"
+                style={{ color: activeSection === id ? "white" : "#7A6A9E" }}
               />
               {label}
             </button>
@@ -613,32 +677,15 @@ export default function Settings() {
         </div>
       </aside>
 
-      {/* ── Mobile nav ──────────────────────────────────────────────────────── */}
-      <div className="md:hidden flex gap-1 overflow-x-auto pb-1 w-full">
-        {visibleNavItems.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveSection(id)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-colors shrink-0"
-            style={{
-              background: activeSection === id ? "#542269" : "rgba(84,34,105,0.06)",
-              color:      activeSection === id ? "white" : "#4A3D5A",
-            }}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
       {/* ── Content panel ───────────────────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 space-y-8 pb-12">
+      <main className="flex-1 min-w-0 space-y-6">
 
         {/* ── Account section ─────────────────────────────────────────────── */}
         {activeSection === "account" && (
           <Section
             title="Account"
             description="Your practitioner identity and digital signature for NDIS audit reports."
+            icon={User}
           >
             {/* Signature card */}
             <PanelCard label="Digital Signature">
@@ -829,6 +876,7 @@ export default function Settings() {
           <Section
             title="Provider"
             description="Your registered NDIS provider business details. These appear on PDF audit reports and invoices."
+            icon={Building2}
           >
             <PanelCard label="Business Information">
               {isLoadingSettings ? (
@@ -886,6 +934,7 @@ export default function Settings() {
           <Section
             title="Session Defaults"
             description="Default settings applied automatically when you start a new live session."
+            icon={Settings2}
           >
             <PanelCard label="Duration">
               {isLoadingSettings ? (
@@ -947,6 +996,7 @@ export default function Settings() {
           <Section
             title="Compliance"
             description="Enforce documentation standards before a session can be approved. These checks run alongside the built-in NDIS compliance engine."
+            icon={ShieldCheck}
           >
             <PanelCard label="Required Before Approval">
               {isLoadingSettings ? (
@@ -1064,15 +1114,21 @@ export default function Settings() {
                   </Button>
                 </div>
 
-                <div className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-1.5"
-                  style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(232,213,232,0.6)", color: "#4A3D5A" }}>
-                  <p className="font-semibold text-[14px]" style={{ color: "#1C1626" }}>How compliance requirements work</p>
-                  <p>
+                <div
+                  className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
+                    border: "1px solid rgba(85,51,204,0.12)",
+                    borderLeft: "3px solid #5533CC",
+                  }}
+                >
+                  <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How compliance requirements work</p>
+                  <p style={{ color: "#4A3D5A" }}>
                     These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
                     Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session
                     review modal opens, so practitioners are prompted to complete the missing documentation immediately.
                   </p>
-                  <p>
+                  <p style={{ color: "#4A3D5A" }}>
                     The built-in engine always runs regardless of these toggles and tracks participant linkage, duration, activities, clinical notes,
                     photo evidence, and goal linkage.
                   </p>
@@ -1087,6 +1143,7 @@ export default function Settings() {
           <Section
             title="Team"
             description="Manage your organisation's staff members and invite new practitioners."
+            icon={Users2}
           >
             {/* Active members */}
             <PanelCard label="Active Members">
@@ -1216,17 +1273,21 @@ export default function Settings() {
 
             {/* Explainer */}
             <div
-              className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-1"
-              style={{ background: "rgba(84,34,105,0.04)", border: "1px solid rgba(232,213,232,0.6)", color: "#4A3D5A" }}
+              className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
+              style={{
+                background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
+                border: "1px solid rgba(85,51,204,0.12)",
+                borderLeft: "3px solid #5533CC",
+              }}
             >
-              <p className="font-semibold text-[13px]" style={{ color: "#1C1626" }}>How staff invitations work</p>
-              <p>
+              <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How staff invitations work</p>
+              <p style={{ color: "#4A3D5A" }}>
                 Inviting a staff member generates a secure token link (7-day expiry). The invitee
                 clicks the link, sets their password, and is immediately added to your organisation
                 with the role you selected. Their access is scoped to only the participants and sessions
                 your org allocates to them.
               </p>
-              <p>
+              <p style={{ color: "#4A3D5A" }}>
                 Email delivery is not yet configured — copy and share the link manually. Pending invitations
                 can be revoked at any time before they are accepted.
               </p>
@@ -1235,6 +1296,8 @@ export default function Settings() {
         )}
 
       </main>
+
+      </div>{/* end flex gap-6 */}
 
       {/* ── Invite modal ────────────────────────────────────────────────────── */}
       <InviteModal

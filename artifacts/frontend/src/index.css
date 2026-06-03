@@ -2,6 +2,30 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+/* ── Scrollbar Styling ────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(122, 106, 158, 0.22);
+  border-radius: 100px;
+  transition: background 0.2s;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(85, 51, 204, 0.38);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 106, 158, 0.22) transparent;
+}
+
 /* ── CareScribe auth page animations ──────────────────────────────────────── */
 @keyframes cs-float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
