@@ -2,7 +2,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useCreateParticipant } from "@workspace/api-client-react";
+import { useCreateParticipant, type CreateParticipantBody } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
@@ -78,7 +78,7 @@ export default function ParticipantNew() {
     if (!payload.total_budget)               delete payload.total_budget;
 
     try {
-      await createParticipant.mutateAsync(payload as Parameters<typeof createParticipant.mutateAsync>[0]);
+      await createParticipant.mutateAsync({ data: payload as CreateParticipantBody });
       toast({ title: "Participant added successfully" });
       navigate("/patients");
     } catch (err: unknown) {
