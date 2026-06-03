@@ -1,0 +1,214 @@
+IMPORTANT UI REQUIREMENT
+
+Do NOT redesign the CareScribe session screen.
+
+The current layout is already aligned with our workflow and should remain largely unchanged.
+
+Preserve:
+
+- Overall page layout
+- Participant profile panel on the left
+- Active session workspace on the right
+- Existing session controls
+- Existing voice recording functionality
+- Existing note capture area
+- Existing navigation tabs
+- Existing visual styling and branding
+
+This is an enhancement project, not a UI redesign.
+
+==================================================
+LEFT PANEL ENHANCEMENT
+==================================================
+
+The left panel should become the Support Worker Readiness Panel.
+
+Instead of only showing basic profile information, enhance it with participant-focused information that helps workers provide better support.
+
+Keep the existing cards and styling.
+
+Add additional cards where data exists:
+
+--------------------------------------------------
+
+PARTICIPANT SNAPSHOT
+
+- Participant Name
+- Preferred Name
+- NDIS Number
+
+--------------------------------------------------
+
+ACTIVE GOALS
+
+Display current NDIS goals.
+
+Examples:
+
+- Community participation
+- Independent living
+- Social engagement
+- Capacity building
+
+--------------------------------------------------
+
+IMPORTANT SUPPORT INFORMATION
+
+Display support preferences and sensitivities.
+
+Examples:
+
+- Sensitive to loud noises
+- Prefers visual instructions
+- Requires additional processing time
+- Avoid sudden routine changes
+- Sensitive to physical touch
+- Prefers quiet environments
+
+This information should be highly visible before support begins.
+
+--------------------------------------------------
+
+MEDICAL ALERTS
+
+Display prominently.
+
+Examples:
+
+- Epilepsy
+- Diabetes
+- Asthma
+- Falls risk
+- Swallowing risk
+
+Use warning styling when applicable.
+
+--------------------------------------------------
+
+ALLERGIES
+
+Display prominently.
+
+Examples:
+
+- Peanut allergy
+- Medication allergy
+- Shellfish allergy
+
+--------------------------------------------------
+
+BEHAVIOUR SUPPORT INFORMATION
+
+If available:
+
+- Positive Behaviour Support Plan
+- Known triggers
+- Escalation indicators
+- De-escalation strategies
+
+--------------------------------------------------
+
+TODAY'S SESSION FOCUS
+
+Display a simple card:
+
+Today's Goals:
+
+✓ Community participation
+
+✓ Independent decision making
+
+✓ Social engagement
+
+This reminds workers what they are supporting today.
+
+==================================================
+RIGHT PANEL ENHANCEMENT
+==================================================
+
+Keep the existing session workspace exactly as it is.
+
+The right panel should remain focused on:
+
+- Voice capture
+- Live notes
+- AI transcription
+- Session documentation
+
+Do not add clutter.
+
+Do not force form completion.
+
+Do not introduce large documentation workflows.
+
+==================================================
+SESSION CONFIDENCE INDICATORS
+==================================================
+
+Add a lightweight status area above or below the note section.
+
+Example:
+
+Session Readiness
+
+✓ Participant profile reviewed
+
+✓ Goals identified
+
+✓ Evidence captured
+
+✓ Outcome recorded
+
+✓ Compliance ready
+
+This is guidance only.
+
+Do not interrupt workers.
+
+==================================================
+END SESSION EXPERIENCE
+==================================================
+
+When End Session is clicked:
+
+Keep existing functionality.
+
+Add a review modal:
+
+Session Summary
+
+- Duration
+- Goals addressed
+- Voice notes captured
+- Observations captured
+
+Compliance Review
+
+✓ Participant identified
+
+✓ Goals referenced
+
+✓ Evidence captured
+
+✓ Audit-ready
+
+Final Message:
+
+"Your session documentation is complete and compliant. No further action is required."
+
+==================================================
+DESIGN PRINCIPLE
+==================================================
+
+The support worker should never need to leave this screen thinking:
+
+"I'll finish the notes later."
+
+CareScribe should create confidence that:
+
+- The participant received full attention.
+- Documentation has been captured.
+- Compliance has been checked.
+- Audit evidence is ready.
+
+The worker leaves the session knowing everything is complete.

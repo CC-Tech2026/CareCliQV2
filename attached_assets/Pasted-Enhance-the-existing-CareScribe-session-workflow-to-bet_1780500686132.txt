@@ -1,0 +1,344 @@
+Enhance the existing CareScribe session workflow to better align with our core mission:
+
+"Support workers should focus on participants, while CareScribe handles documentation, compliance, and audit readiness."
+
+IMPORTANT:
+- Do NOT redesign or replace the existing backend.
+- Do NOT break existing APIs.
+- Do NOT change authentication, organisation hierarchy, participant allocation logic, session engine, compliance engine, or AI note generation.
+- Reuse existing endpoints, database tables, and frontend components wherever possible.
+- This is an enhancement project, not a rebuild.
+
+==================================================
+BUSINESS GOAL
+==================================================
+
+CareScribe exists to reduce administrative burden on disability support workers.
+
+The platform should encourage support workers to:
+
+- Focus on the participant
+- Build stronger participant relationships
+- Deliver higher-quality support
+- Capture information in real time
+- Avoid the "I'll write the notes later" culture
+- Finish every shift with confidence that documentation is complete and compliant
+
+==================================================
+NEW SESSION READINESS EXPERIENCE
+==================================================
+
+Before a support worker starts a session, add a lightweight "Participant Readiness" experience.
+
+When a worker opens a participant profile and clicks Start Session:
+
+Display a Session Readiness Card.
+
+This should be quick to review (under 10 seconds).
+
+Do NOT make it a long form.
+
+Do NOT create additional administrative burden.
+
+==================================================
+PARTICIPANT SNAPSHOT CARD
+==================================================
+
+Display important participant information that helps the support worker provide better care.
+
+Sections:
+
+1. Participant Name
+
+2. Active NDIS Goals
+
+Examples:
+- Increase community participation
+- Improve independent living skills
+- Build social confidence
+- Improve communication skills
+
+3. Support Preferences
+
+Examples:
+- Sensitive to loud noises
+- Requires additional processing time
+- Prefers visual instructions
+- Dislikes sudden routine changes
+- Sensitive to physical touch
+- Prefers quiet environments
+- Uses communication device
+
+4. Medical Alerts
+
+Examples:
+- Epilepsy
+- Diabetes
+- Asthma
+- Falls risk
+- Swallowing risk
+
+Display prominently.
+
+5. Allergies
+
+Examples:
+- Peanut allergy
+- Shellfish allergy
+- Medication allergy
+
+Display prominently.
+
+6. Behaviour Support Information
+
+If available:
+
+- Positive Behaviour Support Plan exists
+- Known triggers
+- De-escalation strategies
+- Support recommendations
+
+7. Emergency Contacts
+
+Read-only access.
+
+==================================================
+SESSION READINESS CONFIRMATION
+==================================================
+
+At the bottom of the card:
+
+Checkbox:
+
+"I have reviewed the participant information"
+
+Button:
+
+"Start Session"
+
+The goal is awareness, not compliance.
+
+==================================================
+ACTIVE SESSION EXPERIENCE
+==================================================
+
+Once a session starts:
+
+Reduce documentation anxiety.
+
+Avoid showing large forms.
+
+Avoid showing compliance warnings during support delivery.
+
+The active session screen should be simple and participant-focused.
+
+Display:
+
+- Participant Name
+- Session Timer
+- Session Type
+- Today's Goals
+
+==================================================
+GOAL REMINDERS
+==================================================
+
+Show small cards highlighting goals being worked on.
+
+Examples:
+
+Today's Focus:
+
+- Community participation
+- Social engagement
+- Independent travel skills
+
+These are reminders only.
+
+Not mandatory tasks.
+
+==================================================
+REAL-TIME CAPTURE WITHOUT INTERRUPTING CARE
+==================================================
+
+Allow support workers to quickly capture observations during the session.
+
+Add:
+
+Quick Observation Buttons
+
+Examples:
+
+- Goal Progress
+- Community Participation
+- Independent Activity
+- Social Engagement
+- Personal Care Support
+- Positive Outcome
+
+These should create timestamped observation drafts.
+
+==================================================
+VOICE MEMO CAPTURE
+==================================================
+
+Prominently surface the existing AI note workflow.
+
+Allow support workers to:
+
+- Record 30-second voice memo
+- Record 60-second voice memo
+- Record 2-minute voice memo
+
+Store:
+
+- Audio
+- Timestamp
+- Session Context
+
+Workers should not feel pressure to write notes while supporting participants.
+
+==================================================
+END SESSION EXPERIENCE
+==================================================
+
+Keep existing session ending functionality.
+
+Enhance it with a cleaner review process.
+
+Display:
+
+Session Summary
+
+- Duration
+- Goals Addressed
+- Draft Observations
+- Voice Memos Captured
+
+==================================================
+AI DOCUMENTATION GENERATION
+==================================================
+
+Use existing AI note generation.
+
+Improve visibility and workflow.
+
+Provide:
+
+"Generate Session Note"
+
+The AI-generated note should continue to:
+
+- Use professional language
+- Reference participant goals
+- Follow NDIS best practices
+- Be audit-ready
+- Align with compliance requirements
+
+==================================================
+COMPLIANCE ASSURANCE EXPERIENCE
+==================================================
+
+One of the biggest challenges for support workers is uncertainty.
+
+After AI note generation, provide reassurance.
+
+Display:
+
+Compliance Check Complete
+
+Checklist:
+
+✓ Participant identified
+✓ Goals referenced
+✓ Objective language used
+✓ Evidence captured
+✓ Required fields completed
+✓ Audit-ready
+
+Display overall compliance score.
+
+==================================================
+AUTO-FIX COMPLIANCE ISSUES
+==================================================
+
+If compliance issues are detected:
+
+Do NOT display technical validation errors.
+
+Instead show:
+
+"We found a few areas that could be improved. Would you like CareScribe to fix them automatically?"
+
+Examples:
+
+- Missing goal references
+- Missing outcome statements
+- Missing evidence wording
+
+Button:
+
+"Auto Fix"
+
+Reuse existing compliance engine where possible.
+
+==================================================
+SESSION COMPLETION CONFIDENCE
+==================================================
+
+When everything passes:
+
+Display:
+
+SESSION COMPLETE
+
+Your documentation is compliant and audit-ready.
+
+No further action is required.
+
+Thank you for focusing on your participant.
+
+The final experience should leave workers feeling confident and supported.
+
+==================================================
+SUPERVISOR VISIBILITY
+==================================================
+
+Reuse existing data and dashboards.
+
+Organisation Owners and Coordinators should continue seeing:
+
+- Sessions completed
+- Notes generated
+- Compliance scores
+- Goal progress
+- Incident flags
+- Team activity
+
+No changes to role permissions.
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+Before making changes:
+
+1. Analyse the current frontend and backend.
+2. Reuse existing APIs wherever possible.
+3. Reuse existing participant data.
+4. Reuse existing goal data.
+5. Reuse existing compliance services.
+6. Reuse existing AI note generation.
+7. Avoid database schema changes unless absolutely necessary.
+8. Keep backwards compatibility.
+
+Success Criteria:
+
+A support worker should be able to:
+
+- Start a session fully informed about participant needs.
+- Focus on the participant throughout the session.
+- Capture information naturally using observations and voice.
+- Finish the session with minimal effort.
+- Trust that CareScribe has handled compliance and documentation requirements.
+- Leave the session knowing their documentation is complete, compliant, and audit-ready.
