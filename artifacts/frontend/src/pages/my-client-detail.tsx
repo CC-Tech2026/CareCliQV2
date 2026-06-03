@@ -259,80 +259,111 @@ function SessionConfidenceCard({ client }: { client: ClientSummary }) {
 
 function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; columns?: 1 | 2 }) {
   const goals = activeGoals(client.goals);
-  const wrapClass = columns === 2 ? "grid items-start gap-6 lg:grid-cols-2" : "space-y-6";
+
+  const medicalCard = client.primary_disability?.trim() ? (
+    <ProminentAlertCard title="Medical Alerts" icon={ShieldAlert} text={client.primary_disability} />
+  ) : null;
+
+  const allergiesCard = client.allergies?.trim() ? (
+    <ProminentAlertCard title="Allergies" icon={AlertTriangle} text={client.allergies} />
+  ) : null;
+
+  const preferencesCard = client.communication_preferences?.trim() ? (
+    <Section title="Support Preferences & Sensitivities" icon={MessageCircle}>
+      <p className="whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+        {client.communication_preferences}
+      </p>
+    </Section>
+  ) : null;
+
+  const behaviourCard = client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim() ? (
+    <Section title="Behaviour Support" icon={ShieldCheck}>
+      <div className="space-y-3">
+        {client.behaviour_support_plan?.trim() && (
+          <div className="rounded-lg bg-[#F8F6FE] p-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behaviour Support Plan</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+              {client.behaviour_support_plan}
+            </p>
+          </div>
+        )}
+        {client.restricted_behavioural_notes?.trim() && (
+          <div className="rounded-lg bg-[#F8F6FE] p-3">
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behavioural Notes</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
+              {client.restricted_behavioural_notes}
+            </p>
+          </div>
+        )}
+      </div>
+    </Section>
+  ) : null;
+
+  const goalsCard = goals.length > 0 ? (
+    <Section title="Active NDIS Goals" icon={Target}>
+      <div className="space-y-3">
+        {goals.map((goal, index) => (
+          <div key={String(goal.id || index)} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
+            <p className="font-black" style={{ color: TEXT }}>{goalLabel(goal, index)}</p>
+            <p className="mt-1 text-sm font-medium capitalize" style={{ color: MUTED }}>{String(goal.status || "active")}</p>
+          </div>
+        ))}
+      </div>
+    </Section>
+  ) : null;
+
+  const focusCard = goals.length > 0 ? (
+    <Section title="Today's Support Focus" icon={CheckCircle2}>
+      <div className="flex flex-wrap gap-2">
+        {goals.map((goal, index) => (
+          <span
+            key={String(goal.id || index)}
+            className="rounded-full border px-3 py-1.5 text-sm font-bold"
+            style={{ borderColor: BORDER, background: SOFT, color: PLUM }}
+          >
+            {goalLabel(goal, index)}
+          </span>
+        ))}
+      </div>
+    </Section>
+  ) : null;
+
+  const confidenceCard = <SessionConfidenceCard client={client} />;
+
+  const safetyGroup = (medicalCard || allergiesCard || preferencesCard || behaviourCard) ? (
+    <div className="space-y-6">
+      {medicalCard}
+      {allergiesCard}
+      {preferencesCard}
+      {behaviourCard}
+    </div>
+  ) : null;
+
+  const goalsGroup = (
+    <div className="space-y-6">
+      {goalsCard}
+      {focusCard}
+      {confidenceCard}
+    </div>
+  );
+
+  if (columns === 1) {
+    return (
+      <div className="space-y-6">
+        <ParticipantSnapshotCard client={client} />
+        {safetyGroup}
+        {goalsGroup}
+      </div>
+    );
+  }
+
   return (
-    <div className={wrapClass}>
+    <div className="space-y-6">
       <ParticipantSnapshotCard client={client} />
-
-      {client.primary_disability?.trim() && (
-        <ProminentAlertCard title="Medical Alerts" icon={ShieldAlert} text={client.primary_disability} />
-      )}
-
-      {client.allergies?.trim() && (
-        <ProminentAlertCard title="Allergies" icon={AlertTriangle} text={client.allergies} />
-      )}
-
-      {client.communication_preferences?.trim() && (
-        <Section title="Support Preferences & Sensitivities" icon={MessageCircle}>
-          <p className="whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
-            {client.communication_preferences}
-          </p>
-        </Section>
-      )}
-
-      {(client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim()) && (
-        <Section title="Behaviour Support" icon={ShieldCheck}>
-          <div className="space-y-3">
-            {client.behaviour_support_plan?.trim() && (
-              <div className="rounded-lg bg-[#F8F6FE] p-3">
-                <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behaviour Support Plan</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
-                  {client.behaviour_support_plan}
-                </p>
-              </div>
-            )}
-            {client.restricted_behavioural_notes?.trim() && (
-              <div className="rounded-lg bg-[#F8F6FE] p-3">
-                <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behavioural Notes</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
-                  {client.restricted_behavioural_notes}
-                </p>
-              </div>
-            )}
-          </div>
-        </Section>
-      )}
-
-      {goals.length > 0 && (
-        <Section title="Active NDIS Goals" icon={Target}>
-          <div className="space-y-3">
-            {goals.map((goal, index) => (
-              <div key={String(goal.id || index)} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
-                <p className="font-black" style={{ color: TEXT }}>{goalLabel(goal, index)}</p>
-                <p className="mt-1 text-sm font-medium capitalize" style={{ color: MUTED }}>{String(goal.status || "active")}</p>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {goals.length > 0 && (
-        <Section title="Today's Support Focus" icon={CheckCircle2}>
-          <div className="flex flex-wrap gap-2">
-            {goals.map((goal, index) => (
-              <span
-                key={String(goal.id || index)}
-                className="rounded-full border px-3 py-1.5 text-sm font-bold"
-                style={{ borderColor: BORDER, background: SOFT, color: PLUM }}
-              >
-                {goalLabel(goal, index)}
-              </span>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <SessionConfidenceCard client={client} />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        {safetyGroup ?? <div className="hidden lg:block" />}
+        {goalsGroup}
+      </div>
     </div>
   );
 }
