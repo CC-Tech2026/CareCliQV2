@@ -831,3 +831,41 @@ DO $$ BEGIN
             FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 END $$;
+
+-- ============================================================
+-- Support Coordinator Feature Columns (idempotent)
+-- ============================================================
+
+-- Session: flag for review
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='review_flag') THEN
+        ALTER TABLE sessions ADD COLUMN review_flag BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='review_note') THEN
+        ALTER TABLE sessions ADD COLUMN review_note TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='review_requested_by') THEN
+        ALTER TABLE sessions ADD COLUMN review_requested_by TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='review_requested_at') THEN
+        ALTER TABLE sessions ADD COLUMN review_requested_at TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- Patients: restricted clinical / full medical history (coordinator-only)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='restricted_behavioural_notes') THEN
+        ALTER TABLE patients ADD COLUMN restricted_behavioural_notes TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='behaviour_support_plan') THEN
+        ALTER TABLE patients ADD COLUMN behaviour_support_plan TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='medications') THEN
+        ALTER TABLE patients ADD COLUMN medications TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='medical_alerts') THEN
+        ALTER TABLE patients ADD COLUMN medical_alerts TEXT;
+    END IF;
+END $$;

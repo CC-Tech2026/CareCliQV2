@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useGetParticipants } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -20,6 +21,7 @@ import {
   ShieldCheck,
   UserCircle,
   Target,
+  Lock,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -697,7 +699,53 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
 
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance">("overview");
+  const { user } = useAuth();
+  const isCoordinator = user?.role === "coordinator";
+
+  const restrictedQuery = useQuery({
+    queryKey: ["participant", id, "restricted-clinical"],
+    queryFn: () => fetchJson<{
+      restricted_behavioural_notes: string | null;
+      behaviour_support_plan: string | null;
+      medications: string | null;
+      medical_alerts: string | null;
+    }>(`/api/participants/${id}/restricted-clinical`),
+    enabled: isCoordinator,
+  });
+  const [restrictedDraft, setRestrictedDraft] = useState<{
+    restricted_behavioural_notes: string;
+    behaviour_support_plan: string;
+    medications: string;
+    medical_alerts: string;
+  } | null>(null);
+  useEffect(() => {
+    if (restrictedQuery.data && restrictedDraft === null) {
+      setRestrictedDraft({
+        restricted_behavioural_notes: restrictedQuery.data.restricted_behavioural_notes ?? "",
+        behaviour_support_plan: restrictedQuery.data.behaviour_support_plan ?? "",
+        medications: restrictedQuery.data.medications ?? "",
+        medical_alerts: restrictedQuery.data.medical_alerts ?? "",
+      });
+    }
+  }, [restrictedQuery.data]);
+  const { toast: toastFn } = useToast();
+  const saveRestricted = useMutation({
+    mutationFn: async () => {
+      const res = await apiFetch(`/api/participants/${id}/restricted-clinical`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(restrictedDraft),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      restrictedQuery.refetch();
+      toastFn({ title: "Clinical records saved" });
+    },
+    onError: () => toastFn({ title: "Save failed", variant: "destructive" }),
+  });
+  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "restricted">("overview");
 
   if (participantQuery.isLoading) {
     return (
@@ -771,6 +819,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     { id: "goals"       as const, label: "Goals",       icon: Target       },
     { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
     { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
   ];
 
   return (
@@ -1128,6 +1177,55 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     </Link>
                   );
                 })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* RESTRICTED CLINICAL TAB — coordinator only */}
+        {activeTab === "restricted" && isCoordinator && (
+          <section className="rounded-2xl border border-orange-200/70 bg-orange-50/30 p-4 space-y-4">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5 text-orange-600" />
+                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">Restricted Clinical Records</p>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">Coordinator Only</span>
+            </div>
+            <p className="text-[12px] text-orange-700/80 leading-relaxed">
+              This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
+            </p>
+            {restrictedQuery.isLoading ? (
+              <div className="space-y-3">
+                {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {([
+                  { key: "restricted_behavioural_notes" as const, label: "Behavioural Notes (Restricted)", placeholder: "Document restricted behavioural observations and incidents…" },
+                  { key: "behaviour_support_plan"       as const, label: "Behaviour Support Plan",         placeholder: "Summarise the participant's current behaviour support plan…" },
+                  { key: "medications"                  as const, label: "Medications",                    placeholder: "Current medications, dosages, and administration notes…" },
+                  { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Known allergies, contraindications, emergency protocols…" },
+                ] as const).map(({ key, label, placeholder }) => (
+                  <div key={key} className="space-y-1.5">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
+                    <textarea
+                      className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
+                      placeholder={placeholder}
+                      value={restrictedDraft?.[key] ?? ""}
+                      onChange={(e) => setRestrictedDraft((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
+                    />
+                  </div>
+                ))}
+                <Button
+                  size="sm"
+                  disabled={saveRestricted.isPending || !restrictedDraft}
+                  onClick={() => saveRestricted.mutate()}
+                  className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
+                >
+                  {saveRestricted.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save Clinical Records
+                </Button>
               </div>
             )}
           </section>

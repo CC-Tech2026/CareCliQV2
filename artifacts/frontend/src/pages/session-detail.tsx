@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { flagSessionForReview } from "@/services/coordinatorService";
 import { useGetSession, useUpdateSession, useSaveSessionWithAI, useGetParticipant } from "@workspace/api-client-react";
 import type { Session } from "@workspace/api-client-react";
 import { exportSingleSessionPDF } from "@/lib/pdf-export";
@@ -36,7 +38,8 @@ import { format, parseISO } from "date-fns";
 import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
-  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target
+  RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target,
+  Flag, FlagOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -237,6 +240,19 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [rpAcknowledged, setRpAcknowledged] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
+  const { user } = useAuth();
+  const isCoordinator = user?.role === "coordinator";
+  const qc = useQueryClient();
+  const flagMutation = useMutation({
+    mutationFn: ({ flag, note }: { flag: boolean; note?: string }) =>
+      flagSessionForReview(sessionId as string, flag, note),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["getSession", sessionId] });
+      refetch();
+      toast({ title: flagMutation.variables?.flag ? "Session flagged for review" : "Flag removed" });
+    },
+    onError: () => toast({ title: "Action failed", variant: "destructive" }),
+  });
 
   useEffect(() => {
     const extended = session as ExtendedSession | undefined;
@@ -577,6 +593,31 @@ export default function SessionDetail({ id }: { id?: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Review flag banner — visible for workers when session is flagged */}
+      {(session as unknown as { review_flag?: boolean; review_note?: string; review_requested_by?: string }).review_flag && (
+        <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <Flag className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-orange-800">This session has been flagged for review</p>
+            {(session as unknown as { review_note?: string }).review_note && (
+              <p className="text-sm text-orange-700 mt-0.5">{(session as unknown as { review_note: string }).review_note}</p>
+            )}
+          </div>
+          {isCoordinator && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-100"
+              disabled={flagMutation.isPending}
+              onClick={() => flagMutation.mutate({ flag: false })}
+            >
+              {flagMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlagOff className="h-3.5 w-3.5 mr-1" />}
+              Remove Flag
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -604,6 +645,18 @@ export default function SessionDetail({ id }: { id?: string }) {
           <Link href="/patients">
             <Button variant="outline" size="sm">View Participant</Button>
           </Link>
+          {isCoordinator && !(session as unknown as { review_flag?: boolean }).review_flag && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={flagMutation.isPending}
+              onClick={() => flagMutation.mutate({ flag: true, note: "Flagged for coordinator review" })}
+              className="gap-1.5 border-orange-200 text-orange-600 hover:bg-orange-50"
+            >
+              {flagMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Flag className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline text-xs">Flag for Review</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

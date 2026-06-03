@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 
 from ..core.access import is_coordinator_role
 from ..core.security import get_current_user
@@ -508,3 +511,51 @@ async def get_compliance_history(
         )
 
     return history
+
+
+# ── Restricted Clinical (Coordinator-only) ────────────────────────────────────
+
+@router.get("/{participant_id}/restricted-clinical")
+async def get_restricted_clinical(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Full medical history + restricted behavioural notes — Support Coordinator only."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    participant = await _require_participant_access(participant_id, current_user)
+    return {
+        "restricted_behavioural_notes": participant.get("restricted_behavioural_notes"),
+        "behaviour_support_plan": participant.get("behaviour_support_plan"),
+        "medications": participant.get("medications"),
+        "medical_alerts": participant.get("medical_alerts"),
+    }
+
+
+class RestrictedClinicalUpdate(BaseModel):
+    restricted_behavioural_notes: Optional[str] = None
+    behaviour_support_plan: Optional[str] = None
+    medications: Optional[str] = None
+    medical_alerts: Optional[str] = None
+
+
+@router.patch("/{participant_id}/restricted-clinical")
+async def update_restricted_clinical(
+    participant_id: str,
+    body: RestrictedClinicalUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update restricted clinical fields — Support Coordinator only."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..services.supabase_client import get_supabase_admin
+    supabase = get_supabase_admin()
+    update_data = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=422, detail="No fields to update.")
+    try:
+        result = supabase.table("patients").update(update_data).eq("id", participant_id).execute()
+        return result.data[0] if result.data else update_data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Update failed: {e}")

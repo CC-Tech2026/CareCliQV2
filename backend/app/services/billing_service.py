@@ -422,3 +422,54 @@ async def generate_invoice_pdf(invoice_id: str, user: dict) -> dict:
         after_state={"pdf_path": path},
     )
     return updated
+
+
+async def get_revenue_report(user: dict) -> dict:
+    """Monthly revenue summary for the Support Coordinator."""
+    _require_billing_role(user)
+    org_id = _require_org(user)
+    supabase = get_supabase_admin()
+
+    try:
+        result = supabase.table("invoices").select(
+            "id, total_cents, currency, status, created_at, due_date, recipient_name"
+        ).eq("organization_id", org_id).order("created_at", desc=True).execute()
+        invoices = result.data or []
+    except Exception:
+        invoices = []
+
+    from collections import defaultdict
+    monthly: dict[str, dict] = defaultdict(lambda: {"billed": 0, "paid": 0, "outstanding": 0, "count": 0})
+
+    total_billed = 0
+    total_paid = 0
+    total_outstanding = 0
+
+    for inv in invoices:
+        month_key = str(inv.get("created_at") or "")[:7]
+        amount = int(inv.get("total_cents") or 0)
+        total_billed += amount
+        monthly[month_key]["billed"] += amount
+        monthly[month_key]["count"] += 1
+
+        s = inv.get("status", "")
+        if s == "paid":
+            total_paid += amount
+            monthly[month_key]["paid"] += amount
+        elif s not in ("void", "cancelled"):
+            total_outstanding += amount
+            monthly[month_key]["outstanding"] += amount
+
+    monthly_list = sorted(
+        [{"month": k, **v} for k, v in monthly.items() if k],
+        key=lambda x: x["month"],
+        reverse=True,
+    )
+
+    return {
+        "monthly": monthly_list,
+        "total_billed_cents": total_billed,
+        "total_paid_cents": total_paid,
+        "total_outstanding_cents": total_outstanding,
+        "invoice_count": len(invoices),
+    }

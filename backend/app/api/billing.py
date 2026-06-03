@@ -141,3 +141,9 @@ async def generate_invoice_pdf(invoice_id: str, request: Request, current_user: 
 async def cancel_invoice(invoice_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     require_recent_reauth(request, current_user)
     return await billing_service.cancel_invoice(invoice_id, current_user)
+
+
+@router.get("/revenue-report")
+async def revenue_report(current_user: dict = Depends(get_current_user)):
+    """Monthly revenue summary for the Support Coordinator invoicing dashboard."""
+    return await billing_service.get_revenue_report(current_user)

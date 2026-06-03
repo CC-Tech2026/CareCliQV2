@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, CreditCard, FileText, Loader2, Plus, ReceiptText } from "lucide-react";
+import { Check, CreditCard, FileText, Loader2, Plus, ReceiptText, TrendingUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { getRevenueReport } from "@/services/coordinatorService";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -419,8 +421,86 @@ export default function Billing() {
             </div>
           )}
         </Panel>
+
+        {/* Revenue Reporting — Coordinator only */}
+        {isCoordinator && <RevenueReportPanel />}
       </div>
     </div>
     </>
+  );
+}
+
+function RevenueReportPanel() {
+  const { data, isLoading } = useQuery({ queryKey: ["billing", "revenue-report"], queryFn: getRevenueReport });
+
+  const PLUM  = "#5533CC";
+  const TEXT  = "#1E1640";
+  const MUTED = "#7A6A9E";
+  const BORDER = "rgba(232,213,232,0.5)";
+
+  function cents(value?: number | null, currency = "AUD") {
+    return new Intl.NumberFormat("en-AU", { style: "currency", currency }).format((value || 0) / 100);
+  }
+
+  return (
+    <section className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: `0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px ${BORDER}` }}>
+      <div className="px-5 pt-5 pb-3 border-b" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4" style={{ color: PLUM }} />
+          <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Revenue Reporting</p>
+        </div>
+      </div>
+      <div className="p-5 space-y-4">
+        {isLoading ? (
+          <div className="flex items-center gap-2 py-4 text-sm" style={{ color: MUTED }}>
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading revenue data…
+          </div>
+        ) : !data ? (
+          <p className="text-sm" style={{ color: MUTED }}>No revenue data available.</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Total Billed",   value: cents(data.total_billed_cents),      color: TEXT },
+                { label: "Total Paid",     value: cents(data.total_paid_cents),        color: "#16A34A" },
+                { label: "Outstanding",    value: cents(data.total_outstanding_cents), color: (data.total_outstanding_cents ?? 0) > 0 ? "#D97706" : TEXT },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="rounded-xl p-3" style={{ background: "rgba(245,243,252,0.8)" }}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: MUTED }}>{label}</p>
+                  <p className="text-base font-black" style={{ color }}>{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {data.monthly && data.monthly.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>Monthly Breakdown</p>
+                <div className="divide-y rounded-xl border overflow-hidden" style={{ borderColor: BORDER }}>
+                  {data.monthly.slice(0, 6).map((m) => {
+                    const billed = m.billed ?? 0;
+                    const paid   = m.paid   ?? 0;
+                    const paidPct = billed > 0 ? Math.round((paid / billed) * 100) : 0;
+                    return (
+                      <div key={m.month} className="flex items-center gap-4 px-4 py-3">
+                        <p className="text-sm font-bold w-20 shrink-0" style={{ color: TEXT }}>{m.month}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="h-1.5 rounded-full w-full" style={{ background: "rgba(232,213,232,0.6)" }}>
+                            <div className="h-full rounded-full transition-all" style={{ width: `${paidPct}%`, background: "#16A34A" }} />
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 space-y-0.5">
+                          <p className="text-xs font-black" style={{ color: TEXT }}>{cents(billed)}</p>
+                          <p className="text-[10px]" style={{ color: MUTED }}>{m.count} invoice{m.count !== 1 ? "s" : ""} · {paidPct}% paid</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
   );
 }

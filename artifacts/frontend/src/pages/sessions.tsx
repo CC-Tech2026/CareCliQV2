@@ -4,10 +4,13 @@ import {
   startOfDay, endOfDay, startOfWeek, startOfMonth, isToday, isThisWeek, isThisMonth,
 } from "date-fns";
 import { Link, useLocation } from "wouter";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { flagSessionForReview } from "@/services/coordinatorService";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
   ChevronRight, FileDown, Loader2, X, ArrowUpDown, Users,
-  AlertTriangle, Plus,
+  AlertTriangle, Plus, Flag,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -155,6 +158,9 @@ export default function Sessions() {
   const [exportProgress, setExportProgress]   = useState<{ done: number; total: number } | null>(null);
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isCoordinator = user?.role === "coordinator";
+  const qc = useQueryClient();
 
   // ── Data fetching ────────────────────────────────────────────────────────────
   const { data: rawSessions = [], isLoading: sessionsLoading } = useGetSessions({ limit: 200 });
@@ -302,6 +308,42 @@ export default function Sessions() {
     ? `${Math.round(scoredSessions.reduce((sum, s) => sum + Number(s.compliance_score), 0) / scoredSessions.length)}%`
     : "—";
 
+  // ── Flag Button (coordinator only, renders inside SessionRow) ─────────────────
+  function FlagButton({ sessionId, flagged, qc: _qc, toast: _toast }: {
+    sessionId: string; flagged: boolean;
+    qc: ReturnType<typeof useQueryClient>;
+    toast: ReturnType<typeof useToast>["toast"];
+  }) {
+    const [loading, setLoading] = useState(false);
+    async function toggle(e: React.MouseEvent) {
+      e.stopPropagation();
+      setLoading(true);
+      try {
+        await flagSessionForReview(sessionId, !flagged, !flagged ? "Flagged from sessions list" : undefined);
+        _qc.invalidateQueries({ queryKey: ["getSessions"] });
+        _toast({ title: flagged ? "Flag removed" : "Session flagged for review" });
+      } catch {
+        _toast({ title: "Failed to update flag", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    }
+    return (
+      <button
+        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-all shrink-0 ${
+          flagged
+            ? "bg-[#F03060]/10 border-[#F03060]/30 text-[#F03060]"
+            : "bg-white border-slate-200 text-slate-300 hover:text-[#F03060] hover:border-[#F03060]/30"
+        }`}
+        onClick={toggle}
+        disabled={loading}
+        title={flagged ? "Remove review flag" : "Flag for review"}
+      >
+        {loading ? <Loader2 size={11} className="animate-spin" /> : <Flag size={11} strokeWidth={2.5} />}
+      </button>
+    );
+  }
+
   // ── Session row ───────────────────────────────────────────────────────────────
   function SessionRow({ session }: { session: typeof sorted[number] }) {
     const sev = severityConfig(session.compliance_score, session.status);
@@ -397,6 +439,9 @@ export default function Sessions() {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {isCoordinator && (
+              <FlagButton sessionId={session.id} flagged={!!(session as unknown as { review_flag?: boolean }).review_flag} qc={qc} toast={toast} />
+            )}
             <button
               className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-400 transition-all hover:text-slate-700 shrink-0"
               style={{ borderColor: BORDER }}

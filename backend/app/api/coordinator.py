@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
-from ..core.access import get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
 from ..core.security import get_current_user
 from ..services import participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
@@ -235,3 +236,227 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
         "generated_at": date.today().isoformat(),
         "alerts": [],
     }
+
+
+# ── Worker Stats ──────────────────────────────────────────────────────────────
+
+@router.get("/worker-stats")
+async def worker_stats(current_user: dict = Depends(get_current_user)):
+    """Per-worker aggregated stats: sessions, compliance, drafts, flagged."""
+    org_id = _require_coordinator(current_user)
+    members = await _team(org_id)
+    all_sessions = await session_service.get_all_sessions(2000, current_user)
+
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+
+    stats: dict[str, dict] = {}
+    for m in members:
+        stats[str(m["id"])] = {
+            **m,
+            "total_sessions": 0,
+            "sessions_this_week": 0,
+            "avg_compliance": None,
+            "draft_count": 0,
+            "flagged_count": 0,
+            "_scores": [],
+        }
+
+    for session in all_sessions:
+        wid = str(
+            session.get("worker_id")
+            or session.get("support_worker_id")
+            or session.get("owner_user_id")
+            or ""
+        )
+        if wid not in stats:
+            continue
+        stats[wid]["total_sessions"] += 1
+        session_date = str(session.get("session_date") or "")[:10]
+        if session_date >= week_ago:
+            stats[wid]["sessions_this_week"] += 1
+        if session.get("status") in ("draft", None) or not session.get("compliance_score"):
+            stats[wid]["draft_count"] += 1
+        if session.get("review_flag"):
+            stats[wid]["flagged_count"] += 1
+        if session.get("compliance_score") is not None:
+            try:
+                stats[wid]["_scores"].append(float(session["compliance_score"]))
+            except (ValueError, TypeError):
+                pass
+
+    result = []
+    for data in stats.values():
+        scores = data.pop("_scores")
+        data["avg_compliance"] = round(sum(scores) / len(scores), 1) if scores else None
+        result.append(data)
+
+    return result
+
+
+# ── Flag Session for Review ───────────────────────────────────────────────────
+
+class FlagReviewBody(BaseModel):
+    flagged: bool = True
+    review_note: Optional[str] = None
+
+
+@router.patch("/sessions/{session_id}/flag-review")
+async def flag_session_for_review(
+    session_id: str,
+    body: FlagReviewBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Flag (or unflag) a session for worker correction."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    coordinator_id = str(get_user_id(current_user) or "")
+
+    update_data: dict[str, Any] = {
+        "review_flag": body.flagged,
+        "review_note": body.review_note if body.flagged else None,
+        "review_requested_by": coordinator_id if body.flagged else None,
+        "review_requested_at": datetime.now(timezone.utc).isoformat() if body.flagged else None,
+    }
+
+    def _do_update() -> None:
+        supabase.table("sessions").update(update_data).eq("id", session_id).execute()
+
+    try:
+        _do_update()
+    except Exception as e:
+        err = str(e)
+        if "42703" in err or "updated_at" in err:
+            try:
+                existing = supabase.table("sessions").select("*").eq("id", session_id).execute()
+                rows = existing.data or []
+                if not rows:
+                    raise HTTPException(status_code=404, detail="Session not found.")
+                merged = {**rows[0], **update_data}
+                supabase.table("sessions").delete().eq("id", session_id).execute()
+                supabase.table("sessions").insert(merged).execute()
+            except HTTPException:
+                raise
+            except Exception as e2:
+                raise HTTPException(status_code=500, detail=f"Flag update failed: {e2}")
+        else:
+            raise HTTPException(status_code=500, detail=f"Flag update failed: {e}")
+
+    return {"session_id": session_id, "flagged": body.flagged}
+
+
+@router.get("/flagged-sessions")
+async def flagged_sessions(current_user: dict = Depends(get_current_user)):
+    """Return all sessions currently flagged for review in this organisation."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    try:
+        result = supabase.table("sessions").select(
+            "id, participant_id, patient_id, session_date, session_type, status, "
+            "compliance_score, review_flag, review_note, review_requested_by, "
+            "review_requested_at, worker_id, support_worker_id, owner_user_id, organization_id"
+        ).eq("review_flag", True).execute()
+        rows = [
+            s for s in (result.data or [])
+            if str(s.get("organization_id") or "") == org_id
+        ]
+    except Exception:
+        rows = []
+
+    return [
+        {
+            **_session_payload(s),
+            "review_flag": True,
+            "review_note": s.get("review_note"),
+            "review_requested_by": s.get("review_requested_by"),
+            "review_requested_at": s.get("review_requested_at"),
+        }
+        for s in rows
+    ]
+
+
+# ── Worker Activation / Deactivation ─────────────────────────────────────────
+
+@router.post("/workers/{worker_id}/deactivate")
+async def deactivate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("users").update({"is_active": False}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        supabase.table("organization_members").update({"is_active": False}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deactivation failed: {e}")
+    return {"worker_id": worker_id, "is_active": False}
+
+
+@router.post("/workers/{worker_id}/activate")
+async def activate_worker(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("users").update({"is_active": True}).eq("id", worker_id).eq("organization_id", org_id).execute()
+        supabase.table("organization_members").update({"is_active": True}).eq("user_id", worker_id).eq("organization_id", org_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Activation failed: {e}")
+    return {"worker_id": worker_id, "is_active": True}
+
+
+# ── Worker ↔ Client Assignments ───────────────────────────────────────────────
+
+class AssignClientBody(BaseModel):
+    patient_id: str
+    role: str = "support_worker"
+
+
+@router.post("/workers/{worker_id}/assign-client")
+async def assign_worker_to_client(
+    worker_id: str,
+    body: AssignClientBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        existing = supabase.table("practitioner_allocations").select("id").eq("user_id", worker_id).eq("patient_id", body.patient_id).execute()
+        if not (existing.data or []):
+            supabase.table("practitioner_allocations").insert({
+                "user_id": worker_id,
+                "patient_id": body.patient_id,
+                "allocated_role": body.role,
+                "organization_id": org_id,
+            }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assignment failed: {e}")
+    return {"worker_id": worker_id, "patient_id": body.patient_id, "role": body.role}
+
+
+@router.delete("/workers/{worker_id}/assign-client/{patient_id}")
+async def unassign_worker_from_client(
+    worker_id: str,
+    patient_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("practitioner_allocations").delete().eq("user_id", worker_id).eq("patient_id", patient_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unassignment failed: {e}")
+    return {"worker_id": worker_id, "patient_id": patient_id, "unassigned": True}
+
+
+# ── Worker Client Assignments List ────────────────────────────────────────────
+
+@router.get("/workers/{worker_id}/clients")
+async def get_worker_clients(worker_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        allocs = supabase.table("practitioner_allocations").select("patient_id, allocated_role").eq("user_id", worker_id).execute()
+        patient_ids = [r["patient_id"] for r in (allocs.data or []) if r.get("patient_id")]
+        if not patient_ids:
+            return []
+        patients = supabase.table("patients").select("id, full_name, ndis_number, plan_status").in_("id", patient_ids).eq("organization_id", org_id).execute()
+        return patients.data or []
+    except Exception:
+        return []
