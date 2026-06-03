@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -43,7 +44,7 @@ export default function ResetPassword() {
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/auth/password-reset/confirm", {
+      const res = await apiFetch("/api/auth/password-reset/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ access_token: recovery.access_token, token_hash: recovery.token_hash, password }),

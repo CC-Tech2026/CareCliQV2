@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { setAuthTokenGetter, customFetch } from "@workspace/api-client-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -117,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);
     try {
-      const res = await fetch("/api/auth/me", {
+      const res = await apiFetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${newToken}` },
       });
       if (res.ok) {

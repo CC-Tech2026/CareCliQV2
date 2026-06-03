@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Loader2, Mail, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,7 +20,7 @@ export default function ForgotPassword() {
     if (!email.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/auth/password-reset/request", {
+      const res = await apiFetch("/api/auth/password-reset/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),

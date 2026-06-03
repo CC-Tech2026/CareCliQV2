@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -72,7 +73,7 @@ export default function AcceptInvite() {
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/invitations/accept/${token}`, {
+      const res = await apiFetch(`/api/invitations/accept/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_name: fullName.trim(), password }),

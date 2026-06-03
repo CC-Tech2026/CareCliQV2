@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
+import { apiFetch } from "@/lib/api-fetch";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -272,7 +273,7 @@ export default function Signup() {
     setBusy(true);
 
     try {
-      const res = await fetch("/api/auth/register", {
+      const res = await apiFetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -306,7 +307,7 @@ export default function Signup() {
 
       if (token) {
         try {
-          const onboardingRes = await fetch("/api/auth/complete-onboarding", {
+          const onboardingRes = await apiFetch("/api/auth/complete-onboarding", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
