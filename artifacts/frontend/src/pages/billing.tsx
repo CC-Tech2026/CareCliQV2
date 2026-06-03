@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, CreditCard, FileText, Loader2, Plus, ReceiptText, TrendingUp } from "lucide-react";
+import { Check, Loader2, Plus, TrendingUp } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getRevenueReport } from "@/services/coordinatorService";
 import { apiFetch } from "@/lib/api-fetch";
@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// ── Design tokens — aligned with Dashboard ────────────────────────────────────
 const PLUM   = "#5533CC";
 const CORAL  = "#F03060";
 const TEXT   = "#1E1640";
 const MUTED  = "#7A6A9E";
-const BORDER = "#EBE5F6";
-const CARD_SHADOW = "0 2px 12px rgba(85,51,204,0.05), 0 1px 3px rgba(0,0,0,0.03)";
+const BORDER = "#E2DEF2";
+const SOFT   = "#F5F3FC";
 
 interface Subscription {
   plan_name: string; status: string; billing_email?: string | null;
@@ -34,51 +35,29 @@ function cents(value?: number | null, currency = "AUD") {
   return new Intl.NumberFormat("en-AU", { style: "currency", currency }).format((value || 0) / 100);
 }
 
-// ── Shared card panel component ────────────────────────────────────────────────
-function Panel({ label, children, icon: Icon }: {
-  label: string;
-  children: React.ReactNode;
-  icon?: React.ComponentType<{ className?: string }>;
-}) {
-  return (
-    <section
-      className="bg-white rounded-2xl overflow-hidden"
-      style={{ border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}
-    >
-      <div
-        className="px-5 py-3 border-b flex items-center gap-2"
-        style={{
-          background: "linear-gradient(to right, rgba(85,51,204,0.05), transparent)",
-          borderColor: BORDER,
-        }}
-      >
-        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: PLUM }} />}
-        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: PLUM }}>{label}</p>
-      </div>
-      <div className="p-5">{children}</div>
-    </section>
-  );
+function statusTone(status: string) {
+  if (status === "paid")      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "finalized" || status === "issued" || status === "sent")
+                               return "bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "cancelled" || status === "void")
+                               return "bg-red-50 text-red-700 border-red-200";
+  return "bg-slate-50 text-slate-600 border-slate-200"; // draft
 }
 
-// ── Invoice status badge ───────────────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { color: string; bg: string }> = {
-    draft:     { color: MUTED,      bg: "rgba(122,106,158,0.1)"  },
-    finalized: { color: "#2563EB",  bg: "rgba(37,99,235,0.08)"   },
-    issued:    { color: "#D97706",  bg: "rgba(245,158,11,0.08)"  },
-    sent:      { color: "#D97706",  bg: "rgba(245,158,11,0.08)"  },
-    paid:      { color: "#16A34A",  bg: "rgba(22,163,74,0.08)"   },
-    void:      { color: MUTED,      bg: "rgba(122,106,158,0.08)" },
-    cancelled: { color: "#DC2626",  bg: "rgba(239,68,68,0.08)"   },
-  };
-  const cfg = map[status] ?? map.draft;
+// ── Shared card component ─────────────────────────────────────────────────────
+function Card({ title, children, action }: {
+  title: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
   return (
-    <span
-      className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider"
-      style={{ background: cfg.bg, color: cfg.color }}
-    >
-      {status}
-    </span>
+    <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER }}>
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
+        {action}
+      </div>
+      <div className="p-6">{children}</div>
+    </section>
   );
 }
 
@@ -88,121 +67,97 @@ export default function Billing() {
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
   const canInvoice = user?.role === "support_coordinator" || user?.role === "allied_health";
-  const [loading, setLoading] = useState(true);
-  const [savingSubscription, setSavingSubscription] = useState(false);
-  const [creatingInvoice, setCreatingInvoice] = useState(false);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  const [invoiceForm, setInvoiceForm] = useState({
+  const [loading,            setLoading           ] = useState(true);
+  const [savingSubscription, setSavingSubscription] = useState(false);
+  const [creatingInvoice,    setCreatingInvoice   ] = useState(false);
+  const [subscription,       setSubscription      ] = useState<Subscription | null>(null);
+  const [invoices,           setInvoices          ] = useState<Invoice[]>([]);
+
+  const [form, setForm] = useState({
     recipient_name: "", recipient_email: "",
     description: "NDIS support service", quantity: "1",
-    unit_amount: "120", due_date: "", notes: "",
+    unit_amount: "120", due_date: "",
   });
 
   const totalOutstanding = useMemo(
-    () => invoices.filter(inv => !["paid", "void"].includes(inv.status)).reduce((sum, inv) => sum + inv.total_cents, 0),
+    () => invoices.filter(inv => !["paid", "void"].includes(inv.status)).reduce((s, inv) => s + inv.total_cents, 0),
     [invoices],
   );
   const totalPaid = useMemo(
-    () => invoices.filter(inv => inv.status === "paid").reduce((sum, inv) => sum + inv.total_cents, 0),
+    () => invoices.filter(inv => inv.status === "paid").reduce((s, inv) => s + inv.total_cents, 0),
     [invoices],
   );
 
   async function loadBilling() {
     setLoading(true);
     try {
-      const invoiceRes = await apiFetch("/api/billing/invoices");
-      if (!invoiceRes.ok) throw new Error("Could not load invoices.");
-      setInvoices(await invoiceRes.json());
-
+      const r = await apiFetch("/api/billing/invoices");
+      if (!r.ok) throw new Error("Could not load invoices.");
+      setInvoices(await r.json());
       if (isCoordinator) {
-        const subRes = await apiFetch("/api/billing/subscription");
-        if (!subRes.ok) throw new Error("Could not load subscription.");
-        setSubscription(await subRes.json());
+        const s = await apiFetch("/api/billing/subscription");
+        if (!s.ok) throw new Error("Could not load subscription.");
+        setSubscription(await s.json());
       }
-    } catch (error) {
-      toast({
-        title: "Billing unavailable",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
+    } catch (err) {
+      toast({ title: "Billing unavailable", description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    if (canInvoice) void loadBilling();
-  }, [canInvoice, isCoordinator]);
+  useEffect(() => { if (canInvoice) void loadBilling(); }, [canInvoice, isCoordinator]);
 
   async function saveSubscription() {
     if (!subscription) return;
     setSavingSubscription(true);
     try {
       const res = await requireReAuth(() => apiFetch("/api/billing/subscription", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subscription),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(subscription),
       }));
       if (!res) return;
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Could not save subscription.");
-      }
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Could not save."); }
       setSubscription(await res.json());
       toast({ title: "Subscription saved" });
-    } catch (error) {
-      toast({ title: "Save failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
-    } finally {
-      setSavingSubscription(false);
-    }
+    } catch (err) {
+      toast({ title: "Save failed", description: (err as Error).message, variant: "destructive" });
+    } finally { setSavingSubscription(false); }
   }
 
   async function createInvoice() {
     setCreatingInvoice(true);
     try {
       const res = await apiFetch("/api/billing/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          recipient_name: invoiceForm.recipient_name,
-          recipient_email: invoiceForm.recipient_email || null,
-          due_date: invoiceForm.due_date || null,
-          notes: invoiceForm.notes || null,
+          recipient_name: form.recipient_name,
+          recipient_email: form.recipient_email || null,
+          due_date: form.due_date || null,
           status: "draft",
-          line_items: [{
-            description: invoiceForm.description,
-            quantity: Number(invoiceForm.quantity || 1),
-            unit_amount: Number(invoiceForm.unit_amount || 0),
-          }],
+          line_items: [{ description: form.description, quantity: Number(form.quantity || 1), unit_amount: Number(form.unit_amount || 0) }],
         }),
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Could not create invoice.");
-      }
-      const invoice = await res.json();
-      setInvoices(prev => [invoice, ...prev]);
-      setInvoiceForm(prev => ({ ...prev, recipient_name: "", recipient_email: "", notes: "" }));
-      toast({ title: "Invoice draft created", description: invoice.invoice_number });
-    } catch (error) {
-      toast({ title: "Invoice failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
-    } finally {
-      setCreatingInvoice(false);
-    }
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Could not create invoice."); }
+      const inv = await res.json();
+      setInvoices(prev => [inv, ...prev]);
+      setForm(prev => ({ ...prev, recipient_name: "", recipient_email: "" }));
+      toast({ title: "Draft invoice created", description: inv.invoice_number });
+    } catch (err) {
+      toast({ title: "Invoice failed", description: (err as Error).message, variant: "destructive" });
+    } finally { setCreatingInvoice(false); }
   }
 
   async function markPaid(invoice: Invoice) {
     try {
       const res = await requireReAuth(() => apiFetch(`/api/billing/invoices/${invoice.id}/mark-paid`, { method: "POST" }));
       if (!res) return;
-      if (!res.ok) throw new Error("Could not mark invoice paid.");
+      if (!res.ok) throw new Error("Could not mark paid.");
       const updated = await res.json();
-      setInvoices(prev => prev.map(item => item.id === updated.id ? updated : item));
-      toast({ title: "Invoice marked paid", description: updated.invoice_number });
-    } catch (error) {
-      toast({ title: "Update failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+      setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
+      toast({ title: "Marked paid", description: updated.invoice_number });
+    } catch (err) {
+      toast({ title: "Update failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
@@ -210,24 +165,21 @@ export default function Billing() {
     try {
       const res = await requireReAuth(() => apiFetch(`/api/billing/invoices/${invoice.id}/${action}`, { method: "POST" }));
       if (!res) return;
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Invoice action failed.");
-      }
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Action failed."); }
       const updated = await res.json();
-      setInvoices(prev => prev.map(item => item.id === updated.id ? updated : item));
+      setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
       toast({ title: "Invoice updated", description: updated.invoice_number });
       if (action === "pdf" && updated.pdf_url) window.open(updated.pdf_url, "_blank", "noopener,noreferrer");
-    } catch (error) {
-      toast({ title: "Invoice action failed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } catch (err) {
+      toast({ title: "Action failed", description: (err as Error).message, variant: "destructive" });
     }
   }
 
   if (!canInvoice) {
     return (
-      <div className="max-w-2xl">
-        <h1 className="text-2xl font-bold" style={{ color: TEXT }}>Billing</h1>
-        <p className="mt-2" style={{ color: MUTED }}>Billing and invoicing are available to support coordinators and allied health professionals.</p>
+      <div className="mx-auto max-w-2xl space-y-2 py-10">
+        <h1 className="text-3xl font-black" style={{ color: PLUM }}>Billing & Invoicing</h1>
+        <p className="text-sm font-medium" style={{ color: MUTED }}>Available to support coordinators and allied health professionals only.</p>
       </div>
     );
   }
@@ -240,261 +192,226 @@ export default function Billing() {
     );
   }
 
+  const liveTotal = Number(form.quantity || 0) * Number(form.unit_amount || 0) * 100;
+
   return (
     <>
       {modal}
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="mx-auto max-w-7xl space-y-6 pb-10">
 
-        {/* ── Page header banner ───────────────────────────────────────────── */}
-        <div
-          className="rounded-2xl px-6 py-4 flex items-center justify-between gap-4"
-          style={{
-            background: "linear-gradient(135deg, rgba(85,51,204,0.07) 0%, rgba(240,48,96,0.03) 100%)",
-            border: "1px solid rgba(85,51,204,0.1)",
-          }}
-        >
-          <div className="flex items-center gap-4 min-w-0">
-            <div
-              className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
-              style={{ background: "rgba(85,51,204,0.1)" }}
-            >
-              <CreditCard className="h-5 w-5" style={{ color: PLUM }} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-[18px] font-bold tracking-tight" style={{ color: TEXT }}>Billing & Invoicing</h1>
-              <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>
-                Issue and manage NDIS support invoices — records persist after reload
-              </p>
-            </div>
-          </div>
-
-          {/* Quick stat pills */}
-          <div className="hidden sm:flex items-center gap-3 shrink-0">
-            <div className="rounded-xl bg-white px-4 py-2.5 text-center" style={{ border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Invoices</p>
-              <p className="text-[18px] font-black leading-none mt-0.5" style={{ color: TEXT }}>{invoices.length}</p>
-            </div>
-            <div className="rounded-xl bg-white px-4 py-2.5 text-center" style={{ border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Outstanding</p>
-              <p className="text-[18px] font-black leading-none mt-0.5" style={{ color: totalOutstanding > 0 ? "#D97706" : TEXT }}>{cents(totalOutstanding)}</p>
-            </div>
-            <div className="rounded-xl bg-white px-4 py-2.5 text-center" style={{ border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Paid</p>
-              <p className="text-[18px] font-black leading-none mt-0.5" style={{ color: "#16A34A" }}>{cents(totalPaid)}</p>
-            </div>
+        {/* ── Page header ───────────────────────────────────────────────────── */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+              {user?.role === "allied_health" ? "Allied Health" : "Support Coordination"}
+            </p>
+            <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+              Billing & Invoicing
+            </h1>
           </div>
         </div>
 
-        {/* ── Subscription management (coordinator only) ───────────────────── */}
+        {/* ── Summary stat cards ────────────────────────────────────────────── */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Invoices</p>
+            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>{invoices.length}</p>
+            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>All time records</p>
+          </section>
+          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Outstanding</p>
+            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: totalOutstanding > 0 ? "#D97706" : TEXT }}>{cents(totalOutstanding)}</p>
+            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Awaiting payment</p>
+          </section>
+          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Paid</p>
+            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: "#16A34A" }}>{cents(totalPaid)}</p>
+            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Confirmed payments</p>
+          </section>
+        </div>
+
+        {/* ── Subscription management (coordinator only) ────────────────────── */}
         {isCoordinator && subscription && (
-          <Panel label="Subscription Management" icon={CreditCard}>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card
+            title="Subscription"
+            action={
+              <button
+                onClick={saveSubscription}
+                disabled={savingSubscription}
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                style={{ background: PLUM }}
+              >
+                {savingSubscription ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Save
+              </button>
+            }
+          >
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Plan</Label>
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Plan</Label>
                 <select
                   value={subscription.plan_name}
                   onChange={e => setSubscription({ ...subscription, plan_name: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-xl border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
                   style={{ borderColor: BORDER }}
                 >
-                  <option value="starter">Starter</option>
-                  <option value="team">Team</option>
-                  <option value="pro">Pro</option>
-                  <option value="enterprise">Enterprise</option>
+                  {["starter", "team", "pro", "enterprise"].map(p => (
+                    <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Status</Label>
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Status</Label>
                 <select
                   value={subscription.status}
                   onChange={e => setSubscription({ ...subscription, status: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-xl border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
                   style={{ borderColor: BORDER }}
                 >
-                  <option value="trialing">Trialing</option>
-                  <option value="active">Active</option>
-                  <option value="past_due">Past due</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="manual_review">Manual review</option>
+                  {["trialing", "active", "past_due", "cancelled", "manual_review"].map(s => (
+                    <option key={s} value={s}>{s.replace("_", " ")}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Seats</Label>
-                <Input
-                  type="number" min={1}
-                  value={subscription.seats}
-                  onChange={e => setSubscription({ ...subscription, seats: Number(e.target.value) })}
-                  className="mt-1.5 rounded-xl"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Seats</Label>
+                <Input type="number" min={1} value={subscription.seats} onChange={e => setSubscription({ ...subscription, seats: Number(e.target.value) })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Monthly amount</Label>
-                <Input
-                  type="number" min={0}
-                  value={(subscription.price_cents || 0) / 100}
-                  onChange={e => setSubscription({ ...subscription, price_cents: Math.round(Number(e.target.value || 0) * 100) })}
-                  className="mt-1.5 rounded-xl"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Monthly ($)</Label>
+                <Input type="number" min={0} value={(subscription.price_cents || 0) / 100} onChange={e => setSubscription({ ...subscription, price_cents: Math.round(Number(e.target.value || 0) * 100) })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div className="md:col-span-2">
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Billing email</Label>
-                <Input
-                  value={subscription.billing_email || ""}
-                  onChange={e => setSubscription({ ...subscription, billing_email: e.target.value })}
-                  className="mt-1.5 rounded-xl"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Billing email</Label>
+                <Input value={subscription.billing_email || ""} onChange={e => setSubscription({ ...subscription, billing_email: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Renewal date</Label>
-                <Input
-                  type="date"
-                  value={subscription.renewal_date || ""}
-                  onChange={e => setSubscription({ ...subscription, renewal_date: e.target.value })}
-                  className="mt-1.5 rounded-xl"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Renewal date</Label>
+                <Input type="date" value={subscription.renewal_date || ""} onChange={e => setSubscription({ ...subscription, renewal_date: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Provider</Label>
-                <Input value={subscription.payment_provider || "manual"} readOnly className="mt-1.5 rounded-xl bg-[#F8F6FE]" />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Provider</Label>
+                <Input value={subscription.payment_provider || "manual"} readOnly className="mt-1.5 rounded-lg" style={{ borderColor: BORDER, background: SOFT }} />
               </div>
             </div>
-            <div className="flex justify-end pt-4 border-t mt-4" style={{ borderColor: BORDER }}>
-              <Button onClick={saveSubscription} disabled={savingSubscription} className="gap-2 rounded-xl">
-                {savingSubscription ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Save Subscription
-              </Button>
-            </div>
-          </Panel>
+          </Card>
         )}
 
-        {/* ── Main content grid ────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
+        {/* ── Main grid: form + register ─────────────────────────────────────── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
 
-          {/* Issue Invoice form */}
-          <Panel label={user?.role === "allied_health" ? "Independent Invoice" : "Issue Invoice"} icon={Plus}>
+          {/* Invoice form */}
+          <Card title={user?.role === "allied_health" ? "New Invoice" : "Issue Invoice"}>
             <div className="space-y-4">
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Recipient name</Label>
-                <Input
-                  value={invoiceForm.recipient_name}
-                  onChange={e => setInvoiceForm({ ...invoiceForm, recipient_name: e.target.value })}
-                  className="mt-1.5 rounded-xl"
-                  placeholder="e.g. Jane Smith"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Recipient name</Label>
+                <Input value={form.recipient_name} onChange={e => setForm({ ...form, recipient_name: e.target.value })} className="mt-1.5 rounded-lg" placeholder="e.g. Jane Smith" style={{ borderColor: BORDER }} />
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Recipient email</Label>
-                <Input
-                  type="email"
-                  value={invoiceForm.recipient_email}
-                  onChange={e => setInvoiceForm({ ...invoiceForm, recipient_email: e.target.value })}
-                  className="mt-1.5 rounded-xl"
-                  placeholder="optional"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Recipient email <span className="font-medium">(optional)</span></Label>
+                <Input type="email" value={form.recipient_email} onChange={e => setForm({ ...form, recipient_email: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Line item description</Label>
-                <Input
-                  value={invoiceForm.description}
-                  onChange={e => setInvoiceForm({ ...invoiceForm, description: e.target.value })}
-                  className="mt-1.5 rounded-xl"
-                />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Description</Label>
+                <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs font-semibold" style={{ color: MUTED }}>Quantity</Label>
-                  <Input type="number" min={0.1} step={0.1} value={invoiceForm.quantity} onChange={e => setInvoiceForm({ ...invoiceForm, quantity: e.target.value })} className="mt-1.5 rounded-xl" />
+                  <Label className="text-xs font-bold" style={{ color: MUTED }}>Quantity</Label>
+                  <Input type="number" min={0.1} step={0.1} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
                 </div>
                 <div>
-                  <Label className="text-xs font-semibold" style={{ color: MUTED }}>Unit amount ($)</Label>
-                  <Input type="number" min={0} step={0.01} value={invoiceForm.unit_amount} onChange={e => setInvoiceForm({ ...invoiceForm, unit_amount: e.target.value })} className="mt-1.5 rounded-xl" />
+                  <Label className="text-xs font-bold" style={{ color: MUTED }}>Unit amount ($)</Label>
+                  <Input type="number" min={0} step={0.01} value={form.unit_amount} onChange={e => setForm({ ...form, unit_amount: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
                 </div>
               </div>
 
-              {/* Live total preview */}
-              <div
-                className="rounded-xl px-4 py-3 flex items-center justify-between"
-                style={{ background: "rgba(85,51,204,0.05)", border: `1px solid ${BORDER}` }}
-              >
-                <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Invoice total</span>
-                <span className="text-[16px] font-black" style={{ color: TEXT }}>
-                  {cents(Number(invoiceForm.quantity || 0) * Number(invoiceForm.unit_amount || 0) * 100)}
-                </span>
+              {/* Running total */}
+              <div className="rounded-lg px-4 py-3 flex items-center justify-between" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                <span className="text-xs font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>Invoice total</span>
+                <span className="text-lg font-black" style={{ color: TEXT }}>{cents(liveTotal)}</span>
               </div>
 
               <div>
-                <Label className="text-xs font-semibold" style={{ color: MUTED }}>Due date</Label>
-                <Input type="date" value={invoiceForm.due_date} onChange={e => setInvoiceForm({ ...invoiceForm, due_date: e.target.value })} className="mt-1.5 rounded-xl" />
+                <Label className="text-xs font-bold" style={{ color: MUTED }}>Due date <span className="font-medium">(optional)</span></Label>
+                <Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
-              <Button
+
+              <button
                 onClick={createInvoice}
-                disabled={creatingInvoice || !invoiceForm.recipient_name.trim() || !invoiceForm.description.trim()}
-                className="w-full gap-2 rounded-xl h-11"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                disabled={creatingInvoice || !form.recipient_name.trim() || !form.description.trim()}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+                style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
               >
                 {creatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Create Draft Invoice
-              </Button>
+              </button>
             </div>
-          </Panel>
+          </Card>
 
-          {/* Invoice register */}
+          {/* Invoice register + revenue */}
           <div className="space-y-6">
-            <Panel label="Invoice Register" icon={FileText}>
+            <Card title="Invoice Register" action={
+              invoices.length > 0
+                ? <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: SOFT, color: PLUM }}>{invoices.length} total</span>
+                : undefined
+            }>
               {invoices.length === 0 ? (
-                <div className="min-h-[220px] flex flex-col items-center justify-center text-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: "rgba(85,51,204,0.06)" }}>
-                    <ReceiptText className="h-6 w-6" style={{ color: "rgba(85,51,204,0.4)" }} />
-                  </div>
-                  <p className="font-bold text-[14px]" style={{ color: TEXT }}>No invoices yet</p>
-                  <p className="text-[13px] max-w-[260px]" style={{ color: MUTED }}>Issued invoices will appear here and persist after reload.</p>
+                <div className="py-10 text-center">
+                  <p className="text-sm font-black" style={{ color: TEXT }}>No invoices yet</p>
+                  <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+                    Draft an invoice on the left and it will appear here.
+                  </p>
                 </div>
               ) : (
-                <div className="divide-y" style={{ borderColor: BORDER }}>
+                <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
                   {invoices.map(invoice => (
-                    <div key={invoice.id} className="py-3.5 flex items-center gap-4">
-                      <div
-                        className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-                        style={{ background: "rgba(85,51,204,0.07)", color: PLUM }}
-                      >
-                        <FileText className="h-5 w-5" />
+                    <div key={invoice.id} className="flex items-center gap-4 py-3.5 first:pt-0 last:pb-0">
+                      {/* Initials circle */}
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
+                        {invoice.recipient_name.split(" ").map(p => p[0]).join("").slice(0, 2).toUpperCase()}
                       </div>
+
+                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[13px] font-bold" style={{ color: TEXT }}>{invoice.invoice_number}</p>
-                          <StatusBadge status={invoice.status} />
+                          <p className="text-sm font-black" style={{ color: TEXT }}>{invoice.recipient_name}</p>
+                          <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${statusTone(invoice.status)}`}>
+                            {invoice.status}
+                          </span>
                         </div>
-                        <p className="text-[12px] truncate mt-0.5" style={{ color: MUTED }}>
-                          {invoice.recipient_name}{invoice.due_date ? ` · Due ${invoice.due_date}` : ""}
+                        <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
+                          {invoice.invoice_number}{invoice.due_date ? ` · Due ${invoice.due_date}` : ""}
                         </p>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[14px] font-black" style={{ color: TEXT }}>{cents(invoice.total_cents, invoice.currency)}</p>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-1.5 shrink-0">
+
+                      {/* Amount */}
+                      <p className="text-sm font-black shrink-0" style={{ color: TEXT }}>
+                        {cents(invoice.total_cents, invoice.currency)}
+                      </p>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {invoice.status === "draft" && (
-                          <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => invoiceAction(invoice, "finalize")}>Finalize</Button>
+                          <Button variant="outline" size="sm" className="rounded-full text-xs h-7 px-3" onClick={() => invoiceAction(invoice, "finalize")}>Finalize</Button>
                         )}
                         {["finalized", "issued"].includes(invoice.status) && (
-                          <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => invoiceAction(invoice, "mark-sent")}>Mark sent</Button>
+                          <Button variant="outline" size="sm" className="rounded-full text-xs h-7 px-3" onClick={() => invoiceAction(invoice, "mark-sent")}>Mark sent</Button>
                         )}
                         {!["paid", "void", "cancelled"].includes(invoice.status) && (
-                          <Button variant="outline" size="sm" className="rounded-lg text-xs gap-1" onClick={() => markPaid(invoice)}>
-                            <CreditCard className="h-3 w-3" /> Paid
-                          </Button>
+                          <Button variant="outline" size="sm" className="rounded-full text-xs h-7 px-3" onClick={() => markPaid(invoice)}>Paid</Button>
                         )}
-                        <Button variant="ghost" size="sm" className="rounded-lg text-xs" onClick={() => invoiceAction(invoice, "pdf")}>PDF</Button>
+                        <Button variant="ghost" size="sm" className="rounded-full text-xs h-7 px-3" onClick={() => invoiceAction(invoice, "pdf")}>PDF</Button>
                         {!["paid", "void", "cancelled"].includes(invoice.status) && (
-                          <Button variant="ghost" size="sm" className="rounded-lg text-xs text-[#F03060]" onClick={() => invoiceAction(invoice, "cancel")}>Cancel</Button>
+                          <Button variant="ghost" size="sm" className="rounded-full text-xs h-7 px-3 text-red-500" onClick={() => invoiceAction(invoice, "cancel")}>Cancel</Button>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-            </Panel>
+            </Card>
 
-            {/* Revenue Reporting — Coordinator only */}
             {isCoordinator && <RevenueReportPanel />}
           </div>
         </div>
@@ -506,66 +423,59 @@ export default function Billing() {
 function RevenueReportPanel() {
   const { data, isLoading } = useQuery({ queryKey: ["billing", "revenue-report"], queryFn: getRevenueReport });
 
-  function cents(value?: number | null, currency = "AUD") {
+  function fmt(value?: number | null, currency = "AUD") {
     return new Intl.NumberFormat("en-AU", { style: "currency", currency }).format((value || 0) / 100);
   }
 
   return (
-    <section
-      className="bg-white rounded-2xl overflow-hidden"
-      style={{ border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}
-    >
-      <div
-        className="px-5 py-3 border-b flex items-center gap-2"
-        style={{
-          background: "linear-gradient(to right, rgba(85,51,204,0.05), transparent)",
-          borderColor: BORDER,
-        }}
-      >
-        <TrendingUp className="h-3.5 w-3.5 shrink-0" style={{ color: PLUM }} />
-        <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: PLUM }}>Revenue Reporting</p>
+    <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER }}>
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>Revenue Report</h2>
+        <TrendingUp size={18} style={{ color: MUTED }} />
       </div>
-      <div className="p-5 space-y-4">
+      <div className="p-6 space-y-5">
         {isLoading ? (
-          <div className="flex items-center gap-2 py-4 text-[13px]" style={{ color: MUTED }}>
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading revenue data…
+          <div className="flex items-center gap-2 py-4 text-sm font-medium" style={{ color: MUTED }}>
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : !data ? (
-          <p className="text-[13px]" style={{ color: MUTED }}>No revenue data available.</p>
+          <p className="text-sm font-medium" style={{ color: MUTED }}>No revenue data available.</p>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: "Total Billed",  value: cents(data.total_billed_cents),      color: TEXT,      bg: "rgba(85,51,204,0.05)" },
-                { label: "Total Paid",    value: cents(data.total_paid_cents),        color: "#16A34A", bg: "rgba(22,163,74,0.06)"  },
-                { label: "Outstanding",   value: cents(data.total_outstanding_cents), color: (data.total_outstanding_cents ?? 0) > 0 ? "#D97706" : TEXT, bg: (data.total_outstanding_cents ?? 0) > 0 ? "rgba(245,158,11,0.07)" : "rgba(85,51,204,0.05)" },
-              ].map(({ label, value, color, bg }) => (
-                <div key={label} className="rounded-xl p-3.5" style={{ background: bg, border: `1px solid ${BORDER}` }}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>{label}</p>
-                  <p className="text-[15px] font-black leading-none" style={{ color }}>{value}</p>
+            {/* Top-line stats */}
+            <div className="grid grid-cols-3 gap-4">
+              {([
+                { label: "Total Billed",  value: fmt(data.total_billed_cents),      color: TEXT       },
+                { label: "Total Paid",    value: fmt(data.total_paid_cents),        color: "#16A34A"  },
+                { label: "Outstanding",   value: fmt(data.total_outstanding_cents), color: (data.total_outstanding_cents ?? 0) > 0 ? "#D97706" : TEXT },
+              ] as const).map(({ label, value, color }) => (
+                <div key={label} className="rounded-lg p-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>{label}</p>
+                  <p className="mt-2 text-base font-black" style={{ color }}>{value}</p>
                 </div>
               ))}
             </div>
 
+            {/* Monthly breakdown */}
             {data.monthly && data.monthly.length > 0 && (
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Monthly Breakdown</p>
-                <div className="rounded-xl border overflow-hidden divide-y" style={{ borderColor: BORDER }}>
+                <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Monthly Breakdown</p>
+                <div className="divide-y rounded-lg border overflow-hidden" style={{ borderColor: BORDER }}>
                   {data.monthly.slice(0, 6).map(m => {
-                    const billed = m.billed ?? 0;
-                    const paid   = m.paid   ?? 0;
-                    const paidPct = billed > 0 ? Math.round((paid / billed) * 100) : 0;
+                    const billed   = m.billed ?? 0;
+                    const paid     = m.paid   ?? 0;
+                    const paidPct  = billed > 0 ? Math.round((paid / billed) * 100) : 0;
                     return (
                       <div key={m.month} className="flex items-center gap-4 px-4 py-3 hover:bg-[#F8F6FE] transition-colors">
-                        <p className="text-[13px] font-bold w-20 shrink-0" style={{ color: TEXT }}>{m.month}</p>
+                        <p className="text-sm font-black w-20 shrink-0" style={{ color: TEXT }}>{m.month}</p>
                         <div className="flex-1 min-w-0">
-                          <div className="h-1.5 rounded-full w-full" style={{ background: BORDER }}>
-                            <div className="h-full rounded-full transition-all" style={{ width: `${paidPct}%`, background: "#16A34A" }} />
+                          <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "#EEEAFB" }}>
+                            <div className="h-full rounded-full" style={{ width: `${paidPct}%`, background: "#16A34A" }} />
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-[13px] font-black" style={{ color: TEXT }}>{cents(billed)}</p>
-                          <p className="text-[10px]" style={{ color: MUTED }}>{m.count} inv · {paidPct}% paid</p>
+                          <p className="text-sm font-black" style={{ color: TEXT }}>{fmt(billed)}</p>
+                          <p className="text-[10px] font-medium" style={{ color: MUTED }}>{m.count} inv · {paidPct}% paid</p>
                         </div>
                       </div>
                     );
