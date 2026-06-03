@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { setAuthTokenGetter } from "@workspace/api-client-react";
+import { setAuthTokenGetter, customFetch } from "@workspace/api-client-react";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -72,16 +72,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const data = await customFetch<any>("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Login failed" }));
-        throw new Error(err.detail || "Login failed");
-      }
-      const data = await res.json();
       const authUser: AuthUser = {
         id: data.user.id,
         email: data.user.email,
@@ -104,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persistSession]);
 
   const logout = useCallback(() => {
-    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    customFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     clearSession();
   }, [clearSession]);
 
