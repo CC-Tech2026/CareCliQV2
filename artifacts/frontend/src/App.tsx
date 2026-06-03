@@ -37,6 +37,7 @@ import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
+import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
@@ -94,6 +95,12 @@ function Router() {
       <Route path="/worker-onboarding">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerOnboarding /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/getting-started">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <CoordinatorOnboarding />
         </ProtectedRoute>
       </Route>
 

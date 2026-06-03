@@ -210,27 +210,30 @@ export default function Signup() {
   const STEP_LABELS = [
     "Account Type",
     "Your Details",
-    "Practice Info",
+    "Organisation",
   ];
 
   const TYPES = [
     {
-      value: "independent_worker" as AccountType,
-      title: "Independent Support Worker",
-      sub: "Sole trader, unregistered provider, or independent worker",
-      dot: CORAL,
+      value: "small_provider" as AccountType,
+      title: "Disability Support Business",
+      sub: "Support Coordinator, Team Leader, Service Manager, Business Owner or Director managing a team",
+      dot: PLUM,
+      badge: "Most common",
     },
     {
       value: "allied_health" as AccountType,
       title: "Allied Health Professional",
-      sub: "OT, Speech Pathologist, Physio, Behaviour Support",
+      sub: "OT, Speech Pathologist, Physiotherapist, Behaviour Support Practitioner",
       dot: "#9B5DE5",
+      badge: null,
     },
     {
-      value: "small_provider" as AccountType,
-      title: "Support Coordinator",
-      sub: "CareScribe Parent with organisation oversight and team management",
-      dot: PLUM,
+      value: "independent_worker" as AccountType,
+      title: "Independent Practitioner",
+      sub: "Sole trader or unregistered provider working without an organisation",
+      dot: CORAL,
+      badge: null,
     },
   ] as const;
 
@@ -422,8 +425,7 @@ export default function Signup() {
             </h1>
 
             <p className="mt-5 text-white/90 max-w-md leading-relaxed">
-              Join thousands of Australian healthcare operators automating
-              invoicing, case tracking, and smart templates.
+              Manage your participants, support workers, compliance, and NDIS documentation — all in one place built for Australian disability support businesses.
             </p>
           </div>
 
@@ -472,12 +474,22 @@ export default function Signup() {
                     className="text-[22px] font-black"
                     style={{ color: PLUM }}
                   >
-                    Who are you?
+                    Create your account
                   </h2>
 
                   <p className="text-sm text-[#9B6FAB]">
-                    Choose how you'll use CareScribe
+                    Choose the option that best describes how you'll use CareScribe
                   </p>
+                </div>
+
+                <div
+                  className="rounded-xl px-4 py-3 text-[12px] leading-relaxed"
+                  style={{ background: `${PLUM}08`, border: `1px solid ${PLUM}20`, color: PLUM }}
+                >
+                  <span className="font-bold">Support worker?</span>{" "}
+                  <span style={{ color: "#7A6A9E" }}>
+                    Workers are invited by their organisation — ask your manager to send you an invite link instead of signing up here.
+                  </span>
                 </div>
 
                 {TYPES.map((t) => {
@@ -506,7 +518,7 @@ export default function Signup() {
                     >
                       <div className="flex items-start gap-3">
                         <span
-                          className="mt-1.5 h-3 w-3 rounded-full"
+                          className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
                           style={{
                             background: sel
                               ? t.dot
@@ -515,9 +527,19 @@ export default function Signup() {
                         />
 
                         <div className="flex-1">
-                          <p className="font-black">
-                            {t.title}
-                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-black">
+                              {t.title}
+                            </p>
+                            {"badge" in t && t.badge && (
+                              <span
+                                className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
+                                style={{ background: `${t.dot}18`, color: t.dot }}
+                              >
+                                {t.badge}
+                              </span>
+                            )}
+                          </div>
 
                           <p className="text-sm text-[#7A6A9E]">
                             {t.sub}
@@ -527,6 +549,7 @@ export default function Signup() {
                         {sel && (
                           <CheckCircle2
                             size={18}
+                            className="shrink-0"
                             style={{
                               color: t.dot,
                             }}
@@ -797,7 +820,9 @@ export default function Signup() {
                     navigate(
                       emailVerify
                         ? "/login"
-                        : "/dashboard"
+                        : form.account_type === "small_provider"
+                          ? "/getting-started"
+                          : "/dashboard"
                     )
                   }
                   className="mt-6 w-full h-11 rounded-xl text-white font-black"
@@ -807,7 +832,9 @@ export default function Signup() {
                 >
                   {emailVerify
                     ? "Go to Login"
-                    : "Go to Dashboard"}
+                    : form.account_type === "small_provider"
+                      ? "Set Up Your Organisation"
+                      : "Go to Dashboard"}
                 </button>
               </div>
             )}

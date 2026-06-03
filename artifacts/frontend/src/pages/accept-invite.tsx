@@ -10,9 +10,9 @@ const CORAL = "#F03060";
 const BORDER = "#D8D0F0";
 
 const ROLE_LABELS: Record<string, string> = {
-  support_worker:      "Support Worker (CareScribe Child)",
-  allied_health:       "Allied Health Professional (CareScribe Pro)",
-  support_coordinator: "Support Coordinator (CareScribe Parent)",
+  support_worker:      "Support Worker",
+  allied_health:       "Allied Health Professional",
+  support_coordinator: "Support Coordinator",
 };
 
 interface InviteInfo {
@@ -104,7 +104,8 @@ export default function AcceptInvite() {
 
       setStep("done");
       toast({ title: "Welcome to CareScribe!", description: "Your account has been activated." });
-      setTimeout(() => navigate("/dashboard"), 1800);
+      const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/dashboard";
+      setTimeout(() => navigate(destination), 1800);
     } catch (e) {
       toast({ title: "Error", description: e instanceof Error ? e.message : "Failed to activate account", variant: "destructive" });
     } finally {

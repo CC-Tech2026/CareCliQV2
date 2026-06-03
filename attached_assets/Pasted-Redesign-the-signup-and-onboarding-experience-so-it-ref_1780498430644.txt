@@ -1,0 +1,177 @@
+Redesign the signup and onboarding experience so it reflects how CarerScribe is actually sold and used by disability support businesses.
+
+Important:
+Do NOT perform large backend refactors.
+Do NOT replace existing authentication, organisation, invitation, role, participant, or permission systems.
+
+First audit the existing backend and determine what already exists.
+
+The goal is to align the frontend signup experience and onboarding workflow with the current backend architecture while making only the minimum backend additions required for compatibility.
+
+Business Model
+
+CarerScribe is designed for disability support businesses.
+
+The primary customer is typically:
+
+Support Coordinator
+Team Leader
+Service Manager
+Business Owner
+Director
+
+When someone signs up, they are creating an organisation account for their disability support business.
+
+They become the Organisation Owner.
+
+Organisation Owners have visibility across:
+
+All participants
+All support workers
+All sessions
+All notes
+All incidents
+All compliance reporting
+Organisation settings
+Billing and subscriptions
+Support Workers
+
+Support workers should not be encouraged to create standalone accounts.
+
+Preferred workflow:
+
+Organisation Owner signs up.
+Organisation is created.
+Organisation Owner invites support workers.
+Worker receives invitation.
+Worker creates password.
+Worker account is linked to the existing organisation.
+Worker only sees assigned participants and related records.
+Implementation Requirements
+Step 1: Audit Existing Backend
+
+Review:
+
+Authentication flow
+User model
+Organisation model
+Invitations
+Roles
+Participant allocations
+Permission checks
+Existing APIs
+
+Determine:
+
+What already exists
+What is missing
+What can be reused
+
+Do not rebuild functionality that already exists.
+
+Step 2: Align Signup Experience
+
+Update signup screens to communicate that users are creating an organisation account.
+
+Replace generic messaging with business-focused language.
+
+Example messaging:
+
+"Create your organisation account to manage participants, support workers, compliance, and NDIS documentation."
+
+Step 3: Organisation Creation
+
+If the backend already supports organisations:
+
+Use existing organisation creation logic.
+
+If organisation creation is partially implemented:
+
+Extend the existing implementation.
+Do not create a parallel system.
+
+If additional fields are required:
+
+Add only what is necessary.
+Step 4: Owner Role
+
+After signup:
+
+User becomes Organisation Owner (or equivalent existing admin role).
+Link user to organisation using the existing backend relationship model.
+
+Do not introduce a new role if an equivalent role already exists.
+
+Step 5: Worker Invitations
+
+Use the existing invitation system if present.
+
+Ensure invitations:
+
+Inherit organisation_id
+Assign appropriate worker role
+Prevent creation of orphan accounts
+
+Do not rebuild invitation infrastructure if it already exists.
+
+Step 6: Onboarding Flow
+
+After signup show:
+
+✓ Organisation created
+
+✓ Invite support workers
+
+✓ Add participants
+
+✓ Assign participants
+
+✓ Create first session
+
+✓ Begin documentation
+
+This is an onboarding checklist only.
+
+Do not modify existing business logic.
+
+Step 7: Permission Validation
+
+Verify the current backend already enforces:
+
+Organisation Owner:
+
+Access to all organisation records
+
+Support Worker:
+
+Access only to assigned participants and related data
+
+If permission gaps exist:
+
+Fix them using existing permission architecture.
+Avoid introducing new permission systems.
+Step 8: Compatibility Requirements
+
+All changes must remain compatible with:
+
+Existing database schema
+Existing Supabase authentication
+Existing invitation flow
+Existing RBAC implementation
+Existing participant allocation system
+Existing API contracts
+
+Avoid breaking existing integrations.
+
+Deliverables
+Audit report of current signup architecture.
+List of reusable backend components.
+List of required changes.
+Updated signup UX.
+Updated onboarding UX.
+Validation that organisation owners can manage the entire organisation.
+Validation that workers only see assigned participants.
+Confirmation that no unnecessary backend rewrites were performed.
+
+Priority:
+Preserve existing backend behaviour and data structures while aligning the customer experience with how CarerScribe is sold to disability support businesses.
