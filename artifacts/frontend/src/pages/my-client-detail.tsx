@@ -921,7 +921,19 @@ export default function MyClientDetail({ id }: { id: string }) {
         throw new Error(body.detail || "Could not generate a compliant note.");
       }
       const data = await response.json();
-      setGeneratedNote(String(data.clinical || data.note || data.text || sessionDraft.trim()));
+      const raw = data.clinical || data.note || data.text;
+      let noteText: string;
+      if (typeof raw === "string") {
+        noteText = raw;
+      } else if (raw && typeof raw === "object") {
+        noteText = Object.entries(raw as Record<string, string>)
+          .filter(([, v]) => v && String(v).trim())
+          .map(([k, v]) => `${k}: ${v}`)
+          .join("\n\n");
+      } else {
+        noteText = sessionDraft.trim();
+      }
+      setGeneratedNote(noteText);
     } catch (error) {
       setComposerError(error instanceof Error ? error.message : "Could not generate a compliant note.");
     } finally {
