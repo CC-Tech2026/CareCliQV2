@@ -52,3 +52,5 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+submit-activity.sh
+docs/CareScribe_Docs/*
