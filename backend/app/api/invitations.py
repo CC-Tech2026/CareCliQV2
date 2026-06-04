@@ -338,8 +338,17 @@ async def update_member_role(
 
     try:
         supabase = get_supabase_admin()
-        supabase.table("organization_members").update({"role": new_role}).eq("id", member_id).eq("organization_id", org_id).execute()
+        # Update organization_members (source of truth on login)
+        member_row = supabase.table("organization_members").update({"role": new_role}).eq("id", member_id).eq("organization_id", org_id).returning("*").execute()
+        if not (member_row.data or []):
+            raise HTTPException(status_code=404, detail="Member not found")
+        user_id = member_row.data[0].get("user_id")
+        # Keep users.role in sync so the login fallback path also reflects the change
+        if user_id:
+            supabase.table("users").update({"role": new_role}).eq("id", user_id).execute()
         return {"ok": True}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("update_member_role error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update role")

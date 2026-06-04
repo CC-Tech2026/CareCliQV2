@@ -296,6 +296,23 @@ export default function Settings() {
     }
   };
 
+  const handleChangeRole = async (memberId: string, newRole: string) => {
+    if (!authToken) return;
+    try {
+      await requireReAuth(() =>
+        apiFetch(`/api/invitations/members/${memberId}/role`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: newRole }),
+        })
+      );
+      setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m));
+      toast({ title: "Role updated", description: `Role changed to ${ROLE_LABELS[newRole] ?? newRole}` });
+    } catch {
+      toast({ title: "Failed to update role", variant: "destructive" });
+    }
+  };
+
   const copyInviteLink = (invite: PendingInvite) => {
     const url = invite.invite_url
       ? `${window.location.origin}${invite.invite_url}`
@@ -1177,13 +1194,26 @@ export default function Settings() {
                           <p className="text-[11px] truncate" style={{ color: "#7A6A9E" }}>{m.email}</p>
                         </div>
 
-                        {/* Role badge */}
-                        <span
-                          className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
-                          style={{ background: rc.bg, color: rc.color }}
-                        >
-                          {ROLE_LABELS[m.role] ?? m.role}
-                        </span>
+                        {/* Role selector — prevent changing own role */}
+                        {m.user_id !== user?.id ? (
+                          <select
+                            value={m.role}
+                            onChange={(e) => handleChangeRole(m.id, e.target.value)}
+                            className="text-[11px] font-semibold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer shrink-0"
+                            style={{ background: rc.bg, color: rc.color }}
+                          >
+                            <option value="support_worker">Support Worker</option>
+                            <option value="support_coordinator">Support Coordinator</option>
+                            <option value="allied_health">Allied Health</option>
+                          </select>
+                        ) : (
+                          <span
+                            className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0"
+                            style={{ background: rc.bg, color: rc.color }}
+                          >
+                            {ROLE_LABELS[m.role] ?? m.role}
+                          </span>
+                        )}
 
                         {/* Joined date */}
                         <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "#7A6A9E" }}>
