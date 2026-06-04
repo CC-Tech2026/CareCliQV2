@@ -30,7 +30,8 @@ import {
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
-import { createIncident, getIncidentsByParticipant } from "@/services/incidentService";
+import { complyIncident, createIncident, getIncidentsByParticipant } from "@/services/incidentService";
+import type { IncidentComplyResult } from "@/services/incidentService";
 import {
   createMyClientNote,
   createMyClientSession,
@@ -849,6 +850,33 @@ function IncidentReportModal({
     form.incident_type === "restrictive_practice" ||
     form.severity === "critical";
 
+  const [comply, setComply] = useState<{ loading: boolean; result: IncidentComplyResult | null }>({
+    loading: false,
+    result: null,
+  });
+
+  async function handleComply() {
+    if (!form.description.trim()) {
+      toast({ title: "Add a description first", variant: "destructive" });
+      return;
+    }
+    setComply({ loading: true, result: null });
+    try {
+      const result = await complyIncident({
+        incident_type: form.incident_type,
+        severity: form.severity,
+        title: form.title.trim() || "Incident",
+        description: form.description,
+        worker_actions: form.worker_actions,
+        participant_name: participantName,
+      });
+      setComply({ loading: false, result });
+    } catch {
+      setComply({ loading: false, result: null });
+      toast({ title: "Compliance check failed", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
   async function handleSubmit() {
     if (!form.title.trim()) {
       toast({ title: "Incident title is required", variant: "destructive" });
@@ -981,16 +1009,124 @@ function IncidentReportModal({
           </div>
 
           <div>
-            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>What happened? *</p>
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>What happened? *</p>
+              <button
+                type="button"
+                onClick={handleComply}
+                disabled={comply.loading || !form.description.trim()}
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black transition hover:bg-[#F0EDFB] disabled:opacity-40"
+                style={{ borderColor: "#C4B8F0", color: PLUM }}
+              >
+                {comply.loading
+                  ? <Loader2 size={11} className="animate-spin" />
+                  : <Sparkles size={11} />}
+                {comply.loading ? "Checking…" : "Check NDIS Compliance"}
+              </button>
+            </div>
             <textarea
               value={form.description}
-              onChange={(event) => setField("description", event.target.value)}
+              onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
               placeholder="Describe the incident in full — who, what, when, where, how..."
               rows={4}
               className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
+
+          {comply.result && (() => {
+            const r = comply.result;
+            const scoreColor = r.compliance_score >= 75 ? "#10B981" : r.compliance_score >= 50 ? "#F59E0B" : "#EF4444";
+            const criteriaLabels: Record<string, string> = {
+              factual_completeness: "Factual completeness",
+              clinical_language: "Clinical language",
+              action_documented: "Actions documented",
+              ndis_standard_alignment: "Practice Standard alignment",
+              follow_up_indicators: "Follow-up clarity",
+            };
+            return (
+              <div className="space-y-3 rounded-xl border bg-[#F8F6FE] p-4" style={{ borderColor: "#DDD8F5" }}>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Compliance Score</p>
+                  <span className="text-sm font-black" style={{ color: scoreColor }}>{r.compliance_score}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/70">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${r.compliance_score}%`, background: scoreColor }} />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: "white" }}>
+                    {r.practice_standard}
+                  </span>
+                  {r.ndis_reportable && (
+                    <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
+                      NDIS Reportable · notify within {r.notification_hours}h
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-y-2">
+                  {Object.entries(r.compliance_criteria).map(([key, val]) => {
+                    const c = val >= 75 ? "#10B981" : val >= 50 ? "#F59E0B" : "#EF4444";
+                    return (
+                      <div key={key}>
+                        <div className="mb-0.5 flex justify-between">
+                          <span className="text-[10px] font-bold" style={{ color: MUTED }}>{criteriaLabels[key] ?? key}</span>
+                          <span className="text-[10px] font-black" style={{ color: c }}>{val}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white">
+                          <div className="h-full rounded-full" style={{ width: `${val}%`, background: c }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {r.compliance_flags.length > 0 && (
+                  <div className="space-y-1">
+                    {r.compliance_flags.map((flag, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-600" />
+                        <p className="text-xs font-medium text-amber-800">{flag}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {r.reporting_requirements && (
+                  <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700 mb-0.5">Reporting Requirement</p>
+                    <p className="text-xs font-medium text-red-800">{r.reporting_requirements}</p>
+                  </div>
+                )}
+
+                {r.suggested_follow_up && (
+                  <div className="rounded-lg bg-white px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-0.5" style={{ color: MUTED }}>Suggested Next Steps</p>
+                    <p className="text-xs font-medium" style={{ color: TEXT }}>{r.suggested_follow_up}</p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm(prev => ({
+                      ...prev,
+                      description: r.compliant_description,
+                      worker_actions: r.compliant_worker_actions || prev.worker_actions,
+                    }));
+                    setComply({ loading: false, result: null });
+                    toast({ title: "NDIS-compliant text applied", description: "Review it before submitting." });
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-white"
+                  style={{ borderColor: "#C4B8F0", color: PLUM, background: "rgba(255,255,255,0.5)" }}
+                >
+                  <Sparkles size={13} />
+                  Apply NDIS-Compliant Text to Report
+                </button>
+              </div>
+            );
+          })()}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>

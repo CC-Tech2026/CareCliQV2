@@ -44,3 +44,38 @@ export function updateIncident<T = unknown>(id: string, updates: Record<string, 
 export function getIncidentsByParticipant<T = unknown>(participantId: string) {
   return jsonFetch<T>(`/api/incidents/participant/${participantId}`);
 }
+
+export interface IncidentComplyPayload {
+  incident_type: string;
+  severity: string;
+  title: string;
+  description: string;
+  worker_actions?: string;
+  participant_name?: string;
+}
+
+export interface IncidentComplyResult {
+  compliant_description: string;
+  compliant_worker_actions: string;
+  practice_standard: string;
+  ndis_reportable: boolean;
+  notification_hours: number;
+  compliance_score: number;
+  compliance_criteria: {
+    factual_completeness: number;
+    clinical_language: number;
+    action_documented: number;
+    ndis_standard_alignment: number;
+    follow_up_indicators: number;
+  };
+  compliance_flags: string[];
+  reporting_requirements: string | null;
+  suggested_follow_up: string | null;
+}
+
+export function complyIncident(payload: IncidentComplyPayload) {
+  return jsonFetch<IncidentComplyResult>("/api/ai/incidents/comply", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
