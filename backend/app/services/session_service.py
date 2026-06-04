@@ -717,6 +717,7 @@ async def get_compliance_report(
         report.append(
             {
                 **session,
+                "session_id": session.get("id"),
                 "notes": legal_note,
                 "legal_record_text": legal_note,
                 "participant_name": (session.get("participants") or {}).get("full_name"),
