@@ -40,3 +40,7 @@ export function updateIncident<T = unknown>(id: string, updates: Record<string, 
     body: JSON.stringify(updates),
   });
 }
+
+export function getIncidentsByParticipant<T = unknown>(participantId: string) {
+  return jsonFetch<T>(`/api/incidents/participant/${participantId}`);
+}

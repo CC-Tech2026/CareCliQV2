@@ -232,7 +232,35 @@ async def get_all_incidents(
     if reporter_id:
         query = query.eq("user_id", reporter_id)
 
-    result = query.execute()
+    try:
+        result = query.execute()
+    except Exception as exc:
+        if "42703" in str(exc) and reporter_id:
+            # incidents.user_id column not yet in DB — retry without the column filter.
+            # Workaround: until supabase_setup.sql is run, fall back to org-only scope
+            # and let the visible_participant_ids pass do the filtering.
+            logger.warning(
+                "incidents.user_id column missing — retrying without reporter filter. "
+                "Run supabase_setup.sql to add the column."
+            )
+            retry = (
+                supabase
+                .table(TABLE)
+                .select("*")
+                .order("incident_date", desc=True)
+                .limit(limit)
+            )
+            if status:
+                retry = retry.eq("status", status)
+            if severity:
+                retry = retry.eq("severity", severity)
+            if participant_id:
+                retry = retry.eq("participant_id", participant_id)
+            if org_id:
+                retry = retry.eq("organization_id", org_id)
+            result = retry.execute()
+        else:
+            raise
 
     rows = _safe_rows(result.data)
 
@@ -428,11 +456,20 @@ async def create_incident(
         exclude_none=True
     )
 
-    await _apply_legal_record_normalization(
-        payload,
-        payload,
-        current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
-    )
+    try:
+        await _apply_legal_record_normalization(
+            payload,
+            payload,
+            current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
+        )
+    except ValueError:
+        # Translation blocking is non-fatal for new incident creation.
+        # The incident is logged immediately so the safety record is preserved;
+        # translation can be applied later via an update.
+        logger.warning(
+            "Legal record normalization failed during incident creation — "
+            "proceeding without translation enrichment."
+        )
 
     if org_id:
         payload["organization_id"] = org_id
@@ -628,7 +665,29 @@ async def get_incident_stats(
         if reporter_id:
             query = query.eq("user_id", reporter_id)
 
-        result = query.execute()
+        try:
+            result = query.execute()
+        except Exception as col_exc:
+            if "42703" in str(col_exc) and reporter_id:
+                logger.warning(
+                    "incidents.user_id column missing — retrying stats without reporter filter. "
+                    "Run supabase_setup.sql to add the column."
+                )
+                retry = (
+                    supabase
+                    .table(TABLE)
+                    .select(
+                        "id, participant_id, status, severity, "
+                        "ndis_reportable, "
+                        "ndis_reported_at, "
+                        "incident_date"
+                    )
+                )
+                if org_id:
+                    retry = retry.eq("organization_id", org_id)
+                result = retry.execute()
+            else:
+                raise
 
         rows = _safe_rows(result.data)
 

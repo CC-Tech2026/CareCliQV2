@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { useLocation } from "wouter";
 import {
   AlertTriangle,
   CalendarDays,
@@ -29,7 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
-import { createIncident } from "@/services/incidentService";
+import { createIncident, getIncidentsByParticipant } from "@/services/incidentService";
 import {
   createMyClientNote,
   createMyClientSession,
@@ -828,6 +829,7 @@ function IncidentReportModal({
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     incident_type: "injury",
@@ -868,10 +870,34 @@ function IncidentReportModal({
         worker_actions: form.worker_actions.trim() || undefined,
         incident_date: new Date().toISOString(),
       });
-      toast({ title: "Incident reported", description: "The incident has been logged against this participant." });
+      toast({
+        title: "Incident logged",
+        description: "The incident has been recorded against this participant.",
+        action: (
+          <button
+            onClick={() => { onClose(); navigate("/incidents"); }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
+          >
+            <Siren size={12} />
+            View Incidents
+          </button>
+        ) as unknown as import("react").ReactElement,
+      });
       onClose();
-    } catch {
-      toast({ title: "Could not log incident. Please try again.", variant: "destructive" });
+    } catch (err: unknown) {
+      const apiErr = err as Error & { status?: number };
+      let title = "Incident not saved";
+      let description = "An unexpected error occurred. Please try again.";
+      if (apiErr.status === 403) {
+        description = "You don't have permission to report incidents for this participant. Check your allocation.";
+      } else if (apiErr.status === 404) {
+        description = "Participant not found — please refresh the page and try again.";
+      } else if (apiErr.status === 422) {
+        description = "The report could not be processed. Please write the incident in English and try again.";
+      } else if (apiErr.message && !apiErr.message.includes("status")) {
+        description = apiErr.message;
+      }
+      toast({ title, description, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -1015,6 +1041,64 @@ function IncidentReportModal({
   );
 }
 
+const SEVERITY_ROW_CLASSES: Record<string, string> = {
+  low:      "border-emerald-200 bg-emerald-50 text-emerald-700",
+  medium:   "border-amber-200 bg-amber-50 text-amber-700",
+  high:     "border-orange-200 bg-orange-50 text-orange-700",
+  critical: "border-red-200 bg-red-50 text-red-700",
+};
+
+function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<string, unknown>> }) {
+  const [, navigate] = useLocation();
+  const recent = incidents.slice(0, 3);
+  return (
+    <section className="rounded-xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="flex shrink-0 items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <Siren size={14} className="text-red-600" />
+          <p className="text-sm font-black" style={{ color: TEXT }}>Reported Incidents</p>
+          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "#FEF2F2", color: "#DC2626" }}>
+            {incidents.length}
+          </span>
+        </div>
+        <button
+          onClick={() => navigate("/incidents")}
+          className="text-xs font-black underline underline-offset-2 transition hover:opacity-70"
+          style={{ color: PLUM }}
+        >
+          View all
+        </button>
+      </div>
+      <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+        {recent.map((inc, idx) => {
+          const sev = String(inc.severity || "medium");
+          const incDate = inc.incident_date ? (() => { try { return formatDistanceToNow(parseISO(String(inc.incident_date)), { addSuffix: true }); } catch { return ""; } })() : "";
+          return (
+            <button
+              key={String(inc.id || idx)}
+              onClick={() => navigate(`/incidents/${String(inc.id || "")}`)}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-[#F8F6FE]"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{String(inc.title || "Incident")}</p>
+                {incDate && <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>{incDate}</p>}
+              </div>
+              <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${SEVERITY_ROW_CLASSES[sev] ?? SEVERITY_ROW_CLASSES.medium}`}>
+                {sev}
+              </span>
+              {inc.ndis_pending && (
+                <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                  NDIS Alert
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
   return (
     <div className="space-y-3">
@@ -1065,6 +1149,11 @@ export default function MyClientDetail({ id }: { id: string }) {
   const queryClient = useQueryClient();
   const detailQuery = useQuery({ queryKey: ["worker", "my-client", id], queryFn: () => getMyClientDetail(id) });
   const planQuery = useQuery({ queryKey: ["worker", "my-client", id, "plan"], queryFn: () => getMyClientNdisPlan(id) });
+  const incidentsQuery = useQuery({
+    queryKey: ["worker", "participant-incidents", id],
+    queryFn: () => getIncidentsByParticipant<Array<Record<string, unknown>>>(id),
+    enabled: !!id,
+  });
 
   const saveSessionDraft = useMutation({
     mutationFn: () => createMyClientSession(id, {
@@ -1376,7 +1465,12 @@ export default function MyClientDetail({ id }: { id: string }) {
             }
           />
         ) : (
-          <ParticipantReadiness client={client} columns={2} />
+          <div className="space-y-4">
+            <ParticipantReadiness client={client} columns={2} />
+            {(incidentsQuery.data?.length ?? 0) > 0 && (
+              <ParticipantIncidentPanel incidents={incidentsQuery.data!} />
+            )}
+          </div>
         )
       )}
 
