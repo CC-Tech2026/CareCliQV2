@@ -22,12 +22,14 @@ import {
   Save,
   ShieldAlert,
   ShieldCheck,
+  Siren,
   Sparkles,
   StopCircle,
   Target,
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { createIncident } from "@/services/incidentService";
 import {
   createMyClientNote,
   createMyClientSession,
@@ -437,6 +439,11 @@ function InlineSessionComposer({
   isGenerating,
   isSaving,
   error,
+  activeGoals: composerGoals,
+  goalsAddressed,
+  outcome,
+  choiceAndControl,
+  recommendations,
   onInputChange,
   onCommitInput,
   onGeneratedChange,
@@ -447,6 +454,10 @@ function InlineSessionComposer({
   onGenerate,
   onSave,
   onClose,
+  onGoalsAddressedChange,
+  onOutcomeChange,
+  onChoiceAndControlChange,
+  onRecommendationsChange,
 }: {
   clientName: string;
   draft: string;
@@ -459,6 +470,11 @@ function InlineSessionComposer({
   isGenerating: boolean;
   isSaving: boolean;
   error?: string;
+  activeGoals?: Array<Record<string, unknown>>;
+  goalsAddressed?: string[];
+  outcome?: string;
+  choiceAndControl?: string;
+  recommendations?: string;
   onInputChange: (value: string) => void;
   onCommitInput: () => void;
   onGeneratedChange: (value: string) => void;
@@ -469,6 +485,10 @@ function InlineSessionComposer({
   onGenerate: () => void;
   onSave: () => void;
   onClose: () => void;
+  onGoalsAddressedChange?: (ids: string[]) => void;
+  onOutcomeChange?: (value: string) => void;
+  onChoiceAndControlChange?: (value: string) => void;
+  onRecommendationsChange?: (value: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canSave = ended && Boolean((generated || draft).trim()) && !isSaving;
@@ -599,6 +619,94 @@ function InlineSessionComposer({
               {error}
             </div>
           )}
+
+          {ended && (
+            <div className="space-y-4 border-t pt-4" style={{ borderColor: "#EEEAFB" }}>
+
+              {composerGoals && composerGoals.length > 0 && (
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                    <Target size={12} />
+                    Goals Addressed This Session
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {composerGoals.map((goal, idx) => {
+                      const gid = String(goal.id ?? idx);
+                      const selected = Boolean(goalsAddressed?.includes(gid));
+                      return (
+                        <button
+                          key={gid}
+                          type="button"
+                          onClick={() => {
+                            if (!onGoalsAddressedChange) return;
+                            onGoalsAddressedChange(
+                              selected
+                                ? (goalsAddressed || []).filter((id) => id !== gid)
+                                : [...(goalsAddressed || []), gid],
+                            );
+                          }}
+                          className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
+                          style={{
+                            borderColor: selected ? PLUM : BORDER,
+                            background: selected ? SOFT : "white",
+                            color: selected ? PLUM : MUTED,
+                          }}
+                        >
+                          {goalLabel(goal, idx)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <CheckCircle2 size={12} />
+                  Session Outcome *
+                </p>
+                <textarea
+                  value={outcome ?? ""}
+                  onChange={(event) => onOutcomeChange?.(event.target.value)}
+                  placeholder="What was achieved? Describe measurable progress and participant response..."
+                  rows={3}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <MessageCircle size={12} />
+                  Participant Choice &amp; Control *
+                </p>
+                <textarea
+                  value={choiceAndControl ?? ""}
+                  onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
+                  placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
+                  rows={3}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <Sparkles size={12} />
+                  Recommendations
+                </p>
+                <textarea
+                  value={recommendations ?? ""}
+                  onChange={(event) => onRecommendationsChange?.(event.target.value)}
+                  placeholder="Recommendations for coordinator or next session (optional)..."
+                  rows={2}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+            </div>
+          )}
         </div>
       </div>
 
@@ -690,6 +798,223 @@ function InlineSessionComposer({
   );
 }
 
+const INCIDENT_TYPES_LIST = [
+  { value: "injury", label: "Injury" },
+  { value: "medication_error", label: "Medication Error" },
+  { value: "behaviour_of_concern", label: "Behaviour of Concern" },
+  { value: "property_damage", label: "Property Damage" },
+  { value: "abuse_neglect", label: "Abuse / Neglect" },
+  { value: "restrictive_practice", label: "Restrictive Practice" },
+  { value: "environmental", label: "Environmental Hazard" },
+  { value: "elopement", label: "Elopement" },
+  { value: "near_miss", label: "Near Miss" },
+  { value: "other", label: "Other" },
+] as const;
+
+const INCIDENT_SEVERITIES_LIST = [
+  { value: "low", label: "Low — minimal impact" },
+  { value: "medium", label: "Medium — some impact" },
+  { value: "high", label: "High — significant impact" },
+  { value: "critical", label: "Critical — life-threatening" },
+] as const;
+
+function IncidentReportModal({
+  participantId,
+  participantName,
+  onClose,
+}: {
+  participantId: string;
+  participantName: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    incident_type: "injury",
+    severity: "medium",
+    title: "",
+    description: "",
+    location: "",
+    worker_actions: "",
+  });
+
+  function setField(key: string, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const ndisReportable =
+    form.incident_type === "abuse_neglect" ||
+    form.incident_type === "restrictive_practice" ||
+    form.severity === "critical";
+
+  async function handleSubmit() {
+    if (!form.title.trim()) {
+      toast({ title: "Incident title is required", variant: "destructive" });
+      return;
+    }
+    if (!form.description.trim()) {
+      toast({ title: "Description is required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await createIncident({
+        participant_id: participantId || undefined,
+        incident_type: form.incident_type,
+        severity: form.severity,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        location: form.location.trim() || undefined,
+        worker_actions: form.worker_actions.trim() || undefined,
+        incident_date: new Date().toISOString(),
+      });
+      toast({ title: "Incident reported", description: "The incident has been logged against this participant." });
+      onClose();
+    } catch {
+      toast({ title: "Could not log incident. Please try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl"
+        style={{ borderColor: BORDER, maxHeight: "92vh" }}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50">
+              <Siren size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Practice Standard 2.3</p>
+              <h2 className="text-base font-black" style={{ color: TEXT }}>Report Incident — {participantName}</h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            style={{ color: MUTED }}
+            aria-label="Close incident form"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+          {ndisReportable && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
+              <p className="text-sm font-bold text-red-800">
+                NDIS Reportable — notify the NDIS Quality &amp; Safeguards Commission.
+                {form.severity === "critical" && " Critical incidents must be reported within 24 hours."}
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Type *</p>
+              <select
+                value={form.incident_type}
+                onChange={(event) => setField("incident_type", event.target.value)}
+                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              >
+                {INCIDENT_TYPES_LIST.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Severity *</p>
+              <select
+                value={form.severity}
+                onChange={(event) => setField("severity", event.target.value)}
+                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              >
+                {INCIDENT_SEVERITIES_LIST.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Title *</p>
+            <input
+              value={form.title}
+              onChange={(event) => setField("title", event.target.value)}
+              placeholder="Brief description of what occurred..."
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>What happened? *</p>
+            <textarea
+              value={form.description}
+              onChange={(event) => setField("description", event.target.value)}
+              placeholder="Describe the incident in full — who, what, when, where, how..."
+              rows={4}
+              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Location</p>
+              <input
+                value={form.location}
+                onChange={(event) => setField("location", event.target.value)}
+                placeholder="Where did it occur?"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Immediate Actions</p>
+              <input
+                value={form.worker_actions}
+                onChange={(event) => setField("worker_actions", event.target.value)}
+                placeholder="First aid, supervisor notified..."
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between border-t px-6 py-4" style={{ borderColor: BORDER }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-[#F8F6FE]"
+            style={{ borderColor: BORDER, color: MUTED }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          >
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
+            Log Incident
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
   return (
     <div className="space-y-3">
@@ -729,6 +1054,11 @@ export default function MyClientDetail({ id }: { id: string }) {
   const [composerError, setComposerError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [sessionOutcome, setSessionOutcome] = useState("");
+  const [sessionChoiceAndControl, setSessionChoiceAndControl] = useState("");
+  const [sessionRecommendations, setSessionRecommendations] = useState("");
+  const [sessionGoalsAddressed, setSessionGoalsAddressed] = useState<string[]>([]);
+  const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
   const dictationBaseRef = useRef("");
   const dictationFinalRef = useRef("");
@@ -742,6 +1072,10 @@ export default function MyClientDetail({ id }: { id: string }) {
       session_type: "support_work",
       duration_minutes: 60,
       notes: generatedNote.trim() || sessionDraft.trim(),
+      outcomes: sessionOutcome.trim() || undefined,
+      participant_response: sessionChoiceAndControl.trim() || undefined,
+      progress_toward_goals: sessionRecommendations.trim() || undefined,
+      goals_addressed: sessionGoalsAddressed.length > 0 ? sessionGoalsAddressed : undefined,
     }),
     onSuccess: () => {
       setSessionDraft("");
@@ -778,6 +1112,10 @@ export default function MyClientDetail({ id }: { id: string }) {
     setSessionAttachmentName("");
     setSessionEnded(false);
     setComposerError("");
+    setSessionOutcome("");
+    setSessionChoiceAndControl("");
+    setSessionRecommendations("");
+    setSessionGoalsAddressed([]);
   }
 
   function openSessionComposer() {
@@ -969,6 +1307,14 @@ export default function MyClientDetail({ id }: { id: string }) {
             <Plus size={16} />
             New Note
           </button>
+          <button
+            onClick={() => setIncidentModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm transition hover:bg-red-50"
+            style={{ borderColor: "#FECACA", color: CORAL }}
+          >
+            <Siren size={16} />
+            Report Incident
+          </button>
         </div>
       </div>
 
@@ -1017,6 +1363,15 @@ export default function MyClientDetail({ id }: { id: string }) {
                   stopSessionDictation();
                   setSessionComposerOpen(false);
                 }}
+                activeGoals={activeGoals(client.goals)}
+                goalsAddressed={sessionGoalsAddressed}
+                outcome={sessionOutcome}
+                choiceAndControl={sessionChoiceAndControl}
+                recommendations={sessionRecommendations}
+                onGoalsAddressedChange={setSessionGoalsAddressed}
+                onOutcomeChange={setSessionOutcome}
+                onChoiceAndControlChange={setSessionChoiceAndControl}
+                onRecommendationsChange={setSessionRecommendations}
               />
             }
           />
@@ -1028,13 +1383,44 @@ export default function MyClientDetail({ id }: { id: string }) {
       {activeTab === "plan" && (
         <Section title="NDIS Plan" icon={ClipboardList}>
           {planQuery.isLoading && <p className="text-sm font-bold" style={{ color: MUTED }}>Loading plan...</p>}
+          {(planQuery.data?.goals || client.goals || []).length === 0 && !planQuery.isLoading && (
+            <p className="text-sm font-medium" style={{ color: MUTED }}>No goals recorded for this participant yet.</p>
+          )}
           <div className="space-y-3">
-            {(planQuery.data?.goals || client.goals || []).map((goal, index) => (
-              <div key={String((goal as any).id || index)} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
-                <p className="font-black" style={{ color: TEXT }}>{String((goal as any).title || (goal as any).description || `Goal ${index + 1}`)}</p>
-                <p className="mt-1 text-sm font-medium capitalize" style={{ color: MUTED }}>{String((goal as any).status || "active")}</p>
-              </div>
-            ))}
+            {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
+              const g = goal as Record<string, unknown>;
+              const title = String(g.title || g.name || `Goal ${index + 1}`);
+              const description = String(g.description || g.instructions || g.goal_instructions || "");
+              const status = String(g.status || "active");
+              const category = String(g.category || g.support_category || "");
+              const isActive = !["completed", "achieved", "archived"].includes(status.toLowerCase());
+              return (
+                <div key={String(g.id || index)} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-black" style={{ color: TEXT }}>{title}</p>
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${
+                        isActive
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {status}
+                    </span>
+                  </div>
+                  {category.trim() && (
+                    <p className="mt-1.5 text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>
+                      {category}
+                    </p>
+                  )}
+                  {description.trim() && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: MUTED }}>
+                      {description}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Section>
       )}
@@ -1076,6 +1462,14 @@ export default function MyClientDetail({ id }: { id: string }) {
         <Section title="My Compliance For This Client" icon={ShieldCheck}>
           <SessionRows rows={detail.compliance} />
         </Section>
+      )}
+
+      {incidentModalOpen && (
+        <IncidentReportModal
+          participantId={String(client.id ?? "")}
+          participantName={client.full_name}
+          onClose={() => setIncidentModalOpen(false)}
+        />
       )}
     </div>
   );

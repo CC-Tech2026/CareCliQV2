@@ -45,6 +45,9 @@ export type CreateWorkerSessionInput = {
   notes?: string;
   goals_addressed?: string[];
   status?: string;
+  outcomes?: string;
+  participant_response?: string;
+  progress_toward_goals?: string;
 };
 
 export type CreateWorkerNoteInput = {

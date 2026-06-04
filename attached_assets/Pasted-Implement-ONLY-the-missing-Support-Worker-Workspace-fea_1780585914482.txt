@@ -1,0 +1,196 @@
+Implement ONLY the missing Support Worker Workspace features identified in the audit report.
+
+CRITICAL CONTEXT
+
+This is an existing production NDIS platform.
+
+The backend already exists.
+The database already exists.
+Supabase already exists.
+Authentication already exists.
+Permissions already exist.
+Session workflows already exist.
+Participant management already exists.
+
+The goal is to carefully extend the frontend experience without breaking existing functionality.
+
+==================================================
+IMPLEMENTATION PRINCIPLES
+==================================================
+
+Before making any changes:
+
+1. Analyze the existing implementation.
+2. Identify all existing components involved.
+3. Identify all existing hooks.
+4. Identify all existing services.
+5. Identify all existing Supabase queries.
+6. Identify all existing routes.
+7. Identify all existing permissions.
+
+Do NOT assume functionality is missing.
+Verify first.
+
+==================================================
+DO NOT
+==================================================
+
+DO NOT create database tables.
+
+DO NOT create migrations.
+
+DO NOT modify existing schemas.
+
+DO NOT modify RLS policies.
+
+DO NOT create duplicate APIs.
+
+DO NOT create duplicate services.
+
+DO NOT create duplicate hooks.
+
+DO NOT create parallel workflows.
+
+DO NOT replace existing functionality.
+
+DO NOT refactor unrelated code.
+
+DO NOT change existing business logic unless absolutely required.
+
+DO NOT introduce breaking changes.
+
+==================================================
+ALLOWED CHANGES
+==================================================
+
+You may:
+
+✓ Create frontend components
+
+✓ Add UI sections
+
+✓ Improve layouts
+
+✓ Add missing views
+
+✓ Connect existing data to existing screens
+
+✓ Reuse existing hooks
+
+✓ Reuse existing services
+
+✓ Reuse existing API calls
+
+✓ Reuse existing database relationships
+
+✓ Add loading states
+
+✓ Add empty states
+
+✓ Add validation
+
+✓ Add responsive behaviour
+
+✓ Improve accessibility
+
+==================================================
+SUPPORT WORKER WORKSPACE OBJECTIVES
+==================================================
+
+Focus only on:
+
+1. Participant Support Profile
+2. Active Goals Visibility
+3. Goal Instructions
+4. Goal Evidence Capture
+5. Session Outcome Recording
+6. Participant Choice & Control
+7. Worker Recommendations
+8. Risk Observation Reporting
+9. Session Completion UX
+10. Mobile Experience
+
+==================================================
+FOR EACH FEATURE
+==================================================
+
+Step 1
+
+Inspect current implementation.
+
+Output:
+
+EXISTING COMPONENTS
+EXISTING ROUTES
+EXISTING SERVICES
+EXISTING TYPES
+EXISTING QUERIES
+
+Step 2
+
+Determine smallest implementation possible.
+
+Output:
+
+WHAT WILL CHANGE
+WHAT WILL NOT CHANGE
+
+Step 3
+
+Implement only the missing functionality.
+
+==================================================
+REQUIRED VALIDATION
+==================================================
+
+Before finalising:
+
+Confirm:
+
+✓ Existing session start still works
+
+✓ Existing session completion still works
+
+✓ Existing participant profile still works
+
+✓ Existing goals still work
+
+✓ Existing permissions still work
+
+✓ Existing coordinator workspace is unaffected
+
+✓ Existing backend is unchanged
+
+✓ Existing database is unchanged
+
+✓ Existing APIs are unchanged
+
+==================================================
+OUTPUT FORMAT
+==================================================
+
+For each ticket provide:
+
+1. Current State Analysis
+2. Files To Update
+3. Components To Reuse
+4. Risk Assessment
+5. Implementation Plan
+6. Actual Code Changes
+
+If any proposed change requires a backend modification:
+
+STOP
+
+Explain why.
+
+Provide an alternative frontend-only solution first.
+
+Priority:
+
+1. Preserve existing behaviour
+2. Reuse existing architecture
+3. Avoid backend changes
+4. Minimise code changes
+5. Improve Support Worker experience
+6. Improve NDIS compliance evidence capture
