@@ -117,7 +117,7 @@ export default function Login() {
           <img
             src="/logo.png"
             alt="CareCliQ"
-            className="h-9 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
+            className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
           />
           <div className="h-4 w-[1px] bg-gray-200" />
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">
