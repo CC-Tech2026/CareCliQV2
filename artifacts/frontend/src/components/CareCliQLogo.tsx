@@ -1,12 +1,12 @@
-interface CareScribeLogoProps {
+interface CareCliQLogoProps {
   compact?: boolean;
   className?: string;
 }
 
-export function CareScribeLogo({
+export function CareCliQLogo({
   compact = false,
   className = "",
-}: CareScribeLogoProps) {
+}: CareCliQLogoProps) {
   return (
     <div
       className={`
@@ -16,7 +16,7 @@ export function CareScribeLogo({
         ${compact ? "justify-center" : "justify-start"}
         ${className}
       `}
-      title="CareScribe"
+      title="CareCliQ"
     >
       {compact ? (
         <img
@@ -36,7 +36,7 @@ export function CareScribeLogo({
       ) : (
         <img
           src="/logo.png"
-          alt="CareScribe"
+          alt="CareCliQ"
           className="
             object-contain
             shrink-0
@@ -58,11 +58,11 @@ export function CareScribeLogo({
    Mobile Logo
 ────────────────────────────────────────── */
 
-interface CareScribeLogoSmProps {
+interface CareCliQLogoSmProps {
   className?: string;
 }
 
-export function CareScribeLogoSm({ className = "" }: CareScribeLogoSmProps) {
+export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
   return (
     <div
       className={`
@@ -74,7 +74,7 @@ export function CareScribeLogoSm({ className = "" }: CareScribeLogoSmProps) {
     >
       <img
         src="/logo.png"
-        alt="CareScribe"
+        alt="CareCliQ"
         className="
           object-contain
           shrink-0

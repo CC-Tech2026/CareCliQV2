@@ -57,7 +57,7 @@ const queryClient = new QueryClient({
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health"] as const;
 
-// Support Coordinator / CareScribe Parent only — oversight, billing, team, compliance.
+// Support Coordinator / CareCliQ Parent only — oversight, billing, team, compliance.
 const COORDINATOR_ROLES = ["support_coordinator"] as const;
 
 // Coordinator + allied health — reports contain clinical documentation allied health needs.

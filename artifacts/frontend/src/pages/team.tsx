@@ -382,7 +382,7 @@ export default function Team() {
           <AlertDialogHeader>
             <AlertDialogTitle>Deactivate {deactivateTarget?.full_name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This worker will lose access to CareScribe immediately. Their existing session records will be preserved. You can reactivate them at any time.
+              This worker will lose access to CareCliQ immediately. Their existing session records will be preserved. You can reactivate them at any time.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

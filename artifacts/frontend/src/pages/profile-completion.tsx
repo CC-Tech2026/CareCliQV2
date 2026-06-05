@@ -87,7 +87,7 @@ export default function ProfileCompletion() {
           {isAllied ? "Allied Health" : "Support Worker"}
         </p>
         <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Complete your profile</h1>
-        <p className="mt-2 text-sm text-[#7A6A9E]">These details are stored on your secure CareScribe profile and used in compliance records.</p>
+        <p className="mt-2 text-sm text-[#7A6A9E]">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
       </div>
       <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E2DEF2] bg-white p-6 shadow-sm">
         <div className="mb-6 rounded-2xl bg-[#F5F3FC] p-4">

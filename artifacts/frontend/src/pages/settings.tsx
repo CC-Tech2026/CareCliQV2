@@ -161,9 +161,9 @@ function PanelCard({
 // Main component
 // ---------------------------------------------------------------------------
 const ROLE_LABELS: Record<string, string> = {
-  support_coordinator: "CareScribe Parent",
-  allied_health:       "CareScribe Pro",
-  support_worker:      "CareScribe Child",
+  support_coordinator: "CareCliQ Parent",
+  allied_health:       "CareCliQ Pro",
+  support_worker:      "CareCliQ Child",
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {

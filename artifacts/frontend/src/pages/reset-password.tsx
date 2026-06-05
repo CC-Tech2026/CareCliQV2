@@ -70,7 +70,7 @@ export default function ResetPassword() {
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F3FC]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="CareScribe" className="h-9 w-auto object-contain" />
+          <img src="/logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
           <div className="h-4 w-[1px] bg-gray-200" />
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">Workspace</span>
         </div>
@@ -90,7 +90,7 @@ export default function ResetPassword() {
               Create new password
             </h1>
             <p className="text-[14px] font-medium mt-1" style={{ color: "#7A6A9E" }}>
-              Choose a new password for your CareScribe workspace.
+              Choose a new password for your CareCliQ workspace.
             </p>
           </div>
 
@@ -173,7 +173,7 @@ export default function ResetPassword() {
       </div>
 
       <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#F03060] via-[#9B5DE5] to-[#5533CC]">
-        <img src="/login_welcome.jpg" alt="CareScribe workspace" className="max-w-xl w-full rounded-[2rem] shadow-2xl" />
+        <img src="/login_welcome.jpg" alt="CareCliQ workspace" className="max-w-xl w-full rounded-[2rem] shadow-2xl" />
       </div>
     </div>
   );

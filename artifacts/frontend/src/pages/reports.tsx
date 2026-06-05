@@ -1017,7 +1017,7 @@ function ExportCentreSection() {
       const { default: autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF();
       doc.setFontSize(20);
-      doc.text("CareScribe Compliance Bundle", 14, 22);
+      doc.text("CareCliQ Compliance Bundle", 14, 22);
       doc.setFontSize(11);
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 32);
       doc.text(`Overall Score: ${Math.round(ov?.average_score ?? 0)}%`, 14, 40);
@@ -1113,7 +1113,7 @@ function ExportCentreSection() {
         <CardHeader title="Export Notes" />
         <div className="p-5 space-y-2">
           {[
-            "All exports are timestamped with the generation date and CareScribe version.",
+            "All exports are timestamped with the generation date and CareCliQ version.",
             "PDF exports include your provider name, credentials, and digital signature if configured in Settings.",
             "CSV exports open in Excel, Google Sheets, or any spreadsheet application.",
             "Compliance bundles include per-session rule-by-rule breakdowns suitable for NDIA quality audits.",

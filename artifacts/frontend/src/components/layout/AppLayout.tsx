@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
-import { CareScribeLogo, CareScribeLogoSm } from "@/components/CareScribeLogo";
+import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#5533CC";
@@ -193,7 +193,7 @@ function SidebarContents({
           )}
         >
           <div className={cn("flex items-center overflow-visible", compact ? "justify-center" : "justify-start")}>
-            <CareScribeLogo compact={compact} />
+            <CareCliQLogo compact={compact} />
           </div>
         </Link>
         {!compact && !isDrawer && (
@@ -394,7 +394,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Mobile header */}
           <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10 border-b border-black/5">
             <Link href="/dashboard" className="flex items-center focus:outline-none py-1 active:opacity-75 transition-opacity">
-              <CareScribeLogoSm />
+              <CareCliQLogoSm />
             </Link>
             <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
               <Menu size={22} />

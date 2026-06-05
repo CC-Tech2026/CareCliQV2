@@ -382,7 +382,7 @@ export default function Signup() {
           <div>
             <img
               src="/logo.png"
-              alt="CareScribe"
+              alt="CareCliQ"
               className="max-w-[220px]"
             />
 
@@ -454,7 +454,7 @@ export default function Signup() {
                   </h2>
 
                   <p className="text-sm text-[#9B6FAB]">
-                    Choose the option that best describes how you'll use CareScribe
+                    Choose the option that best describes how you'll use CareCliQ
                   </p>
                 </div>
 

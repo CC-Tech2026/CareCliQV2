@@ -19,9 +19,9 @@ interface ProtectedRouteProps {
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
-  support_coordinator: "Support Coordinator (CareScribe Parent)",
-  support_worker: "Support Worker (CareScribe Child)",
-  allied_health: "Allied Health Professional (CareScribe Pro)",
+  support_coordinator: "Support Coordinator (CareCliQ Parent)",
+  support_worker: "Support Worker (CareCliQ Child)",
+  allied_health: "Allied Health Professional (CareCliQ Pro)",
 };
 
 /**
@@ -106,7 +106,7 @@ export function ProtectedRoute({
             </h2>
 
             <p className="mt-2 text-sm text-amber-800 leading-6">
-              CareScribe uses role-based access controls to protect participant
+              CareCliQ uses role-based access controls to protect participant
               privacy, compliance records, and sensitive organisational
               information.
             </p>

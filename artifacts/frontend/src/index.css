@@ -26,7 +26,7 @@
   scrollbar-color: rgba(122, 106, 158, 0.22) transparent;
 }
 
-/* ── CareScribe auth page animations ──────────────────────────────────────── */
+/* ── CareCliQ auth page animations ──────────────────────────────────────── */
 @keyframes cs-float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
   33%       { transform: translateY(-10px) rotate(1deg); }

@@ -103,7 +103,7 @@ export default function AcceptInvite() {
       }
 
       setStep("done");
-      toast({ title: "Welcome to CareScribe!", description: "Your account has been activated." });
+      toast({ title: "Welcome to CareCliQ!", description: "Your account has been activated." });
       const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/dashboard";
       setTimeout(() => navigate(destination), 1800);
     } catch (e) {

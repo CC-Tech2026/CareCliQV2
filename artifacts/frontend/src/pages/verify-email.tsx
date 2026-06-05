@@ -40,7 +40,7 @@ export default function VerifyEmail() {
         </div>
         <h1 className="mt-5 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Verify your email</h1>
         <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[#7A6A9E]">
-          CareScribe protects participant records by requiring verified email before full workspace access.
+          CareCliQ protects participant records by requiring verified email before full workspace access.
           We sent a verification link to <strong>{user?.email}</strong>.
         </p>
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
