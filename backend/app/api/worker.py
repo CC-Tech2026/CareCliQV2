@@ -23,6 +23,8 @@ class WorkerSessionCreate(BaseModel):
     notes: Optional[str] = None
     goals_addressed: list[str] = Field(default_factory=list)
     status: str = "draft"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     activities_performed: Optional[str] = None
     outcomes: Optional[str] = None
     participant_response: Optional[str] = None
@@ -273,6 +275,8 @@ async def create_my_client_session(
         notes=body.notes,
         goals_addressed=goals_addressed,
         status=body.status,
+        start_time=body.start_time,
+        end_time=body.end_time,
         activities_performed=body.activities_performed,
         outcomes=body.outcomes,
         participant_response=body.participant_response,
