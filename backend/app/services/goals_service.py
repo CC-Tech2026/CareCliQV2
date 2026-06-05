@@ -32,16 +32,33 @@ def _safe_row(data: Any) -> Optional[dict]:
 
 
 def _normalize(row: dict[str, Any]) -> dict[str, Any]:
-    """Normalize goal row."""
+    """Normalize goal row — never expose funding/budget fields."""
     out: dict[str, Any] = dict(row)
 
     target_date = out.get("target_date")
-
     if target_date and not isinstance(target_date, str):
         out["target_date"] = str(target_date)
 
     out.setdefault("is_achieved", False)
     out.setdefault("category", "general")
+    out.setdefault("priority", 99)
+    out.setdefault("why_it_matters", None)
+    out.setdefault("worker_focus", [])
+
+    # Ensure title is always populated (fall back to description)
+    if not out.get("title"):
+        out["title"] = out.get("description") or ""
+
+    # Ensure worker_focus is a list
+    wf = out.get("worker_focus")
+    if not isinstance(wf, list):
+        out["worker_focus"] = []
+
+    # Strip any funding/plan-financial fields so worker-facing endpoints
+    # never accidentally expose budget data
+    for _field in ("total_funding", "used_funding", "budget", "funding_amount",
+                   "plan_funding", "allocated_funding"):
+        out.pop(_field, None)
 
     return out
 
@@ -52,8 +69,13 @@ def _normalize(row: dict[str, Any]) -> dict[str, Any]:
 
 async def get_goals_for_participant(
     participant_id: str,
+    active_only: bool = True,
 ) -> List[dict[str, Any]]:
-    """Return all goals for participant active plan."""
+    """Return goals for participant's active plan.
+
+    By default only active goals are returned, sorted by priority ascending.
+    Pass active_only=False to include all statuses.
+    """
 
     try:
         plan = await funding_service.get_plan_for_participant(
@@ -70,11 +92,19 @@ async def get_goals_for_participant(
 
         supabase = get_supabase_admin()
 
-        result = (
+        query = (
             supabase
             .table(TABLE)
             .select("*")
             .eq("plan_id", plan_id)
+        )
+
+        if active_only:
+            query = query.eq("status", "active")
+
+        result = (
+            query
+            .order("priority", desc=False)
             .order("created_at")
             .execute()
         )
@@ -95,17 +125,26 @@ async def get_goals_for_participant(
 
 async def get_goals_for_plan(
     plan_id: str,
+    active_only: bool = False,
 ) -> List[dict[str, Any]]:
-    """Return all goals for a plan."""
+    """Return goals for a plan, sorted by priority."""
 
     try:
         supabase = get_supabase_admin()
 
-        result = (
+        query = (
             supabase
             .table(TABLE)
             .select("*")
             .eq("plan_id", plan_id)
+        )
+
+        if active_only:
+            query = query.eq("status", "active")
+
+        result = (
+            query
+            .order("priority", desc=False)
             .order("created_at")
             .execute()
         )

@@ -149,6 +149,7 @@ def _normalize(row: Dict[str, Any]) -> Dict[str, Any]:
         "goals_addressed",
         "photo_urls",
         "body_markers",
+        "goal_progress_notes",
     ):
         value = out.get(field)
 
@@ -197,6 +198,7 @@ def _prepare_session_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "goals_addressed",
         "photo_urls",
         "body_markers",
+        "goal_progress_notes",
     ):
         if field in out and isinstance(out[field], list):
             out[field] = json.dumps(out[field])

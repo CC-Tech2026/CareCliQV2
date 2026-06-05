@@ -11,6 +11,14 @@ import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
 
 // Extended session type with extra DB columns not yet in the OpenAPI spec
+type GoalProgressNote = {
+  goal_id: string;
+  goal_title: string;
+  evidence_provided?: string;
+  outcome?: string;
+  observation?: string;
+};
+
 type ExtendedSession = Session & {
   cost?: number | null;
   support_category?: string | null;
@@ -22,6 +30,10 @@ type ExtendedSession = Session & {
   detected_language?: string | null;
   translation_status?: string | null;
   translation_metadata?: Record<string, unknown> | null;
+  // SCRUM-226: structured per-goal documentation
+  goal_progress_notes?: GoalProgressNote[] | null;
+  // SCRUM-227: participant choice & control narrative
+  participant_choice_control?: string | null;
 };
 
 import { Button } from "@/components/ui/button";
@@ -1158,27 +1170,76 @@ export default function SessionDetail({ id }: { id?: string }) {
             </div>
           </div>
 
-          {/* Linked Goals & Tags */}
+          {/* Goals Worked On & Tags */}
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <Target className="h-4 w-4 text-slate-500" />
               <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Core Mapping</p>
             </div>
             <div className="p-5 space-y-4">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> Linked Goals</p>
-                {Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {session.goals_addressed.map((goal: string, index: number) => (
-                      <div key={index} className="text-xs bg-indigo-50/50 border border-indigo-100/40 text-indigo-900 px-2.5 py-1.5 rounded-lg font-medium leading-normal">
-                        {goal}
+
+              {/* Structured per-goal documentation (SCRUM-226) */}
+              {Array.isArray((session as ExtendedSession).goal_progress_notes) && (session as ExtendedSession).goal_progress_notes!.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                    <Target className="h-3 w-3" /> Goals Worked On
+                  </p>
+                  {(session as ExtendedSession).goal_progress_notes!.map((gnote, i) => (
+                    <div key={gnote.goal_id || i} className="rounded-xl border border-indigo-100/60 bg-indigo-50/40 overflow-hidden">
+                      <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100/60">
+                        <p className="text-sm font-bold text-indigo-900">{gnote.goal_title || `Goal ${i + 1}`}</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs italic text-slate-400">No specific NDIS strategic support goals linked.</p>
-                )}
-              </div>
+                      <div className="px-4 py-3 space-y-2.5 text-xs">
+                        {gnote.evidence_provided && (
+                          <div>
+                            <p className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">Evidence Provided</p>
+                            <p className="text-slate-700 leading-relaxed">{gnote.evidence_provided}</p>
+                          </div>
+                        )}
+                        {gnote.outcome && (
+                          <div>
+                            <p className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">Outcome</p>
+                            <p className="text-slate-700 leading-relaxed">{gnote.outcome}</p>
+                          </div>
+                        )}
+                        {gnote.observation && (
+                          <div>
+                            <p className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">Observation</p>
+                            <p className="text-slate-700 leading-relaxed">{gnote.observation}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Target className="h-3 w-3" /> Linked Goals</p>
+                  {Array.isArray(session.goals_addressed) && session.goals_addressed.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {session.goals_addressed.map((goal: string, index: number) => (
+                        <div key={index} className="text-xs bg-indigo-50/50 border border-indigo-100/40 text-indigo-900 px-2.5 py-1.5 rounded-lg font-medium leading-normal">
+                          {goal}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs italic text-slate-400">No specific NDIS strategic support goals linked.</p>
+                  )}
+                </div>
+              )}
+
+              {/* Participant Choice & Control (SCRUM-227) */}
+              {(session as ExtendedSession).participant_choice_control && (
+                <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-purple-500 mb-1 flex items-center gap-1">
+                    <Flag className="h-3 w-3" /> Participant Choice &amp; Control
+                  </p>
+                  <p className="text-sm text-purple-900 leading-relaxed font-medium">
+                    {(session as ExtendedSession).participant_choice_control}
+                  </p>
+                </div>
+              )}
 
               <div className="pt-2">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1"><Tags className="h-3 w-3" /> Categorization Tags</p>
