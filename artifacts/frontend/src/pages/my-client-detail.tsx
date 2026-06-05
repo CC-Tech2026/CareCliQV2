@@ -495,6 +495,8 @@ function InlineSessionComposer({
   language,
   ended,
   isGenerating,
+  isTranslating,
+  translatedFromLang,
   isSaving,
   error,
   selectedGoals,
@@ -507,6 +509,7 @@ function InlineSessionComposer({
   onAttach,
   onToggleDictation,
   onEnd,
+  onTranslate,
   onGenerate,
   onSave,
   onClose,
@@ -524,6 +527,8 @@ function InlineSessionComposer({
   language: string;
   ended: boolean;
   isGenerating: boolean;
+  isTranslating: boolean;
+  translatedFromLang: string;
   isSaving: boolean;
   error?: string;
   selectedGoals: Set<string>;
@@ -536,6 +541,7 @@ function InlineSessionComposer({
   onAttach: (file: File | null) => void;
   onToggleDictation: () => void;
   onEnd: () => void;
+  onTranslate: () => void;
   onGenerate: () => void;
   onSave: () => void;
   onClose: () => void;
@@ -712,27 +718,49 @@ function InlineSessionComposer({
 
           <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
             {ended ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={onGenerate}
-                  disabled={!draft.trim() || isGenerating}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition disabled:opacity-50"
-                  style={{ borderColor: PLUM, color: PLUM }}
-                >
-                  {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                  Generate Compliant Note
-                </button>
-                <button
-                  type="button"
-                  onClick={onSave}
-                  disabled={!canSave}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white transition disabled:opacity-50"
-                  style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
-                >
-                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Save Draft
-                </button>
+              <div className="space-y-2">
+                {translatedFromLang && (
+                  <div
+                    className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold w-fit"
+                    style={{ borderColor: "#C4B8E8", color: PLUM, background: "#F5F3FC" }}
+                  >
+                    <Languages size={13} />
+                    Translated from{" "}
+                    {INPUT_LANGUAGES.find((l) => l.value === translatedFromLang)?.label ?? translatedFromLang.toUpperCase()}
+                  </div>
+                )}
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={onTranslate}
+                    disabled={!draft.trim() || isTranslating || isGenerating}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
+                    style={{ borderColor: PLUM, color: PLUM }}
+                  >
+                    {isTranslating ? <Loader2 size={15} className="animate-spin" /> : <Languages size={15} />}
+                    Translate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onGenerate}
+                    disabled={!draft.trim() || isGenerating || isTranslating}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition disabled:opacity-50"
+                    style={{ borderColor: PLUM, color: PLUM }}
+                  >
+                    {isGenerating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+                    Clinical Rewrite
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onSave}
+                    disabled={!canSave}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white transition disabled:opacity-50"
+                    style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                  >
+                    {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                    Save Draft
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-3">
@@ -915,6 +943,8 @@ export default function MyClientDetail({ id }: { id: string }) {
   const [inputLanguage, setInputLanguage] = useState("auto");
   const [composerError, setComposerError] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedFromLang, setTranslatedFromLang] = useState("");
   const [isListening, setIsListening] = useState(false);
   // SCRUM-226: goals worked on during session
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
@@ -952,6 +982,7 @@ export default function MyClientDetail({ id }: { id: string }) {
       setGeneratedNote("");
       setSessionAttachmentName("");
       setSessionEnded(false);
+      setTranslatedFromLang("");
       setSelectedGoals(new Set());
       setGoalNotes({});
       setChoiceControl("");
@@ -984,6 +1015,7 @@ export default function MyClientDetail({ id }: { id: string }) {
     setSessionAttachmentName("");
     setSessionEnded(false);
     setComposerError("");
+    setTranslatedFromLang("");
     setSelectedGoals(new Set());
     setGoalNotes({});
     setChoiceControl("");
@@ -1138,44 +1170,99 @@ export default function MyClientDetail({ id }: { id: string }) {
     };
   }, []);
 
+  async function translateNote() {
+    if (!sessionEnded) {
+      setComposerError("End the session before translating.");
+      return;
+    }
+    if (!sessionDraft.trim() || isTranslating) return;
+    setComposerError("");
+    setTranslatedFromLang("");
+    setIsTranslating(true);
+    try {
+      const response = await apiFetch("/api/ai/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: sessionDraft.trim(),
+          source_language: inputLanguage === "auto" ? "auto" : inputLanguage,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          body.detail ||
+            "Translation service is currently unavailable. You can still save your original note."
+        );
+      }
+      const data = await response.json();
+      const translated = (data.translated || "").trim();
+      if (translated) {
+        setGeneratedNote(translated);
+        setTranslatedFromLang(data.detected_language || "");
+      }
+    } catch (error) {
+      setComposerError(
+        error instanceof Error
+          ? error.message
+          : "Translation service is currently unavailable. You can still save your original note."
+      );
+    } finally {
+      setIsTranslating(false);
+    }
+  }
+
   async function generateCompliantNote() {
     if (!sessionEnded) {
       setComposerError("End the session before generating the compliant note.");
       return;
     }
-    if (!sessionDraft.trim() || isGenerating) return;
+    const baseText = generatedNote.trim() || sessionDraft.trim();
+    if (!baseText || isGenerating) return;
     setComposerError("");
     setIsGenerating(true);
     try {
+      // If a translation already exists the text is English; otherwise pass the original language
+      const sourceLang = translatedFromLang ? "en" : (inputLanguage === "auto" ? "auto" : inputLanguage);
+      const textPayload =
+        sourceLang === "auto" || sourceLang === "en"
+          ? baseText
+          : `[Input language: ${sourceLang}]\n${baseText}`;
       const response = await apiFetch("/api/ai/clinical-rewrite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: inputLanguage === "auto"
-            ? sessionDraft.trim()
-            : `[Input language: ${inputLanguage}]\n${sessionDraft.trim()}`,
-        }),
+        body: JSON.stringify({ text: textPayload, source_language: sourceLang }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || "Could not generate a compliant note.");
+        throw new Error(
+          body.detail ||
+            "Clinical rewrite service is currently unavailable. You can still save your original note."
+        );
       }
       const data = await response.json();
       const raw = data.clinical || data.note || data.text;
-      let noteText: string;
+      let rewrittenText: string;
       if (typeof raw === "string") {
-        noteText = raw;
+        rewrittenText = raw;
       } else if (raw && typeof raw === "object") {
-        noteText = Object.entries(raw as Record<string, string>)
+        rewrittenText = Object.entries(raw as Record<string, string>)
           .filter(([, v]) => v && String(v).trim())
           .map(([k, v]) => `${k}: ${v}`)
           .join("\n\n");
       } else {
-        noteText = sessionDraft.trim();
+        rewrittenText = baseText;
       }
-      setGeneratedNote(noteText);
+      setGeneratedNote(rewrittenText);
+      if (data.translated_from && !translatedFromLang) {
+        setTranslatedFromLang(data.translated_from);
+      }
     } catch (error) {
-      setComposerError(error instanceof Error ? error.message : "Could not generate a compliant note.");
+      setComposerError(
+        error instanceof Error
+          ? error.message
+          : "Clinical rewrite service is currently unavailable. You can still save your original note."
+      );
     } finally {
       setIsGenerating(false);
     }
@@ -1255,6 +1342,8 @@ export default function MyClientDetail({ id }: { id: string }) {
                 language={inputLanguage}
                 ended={sessionEnded}
                 isGenerating={isGenerating}
+                isTranslating={isTranslating}
+                translatedFromLang={translatedFromLang}
                 isSaving={saveSessionDraft.isPending}
                 error={composerError || (saveSessionDraft.error instanceof Error ? saveSessionDraft.error.message : "")}
                 selectedGoals={selectedGoals}
@@ -1267,6 +1356,7 @@ export default function MyClientDetail({ id }: { id: string }) {
                 onAttach={attachSessionFile}
                 onToggleDictation={toggleSessionDictation}
                 onEnd={endSessionComposer}
+                onTranslate={translateNote}
                 onGenerate={generateCompliantNote}
                 onSave={() => saveSessionDraft.mutate()}
                 onClose={() => {

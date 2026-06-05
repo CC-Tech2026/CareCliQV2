@@ -8,6 +8,7 @@ from openai import OpenAI
 from ..core.config import settings
 import json
 import os
+import re
 import urllib.request
 import logging
 
@@ -885,28 +886,59 @@ Respond with a JSON object:
     }
 
 
-async def clinical_rewrite(text: str) -> dict:
-    """Rewrite dictated or informal text into structured NDIS clinical documentation."""
+async def clinical_rewrite(text: str, source_language: str = "auto") -> dict:
+    """Rewrite dictated or informal text into NDIS-compliant clinical documentation.
+
+    If the input is non-English (determined by source_language hint or the
+    [Input language: xx] prefix convention), it is translated to English first,
+    then restructured using the TARP framework (Time · Activity · Response · Progress).
+    """
     if not text or not text.strip():
-        return {"clinical": "", "translated": "", "detected_language": "en"}
+        return {"clinical": "", "detected_language": "en", "translated_from": None}
+
+    # Extract [Input language: xx] prefix written by the frontend
+    effective_language = source_language
+    clean_text = text
+    lang_prefix_match = re.match(r"^\[Input language: ([a-z]{2})\]\n", text)
+    if lang_prefix_match:
+        effective_language = lang_prefix_match.group(1)
+        clean_text = text[lang_prefix_match.end():]
+
+    # Translate non-English input to English before rewriting
+    translated_from: str | None = None
+    english_text = clean_text
+    if effective_language not in ("auto", "en"):
+        try:
+            translation = await translate_to_english(clean_text, effective_language)
+            english_text = translation["translated"] or clean_text
+            translated_from = translation.get("detected_language") or effective_language
+        except Exception as exc:
+            logger.warning("Pre-rewrite translation failed, using original text: %s", exc)
 
     prompt = f"""You are a clinical documentation specialist for NDIS providers in Australia.
 
-Convert the following spoken or informal text into professional clinical documentation:
+Convert the following spoken or informal text into structured NDIS-compliant clinical documentation using the TARP framework:
+
+**Time**: When and how long the session occurred (use information from input; write "Not specified" if absent)
+**Activity**: What activities and supports were delivered during the session
+**Response**: How the participant responded, engaged, and their overall presentation
+**Progress**: Measurable progress toward NDIS goals and recommended next steps
+
+Guidelines:
 - Remove filler words (um, uh, like, you know, so, basically)
-- Use third-person clinical language ("Participant reports..." not "I said...")
-- Standardise terminology (use "ambulation" not "walking around", "demonstrates" not "shows")
-- Align with NDIS Active Support documentation standards
-- Use person-first language throughout
+- Use third-person clinical language ("Participant engaged..." not "I saw...")
+- Use person-first language throughout ("person with disability", not "disabled person")
 - Be factual and specific — do not add information not present in the input
 - Preserve all clinical facts and observations
+- Reference any NDIS goals mentioned in the input
+- Standardise terminology (e.g. "ambulation" not "walking around")
 
-Input: {text}
+Input: {english_text}
 
 Respond with a JSON object:
 {{
-  "clinical": "the clinical rewrite in professional NDIS documentation style",
-  "detected_language": "ISO 639-1 language code of the input (e.g. en, fr, zh)"
+  "clinical": "the full TARP-structured clinical note with Time, Activity, Response, and Progress headings",
+  "detected_language": "ISO 639-1 language code of the original input (e.g. en, fr, zh)"
 }}"""
 
     response = client.chat.completions.create(
@@ -915,14 +947,15 @@ Respond with a JSON object:
             {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
-        max_tokens=600,
+        max_tokens=800,
         temperature=0.2,
         response_format={"type": "json_object"},
     )
     result = json.loads(response.choices[0].message.content)
     return {
-        "clinical": result.get("clinical", text),
-        "detected_language": result.get("detected_language", "en"),
+        "clinical": result.get("clinical", english_text),
+        "detected_language": result.get("detected_language", effective_language if effective_language != "auto" else "en"),
+        "translated_from": translated_from,
     }
 
 
