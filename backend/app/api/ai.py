@@ -40,6 +40,7 @@ class TranslateRequest(BaseModel):
 
 class ClinicalRewriteRequest(BaseModel):
     text: str
+    source_language: Optional[str] = "auto"
 
 
 class AssessNoteRequest(BaseModel):
@@ -180,9 +181,13 @@ async def translate_text(body: TranslateRequest, current_user: dict = Depends(ge
 
 @router.post("/clinical-rewrite")
 async def rewrite_clinical(body: ClinicalRewriteRequest, current_user: dict = Depends(get_current_user)):
-    """Rewrite informal or dictated text into NDIS-compliant clinical documentation."""
+    """Rewrite informal or dictated text into NDIS-compliant clinical documentation.
+
+    Non-English input is translated to English first, then restructured using
+    the TARP framework (Time · Activity · Response · Progress).
+    """
     try:
-        result = await ai_service.clinical_rewrite(body.text)
+        result = await ai_service.clinical_rewrite(body.text, body.source_language or "auto")
         return result
     except Exception as e:
         logger.error(f"Clinical rewrite error: {str(e)}")
