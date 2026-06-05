@@ -1,6 +1,29 @@
 import { jsonFetch } from "@/services/http";
 import type { DashboardClient, DashboardSession } from "@/services/dashboardService";
 
+/** Enriched goal returned by the worker API (SCRUM-145, SCRUM-255). No funding data. */
+export type GoalDetail = {
+  id: string;
+  title: string;
+  description?: string;
+  status: "active" | "archived" | "completed";
+  category?: string;
+  priority: number;
+  why_it_matters?: string | null;
+  worker_focus?: string[];
+  progress_percentage?: number | null;
+  target_date?: string | null;
+};
+
+/** Per-goal structured documentation captured during a session (SCRUM-226). */
+export type GoalProgressNote = {
+  goal_id: string;
+  goal_title: string;
+  evidence_provided?: string;
+  outcome?: string;
+  observation?: string;
+};
+
 export type WorkerClient = DashboardClient & {
   date_of_birth?: string;
   primary_disability?: string;
@@ -10,7 +33,7 @@ export type WorkerClient = DashboardClient & {
   restricted_behavioural_notes?: string | null;
   plan_start_date?: string;
   plan_end_date?: string;
-  goals?: Array<Record<string, unknown>>;
+  goals?: GoalDetail[];
   limited_medical_history?: Record<string, unknown>;
 };
 
@@ -34,7 +57,7 @@ export type WorkerNdisPlan = {
   participant_id: string;
   participant_name?: string;
   read_only: boolean;
-  goals: Array<Record<string, unknown>>;
+  goals: GoalDetail[];
   plan: Record<string, unknown>;
 };
 
@@ -45,6 +68,10 @@ export type CreateWorkerSessionInput = {
   notes?: string;
   goals_addressed?: string[];
   status?: string;
+  /** SCRUM-226: structured per-goal documentation */
+  goal_progress_notes?: GoalProgressNote[];
+  /** SCRUM-227: how the participant exercised choice during the session */
+  participant_choice_control?: string;
 };
 
 export type CreateWorkerNoteInput = {

@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
-from ..schemas.session import SessionCreate
-from ..services import audit_service, funding_service, participant_service, session_service
+from ..schemas.session import GoalProgressNote, SessionCreate
+from ..services import audit_service, funding_service, goals_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -27,6 +27,10 @@ class WorkerSessionCreate(BaseModel):
     outcomes: Optional[str] = None
     participant_response: Optional[str] = None
     progress_toward_goals: Optional[str] = None
+    # SCRUM-226: structured per-goal documentation
+    goal_progress_notes: list[GoalProgressNote] = Field(default_factory=list)
+    # SCRUM-227: participant choice & control narrative
+    participant_choice_control: Optional[str] = None
 
 
 class WorkerNoteCreate(BaseModel):
@@ -121,6 +125,10 @@ def _session_payload(session: dict) -> dict:
         "compliance_status": _score_status(session.get("compliance_score")),
         "goals_addressed": session.get("goals_addressed") or [],
         "translation_status": session.get("translation_status"),
+        # SCRUM-226
+        "goal_progress_notes": session.get("goal_progress_notes") or [],
+        # SCRUM-227
+        "participant_choice_control": session.get("participant_choice_control"),
     }
 
 
@@ -179,6 +187,10 @@ async def my_clients(current_user: dict = Depends(get_current_user)):
 async def my_client_detail(participant_id: str, current_user: dict = Depends(get_current_user)):
     participant = await _assigned_participant(participant_id, current_user)
     sessions = await _worker_sessions_for_participant(participant_id, current_user)
+    # Enrich participant with priority-sorted active goals (no funding data)
+    enriched_goals = await goals_service.get_goals_for_participant(participant_id, active_only=True)
+    if enriched_goals:
+        participant = {**participant, "goals": enriched_goals}
     await audit_service.log_action(
         action_type="worker.participant.viewed",
         entity_type="participant",
@@ -208,11 +220,13 @@ async def my_client_sessions(participant_id: str, current_user: dict = Depends(g
 async def my_client_ndis_plan(participant_id: str, current_user: dict = Depends(get_current_user)):
     participant = await _assigned_participant(participant_id, current_user)
     plan = await funding_service.get_plan_for_participant(participant_id)
+    # Fetch enriched goals (priority-sorted, active only, no funding data) from goals_service
+    enriched_goals = await goals_service.get_goals_for_participant(participant_id, active_only=False)
     return {
         "participant_id": participant_id,
         "participant_name": participant.get("full_name"),
         "read_only": True,
-        "goals": participant.get("goals") or [],
+        "goals": enriched_goals or participant.get("goals") or [],
         "plan": plan or {
             "has_plan": False,
             "plan_status": participant.get("plan_status"),
@@ -247,18 +261,24 @@ async def create_my_client_session(
 ):
     await _assigned_participant(participant_id, current_user)
     _require_worker_ready_for_sessions(current_user)
+    # Auto-populate goals_addressed from goal_progress_notes if not explicitly provided
+    goals_addressed = body.goals_addressed or [
+        note.goal_id for note in body.goal_progress_notes if note.goal_id
+    ]
     payload = SessionCreate(
         participant_id=participant_id,
         session_date=body.session_date,
         duration_minutes=body.duration_minutes,
         session_type=body.session_type,
         notes=body.notes,
-        goals_addressed=body.goals_addressed,
+        goals_addressed=goals_addressed,
         status=body.status,
         activities_performed=body.activities_performed,
         outcomes=body.outcomes,
         participant_response=body.participant_response,
         progress_toward_goals=body.progress_toward_goals,
+        goal_progress_notes=body.goal_progress_notes,
+        participant_choice_control=body.participant_choice_control,
     )
     try:
         session = await session_service.create_session(payload, current_user)

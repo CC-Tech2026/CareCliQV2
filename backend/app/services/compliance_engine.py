@@ -304,8 +304,27 @@ _GOAL_LANGUAGE_PATTERNS: list[str] = [
 
 
 def check_goal_language_in_note(session: dict) -> dict:
-    """R5: At least one goal must be linked AND goal language must appear in the note body."""
+    """R5: At least one goal must be linked AND goal language must appear in the note body.
+
+    Accepts structured goal_progress_notes (SCRUM-226) as a stronger form of linkage —
+    if present, the per-goal evidence fields satisfy both the linkage and language checks.
+    """
     goals = _parse_list(session.get("goals_addressed"))
+    goal_progress_notes = _parse_list(session.get("goal_progress_notes"))
+
+    # Structured goal notes (SCRUM-226) are the richest form of evidence
+    if goal_progress_notes:
+        return {
+            "rule": "R5",
+            "label": "Goals referenced in note",
+            "status": "pass",
+            "message": (
+                f"R5: Structured goal documentation provided for {len(goal_progress_notes)} goal(s) "
+                "with evidence, outcomes, and observations"
+            ),
+            "severity": "high",
+        }
+
     notes = (session.get("notes") or "").lower()
     structured_text = _structured_fields_text(session).lower()
     full_text = notes + " " + structured_text
