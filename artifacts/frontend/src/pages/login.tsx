@@ -115,7 +115,7 @@ export default function Login() {
         {/* Top brand header utilizing logo.png */}
         <div className="flex items-center gap-3">
           <img
-            src="/logo.png"
+            src="/carecliQ_logo.png"
             alt="CareCliQ"
             className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
           />

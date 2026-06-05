@@ -381,7 +381,7 @@ export default function Signup() {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div>
             <img
-              src="/logo.png"
+              src="/carecliQ_logo.png"
               alt="CareCliQ"
               className="max-w-[220px]"
             />

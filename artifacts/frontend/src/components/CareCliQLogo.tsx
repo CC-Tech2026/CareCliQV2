@@ -20,7 +20,7 @@ export function CareCliQLogo({
     >
       {compact ? (
         <img
-          src="/cs.png"
+          src="/carecliQ_logo.png"
           alt="CS"
           className="
             object-contain
@@ -35,7 +35,7 @@ export function CareCliQLogo({
         />
       ) : (
         <img
-          src="/logo.png"
+          src="/carecliQ_logo.png"
           alt="CareCliQ"
           className="
             object-contain
@@ -73,7 +73,7 @@ export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
       `}
     >
       <img
-        src="/logo.png"
+        src="/carecliQ_logo.png"
         alt="CareCliQ"
         className="
           object-contain
