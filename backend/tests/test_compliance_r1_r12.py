@@ -207,17 +207,17 @@ class TestR7(unittest.TestCase):
         r = _get_rule(run_compliance_check(_base_session()), "R7")
         self.assertEqual(r["status"], "pass")
 
-    def test_warning_on_wheelchair_bound(self):
+    def test_fail_on_wheelchair_bound(self):
         r = _get_rule(run_compliance_check(_base_session(
             compliance_input_text=_base_session()["compliance_input_text"] + " The wheelchair-bound client was assisted."
         )), "R7")
-        self.assertEqual(r["status"], "warning")
+        self.assertEqual(r["status"], "fail")
 
-    def test_warning_on_suffers_from(self):
+    def test_fail_on_suffers_from(self):
         r = _get_rule(run_compliance_check(_base_session(
             compliance_input_text=_base_session()["compliance_input_text"] + " The participant suffers from anxiety."
         )), "R7")
-        self.assertEqual(r["status"], "warning")
+        self.assertEqual(r["status"], "fail")
 
 
 # ---------------------------------------------------------------------------

@@ -7,16 +7,23 @@ Each rule returns:
     "label": "Human-readable rule name",
     "status": "pass" | "fail" | "warning",
     "message": "Human readable message",
-    "severity": "high" | "medium" | "low"
+    "severity": "high" | "medium" | "low",
+    "is_blocking": bool,
 }
 
-Final score = (passed + warnings * 0.5) / total * 100
+Patterns and thresholds are loaded from the compliance_rules.config JSONB column at
+runtime (5-minute cache). Module-level constants are kept as fallback defaults so the
+engine degrades gracefully when the DB is unavailable — saves are never blocked by a
+configuration load error.
+
+Final score = (passed + warnings * 0.5) / active_rules * 100
 """
 from datetime import date
 from typing import Optional, List
 import json
 import logging
 import re
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +34,70 @@ COMPLIANCE_BLOCKED_MESSAGE = "Compliance blocked: English legal record is missin
 class ComplianceBlockedError(ValueError):
     """Raised when compliance is attempted without a valid English legal record."""
 
+
+# ---------------------------------------------------------------------------
+# Hardcoded defaults — mirrors 015_compliance_rules_seed.sql
+# Used when the DB is unavailable so blocking behaviour stays consistent.
+# ---------------------------------------------------------------------------
+
+_RULE_DEFAULTS: dict[str, dict] = {
+    "R1":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R2":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R3":  {"severity": "medium", "is_active": True, "is_blocking": False},
+    "R4":  {"severity": "medium", "is_active": True, "is_blocking": True},
+    "R5":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R6":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R7":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R8":  {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R9":  {"severity": "high",   "is_active": True, "is_blocking": False},
+    "R10": {"severity": "high",   "is_active": True, "is_blocking": True},
+    "R11": {"severity": "medium", "is_active": True, "is_blocking": False},
+    "R12": {"severity": "medium", "is_active": True, "is_blocking": False},
+}
+
+
+# ---------------------------------------------------------------------------
+# Rule config cache
+# ---------------------------------------------------------------------------
+
+_rule_config_cache: dict[str, dict] = {}
+_rule_config_cache_time: float = 0.0
+_RULE_CONFIG_TTL = 300  # seconds
+
+
+def load_rule_configs() -> dict[str, dict]:
+    """Return a dict keyed by rule_code with the full DB row for each rule.
+
+    Each value contains: severity, is_active, is_blocking, config, category, guidance_text.
+    Falls back to {} on DB failure — engine uses module-level constant defaults.
+    """
+    global _rule_config_cache, _rule_config_cache_time
+
+    now = time.monotonic()
+    if _rule_config_cache and (now - _rule_config_cache_time) < _RULE_CONFIG_TTL:
+        return _rule_config_cache
+
+    try:
+        from .supabase_client import get_supabase_admin
+        supabase = get_supabase_admin()
+        resp = (
+            supabase.table("compliance_rules")
+            .select("rule_code,severity,is_active,is_blocking,config,category,guidance_text")
+            .execute()
+        )
+        if resp.data:
+            _rule_config_cache = {row["rule_code"]: row for row in resp.data}
+            _rule_config_cache_time = now
+            return _rule_config_cache
+    except Exception as exc:
+        logger.warning("Could not load compliance_rules from DB (using defaults): %s", exc)
+
+    return {}
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
 
 def _parse_list(value) -> list:
     if isinstance(value, list):
@@ -52,7 +123,6 @@ def _parse_date(value) -> Optional[date]:
 
 
 def _structured_fields_text(session: dict) -> str:
-    """Concatenate the 4 structured note columns into a single string."""
     parts = [
         session.get("activities_performed") or "",
         session.get("outcomes") or "",
@@ -66,8 +136,10 @@ def _structured_fields_text(session: dict) -> str:
 # R1 — Session time and duration
 # ---------------------------------------------------------------------------
 
-def check_session_time_and_duration(session: dict) -> dict:
-    """R1: start_time and end_time required; warn if duration exceeds 8 hours."""
+def check_session_time_and_duration(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    max_duration_minutes = cfg.get("max_duration_minutes", 480)
+
     start_time = (session.get("start_time") or "").strip()
     end_time = (session.get("end_time") or "").strip()
     duration = session.get("duration_minutes", 0) or 0
@@ -93,12 +165,13 @@ def check_session_time_and_duration(session: dict) -> dict:
             "severity": "high",
         }
 
-    if duration > 480:
+    if duration > max_duration_minutes:
+        max_hours = max_duration_minutes // 60
         return {
             "rule": "R1",
             "label": "Session time and duration",
             "status": "warning",
-            "message": f"R1: Session duration is {int(duration)} min — exceeds 8 hours; confirm this is correct",
+            "message": f"R1: Session duration is {int(duration)} min — exceeds {max_hours} hours; confirm this is correct",
             "severity": "medium",
         }
 
@@ -115,20 +188,15 @@ def check_session_time_and_duration(session: dict) -> dict:
 # R2 — 48-hour documentation rule
 # ---------------------------------------------------------------------------
 
-def check_48_hour_documentation(session: dict) -> dict:
-    """R2: Note must be completed within 48 hours of the session date.
-
-    Uses updated_at (actual note save time) as the documentation timestamp.
-    Falls back to note_completed_at, then today as a proxy.
-    """
+def check_48_hour_documentation(session: dict, config: dict | None = None) -> dict:
     from datetime import datetime, timezone
 
+    cfg = config or {}
+    warn_after_days = cfg.get("warn_after_days", 2)
+    fail_after_days = cfg.get("fail_after_days", 7)
+
     session_date = _parse_date(session.get("session_date"))
-    note_time_raw = (
-        session.get("note_completed_at")
-        or session.get("updated_at")
-        or ""
-    )
+    note_time_raw = session.get("note_completed_at") or session.get("updated_at") or ""
 
     if not session_date:
         return {
@@ -157,7 +225,7 @@ def check_48_hour_documentation(session: dict) -> dict:
             "message": "R2: Note date precedes session date — verify that the session date is correct",
             "severity": "medium",
         }
-    if delta_days <= 2:
+    if delta_days <= warn_after_days:
         return {
             "rule": "R2",
             "label": "48-hour documentation",
@@ -165,7 +233,7 @@ def check_48_hour_documentation(session: dict) -> dict:
             "message": f"R2: Note completed within 48 hours ({delta_days} day(s) after session)",
             "severity": "low",
         }
-    if delta_days <= 7:
+    if delta_days <= fail_after_days:
         return {
             "rule": "R2",
             "label": "48-hour documentation",
@@ -183,7 +251,8 @@ def check_48_hour_documentation(session: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# R3 — Note quality: 80-word minimum + filler phrase detection
+# R3 — Note quality: minimum word count + filler phrase detection
+# Fallback constant used when DB config is unavailable.
 # ---------------------------------------------------------------------------
 
 FILLER_PHRASES: list[tuple[str, str]] = [
@@ -207,13 +276,22 @@ FILLER_PHRASES: list[tuple[str, str]] = [
 ]
 
 
-def check_note_quality(session: dict) -> dict:
-    """R3: Note must be at least 80 words and must not contain vague filler phrases."""
+def check_note_quality(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    min_words_pass = cfg.get("min_words_pass", 80)
+    min_words_warn = cfg.get("min_words_warn", 30)
+
+    filler_phrases_cfg = cfg.get("filler_phrases")
+    phrases = (
+        [(p["pattern"], p["label"]) for p in filler_phrases_cfg]
+        if filler_phrases_cfg else FILLER_PHRASES
+    )
+
     notes = (session.get("notes") or "").strip()
     structured_text = _structured_fields_text(session)
     effective_text = structured_text if len(structured_text) > len(notes) else notes
 
-    for pattern, phrase in FILLER_PHRASES:
+    for pattern, phrase in phrases:
         if re.search(pattern, effective_text, re.IGNORECASE):
             return {
                 "rule": "R3",
@@ -228,22 +306,22 @@ def check_note_quality(session: dict) -> dict:
 
     word_count = len(effective_text.split())
 
-    if word_count >= 80:
+    if word_count >= min_words_pass:
         return {
             "rule": "R3",
             "label": "Note quality",
             "status": "pass",
-            "message": f"R3: Clinical documentation meets the 80-word standard ({word_count} words)",
+            "message": f"R3: Clinical documentation meets the {min_words_pass}-word standard ({word_count} words)",
             "severity": "high",
         }
-    if word_count >= 30:
+    if word_count >= min_words_warn:
         return {
             "rule": "R3",
             "label": "Note quality",
             "status": "warning",
             "message": (
                 f"R3: Note is brief ({word_count} words) — "
-                "NDIS auditors expect at least 80 words of clinical detail"
+                f"NDIS auditors expect at least {min_words_pass} words of clinical detail"
             ),
             "severity": "medium",
         }
@@ -251,17 +329,16 @@ def check_note_quality(session: dict) -> dict:
         "rule": "R3",
         "label": "Note quality",
         "status": "fail",
-        "message": f"R3: Note is too short ({word_count} words) — must contain at least 80 words",
+        "message": f"R3: Note is too short ({word_count} words) — must contain at least {min_words_pass} words",
         "severity": "high",
     }
 
 
 # ---------------------------------------------------------------------------
-# R4 — Support type documented
+# R4 — Support type documented  (no configurable parameters)
 # ---------------------------------------------------------------------------
 
 def check_support_type(session: dict) -> dict:
-    """R4: Support type / service category must be specified."""
     session_type = (session.get("session_type") or "").strip()
     if session_type:
         return {
@@ -303,16 +380,13 @@ _GOAL_LANGUAGE_PATTERNS: list[str] = [
 ]
 
 
-def check_goal_language_in_note(session: dict) -> dict:
-    """R5: At least one goal must be linked AND goal language must appear in the note body.
+def check_goal_language_in_note(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    patterns = cfg.get("goal_language_patterns") or _GOAL_LANGUAGE_PATTERNS
 
-    Accepts structured goal_progress_notes (SCRUM-226) as a stronger form of linkage —
-    if present, the per-goal evidence fields satisfy both the linkage and language checks.
-    """
     goals = _parse_list(session.get("goals_addressed"))
     goal_progress_notes = _parse_list(session.get("goal_progress_notes"))
 
-    # Structured goal notes (SCRUM-226) are the richest form of evidence
     if goal_progress_notes:
         return {
             "rule": "R5",
@@ -338,7 +412,7 @@ def check_goal_language_in_note(session: dict) -> dict:
             "severity": "high",
         }
 
-    if any(re.search(p, full_text, re.IGNORECASE) for p in _GOAL_LANGUAGE_PATTERNS):
+    if any(re.search(p, full_text, re.IGNORECASE) for p in patterns):
         return {
             "rule": "R5",
             "label": "Goals referenced in note",
@@ -377,13 +451,19 @@ _SUBJECTIVE_PHRASES: list[tuple[str, str]] = [
 ]
 
 
-def check_objective_language(session: dict) -> dict:
-    """R6: Notes must use objective language — flag first-person subjective phrasing."""
+def check_objective_language(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    phrases_cfg = cfg.get("subjective_phrases")
+    phrases = (
+        [(p["pattern"], p["label"]) for p in phrases_cfg]
+        if phrases_cfg else _SUBJECTIVE_PHRASES
+    )
+
     notes = session.get("notes") or ""
     structured_text = _structured_fields_text(session)
     full_text = notes + " " + structured_text
 
-    for pattern, phrase in _SUBJECTIVE_PHRASES:
+    for pattern, phrase in phrases:
         if re.search(pattern, full_text, re.IGNORECASE):
             return {
                 "rule": "R6",
@@ -423,20 +503,26 @@ _PERSON_FIRST_VIOLATIONS: list[tuple[str, str]] = [
 ]
 
 
-def check_person_first_language(session: dict) -> dict:
-    """R7: Warn if non-person-first language is detected in clinical notes."""
+def check_person_first_language(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    violations_cfg = cfg.get("violations")
+    violations = (
+        [(v["pattern"], v["suggestion"]) for v in violations_cfg]
+        if violations_cfg else _PERSON_FIRST_VIOLATIONS
+    )
+
     notes = (session.get("notes") or "").lower()
     structured_text = _structured_fields_text(session).lower()
     full_text = notes + " " + structured_text
 
-    for pattern, suggestion in _PERSON_FIRST_VIOLATIONS:
+    for pattern, suggestion in violations:
         if re.search(pattern, full_text, re.IGNORECASE):
             return {
                 "rule": "R7",
                 "label": "Person-first language",
-                "status": "warning",
+                "status": "fail",
                 "message": f"R7: Non-person-first language detected — use '{suggestion}'",
-                "severity": "medium",
+                "severity": "high",
             }
 
     return {
@@ -469,13 +555,19 @@ _SCOPE_VIOLATION_PATTERNS: list[tuple[str, str]] = [
 ]
 
 
-def check_scope_of_practice(session: dict) -> dict:
-    """R8: Support workers must not document clinical assessments, diagnoses, or medication admin."""
+def check_scope_of_practice(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    patterns_cfg = cfg.get("violation_patterns")
+    patterns = (
+        [(p["pattern"], p["label"]) for p in patterns_cfg]
+        if patterns_cfg else _SCOPE_VIOLATION_PATTERNS
+    )
+
     notes = session.get("notes") or ""
     structured_text = _structured_fields_text(session)
     full_text = notes + " " + structured_text
 
-    for pattern, label in _SCOPE_VIOLATION_PATTERNS:
+    for pattern, label in patterns:
         if re.search(pattern, full_text, re.IGNORECASE):
             return {
                 "rule": "R8",
@@ -498,7 +590,7 @@ def check_scope_of_practice(session: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# R9 — Incident trigger words (auto-incident creation handled in sessions.py)
+# R9 — Incident trigger words
 # ---------------------------------------------------------------------------
 
 _INCIDENT_TRIGGER_PATTERNS: list[tuple[str, str]] = [
@@ -519,14 +611,20 @@ _INCIDENT_TRIGGER_PATTERNS: list[tuple[str, str]] = [
 ]
 
 
-def check_incident_triggers(session: dict) -> dict:
-    """R9: Scan for incident trigger words. Detected triggers drive auto-incident creation in sessions.py."""
+def check_incident_triggers(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    triggers_cfg = cfg.get("trigger_patterns")
+    trigger_patterns = (
+        [(p["pattern"], p["label"]) for p in triggers_cfg]
+        if triggers_cfg else _INCIDENT_TRIGGER_PATTERNS
+    )
+
     notes = session.get("notes") or ""
     structured_text = _structured_fields_text(session)
     full_text = notes + " " + structured_text
 
     matched: list[str] = []
-    for pattern, label in _INCIDENT_TRIGGER_PATTERNS:
+    for pattern, label in trigger_patterns:
         if re.search(pattern, full_text, re.IGNORECASE) and label not in matched:
             matched.append(label)
 
@@ -554,7 +652,7 @@ def check_incident_triggers(session: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Restrictive Practice (RP) Detection — shared with R10
+# Restrictive Practice (RP) detection — shared between R10 and the RP deep scan
 # ---------------------------------------------------------------------------
 
 RESTRICTIVE_PRACTICE_PHRASES: dict[str, list[str]] = {
@@ -623,13 +721,33 @@ RESTRICTIVE_PRACTICE_PHRASES: dict[str, list[str]] = {
 }
 
 
-def detect_restrictive_practices(session: dict) -> list[dict]:
+def detect_restrictive_practices(session: dict, phrases: dict | None = None) -> list[dict]:
     """Scan session text fields for restrictive practice indicators.
 
-    Returns a list of flag dicts:
-        {category, phrase, context, severity, suggestion}
-    where ``suggestion`` is None (filled later by Claude via enrich_rp_suggestions).
+    phrases: DB-driven config in the form {category: {severity, patterns[]}}.
+    Falls back to the RESTRICTIVE_PRACTICE_PHRASES module constant when None.
+
+    Returns a list of flag dicts: {category, phrase, context, severity, suggestion}
+    where suggestion is None until enriched by Claude via enrich_rp_suggestions.
     """
+    # Normalise input into {category: {severity, patterns}} regardless of source
+    if phrases:
+        categories = {
+            cat: {
+                "severity": cfg.get("severity", "high"),
+                "patterns": cfg.get("patterns", []),
+            }
+            for cat, cfg in phrases.items()
+        }
+    else:
+        categories = {
+            cat: {
+                "severity": "critical" if cat in ("chemical_restraint", "physical_restraint") else "high",
+                "patterns": pats,
+            }
+            for cat, pats in RESTRICTIVE_PRACTICE_PHRASES.items()
+        }
+
     fields_to_scan = [
         session.get("notes") or "",
         session.get("activities_performed") or "",
@@ -645,9 +763,9 @@ def detect_restrictive_practices(session: dict) -> list[dict]:
     flags: list[dict] = []
     seen_phrases: set[str] = set()
 
-    for category, patterns in RESTRICTIVE_PRACTICE_PHRASES.items():
-        severity = "critical" if category in ("chemical_restraint", "physical_restraint") else "high"
-        for pattern in patterns:
+    for category, cat_cfg in categories.items():
+        severity = cat_cfg["severity"]
+        for pattern in cat_cfg["patterns"]:
             for match in re.finditer(pattern, full_text, re.IGNORECASE):
                 matched_phrase = match.group(0)
                 key = f"{category}:{matched_phrase.lower()}"
@@ -672,11 +790,12 @@ def detect_restrictive_practices(session: dict) -> list[dict]:
 
 # ---------------------------------------------------------------------------
 # R10 — Restrictive practice must be linked to an incident report
+# (no configurable parameters — uses the shared RP scanner above)
 # ---------------------------------------------------------------------------
 
-def check_restrictive_practice_reported(session: dict) -> dict:
-    """R10: Notes mentioning restrictive practices require a linked incident report."""
-    rp_flags = detect_restrictive_practices(session)
+def check_restrictive_practice_reported(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    rp_flags = detect_restrictive_practices(session, phrases=cfg.get("categories"))
 
     if not rp_flags:
         return {
@@ -690,7 +809,6 @@ def check_restrictive_practice_reported(session: dict) -> dict:
     categories = list({f["category"] for f in rp_flags})
     category_labels = ", ".join(c.replace("_", " ") for c in categories)
 
-    # rp_incident_linked is set by coordinators once an incident report is filed
     if session.get("rp_incident_linked"):
         return {
             "rule": "R10",
@@ -713,7 +831,7 @@ def check_restrictive_practice_reported(session: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# R11 — Note uniqueness: similarity against last 5 notes (same worker + participant)
+# R11 — Note uniqueness: similarity against last N notes
 # ---------------------------------------------------------------------------
 
 def _jaccard_similarity(text_a: str, text_b: str) -> float:
@@ -724,8 +842,12 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
     return len(words_a & words_b) / len(words_a | words_b)
 
 
-def check_note_similarity(session: dict, existing_sessions: List[dict]) -> dict:
-    """R11: Compare current note against last 5 notes for the same worker and participant."""
+def check_note_similarity(session: dict, existing_sessions: List[dict], config: dict | None = None) -> dict:
+    cfg = config or {}
+    fail_threshold = cfg.get("fail_threshold", 0.75)
+    warn_threshold = cfg.get("warn_threshold", 0.55)
+    lookback_count = int(cfg.get("lookback_count", 5))
+
     session_id = session.get("id", "")
     participant_id = session.get("patient_id") or session.get("participant_id") or ""
     worker_id = session.get("worker_id") or session.get("user_id") or ""
@@ -740,7 +862,6 @@ def check_note_similarity(session: dict, existing_sessions: List[dict]) -> dict:
             "severity": "low",
         }
 
-    # Last 5 sessions: same participant AND same worker, excluding the current session
     relevant = [
         s for s in existing_sessions
         if s.get("id") != session_id
@@ -751,7 +872,7 @@ def check_note_similarity(session: dict, existing_sessions: List[dict]) -> dict:
         relevant,
         key=lambda s: str(s.get("session_date") or ""),
         reverse=True,
-    )[:5]
+    )[:lookback_count]
 
     if not relevant_sorted:
         return {
@@ -776,7 +897,7 @@ def check_note_similarity(session: dict, existing_sessions: List[dict]) -> dict:
         if sim > max_similarity:
             max_similarity = sim
 
-    if max_similarity >= 0.75:
+    if max_similarity >= fail_threshold:
         return {
             "rule": "R11",
             "label": "Note uniqueness",
@@ -787,7 +908,7 @@ def check_note_similarity(session: dict, existing_sessions: List[dict]) -> dict:
             ),
             "severity": "high",
         }
-    if max_similarity >= 0.55:
+    if max_similarity >= warn_threshold:
         return {
             "rule": "R11",
             "label": "Note uniqueness",
@@ -829,8 +950,10 @@ _PARTICIPANT_RESPONSE_PATTERNS: list[str] = [
 ]
 
 
-def check_participant_response_language(session: dict) -> dict:
-    """R12: Notes must include language describing how the participant responded."""
+def check_participant_response_language(session: dict, config: dict | None = None) -> dict:
+    cfg = config or {}
+    patterns = cfg.get("response_patterns") or _PARTICIPANT_RESPONSE_PATTERNS
+
     participant_response_col = (session.get("participant_response") or "").strip()
     if participant_response_col:
         return {
@@ -845,7 +968,7 @@ def check_participant_response_language(session: dict) -> dict:
     structured_text = _structured_fields_text(session).lower()
     full_text = notes + " " + structured_text
 
-    if any(re.search(p, full_text, re.IGNORECASE) for p in _PARTICIPANT_RESPONSE_PATTERNS):
+    if any(re.search(p, full_text, re.IGNORECASE) for p in patterns):
         return {
             "rule": "R12",
             "label": "Participant response",
@@ -867,13 +990,12 @@ def check_participant_response_language(session: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Additional helpers (used in sessions.py outside the 12-rule check)
+# Budget check (not part of R1–R12; called separately for alerts)
 # ---------------------------------------------------------------------------
 
 def check_budget_not_exceeded(
     session: dict, participant: Optional[dict] = None
 ) -> dict:
-    """Budget check — not part of R1-R12; called separately from sessions.py for alerts."""
     if not participant:
         return {
             "rule": "budget_not_exceeded",
@@ -930,16 +1052,20 @@ def run_compliance_check(
     """
     Run all 12 NDIS compliance rules (R1–R12) and RP detection against a session.
 
+    Rule metadata (severity, is_active, is_blocking) and pattern/threshold config
+    are loaded from the compliance_rules DB table. Module-level constants serve as
+    fallback defaults when the DB is unavailable.
+
     Returns:
         {
-            "rules": [...],                     # R1–R12 individual rule results
+            "rules": [...],                     # active rule results with is_blocking stamped
             "score": float,                     # 0–100
             "passed": int,
             "warnings": int,
             "failed": int,
             "total_rules": int,
             "failed_rules": [...],
-            "rp_flags": [...],                  # RP flags (suggestion=None until enriched)
+            "rp_flags": [...],
             "restrictive_practice_detected": bool,
             "restrictive_practice_types": [...],
         }
@@ -953,7 +1079,7 @@ def run_compliance_check(
     if translation_status in BLOCKING_TRANSLATION_STATUSES or not str(legal_text).strip():
         raise ComplianceBlockedError(COMPLIANCE_BLOCKED_MESSAGE)
 
-    # Normalise: use compliance text as the authoritative notes field
+    # Use compliance text as the authoritative notes field
     session = {
         **session,
         "notes": str(legal_text).strip(),
@@ -963,30 +1089,51 @@ def run_compliance_check(
         "progress_toward_goals": "",
     }
 
-    rules = [
-        check_session_time_and_duration(session),                          # R1
-        check_48_hour_documentation(session),                              # R2
-        check_note_quality(session),                                       # R3
-        check_support_type(session),                                       # R4
-        check_goal_language_in_note(session),                              # R5
-        check_objective_language(session),                                 # R6
-        check_person_first_language(session),                              # R7
-        check_scope_of_practice(session),                                  # R8
-        check_incident_triggers(session),                                  # R9
-        check_restrictive_practice_reported(session),                      # R10
-        check_note_similarity(session, existing_sessions or []),           # R11
-        check_participant_response_language(session),                      # R12
+    # Load DB configs first so patterns/thresholds reach each check function
+    rule_configs = load_rule_configs()
+
+    def _cfg(code: str) -> dict:
+        return (rule_configs.get(code) or {}).get("config") or {}
+
+    raw_rules = [
+        check_session_time_and_duration(session,             config=_cfg("R1")),
+        check_48_hour_documentation(session,                 config=_cfg("R2")),
+        check_note_quality(session,                          config=_cfg("R3")),
+        check_support_type(session),                                              # R4 — no config
+        check_goal_language_in_note(session,                 config=_cfg("R5")),
+        check_objective_language(session,                    config=_cfg("R6")),
+        check_person_first_language(session,                 config=_cfg("R7")),
+        check_scope_of_practice(session,                     config=_cfg("R8")),
+        check_incident_triggers(session,                     config=_cfg("R9")),
+        check_restrictive_practice_reported(session,        config=_cfg("R10")),
+        check_note_similarity(session, existing_sessions or [], config=_cfg("R11")),
+        check_participant_response_language(session,         config=_cfg("R12")),
     ]
+
+    # Apply metadata: DB row takes precedence, _RULE_DEFAULTS used as fallback
+    # so blocking behaviour is consistent even when the DB is unavailable.
+    rules: list[dict] = []
+    for result in raw_rules:
+        rule_code = result.get("rule", "")
+        row = rule_configs.get(rule_code) or _RULE_DEFAULTS.get(rule_code, {})
+
+        if row.get("is_active") is False:
+            continue  # Disabled — excluded from scoring entirely
+
+        if row.get("severity"):
+            result["severity"] = row["severity"]
+
+        result["is_blocking"] = row.get("is_blocking", False)
+        rules.append(result)
 
     total = len(rules)
     passed = sum(1 for r in rules if r["status"] == "pass")
     warnings = sum(1 for r in rules if r["status"] == "warning")
     failed = sum(1 for r in rules if r["status"] == "fail")
 
-    score = round((passed + warnings * 0.5) / total * 100, 1)
+    score = round((passed + warnings * 0.5) / total * 100, 1) if total else 0.0
 
-    # RP detection for enrichment (already computed inside R10, re-use here)
-    rp_flags = detect_restrictive_practices(session)
+    rp_flags = detect_restrictive_practices(session, phrases=_cfg("R10").get("categories"))
     rp_categories = list({f["category"] for f in rp_flags}) if rp_flags else []
 
     return {

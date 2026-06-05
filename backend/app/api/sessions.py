@@ -211,6 +211,13 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         custom_physical_types = await get_physical_exam_session_types()
         rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
 
+        # Identify rules that hard-block approval (is_blocking=True + status=fail).
+        # These prevent status from advancing to "completed" regardless of the blended score.
+        blocking_failures = [
+            r for r in rules_result.get("rules", [])
+            if r.get("status") == "fail" and r.get("is_blocking", False)
+        ]
+
         # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
@@ -239,8 +246,11 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "assessment": (analysis.get("compliance") or {}).get("recommendations", []),
         }
 
-        # Derive claim readiness status from score
-        if blended_score >= 85:
+        # Derive compliance status from score, then override if blocking rules failed.
+        # A blocking failure forces non_compliant regardless of the numeric score.
+        if blocking_failures:
+            compliance_status = "non_compliant"
+        elif blended_score >= 85:
             compliance_status = "compliant"
         elif blended_score >= 60:
             compliance_status = "at_risk"
@@ -304,12 +314,12 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
 
         updates = {
             "compliance_score": blended_score,
+            "compliance_status": compliance_status,
             "compliance_notes": " | ".join(
                 (analysis.get("compliance") or {}).get("recommendations", [])
             ) or ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps(ai_insights_payload),
-            "status": "completed",
             "restrictive_practice_detected": rp_detected,
             "restrictive_practice_types": json.dumps(rp_categories),
             "compliance_flags": json.dumps({"rp_flags": rp_flags}),
@@ -318,6 +328,12 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
+        # Only advance to "completed" when no blocking rules failed.
+        # Compliance data is always persisted so the worker and coordinator
+        # can see the score and which rules failed even when saving is blocked.
+        if not blocking_failures:
+            updates["status"] = "completed"
+
         updated = await session_service.update_session(session_id, updates, current_user)
 
         # 2c. Persist RP flags + per-rule results (non-critical)
@@ -354,6 +370,27 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                 ).execute()
         except Exception as rp_persist_err:
             logger.warning(f"Compliance rule/RP flag persistence failed (non-critical): {rp_persist_err}")
+
+        # Gate approval: if any blocking rule failed, return 422 now.
+        # Compliance data and per-rule results have already been persisted above
+        # so the worker and coordinator can review the score and failure details.
+        if blocking_failures:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "COMPLIANCE_BLOCKING_FAILURE",
+                    "message": "Note cannot be approved: one or more critical compliance rules failed.",
+                    "blocking_rules": [
+                        {
+                            "rule": r["rule"],
+                            "label": r.get("label", r["rule"]),
+                            "message": r.get("message", ""),
+                        }
+                        for r in blocking_failures
+                    ],
+                    "compliance_score": blended_score,
+                },
+            )
 
         # 3. Store compliance audit log (non-critical — do not fail the response)
         try:
