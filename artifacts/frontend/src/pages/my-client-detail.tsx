@@ -945,6 +945,8 @@ export default function MyClientDetail({ id }: { id: string }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedFromLang, setTranslatedFromLang] = useState("");
+  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
+  const [sessionEndTime, setSessionEndTime] = useState<Date | null>(null);
   const [isListening, setIsListening] = useState(false);
   // SCRUM-226: goals worked on during session
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
@@ -967,10 +969,17 @@ export default function MyClientDetail({ id }: { id: string }) {
         outcome: goalNotes[goalId]?.outcome,
         observation: goalNotes[goalId]?.observation,
       }));
+      const start = sessionStartTime ?? new Date();
+      const end = sessionEndTime ?? new Date();
+      const durationMinutes = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60000));
+      const fmt = (d: Date) =>
+        d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false });
       return createMyClientSession(id, {
         status: "draft",
         session_type: "support_work",
-        duration_minutes: 60,
+        duration_minutes: durationMinutes,
+        start_time: fmt(start),
+        end_time: fmt(end),
         notes: generatedNote.trim() || sessionDraft.trim(),
         goal_progress_notes: goalProgressNotes,
         participant_choice_control: choiceControl.trim() || undefined,
@@ -983,6 +992,8 @@ export default function MyClientDetail({ id }: { id: string }) {
       setSessionAttachmentName("");
       setSessionEnded(false);
       setTranslatedFromLang("");
+      setSessionStartTime(null);
+      setSessionEndTime(null);
       setSelectedGoals(new Set());
       setGoalNotes({});
       setChoiceControl("");
@@ -1016,6 +1027,8 @@ export default function MyClientDetail({ id }: { id: string }) {
     setSessionEnded(false);
     setComposerError("");
     setTranslatedFromLang("");
+    setSessionStartTime(null);
+    setSessionEndTime(null);
     setSelectedGoals(new Set());
     setGoalNotes({});
     setChoiceControl("");
@@ -1025,6 +1038,7 @@ export default function MyClientDetail({ id }: { id: string }) {
     setActiveTab("overview");
     if (!sessionComposerOpen) {
       resetSessionComposer();
+      setSessionStartTime(new Date());
     }
     setSessionComposerOpen(true);
   }
@@ -1033,6 +1047,7 @@ export default function MyClientDetail({ id }: { id: string }) {
     stopSessionDictation();
     commitSessionInput();
     setSessionEnded(true);
+    setSessionEndTime(new Date());
     setComposerError("");
   }
 

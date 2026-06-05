@@ -68,6 +68,8 @@ export type CreateWorkerSessionInput = {
   notes?: string;
   goals_addressed?: string[];
   status?: string;
+  start_time?: string;
+  end_time?: string;
   /** SCRUM-226: structured per-goal documentation */
   goal_progress_notes?: GoalProgressNote[];
   /** SCRUM-227: how the participant exercised choice during the session */

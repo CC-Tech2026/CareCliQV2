@@ -34,6 +34,8 @@ class SessionCreate(BaseModel):
     tags: Optional[List[str]] = []
     goals_addressed: Optional[List[str]] = []
     status: str = "draft"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     activities_performed: Optional[str] = None
     outcomes: Optional[str] = None
     participant_response: Optional[str] = None
