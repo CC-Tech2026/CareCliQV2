@@ -64,12 +64,6 @@ export function WorkspaceLauncher() {
   const { user } = useAuth();
   const role = user?.role;
 
-  const visibleWorkspaces = WORKSPACES.filter(
-    (ws) => ws.comingSoon || ws.allowedRoles.includes(role || "")
-  );
-
-  if (visibleWorkspaces.length === 0) return null;
-
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
@@ -80,14 +74,12 @@ export function WorkspaceLauncher() {
           className="rounded-full px-3 py-1 text-[11px] font-black"
           style={{ background: SOFT, color: PLUM }}
         >
-          {visibleWorkspaces.length} workspace{visibleWorkspaces.length !== 1 ? "s" : ""}
+          {WORKSPACES.length} workspaces
         </span>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {WORKSPACES.filter(
-          (ws) => ws.comingSoon || ws.allowedRoles.includes(role || "")
-        ).map((ws) => {
+        {WORKSPACES.map((ws) => {
           const Icon = ws.icon;
           const isOwned = ws.allowedRoles.includes(role || "");
 

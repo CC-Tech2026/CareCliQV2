@@ -104,7 +104,7 @@ export default function AcceptInvite() {
 
       setStep("done");
       toast({ title: "Welcome to CareCliQ!", description: "Your account has been activated." });
-      const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/dashboard";
+      const destination = data.user?.role === "support_worker" ? "/worker-onboarding" : "/hub";
       setTimeout(() => navigate(destination), 1800);
     } catch (e) {
       toast({ title: "Error", description: e instanceof Error ? e.message : "Failed to activate account", variant: "destructive" });

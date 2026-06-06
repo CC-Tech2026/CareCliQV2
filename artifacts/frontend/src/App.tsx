@@ -11,6 +11,7 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { HubLayout } from "@/components/layout/HubLayout";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
@@ -108,7 +109,7 @@ function Router() {
       {/* ── Hub — org intelligence layer, all roles ───────────────────────── */}
       <Route path="/hub">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-          <AppLayout><HubPage /></AppLayout>
+          <HubLayout><HubPage /></HubLayout>
         </ProtectedRoute>
       </Route>
 

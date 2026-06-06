@@ -30,7 +30,7 @@ export default function Login() {
         title: "Welcome back!",
         description: "Your terminal instance has safely initialized.",
       });
-      navigate("/dashboard");
+      navigate("/hub");
     } catch (err) {
       toast({
         title: "Authentication Failed",
