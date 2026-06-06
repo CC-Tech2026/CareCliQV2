@@ -102,7 +102,7 @@ export function getCoordinatorRpFlags() {
 }
 
 export function getCoordinatorCredentialAlerts() {
-  return jsonFetch<{ alerts: Array<Record<string, unknown>>; generated_at: string }>("/api/coordinator/credential-alerts");
+  return jsonFetch<{ alerts: CredentialAlert[]; generated_at: string }>("/api/coordinator/credential-alerts");
 }
 
 export function getCoordinatorFlaggedSessions() {
@@ -154,5 +154,96 @@ export function updateRestrictedClinical(participantId: string, data: Restricted
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
+  });
+}
+
+export type GoalStatus = "progressing" | "stalled" | "blocked" | "achieved" | "general";
+
+export type ParticipantGoal = {
+  id: string;
+  description: string;
+  category: string;
+  is_achieved: boolean;
+  target_date?: string;
+  goal_code?: string;
+  status?: GoalStatus;
+};
+
+export type ParticipantGoalGroup = {
+  participant_id: string;
+  participant_name: string;
+  assigned_worker?: string;
+  ndis_number?: string;
+  last_session_date?: string;
+  upcoming_review_date?: string;
+  goals: ParticipantGoal[];
+};
+
+export type CredentialAlert = {
+  credential_id?: string;
+  user_id?: string;
+  full_name?: string;
+  role?: string;
+  credential_type?: string;
+  title?: string;
+  expiry_date?: string;
+  status?: string;
+};
+
+export async function getCoordinatorGoals(): Promise<ParticipantGoalGroup[]> {
+  const [participants, team, sessions] = await Promise.all([
+    jsonFetch<Array<Record<string, unknown>>>("/api/participants"),
+    jsonFetch<Array<Record<string, unknown>>>("/api/coordinator/team").catch(() => [] as Array<Record<string, unknown>>),
+    jsonFetch<Array<Record<string, unknown>>>("/api/coordinator/all-sessions").catch(() => [] as Array<Record<string, unknown>>),
+  ]);
+
+  const workerById = new Map<string, string>();
+  for (const m of team) {
+    if (m.id) workerById.set(String(m.id), String(m.full_name ?? m.email ?? "Team member"));
+  }
+
+  const lastSessionByParticipant = new Map<string, string>();
+  for (const s of sessions) {
+    const pid = String(s.participant_id ?? "");
+    const d = String(s.session_date ?? "");
+    if (pid && d) {
+      const existing = lastSessionByParticipant.get(pid);
+      if (!existing || d > existing) lastSessionByParticipant.set(pid, d);
+    }
+  }
+
+  return (participants as Array<Record<string, unknown>>).map((p) => {
+    const rawGoals = (p.goals as Array<Record<string, unknown>> | null) ?? [];
+    const goals: ParticipantGoal[] = rawGoals.map((g) => ({
+      id: String(g.id ?? ""),
+      description: String(g.description ?? g.goal_text ?? ""),
+      category: String(g.category ?? g.ndis_category ?? "general"),
+      is_achieved: Boolean(g.is_achieved ?? false),
+      target_date: g.target_date ? String(g.target_date) : undefined,
+      goal_code: g.goal_code ? String(g.goal_code) : undefined,
+      status: (g.status as GoalStatus) ?? (g.is_achieved ? "achieved" : "progressing"),
+    }));
+
+    const pid = String(p.id ?? "");
+    const workerIdRaw = p.assigned_worker_id ?? p.owner_user_id ?? p.created_by;
+    const assignedWorkerId = workerIdRaw ? String(workerIdRaw) : undefined;
+
+    return {
+      participant_id: pid,
+      participant_name: String(p.full_name ?? "Unknown"),
+      ndis_number: p.ndis_number ? String(p.ndis_number) : undefined,
+      assigned_worker: assignedWorkerId ? (workerById.get(assignedWorkerId) ?? assignedWorkerId) : undefined,
+      last_session_date: lastSessionByParticipant.get(pid),
+      upcoming_review_date: p.upcoming_review_date ? String(p.upcoming_review_date) : undefined,
+      goals,
+    };
+  });
+}
+
+export function sendBulkReminders(workerIds: string[], message: string) {
+  return jsonFetch<{ alerts_created: number; errors: string[] }>("/api/coordinator/bulk-reminders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ worker_ids: workerIds, message }),
   });
 }

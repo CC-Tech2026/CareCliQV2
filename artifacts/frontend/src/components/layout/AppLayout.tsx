@@ -4,7 +4,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
-  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench,
+  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
@@ -44,9 +44,10 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "People & Care",
       items: [
-        { href: "/team",       label: "Team",          icon: Users },
-        { href: "/patients",   label: "Participants",   icon: UserRound },
-        { href: "/sessions",   label: "Sessions",       icon: CalendarDays },
+        { href: "/team",               label: "Team",             icon: Users },
+        { href: "/patients",           label: "Participants",      icon: UserRound },
+        { href: "/sessions",           label: "Sessions",          icon: CalendarDays },
+        { href: "/coordinator-goals",  label: "Goals & Planning",  icon: Target },
       ],
     },
     {

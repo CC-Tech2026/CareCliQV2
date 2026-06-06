@@ -32,6 +32,7 @@ import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
 import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
+import CoordinatorGoals from "@/pages/coordinator-goals";
 import AuditPack from "@/pages/audit-pack";
 import Credentials from "@/pages/credentials";
 import Toolkit from "@/pages/toolkit";
@@ -163,6 +164,12 @@ function Router() {
       <Route path="/team">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Team /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator-goals">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorGoals /></AppLayout>
         </ProtectedRoute>
       </Route>
 

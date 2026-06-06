@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BadgeCheck, FileUp, Loader2, ShieldCheck, Trash2 } from "lucide-react";
+import { BadgeCheck, Bell, FileUp, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useReAuth } from "@/hooks/useReAuth";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   createCredential,
   deleteCredential,
@@ -16,6 +22,7 @@ import {
   uploadCredentialFile,
   type Credential,
 } from "@/services/credentialsService";
+import { getCoordinatorCredentialAlerts, sendBulkReminders, type CredentialAlert } from "@/services/coordinatorService";
 
 const PLUM = "#5533CC";
 const CORAL = "#F03060";
@@ -125,6 +132,122 @@ function CredentialRow({
   );
 }
 
+function BulkRemindersModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [customMessage, setCustomMessage] = useState("Your credential is expiring soon. Please update it to remain compliant.");
+
+  const { data: alertsData, isLoading: alertsLoading } = useQuery({
+    queryKey: ["coordinator-credential-alerts"],
+    queryFn: getCoordinatorCredentialAlerts,
+    enabled: open,
+  });
+
+  const credentialAlerts: CredentialAlert[] = alertsData?.alerts ?? [];
+
+  const workers = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of credentialAlerts) {
+      if (a.user_id) map.set(a.user_id, a.full_name ?? a.user_id);
+    }
+    return [...map.entries()].map(([id, name]) => ({ id, name }));
+  }, [credentialAlerts]);
+
+  const mutation = useMutation({
+    mutationFn: () => sendBulkReminders([...selectedIds], customMessage),
+    onSuccess: (result) => {
+      toast({ title: "Reminders sent", description: `${result.alerts_created} alert(s) created.` });
+      onClose();
+    },
+    onError: (err) => toast({ title: "Failed to send reminders", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  function toggle(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selectedIds.size === workers.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(workers.map((w) => w.id)));
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-[#1E1640]">Send Credential Reminders</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-[#7A6A9E]">
+          Select workers with expiring or expired credentials to send them an in-app reminder.
+        </p>
+
+        {alertsLoading ? (
+          <div className="flex items-center gap-2 py-4 text-sm text-[#7A6A9E]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : workers.length === 0 ? (
+          <p className="mt-2 rounded-xl bg-[#F5F3FC] p-3 text-sm font-bold text-[#5533CC]">
+            No workers with expiring credentials found.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <button className="text-xs font-bold text-[#5533CC] underline" onClick={toggleAll}>
+              {selectedIds.size === workers.length ? "Deselect all" : "Select all"}
+            </button>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {workers.map(({ id, name }) => (
+                <label key={id} className="flex cursor-pointer items-center gap-3 rounded-xl border p-2.5" style={{ borderColor: "#E2DEF2" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(id)}
+                    onChange={() => toggle(id)}
+                    className="h-4 w-4 accent-[#5533CC]"
+                  />
+                  <span className="text-sm font-semibold text-[#1E1640]">{name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-2">
+          <Label>Message</Label>
+          <textarea
+            className="mt-1 w-full rounded-xl border border-[#E2DEF2] p-3 text-sm"
+            rows={3}
+            value={customMessage}
+            onChange={(e) => setCustomMessage(e.target.value)}
+          />
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={selectedIds.size === 0 || mutation.isPending}
+            className="rounded-xl gap-1"
+            style={{ background: `linear-gradient(135deg, #F03060, #5533CC)` }}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+            Send Reminders ({selectedIds.size})
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Credentials() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -145,6 +268,7 @@ export default function Credentials() {
     issue_date: "",
     expiry_date: "",
   });
+  const [showBulkReminders, setShowBulkReminders] = useState(false);
 
   const summary = useMemo(() => ({
     total: data.length,
@@ -213,6 +337,12 @@ export default function Credentials() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       {modal}
+      {showBulkReminders && (
+        <BulkRemindersModal
+          open
+          onClose={() => setShowBulkReminders(false)}
+        />
+      )}
       <div>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Allied Health" : "Support Worker"}
@@ -235,6 +365,23 @@ export default function Credentials() {
           </div>
         ))}
       </div>
+
+      {isCoordinator && (summary.expiring > 0 || summary.expired > 0) && (
+        <div className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3">
+          <p className="text-sm font-bold text-amber-800">
+            {summary.expiring + summary.expired} worker credential(s) need attention.
+          </p>
+          <Button
+            size="sm"
+            className="gap-1.5 rounded-xl"
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            onClick={() => setShowBulkReminders(true)}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Send Reminders
+          </Button>
+        </div>
+      )}
 
       {!isCoordinator && (
         <form onSubmit={submit} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>

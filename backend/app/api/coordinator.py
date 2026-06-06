@@ -231,10 +231,61 @@ async def rp_flags(current_user: dict = Depends(get_current_user)):
 
 @router.get("/credential-alerts")
 async def credential_alerts(current_user: dict = Depends(get_current_user)):
-    _require_coordinator(current_user)
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    today = date.today()
+    warn_date = (today + timedelta(days=60)).isoformat()
+
+    try:
+        result = (
+            supabase.table("credentials")
+            .select("id, user_id, credential_type, title, expiry_date, status")
+            .eq("organization_id", org_id)
+            .in_("status", ["expiring", "expired"])
+            .lte("expiry_date", warn_date)
+            .execute()
+        )
+        rows = result.data or []
+    except Exception:
+        rows = []
+
+    user_ids = list({r["user_id"] for r in rows if r.get("user_id")})
+    users_by_id: dict[str, dict] = {}
+    if user_ids:
+        try:
+            profiles = (
+                supabase.table("users")
+                .select("id, full_name, email, role")
+                .in_("id", user_ids)
+                .execute()
+            )
+            users_by_id = {
+                str(p["id"]): p
+                for p in (profiles.data or [])
+                if p.get("id")
+            }
+        except Exception:
+            pass
+
+    alerts_out = []
+    for row in rows:
+        uid = str(row.get("user_id") or "")
+        profile = users_by_id.get(uid, {})
+        alerts_out.append({
+            "credential_id": row.get("id"),
+            "user_id": uid or None,
+            "full_name": profile.get("full_name") or profile.get("email") or "Team member",
+            "role": profile.get("role"),
+            "credential_type": row.get("credential_type"),
+            "title": row.get("title"),
+            "expiry_date": row.get("expiry_date"),
+            "status": row.get("status"),
+        })
+
     return {
-        "generated_at": date.today().isoformat(),
-        "alerts": [],
+        "generated_at": today.isoformat(),
+        "alerts": alerts_out,
     }
 
 
@@ -446,6 +497,51 @@ async def unassign_worker_from_client(
 
 
 # ── Worker Client Assignments List ────────────────────────────────────────────
+
+class BulkRemindersBody(BaseModel):
+    worker_ids: list[str]
+    message: str = "Your credential is expiring soon. Please update it to remain compliant."
+
+
+@router.post("/bulk-reminders")
+async def bulk_reminders(
+    body: BulkRemindersBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send an in-app training_reminder alert to each selected worker."""
+    from ..services import alert_service
+    from ..schemas.alert import AlertCreate
+
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        members = supabase.table("organization_members").select("user_id").eq("organization_id", org_id).execute()
+        valid_ids: set[str] = {str(r["user_id"]) for r in (members.data or []) if r.get("user_id")}
+    except Exception as lookup_err:
+        raise HTTPException(status_code=500, detail=f"Could not validate worker membership: {lookup_err}")
+
+    count = 0
+    errors: list[str] = []
+    for worker_id in body.worker_ids:
+        if worker_id not in valid_ids:
+            errors.append(f"worker {worker_id} not in organisation")
+            continue
+        try:
+            await alert_service.create_alert(
+                AlertCreate(
+                    alert_type="training_reminder",
+                    severity="medium",
+                    title="Credential reminder",
+                    message=body.message,
+                    recipient_user_id=worker_id,
+                )
+            )
+            count += 1
+        except Exception as exc:
+            errors.append(str(exc))
+
+    return {"alerts_created": count, "errors": errors}
+
 
 @router.get("/workers/{worker_id}/clients")
 async def get_worker_clients(worker_id: str, current_user: dict = Depends(get_current_user)):
