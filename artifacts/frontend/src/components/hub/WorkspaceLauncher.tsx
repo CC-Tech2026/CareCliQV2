@@ -1,188 +1,173 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
-import { ArrowRight, UserRound, LayoutDashboard, Crown, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  UserRound,
+  LayoutDashboard,
+  Stethoscope,
+  Crown,
+  Lock,
+} from "lucide-react";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const SOFT = "#F5F3FC";
+const PLUM   = "#5533CC";
+const TEXT   = "#1E1640";
+const MUTED  = "#7A6A9E";
+const SOFT   = "#F5F3FC";
 const BORDER = "#E2DEF2";
+const CORAL  = "#F03060";
 
 interface WorkspaceCard {
-  roleKey: string;
+  role: string;
   title: string;
   description: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  gradient: string;
+  allowedRoles: string[];
+  accentColor: string;
   comingSoon?: boolean;
 }
 
 const WORKSPACES: WorkspaceCard[] = [
   {
-    roleKey: "support_worker",
+    role: "Support Worker",
     title: "Support Worker",
     description: "Client visits, shift notes, daily documentation, and compliance tracking.",
     href: "/my-clients",
     icon: UserRound,
-    gradient: "linear-gradient(135deg, #5533CC 0%, #7B4FE0 100%)",
+    allowedRoles: ["support_worker"],
+    accentColor: PLUM,
   },
   {
-    roleKey: "support_coordinator",
+    role: "Support Coordinator",
     title: "Support Coordinator",
     description: "Team oversight, NDIS plans, participant management, and billing.",
     href: "/dashboard",
     icon: LayoutDashboard,
-    gradient: "linear-gradient(135deg, #F03060 0%, #FF6B95 100%)",
+    allowedRoles: ["support_coordinator"],
+    accentColor: CORAL,
   },
   {
-    roleKey: "managing_director",
+    role: "Clinician",
+    title: "Clinician",
+    description: "Clinical sessions, assessments, reports, and therapeutic outcomes.",
+    href: "/sessions",
+    icon: Stethoscope,
+    allowedRoles: ["allied_health"],
+    accentColor: "#0EA5E9",
+  },
+  {
+    role: "Managing Director",
     title: "Managing Director",
     description: "Executive overview, organisation analytics, and strategic reporting.",
     href: "/compliance",
     icon: Crown,
-    gradient: "linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%)",
+    allowedRoles: [],
+    accentColor: "#F59E0B",
     comingSoon: true,
   },
 ];
 
 export function WorkspaceLauncher() {
   const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const [launching, setLaunching] = useState(false);
-
-  const role = user?.role ?? "";
-
-  const myWorkspace = WORKSPACES.find((ws) => ws.roleKey === role);
-
-  function handleLaunch(href: string) {
-    if (launching) return;
-    setLaunching(true);
-    setTimeout(() => {
-      navigate(href);
-    }, 1400);
-  }
-
-  if (!myWorkspace) return null;
-
-  const Icon = myWorkspace.icon;
+  const role = user?.role;
 
   return (
     <section>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          Your Workspace
-        </h2>
+        <div>
+          <h2 className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+            Workspace Launcher
+          </h2>
+          <p className="mt-0.5 text-[15px] font-black" style={{ color: TEXT }}>
+            Choose your workspace
+          </p>
+        </div>
       </div>
 
-      {/* Launching overlay */}
-      {launching && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5"
-          style={{ background: "rgba(21, 14, 60, 0.82)", backdropFilter: "blur(8px)" }}
-        >
-          <div
-            className="flex h-20 w-20 items-center justify-center rounded-2xl shadow-2xl text-white"
-            style={{ background: myWorkspace.gradient }}
-          >
-            <Icon size={36} strokeWidth={2} />
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2.5">
-              <Loader2 size={18} className="animate-spin text-white/80" />
-              <span className="text-[17px] font-black text-white tracking-tight">
-                Launching workspace…
-              </span>
-            </div>
-            <span className="text-[13px] font-medium text-white/50">
-              {myWorkspace.title}
-            </span>
-          </div>
-        </div>
-      )}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {WORKSPACES.map((ws) => {
+          const Icon = ws.icon;
+          const isOwned = ws.allowedRoles.includes(role || "");
 
-      {/* Single card */}
-      <div className="max-w-sm">
-        {myWorkspace.comingSoon ? (
-          <div
-            className="relative flex flex-col overflow-hidden rounded-2xl border p-6 opacity-70 cursor-default"
-            style={{ borderColor: BORDER, background: "#FFFFFF" }}
-          >
-            <WorkspaceCardBody ws={myWorkspace} Icon={Icon} launching={false} comingSoon />
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => handleLaunch(myWorkspace.href)}
-            disabled={launching}
-            className="group relative flex w-full flex-col overflow-hidden rounded-2xl border p-6 text-left transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2"
-            style={{ borderColor: BORDER, background: "#FFFFFF" }}
-          >
-            <WorkspaceCardBody ws={myWorkspace} Icon={Icon} launching={launching} />
-          </button>
-        )}
+          const CardContent = (
+            <div
+              className={`group relative flex flex-col overflow-hidden rounded-xl border bg-white p-5 transition-all duration-200 ${
+                ws.comingSoon
+                  ? "opacity-60 cursor-default"
+                  : "hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+              }`}
+              style={{ borderColor: isOwned && !ws.comingSoon ? ws.accentColor : BORDER }}
+            >
+              {/* Icon */}
+              <div
+                className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg"
+                style={{ background: SOFT, color: ws.comingSoon ? MUTED : ws.accentColor }}
+              >
+                <Icon size={18} strokeWidth={2.5} />
+              </div>
+
+              {/* Role chip */}
+              <span
+                className="mb-2 inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                style={{ background: SOFT, color: MUTED }}
+              >
+                {ws.role}
+              </span>
+
+              <h3 className="text-[14px] font-black leading-snug" style={{ color: TEXT }}>
+                {ws.title}
+              </h3>
+              <p
+                className="mt-1.5 flex-1 text-[12px] font-medium leading-relaxed"
+                style={{ color: MUTED }}
+              >
+                {ws.description}
+              </p>
+
+              {/* CTA */}
+              <div className="mt-4">
+                {ws.comingSoon ? (
+                  <div
+                    className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-black"
+                    style={{ background: SOFT, color: MUTED }}
+                  >
+                    <Lock size={11} strokeWidth={2.5} />
+                    Coming Soon
+                  </div>
+                ) : (
+                  <div
+                    className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-black transition-all group-hover:gap-3"
+                    style={{
+                      background: isOwned ? ws.accentColor : SOFT,
+                      color: isOwned ? "#ffffff" : MUTED,
+                    }}
+                  >
+                    Launch Workspace
+                    <ArrowRight size={12} strokeWidth={2.5} />
+                  </div>
+                )}
+              </div>
+
+              {/* Active dot */}
+              {isOwned && !ws.comingSoon && (
+                <div
+                  className="absolute right-4 top-4 h-2 w-2 rounded-full"
+                  style={{ background: "#10B981" }}
+                  title="Your active workspace"
+                />
+              )}
+            </div>
+          );
+
+          return ws.comingSoon ? (
+            <div key={ws.role}>{CardContent}</div>
+          ) : (
+            <Link key={ws.role} href={ws.href}>
+              {CardContent}
+            </Link>
+          );
+        })}
       </div>
     </section>
-  );
-}
-
-function WorkspaceCardBody({
-  ws,
-  Icon,
-  launching,
-  comingSoon,
-}: {
-  ws: WorkspaceCard;
-  Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  launching: boolean;
-  comingSoon?: boolean;
-}) {
-  return (
-    <>
-      {/* Green active dot */}
-      {!comingSoon && (
-        <div
-          className="absolute right-4 top-4 h-2.5 w-2.5 rounded-full"
-          style={{ background: "#10B981" }}
-          title="Your active workspace"
-        />
-      )}
-
-      {/* Icon */}
-      <div
-        className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl text-white shadow-md"
-        style={{ background: ws.gradient }}
-      >
-        <Icon size={26} strokeWidth={2.5} />
-      </div>
-
-      <h3 className="text-[17px] font-black leading-snug" style={{ color: TEXT }}>
-        {ws.title}
-      </h3>
-      <p className="mt-2 text-[13px] font-medium leading-relaxed flex-1" style={{ color: MUTED }}>
-        {ws.description}
-      </p>
-
-      {/* CTA */}
-      <div className="mt-5">
-        {comingSoon ? (
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-black"
-            style={{ background: SOFT, color: MUTED }}
-          >
-            Coming Soon
-          </div>
-        ) : (
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-black text-white shadow-sm transition-all group-hover:gap-3"
-            style={{ background: launching ? MUTED : PLUM }}
-          >
-            {launching ? "Launching…" : "Launch"}
-            <ArrowRight size={14} strokeWidth={2.5} />
-          </div>
-        )}
-      </div>
-    </>
   );
 }

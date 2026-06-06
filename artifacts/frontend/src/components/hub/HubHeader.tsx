@@ -1,16 +1,16 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
-import { Building2, Hash } from "lucide-react";
+import { Building2, CalendarDays, Hash } from "lucide-react";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
+const PLUM  = "#5533CC";
+const TEXT  = "#1E1640";
 const MUTED = "#7A6A9E";
+const BORDER = "#E2DEF2";
+const SOFT  = "#F5F3FC";
 
 const ORG_DATA = {
   name: "CareCliQ Support Services",
   providerNumber: "4050123456",
-  tagline: "Empowering independence through quality care",
 };
 
 function greeting(name?: string | null): string {
@@ -27,74 +27,60 @@ export function HubHeader() {
 
   return (
     <div
-      className="relative overflow-hidden rounded-3xl px-8 py-8"
-      style={{
-        background: `linear-gradient(135deg, ${PLUM} 0%, #7B4FE0 50%, #9B6FF0 100%)`,
-      }}
+      className="rounded-xl border bg-white px-6 py-5 shadow-sm"
+      style={{ borderColor: BORDER }}
     >
-      {/* Background decoration */}
-      <div
-        className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full opacity-10"
-        style={{ background: CORAL }}
-      />
-      <div
-        className="pointer-events-none absolute -bottom-20 -left-10 h-48 w-48 rounded-full opacity-10"
-        style={{ background: "#FFFFFF" }}
-      />
-
-      <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left: logo + org name */}
-        <div className="flex items-center gap-5">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/15 shadow-lg backdrop-blur-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {/* Left: org identity */}
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: SOFT }}
+          >
             <img
               src="/carecliQ_logo.png"
               alt="CareCliQ"
-              className="h-12 w-12 object-contain"
+              className="h-9 w-9 object-contain"
             />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <Building2 size={13} className="text-white/70" />
-              <span className="text-[11px] font-black uppercase tracking-[0.22em] text-white/70">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Building2 size={11} strokeWidth={2.5} style={{ color: MUTED }} />
+              <span
+                className="text-[10px] font-black uppercase tracking-[0.18em]"
+                style={{ color: MUTED }}
+              >
                 Organisation Hub
               </span>
             </div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-white">
+            <h1 className="text-[17px] font-black leading-tight" style={{ color: TEXT }}>
               {ORG_DATA.name}
             </h1>
-            <div className="mt-1 flex items-center gap-1.5">
-              <Hash size={12} className="text-white/60" />
-              <span className="text-[12px] font-semibold text-white/70">
+            <div className="mt-0.5 flex items-center gap-1">
+              <Hash size={11} strokeWidth={2.5} style={{ color: MUTED }} />
+              <span className="text-[11px] font-semibold" style={{ color: MUTED }}>
                 Provider {ORG_DATA.providerNumber}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right: greeting + date */}
-        <div className="text-right">
-          <p className="text-xl font-black text-white">
+        {/* Right: greeting + date + role badge */}
+        <div className="flex flex-col items-start gap-1.5 sm:items-end">
+          <p className="text-[17px] font-black" style={{ color: PLUM }}>
             {greeting(user?.full_name)}
           </p>
-          <p className="mt-1 text-[13px] font-medium text-white/70">{today}</p>
+          <div className="flex items-center gap-1.5" style={{ color: MUTED }}>
+            <CalendarDays size={12} strokeWidth={2.5} />
+            <span className="text-[12px] font-medium">{today}</span>
+          </div>
           <span
-            className="mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black capitalize"
-            style={{ background: "rgba(255,255,255,0.18)", color: "#ffffff" }}
+            className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-black capitalize"
+            style={{ background: SOFT, color: PLUM }}
           >
-            <span
-              className="inline-block h-2 w-2 rounded-full"
-              style={{ background: CORAL }}
-            />
             {user?.role?.replace(/_/g, " ") || "Staff Member"}
           </span>
         </div>
-      </div>
-
-      {/* Tagline strip */}
-      <div className="relative mt-5 border-t border-white/10 pt-4">
-        <p className="text-[12px] font-medium italic text-white/60">
-          {ORG_DATA.tagline}
-        </p>
       </div>
     </div>
   );

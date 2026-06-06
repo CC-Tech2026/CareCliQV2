@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { format, parseISO, addDays, addWeeks, differenceInDays } from "date-fns";
-import { Calendar, ClipboardCheck, Users, BookOpen, Target, Plus, Trash2, AlertTriangle } from "lucide-react";
+import { Calendar, ClipboardCheck, Users, BookOpen, Target, Plus, Trash2, AlertTriangle, MapPin } from "lucide-react";
 import { getOrgEvents, createOrgEvent, deleteOrgEvent, type OrgEvent } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -100,13 +100,15 @@ function EventCard({
           {event.title}
         </h3>
         {event.location && (
-          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-            📍 {event.location}
+          <p className="mt-0.5 flex items-center gap-1 text-[12px] font-medium" style={{ color: MUTED }}>
+            <MapPin size={11} strokeWidth={2.5} />
+            {event.location}
           </p>
         )}
         {event.participants_desc && (
-          <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-            👥 {event.participants_desc}
+          <p className="mt-0.5 flex items-center gap-1 text-[12px] font-medium" style={{ color: MUTED }}>
+            <Users size={11} strokeWidth={2.5} />
+            {event.participants_desc}
           </p>
         )}
       </div>
