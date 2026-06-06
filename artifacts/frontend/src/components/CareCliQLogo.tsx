@@ -29,8 +29,8 @@ export function CareCliQLogo({
             hover:scale-[1.03]
           "
           style={{
-            height: 68,
-            width: 68,
+            height: 70,
+            width: 70,
           }}
         />
       ) : (
@@ -44,9 +44,9 @@ export function CareCliQLogo({
             max-h-full
           "
           style={{
-            height: "clamp(70px, 5.5vh, 96px)",
+            height: "clamp(45px, 5vh, 150px)",
             width: "auto",
-            maxWidth: 260,
+            maxWidth: 200,
           }}
         />
       )}
@@ -81,9 +81,9 @@ export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
           transition-all duration-200 ease-out
         "
         style={{
-          height: 60,
+          height: 100,
           width: "auto",
-          maxWidth: 200,
+          maxWidth: 180,
         }}
       />
     </div>

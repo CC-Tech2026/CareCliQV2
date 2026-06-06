@@ -100,9 +100,7 @@ function StyledInput({
       className="w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200"
       style={{
         background: BG,
-        border: `1.5px solid ${
-          error ? "#EF4444" : focused ? CORAL : BORDER
-        }`,
+        border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
         color: "#1E1640",
         WebkitAppearance: "none",
       }}
@@ -187,21 +185,14 @@ export default function Signup() {
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
 
-  const updateField = useCallback(
-    (f: keyof FormData, v: string) => {
-      setForm((p) => ({
-        ...p,
-        [f]: v,
-      }));
-    },
-    []
-  );
+  const updateField = useCallback((f: keyof FormData, v: string) => {
+    setForm((p) => ({
+      ...p,
+      [f]: v,
+    }));
+  }, []);
 
-  const STEP_LABELS = [
-    "Account Type",
-    "Your Details",
-    "Organisation",
-  ];
+  const STEP_LABELS = ["Account Type", "Your Details", "Organisation"];
 
   const TYPES = [
     {
@@ -232,8 +223,7 @@ export default function Signup() {
   function step2Valid() {
     if (form.account_type === "allied_health") {
       return (
-        form.ah_profession_type !== "" &&
-        form.ah_registration_status !== ""
+        form.ah_profession_type !== "" && form.ah_registration_status !== ""
       );
     }
 
@@ -266,7 +256,9 @@ export default function Signup() {
       });
 
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ detail: "Registration failed" }));
+        const errBody = await res
+          .json()
+          .catch(() => ({ detail: "Registration failed" }));
         throw new Error(errBody.detail || "Registration failed");
       }
 
@@ -275,9 +267,7 @@ export default function Signup() {
       try {
         const u = await login(form.email, form.password);
 
-        token = u
-          ? localStorage.getItem("carescribe_token")
-          : null;
+        token = u ? localStorage.getItem("carescribe_token") : null;
       } catch (err) {
         setEmailVerify(true);
         setStep(3);
@@ -286,14 +276,17 @@ export default function Signup() {
 
       if (token) {
         try {
-          const onboardingRes = await apiFetch("/api/auth/complete-onboarding", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+          const onboardingRes = await apiFetch(
+            "/api/auth/complete-onboarding",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(buildPayload(form)),
             },
-            body: JSON.stringify(buildPayload(form)),
-          });
+          );
 
           // complete-onboarding now returns a fresh JWT that already includes
           // organization_id — use it directly so no second login is needed.
@@ -304,7 +297,10 @@ export default function Signup() {
             } else {
               updateUser({ onboarding_complete: true });
             }
-            if (form.account_type === "small_provider" && !onboardingData.org_created) {
+            if (
+              form.account_type === "small_provider" &&
+              !onboardingData.org_created
+            ) {
               toast({
                 title: "Database migration required",
                 description:
@@ -325,10 +321,7 @@ export default function Signup() {
     } catch (err) {
       toast({
         title: "Sign up failed",
-        description:
-          err instanceof Error
-            ? err.message
-            : "Please try again.",
+        description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -337,21 +330,25 @@ export default function Signup() {
   }
 
   const mismatch =
-    !!form.confirm_password &&
-    form.password !== form.confirm_password;
+    !!form.confirm_password && form.password !== form.confirm_password;
 
-  const short =
-    !!form.password &&
-    form.password.length < 8;
+  const short = !!form.password && form.password.length < 8;
 
   return (
-    <div className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden" style={{ animation: "authPageEnter 0.3s ease-out" }}>
-      <style dangerouslySetInnerHTML={{ __html: `
+    <div
+      className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden"
+      style={{ animation: "authPageEnter 0.3s ease-out" }}
+    >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes authPageEnter {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-      ` }} />
+      `,
+        }}
+      />
       {/* LEFT */}
       <div className="hidden md:flex md:w-1/2 relative h-full overflow-hidden">
         <div
@@ -383,7 +380,7 @@ export default function Signup() {
             <img
               src="/carecliQ_logo.png"
               alt="CareCliQ"
-              className="max-w-[220px]"
+              className="max-w-[250px]"
             />
 
             <p className="mt-3 text-xs font-black tracking-[0.18em] uppercase text-[#FFD2DA]">
@@ -395,13 +392,13 @@ export default function Signup() {
             <h1 className="text-5xl font-black text-white leading-tight">
               Write beautiful notes,
               <br />
-              <span className="text-[#FFD2DA]">
-                minus the heavy paperwork.
-              </span>
+              <span className="text-[#FFD2DA]">minus the heavy paperwork.</span>
             </h1>
 
             <p className="mt-5 text-white/90 max-w-md leading-relaxed">
-              Manage your participants, support workers, compliance, and NDIS documentation — all in one place built for Australian disability support businesses.
+              Manage your participants, support workers, compliance, and NDIS
+              documentation — all in one place built for Australian disability
+              support businesses.
             </p>
           </div>
 
@@ -416,23 +413,18 @@ export default function Signup() {
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2 justify-center mb-5 bg-white px-4 py-2.5 rounded-2xl border border-[#D8D0F0]/60">
             {STEP_LABELS.map((l, i) => (
-              <div
-                key={l}
-                className="flex-1 flex flex-col items-center gap-1"
-              >
+              <div key={l} className="flex-1 flex flex-col items-center gap-1">
                 <div
                   className="h-1 w-full rounded-full"
                   style={{
-                    background:
-                      i <= step ? PLUM : "#E5E7EB",
+                    background: i <= step ? PLUM : "#E5E7EB",
                   }}
                 />
 
                 <span
                   className="text-[9px] font-bold uppercase"
                   style={{
-                    color:
-                      i <= step ? PLUM : "#9CA3AF",
+                    color: i <= step ? PLUM : "#9CA3AF",
                   }}
                 >
                   {l.split(" ")[0]}
@@ -454,72 +446,65 @@ export default function Signup() {
                   </h2>
 
                   <p className="text-sm text-[#9B6FAB]">
-                    Choose the option that best describes how you'll use CareCliQ
+                    Choose the option that best describes how you'll use
+                    CareCliQ
                   </p>
                 </div>
 
                 <div
                   className="rounded-xl px-4 py-3 text-[12px] leading-relaxed"
-                  style={{ background: `${PLUM}08`, border: `1px solid ${PLUM}20`, color: PLUM }}
+                  style={{
+                    background: `${PLUM}08`,
+                    border: `1px solid ${PLUM}20`,
+                    color: PLUM,
+                  }}
                 >
                   <span className="font-bold">Support worker?</span>{" "}
                   <span style={{ color: "#7A6A9E" }}>
-                    Workers are invited by their organisation — ask your manager to send you an invite link instead of signing up here.
+                    Workers are invited by their organisation — ask your manager
+                    to send you an invite link instead of signing up here.
                   </span>
                 </div>
 
                 {TYPES.map((t) => {
-                  const sel =
-                    form.account_type === t.value;
+                  const sel = form.account_type === t.value;
 
                   return (
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() =>
-                        updateField(
-                          "account_type",
-                          t.value
-                        )
-                      }
+                      onClick={() => updateField("account_type", t.value)}
                       className="w-full text-left p-4 rounded-2xl border-2 transition-all"
                       style={{
-                        borderColor: sel
-                          ? t.dot
-                          : BORDER,
-                        background: sel
-                          ? `${t.dot}10`
-                          : "white",
+                        borderColor: sel ? t.dot : BORDER,
+                        background: sel ? `${t.dot}10` : "white",
                       }}
                     >
                       <div className="flex items-start gap-3">
                         <span
                           className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
                           style={{
-                            background: sel
-                              ? t.dot
-                              : BORDER,
+                            background: sel ? t.dot : BORDER,
                           }}
                         />
 
                         <div className="flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-black">
-                              {t.title}
-                            </p>
+                            <p className="font-black">{t.title}</p>
                             {"badge" in t && t.badge && (
                               <span
                                 className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
-                                style={{ background: `${t.dot}18`, color: t.dot }}
+                                style={{
+                                  background: `${t.dot}18`,
+                                  color: t.dot,
+                                }}
                               >
                                 {t.badge}
                               </span>
                             )}
                           </div>
 
-                          <p className="text-sm text-[#7A6A9E]">
-                            {t.sub}
-                          </p>
+                          <p className="text-sm text-[#7A6A9E]">{t.sub}</p>
                         </div>
 
                         {sel && (
@@ -581,12 +566,7 @@ export default function Signup() {
                   <StyledInput
                     name="full_name"
                     value={form.full_name}
-                    onChange={(v) =>
-                      updateField(
-                        "full_name",
-                        v
-                      )
-                    }
+                    onChange={(v) => updateField("full_name", v)}
                     placeholder="Jane Smith"
                     autoComplete="name"
                   />
@@ -599,9 +579,7 @@ export default function Signup() {
                     name="email"
                     type="email"
                     value={form.email}
-                    onChange={(v) =>
-                      updateField("email", v)
-                    }
+                    onChange={(v) => updateField("email", v)}
                     placeholder="you@example.com"
                     autoComplete="email"
                   />
@@ -613,18 +591,9 @@ export default function Signup() {
                   <div className="relative">
                     <StyledInput
                       name="password"
-                      type={
-                        showPass
-                          ? "text"
-                          : "password"
-                      }
+                      type={showPass ? "text" : "password"}
                       value={form.password}
-                      onChange={(v) =>
-                        updateField(
-                          "password",
-                          v
-                        )
-                      }
+                      onChange={(v) => updateField("password", v)}
                       placeholder="Minimum 8 characters"
                       autoComplete="new-password"
                       error={short}
@@ -632,18 +601,10 @@ export default function Signup() {
 
                     <button
                       type="button"
-                      onClick={() =>
-                        setShowPass(
-                          (p) => !p
-                        )
-                      }
+                      onClick={() => setShowPass((p) => !p)}
                       className="absolute right-4 top-1/2 -translate-y-1/2"
                     >
-                      {showPass ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
+                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
@@ -655,12 +616,7 @@ export default function Signup() {
                     name="confirm_password"
                     type="password"
                     value={form.confirm_password}
-                    onChange={(v) =>
-                      updateField(
-                        "confirm_password",
-                        v
-                      )
-                    }
+                    onChange={(v) => updateField("confirm_password", v)}
                     placeholder="Repeat password"
                     error={mismatch}
                   />
@@ -695,12 +651,8 @@ export default function Signup() {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-4"
-              >
-                {form.account_type ===
-                  "allied_health" && (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {form.account_type === "allied_health" && (
                   <AlliedHealthFields
                     form={form}
                     updateField={updateField}
@@ -708,8 +660,7 @@ export default function Signup() {
                   />
                 )}
 
-                {form.account_type ===
-                  "small_provider" && (
+                {form.account_type === "small_provider" && (
                   <SmallProviderFields
                     form={form}
                     updateField={updateField}
@@ -732,9 +683,7 @@ export default function Signup() {
 
                   <button
                     type="submit"
-                    disabled={
-                      !step2Valid() || busy
-                    }
+                    disabled={!step2Valid() || busy}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
                     style={{
                       background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
@@ -771,9 +720,7 @@ export default function Signup() {
                   className="text-[24px] font-black mt-5"
                   style={{ color: PLUM }}
                 >
-                  {emailVerify
-                    ? "Check your email"
-                    : "You're all set!"}
+                  {emailVerify ? "Check your email" : "You're all set!"}
                 </h2>
 
                 <p className="text-[#9B6FAB] mt-2">
@@ -789,7 +736,7 @@ export default function Signup() {
                         ? "/login"
                         : form.account_type === "small_provider"
                           ? "/getting-started"
-                          : "/dashboard"
+                          : "/dashboard",
                     )
                   }
                   className="mt-6 w-full h-11 rounded-xl text-white font-black"
@@ -838,18 +785,20 @@ function buildPayload(form: FormData) {
 
   if (form.account_type === "small_provider") {
     base.organization_name = form.sp_organisation_name;
-    if (form.sp_provider_type)       base.provider_type       = form.sp_provider_type;
-    if (form.sp_registration_status) base.registration_status = form.sp_registration_status;
-    if (form.sp_team_size)           base.team_size           = form.sp_team_size;
-    if (form.sp_participant_volume)  base.participant_volume  = form.sp_participant_volume;
-    if (form.sp_contact_number)      base.contact_number      = form.sp_contact_number;
+    if (form.sp_provider_type) base.provider_type = form.sp_provider_type;
+    if (form.sp_registration_status)
+      base.registration_status = form.sp_registration_status;
+    if (form.sp_team_size) base.team_size = form.sp_team_size;
+    if (form.sp_participant_volume)
+      base.participant_volume = form.sp_participant_volume;
+    if (form.sp_contact_number) base.contact_number = form.sp_contact_number;
   } else if (form.account_type === "allied_health") {
     base.onboarding_data = {
-      profession_type:      form.ah_profession_type,
-      registration_status:  form.ah_registration_status,
-      provider_number:      form.ah_provider_number,
-      specialties:          form.ah_specialties,
-      clinic_name:          form.ah_clinic_name,
+      profession_type: form.ah_profession_type,
+      registration_status: form.ah_registration_status,
+      provider_number: form.ah_provider_number,
+      specialties: form.ah_specialties,
+      clinic_name: form.ah_clinic_name,
     };
   }
 
@@ -857,11 +806,7 @@ function buildPayload(form: FormData) {
 }
 
 // ── Allied Health ─────────────────────────────────────────────────────────────
-function AlliedHealthFields({
-  form,
-  updateField,
-  disabled,
-}: any) {
+function AlliedHealthFields({ form, updateField, disabled }: any) {
   return (
     <>
       <div>
@@ -870,18 +815,22 @@ function AlliedHealthFields({
         <StyledSelect
           name="ah_profession_type"
           value={form.ah_profession_type}
-          onChange={(v) =>
-            updateField("ah_profession_type", v)
-          }
+          onChange={(v) => updateField("ah_profession_type", v)}
           placeholder="Select profession..."
           disabled={disabled}
           options={[
-            { value: "occupational_therapist",  label: "Occupational Therapist" },
-            { value: "speech_pathologist",       label: "Speech Pathologist" },
-            { value: "physiotherapist",          label: "Physiotherapist" },
-            { value: "behaviour_support",        label: "Behaviour Support Practitioner" },
-            { value: "social_worker",            label: "Social Worker" },
-            { value: "psychologist",             label: "Psychologist" },
+            {
+              value: "occupational_therapist",
+              label: "Occupational Therapist",
+            },
+            { value: "speech_pathologist", label: "Speech Pathologist" },
+            { value: "physiotherapist", label: "Physiotherapist" },
+            {
+              value: "behaviour_support",
+              label: "Behaviour Support Practitioner",
+            },
+            { value: "social_worker", label: "Social Worker" },
+            { value: "psychologist", label: "Psychologist" },
           ]}
         />
       </div>
@@ -892,15 +841,13 @@ function AlliedHealthFields({
         <StyledSelect
           name="ah_registration_status"
           value={form.ah_registration_status}
-          onChange={(v) =>
-            updateField("ah_registration_status", v)
-          }
+          onChange={(v) => updateField("ah_registration_status", v)}
           placeholder="Select status..."
           disabled={disabled}
           options={[
-            { value: "ahpra_registered",  label: "AHPRA Registered" },
-            { value: "ndis_registered",   label: "NDIS Registered Provider" },
-            { value: "unregistered",      label: "Unregistered" },
+            { value: "ahpra_registered", label: "AHPRA Registered" },
+            { value: "ndis_registered", label: "NDIS Registered Provider" },
+            { value: "unregistered", label: "Unregistered" },
           ]}
         />
       </div>
@@ -911,9 +858,7 @@ function AlliedHealthFields({
         <StyledInput
           name="ah_provider_number"
           value={form.ah_provider_number}
-          onChange={(v) =>
-            updateField("ah_provider_number", v)
-          }
+          onChange={(v) => updateField("ah_provider_number", v)}
           placeholder="e.g. OCC0001234"
           disabled={disabled}
           required={false}
@@ -926,9 +871,7 @@ function AlliedHealthFields({
         <StyledInput
           name="ah_specialties"
           value={form.ah_specialties}
-          onChange={(v) =>
-            updateField("ah_specialties", v)
-          }
+          onChange={(v) => updateField("ah_specialties", v)}
           placeholder="e.g. Autism, acquired brain injury"
           disabled={disabled}
           required={false}
@@ -941,9 +884,7 @@ function AlliedHealthFields({
         <StyledInput
           name="ah_clinic_name"
           value={form.ah_clinic_name}
-          onChange={(v) =>
-            updateField("ah_clinic_name", v)
-          }
+          onChange={(v) => updateField("ah_clinic_name", v)}
           placeholder="Clinic or employer"
           disabled={disabled}
           required={false}
@@ -954,11 +895,7 @@ function AlliedHealthFields({
 }
 
 // ── Small Provider ────────────────────────────────────────────────────────────
-function SmallProviderFields({
-  form,
-  updateField,
-  disabled,
-}: any) {
+function SmallProviderFields({ form, updateField, disabled }: any) {
   return (
     <>
       <div>
@@ -967,9 +904,7 @@ function SmallProviderFields({
         <StyledInput
           name="sp_organisation_name"
           value={form.sp_organisation_name}
-          onChange={(v) =>
-            updateField("sp_organisation_name", v)
-          }
+          onChange={(v) => updateField("sp_organisation_name", v)}
           placeholder="Care Partners Ltd"
           disabled={disabled}
         />
@@ -981,17 +916,15 @@ function SmallProviderFields({
         <StyledSelect
           name="sp_provider_type"
           value={form.sp_provider_type}
-          onChange={(v) =>
-            updateField("sp_provider_type", v)
-          }
+          onChange={(v) => updateField("sp_provider_type", v)}
           placeholder="Select type..."
           disabled={disabled}
           required={false}
           options={[
-            { value: "registered_ndis",   label: "Registered NDIS Provider" },
-            { value: "unregistered",      label: "Unregistered Provider" },
-            { value: "plan_management",   label: "Plan Management Provider" },
-            { value: "support_coord",     label: "Support Coordination Provider" },
+            { value: "registered_ndis", label: "Registered NDIS Provider" },
+            { value: "unregistered", label: "Unregistered Provider" },
+            { value: "plan_management", label: "Plan Management Provider" },
+            { value: "support_coord", label: "Support Coordination Provider" },
           ]}
         />
       </div>
@@ -1002,16 +935,14 @@ function SmallProviderFields({
         <StyledSelect
           name="sp_registration_status"
           value={form.sp_registration_status}
-          onChange={(v) =>
-            updateField("sp_registration_status", v)
-          }
+          onChange={(v) => updateField("sp_registration_status", v)}
           placeholder="Select status..."
           disabled={disabled}
           required={false}
           options={[
-            { value: "registered",   label: "Registered with NDIS Commission" },
+            { value: "registered", label: "Registered with NDIS Commission" },
             { value: "unregistered", label: "Unregistered" },
-            { value: "in_progress",  label: "Registration in Progress" },
+            { value: "in_progress", label: "Registration in Progress" },
           ]}
         />
       </div>
@@ -1022,15 +953,13 @@ function SmallProviderFields({
         <StyledSelect
           name="sp_team_size"
           value={form.sp_team_size}
-          onChange={(v) =>
-            updateField("sp_team_size", v)
-          }
+          onChange={(v) => updateField("sp_team_size", v)}
           placeholder="Select size..."
           disabled={disabled}
           required={false}
           options={[
-            { value: "1_5",     label: "1–5 staff" },
-            { value: "5_20",    label: "5–20 staff" },
+            { value: "1_5", label: "1–5 staff" },
+            { value: "5_20", label: "5–20 staff" },
             { value: "20_plus", label: "20+ staff" },
           ]}
         />
@@ -1042,15 +971,13 @@ function SmallProviderFields({
         <StyledSelect
           name="sp_participant_volume"
           value={form.sp_participant_volume}
-          onChange={(v) =>
-            updateField("sp_participant_volume", v)
-          }
+          onChange={(v) => updateField("sp_participant_volume", v)}
           placeholder="Approx. number of participants..."
           disabled={disabled}
           required={false}
           options={[
-            { value: "1_10",    label: "1–10 participants" },
-            { value: "10_50",   label: "10–50 participants" },
+            { value: "1_10", label: "1–10 participants" },
+            { value: "10_50", label: "10–50 participants" },
             { value: "50_plus", label: "50+ participants" },
           ]}
         />
@@ -1062,9 +989,7 @@ function SmallProviderFields({
         <StyledInput
           name="sp_contact_number"
           value={form.sp_contact_number}
-          onChange={(v) =>
-            updateField("sp_contact_number", v)
-          }
+          onChange={(v) => updateField("sp_contact_number", v)}
           placeholder="02 xxxx xxxx"
           disabled={disabled}
           required={false}

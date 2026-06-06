@@ -44,7 +44,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden" style={{ animation: "authPageEnter 0.3s ease-out" }}>
+    <div
+      className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden"
+      style={{ animation: "authPageEnter 0.3s ease-out" }}
+    >
       {/* ── Injection of Fluid Animation Keyframes ────────────────────────── */}
       <style
         dangerouslySetInnerHTML={{
@@ -117,7 +120,7 @@ export default function Login() {
           <img
             src="/carecliQ_logo.png"
             alt="CareCliQ"
-            className="h-16 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
+            className="h-13 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
           />
           <div className="h-4 w-[1px] bg-gray-200" />
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">
