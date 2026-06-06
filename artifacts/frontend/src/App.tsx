@@ -34,6 +34,7 @@ import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
 import CoordinatorGoals from "@/pages/coordinator-goals";
 import AuditPack from "@/pages/audit-pack";
+import SessionReview from "@/pages/session-review";
 import Credentials from "@/pages/credentials";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
@@ -176,6 +177,12 @@ function Router() {
       <Route path="/audit-pack">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><AuditPack /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/session-review">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><SessionReview /></AppLayout>
         </ProtectedRoute>
       </Route>
 

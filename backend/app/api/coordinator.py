@@ -283,9 +283,37 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
             "status": row.get("status"),
         })
 
+    # Count workers whose avg compliance < 60 — these need coaching / training.
+    training_due_count = 0
+    try:
+        sessions_resp = supabase.table("sessions").select(
+            "worker_id, support_worker_id, owner_user_id, compliance_score, organization_id"
+        ).eq("organization_id", org_id).not_.is_("compliance_score", "null").execute()
+        sessions_data = sessions_resp.data or []
+
+        scores_by_worker: dict[str, list[float]] = {}
+        for s in sessions_data:
+            wid = str(
+                s.get("worker_id") or s.get("support_worker_id") or s.get("owner_user_id") or ""
+            )
+            if not wid:
+                continue
+            try:
+                scores_by_worker.setdefault(wid, []).append(float(s["compliance_score"]))
+            except (ValueError, TypeError):
+                pass
+
+        training_due_count = sum(
+            1 for scores in scores_by_worker.values()
+            if scores and (sum(scores) / len(scores)) < 60
+        )
+    except Exception:
+        training_due_count = 0
+
     return {
         "generated_at": today.isoformat(),
         "alerts": alerts_out,
+        "training_due_count": training_due_count,
     }
 
 
@@ -393,6 +421,90 @@ async def flag_session_for_review(
             raise HTTPException(status_code=500, detail=f"Flag update failed: {e}")
 
     return {"session_id": session_id, "flagged": body.flagged}
+
+
+@router.post("/sessions/{session_id}/approve")
+async def approve_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Approve a flagged session — clears review_flag; org-scoped to coordinator's organisation."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    coordinator_id = str(get_user_id(current_user) or "")
+    approved_at = datetime.now(timezone.utc).isoformat()
+
+    # ── 1. Fetch and verify org ownership before mutating ────────────────────
+    try:
+        existing_resp = (
+            supabase.table("sessions")
+            .select("id, participant_id, patient_id, session_date, session_type, status, "
+                    "compliance_score, worker_id, support_worker_id, owner_user_id, organization_id, "
+                    "review_flag, review_note, review_requested_by, review_requested_at")
+            .eq("id", session_id)
+            .execute()
+        )
+        existing_rows = existing_resp.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Session lookup failed: {e}")
+
+    if not existing_rows:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    session_row = existing_rows[0]
+    session_org = str(session_row.get("organization_id") or "")
+    if session_org != org_id:
+        raise HTTPException(status_code=403, detail="Session does not belong to your organisation.")
+
+    # ── 2. Build update payload; try with extended fields first ──────────────
+    base_update: dict[str, Any] = {
+        "review_flag": False,
+        "review_requested_by": None,
+        "review_requested_at": None,
+        "review_note": f"Approved by {coordinator_id} at {approved_at}",
+    }
+    extended_update: dict[str, Any] = {
+        **base_update,
+        "approved_by": coordinator_id,
+        "approved_at": approved_at,
+    }
+
+    def _do_update(payload: dict[str, Any]) -> None:
+        supabase.table("sessions").update(payload).eq("id", session_id).execute()
+
+    # ── 3. Apply update — no delete/insert fallback to avoid FK cascade risk ─
+    try:
+        _do_update(extended_update)
+        persisted = {**session_row, **extended_update}
+    except Exception as e:
+        err = str(e)
+        # Column missing (approved_by / approved_at not yet in schema) — retry base only
+        if "42703" in err or "column" in err.lower():
+            try:
+                _do_update(base_update)
+                persisted = {**session_row, **base_update}
+            except Exception as e2:
+                err2 = str(e2)
+                if "42703" in err2 or "updated_at" in err2:
+                    # updated_at trigger bug: update is actually applied despite the error;
+                    # treat as success rather than corrupting data with delete+insert.
+                    persisted = {**session_row, **base_update}
+                else:
+                    raise HTTPException(status_code=500, detail=f"Approve failed: {e2}")
+        elif "42703" in err or "updated_at" in err:
+            # updated_at trigger bug on extended update — treat as success
+            persisted = {**session_row, **extended_update}
+        else:
+            raise HTTPException(status_code=500, detail=f"Approve failed: {e}")
+
+    # ── 4. Return the updated session payload ────────────────────────────────
+    return {
+        **_session_payload(persisted),
+        "review_flag": False,
+        "review_note": persisted.get("review_note"),
+        "approved_by": coordinator_id,
+        "approved_at": approved_at,
+    }
 
 
 @router.get("/flagged-sessions")

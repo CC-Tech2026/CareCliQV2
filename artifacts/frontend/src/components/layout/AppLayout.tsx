@@ -4,7 +4,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
-  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target,
+  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
@@ -53,9 +53,10 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Quality & Safety",
       items: [
-        { href: "/compliance", label: "Compliance",    icon: ShieldCheck },
-        { href: "/audit-pack", label: "Audit Pack",    icon: FileCheck2 },
-        { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
+        { href: "/compliance",      label: "Compliance",      icon: ShieldCheck },
+        { href: "/session-review",  label: "Session Review",  icon: ClipboardCheck },
+        { href: "/audit-pack",      label: "Audit Pack",      icon: FileCheck2 },
+        { href: "/incidents",       label: "Incidents",       icon: AlertTriangle },
       ],
     },
     {

@@ -101,8 +101,14 @@ export function getCoordinatorRpFlags() {
   return jsonFetch<RpFlag[]>("/api/coordinator/rp-flags");
 }
 
+export type CredentialAlertsResponse = {
+  alerts: CredentialAlert[];
+  generated_at: string;
+  training_due_count: number;
+};
+
 export function getCoordinatorCredentialAlerts() {
-  return jsonFetch<{ alerts: CredentialAlert[]; generated_at: string }>("/api/coordinator/credential-alerts");
+  return jsonFetch<CredentialAlertsResponse>("/api/coordinator/credential-alerts");
 }
 
 export function getCoordinatorFlaggedSessions() {
@@ -245,5 +251,26 @@ export function sendBulkReminders(workerIds: string[], message: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ worker_ids: workerIds, message }),
+  });
+}
+
+export type ApproveResult = {
+  id?: string;
+  participant_id?: string;
+  participant_name?: string;
+  session_date?: string;
+  session_type?: string;
+  status?: string;
+  compliance_score?: number;
+  compliance_status?: string;
+  review_flag: boolean;
+  review_note?: string;
+  approved_by: string;
+  approved_at: string;
+};
+
+export function approveSession(sessionId: string) {
+  return jsonFetch<ApproveResult>(`/api/coordinator/sessions/${sessionId}/approve`, {
+    method: "POST",
   });
 }
