@@ -17,6 +17,10 @@ interface BillingReport {
   total_outstanding_cents: number;
   invoice_count: number;
   monthly: Array<{ month: string; billed: number; paid: number; outstanding: number; count: number }>;
+  session_count?: number | null;
+  total_session_costs_cents?: number | null;
+  cost_per_session_cents?: number | null;
+  gross_margin_pct?: number | null;
 }
 
 function MetricCard({
@@ -71,22 +75,14 @@ function MonthBar({ label, revenue, max }: { label: string; revenue: number; max
 export default function MDFinancialPage() {
   const [, navigate] = useLocation();
   const [rev, setRev] = useState<BillingReport | null>(null);
-  const [mdData, setMdData] = useState<{ sessions_this_week?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      apiFetch("/api/billing/revenue-report").then((r) => (r.ok ? r.json() : null)),
-      apiFetch("/api/dashboard/managing-director").then((r) => (r.ok ? r.json() : null)),
-    ])
-      .then(([r, md]) => {
-        if (!cancelled) {
-          setRev(r);
-          setMdData(md);
-        }
-      })
+    apiFetch("/api/billing/revenue-report")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => { if (!cancelled) setRev(r); })
       .catch(() => { if (!cancelled) setError(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -98,12 +94,16 @@ export default function MDFinancialPage() {
   const totalPaid = centsToAud(rev?.total_paid_cents ?? 0);
   const totalOutstanding = centsToAud(rev?.total_outstanding_cents ?? 0);
   const totalInvoices = rev?.invoice_count ?? 0;
-  const sessionsThisWeek = mdData?.sessions_this_week ?? 1;
-  const costPerSession = totalRev > 0 && sessionsThisWeek > 0
-    ? Math.round((totalRev / Math.max(sessionsThisWeek * 4, 1)) * 10) / 10
-    : 0;
-  const grossMarginPct = 38;
-  const netMarginPct = 22;
+
+  const costPerSession = rev?.cost_per_session_cents != null && rev.cost_per_session_cents > 0
+    ? centsToAud(rev.cost_per_session_cents)
+    : null;
+  const grossMarginPct: number | null = rev?.gross_margin_pct ?? null;
+  const totalSessionCosts = rev?.total_session_costs_cents != null && rev.total_session_costs_cents > 0
+    ? centsToAud(rev.total_session_costs_cents)
+    : null;
+  const hasCostData = costPerSession !== null || grossMarginPct !== null;
+
   const target = Math.max(totalRev * 1.05, 1000);
   const targetPct = totalRev > 0 ? Math.round((totalRev / target) * 100) : 0;
 
@@ -196,25 +196,41 @@ export default function MDFinancialPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
                   <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Cost per Session</p>
-                  <p className="text-2xl font-black" style={{ color: TEXT }}>{costPerSession > 0 ? fmt(costPerSession) : "—"}</p>
-                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>Based on weekly sessions × 4</p>
+                  <p className="text-2xl font-black" style={{ color: TEXT }}>
+                    {costPerSession !== null ? fmt(costPerSession) : "—"}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
+                    {costPerSession !== null ? `Avg across ${rev?.session_count ?? 0} sessions` : "No session cost data yet"}
+                  </p>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Est. Gross Margin</p>
-                  <p className="text-2xl font-black" style={{ color: "#10B981" }}>{grossMarginPct}%</p>
-                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>NDIS sector estimate</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>
+                    {grossMarginPct !== null ? "Gross Margin" : "Est. Gross Margin"}
+                  </p>
+                  <p className="text-2xl font-black" style={{ color: grossMarginPct !== null ? (grossMarginPct >= 0 ? "#10B981" : "#EF4444") : MUTED }}>
+                    {grossMarginPct !== null ? `${grossMarginPct}%` : "—"}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
+                    {grossMarginPct !== null ? "Revenue minus session costs" : "No billing data yet"}
+                  </p>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Est. Net Margin</p>
-                  <p className="text-2xl font-black" style={{ color: "#10B981" }}>{netMarginPct}%</p>
-                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>After overhead est.</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-2" style={{ color: MUTED }}>Total Session Costs</p>
+                  <p className="text-2xl font-black" style={{ color: totalSessionCosts !== null ? TEXT : MUTED }}>
+                    {totalSessionCosts !== null ? fmt(totalSessionCosts) : "—"}
+                  </p>
+                  <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
+                    {totalSessionCosts !== null ? "From NDIS budget usage records" : "No cost records yet"}
+                  </p>
                 </div>
               </div>
-              <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-                <p className="text-[11px] font-medium text-blue-700">
-                  Margin figures are NDIS sector estimates. Connect your accounting system for precise margin tracking.
-                </p>
-              </div>
+              {!hasCostData && (
+                <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                  <p className="text-[11px] font-medium text-blue-700">
+                    Margin figures will appear once sessions with recorded costs exist. Save sessions with AI to capture cost data.
+                  </p>
+                </div>
+              )}
             </section>
 
             {monthly.length > 0 && (

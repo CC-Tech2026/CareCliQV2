@@ -466,10 +466,61 @@ async def get_revenue_report(user: dict) -> dict:
         reverse=True,
     )
 
+    # --- Real cost and margin figures from budget_usage records ---
+    total_session_costs_cents: int | None = None
+    session_count: int | None = None
+    cost_per_session_cents: int | None = None
+    gross_margin_pct: float | None = None
+    # net_margin_pct is omitted until real overhead cost data is available
+
+    try:
+        # Step 1: get all session IDs for this org
+        sessions_result = (
+            supabase.table("sessions")
+            .select("id")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        session_ids = [r["id"] for r in (sessions_result.data or []) if r.get("id")]
+        session_count = len(session_ids)
+
+        if session_ids:
+            # Step 2: sum budget_usage.amount for those sessions
+            # budget_usage.amount is stored in dollars; convert to cents
+            usage_result = (
+                supabase.table("budget_usage")
+                .select("session_id, amount")
+                .in_("session_id", session_ids)
+                .execute()
+            )
+            usage_rows = usage_result.data or []
+
+            raw_cost_sum = 0.0
+            for row in usage_rows:
+                raw_cost_sum += float(row.get("amount") or 0)
+
+            total_session_costs_cents = int(raw_cost_sum * 100)
+
+            # Cost-per-session: total budget_usage cost / total session count for org
+            # (per task spec: total session cost from budget_usage / session count)
+            if session_count > 0 and total_session_costs_cents > 0:
+                cost_per_session_cents = int(total_session_costs_cents / session_count)
+
+            # Gross margin only when we have real invoice revenue AND real cost records
+            if total_billed > 0 and total_session_costs_cents > 0:
+                gross = (total_billed - total_session_costs_cents) / total_billed * 100
+                gross_margin_pct = round(gross, 1)
+    except Exception:
+        pass
+
     return {
         "monthly": monthly_list,
         "total_billed_cents": total_billed,
         "total_paid_cents": total_paid,
         "total_outstanding_cents": total_outstanding,
         "invoice_count": len(invoices),
+        "session_count": session_count,
+        "total_session_costs_cents": total_session_costs_cents,
+        "cost_per_session_cents": cost_per_session_cents,
+        "gross_margin_pct": gross_margin_pct,
     }
