@@ -1,0 +1,204 @@
+Acceptance Criteria:
+
+ MD logs in → sees MD Hub (not worker/coordinator Hub)
+ Dashboard shows 10 key metrics
+ Alerts section shows organization-level risks
+ Compliance trends visible with charts
+ Financial summary accurate
+ Workspace launcher shows 4 MD workspace options
+ All data is organization-wide (not team-specific)
+ Charts/graphs render correctly
+
+
+1.4 Managing Director Workspace
+Effort: 6-7 days | Priority: CRITICAL
+Create MD workspace for deep analysis and management:
+Managing Director Workspace:
+├─ EXECUTIVE DASHBOARD (comprehensive KPI view)
+│  ├─ Organization metrics (live updates)
+│  ├─ Performance vs targets
+│  ├─ Trend analysis
+│  ├─ Risk dashboard
+│  └─ Strategic alerts
+│
+├─ STAFF MANAGEMENT (people focus)
+│  ├─ Staff directory (all staff)
+│  ├─ Individual performance
+│  ├─ Hire/onboard tracking
+│  ├─ Development planning
+│  ├─ Retention risk tracking
+│  └─ Team structure view
+│
+├─ COMPLIANCE DASHBOARD (compliance focus)
+│  ├─ Organization compliance score
+│  ├─ Compliance trends (90-day chart)
+│  ├─ Rule-by-rule breakdown (R1-R12)
+│  ├─ Worker rankings
+│  ├─ Team comparisons
+│  ├─ Audit readiness
+│  └─ Trending alerts
+│
+└─ FINANCIAL OVERVIEW (business focus)
+   ├─ Revenue tracking
+   ├─ Budget vs actual
+   ├─ Cost per session
+   ├─ Margin analysis
+   ├─ YTD summary
+   ├─ Participant billing
+   └─ Profitability insights
+Key Components:
+a) Executive Dashboard
+┌─────────────────────────────────────────┐
+│ ORGANIZATION EXECUTIVE DASHBOARD        │
+├─────────────────────────────────────────┤
+│                                         │
+│ KEY METRICS                             │
+│ ┌─────────────────────────────────────┐ │
+│ │ Participants: 156 ↗ (up 5% YoY)   │ │
+│ │ Staff: 48 (Retention: 96%)         │ │
+│ │ Sessions/week: 342 ↗ (+8%)         │ │
+│ │ Compliance: 88% (Target: 90%) ⚠️   │ │
+│ │ Revenue/month: $42.7K (95% target) │ │
+│ │ Incidents/month: 3 ↘ (-40%)        │ │
+│ │ Goal Achievement: 92% ✓            │ │
+│ └─────────────────────────────────────┘ │
+│                                         │
+│ ORGANIZATION ALERTS                     │
+│ ├─ 1 worker below 80% compliance       │
+│ ├─ 2 staff retention risks              │
+│ ├─ Audit prep (10 days away)            │
+│ └─ Budget on track (95%)                │
+│                                         │
+│ TRENDS (Last 90 Days)                   │
+│ ├─ Compliance: ↗ IMPROVING              │
+│ ├─ Incidents: ↘ DECLINING               │
+│ ├─ Revenue: → STEADY                    │
+│ └─ Retention: ↗ IMPROVING               │
+│                                         │
+└─────────────────────────────────────────┘
+b) Staff Management
+┌──────────────────────────────────────────┐
+│ STAFF MANAGEMENT (48 staff)              │
+├──────────────────────────────────────────┤
+│ Filter: All | Retention Risk | Training  │
+│                                          │
+│ Lisa Rodriguez - RETENTION RISK ⚠️       │
+│ Role: Support Coordinator                │
+│ Tenure: 3.2 years                        │
+│ Performance: Strong                      │
+│ Team: Community Access (8 workers)       │
+│ Signals: Mentioned exploring options     │
+│ [Schedule Chat] [Check-In] [History]     │
+│                                          │
+│ James Park - RETENTION RISK ⚠️          │
+│ Role: Support Worker                     │
+│ Tenure: 1.8 years                        │
+│ Performance: Good (85% compliance)       │
+│ Assigned: 9 participants                 │
+│ Signals: Reduced hours request           │
+│ [Schedule Chat] [Check-In] [History]     │
+│                                          │
+│ Sarah Johnson - STRONG PERFORMER ✓      │
+│ Role: Support Worker                     │
+│ Tenure: 4.5 years                        │
+│ Performance: Excellent (92% compliance)  │
+│ Assigned: 8 participants                 │
+│ Development: Ready for senior role       │
+│ [Performance Review] [Development Plan]  │
+│                                          │
+└──────────────────────────────────────────┘
+c) Compliance Dashboard
+┌──────────────────────────────────────────┐
+│ ORGANIZATION COMPLIANCE DASHBOARD        │
+├──────────────────────────────────────────┤
+│                                          │
+│ Current Compliance: 88% (Target: 90%)    │
+│ Status: Below Target ⚠️                  │
+│                                          │
+│ 90-Day Trend Chart                       │
+│ 100% ┌──────────────────────┐            │
+│      │                      │            │
+│  90% │      ╱╲              │            │
+│      │     ╱  ╲             │            │
+│  80% │    ╱    ╲    ╱╲      │            │
+│      │   ╱      ╲  ╱  ╲     │            │
+│  70% └──────────────────────┘            │
+│      30d    60d    90d                    │
+│  Trend: IMPROVING (+2% last month)       │
+│                                          │
+│ RULE BREAKDOWN (R1-R12)                  │
+│ R5: Goal Reference     ▓▓▓░ 75%         │
+│ R6: Objective Language ▓▓▓▓░ 80%         │
+│ R1: Date/Time/Duration ▓▓▓▓▓ 95% ✓      │
+│ R10: Restrictive Pract ▓▓▓▓░ 88%         │
+│ [More rules...]                          │
+│                                          │
+│ WORKER RANKINGS                          │
+│ 1. Sarah Johnson - 92% ⭐                │
+│ 2. Emma Thompson - 90% ⭐                │
+│ 3. David Brown - 88%                     │
+│ ...                                      │
+│ 45. James Mitchell - 78% ⚠️              │
+│ 46. Lisa Chen - 82% ⚠️                   │
+│                                          │
+│ AUDIT READINESS                          │
+│ Documentation: ✓ Complete                │
+│ Certifications: ⚠️ 5 expiring (14 days)  │
+│ Training Records: ⚠️ 12 due for review   │
+│ Incidents: ✓ All current                 │
+│ Overall: 85% Ready (10 days until audit) │
+│                                          │
+└──────────────────────────────────────────┘
+d) Financial Overview
+┌──────────────────────────────────────────┐
+│ FINANCIAL OVERVIEW                       │
+├──────────────────────────────────────────┤
+│                                          │
+│ THIS MONTH                               │
+│ Revenue: $42,750 (95% of $45K target)    │
+│ Status: On Track ✓                       │
+│                                          │
+│ YEAR-TO-DATE                             │
+│ Revenue: $512,400 (94% of $540K target)  │
+│ Status: On Track (94%)                   │
+│ Projected Year-End: +$3,000 surplus      │
+│                                          │
+│ COST ANALYSIS                            │
+│ Cost per Session: $125                   │
+│ Industry Average: $130                   │
+│ Status: More Efficient ✓                 │
+│                                          │
+│ MARGIN ANALYSIS                          │
+│ Average Invoice: $1,250                  │
+│ Cost per Session: $125 (10%)             │
+│ Gross Margin: 38%                        │
+│ Net Margin: 22% (after overhead)         │
+│                                          │
+│ REVENUE BY PARTICIPANT TYPE              │
+│ Community Access: 35% ($187.5K)          │
+│ Residential: 45% ($229.8K)               │
+│ Coordination: 15% ($76.8K)               │
+│ Other: 5% ($25.6K)                       │
+│                                          │
+└──────────────────────────────────────────┘
+Implementation Steps:
+
+Create MD Workspace layout (tabbed interface)
+Build Executive Dashboard (live KPI cards)
+Build Staff Management section (staff directory, performance)
+Build Compliance Dashboard (trend chart, rule breakdown, rankings)
+Build Financial Overview (revenue, budget, margin)
+Integrate data feeds (real-time updates)
+Create export functionality (reports, PDFs)
+Add deep-dive capabilities (click metric → see details)
+
+Acceptance Criteria:
+
+ MD can access all 4 workspace tabs
+ Executive Dashboard shows 10+ key metrics with trends
+ Staff Management shows all staff with performance data
+ Compliance Dashboard shows trends and rule breakdown
+ Financial Overview accurate (matches invoice data)
+ Charts and visualizations render correctly
+ Deep-dive functionality works (click metric → see details)
+ Real-time data updates
