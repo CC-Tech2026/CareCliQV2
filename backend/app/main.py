@@ -72,6 +72,7 @@ async def _apply_startup_migrations():
             ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
             ("patient_goals",        "patient_goals",           "id, plan_id, description",                                                    "patient_goals table OK",                "patient_goals table missing — run backend/supabase_setup.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
+            ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -109,6 +110,8 @@ async def _apply_startup_migrations():
                 migration_state.patient_goals_table_missing = not ok
             elif key == "practitioner_allocs":
                 migration_state.practitioner_allocations_table_missing = not ok
+            elif key == "upcoming_review_date":
+                migration_state.upcoming_review_date_column_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")

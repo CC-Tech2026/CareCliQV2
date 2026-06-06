@@ -57,6 +57,9 @@ def _strip_optional_columns(payload: dict) -> dict:
     if migration_state.biological_sex_column_missing:
         payload.pop("biological_sex", None)
 
+    if migration_state.upcoming_review_date_column_missing:
+        payload.pop("upcoming_review_date", None)
+
     return payload
 
 
