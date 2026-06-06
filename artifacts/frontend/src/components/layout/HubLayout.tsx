@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiFetch } from "@/lib/api-fetch";
 
 const PLUM = "#5533CC";
 const TEXT = "#1E1640";
@@ -19,6 +21,21 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   const displayName = user?.full_name || user?.email || "Staff Member";
   const initials = getInitials(displayName);
 
+  const [orgName, setOrgName] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch("/api/hub/org")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data) => {
+        setOrgName(data?.organization_name || null);
+      })
+      .catch(() => {
+        setOrgName(null);
+      });
+  }, []);
+
+  const orgDisplay = orgName ?? "Your Organisation";
+
   return (
     <div className="min-h-screen w-full" style={{ background: "#F5F3FC" }}>
       {/* Slim top bar */}
@@ -35,7 +52,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               className="h-8 w-8 object-contain"
             />
             <span className="text-[15px] font-black tracking-tight" style={{ color: TEXT }}>
-              Sunshine Disability Services
+              {orgDisplay}
             </span>
           </div>
 

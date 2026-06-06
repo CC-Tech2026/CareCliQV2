@@ -26,6 +26,28 @@ def _require_coordinator(user: dict) -> str:
     return org_id
 
 
+# ── Organisation Info ─────────────────────────────────────────────────────────
+
+@router.get("/org")
+async def get_org_info(current_user: dict = Depends(get_current_user)):
+    """Return the current user's organisation name."""
+    org_id = _get_org_id(current_user)
+    if not org_id:
+        return {"organization_name": None}
+    supabase = get_supabase_admin()
+    try:
+        res = (
+            supabase.table("organizations")
+            .select("organization_name")
+            .eq("id", org_id)
+            .single()
+            .execute()
+        )
+        return {"organization_name": (res.data or {}).get("organization_name")}
+    except Exception:
+        return {"organization_name": None}
+
+
 # ── Compliance Alerts ─────────────────────────────────────────────────────────
 
 @router.get("/compliance-alerts")
