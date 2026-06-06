@@ -1,0 +1,173 @@
+The current implementation is not aligned with the intended CareCliQ architecture.
+
+The screen currently being used as the Hub is actually the existing Support Worker Workspace Dashboard.
+
+This dashboard already contains worker operational functionality:
+
+My Clients
+Compliance
+Incidents
+Credentials
+Toolkit
+Compliance Score
+Today's Clients
+Session metrics
+Participant information
+
+These are workspace features and must remain inside the Support Worker Workspace.
+
+Required Architecture
+
+Current incorrect implementation:
+
+Login
+  ↓
+Support Worker Dashboard
+  ↓
+Work begins
+
+Target architecture:
+
+Login
+  ↓
+CareCliQ Hub
+  ↓
+Launch Workspace
+  ↓
+Support Worker Workspace
+CareCliQ Hub Must Be A Separate Experience
+
+Create an entirely new route and page for the Hub.
+
+Examples:
+
+/hub
+
+or
+
+/organization-hub
+
+The Hub should be a completely separate page from all existing workspaces.
+
+The Hub is the organizational headquarters.
+
+The Hub should contain:
+
+Organization Header
+Company News Feed
+Compliance Centre
+Staff Community
+Organization Calendar
+Organization KPIs
+Workspace Launcher
+
+The Hub should NOT contain:
+
+My Clients
+Session Management
+Compliance Scores
+Incidents
+Participant Lists
+Participant Details
+Worker Tasks
+Existing Dashboard Widgets
+
+Those belong to the workspaces.
+
+Existing Workspaces Must Remain Untouched
+
+Do not modify:
+
+Support Worker Dashboard
+Support Coordinator Dashboard
+Existing navigation
+Existing workspace routes
+Existing workspace layouts
+Existing workspace functionality
+
+Treat them as production systems.
+
+No redesigns.
+
+No refactors.
+
+No relocations.
+
+No UI modifications.
+
+No route modifications.
+
+Workspace Launcher Behaviour
+
+Inside the Hub:
+
+Support Worker Workspace
+[ Launch Workspace ]
+
+Support Coordinator Workspace
+[ Launch Workspace ]
+
+Managing Director Workspace
+[ Launch Workspace ]
+
+When a user clicks Launch:
+
+Support Worker:
+
+Navigate to existing Support Worker Dashboard route
+
+Support Coordinator:
+
+Navigate to existing Coordinator Dashboard route
+
+Managing Director:
+
+Navigate to existing Director Dashboard route
+
+The launcher is simply navigation.
+
+Visual Example
+
+The user journey should feel like:
+
+LOGIN
+
+↓
+
+CARECLIQ HUB
+
+------------------------------------------------
+Sunshine Disability Services
+
+News Feed
+Compliance Alerts
+Staff Community
+Organization Calendar
+Organization KPIs
+
+Workspace Launcher
+
+[ Support Worker Workspace ]
+[ Launch ]
+
+[ Support Coordinator Workspace ]
+[ Launch ]
+
+[ Managing Director Workspace ]
+[ Launch ]
+------------------------------------------------
+
+↓ Click Launch
+
+SUPPORT WORKER WORKSPACE
+
+(existing dashboard shown in screenshot)
+
+My Clients
+Compliance
+Incidents
+Credentials
+Toolkit
+Today's Clients
+Compliance Score
+etc.
