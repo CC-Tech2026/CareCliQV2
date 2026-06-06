@@ -4,7 +4,6 @@ import {
   ArrowRight,
   UserRound,
   LayoutDashboard,
-  Stethoscope,
   Crown,
   Lock,
 } from "lucide-react";
@@ -45,15 +44,6 @@ const WORKSPACES: WorkspaceCard[] = [
     icon: LayoutDashboard,
     allowedRoles: ["support_coordinator"],
     accentColor: CORAL,
-  },
-  {
-    role: "Clinician",
-    title: "Clinician",
-    description: "Clinical sessions, assessments, reports, and therapeutic outcomes.",
-    href: "/sessions",
-    icon: Stethoscope,
-    allowedRoles: ["allied_health"],
-    accentColor: "#0EA5E9",
   },
   {
     role: "Managing Director",
