@@ -25,12 +25,12 @@ export default function Login() {
 
     setBusy(true);
     try {
-      await login(email, password);
+      const authUser = await login(email, password);
       toast({
         title: "Welcome back!",
         description: "Your terminal instance has safely initialized.",
       });
-      navigate("/hub");
+      navigate(authUser.role === "managing_director" ? "/hub" : "/dashboard");
     } catch (err) {
       toast({
         title: "Authentication Failed",
