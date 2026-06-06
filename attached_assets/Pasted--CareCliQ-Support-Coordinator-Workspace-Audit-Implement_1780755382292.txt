@@ -1,0 +1,300 @@
+# CareCliQ – Support Coordinator Workspace Audit & Implementation Review
+
+## Objective
+
+Review the existing CareCliQ application and determine whether the Support Coordinator Workspace requirements below have already been implemented, partially implemented, or are missing.
+
+### Critical Instruction
+
+DO NOT modify, refactor, rename, remove, or break any existing frontend or backend functionality.
+
+The Support Worker Workspace must remain fully functional and unchanged.
+
+Only extend existing functionality where necessary and reuse existing components, services, database tables, APIs, hooks, layouts, styling systems, and permissions wherever possible.
+
+Before creating any new:
+
+* Database tables
+* API endpoints
+* Services
+* Components
+* Types
+* Routes
+
+Check whether equivalent functionality already exists and can be reused.
+
+---
+
+# Phase 1 – Audit Existing System
+
+Perform a complete audit of:
+
+## Frontend
+
+* Routes
+* Pages
+* Components
+* Layouts
+* Navigation
+* Dashboards
+* Cards
+* Widgets
+* Services
+* Hooks
+* State management
+
+## Backend
+
+* Tables
+* Views
+* RPC functions
+* Services
+* APIs
+* Security policies
+* Existing role systems
+
+## Existing Roles
+
+Determine whether:
+
+* Support Worker
+* Support Coordinator
+* Managing Director
+* Admin
+
+already exist and how permissions are currently handled.
+
+---
+
+# Deliver Audit Report
+
+Provide:
+
+## Already Implemented
+
+Features that already satisfy requirements.
+
+## Partially Implemented
+
+Features that exist but require enhancement.
+
+## Missing
+
+Features not currently present.
+
+## Reusable Assets
+
+List all existing:
+
+* Components
+* Services
+* APIs
+* Database tables
+* Hooks
+
+that can be leveraged.
+
+---
+
+# Phase 2 – Coordinator Workspace Validation
+
+Verify that Coordinators:
+
+* See Coordinator Hub
+* Do NOT see Worker Hub
+* Have role-based routing
+* Have role-based navigation
+* Have team-scoped data access
+
+---
+
+# Coordinator Dashboard Requirements
+
+Verify implementation of:
+
+## Team Overview
+
+* Team Participants count
+* Team Sessions This Week
+* Team Compliance Average
+* Incidents This Month
+* Workers Needing Support
+
+## Team Alerts
+
+Display:
+
+* Flagged sessions
+* Pending incidents
+* Low-compliance workers
+* Expiring certifications
+* Training records due
+
+## Quick Actions
+
+Verify:
+
+* Review Now
+* Schedule Check-In
+* Send Reminder
+* Bulk Reminder
+
+are functional.
+
+---
+
+# Team Management
+
+Verify implementation of:
+
+* Team member list
+* Compliance scores
+* Session statistics
+* Participant allocations
+* Performance alerts
+* Check-in history
+* Schedule 1:1 actions
+* Messaging actions
+
+Confirm coordinator can only see workers within their assigned team.
+
+---
+
+# Participant Management
+
+Verify implementation of:
+
+* Participant listing
+* Participant status
+* Assigned worker
+* Goals and progress
+* Risk levels
+* Incident history
+* Escalation actions
+* Plan review actions
+
+Confirm coordinators only see participants belonging to their care team.
+
+---
+
+# Session Review
+
+Verify implementation of:
+
+* Flagged session list
+* Session detail view
+* Compliance rule breakdown
+* AI suggestions
+* Approve session
+* Reject session
+* Send back to worker
+* Bulk approval workflow
+
+Confirm approval workflow functions correctly.
+
+---
+
+# Incident Management
+
+Verify implementation of:
+
+* Incident listing
+* Incident detail view
+* Risk assessment
+* Follow-up tracking
+* Escalation workflows
+
+Confirm coordinators can manage incidents for their team only.
+
+---
+
+# Compliance Tracking
+
+Verify implementation of:
+
+* Team compliance score
+* Compliance trends
+* Expiring certifications
+* Training due records
+* Bulk reminders
+
+Confirm all metrics are team-based rather than individual worker-based.
+
+---
+
+# UI / UX Validation
+
+Confirm:
+
+* Styling matches existing Support Worker Workspace
+* Existing design system is reused
+* Existing cards are reused where possible
+* Existing typography is reused
+* Existing spacing is reused
+* Existing responsive layouts are reused
+
+Do not create a separate visual language.
+
+Coordinator Workspace must feel like an extension of the Worker Workspace.
+
+---
+
+# Security Validation
+
+Verify:
+
+* Coordinators cannot access other teams
+* Workers cannot access Coordinator Workspace
+* Team data is properly scoped
+* Role-based permissions are enforced
+* Existing RLS policies are reused where possible
+
+---
+
+# Phase 3 – Gap Analysis
+
+After the audit provide:
+
+## Completed Features
+
+List all requirements already satisfied.
+
+## Missing Features
+
+List requirements not implemented.
+
+## Required Frontend Changes
+
+Only additions required.
+
+## Required Backend Changes
+
+Only additions required.
+
+## Database Impact
+
+Specify:
+
+* No database changes required
+  OR
+* Minimal additions required
+
+Do not recommend unnecessary tables.
+
+---
+
+# Phase 4 – Implementation Plan
+
+Generate a step-by-step implementation plan that:
+
+1. Preserves all existing functionality.
+2. Does not break Support Worker Workspace.
+3. Reuses existing backend services.
+4. Reuses existing frontend components.
+5. Adds only missing Coordinator functionality.
+6. Follows current architecture and patterns.
+
+Provide estimated effort for each missing feature.
+
+Important:
+Treat the existing CareCliQ codebase as the source of truth. Audit first, then recommend additions only where functionality is missing.
