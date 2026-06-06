@@ -38,6 +38,7 @@ import VerifyEmail from "@/pages/verify-email";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
+import HubPage from "@/pages/hub/HubPage";
 import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
@@ -101,6 +102,13 @@ function Router() {
       <Route path="/getting-started">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <CoordinatorOnboarding />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Hub — org intelligence layer, all roles ───────────────────────── */}
+      <Route path="/hub">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><HubPage /></AppLayout>
         </ProtectedRoute>
       </Route>
 
