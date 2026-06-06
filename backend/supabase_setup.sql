@@ -869,3 +869,39 @@ BEGIN
         ALTER TABLE patients ADD COLUMN medical_alerts TEXT;
     END IF;
 END $$;
+
+-- ============================================================
+-- Hub: Org Events + Announcements tables (idempotent)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.org_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    title           TEXT NOT NULL,
+    event_date      DATE NOT NULL,
+    duration        TEXT NOT NULL DEFAULT '1 hour',
+    event_type      TEXT NOT NULL DEFAULT 'meeting',
+    location        TEXT,
+    participants_desc TEXT,
+    created_by      UUID,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.announcements (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    title           TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    severity        TEXT NOT NULL DEFAULT 'info',
+    category        TEXT NOT NULL DEFAULT 'Announcement',
+    created_by      UUID,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- date_of_birth on users (for birthday community items)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='date_of_birth') THEN
+        ALTER TABLE public.users ADD COLUMN date_of_birth DATE;
+    END IF;
+END $$;
