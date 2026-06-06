@@ -25,7 +25,7 @@ from . import audit_service
 SUBSCRIPTION_STATUSES = {"trialing", "active", "past_due", "cancelled", "manual_review"}
 SUBSCRIPTION_PLANS = {"starter", "team", "pro", "enterprise"}
 INVOICE_STATUSES = {"draft", "finalized", "issued", "sent", "paid", "void", "overdue", "cancelled"}
-BILLING_ROLES = {"support_coordinator", "allied_health"}
+BILLING_ROLES = {"support_coordinator", "allied_health", "managing_director"}
 
 
 def _now_iso() -> str:

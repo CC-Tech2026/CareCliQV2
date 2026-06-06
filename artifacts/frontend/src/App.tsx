@@ -42,6 +42,10 @@ import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
 import HubPage from "@/pages/hub/HubPage";
+import MDExecutivePage from "@/pages/md/executive";
+import MDStaffPage from "@/pages/md/staff";
+import MDCompliancePage from "@/pages/md/compliance";
+import MDFinancialPage from "@/pages/md/financial";
 import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
@@ -59,7 +63,7 @@ const queryClient = new QueryClient({
 });
 
 // All authenticated roles
-const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
 
 // Support Coordinator / CareCliQ Parent only — oversight, billing, team, compliance.
 const COORDINATOR_ROLES = ["support_coordinator"] as const;
@@ -67,6 +71,9 @@ const COORDINATOR_ROLES = ["support_coordinator"] as const;
 // Coordinator + allied health — reports contain clinical documentation allied health needs.
 const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 const WORKER_ROLES = ["support_worker"] as const;
+
+// Managing Director only
+const MD_ROLES = ["managing_director"] as const;
 
 function LegacyLiveRedirect({ sessionId }: { sessionId: string }) {
   const { user } = useAuth();
@@ -112,6 +119,31 @@ function Router() {
       <Route path="/hub">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <HubLayout><HubPage /></HubLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Managing Director Workspaces ──────────────────────────────────── */}
+      <Route path="/md/executive">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDExecutivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/staff">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDStaffPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/compliance">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDCompliancePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/financial">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDFinancialPage />
         </ProtectedRoute>
       </Route>
 

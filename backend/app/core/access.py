@@ -9,7 +9,8 @@ from fastapi import HTTPException, status
 
 COORDINATOR_ROLES = {"support_coordinator"}
 SCOPED_ROLES = {"support_worker", "allied_health"}
-VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES
+EXECUTIVE_ROLES = {"managing_director"}
+VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES
 
 SUPPORT_WORKER_PARTICIPANT_FIELDS = (
     "assigned_worker_id",
@@ -105,12 +106,21 @@ def is_coordinator_role(user: Optional[dict]) -> bool:
     return get_user_role(user) in COORDINATOR_ROLES
 
 
+def has_org_wide_access(user: Optional[dict]) -> bool:
+    """True for any role with organisation-wide read access (coordinator + MD)."""
+    return get_user_role(user) in COORDINATOR_ROLES | EXECUTIVE_ROLES
+
+
 def is_support_worker(user: Optional[dict]) -> bool:
     return get_user_role(user) == "support_worker"
 
 
 def is_allied_health(user: Optional[dict]) -> bool:
     return get_user_role(user) == "allied_health"
+
+
+def is_managing_director(user: Optional[dict]) -> bool:
+    return get_user_role(user) == "managing_director"
 
 
 def record_belongs_to_user_org(row: dict, user: Optional[dict]) -> bool:
@@ -169,7 +179,7 @@ def can_access_participant(row: dict, user: Optional[dict]) -> bool:
         return False
     if not record_belongs_to_user_org(row, user):
         return False
-    if is_coordinator_role(user):
+    if has_org_wide_access(user):
         return record_belongs_to_user_org(row, user)
     if is_support_worker(user) or is_allied_health(user):
         return record_assigned_to_user(row, user)
@@ -192,7 +202,7 @@ def can_access_session(
     if not org_match:
         return False
 
-    if is_coordinator_role(user):
+    if has_org_wide_access(user):
         return org_match
 
     session_assigned = record_assigned_to_user(row, user, is_session=True)

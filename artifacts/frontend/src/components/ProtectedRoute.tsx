@@ -22,6 +22,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   support_coordinator: "Support Coordinator (CareCliQ Parent)",
   support_worker: "Support Worker (CareCliQ Child)",
   allied_health: "Allied Health Professional (CareCliQ Pro)",
+  managing_director: "Managing Director (CareCliQ Executive)",
 };
 
 /**
