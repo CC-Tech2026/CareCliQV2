@@ -1,0 +1,223 @@
+Managing Director Onboarding Centre
+
+This should be a dedicated module accessible only from the Managing Director Workspace.
+
+The onboarding area should be designed as a modern training and employee activation platform.
+
+Onboarding Overview Screen
+
+Display:
+
+Summary Cards
+Total New Starters
+In Progress
+Completed
+Overdue
+Awaiting Approval
+Progress Analytics
+
+Visual charts showing:
+
+Completion rate
+Stage completion breakdown
+Average onboarding duration
+New Starter Table
+
+Show:
+
+Name
+Position
+Current Stage
+Completion %
+Assigned Date
+Status
+Onboarding Builder UI
+
+Allow the Managing Director to visually create onboarding programs.
+
+Design a drag-and-drop onboarding builder that includes:
+
+Stages
+
+Examples:
+
+Welcome
+Company Introduction
+Policies & Procedures
+NDIS Compliance
+Platform Training
+Documentation Submission
+Supervisor Review
+Final Approval
+
+Display stages as:
+
+Timeline view
+Vertical workflow view
+Kanban-style stage cards
+Stage Configuration Panel
+
+When the MD clicks a stage, open a modern side panel or modal.
+
+Allow configuration of:
+
+Training Resources
+
+Upload Areas:
+
+Video Upload
+Document Upload
+PDF Upload
+Training Guides
+External Links
+
+Display uploaded resources as beautiful cards with:
+
+Thumbnail
+Resource Type
+Duration
+File Size
+Version
+Stage Instructions
+
+Provide:
+
+Rich text editor
+Checklists
+Key objectives
+Notes section
+Completion Requirements
+
+UI controls for:
+
+Must Watch Video
+Must Download Resource
+Must Read Document
+Must Complete Checklist
+Require Acknowledgement
+Training & Resource Library
+
+Create a modern media management interface.
+
+The Managing Director should be able to upload:
+
+Videos
+
+Display:
+
+Video thumbnails
+Duration
+Category
+Usage count
+Documents
+
+Display:
+
+PDF cards
+Policy cards
+Training guides
+Categories
+
+Examples:
+
+Welcome
+Compliance
+NDIS
+HR
+Platform Training
+Policies
+Safety
+
+Use a modern grid-based layout similar to Notion or Google Drive.
+
+Onboarding Progress Experience
+
+Create a polished progress tracking interface.
+
+For each new employee show:
+
+Progress Timeline
+
+Visual onboarding journey showing:
+
+✔ Completed
+
+🟡 In Progress
+
+⚪ Not Started
+
+🔴 Overdue
+
+Progress Ring
+
+Large completion percentage indicator.
+
+Stage Cards
+
+Each stage card should show:
+
+Completion status
+Resources assigned
+Due date
+MD approval status
+Approval Interface
+
+The Managing Director should have a dedicated approval queue.
+
+Design:
+
+Approval Cards
+
+Showing:
+
+Staff member
+Stage awaiting approval
+Submitted documents
+Completion percentage
+
+Actions:
+
+Approve
+Request Changes
+Add Notes
+UI Design Direction
+
+The overall experience should feel premium and executive-focused.
+
+Design Inspiration
+Linear
+Notion
+Monday.com
+ClickUp
+Salesforce Lightning
+Visual Style
+Modern SaaS dashboard
+Clean spacing
+Large cards
+Soft shadows
+Rounded corners
+Professional typography
+Executive-level visual hierarchy
+Components Required
+KPI Cards
+Progress Rings
+Timeline Components
+Upload Zones
+Video Resource Cards
+Document Cards
+Activity Feed
+Approval Queue
+Onboarding Builder
+Analytics Widgets
+Final Goal
+
+The Managing Director Workspace should feel like a complete executive onboarding command centre where the MD can:
+
+Design onboarding programs
+Upload videos and training resources
+Manage onboarding stages
+Track employee progress
+Review submissions
+Approve completion
+
+All onboarding management should be centralized within the Managing Director Workspace and presented through a polished, enterprise-grade UI.
