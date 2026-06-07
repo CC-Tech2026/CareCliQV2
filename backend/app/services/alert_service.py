@@ -21,7 +21,7 @@ async def get_all_alerts(limit: int = 50) -> List[dict]:
 async def get_unread_alerts() -> List[dict]:
     supabase = get_supabase_admin()
     try:
-        result = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", False).order("created_at", desc=True).execute()
+        result = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", "false").order("created_at", desc=True).execute()
         return [_normalize(r) for r in (result.data or [])]
     except Exception as e:
         logger.warning(f"alerts table not available: {e}")
@@ -45,7 +45,7 @@ async def mark_alert_read(alert_id: str) -> Optional[dict]:
 
 async def mark_all_read() -> bool:
     supabase = get_supabase_admin()
-    supabase.table(TABLE).update({"is_read": True}).eq("is_read", False).execute()
+    supabase.table(TABLE).update({"is_read": True}).eq("is_read", "false").execute()
     return True
 
 

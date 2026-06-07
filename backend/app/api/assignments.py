@@ -114,7 +114,7 @@ async def get_my_participants(user: dict = Depends(get_current_user)):
             supabase.table(TABLE)
             .select("patient_id")
             .eq("user_id", uid)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .execute()
         )
         patient_ids = [r["patient_id"] for r in (alloc.data or [])]
@@ -177,7 +177,7 @@ async def list_assignments(user: dict = Depends(get_current_user)):
     uid    = user.get("sub")
 
     try:
-        q = supabase.table(TABLE).select("*").eq("is_active", True)
+        q = supabase.table(TABLE).select("*").eq("is_active", "true")
         if role in _COORDINATOR_ROLES:
             if org_id:
                 q = q.eq("organization_id", org_id)

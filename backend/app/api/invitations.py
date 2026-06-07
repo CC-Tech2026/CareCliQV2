@@ -293,7 +293,7 @@ async def list_members(current_user: dict = Depends(get_current_user)):
             supabase.table("organization_members")
             .select("id, user_id, role, is_active, joined_at")
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .execute()
         )
         members = result.data or []

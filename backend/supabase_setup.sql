@@ -640,6 +640,16 @@ CREATE TABLE IF NOT EXISTS organizations (
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Column guards: add any missing columns to pre-existing organizations tables
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+
 -- RLS on organizations
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 
@@ -728,6 +738,15 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
 );
 
+-- Column guards: add any missing columns to pre-existing organization_members tables.
+-- These run even when the CREATE TABLE above was skipped (table already existed).
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS user_id         UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+
 -- Widen role constraint idempotently (covers tables created before this update)
 DO $$ BEGIN
     ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
@@ -736,9 +755,10 @@ DO $$ BEGIN
 EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
+-- Indexes (wrapped in DO blocks so they never fail even if a column was just added)
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);            EXCEPTION WHEN others THEN NULL; END $$;
 
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
 
@@ -756,27 +776,32 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Backfill existing users who already have an organization_id
--- managing_director stays managing_director (not downgraded to support_coordinator)
-INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
-SELECT
-    u.id,
-    u.organization_id,
-    CASE u.role
-        WHEN 'managing_director'   THEN 'managing_director'
-        WHEN 'admin'               THEN 'admin'
-        WHEN 'manager'             THEN 'support_coordinator'
-        WHEN 'support_coordinator' THEN 'support_coordinator'
-        WHEN 'allied_health'       THEN 'allied_health'
-        ELSE 'support_worker'
-    END,
-    u.is_active
-FROM public.users u
-WHERE u.organization_id IS NOT NULL
-  AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
-ON CONFLICT (user_id, organization_id) DO UPDATE
-    SET role      = EXCLUDED.role,
-        is_active = EXCLUDED.is_active;
+-- Backfill existing users who already have an organization_id.
+-- Wrapped in a DO block so it silently skips if user_id / organization_id are still NULL
+-- (e.g. when the columns were just added to a pre-existing table with no data yet).
+DO $$ BEGIN
+    INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
+    SELECT
+        u.id,
+        u.organization_id,
+        CASE u.role
+            WHEN 'managing_director'   THEN 'managing_director'
+            WHEN 'admin'               THEN 'admin'
+            WHEN 'manager'             THEN 'support_coordinator'
+            WHEN 'support_coordinator' THEN 'support_coordinator'
+            WHEN 'allied_health'       THEN 'allied_health'
+            ELSE 'support_worker'
+        END,
+        COALESCE(u.is_active, TRUE)
+    FROM public.users u
+    WHERE u.organization_id IS NOT NULL
+      AND u.id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
+    ON CONFLICT (user_id, organization_id) DO UPDATE
+        SET role      = EXCLUDED.role,
+            is_active = EXCLUDED.is_active;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
 -- ============================================================
 -- INVITATIONS — staff onboarding via secure token

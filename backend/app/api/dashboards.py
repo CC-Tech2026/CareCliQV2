@@ -161,7 +161,7 @@ async def _team_members(org_id: str) -> list[dict]:
             supabase.table("organization_members")
             .select("user_id, role, is_active, joined_at")
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .execute()
         )
     except Exception:

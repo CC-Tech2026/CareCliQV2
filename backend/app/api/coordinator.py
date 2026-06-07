@@ -553,7 +553,7 @@ async def flagged_sessions(current_user: dict = Depends(get_current_user)):
             "id, participant_id, patient_id, session_date, session_type, status, "
             "compliance_score, review_flag, review_note, review_requested_by, "
             "review_requested_at, worker_id, support_worker_id, owner_user_id, organization_id"
-        ).eq("review_flag", True).execute()
+        ).eq("review_flag", "true").execute()
         rows = [
             s for s in (result.data or [])
             if str(s.get("organization_id") or "") == org_id

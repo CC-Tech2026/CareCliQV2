@@ -295,7 +295,7 @@ async def _resolve_org_member_role(
             .select("role")
             .eq("user_id", user_id)
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .limit(1)
             .execute()
         )

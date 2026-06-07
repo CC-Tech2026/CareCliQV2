@@ -224,11 +224,12 @@ DO $$ BEGIN ALTER TABLE public.ndis_plans                 ADD COLUMN IF NOT EXIS
 DO $$ BEGIN ALTER TABLE public.plan_budgets               ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.budget_usage               ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.note_embeddings            ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE public.onboarding_programs        ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE public.onboarding_stages          ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE public.onboarding_stage_resources ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE public.onboarding_assignments     ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
-DO $$ BEGIN ALTER TABLE public.onboarding_stage_progress  ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+-- NOTE: onboarding tables use org_id (not organization_id) — confirmed in md_onboarding.py
+DO $$ BEGIN ALTER TABLE public.onboarding_programs        ADD COLUMN IF NOT EXISTS org_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stages          ADD COLUMN IF NOT EXISTS org_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stage_resources ADD COLUMN IF NOT EXISTS org_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_assignments     ADD COLUMN IF NOT EXISTS org_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stage_progress  ADD COLUMN IF NOT EXISTS org_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.org_events                 ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.org_events                 ADD COLUMN IF NOT EXISTS created_by      UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.announcements              ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
