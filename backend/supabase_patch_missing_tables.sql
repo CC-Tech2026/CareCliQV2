@@ -169,4 +169,75 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS coordinator_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_users_coordinator_id ON public.users(coordinator_id);
 
+-- ── 8. Idempotent column guards for pre-existing tables ──────────────────────
+--
+-- The CREATE TABLE IF NOT EXISTS blocks above are skipped when the table already
+-- exists.  These ALTER TABLE statements run regardless and add any missing columns.
+-- They are all safe to re-run (IF NOT EXISTS prevents duplicate-column errors).
+
+-- organizations (may have been created by an older schema without some columns)
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
+ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+
+-- organization_members (may have been created without organization_id / is_active / joined_at)
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+
+-- invitations (may have been created without some columns)
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
+ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+
+-- Ensure indexes exist even if the table already existed before the patch
+CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
+CREATE INDEX IF NOT EXISTS idx_invitations_org_id   ON public.invitations(organization_id);
+
+-- ── 9. organization_id guards on ALL setup-file tables ────────────────────────
+--
+-- Each table below was created with organization_id in the CREATE TABLE definition
+-- inside supabase_setup.sql, but if the table was created by an earlier version
+-- of the schema the column may be absent.  These guards fix that silently.
+
+-- All wrapped in DO blocks so this patch never errors even if a table doesn't exist yet.
+DO $$ BEGIN ALTER TABLE public.alerts                     ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.audit_logs                 ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.compliance_audit_logs      ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.compliance_rule_results    ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.restrictive_practice_flags ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.ndis_plans                 ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.plan_budgets               ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.budget_usage               ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.note_embeddings            ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_programs        ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stages          ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stage_resources ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_assignments     ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.onboarding_stage_progress  ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.org_events                 ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.org_events                 ADD COLUMN IF NOT EXISTS created_by      UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.announcements              ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.announcements              ADD COLUMN IF NOT EXISTS created_by      UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.incidents                  ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.session_messages           ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+
+-- ── 10. is_active / role guards on users ─────────────────────────────────────
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role       TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT TRUE;
+
 -- Done! Re-run your backend after applying this patch.
