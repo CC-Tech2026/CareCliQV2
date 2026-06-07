@@ -959,3 +959,111 @@ BEGIN
   ALTER TABLE public.users ADD CONSTRAINT users_account_type_check
     CHECK (account_type IN ('independent_worker','allied_health','small_provider','managing_director'));
 END $$;
+
+-- ============================================================
+-- MD Onboarding Centre tables (idempotent)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.onboarding_programs (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id      UUID NOT NULL,
+    name        TEXT NOT NULL,
+    description TEXT,
+    created_by  UUID,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_programs_org ON public.onboarding_programs(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stages (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id              UUID NOT NULL REFERENCES public.onboarding_programs(id) ON DELETE CASCADE,
+    org_id                  UUID NOT NULL,
+    title                   TEXT NOT NULL,
+    instructions            TEXT,
+    stage_order             INT NOT NULL DEFAULT 0,
+    completion_requirements JSONB DEFAULT '{}'::jsonb,
+    created_at              TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_stages_program ON public.onboarding_stages(program_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stage_resources (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stage_id        UUID REFERENCES public.onboarding_stages(id) ON DELETE SET NULL,
+    org_id          UUID NOT NULL,
+    name            TEXT NOT NULL,
+    resource_type   TEXT NOT NULL DEFAULT 'document',
+    file_key        TEXT,                   -- storage path used to generate signed URLs
+    url             TEXT,                   -- legacy column (kept for backward compat)
+    file_size_bytes BIGINT,
+    category        TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+-- Idempotent migration: add file_key if upgrading from an older schema
+ALTER TABLE public.onboarding_stage_resources ADD COLUMN IF NOT EXISTS file_key TEXT;
+CREATE INDEX IF NOT EXISTS idx_onboarding_resources_stage ON public.onboarding_stage_resources(stage_id);
+CREATE INDEX IF NOT EXISTS idx_onboarding_resources_org ON public.onboarding_stage_resources(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_assignments (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id  UUID NOT NULL REFERENCES public.onboarding_programs(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL,
+    org_id      UUID NOT NULL,
+    assigned_by UUID,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    status      TEXT NOT NULL DEFAULT 'active'
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_assignments_org ON public.onboarding_assignments(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stage_progress (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    assignment_id UUID NOT NULL REFERENCES public.onboarding_assignments(id) ON DELETE CASCADE,
+    stage_id      UUID NOT NULL REFERENCES public.onboarding_stages(id) ON DELETE CASCADE,
+    org_id        UUID NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'not_started',
+    submitted_at  TIMESTAMPTZ,
+    approved_by   UUID,
+    approved_at   TIMESTAMPTZ,
+    notes         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_assignment ON public.onboarding_stage_progress(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_org ON public.onboarding_stage_progress(org_id);
+
+-- ── Onboarding Storage Bucket ─────────────────────────────────────────────────
+-- Run this block in Supabase SQL editor to create the onboarding-resources
+-- storage bucket used by POST /api/md/onboarding/resources/upload.
+-- The bucket is private; access is controlled by the service-role key on the backend.
+--
+-- NOTE: Supabase Storage bucket creation is not possible via plain SQL in all
+-- versions. If the INSERT below fails, create the bucket manually:
+--   Supabase Dashboard → Storage → New Bucket → Name: onboarding-resources → Private
+--
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'onboarding-resources',
+    'onboarding-resources',
+    false,
+    52428800,   -- 50 MB limit
+    ARRAY['application/pdf','video/mp4','video/quicktime','video/webm',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain','image/png','image/jpeg']
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS policy: backend service-role can read/write; no anon access
+-- Uses idempotent DO-block pattern (CREATE POLICY IF NOT EXISTS is not valid Postgres syntax)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage'
+          AND tablename  = 'objects'
+          AND policyname = 'onboarding_resources_service_rw'
+    ) THEN
+        CREATE POLICY "onboarding_resources_service_rw"
+            ON storage.objects FOR ALL
+            TO service_role
+            USING (bucket_id = 'onboarding-resources')
+            WITH CHECK (bucket_id = 'onboarding-resources');
+    END IF;
+END $$;

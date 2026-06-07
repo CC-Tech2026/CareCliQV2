@@ -46,6 +46,7 @@ import MDExecutivePage from "@/pages/md/executive";
 import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
+import MDOnboardingPage from "@/pages/md/onboarding";
 import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
@@ -144,6 +145,12 @@ function Router() {
       <Route path="/md/financial">
         <ProtectedRoute allowedRoles={[...MD_ROLES]}>
           <MDFinancialPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/onboarding">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDOnboardingPage />
         </ProtectedRoute>
       </Route>
 

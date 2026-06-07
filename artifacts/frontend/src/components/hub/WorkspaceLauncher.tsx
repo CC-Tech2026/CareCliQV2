@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ArrowRight, UserRound, LayoutDashboard, Crown, Loader2,
-  BarChart2, UserCheck, ShieldCheck, DollarSign,
+  BarChart2, UserCheck, ShieldCheck, DollarSign, GraduationCap,
 } from "lucide-react";
 
 const PLUM   = "#5533CC";
@@ -74,6 +74,14 @@ const MD_WORKSPACES: WorkspaceDef[] = [
     icon: DollarSign,
     allowedRoles: ["managing_director"],
     accentColor: "#0EA5E9",
+  },
+  {
+    title: "Onboarding Centre",
+    subtitle: "Design programs, track progress and approve completions.",
+    href: "/md/onboarding",
+    icon: GraduationCap,
+    allowedRoles: ["managing_director"],
+    accentColor: PLUM,
   },
 ];
 
