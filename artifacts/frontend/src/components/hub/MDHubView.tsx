@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
-  Users, UserCheck, TrendingUp, ShieldCheck,
-  AlertTriangle, ArrowRight, Target, Activity,
+  AlertTriangle, ArrowRight,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
@@ -35,47 +34,34 @@ interface TrendPoint {
   session_count: number;
 }
 
-/* ── KPI card ──────────────────────────────────────────────── */
-function KpiCard({
+/* ── Stat strip item ───────────────────────────────────────── */
+function StatItem({
   label,
   value,
   sub,
-  icon: Icon,
-  accent,
   warn,
+  last,
 }: {
   label: string;
   value: string | number;
   sub?: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-  accent?: string;
   warn?: boolean;
+  last?: boolean;
 }) {
-  const color = warn ? "#EF4444" : (accent ?? PLUM);
+  const valueColor = warn ? "#EF4444" : TEXT;
   return (
     <div
-      className="rounded-xl border bg-white p-4 shadow-sm"
-      style={{ borderColor: BORDER, borderLeft: `3px solid ${color}` }}
+      className="flex flex-1 flex-col px-5 py-4"
+      style={{ borderRight: last ? undefined : `1px solid ${BORDER}` }}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span
-          className="text-[10px] font-black uppercase tracking-[0.18em] leading-tight"
-          style={{ color: MUTED }}
-        >
-          {label}
-        </span>
-        <div
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: SOFT, color }}
-        >
-          <Icon size={13} strokeWidth={2} />
-        </div>
-      </div>
-      <p className="text-[26px] font-black leading-none tracking-tight" style={{ color: warn ? "#EF4444" : TEXT }}>
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] mb-2" style={{ color: MUTED }}>
+        {label}
+      </p>
+      <p className="text-[22px] font-black leading-none tracking-tight" style={{ color: valueColor }}>
         {value}
       </p>
       {sub && (
-        <p className="mt-1.5 text-[11px] font-medium" style={{ color: warn ? "#EF4444" : MUTED }}>
+        <p className="mt-1 text-[11px] font-medium" style={{ color: warn ? "#EF4444" : MUTED }}>
           {sub}
         </p>
       )}
@@ -106,11 +92,13 @@ function Panel({
   sub,
   action,
   children,
+  noPad,
 }: {
   title: string;
   sub?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  noPad?: boolean;
 }) {
   return (
     <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
@@ -124,7 +112,7 @@ function Panel({
         </div>
         {action}
       </div>
-      <div className="px-6 py-5">{children}</div>
+      <div className={noPad ? undefined : "px-6 py-5"}>{children}</div>
     </section>
   );
 }
@@ -170,8 +158,8 @@ export function MDHubView() {
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-2xl" style={{ background: SOFT }} />
+        {[1, 2].map((i) => (
+          <div key={i} className="h-20 animate-pulse rounded-2xl" style={{ background: SOFT }} />
         ))}
       </div>
     );
@@ -196,58 +184,51 @@ export function MDHubView() {
   return (
     <div className="space-y-5">
 
-      {/* ── KPI strip (top row) ──────────────────────── */}
-      <section>
-        <p className="mb-3 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
-          Executive Metrics
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard label="Active Participants" value={data.active_participants} icon={Users} accent={PLUM} />
-          <KpiCard
+      {/* ── Primary stat strip ───────────────────────── */}
+      <Panel
+        title="Executive Metrics"
+        sub="Live organisational snapshot"
+        action={<LinkBtn onClick={() => navigate("/md/executive")}>Full report</LinkBtn>}
+        noPad
+      >
+        <div className="flex flex-wrap divide-y sm:divide-y-0" style={{ borderTop: `0` }}>
+          <StatItem
+            label="Participants"
+            value={data.active_participants}
+          />
+          <StatItem
             label="Active Staff"
             value={data.active_staff}
-            sub={`${data.staff_retention_rate}% retention rate`}
-            icon={UserCheck}
-            accent="#10B981"
+            sub={`${data.staff_retention_rate}% retention`}
           />
-          <KpiCard
+          <StatItem
             label="Sessions This Week"
             value={data.sessions_this_week}
-            icon={Activity}
-            accent="#0EA5E9"
           />
-          <KpiCard
+          <StatItem
             label="Compliance Score"
             value={`${data.compliance_score}%`}
-            sub={complianceWarn ? `Below ${data.compliance_target}% target` : `At or above ${data.compliance_target}% target`}
-            icon={ShieldCheck}
+            sub={complianceWarn ? `Below ${data.compliance_target}% target` : `On target`}
             warn={complianceWarn}
           />
-        </div>
-
-        {/* secondary row */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <KpiCard
-            label="Incidents This Month"
+          <StatItem
+            label="Incidents"
             value={data.incidents_this_month}
-            icon={AlertTriangle}
-            accent="#F97316"
+            sub="This month"
             warn={data.incidents_this_month > 0}
           />
-          <KpiCard
+          <StatItem
             label="Goal Achievement"
             value={`${data.goal_achievement_rate}%`}
-            icon={Target}
-            accent="#10B981"
           />
-          <KpiCard
+          <StatItem
             label="Staff at Risk"
             value={data.workers_at_risk.length}
-            icon={TrendingUp}
             warn={data.workers_at_risk.length > 0}
+            last
           />
         </div>
-      </section>
+      </Panel>
 
       {/* ── Org alerts ──────────────────────────────── */}
       {data.org_alerts.length > 0 && (
@@ -329,22 +310,23 @@ function FinancialSummaryStrip({ onNavigate }: { onNavigate: () => void }) {
       title="Financial Summary"
       sub="Revenue & invoicing at a glance"
       action={<LinkBtn onClick={onNavigate}>Full report</LinkBtn>}
+      noPad
     >
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "Total Revenue", value: `$${totalRev.toLocaleString("en-AU", { maximumFractionDigits: 0 })}` },
-          { label: "Total Invoices", value: totalInvoices },
-          { label: "vs Target", value: `${pct}%`, accent: pct >= 90 ? "#10B981" : AMBER },
-        ].map(({ label, value, accent }) => (
-          <div key={label} className="rounded-xl p-4" style={{ background: SOFT }}>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
-              {label}
-            </p>
-            <p className="mt-2 text-[22px] font-black leading-none" style={{ color: accent ?? TEXT }}>
-              {value}
-            </p>
-          </div>
-        ))}
+      <div className="flex">
+        <StatItem
+          label="Total Revenue"
+          value={`$${totalRev.toLocaleString("en-AU", { maximumFractionDigits: 0 })}`}
+        />
+        <StatItem
+          label="Total Invoices"
+          value={totalInvoices}
+        />
+        <StatItem
+          label="vs Target"
+          value={`${pct}%`}
+          warn={pct > 0 && pct < 90}
+          last
+        />
       </div>
     </Panel>
   );

@@ -25,6 +25,7 @@ const SKY    = "#0EA5E9";
 
 interface WorkspaceDef {
   title: string;
+  shortLabel: string;
   subtitle: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
@@ -35,6 +36,7 @@ interface WorkspaceDef {
 const WORKSPACES: WorkspaceDef[] = [
   {
     title: "Support Worker Workspace",
+    shortLabel: "Support Worker",
     subtitle: "Client visits, shift notes, daily documentation and compliance tracking.",
     href: "/my-clients",
     icon: UserRound,
@@ -43,6 +45,7 @@ const WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Support Coordinator Workspace",
+    shortLabel: "Coordinator",
     subtitle: "Team oversight, NDIS plans, participant management and billing.",
     href: "/dashboard",
     icon: LayoutDashboard,
@@ -54,6 +57,7 @@ const WORKSPACES: WorkspaceDef[] = [
 const MD_WORKSPACES: WorkspaceDef[] = [
   {
     title: "Executive Dashboard",
+    shortLabel: "Executive",
     subtitle: "KPIs, trend analysis and strategic overview.",
     href: "/md/executive",
     icon: BarChart2,
@@ -62,6 +66,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Staff Management",
+    shortLabel: "Staff",
     subtitle: "People performance and retention tracking.",
     href: "/md/staff",
     icon: UserCheck,
@@ -70,6 +75,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Compliance Dashboard",
+    shortLabel: "Compliance",
     subtitle: "Org-wide compliance scores and audit readiness.",
     href: "/md/compliance",
     icon: ShieldCheck,
@@ -78,6 +84,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Financial Overview",
+    shortLabel: "Financial",
     subtitle: "Revenue, margins and billing performance.",
     href: "/md/financial",
     icon: DollarSign,
@@ -86,6 +93,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Onboarding Centre",
+    shortLabel: "Onboarding",
     subtitle: "Design programs, track progress and approve completions.",
     href: "/md/onboarding",
     icon: GraduationCap,
@@ -180,8 +188,11 @@ function MDWorkspaceLauncher({
       <section>
         <SectionLabel>MD Workspaces</SectionLabel>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {MD_WORKSPACES.map((ws) => {
+        <nav
+          className="flex items-stretch rounded-xl border bg-white overflow-hidden"
+          style={{ borderColor: BORDER }}
+        >
+          {MD_WORKSPACES.map((ws, idx) => {
             const Icon        = ws.icon;
             const isLaunching = launching?.href === ws.href;
 
@@ -190,40 +201,28 @@ function MDWorkspaceLauncher({
                 key={ws.href}
                 onClick={() => handleLaunch(ws)}
                 disabled={!!launching}
-                className="group flex flex-col rounded-xl border bg-white p-4 text-left transition-all duration-150 hover:shadow-md hover:-translate-y-px disabled:pointer-events-none"
+                className="group flex flex-1 flex-col items-center gap-2 px-3 py-3.5 text-center transition-colors duration-150 hover:bg-[#F5F3FC] disabled:pointer-events-none"
                 style={{
-                  borderColor: BORDER,
+                  borderLeft: idx > 0 ? `1px solid ${BORDER}` : undefined,
                   borderTop: `3px solid ${ws.accentColor}`,
                 }}
               >
-                {/* Icon row */}
                 <div
-                  className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg"
                   style={{ background: SOFT, color: ws.accentColor }}
                 >
                   {isLaunching
-                    ? <Loader2 size={16} strokeWidth={2} className="animate-spin" />
-                    : <Icon size={16} strokeWidth={2} />
+                    ? <Loader2 size={14} strokeWidth={2} className="animate-spin" style={{ color: ws.accentColor }} />
+                    : <Icon size={14} strokeWidth={2} />
                   }
                 </div>
-
-                {/* Title + subtitle */}
-                <p className="text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
-                  {ws.title}
-                </p>
-                <p className="mt-1 flex-1 text-[11px] leading-snug" style={{ color: MUTED }}>
-                  {ws.subtitle}
-                </p>
-
-                {/* Open link */}
-                <div className="mt-3 flex items-center gap-1 text-[11px] font-bold" style={{ color: ws.accentColor }}>
-                  {isLaunching ? "Launching…" : "Open"}
-                  <ArrowRight size={11} strokeWidth={2} />
-                </div>
+                <span className="text-[11px] font-bold leading-tight" style={{ color: TEXT }}>
+                  {ws.shortLabel}
+                </span>
               </button>
             );
           })}
-        </div>
+        </nav>
       </section>
     </>
   );
