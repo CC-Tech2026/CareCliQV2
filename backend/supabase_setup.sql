@@ -762,8 +762,21 @@ ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active      
 ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
 ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
 
--- Widen role constraint idempotently (covers tables created before this update)
+-- Normalise any legacy role values then widen constraint idempotently.
+-- Existing rows with values like 'manager' are mapped before the constraint is applied.
 DO $$ BEGIN
+    UPDATE public.organization_members
+    SET role = CASE role
+        WHEN 'manager'             THEN 'support_coordinator'
+        WHEN 'coordinator'         THEN 'support_coordinator'
+        WHEN 'support_coordinator' THEN 'support_coordinator'
+        WHEN 'allied_health'       THEN 'allied_health'
+        WHEN 'managing_director'   THEN 'managing_director'
+        WHEN 'admin'               THEN 'admin'
+        ELSE 'support_worker'
+    END
+    WHERE role NOT IN ('support_worker','support_coordinator','allied_health','managing_director','admin');
+
     ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
     ALTER TABLE public.organization_members ADD CONSTRAINT organization_members_role_check
         CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));

@@ -65,8 +65,20 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
 );
 
--- ── Step C: widen role constraint idempotently ────────────────────────────────
+-- ── Step C: normalise legacy role values, then widen constraint idempotently ──
 DO $$ BEGIN
+    UPDATE public.organization_members
+    SET role = CASE role
+        WHEN 'manager'             THEN 'support_coordinator'
+        WHEN 'coordinator'         THEN 'support_coordinator'
+        WHEN 'support_coordinator' THEN 'support_coordinator'
+        WHEN 'allied_health'       THEN 'allied_health'
+        WHEN 'managing_director'   THEN 'managing_director'
+        WHEN 'admin'               THEN 'admin'
+        ELSE 'support_worker'
+    END
+    WHERE role NOT IN ('support_worker','support_coordinator','allied_health','managing_director','admin');
+
     ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
     ALTER TABLE public.organization_members ADD CONSTRAINT organization_members_role_check
         CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));
