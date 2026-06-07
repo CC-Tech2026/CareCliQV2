@@ -96,6 +96,7 @@ _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
     "allied_health": "allied_health",
     "small_provider": "support_coordinator",
+    "managing_director": "managing_director",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 

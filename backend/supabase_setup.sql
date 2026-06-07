@@ -911,3 +911,20 @@ ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS upcoming_review_date TEXT;
 
 -- recipient_user_id on alerts (targeted in-app alerts, e.g. bulk credential reminders)
 ALTER TABLE public.alerts ADD COLUMN IF NOT EXISTS recipient_user_id UUID;
+
+-- ── Managing Director role support ───────────────────────────────────────────
+-- Extend check constraints to allow the managing_director role and account type.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_role_check;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('support_worker','support_coordinator','allied_health','admin','managing_director'));
+
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_account_type_check') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_account_type_check;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_account_type_check
+    CHECK (account_type IN ('independent_worker','allied_health','small_provider','managing_director'));
+END $$;

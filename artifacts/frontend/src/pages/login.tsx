@@ -30,7 +30,7 @@ export default function Login() {
         title: "Welcome back!",
         description: "Your terminal instance has safely initialized.",
       });
-      navigate(authUser.role === "managing_director" ? "/hub" : "/dashboard");
+      navigate("/hub");
     } catch (err) {
       toast({
         title: "Authentication Failed",
