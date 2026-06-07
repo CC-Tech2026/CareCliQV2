@@ -35,6 +35,20 @@ DO $$ BEGIN
 END $$;
 
 -- 2. ORGANIZATION MEMBERS (requires organizations to exist first)
+-- ── Step A: column guards FIRST ─────────────────────────────────────────────
+-- Wrapped in a DO block so this is safe whether the table already exists or not.
+-- If the table doesn't exist yet, the EXCEPTION catches it and step B creates it.
+DO $$ BEGIN
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS user_id         UUID;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- ── Step B: create table if it doesn't exist yet ─────────────────────────────
 CREATE TABLE IF NOT EXISTS public.organization_members (
     id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id         UUID        NOT NULL REFERENCES public.users(id)         ON DELETE CASCADE,
@@ -51,7 +65,7 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
 );
 
--- Widen role constraint idempotently (covers tables created before this patch)
+-- ── Step C: widen role constraint idempotently ────────────────────────────────
 DO $$ BEGIN
     ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
     ALTER TABLE public.organization_members ADD CONSTRAINT organization_members_role_check
@@ -59,10 +73,12 @@ DO $$ BEGIN
 EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
+-- ── Step D: indexes (DO blocks — never error even if column just added) ───────
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);            EXCEPTION WHEN others THEN NULL; END $$;
 
+-- ── Step E: RLS & policies ────────────────────────────────────────────────────
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
 
 DO $$ BEGIN
@@ -77,31 +93,48 @@ DO $$ BEGIN
         CREATE POLICY om_self_read ON public.organization_members
             FOR SELECT TO authenticated USING (user_id = auth.uid());
     END IF;
+EXCEPTION WHEN others THEN NULL;
 END $$;
 
--- Backfill existing users who already completed onboarding
--- managing_director stays managing_director (not downgraded to support_coordinator)
-INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
-SELECT
-    u.id,
-    u.organization_id,
-    CASE u.role
-        WHEN 'managing_director'   THEN 'managing_director'
-        WHEN 'admin'               THEN 'admin'
-        WHEN 'manager'             THEN 'support_coordinator'
-        WHEN 'support_coordinator' THEN 'support_coordinator'
-        WHEN 'allied_health'       THEN 'allied_health'
-        ELSE 'support_worker'
-    END,
-    u.is_active
-FROM public.users u
-WHERE u.organization_id IS NOT NULL
-  AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
-ON CONFLICT (user_id, organization_id) DO UPDATE
-    SET role      = EXCLUDED.role,
-        is_active = EXCLUDED.is_active;
+-- ── Step F: backfill (DO block — safe if columns were just added as NULL) ─────
+DO $$ BEGIN
+    INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
+    SELECT
+        u.id,
+        u.organization_id,
+        CASE u.role
+            WHEN 'managing_director'   THEN 'managing_director'
+            WHEN 'admin'               THEN 'admin'
+            WHEN 'manager'             THEN 'support_coordinator'
+            WHEN 'support_coordinator' THEN 'support_coordinator'
+            WHEN 'allied_health'       THEN 'allied_health'
+            ELSE 'support_worker'
+        END,
+        COALESCE(u.is_active, TRUE)
+    FROM public.users u
+    WHERE u.organization_id IS NOT NULL
+      AND u.id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
+    ON CONFLICT (user_id, organization_id) DO UPDATE
+        SET role      = EXCLUDED.role,
+            is_active = EXCLUDED.is_active;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
 -- 3. INVITATIONS (requires organizations to exist first)
+-- ── Step A: column guards first (safe if table pre-exists without these columns)
+DO $$ BEGIN
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- ── Step B: create table if it doesn't exist yet
 CREATE TABLE IF NOT EXISTS public.invitations (
     id              UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
     organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
@@ -119,7 +152,7 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Widen role constraint idempotently (covers tables created before this patch)
+-- ── Step C: widen role constraint idempotently
 DO $$ BEGIN
     ALTER TABLE public.invitations DROP CONSTRAINT IF EXISTS invitations_role_check;
     ALTER TABLE public.invitations ADD CONSTRAINT invitations_role_check
@@ -127,9 +160,10 @@ DO $$ BEGIN
 EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_invitations_token  ON public.invitations(token);
-CREATE INDEX IF NOT EXISTS idx_invitations_org_id ON public.invitations(organization_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_email  ON public.invitations(email);
+-- ── Step D: indexes in DO blocks
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_token  ON public.invitations(token);          EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_org_id ON public.invitations(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_email  ON public.invitations(email);           EXCEPTION WHEN others THEN NULL; END $$;
 
 ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
 
@@ -176,37 +210,46 @@ CREATE INDEX IF NOT EXISTS idx_users_coordinator_id ON public.users(coordinator_
 -- They are all safe to re-run (IF NOT EXISTS prevents duplicate-column errors).
 
 -- organizations (may have been created by an older schema without some columns)
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- organization_members (may have been created without organization_id / is_active / joined_at)
-ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
-ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
-ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
-ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- invitations (may have been created without some columns)
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
-ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- Ensure indexes exist even if the table already existed before the patch
-CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
-CREATE INDEX IF NOT EXISTS idx_invitations_org_id   ON public.invitations(organization_id);
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);            EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_org_id   ON public.invitations(organization_id);          EXCEPTION WHEN others THEN NULL; END $$;
 
 -- ── 9. organization_id guards on ALL setup-file tables ────────────────────────
 --

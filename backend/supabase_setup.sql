@@ -572,15 +572,15 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
 
-CREATE INDEX IF NOT EXISTS idx_patients_organization_id ON public.patients(organization_id);
-CREATE INDEX IF NOT EXISTS idx_patients_assigned_worker_id ON public.patients(assigned_worker_id);
-CREATE INDEX IF NOT EXISTS idx_patients_allied_health_id ON public.patients(allied_health_id);
-CREATE INDEX IF NOT EXISTS idx_patients_clinician_id ON public.patients(clinician_id);
-CREATE INDEX IF NOT EXISTS idx_patients_created_by ON public.patients(created_by);
-CREATE INDEX IF NOT EXISTS idx_sessions_organization_id ON public.sessions(organization_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_worker_id ON public.sessions(worker_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id ON public.sessions(practitioner_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_created_by ON public.sessions(created_by);
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_organization_id    ON public.patients(organization_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_assigned_worker_id ON public.patients(assigned_worker_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_allied_health_id   ON public.patients(allied_health_id);   EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_clinician_id       ON public.patients(clinician_id);       EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_created_by         ON public.patients(created_by);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_organization_id    ON public.sessions(organization_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_worker_id          ON public.sessions(worker_id);          EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id    ON public.sessions(practitioner_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_created_by         ON public.sessions(created_by);         EXCEPTION WHEN others THEN NULL; END $$;
 
 -- NOTE: After running this SQL, create your first support coordinator user:
 --   1. Sign up via POST /api/auth/register with account_type="small_provider"
@@ -640,15 +640,19 @@ CREATE TABLE IF NOT EXISTS organizations (
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Column guards: add any missing columns to pre-existing organizations tables
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
-ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+-- Column guards: add any missing columns to pre-existing organizations tables.
+-- Wrapped in DO block so it is safe whether the table exists or not.
+DO $$ BEGIN
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- RLS on organizations
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
@@ -709,12 +713,23 @@ CREATE TABLE IF NOT EXISTS incidents (
     updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant_id);
-CREATE INDEX IF NOT EXISTS incidents_organization_id_idx ON incidents(organization_id);
-CREATE INDEX IF NOT EXISTS incidents_user_id_idx ON incidents(user_id);
-CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
-CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
-CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
+-- Column guards: incidents may have been created by an older schema without these columns.
+-- Must run BEFORE any CREATE INDEX that references these columns.
+DO $$ BEGIN
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS user_id          UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS organization_id  UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS participant_id   UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS created_by       UUID;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- Indexes wrapped in DO blocks so they never abort the script
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_participant_id_idx   ON incidents(participant_id);      EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_organization_id_idx  ON incidents(organization_id);     EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_user_id_idx          ON incidents(user_id);             EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_status_idx           ON incidents(status);              EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_severity_idx         ON incidents(severity);            EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_incident_date_idx    ON incidents(incident_date DESC);  EXCEPTION WHEN others THEN NULL; END $$;
 
 -- ============================================================
 -- ORGANIZATION MEMBERS — central RBAC table
@@ -824,6 +839,18 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Column guards: invitations may pre-exist without all columns
+DO $$ BEGIN
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
 -- Widen role constraint idempotently (covers tables created before this update)
 DO $$ BEGIN
     ALTER TABLE public.invitations DROP CONSTRAINT IF EXISTS invitations_role_check;
@@ -832,9 +859,9 @@ DO $$ BEGIN
 EXCEPTION WHEN undefined_table THEN NULL;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_invitations_token          ON public.invitations(token);
-CREATE INDEX IF NOT EXISTS idx_invitations_org_id         ON public.invitations(organization_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_email          ON public.invitations(email);
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_token  ON public.invitations(token);          EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_org_id ON public.invitations(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_email  ON public.invitations(email);           EXCEPTION WHEN others THEN NULL; END $$;
 
 ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
 
