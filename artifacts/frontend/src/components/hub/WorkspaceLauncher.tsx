@@ -36,8 +36,8 @@ interface WorkspaceDef {
 const WORKSPACES: WorkspaceDef[] = [
   {
     title: "Support Worker Workspace",
-    shortLabel: "Support Worker",
-    subtitle: "Client visits, shift notes, daily documentation and compliance tracking.",
+    shortLabel: "My Workspace",
+    subtitle: "Client visits, shift notes and compliance tracking.",
     href: "/my-clients",
     icon: UserRound,
     allowedRoles: ["support_worker"],
@@ -45,8 +45,8 @@ const WORKSPACES: WorkspaceDef[] = [
   },
   {
     title: "Support Coordinator Workspace",
-    shortLabel: "Coordinator",
-    subtitle: "Team oversight, NDIS plans, participant management and billing.",
+    shortLabel: "My Workspace",
+    subtitle: "Team oversight, NDIS plans and billing.",
     href: "/dashboard",
     icon: LayoutDashboard,
     allowedRoles: ["support_coordinator"],
@@ -94,7 +94,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
   {
     title: "Onboarding Centre",
     shortLabel: "Onboarding",
-    subtitle: "Design programs, track progress and approve completions.",
+    subtitle: "Design programs and track staff progress.",
     href: "/md/onboarding",
     icon: GraduationCap,
     allowedRoles: ["managing_director"],
@@ -122,46 +122,45 @@ export function WorkspaceLauncher() {
     e.preventDefault();
     if (launching) return;
     setLaunching(ws!);
-    setTimeout(() => navigate(ws!.href), 1600);
+    setTimeout(() => navigate(ws!.href), 1400);
   }
 
   return (
     <>
       {isLaunching && <LaunchOverlay ws={ws} />}
-
-      <section>
-        <SectionLabel>Your Workspace</SectionLabel>
-
-        <button
-          onClick={handleLaunch}
-          disabled={!!launching}
-          className="group w-full flex items-center gap-5 rounded-xl border bg-white px-6 py-4 text-left transition-all duration-150 hover:shadow-md hover:-translate-y-px disabled:pointer-events-none"
-          style={{ borderColor: BORDER, borderLeft: `3px solid ${ws.accentColor}` }}
-        >
-          <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: SOFT, color: ws.accentColor }}
+      <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
+            Workspace
+          </p>
+        </div>
+        <div className="p-3">
+          <button
+            onClick={handleLaunch}
+            disabled={!!launching}
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#F5F3FC] disabled:pointer-events-none"
           >
-            <Icon size={20} strokeWidth={2} />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-bold leading-snug" style={{ color: TEXT }}>
-              {ws.title}
-            </p>
-            <p className="mt-0.5 truncate text-[12px]" style={{ color: MUTED }}>
-              {ws.subtitle}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2 text-[12px] font-bold" style={{ color: ws.accentColor }}>
-            {isLaunching
-              ? <><Loader2 size={14} strokeWidth={2} className="animate-spin" /> Launching</>
-              : <>Open <ArrowRight size={14} strokeWidth={2} /></>
-            }
-          </div>
-        </button>
-      </section>
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+              style={{ background: SOFT, color: ws.accentColor }}
+            >
+              {isLaunching
+                ? <Loader2 size={16} strokeWidth={2} className="animate-spin" />
+                : <Icon size={16} strokeWidth={2} />
+              }
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
+                {ws.shortLabel}
+              </p>
+              <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>
+                {ws.subtitle}
+              </p>
+            </div>
+            <ArrowRight size={14} strokeWidth={2} style={{ color: MUTED }} />
+          </button>
+        </div>
+      </div>
     </>
   );
 }
@@ -178,52 +177,47 @@ function MDWorkspaceLauncher({
   function handleLaunch(ws: WorkspaceDef) {
     if (launching) return;
     setLaunching(ws);
-    setTimeout(() => navigate(ws.href), 1600);
+    setTimeout(() => navigate(ws.href), 1400);
   }
 
   return (
     <>
       {launching && <LaunchOverlay ws={launching} />}
-
-      <section>
-        <SectionLabel>MD Workspaces</SectionLabel>
-
-        <nav
-          className="flex items-stretch rounded-xl border bg-white overflow-hidden"
-          style={{ borderColor: BORDER }}
-        >
-          {MD_WORKSPACES.map((ws, idx) => {
+      <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
+            MD Workspaces
+          </p>
+        </div>
+        <div className="p-3 space-y-0.5">
+          {MD_WORKSPACES.map((ws) => {
             const Icon        = ws.icon;
             const isLaunching = launching?.href === ws.href;
-
             return (
               <button
                 key={ws.href}
                 onClick={() => handleLaunch(ws)}
                 disabled={!!launching}
-                className="group flex flex-1 flex-col items-center gap-2 px-3 py-3.5 text-center transition-colors duration-150 hover:bg-[#F5F3FC] disabled:pointer-events-none"
-                style={{
-                  borderLeft: idx > 0 ? `1px solid ${BORDER}` : undefined,
-                  borderTop: `3px solid ${ws.accentColor}`,
-                }}
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#F5F3FC] disabled:pointer-events-none"
               >
                 <div
-                  className="flex h-8 w-8 items-center justify-center rounded-lg"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
                   style={{ background: SOFT, color: ws.accentColor }}
                 >
                   {isLaunching
-                    ? <Loader2 size={14} strokeWidth={2} className="animate-spin" style={{ color: ws.accentColor }} />
-                    : <Icon size={14} strokeWidth={2} />
+                    ? <Loader2 size={13} strokeWidth={2} className="animate-spin" style={{ color: ws.accentColor }} />
+                    : <Icon size={13} strokeWidth={2} />
                   }
                 </div>
-                <span className="text-[11px] font-bold leading-tight" style={{ color: TEXT }}>
+                <span className="flex-1 text-[13px] font-bold text-left" style={{ color: TEXT }}>
                   {ws.shortLabel}
                 </span>
+                <ArrowRight size={12} strokeWidth={2} style={{ color: MUTED }} />
               </button>
             );
           })}
-        </nav>
-      </section>
+        </div>
+      </div>
     </>
   );
 }
@@ -257,16 +251,5 @@ function LaunchOverlay({ ws }: { ws: WorkspaceDef }) {
         </p>
       </div>
     </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      className="mb-3 text-[10px] font-black uppercase tracking-[0.22em]"
-      style={{ color: MUTED }}
-    >
-      {children}
-    </p>
   );
 }

@@ -19,47 +19,17 @@ const now = new Date();
 
 const EVENT_CONFIG: Record<
   EventType,
-  {
-    icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-    label: string;
-    color: string;
-    bg: string;
-    chip: string;
-  }
+  { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; color: string; bg: string; chip: string }
 > = {
-  audit: {
-    icon:  ClipboardCheck,
-    label: "Audit",
-    color: "#EF4444",
-    bg:    "#FEF2F2",
-    chip:  "bg-red-50 text-red-700 border border-red-200",
-  },
-  training: {
-    icon:  BookOpen,
-    label: "Training",
-    color: PLUM,
-    bg:    "#EEEAFB",
-    chip:  "bg-purple-50 text-purple-700 border border-purple-200",
-  },
-  meeting: {
-    icon:  Users,
-    label: "Meeting",
-    color: "#0EA5E9",
-    bg:    "#E0F2FE",
-    chip:  "bg-blue-50 text-blue-700 border border-blue-200",
-  },
-  review: {
-    icon:  Target,
-    label: "Goal Review",
-    color: "#10B981",
-    bg:    "#D1FAE5",
-    chip:  "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  },
+  audit:    { icon: ClipboardCheck, label: "Audit",    color: "#EF4444", bg: "#FEF2F2", chip: "bg-red-50 text-red-700" },
+  training: { icon: BookOpen,       label: "Training", color: PLUM,      bg: "#EEEAFB", chip: "bg-purple-50 text-purple-700" },
+  meeting:  { icon: Users,          label: "Meeting",  color: "#0EA5E9", bg: "#E0F2FE", chip: "bg-sky-50 text-sky-700" },
+  review:   { icon: Target,         label: "Review",   color: "#10B981", bg: "#D1FAE5", chip: "bg-emerald-50 text-emerald-700" },
 };
 
 const EVENT_TYPES: EventType[] = ["audit", "training", "meeting", "review"];
 
-function EventCard({
+function EventRow({
   event,
   onDelete,
   isCoordinator,
@@ -75,52 +45,43 @@ function EventCard({
   const isImminent = daysUntil >= 0 && daysUntil < 7;
 
   return (
-    <div className="flex gap-4 rounded-xl border p-4" style={{ borderColor: BORDER }}>
-      {/* Date block */}
+    <div
+      className="flex items-start gap-3 py-3"
+      style={{ borderBottom: `1px solid ${BORDER}` }}
+    >
+      {/* Compact date block */}
       <div
-        className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl py-2 text-center"
+        className="flex w-10 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 text-center"
         style={{ background: cfg.bg }}
       >
-        <span className="text-[10px] font-black uppercase tracking-wide" style={{ color: cfg.color }}>
+        <span className="text-[9px] font-black uppercase tracking-wide leading-none" style={{ color: cfg.color }}>
           {format(eventDate, "MMM")}
         </span>
-        <span className="text-[20px] font-black leading-none" style={{ color: cfg.color }}>
+        <span className="text-[16px] font-black leading-none mt-0.5" style={{ color: cfg.color }}>
           {format(eventDate, "d")}
-        </span>
-        <span className="text-[9px] font-bold" style={{ color: cfg.color }}>
-          {format(eventDate, "EEE")}
         </span>
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-black ${cfg.chip}`}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${cfg.chip}`}>
             <Icon size={9} strokeWidth={2} />
             {cfg.label}
           </span>
-          <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: SOFT, color: MUTED }}>
-            {event.duration}
-          </span>
           {isImminent && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 border border-amber-200">
-              Coming up
+            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
+              Soon
             </span>
           )}
         </div>
-        <h3 className="mt-1.5 text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
+        <p className="mt-1 truncate text-[12px] font-bold leading-snug" style={{ color: TEXT }}>
           {event.title}
-        </h3>
+        </p>
         {event.location && (
-          <p className="mt-0.5 flex items-center gap-1 text-[12px]" style={{ color: MUTED }}>
-            <MapPin size={11} strokeWidth={2} />
+          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px]" style={{ color: MUTED }}>
+            <MapPin size={10} strokeWidth={2} />
             {event.location}
-          </p>
-        )}
-        {event.participants_desc && (
-          <p className="mt-0.5 flex items-center gap-1 text-[12px]" style={{ color: MUTED }}>
-            <Users size={11} strokeWidth={2} />
-            {event.participants_desc}
           </p>
         )}
       </div>
@@ -128,11 +89,10 @@ function EventCard({
       {isCoordinator && onDelete && (
         <button
           onClick={() => onDelete(event.id)}
-          className="ml-1 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
+          className="ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
           style={{ color: MUTED }}
-          title="Delete event"
         >
-          <Trash2 size={13} strokeWidth={2} />
+          <Trash2 size={11} strokeWidth={2} />
         </button>
       )}
     </div>
@@ -150,7 +110,7 @@ const BLANK_FORM = {
 
 export function OrganizationCalendar() {
   const { user } = useAuth();
-  const isCoordinator = user?.role === "support_coordinator";
+  const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
 
   const [events,      setEvents]      = useState<OrgEvent[] | null>(null);
   const [loading,     setLoading]     = useState(true);
@@ -209,43 +169,35 @@ export function OrganizationCalendar() {
   }
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
-      <div
-        className="flex items-center justify-between gap-3 px-6 py-4"
-        style={{ borderBottom: `1px solid ${BORDER}` }}
-      >
-        <div>
-          <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
-            Organisation Calendar
-          </h2>
-          <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
-            Upcoming audits, training, meetings & reviews
-          </p>
-        </div>
+      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
+          Upcoming Events
+        </p>
         <div className="flex items-center gap-2">
           {isCoordinator && (
             <button
               onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors"
+              className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors"
               style={{ background: SOFT, color: PLUM }}
             >
-              <Plus size={12} strokeWidth={2} />
-              Add Event
+              <Plus size={11} strokeWidth={2} />
+              Add
             </button>
           )}
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            className="flex h-7 w-7 items-center justify-center rounded-lg"
             style={{ background: SOFT, color: PLUM }}
           >
-            <Calendar size={15} strokeWidth={2} />
+            <Calendar size={13} strokeWidth={2} />
           </div>
         </div>
       </div>
 
-      <div className="px-6 py-5 space-y-4">
+      <div className="px-5">
         {deleteError && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700 border border-red-200">
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700 border border-red-200">
             {deleteError}
           </p>
         )}
@@ -253,14 +205,14 @@ export function OrganizationCalendar() {
         {showForm && isCoordinator && (
           <form
             onSubmit={handleAdd}
-            className="rounded-xl border p-4 space-y-3"
+            className="mt-3 rounded-xl border p-4 space-y-3"
             style={{ borderColor: BORDER, background: SOFT }}
           >
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+            <div className="space-y-2">
+              <div>
                 <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
                 <input
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -268,63 +220,45 @@ export function OrganizationCalendar() {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Date *</label>
-                <input
-                  type="date"
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-                  style={{ borderColor: BORDER }}
-                  value={form.event_date}
-                  onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Duration</label>
-                <input
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-                  style={{ borderColor: BORDER }}
-                  value={form.duration}
-                  onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
-                  placeholder="e.g. 2 hours"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Type</label>
-                <select
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-                  style={{ borderColor: BORDER }}
-                  value={form.event_type}
-                  onChange={(e) => setForm((f) => ({ ...f, event_type: e.target.value as EventType }))}
-                >
-                  {EVENT_TYPES.map((t) => (
-                    <option key={t} value={t}>{EVENT_CONFIG[t].label}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Date *</label>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
+                    style={{ borderColor: BORDER }}
+                    value={form.event_date}
+                    onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Type</label>
+                  <select
+                    className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
+                    style={{ borderColor: BORDER }}
+                    value={form.event_type}
+                    onChange={(e) => setForm((f) => ({ ...f, event_type: e.target.value as EventType }))}
+                  >
+                    {EVENT_TYPES.map((t) => (
+                      <option key={t} value={t}>{EVENT_CONFIG[t].label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Location</label>
                 <input
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
                   value={form.location}
                   onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
                   placeholder="Optional"
                 />
               </div>
-              <div className="col-span-2">
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Who attends</label>
-                <input
-                  className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
-                  style={{ borderColor: BORDER }}
-                  value={form.participants_desc}
-                  onChange={(e) => setForm((f) => ({ ...f, participants_desc: e.target.value }))}
-                  placeholder="e.g. All clinical staff"
-                />
-              </div>
             </div>
             {saveError && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700 border border-red-200">
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">
                 {saveError}
               </p>
             )}
@@ -350,40 +284,49 @@ export function OrganizationCalendar() {
         )}
 
         {loading ? (
-          <div className="space-y-3">
+          <div className="py-4 space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-xl" style={{ background: SOFT }} />
+              <div key={i} className="flex items-start gap-3">
+                <div className="h-10 w-10 animate-pulse rounded-xl" style={{ background: SOFT }} />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-28 animate-pulse rounded" style={{ background: SOFT }} />
+                  <div className="h-2.5 w-20 animate-pulse rounded" style={{ background: SOFT }} />
+                </div>
+              </div>
             ))}
           </div>
         ) : fetchError ? (
-          <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
-            <AlertTriangle size={22} className="mx-auto mb-2" style={{ color: "#F97316" }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>Could not load calendar</p>
-            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Check your connection and try again.</p>
+          <div className="py-6 text-center">
+            <AlertTriangle size={18} className="mx-auto mb-2" style={{ color: "#F97316" }} />
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load calendar</p>
           </div>
         ) : sorted.length === 0 ? (
-          <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
-            <Calendar size={22} className="mx-auto mb-2" style={{ color: MUTED }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>No upcoming events</p>
-            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
-              {isCoordinator
-                ? "Use the Add Event button to schedule the first event."
-                : "Your coordinator will add events here."}
+          <div className="py-6 text-center">
+            <Calendar size={18} className="mx-auto mb-2" style={{ color: MUTED }} />
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>No upcoming events</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+              {isCoordinator ? "Use Add to schedule events." : "Your coordinator will add events here."}
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {sorted.map((event) => (
-              <EventCard
+          <div>
+            {sorted.slice(0, 5).map((event) => (
+              <EventRow
                 key={event.id}
                 event={event}
                 onDelete={isCoordinator ? handleDelete : undefined}
                 isCoordinator={isCoordinator}
               />
             ))}
+            {sorted.length > 5 && (
+              <p className="py-3 text-[11px] font-bold" style={{ color: PLUM }}>
+                +{sorted.length - 5} more events
+              </p>
+            )}
+            <div style={{ marginBottom: "4px" }} />
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

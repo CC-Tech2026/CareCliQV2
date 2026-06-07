@@ -14,12 +14,12 @@ type CommunityType = "birthday" | "anniversary" | "new_starter" | "shoutout";
 
 const TYPE_CONFIG: Record<
   CommunityType,
-  { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; color: string; bg: string }
+  { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; color: string; bg: string; chip: string }
 > = {
-  birthday:    { icon: Cake,     label: "Birthday",          color: CORAL,     bg: "#FFE8EE" },
-  anniversary: { icon: Award,    label: "Work Anniversary",  color: PLUM,      bg: "#EEEAFB" },
-  new_starter: { icon: Sparkles, label: "New Starter",       color: "#0EA5E9", bg: "#E0F2FE" },
-  shoutout:    { icon: Heart,    label: "Team Shout-out",    color: "#10B981", bg: "#D1FAE5" },
+  birthday:    { icon: Cake,     label: "Birthday",    color: CORAL,     bg: "#FFE8EE", chip: "bg-pink-50 text-pink-700" },
+  anniversary: { icon: Award,    label: "Anniversary", color: PLUM,      bg: "#EEEAFB", chip: "bg-purple-50 text-purple-700" },
+  new_starter: { icon: Sparkles, label: "New Starter", color: "#0EA5E9", bg: "#E0F2FE", chip: "bg-sky-50 text-sky-700" },
+  shoutout:    { icon: Heart,    label: "Shout-out",   color: "#10B981", bg: "#D1FAE5", chip: "bg-emerald-50 text-emerald-700" },
 };
 
 const AVATAR_COLORS = [
@@ -30,41 +30,41 @@ const AVATAR_COLORS = [
   { bg: "#FEF3C7", color: "#D97706" },
 ];
 
-function CommunityCard({ item, idx }: { item: CommunityItem; idx: number }) {
+function CommunityRow({ item, idx }: { item: CommunityItem; idx: number }) {
   const cfg  = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.shoutout;
   const Icon = cfg.icon;
   const av   = AVATAR_COLORS[idx % AVATAR_COLORS.length];
+  const date = item.date ? format(parseISO(item.date), "d MMM") : null;
 
   return (
-    <div className="flex items-start gap-4 rounded-xl border p-4" style={{ borderColor: BORDER }}>
+    <div
+      className="flex items-center gap-3 py-3"
+      style={{ borderBottom: `1px solid ${BORDER}` }}
+    >
+      {/* Avatar */}
       <div
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-black"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-black"
         style={{ background: av.bg, color: av.color }}
       >
         {item.avatar}
       </div>
 
+      {/* Name + detail */}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-black"
-            style={{ background: cfg.bg, color: cfg.color }}
-          >
-            <Icon size={10} strokeWidth={2} />
-            {cfg.label}
-          </div>
-        </div>
-        <p className="mt-1.5 text-[13px] font-bold" style={{ color: TEXT }}>
+        <p className="truncate text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
           {item.name}
         </p>
-        <p className="mt-0.5 text-[12px] leading-relaxed" style={{ color: MUTED }}>
-          {item.detail}
+        <p className="truncate text-[11px]" style={{ color: MUTED }}>
+          {date ? `${date} · ` : ""}{item.detail}
         </p>
-        {item.date && (
-          <p className="mt-1.5 text-[11px] font-semibold" style={{ color: MUTED }}>
-            {format(parseISO(item.date), "EEEE, MMMM d")}
-          </p>
-        )}
+      </div>
+
+      {/* Type badge */}
+      <div
+        className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${cfg.chip}`}
+      >
+        <Icon size={9} strokeWidth={2} />
+        {cfg.label}
       </div>
     </div>
   );
@@ -89,49 +89,62 @@ export function StaffCommunity() {
   const displayItems = items ?? [];
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
-      <div
-        className="px-6 py-4"
-        style={{ borderBottom: `1px solid ${BORDER}` }}
-      >
-        <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
-          Staff Community
-        </h2>
-        <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
-          Birthdays, anniversaries, new starters & recognition
-        </p>
+      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
+            Staff Community
+          </p>
+        </div>
+        {!loading && displayItems.length > 0 && (
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-black"
+            style={{ background: SOFT, color: PLUM }}
+          >
+            {displayItems.length}
+          </span>
+        )}
       </div>
 
-      <div className="px-6 py-5">
+      <div className="px-5">
         {loading ? (
-          <div className="space-y-3">
+          <div className="py-4 space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-xl" style={{ background: SOFT }} />
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-9 w-9 animate-pulse rounded-full" style={{ background: SOFT }} />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-28 animate-pulse rounded" style={{ background: SOFT }} />
+                  <div className="h-2.5 w-20 animate-pulse rounded" style={{ background: SOFT }} />
+                </div>
+              </div>
             ))}
           </div>
         ) : fetchError ? (
-          <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
-            <AlertTriangle size={22} className="mx-auto mb-2" style={{ color: "#F97316" }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>Could not load community data</p>
-            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Check your connection and try again.</p>
+          <div className="py-6 text-center">
+            <AlertTriangle size={18} className="mx-auto mb-2" style={{ color: "#F97316" }} />
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load data</p>
           </div>
         ) : displayItems.length === 0 ? (
-          <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
-            <Sparkles size={22} className="mx-auto mb-2" style={{ color: MUTED }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>Nothing to celebrate right now</p>
-            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
-              Birthdays, anniversaries, and new starters appear here automatically.
-            </p>
+          <div className="py-6 text-center">
+            <Sparkles size={18} className="mx-auto mb-2" style={{ color: MUTED }} />
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>Nothing to celebrate yet</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>Birthdays & anniversaries appear here.</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div>
             {displayItems.map((item, idx) => (
-              <CommunityCard key={item.id} item={item} idx={idx} />
+              <CommunityRow
+                key={item.id}
+                item={item}
+                idx={idx}
+              />
             ))}
+            {/* Remove bottom border on last item */}
+            <div style={{ marginBottom: "4px" }} />
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

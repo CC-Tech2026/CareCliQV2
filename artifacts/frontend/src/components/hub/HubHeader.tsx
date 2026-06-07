@@ -1,21 +1,24 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
-import { Building2, CalendarDays } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
-
-const PLUM   = "#5533CC";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+import { ArrowRight, CalendarDays } from "lucide-react";
 
 const ROLE_LABEL: Record<string, string> = {
-  support_worker:     "Support Worker",
-  support_coordinator:"Support Coordinator",
-  managing_director:  "Managing Director",
-  allied_health:      "Allied Health",
-  admin:              "Administrator",
+  support_worker:      "Support Worker",
+  support_coordinator: "Support Coordinator",
+  managing_director:   "Managing Director",
+  allied_health:       "Allied Health",
+  admin:               "Administrator",
+};
+
+const ROLE_CTA: Record<string, { label: string; href: string }> = {
+  support_worker:      { label: "View My Clients",       href: "/my-clients" },
+  support_coordinator: { label: "Go to Dashboard",       href: "/dashboard" },
+  managing_director:   { label: "Executive Dashboard",   href: "/md/executive" },
+  allied_health:       { label: "View Caseload",         href: "/patients" },
+  admin:               { label: "Go to Dashboard",       href: "/dashboard" },
 };
 
 interface OrgResponse {
@@ -31,108 +34,82 @@ function greeting(name?: string | null): string {
   return `Good evening, ${first}`;
 }
 
-function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
-}
-
 export function HubHeader() {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const displayName = user?.full_name || user?.email || "Staff Member";
-  const initials    = getInitials(displayName);
   const role        = ROLE_LABEL[user?.role ?? ""] ?? "Staff Member";
-  const today       = format(new Date(), "EEEE, MMMM d, yyyy");
+  const today       = format(new Date(), "EEEE, MMMM d");
+  const cta         = ROLE_CTA[user?.role ?? ""] ?? ROLE_CTA.support_coordinator;
 
-  const [orgName, setOrgName]       = useState<string>("Organisation Hub");
-  const [providerNum, setProviderNum] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string>("Organisation Hub");
 
   useEffect(() => {
     apiFetch("/api/hub/org")
       .then((res) => (res.ok ? res.json() : Promise.reject()))
       .then((data: OrgResponse) => {
         setOrgName(data.organization_name || "Organisation Hub");
-        setProviderNum(data.provider_number || null);
       })
       .catch(() => {});
   }, []);
 
   return (
     <div
-      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
-      style={{ borderColor: BORDER }}
+      className="relative overflow-hidden rounded-3xl"
+      style={{ background: "linear-gradient(135deg, #5533CC 0%, #3A1FA8 55%, #2A1490 100%)" }}
     >
-      <div className="flex flex-col gap-0 lg:flex-row">
+      {/* Decorative circles */}
+      <span
+        className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full opacity-[0.12]"
+        style={{ background: "#fff" }}
+      />
+      <span
+        className="pointer-events-none absolute -bottom-10 right-20 h-36 w-36 rounded-full opacity-[0.07]"
+        style={{ background: "#fff" }}
+      />
+      <span
+        className="pointer-events-none absolute top-8 right-32 h-16 w-16 rounded-full opacity-[0.08]"
+        style={{ background: "#F03060" }}
+      />
+      <span
+        className="pointer-events-none absolute bottom-6 -left-6 h-24 w-24 rounded-full opacity-[0.08]"
+        style={{ background: "#fff" }}
+      />
 
-        {/* LEFT — org identity */}
-        <div
-          className="flex items-center gap-5 px-7 py-6 lg:flex-1"
-          style={{ borderRight: `1px solid ${BORDER}` }}
+      {/* Content */}
+      <div className="relative z-10 px-8 py-8">
+        {/* Role badge */}
+        <span
+          className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em]"
+          style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.9)" }}
         >
-          {/* Logo block */}
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
-            style={{ background: SOFT }}
-          >
-            <img
-              src="/carecliQ_logo.png"
-              alt="CareCliQ"
-              className="h-10 w-10 object-contain"
-            />
-          </div>
+          {role}
+        </span>
 
-          {/* Org info */}
-          <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-1.5">
-              <Building2 size={11} strokeWidth={2.5} style={{ color: MUTED }} />
-              <span
-                className="text-[10px] font-black uppercase tracking-[0.2em]"
-                style={{ color: MUTED }}
-              >
-                Organisation
-              </span>
-            </div>
+        {/* Greeting */}
+        <h1 className="mt-4 text-[30px] font-black leading-tight tracking-tight text-white sm:text-[36px]">
+          {greeting(user?.full_name)}
+        </h1>
 
-            <h1 className="truncate text-[22px] font-black leading-tight" style={{ color: TEXT }}>
-              {orgName}
-            </h1>
+        {/* Org + date */}
+        <p className="mt-1.5 text-[13px] font-semibold" style={{ color: "rgba(255,255,255,0.65)" }}>
+          {orgName}
+        </p>
 
-            {providerNum && (
-              <p className="mt-1 text-[12px] font-semibold" style={{ color: MUTED }}>
-                NDIS Provider · {providerNum}
-              </p>
-            )}
-          </div>
+        <div className="mt-1 flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>
+          <CalendarDays size={12} strokeWidth={2.5} />
+          <span className="text-[12px]">{today}</span>
         </div>
 
-        {/* RIGHT — personal greeting */}
-        <div className="flex items-center justify-between gap-6 px-7 py-6 lg:w-[340px] lg:justify-start lg:flex-col lg:items-start lg:gap-3">
-          {/* Avatar + name */}
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[13px] font-black"
-              style={{ background: "#EDEAFF", color: PLUM }}
-            >
-              {initials}
-            </div>
-            <div>
-              <p className="text-[14px] font-black leading-snug" style={{ color: TEXT }}>
-                {greeting(user?.full_name)}
-              </p>
-              <span
-                className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-black"
-                style={{ background: SOFT, color: PLUM }}
-              >
-                {role}
-              </span>
-            </div>
-          </div>
-
-          {/* Date */}
-          <div className="flex items-center gap-1.5" style={{ color: MUTED }}>
-            <CalendarDays size={13} strokeWidth={2.5} />
-            <span className="text-[12px] font-medium">{today}</span>
-          </div>
-        </div>
-
+        {/* CTA */}
+        <button
+          onClick={() => navigate(cta.href)}
+          className="mt-6 flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
+          style={{ color: "#5533CC" }}
+        >
+          {cta.label}
+          <ArrowRight size={13} strokeWidth={2.5} />
+        </button>
       </div>
     </div>
   );
