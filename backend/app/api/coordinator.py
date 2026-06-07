@@ -7,7 +7,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role
+from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
 from ..core.security import get_current_user
 from ..services import participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
@@ -110,8 +110,19 @@ def _rp_payload(session: dict) -> list[dict]:
     ]
 
 
-async def _team(org_id: str) -> list[dict]:
+async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]:
     supabase = get_supabase_admin()
+
+    # Resolve coordinator-scoped member IDs before hitting organization_members.
+    # get_coordinator_team_ids returns:
+    #   - coordinator's linked workers (if any assigned via coordinator_id FK)
+    #   - all org support_workers (global fallback when no one has coordinator_id set)
+    #   - empty list (rollout started but this coordinator has no team yet)
+    scoped_ids: set[str] | None = None
+    if coordinator_user is not None:
+        ids = get_coordinator_team_ids(coordinator_user, supabase)
+        scoped_ids = set(ids)  # may be empty — that's intentional
+
     try:
         memberships = (
             supabase.table("organization_members")
@@ -120,11 +131,15 @@ async def _team(org_id: str) -> list[dict]:
             .execute()
         )
     except Exception:
-        return await _team_fallback(org_id)
+        return await _team_fallback(org_id, coordinator_user=coordinator_user)
 
     rows = [row for row in memberships.data or [] if isinstance(row, dict)]
     if not rows:
-        return await _team_fallback(org_id)
+        return await _team_fallback(org_id, coordinator_user=coordinator_user)
+
+    # Apply coordinator team scoping to the membership rows when IDs are known.
+    if scoped_ids is not None:
+        rows = [r for r in rows if str(r.get("user_id") or "") in scoped_ids]
 
     user_ids = [row.get("user_id") for row in rows if row.get("user_id")]
     profiles_by_id: dict[str, dict] = {}
@@ -160,16 +175,36 @@ async def _team(org_id: str) -> list[dict]:
     return output
 
 
-async def _team_fallback(org_id: str) -> list[dict]:
+async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> list[dict]:
     supabase = get_supabase_admin()
+
+    # When coordinator context is available, resolve their scoped team IDs.
+    # get_coordinator_team_ids distinguishes three states:
+    #   non-empty list  → coordinator's linked workers (filter to these)
+    #   empty list      → rollout started but this coordinator has no team yet
+    #                     (must return [] — do NOT fall through to org-wide query)
+    #   None sentinel   → no coordinator context, return org-wide (no scoping)
+    if coordinator_user is not None:
+        member_ids = get_coordinator_team_ids(coordinator_user, supabase)
+        if not member_ids:
+            # Empty means either: rollout started and this coordinator has no
+            # linked workers, or the helper encountered an error. Either way,
+            # returning org-wide results would leak cross-team data.
+            return []
+        id_filter: list[str] | None = member_ids
+    else:
+        id_filter = None
+
     try:
-        profiles = (
+        query = (
             supabase.table("users")
             .select("id, email, full_name, role, is_active, last_login, organization_id")
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "allied_health", "support_coordinator"])
-            .execute()
         )
+        if id_filter is not None:
+            query = query.in_("id", id_filter)
+        profiles = query.execute()
     except Exception:
         return []
 
@@ -192,7 +227,7 @@ async def _team_fallback(org_id: str) -> list[dict]:
 @router.get("/team")
 async def team(current_user: dict = Depends(get_current_user)):
     org_id = _require_coordinator(current_user)
-    return await _team(org_id)
+    return await _team(org_id, coordinator_user=current_user)
 
 
 @router.get("/all-sessions")
@@ -323,7 +358,7 @@ async def credential_alerts(current_user: dict = Depends(get_current_user)):
 async def worker_stats(current_user: dict = Depends(get_current_user)):
     """Per-worker aggregated stats: sessions, compliance, drafts, flagged."""
     org_id = _require_coordinator(current_user)
-    members = await _team(org_id)
+    members = await _team(org_id, coordinator_user=current_user)
     all_sessions = await session_service.get_all_sessions(2000, current_user)
 
     week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()

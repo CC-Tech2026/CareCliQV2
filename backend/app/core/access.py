@@ -270,6 +270,80 @@ def owner_payload(user: Optional[dict]) -> dict:
     return payload
 
 
+def get_coordinator_team_ids(coordinator_user: dict, supabase) -> list[str]:
+    """Return IDs of support workers whose coordinator_id matches this coordinator.
+
+    Fallback behaviour (backward-compatible rollout):
+    - If ANY worker in the org already has coordinator_id set, the feature is
+      considered "rolled out". A coordinator with no linked workers gets an
+      empty list — they truly have no team yet.
+    - If NO worker in the org has coordinator_id set at all, the FK column has
+      just been migrated and no assignments exist yet. In this case we fall back
+      to returning all org support_workers so existing coordinator features
+      (dashboard, session review, credential alerts) continue working unchanged.
+
+    Args:
+        coordinator_user: The authenticated coordinator user dict.
+        supabase: A Supabase admin client instance.
+
+    Returns:
+        List of user ID strings (never raises — returns [] on error).
+    """
+    coordinator_id = get_user_id(coordinator_user)
+    org_id = get_user_organization_id(coordinator_user)
+    if not coordinator_id or not org_id:
+        return []
+
+    try:
+        linked = (
+            supabase.table("users")
+            .select("id")
+            .eq("coordinator_id", coordinator_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        ids = [str(row["id"]) for row in (linked.data or []) if row.get("id")]
+    except Exception:
+        ids = []
+
+    if ids:
+        return ids
+
+    # Check whether coordinator_id has been assigned to anyone in this org yet.
+    # If some workers have it set (but none for this coordinator), this
+    # coordinator genuinely has no team — return empty to avoid cross-team leak.
+    try:
+        any_linked = (
+            supabase.table("users")
+            .select("id")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .not_.is_("coordinator_id", "null")
+            .limit(1)
+            .execute()
+        )
+        rollout_started = bool(any_linked.data)
+    except Exception:
+        rollout_started = False
+
+    if rollout_started:
+        return []
+
+    # Global initial state: no worker has coordinator_id set yet. Fall back to
+    # all org support_workers so the coordinator dashboard keeps working.
+    try:
+        all_workers = (
+            supabase.table("users")
+            .select("id")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .execute()
+        )
+        return [str(row["id"]) for row in (all_workers.data or []) if row.get("id")]
+    except Exception:
+        return []
+
+
 # Backward-compatible aliases used by existing services.
 user_id = get_user_id
 organization_id = get_user_organization_id

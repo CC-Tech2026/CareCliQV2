@@ -42,13 +42,22 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
                                     'support_worker',
-                                    'support_coordinator', 'allied_health'
+                                    'support_coordinator', 'allied_health',
+                                    'managing_director', 'admin'
                                 )),
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     invited_by      UUID        REFERENCES public.users(id),
     joined_at       TIMESTAMPTZ DEFAULT NOW(),
     CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
 );
+
+-- Widen role constraint idempotently (covers tables created before this patch)
+DO $$ BEGIN
+    ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
+    ALTER TABLE public.organization_members ADD CONSTRAINT organization_members_role_check
+        CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
@@ -71,12 +80,14 @@ DO $$ BEGIN
 END $$;
 
 -- Backfill existing users who already completed onboarding
+-- managing_director stays managing_director (not downgraded to support_coordinator)
 INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
 SELECT
     u.id,
     u.organization_id,
     CASE u.role
-        WHEN 'admin'               THEN 'support_coordinator'
+        WHEN 'managing_director'   THEN 'managing_director'
+        WHEN 'admin'               THEN 'admin'
         WHEN 'manager'             THEN 'support_coordinator'
         WHEN 'support_coordinator' THEN 'support_coordinator'
         WHEN 'allied_health'       THEN 'allied_health'
@@ -99,13 +110,22 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
                                     'support_worker',
-                                    'support_coordinator', 'allied_health'
+                                    'support_coordinator', 'allied_health',
+                                    'managing_director', 'admin'
                                 )),
     token           TEXT        NOT NULL UNIQUE,
     expires_at      TIMESTAMPTZ NOT NULL,
     accepted_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Widen role constraint idempotently (covers tables created before this patch)
+DO $$ BEGIN
+    ALTER TABLE public.invitations DROP CONSTRAINT IF EXISTS invitations_role_check;
+    ALTER TABLE public.invitations ADD CONSTRAINT invitations_role_check
+        CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_invitations_token  ON public.invitations(token);
 CREATE INDEX IF NOT EXISTS idx_invitations_org_id ON public.invitations(organization_id);
@@ -141,5 +161,12 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS practitioner_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
+
+-- 7. Add coordinator_id to users (org hierarchy: which coordinator a worker reports to)
+-- NULL = no coordinator assigned yet (valid for coordinators, MDs, and unlinked workers).
+-- Set this when a coordinator is assigned to a worker via staff management.
+-- Used by get_coordinator_team_ids() in access.py for team-scoped queries.
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS coordinator_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_users_coordinator_id ON public.users(coordinator_id);
 
 -- Done! Re-run your backend after applying this patch.
