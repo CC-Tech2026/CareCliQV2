@@ -1983,7 +1983,7 @@ export default function MyClientDetail({ id }: { id: string }) {
               );
             })}
           </div>
-        </Section>
+        </div>
       )}
 
       {activeTab === "sessions" && (
