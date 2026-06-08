@@ -867,7 +867,7 @@ function InlineSessionComposer({
                 Next: Choice & Control →
               </button>
             </div>
-          )}
+          </div>
 
           {ended && (
             <div className="space-y-4 border-t pt-4" style={{ borderColor: "#EEEAFB" }}>
@@ -956,8 +956,8 @@ function InlineSessionComposer({
 
             </div>
           )}
-        </div>
-      </div>
+        </>
+      )}
 
       {/* Step: choice & control (SCRUM-227) */}
       {composerStep === "choice" && (
