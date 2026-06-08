@@ -622,6 +622,7 @@ async def assign_worker_to_client(
                 "patient_id": body.patient_id,
                 "allocated_role": body.role,
                 "organization_id": org_id,
+                "is_active": True,
             }).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Assignment failed: {e}")

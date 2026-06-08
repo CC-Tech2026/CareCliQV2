@@ -94,7 +94,7 @@ export default function Team() {
     if (!inviteEmail.trim()) return;
     setInviteSending(true);
     try {
-      await jsonFetch("/api/settings/invite", {
+      await jsonFetch("/api/invitations/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),

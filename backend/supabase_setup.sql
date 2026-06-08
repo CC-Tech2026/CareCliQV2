@@ -146,6 +146,18 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='incident_language_detected') THEN
         ALTER TABLE sessions ADD COLUMN incident_language_detected BOOLEAN DEFAULT FALSE;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='start_time') THEN
+        ALTER TABLE sessions ADD COLUMN start_time TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='end_time') THEN
+        ALTER TABLE sessions ADD COLUMN end_time TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='rp_incident_linked') THEN
+        ALTER TABLE sessions ADD COLUMN rp_incident_linked BOOLEAN DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='note_completed_at') THEN
+        ALTER TABLE sessions ADD COLUMN note_completed_at TIMESTAMPTZ;
+    END IF;
 END $$;
 
 -- Per-session compliance rule results table (upsert target: session_id + rule_id)

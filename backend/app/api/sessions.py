@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
 from ..services import session_service, ai_service, alert_service, funding_service, message_service
-from ..services.compliance_engine import run_compliance_check
+from ..services.compliance_engine import run_compliance_check, check_budget_not_exceeded
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
@@ -211,6 +211,13 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         custom_physical_types = await get_physical_exam_session_types()
         rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
 
+        # Identify rules that hard-block approval (is_blocking=True + status=fail).
+        # These prevent status from advancing to "completed" regardless of the blended score.
+        blocking_failures = [
+            r for r in rules_result.get("rules", [])
+            if r.get("status") == "fail" and r.get("is_blocking", False)
+        ]
+
         # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
@@ -239,8 +246,11 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "assessment": (analysis.get("compliance") or {}).get("recommendations", []),
         }
 
-        # Derive claim readiness status from score
-        if blended_score >= 85:
+        # Derive compliance status from score, then override if blocking rules failed.
+        # A blocking failure forces non_compliant regardless of the numeric score.
+        if blocking_failures:
+            compliance_status = "non_compliant"
+        elif blended_score >= 85:
             compliance_status = "compliant"
         elif blended_score >= 60:
             compliance_status = "at_risk"
@@ -304,12 +314,12 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
 
         updates = {
             "compliance_score": blended_score,
+            "compliance_status": compliance_status,
             "compliance_notes": " | ".join(
                 (analysis.get("compliance") or {}).get("recommendations", [])
             ) or ai_compliance.get("assessment", ""),
             "ai_summary": insights.get("summary", ""),
             "ai_insights": json.dumps(ai_insights_payload),
-            "status": "completed",
             "restrictive_practice_detected": rp_detected,
             "restrictive_practice_types": json.dumps(rp_categories),
             "compliance_flags": json.dumps({"rp_flags": rp_flags}),
@@ -318,6 +328,12 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
+        # Only advance to "completed" when no blocking rules failed.
+        # Compliance data is always persisted so the worker and coordinator
+        # can see the score and which rules failed even when saving is blocked.
+        if not blocking_failures:
+            updates["status"] = "completed"
+
         updated = await session_service.update_session(session_id, updates, current_user)
 
         # 2c. Persist RP flags + per-rule results (non-critical)
@@ -355,6 +371,27 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         except Exception as rp_persist_err:
             logger.warning(f"Compliance rule/RP flag persistence failed (non-critical): {rp_persist_err}")
 
+        # Gate approval: if any blocking rule failed, return 422 now.
+        # Compliance data and per-rule results have already been persisted above
+        # so the worker and coordinator can review the score and failure details.
+        if blocking_failures:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "COMPLIANCE_BLOCKING_FAILURE",
+                    "message": "Note cannot be approved: one or more critical compliance rules failed.",
+                    "blocking_rules": [
+                        {
+                            "rule": r["rule"],
+                            "label": r.get("label", r["rule"]),
+                            "message": r.get("message", ""),
+                        }
+                        for r in blocking_failures
+                    ],
+                    "compliance_score": blended_score,
+                },
+            )
+
         # 3. Store compliance audit log (non-critical — do not fail the response)
         try:
             rules_result["score"] = blended_score
@@ -390,9 +427,68 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         except Exception as side_e:
             logger.warning(f"Budget usage record failed (non-critical): {side_e}")
 
-        # 5. Create alerts for low compliance or budget issues (non-critical)
+        # 5a. R9 — Auto-create an incident draft when incident trigger language is detected
+        try:
+            r9_rule = next(
+                (r for r in rules_result.get("rules", []) if r.get("rule") == "R9"), None
+            )
+            if r9_rule and r9_rule.get("incident_triggers"):
+                triggers: list[str] = r9_rule["incident_triggers"]
+                from ..services.incident_service import create_incident
+                from ..schemas.incident import IncidentCreate
+
+                session_date_raw = session.get("session_date") or datetime.now(timezone.utc).isoformat()
+                try:
+                    incident_date = datetime.fromisoformat(str(session_date_raw)[:19])
+                except Exception:
+                    incident_date = datetime.now(timezone.utc)
+
+                has_aggression = any(
+                    "aggression" in t or "self-harm" in t or "abuse" in t for t in triggers
+                )
+                incident_type = "behaviour_of_concern" if has_aggression else "other"
+
+                auto_incident = IncidentCreate(
+                    participant_id=participant_id,
+                    session_id=session_id,
+                    title=f"Auto-detected: {', '.join(triggers[:2])}",
+                    description=(
+                        f"Incident language was automatically detected in a session note "
+                        f"dated {session.get('session_date')}.\n\n"
+                        f"Triggers: {', '.join(triggers)}\n\n"
+                        "This draft was created by the compliance engine. "
+                        "Please review and complete this incident report."
+                    ),
+                    incident_type=incident_type,
+                    severity="high",
+                    incident_date=incident_date,
+                )
+                org_id = current_user.get("organization_id") or session.get("organization_id")
+                user_id_str = current_user.get("sub")
+                await create_incident(auto_incident, org_id=org_id, user_id=user_id_str)
+
+                if participant_id:
+                    await alert_service.create_alert(AlertCreate(
+                        participant_id=participant_id,
+                        session_id=session_id,
+                        alert_type="incident",
+                        severity="high",
+                        title="Incident language detected in session note",
+                        message=(
+                            f"Incident triggers detected: {', '.join(triggers)}. "
+                            "An incident draft has been created for coordinator review."
+                        ),
+                    ))
+        except Exception as r9_err:
+            logger.warning(f"R9 auto-incident creation failed (non-critical): {r9_err}")
+
+        # 5b. Create alerts for low compliance or budget issues (non-critical)
         try:
             if blended_score < 70 and participant_id:
+                failed_labels = ", ".join(
+                    f"{r['rule']} ({r.get('label', r['rule'])})"
+                    for r in rules_result.get("failed_rules", [])
+                )
                 await alert_service.create_alert(AlertCreate(
                     participant_id=participant_id,
                     session_id=session_id,
@@ -401,22 +497,20 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                     title="Low Compliance Score",
                     message=(
                         f"Session on {session.get('session_date')} scored {blended_score:.0f}%. "
-                        f"Failed rules: {', '.join(r['rule'] for r in rules_result.get('failed_rules', []))}"
+                        f"Failed rules: {failed_labels}"
                     ),
                 ))
 
-            budget_rule = next(
-                (r for r in rules_result.get("rules", []) if r["rule"] == "budget_not_exceeded"),
-                None,
-            )
-            if budget_rule and budget_rule["status"] in ("warning", "fail") and participant_id:
+            # Budget check runs separately (not part of R1–R12 NDIS rules)
+            budget_result = check_budget_not_exceeded(session, participant)
+            if budget_result["status"] in ("warning", "fail") and participant_id:
                 await alert_service.create_alert(AlertCreate(
                     participant_id=participant_id,
                     session_id=session_id,
                     alert_type="budget",
-                    severity="high" if budget_rule["status"] == "fail" else "medium",
+                    severity="high" if budget_result["status"] == "fail" else "medium",
                     title="Budget Alert",
-                    message=budget_rule["message"],
+                    message=budget_result["message"],
                 ))
         except Exception as side_e:
             logger.warning(f"Alert creation failed (non-critical): {side_e}")

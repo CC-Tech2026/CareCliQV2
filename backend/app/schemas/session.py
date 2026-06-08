@@ -3,6 +3,15 @@ from typing import Optional, List, Dict
 from datetime import date
 
 
+class GoalProgressNote(BaseModel):
+    """Per-goal structured documentation captured during a session (SCRUM-226)."""
+    goal_id: str
+    goal_title: str
+    evidence_provided: Optional[str] = None
+    outcome: Optional[str] = None
+    observation: Optional[str] = None
+
+
 class MessageCreate(BaseModel):
     message_type: str = "text"
     content: str = ""
@@ -25,10 +34,16 @@ class SessionCreate(BaseModel):
     tags: Optional[List[str]] = []
     goals_addressed: Optional[List[str]] = []
     status: str = "draft"
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
     activities_performed: Optional[str] = None
     outcomes: Optional[str] = None
     participant_response: Optional[str] = None
     progress_toward_goals: Optional[str] = None
+    # SCRUM-226: structured per-goal documentation
+    goal_progress_notes: Optional[List[GoalProgressNote]] = []
+    # SCRUM-227: participant choice & control narrative
+    participant_choice_control: Optional[str] = None
 
 
 class SessionUpdate(BaseModel):
@@ -70,3 +85,7 @@ class SessionUpdate(BaseModel):
     translation_metadata: Optional[Dict] = None
     translation_error: Optional[str] = None
     translation_completed_at: Optional[str] = None
+    # SCRUM-226: structured per-goal documentation
+    goal_progress_notes: Optional[List[GoalProgressNote]] = None
+    # SCRUM-227: participant choice & control narrative
+    participant_choice_control: Optional[str] = None
