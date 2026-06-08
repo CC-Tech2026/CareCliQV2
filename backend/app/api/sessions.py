@@ -9,6 +9,7 @@ from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
+from ..core.access import get_user_organization_id
 from .security import require_recent_reauth
 import logging
 import json
@@ -405,11 +406,13 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             if embedding_vector:
                 from ..services.supabase_client import get_supabase_admin as _get_admin
                 supabase_emb = _get_admin()
+                _org_id = session.get("organization_id") or get_user_organization_id(current_user)
                 supabase_emb.table("note_embeddings").upsert(
                     {
                         "session_id": session_id,
                         "embedding": embedding_vector,
                         "model": "text-embedding-3-small",
+                        "organization_id": _org_id,
                     },
                     on_conflict="session_id",
                 ).execute()

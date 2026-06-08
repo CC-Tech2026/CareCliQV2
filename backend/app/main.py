@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding
 from .core.security import get_current_user
+from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
 import logging
 
@@ -137,6 +138,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# CCQ-104: attach organisation_id to every request from the JWT claim.
+# Runs after CORS so preflight OPTIONS requests pass through unaffected.
+app.add_middleware(OrgContextMiddleware)
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(participants.router, prefix="/api")
