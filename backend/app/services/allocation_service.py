@@ -104,7 +104,7 @@ async def get_allocations_for_user(user_id: str) -> List[Dict[str, Any]]:
             supabase.table(TABLE)
             .select("*")
             .eq("user_id", user_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .order("created_at", desc=True)
             .execute()
         )

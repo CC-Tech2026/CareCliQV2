@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
+import { useLocation } from "wouter";
 import {
   AlertTriangle,
   CalendarDays,
@@ -22,12 +23,15 @@ import {
   Save,
   ShieldAlert,
   ShieldCheck,
+  Siren,
   Sparkles,
   StopCircle,
   Target,
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { complyIncident, createIncident, getIncidentsByParticipant } from "@/services/incidentService";
+import type { IncidentComplyResult } from "@/services/incidentService";
 import {
   createMyClientNote,
   createMyClientSession,
@@ -499,9 +503,11 @@ function InlineSessionComposer({
   translatedFromLang,
   isSaving,
   error,
-  selectedGoals,
-  goalNotes,
-  choiceControl,
+  activeGoals: composerGoals,
+  goalsAddressed,
+  outcome,
+  choiceAndControl,
+  recommendations,
   onInputChange,
   onCommitInput,
   onGeneratedChange,
@@ -513,9 +519,10 @@ function InlineSessionComposer({
   onGenerate,
   onSave,
   onClose,
-  onToggleGoal,
-  onGoalNoteChange,
-  onChoiceControlChange,
+  onGoalsAddressedChange,
+  onOutcomeChange,
+  onChoiceAndControlChange,
+  onRecommendationsChange,
 }: {
   clientName: string;
   goals: GoalDetail[];
@@ -534,6 +541,11 @@ function InlineSessionComposer({
   selectedGoals: Set<string>;
   goalNotes: Record<string, GoalProgressNote>;
   choiceControl: string;
+  activeGoals?: Array<Record<string, unknown>>;
+  goalsAddressed?: string[];
+  outcome?: string;
+  choiceAndControl?: string;
+  recommendations?: string;
   onInputChange: (value: string) => void;
   onCommitInput: () => void;
   onGeneratedChange: (value: string) => void;
@@ -548,6 +560,10 @@ function InlineSessionComposer({
   onToggleGoal: (goal: GoalDetail) => void;
   onGoalNoteChange: (goalId: string, field: keyof GoalProgressNote, value: string) => void;
   onChoiceControlChange: (value: string) => void;
+  onGoalsAddressedChange?: (ids: string[]) => void;
+  onOutcomeChange?: (value: string) => void;
+  onChoiceAndControlChange?: (value: string) => void;
+  onRecommendationsChange?: (value: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [composerStep, setComposerStep] = useState<ComposerStep>("record");
@@ -851,9 +867,97 @@ function InlineSessionComposer({
                 Next: Choice & Control →
               </button>
             </div>
-          </div>
-        </>
-      )}
+          )}
+
+          {ended && (
+            <div className="space-y-4 border-t pt-4" style={{ borderColor: "#EEEAFB" }}>
+
+              {composerGoals && composerGoals.length > 0 && (
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                    <Target size={12} />
+                    Goals Addressed This Session
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {composerGoals.map((goal, idx) => {
+                      const gid = String(goal.id ?? idx);
+                      const selected = Boolean(goalsAddressed?.includes(gid));
+                      return (
+                        <button
+                          key={gid}
+                          type="button"
+                          onClick={() => {
+                            if (!onGoalsAddressedChange) return;
+                            onGoalsAddressedChange(
+                              selected
+                                ? (goalsAddressed || []).filter((id) => id !== gid)
+                                : [...(goalsAddressed || []), gid],
+                            );
+                          }}
+                          className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
+                          style={{
+                            borderColor: selected ? PLUM : BORDER,
+                            background: selected ? SOFT : "white",
+                            color: selected ? PLUM : MUTED,
+                          }}
+                        >
+                          {goalLabel(goal, idx)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <CheckCircle2 size={12} />
+                  Session Outcome *
+                </p>
+                <textarea
+                  value={outcome ?? ""}
+                  onChange={(event) => onOutcomeChange?.(event.target.value)}
+                  placeholder="What was achieved? Describe measurable progress and participant response..."
+                  rows={3}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <MessageCircle size={12} />
+                  Participant Choice &amp; Control *
+                </p>
+                <textarea
+                  value={choiceAndControl ?? ""}
+                  onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
+                  placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
+                  rows={3}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                  <Sparkles size={12} />
+                  Recommendations
+                </p>
+                <textarea
+                  value={recommendations ?? ""}
+                  onChange={(event) => onRecommendationsChange?.(event.target.value)}
+                  placeholder="Recommendations for coordinator or next session (optional)..."
+                  rows={2}
+                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  style={{ borderColor: BORDER, color: TEXT }}
+                />
+              </div>
+
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Step: choice & control (SCRUM-227) */}
       {composerStep === "choice" && (
@@ -901,6 +1005,441 @@ function InlineSessionComposer({
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+const INCIDENT_TYPES_LIST = [
+  { value: "injury", label: "Injury" },
+  { value: "medication_error", label: "Medication Error" },
+  { value: "behaviour_of_concern", label: "Behaviour of Concern" },
+  { value: "property_damage", label: "Property Damage" },
+  { value: "abuse_neglect", label: "Abuse / Neglect" },
+  { value: "restrictive_practice", label: "Restrictive Practice" },
+  { value: "environmental", label: "Environmental Hazard" },
+  { value: "elopement", label: "Elopement" },
+  { value: "near_miss", label: "Near Miss" },
+  { value: "other", label: "Other" },
+] as const;
+
+const INCIDENT_SEVERITIES_LIST = [
+  { value: "low", label: "Low — minimal impact" },
+  { value: "medium", label: "Medium — some impact" },
+  { value: "high", label: "High — significant impact" },
+  { value: "critical", label: "Critical — life-threatening" },
+] as const;
+
+function IncidentReportModal({
+  participantId,
+  participantName,
+  onClose,
+}: {
+  participantId: string;
+  participantName: string;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    incident_type: "injury",
+    severity: "medium",
+    title: "",
+    description: "",
+    location: "",
+    worker_actions: "",
+  });
+
+  function setField(key: string, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const ndisReportable =
+    form.incident_type === "abuse_neglect" ||
+    form.incident_type === "restrictive_practice" ||
+    form.severity === "critical";
+
+  const [comply, setComply] = useState<{ loading: boolean; result: IncidentComplyResult | null }>({
+    loading: false,
+    result: null,
+  });
+
+  async function handleComply() {
+    if (!form.description.trim()) {
+      toast({ title: "Add a description first", variant: "destructive" });
+      return;
+    }
+    setComply({ loading: true, result: null });
+    try {
+      const result = await complyIncident({
+        incident_type: form.incident_type,
+        severity: form.severity,
+        title: form.title.trim() || "Incident",
+        description: form.description,
+        worker_actions: form.worker_actions,
+        participant_name: participantName,
+      });
+      setComply({ loading: false, result });
+    } catch {
+      setComply({ loading: false, result: null });
+      toast({ title: "Compliance check failed", description: "Please try again.", variant: "destructive" });
+    }
+  }
+
+  async function handleSubmit() {
+    if (!form.title.trim()) {
+      toast({ title: "Incident title is required", variant: "destructive" });
+      return;
+    }
+    if (!form.description.trim()) {
+      toast({ title: "Description is required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await createIncident({
+        participant_id: participantId || undefined,
+        incident_type: form.incident_type,
+        severity: form.severity,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        location: form.location.trim() || undefined,
+        worker_actions: form.worker_actions.trim() || undefined,
+        incident_date: new Date().toISOString(),
+      });
+      toast({
+        title: "Incident logged",
+        description: "The incident has been recorded against this participant.",
+        action: (
+          <button
+            onClick={() => { onClose(); navigate("/incidents"); }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
+          >
+            <Siren size={12} />
+            View Incidents
+          </button>
+        ) as unknown as import("react").ReactElement,
+      });
+      onClose();
+    } catch (err: unknown) {
+      const apiErr = err as Error & { status?: number };
+      let title = "Incident not saved";
+      let description = "An unexpected error occurred. Please try again.";
+      if (apiErr.status === 403) {
+        description = "You don't have permission to report incidents for this participant. Check your allocation.";
+      } else if (apiErr.status === 404) {
+        description = "Participant not found — please refresh the page and try again.";
+      } else if (apiErr.status === 422) {
+        description = "The report could not be processed. Please write the incident in English and try again.";
+      } else if (apiErr.message && !apiErr.message.includes("status")) {
+        description = apiErr.message;
+      }
+      toast({ title, description, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl"
+        style={{ borderColor: BORDER, maxHeight: "92vh" }}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50">
+              <Siren size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Practice Standard 2.3</p>
+              <h2 className="text-base font-black" style={{ color: TEXT }}>Report Incident — {participantName}</h2>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            style={{ color: MUTED }}
+            aria-label="Close incident form"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-6">
+          {ndisReportable && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
+              <p className="text-sm font-bold text-red-800">
+                NDIS Reportable — notify the NDIS Quality &amp; Safeguards Commission.
+                {form.severity === "critical" && " Critical incidents must be reported within 24 hours."}
+              </p>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Type *</p>
+              <select
+                value={form.incident_type}
+                onChange={(event) => setField("incident_type", event.target.value)}
+                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              >
+                {INCIDENT_TYPES_LIST.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Severity *</p>
+              <select
+                value={form.severity}
+                onChange={(event) => setField("severity", event.target.value)}
+                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                style={{ borderColor: BORDER, color: TEXT }}
+              >
+                {INCIDENT_SEVERITIES_LIST.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Title *</p>
+            <input
+              value={form.title}
+              onChange={(event) => setField("title", event.target.value)}
+              placeholder="Brief description of what occurred..."
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
+
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>What happened? *</p>
+              <button
+                type="button"
+                onClick={handleComply}
+                disabled={comply.loading || !form.description.trim()}
+                className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-black transition hover:bg-[#F0EDFB] disabled:opacity-40"
+                style={{ borderColor: "#C4B8F0", color: PLUM }}
+              >
+                {comply.loading
+                  ? <Loader2 size={11} className="animate-spin" />
+                  : <Sparkles size={11} />}
+                {comply.loading ? "Checking…" : "Check NDIS Compliance"}
+              </button>
+            </div>
+            <textarea
+              value={form.description}
+              onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
+              placeholder="Describe the incident in full — who, what, when, where, how..."
+              rows={4}
+              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+              style={{ borderColor: BORDER, color: TEXT }}
+            />
+          </div>
+
+          {comply.result && (() => {
+            const r = comply.result;
+            const scoreColor = r.compliance_score >= 75 ? "#10B981" : r.compliance_score >= 50 ? "#F59E0B" : "#EF4444";
+            const criteriaLabels: Record<string, string> = {
+              factual_completeness: "Factual completeness",
+              clinical_language: "Clinical language",
+              action_documented: "Actions documented",
+              ndis_standard_alignment: "Practice Standard alignment",
+              follow_up_indicators: "Follow-up clarity",
+            };
+            return (
+              <div className="space-y-3 rounded-xl border bg-[#F8F6FE] p-4" style={{ borderColor: "#DDD8F5" }}>
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Compliance Score</p>
+                  <span className="text-sm font-black" style={{ color: scoreColor }}>{r.compliance_score}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/70">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${r.compliance_score}%`, background: scoreColor }} />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: "white" }}>
+                    {r.practice_standard}
+                  </span>
+                  {r.ndis_reportable && (
+                    <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
+                      NDIS Reportable · notify within {r.notification_hours}h
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-y-2">
+                  {Object.entries(r.compliance_criteria).map(([key, val]) => {
+                    const c = val >= 75 ? "#10B981" : val >= 50 ? "#F59E0B" : "#EF4444";
+                    return (
+                      <div key={key}>
+                        <div className="mb-0.5 flex justify-between">
+                          <span className="text-[10px] font-bold" style={{ color: MUTED }}>{criteriaLabels[key] ?? key}</span>
+                          <span className="text-[10px] font-black" style={{ color: c }}>{val}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white">
+                          <div className="h-full rounded-full" style={{ width: `${val}%`, background: c }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {r.compliance_flags.length > 0 && (
+                  <div className="space-y-1">
+                    {r.compliance_flags.map((flag, i) => (
+                      <div key={i} className="flex items-start gap-1.5">
+                        <AlertTriangle size={11} className="mt-0.5 shrink-0 text-amber-600" />
+                        <p className="text-xs font-medium text-amber-800">{flag}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {r.reporting_requirements && (
+                  <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700 mb-0.5">Reporting Requirement</p>
+                    <p className="text-xs font-medium text-red-800">{r.reporting_requirements}</p>
+                  </div>
+                )}
+
+                {r.suggested_follow_up && (
+                  <div className="rounded-lg bg-white px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-0.5" style={{ color: MUTED }}>Suggested Next Steps</p>
+                    <p className="text-xs font-medium" style={{ color: TEXT }}>{r.suggested_follow_up}</p>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm(prev => ({
+                      ...prev,
+                      description: r.compliant_description,
+                      worker_actions: r.compliant_worker_actions || prev.worker_actions,
+                    }));
+                    setComply({ loading: false, result: null });
+                    toast({ title: "NDIS-compliant text applied", description: "Review it before submitting." });
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-white"
+                  style={{ borderColor: "#C4B8F0", color: PLUM, background: "rgba(255,255,255,0.5)" }}
+                >
+                  <Sparkles size={13} />
+                  Apply NDIS-Compliant Text to Report
+                </button>
+              </div>
+            );
+          })()}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Location</p>
+              <input
+                value={form.location}
+                onChange={(event) => setField("location", event.target.value)}
+                placeholder="Where did it occur?"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Immediate Actions</p>
+              <input
+                value={form.worker_actions}
+                onChange={(event) => setField("worker_actions", event.target.value)}
+                placeholder="First aid, supervisor notified..."
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                style={{ borderColor: BORDER, color: TEXT }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between border-t px-6 py-4" style={{ borderColor: BORDER }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-[#F8F6FE]"
+            style={{ borderColor: BORDER, color: MUTED }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          >
+            {saving ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
+            Log Incident
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SEVERITY_ROW_CLASSES: Record<string, string> = {
+  low:      "border-emerald-200 bg-emerald-50 text-emerald-700",
+  medium:   "border-amber-200 bg-amber-50 text-amber-700",
+  high:     "border-orange-200 bg-orange-50 text-orange-700",
+  critical: "border-red-200 bg-red-50 text-red-700",
+};
+
+function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<string, unknown>> }) {
+  const [, navigate] = useLocation();
+  const recent = incidents.slice(0, 3);
+  return (
+    <section className="rounded-xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="flex shrink-0 items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2">
+          <Siren size={14} className="text-red-600" />
+          <p className="text-sm font-black" style={{ color: TEXT }}>Reported Incidents</p>
+          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "#FEF2F2", color: "#DC2626" }}>
+            {incidents.length}
+          </span>
+        </div>
+        <button
+          onClick={() => navigate("/incidents")}
+          className="text-xs font-black underline underline-offset-2 transition hover:opacity-70"
+          style={{ color: PLUM }}
+        >
+          View all
+        </button>
+      </div>
+      <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+        {recent.map((inc, idx) => {
+          const sev = String(inc.severity || "medium");
+          const incDate = inc.incident_date ? (() => { try { return formatDistanceToNow(parseISO(String(inc.incident_date)), { addSuffix: true }); } catch { return ""; } })() : "";
+          return (
+            <button
+              key={String(inc.id || idx)}
+              onClick={() => navigate(`/incidents/${String(inc.id || "")}`)}
+              className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-[#F8F6FE]"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{String(inc.title || "Incident")}</p>
+                {incDate && <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>{incDate}</p>}
+              </div>
+              <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${SEVERITY_ROW_CLASSES[sev] ?? SEVERITY_ROW_CLASSES.medium}`}>
+                {sev}
+              </span>
+              {inc.ndis_pending && (
+                <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                  NDIS Alert
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -953,38 +1492,34 @@ export default function MyClientDetail({ id }: { id: string }) {
   const [goalNotes, setGoalNotes] = useState<Record<string, GoalProgressNote>>({});
   // SCRUM-227: participant choice & control
   const [choiceControl, setChoiceControl] = useState("");
+  const [sessionOutcome, setSessionOutcome] = useState("");
+  const [sessionChoiceAndControl, setSessionChoiceAndControl] = useState("");
+  const [sessionRecommendations, setSessionRecommendations] = useState("");
+  const [sessionGoalsAddressed, setSessionGoalsAddressed] = useState<string[]>([]);
+  const [incidentModalOpen, setIncidentModalOpen] = useState(false);
   const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
   const dictationBaseRef = useRef("");
   const dictationFinalRef = useRef("");
   const queryClient = useQueryClient();
   const detailQuery = useQuery({ queryKey: ["worker", "my-client", id], queryFn: () => getMyClientDetail(id) });
   const planQuery = useQuery({ queryKey: ["worker", "my-client", id, "plan"], queryFn: () => getMyClientNdisPlan(id) });
+  const incidentsQuery = useQuery({
+    queryKey: ["worker", "participant-incidents", id],
+    queryFn: () => getIncidentsByParticipant<Array<Record<string, unknown>>>(id),
+    enabled: !!id,
+  });
 
   const saveSessionDraft = useMutation({
-    mutationFn: () => {
-      const goalProgressNotes: GoalProgressNote[] = Array.from(selectedGoals).map((goalId) => ({
-        goal_id: goalId,
-        goal_title: goalNotes[goalId]?.goal_title ?? "",
-        evidence_provided: goalNotes[goalId]?.evidence_provided,
-        outcome: goalNotes[goalId]?.outcome,
-        observation: goalNotes[goalId]?.observation,
-      }));
-      const start = sessionStartTime ?? new Date();
-      const end = sessionEndTime ?? new Date();
-      const durationMinutes = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60000));
-      const fmt = (d: Date) =>
-        d.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false });
-      return createMyClientSession(id, {
-        status: "draft",
-        session_type: "support_work",
-        duration_minutes: durationMinutes,
-        start_time: fmt(start),
-        end_time: fmt(end),
-        notes: generatedNote.trim() || sessionDraft.trim(),
-        goal_progress_notes: goalProgressNotes,
-        participant_choice_control: choiceControl.trim() || undefined,
-      });
-    },
+    mutationFn: () => createMyClientSession(id, {
+      status: "draft",
+      session_type: "support_work",
+      duration_minutes: 60,
+      notes: generatedNote.trim() || sessionDraft.trim(),
+      outcomes: sessionOutcome.trim() || undefined,
+      participant_response: sessionChoiceAndControl.trim() || undefined,
+      progress_toward_goals: sessionRecommendations.trim() || undefined,
+      goals_addressed: sessionGoalsAddressed.length > 0 ? sessionGoalsAddressed : undefined,
+    }),
     onSuccess: () => {
       setSessionDraft("");
       setSessionInput("");
@@ -1026,12 +1561,10 @@ export default function MyClientDetail({ id }: { id: string }) {
     setSessionAttachmentName("");
     setSessionEnded(false);
     setComposerError("");
-    setTranslatedFromLang("");
-    setSessionStartTime(null);
-    setSessionEndTime(null);
-    setSelectedGoals(new Set());
-    setGoalNotes({});
-    setChoiceControl("");
+    setSessionOutcome("");
+    setSessionChoiceAndControl("");
+    setSessionRecommendations("");
+    setSessionGoalsAddressed([]);
   }
 
   function openSessionComposer() {
@@ -1323,6 +1856,14 @@ export default function MyClientDetail({ id }: { id: string }) {
             <Plus size={16} />
             New Note
           </button>
+          <button
+            onClick={() => setIncidentModalOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm transition hover:bg-red-50"
+            style={{ borderColor: "#FECACA", color: CORAL }}
+          >
+            <Siren size={16} />
+            Report Incident
+          </button>
         </div>
       </div>
 
@@ -1378,25 +1919,71 @@ export default function MyClientDetail({ id }: { id: string }) {
                   stopSessionDictation();
                   setSessionComposerOpen(false);
                 }}
-                onToggleGoal={toggleGoal}
-                onGoalNoteChange={handleGoalNoteChange}
-                onChoiceControlChange={setChoiceControl}
+                activeGoals={activeGoals(client.goals)}
+                goalsAddressed={sessionGoalsAddressed}
+                outcome={sessionOutcome}
+                choiceAndControl={sessionChoiceAndControl}
+                recommendations={sessionRecommendations}
+                onGoalsAddressedChange={setSessionGoalsAddressed}
+                onOutcomeChange={setSessionOutcome}
+                onChoiceAndControlChange={setSessionChoiceAndControl}
+                onRecommendationsChange={setSessionRecommendations}
               />
             }
           />
         ) : (
-          <ParticipantReadiness client={client} columns={2} />
+          <div className="space-y-4">
+            <ParticipantReadiness client={client} columns={2} />
+            {(incidentsQuery.data?.length ?? 0) > 0 && (
+              <ParticipantIncidentPanel incidents={incidentsQuery.data!} />
+            )}
+          </div>
         )
       )}
 
       {activeTab === "plan" && (
         <div className="space-y-6">
           {planQuery.isLoading && <p className="text-sm font-bold" style={{ color: MUTED }}>Loading plan...</p>}
-          <ActiveGoalsPanel
-            goals={(planQuery.data?.goals ?? client.goals ?? []) as GoalDetail[]}
-            showCompletedToggle
-          />
-        </div>
+          {(planQuery.data?.goals || client.goals || []).length === 0 && !planQuery.isLoading && (
+            <p className="text-sm font-medium" style={{ color: MUTED }}>No goals recorded for this participant yet.</p>
+          )}
+          <div className="space-y-3">
+            {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
+              const g = goal as Record<string, unknown>;
+              const title = String(g.title || g.name || `Goal ${index + 1}`);
+              const description = String(g.description || g.instructions || g.goal_instructions || "");
+              const status = String(g.status || "active");
+              const category = String(g.category || g.support_category || "");
+              const isActive = !["completed", "achieved", "archived"].includes(status.toLowerCase());
+              return (
+                <div key={String(g.id || index)} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-black" style={{ color: TEXT }}>{title}</p>
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${
+                        isActive
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600"
+                      }`}
+                    >
+                      {status}
+                    </span>
+                  </div>
+                  {category.trim() && (
+                    <p className="mt-1.5 text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>
+                      {category}
+                    </p>
+                  )}
+                  {description.trim() && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: MUTED }}>
+                      {description}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
       )}
 
       {activeTab === "sessions" && (
@@ -1436,6 +2023,14 @@ export default function MyClientDetail({ id }: { id: string }) {
         <Section title="My Compliance For This Client" icon={ShieldCheck}>
           <SessionRows rows={detail.compliance} />
         </Section>
+      )}
+
+      {incidentModalOpen && (
+        <IncidentReportModal
+          participantId={String(client.id ?? "")}
+          participantName={client.full_name}
+          onClose={() => setIncidentModalOpen(false)}
+        />
       )}
     </div>
   );

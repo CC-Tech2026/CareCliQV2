@@ -96,6 +96,7 @@ _ACCOUNT_TYPE_TO_ROLE: dict[str, str] = {
     "independent_worker": "support_worker",
     "allied_health": "allied_health",
     "small_provider": "support_coordinator",
+    "managing_director": "managing_director",
 }
 VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
@@ -294,7 +295,7 @@ async def _resolve_org_member_role(
             .select("role")
             .eq("user_id", user_id)
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .limit(1)
             .execute()
         )

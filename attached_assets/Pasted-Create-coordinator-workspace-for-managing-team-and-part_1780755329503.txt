@@ -1,0 +1,194 @@
+Create coordinator workspace for managing team and participants:
+Current Worker Workspace (for reference):
+├─ Dashboard
+├─ My Clients (their participants)
+├─ My Compliance (personal score)
+├─ Incidents (personal incidents)
+├─ Credentials
+├─ Toolkit
+└─ Settings
+
+New Coordinator Workspace:
+├─ DASHBOARD (Team overview)
+│  ├─ Team members (list with stats)
+│  ├─ Participants (list with status)
+│  ├─ Key metrics (compliance, incidents, sessions)
+│  └─ Alerts (flagged items)
+│
+├─ TEAM MANAGEMENT (NEW)
+│  ├─ Team members (list)
+│  ├─ Individual performance (stats per worker)
+│  ├─ Assign participants to workers
+│  ├─ Performance alerts
+│  └─ Check-in history
+│
+├─ PARTICIPANT MANAGEMENT (NEW)
+│  ├─ All participants in care
+│  ├─ Participant details
+│  ├─ Goals & progress
+│  ├─ Risk assessment
+│  └─ Incident history
+│
+├─ SESSION REVIEW (NEW)
+│  ├─ Flagged sessions (to review)
+│  ├─ Session details & notes
+│  ├─ Flag/unflag controls
+│  ├─ Compliance feedback
+│  └─ Bulk approve action
+│
+├─ INCIDENT MANAGEMENT (NEW)
+│  ├─ Incident list
+│  ├─ Incident details
+│  ├─ Follow-up tracking
+│  └─ Risk assessment
+│
+├─ COMPLIANCE TRACKING (NEW)
+│  ├─ Team compliance score (chart)
+│  ├─ Expiring certifications (with action items)
+│  ├─ Training records due
+│  ├─ Bulk send reminders
+│  └─ Compliance trends
+│
+├─ GOALS & PLANNING (NEW)
+│  ├─ Participant goals
+│  ├─ Progress tracking
+│  ├─ Outcome measurement
+│  └─ Review scheduling
+│
+└─ SETTINGS
+   ├─ Team settings
+   └─ Notification preferences
+Key Sections to Build:
+a) Dashboard
+┌─────────────────────────────────────────┐
+│ Team Overview                           │
+├─────────────────────────────────────────┤
+│                                         │
+│ Team Participants: 45                   │
+│ Team Sessions This Week: 120            │
+│ Team Compliance Average: 85%            │
+│ Incidents This Month: 2                 │
+│ Workers Needing Support: 3              │
+│                                         │
+├─────────────────────────────────────────┤
+│ QUICK ACTIONS                           │
+│ ┌─────────────┐  ┌──────────────┐      │
+│ │ 5 Flagged   │  │ 2 Incidents  │      │
+│ │ Sessions    │  │ Pending      │      │
+│ │ [REVIEW]    │  │ [REVIEW]     │      │
+│ └─────────────┘  └──────────────┘      │
+│                                         │
+│ ┌─────────────┐  ┌──────────────┐      │
+│ │ 12 Workers  │  │ 8 Training   │      │
+│ │ With Expiry │  │ Records Due  │      │
+│ │ [SEND BULK] │  │ [SEND BULK]  │      │
+│ └─────────────┘  └──────────────┘      │
+│                                         │
+└─────────────────────────────────────────┘
+b) Team Management
+┌──────────────────────────────────────────┐
+│ MY TEAM (5 workers)                      │
+├──────────────────────────────────────────┤
+│                                          │
+│ Sarah Johnson                            │
+│ Compliance: 88% ✓                        │
+│ Participants: 8  Sessions: 12/wk         │
+│ Status: On Track                         │
+│ [View] [Send Message] [Schedule 1:1]    │
+│                                          │
+│ James Mitchell                           │
+│ Compliance: 78% ⚠️                       │
+│ Participants: 9  Sessions: 14/wk         │
+│ Status: Needs Support                    │
+│ [View] [Schedule Check-In] [Training]    │
+│                                          │
+│ Lisa Chen                                │
+│ Compliance: 82% ⚠️                       │
+│ Participants: 7  Sessions: 11/wk         │
+│ Status: Declining Trend                  │
+│ [View] [Discuss] [1:1 Scheduled]         │
+│                                          │
+└──────────────────────────────────────────┘
+c) Participant Management
+┌──────────────────────────────────────────┐
+│ PARTICIPANTS IN MY CARE (45)             │
+├──────────────────────────────────────────┤
+│ Filter: All | Active | At Risk | Review  │
+│                                          │
+│ Benjamin Scott                           │
+│ Support Worker: Sarah Johnson            │
+│ Status: Active ✓                         │
+│ Goals: 3 (2 progressing, 1 blocked)      │
+│ Last session: Jun 5                      │
+│ Risk Level: Low                          │
+│ [View Profile] [View Sessions]           │
+│                                          │
+│ John Doe                                 │
+│ Support Worker: James Mitchell           │
+│ Status: At Risk ⚠️                       │
+│ Goals: 2 (1 progressing, 1 stalled)      │
+│ Last session: May 28                     │
+│ Risk Level: High (Behavior escalating)   │
+│ [View Profile] [Escalate] [Plan Review]  │
+│                                          │
+└──────────────────────────────────────────┘
+d) Session Review
+┌──────────────────────────────────────────┐
+│ FLAGGED SESSIONS (5)                     │
+├──────────────────────────────────────────┤
+│                                          │
+│ Session: Sarah Johnson → Benjamin Scott  │
+│ Date: Jun 5, 2026                        │
+│ Reason for Flag: Missing goal reference  │
+│ Compliance Issues:                       │
+│   • R5: No goal mentioned (BLOCK)        │
+│   • R6: Subjective language (WARN)       │
+│                                          │
+│ Notes Preview:                           │
+│ "Had a good session today. Worked on     │
+│  some tasks and it went okay. Participant│
+│  seemed happy."                          │
+│                                          │
+│ AI Suggestions:                          │
+│ • Reference Goal 2 (Community Skills)    │
+│ • Rewrite: "seemed happy" → "engaged"    │
+│                                          │
+│ [APPROVE] [SEND BACK TO WORKER] [VIEW]  │
+│                                          │
+│ ────────────────────────────────────────│
+│                                          │
+│ Session: James Mitchell → Lisa Smith     │
+│ Date: Jun 4, 2026                        │
+│ Reason for Flag: Behavior escalation     │
+│ Compliance Issues:                       │
+│   • R10: Restrictive practice language   │
+│          detected (CRITICAL)             │
+│                                          │
+│ [ESCALATE INCIDENT] [VIEW INCIDENT]      │
+│ [SEND BACK TO WORKER] [VIEW]             │
+│                                          │
+└──────────────────────────────────────────┘
+Implementation Steps:
+
+Create Coordinator Workspace layout (sidebar + main area)
+Build Dashboard section (team stats, quick action cards)
+Build Team Management section (worker list, performance)
+Build Participant Management section (participant list, status)
+Build Session Review section (flagged sessions, approval workflow)
+Build Incident Management section (incident list, tracking)
+Build Compliance Tracking section (certifications, training, trends)
+Integrate quick action buttons (send bulk reminders, etc.)
+Add team-level filters and searches
+Implement role-based data scoping (only see team data)
+
+Acceptance Criteria:
+
+ Coordinator can see team dashboard
+ Team members listed with performance stats
+ Participants listed with status indicators
+ Flagged sessions can be reviewed and approved/rejected
+ Incident reports viewable and manageable
+ Compliance certifications tracked with expiry dates
+ Bulk actions work (send reminders to multiple staff)
+ Data scoped to coordinator's team only
+ Search and filter functions work

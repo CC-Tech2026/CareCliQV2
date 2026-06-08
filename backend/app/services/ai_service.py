@@ -1081,3 +1081,138 @@ async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
         return transcript.text
     finally:
         _os.unlink(temp_path)
+
+
+# ---------------------------------------------------------------------------
+# Incident compliance rewrite + scoring
+# ---------------------------------------------------------------------------
+
+async def comply_incident(
+    incident_type: str,
+    severity: str,
+    title: str,
+    description: str,
+    worker_actions: str,
+    participant_name: str = "the participant",
+) -> dict:
+    """Rewrite an incident report in NDIS-compliant clinical English and score it
+    against 5 Practice Standard criteria. Returns the rewrite, per-criterion scores,
+    flags, notification requirements, and suggested follow-up actions."""
+
+    from ..schemas.incident import (
+        PRACTICE_STANDARD_MAP,
+        NDIS_NOTIFICATION_HOURS,
+        is_ndis_reportable,
+    )
+
+    practice_standard = PRACTICE_STANDARD_MAP.get(incident_type, "Standard 2.3 — Incident management")
+    notification_hours = NDIS_NOTIFICATION_HOURS.get(severity, 480)
+    ndis_reportable = is_ndis_reportable(incident_type, severity)
+
+    fallback = {
+        "compliant_description": description,
+        "compliant_worker_actions": worker_actions,
+        "practice_standard": practice_standard,
+        "ndis_reportable": ndis_reportable,
+        "notification_hours": notification_hours,
+        "compliance_score": 50,
+        "compliance_criteria": {
+            "factual_completeness": 50,
+            "clinical_language": 50,
+            "action_documented": 50,
+            "ndis_standard_alignment": 50,
+            "follow_up_indicators": 50,
+        },
+        "compliance_flags": ["AI rewrite unavailable — please review the report manually before submitting."],
+        "reporting_requirements": (
+            f"This incident must be reported to the NDIS Quality and Safeguards Commission within "
+            f"{notification_hours} hours as it meets reportable incident criteria." if ndis_reportable else None
+        ),
+        "suggested_follow_up": None,
+    }
+
+    if not _openai_configured():
+        return fallback
+
+    prompt = f"""You are an NDIS compliance specialist preparing formal incident documentation for an Australian NDIS provider.
+
+RAW INCIDENT DETAILS:
+- Incident type: {incident_type}
+- Severity: {severity}
+- Title: {title}
+- Participant referred to as: {participant_name}
+- Raw description: {description}
+- Raw worker actions: {worker_actions or "Not provided"}
+
+Applicable NDIS Practice Standard: {practice_standard}
+NDIS Reportable: {ndis_reportable}
+Notification requirement: within {notification_hours} hours (if reportable)
+
+YOUR TASKS:
+
+1. Rewrite the description in formal, third-person, past-tense clinical English that meets NDIS audit standards. Include all factual elements present — do NOT fabricate new facts. Use person-first language. Remove first-person pronouns ("I", "we", "my"). Keep all times, locations, and factual details from the original.
+
+2. Rewrite the worker_actions as a concise numbered list of actions actually taken, in past tense. If the original is empty, write: "No immediate actions documented."
+
+3. Score each criterion from 0-100 (be strict — most real incident notes score 40-70):
+   - factual_completeness: Does it answer who, what, when, where, how? Score 0 if any key element is completely missing.
+   - clinical_language: Is it formal, third-person, no filler words, no first person? Deduct for every "I", "we", or informal phrase.
+   - action_documented: Are the worker's actions specific and documented? Score 0 if no actions mentioned.
+   - ndis_standard_alignment: Does the description address the relevant Practice Standard ({practice_standard})? Deduct if the standard's specific requirements are not addressed.
+   - follow_up_indicators: Are next steps, follow-up care, or escalation clear? Score 0 if no follow-up mentioned.
+
+4. List up to 4 specific compliance_flags — exact gaps in the current documentation (e.g. "Time of incident not recorded", "Witness details absent", "No mention of participant's injury assessment").
+
+5. Write reporting_requirements as a single sentence if ndis_reportable is true, otherwise null.
+
+6. Write suggested_follow_up as 2-3 concrete actions the support worker must take next (e.g., "Notify team leader within 2 hours", "Complete NDIS reportable incident form", "Document participant's current condition in progress notes").
+
+Return ONLY valid JSON — no markdown, no explanation:
+{{
+  "compliant_description": "...",
+  "compliant_worker_actions": "...",
+  "compliance_criteria": {{
+    "factual_completeness": 0-100,
+    "clinical_language": 0-100,
+    "action_documented": 0-100,
+    "ndis_standard_alignment": 0-100,
+    "follow_up_indicators": 0-100
+  }},
+  "compliance_flags": ["...", "..."],
+  "reporting_requirements": "..." or null,
+  "suggested_follow_up": "..."
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.15,
+            max_tokens=900,
+            response_format={"type": "json_object"},
+        )
+        raw = json.loads(resp.choices[0].message.content or "{}")
+    except Exception as exc:
+        logger.warning("comply_incident AI call failed: %s", exc)
+        return fallback
+
+    criteria = raw.get("compliance_criteria", {})
+    compliance_score = (
+        int(round(sum(criteria.values()) / len(criteria))) if criteria else 50
+    )
+
+    return {
+        "compliant_description": raw.get("compliant_description") or description,
+        "compliant_worker_actions": raw.get("compliant_worker_actions") or worker_actions,
+        "practice_standard": practice_standard,
+        "ndis_reportable": ndis_reportable,
+        "notification_hours": notification_hours,
+        "compliance_score": compliance_score,
+        "compliance_criteria": criteria,
+        "compliance_flags": raw.get("compliance_flags") or [],
+        "reporting_requirements": raw.get("reporting_requirements"),
+        "suggested_follow_up": raw.get("suggested_follow_up"),
+    }

@@ -271,7 +271,7 @@ export function InviteModal({
 
           <DialogDescription>
             Securely invite team members to
-            CareScribe with role-based access
+            CareCliQ with role-based access
             permissions and organisation-level
             controls.
           </DialogDescription>

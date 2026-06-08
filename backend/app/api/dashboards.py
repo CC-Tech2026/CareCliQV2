@@ -11,10 +11,11 @@ from ..core.access import (
     get_user_id,
     get_user_organization_id,
     is_coordinator_role,
+    is_managing_director,
     is_support_worker,
 )
 from ..core.security import get_current_user
-from ..services import participant_service, session_service
+from ..services import billing_service, participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -160,7 +161,7 @@ async def _team_members(org_id: str) -> list[dict]:
             supabase.table("organization_members")
             .select("user_id, role, is_active, joined_at")
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .execute()
         )
     except Exception:
@@ -317,3 +318,269 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
         "participants": len(participants),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _goal_achievement_rate(participants: list[dict]) -> float:
+    """Derive goal achievement rate from participant plan status fields."""
+    if not participants:
+        return 0.0
+    achieved = sum(
+        1 for p in participants
+        if p.get("plan_status") == "active" or p.get("goals_met") is True
+    )
+    return round((achieved / len(participants)) * 100, 1)
+
+
+def _retention_rate(team: list[dict]) -> float:
+    """Simplified retention rate: percentage of members still active."""
+    if not team:
+        return 100.0
+    active = sum(1 for m in team if m.get("is_active"))
+    return round((active / len(team)) * 100, 1)
+
+
+@router.get("/managing-director")
+async def md_dashboard(current_user: dict = Depends(get_current_user)):
+    """Executive dashboard aggregate for managing_director role."""
+    if not is_managing_director(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Managing Director access required.")
+    org_id = get_user_organization_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+
+    participants = await participant_service.get_all_participants(current_user)
+    sessions = await session_service.get_all_sessions(1000, current_user)
+    team = await _team_members(org_id)
+
+    today = _today_iso()
+    active_workers = [m for m in team if m.get("is_active")]
+    support_workers = [m for m in active_workers if m.get("role") == "support_worker"]
+
+    # Sessions this week
+    from datetime import timedelta
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
+
+    # Compliance
+    compliance_score = _average_score(sessions)
+    compliance_target = 90
+
+    # Workers needing attention (derived from coordinator logic)
+    worker_scores: dict[str, list[float]] = defaultdict(list)
+    worker_sessions_count: dict[str, int] = defaultdict(int)
+    for session in sessions:
+        wid = session.get("worker_id") or session.get("support_worker_id") or session.get("owner_user_id")
+        if not wid:
+            continue
+        worker_sessions_count[str(wid)] += 1
+        if session.get("compliance_score") is not None:
+            worker_scores[str(wid)].append(float(session["compliance_score"]))
+
+    workers_at_risk = []
+    worker_map = {str(m.get("id")): m for m in team}
+    for wid, count in worker_sessions_count.items():
+        scores = worker_scores.get(wid, [])
+        avg = round(sum(scores) / len(scores)) if scores else 0
+        if scores and avg < 85:
+            worker_info = worker_map.get(wid, {})
+            workers_at_risk.append({
+                "id": wid,
+                "full_name": worker_info.get("full_name") or "Worker",
+                "compliance_score": avg,
+                "sessions": count,
+            })
+
+    # Incidents this month only (sessions with RP flags within the current calendar month)
+    current_month_prefix = today[:7]  # e.g. "2026-06"
+    incidents_this_month = sum(
+        1 for s in sessions
+        if _has_rp_flag(s) and _date_part(s.get("session_date")).startswith(current_month_prefix)
+    )
+
+    # Goal achievement rate
+    goal_rate = _goal_achievement_rate(participants)
+
+    # Retention rate — query ALL org members (including inactive) for a correct denominator
+    supabase = get_supabase_admin()
+    try:
+        all_members_result = (
+            supabase.table("organization_members")
+            .select("user_id, is_active", count="exact")
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        total_member_count = all_members_result.count or len(all_members_result.data or [])
+        inactive_count = sum(1 for m in (all_members_result.data or []) if not m.get("is_active"))
+    except Exception:
+        total_member_count = len(team)
+        inactive_count = 0
+    active_count = total_member_count - inactive_count
+    retention_rate = round((active_count / total_member_count) * 100, 1) if total_member_count else 100.0
+
+    # Revenue summary from billing service
+    try:
+        revenue_data = await billing_service.get_revenue_report(current_user)
+        revenue_this_month_cents = 0
+        if revenue_data.get("monthly"):
+            for month_entry in revenue_data["monthly"]:
+                if str(month_entry.get("month", "")).startswith(current_month_prefix):
+                    revenue_this_month_cents = month_entry.get("billed", 0)
+                    break
+        revenue_summary = {
+            "total_billed_cents": revenue_data.get("total_billed_cents", 0),
+            "total_paid_cents": revenue_data.get("total_paid_cents", 0),
+            "total_outstanding_cents": revenue_data.get("total_outstanding_cents", 0),
+            "revenue_this_month_cents": revenue_this_month_cents,
+            "invoice_count": revenue_data.get("invoice_count", 0),
+        }
+    except Exception:
+        revenue_summary = {
+            "total_billed_cents": 0,
+            "total_paid_cents": 0,
+            "total_outstanding_cents": 0,
+            "revenue_this_month_cents": 0,
+            "invoice_count": 0,
+        }
+
+    # Common issues
+    common_issues = _common_issues(sessions)
+
+    # Full staff directory — all active team members with per-worker compliance stats
+    # Build participant-per-worker count from the participant list
+    participant_count_by_worker: dict[str, int] = defaultdict(int)
+    for participant in participants:
+        wid = str(participant.get("assigned_worker_id") or participant.get("owner_user_id") or "")
+        if wid:
+            participant_count_by_worker[wid] += 1
+
+    staff_directory = []
+    for member in team:
+        if not member.get("is_active"):
+            continue
+        mid = str(member.get("id") or "")
+        scores = worker_scores.get(mid, [])
+        avg_score = round(sum(scores) / len(scores)) if scores else 0
+        session_count = worker_sessions_count.get(mid, 0)
+        staff_directory.append({
+            "id": mid,
+            "full_name": member.get("full_name") or "Team Member",
+            "email": member.get("email"),
+            "role": member.get("role"),
+            "compliance_score": avg_score,
+            "sessions": session_count,
+            "participant_count": participant_count_by_worker.get(mid, 0),
+            "last_login": member.get("last_login"),
+            "joined_at": member.get("joined_at"),
+        })
+    # Sort by compliance score descending
+    staff_directory.sort(key=lambda x: x["compliance_score"], reverse=True)
+
+    # Org alerts
+    org_alerts = []
+    if workers_at_risk:
+        org_alerts.append({
+            "type": "compliance",
+            "severity": "high",
+            "message": f"{len(workers_at_risk)} worker{'s' if len(workers_at_risk) > 1 else ''} below 85% compliance threshold",
+        })
+    if compliance_score < compliance_target:
+        org_alerts.append({
+            "type": "compliance",
+            "severity": "medium",
+            "message": f"Organisation compliance {compliance_score}% is below {compliance_target}% target",
+        })
+    notes_at_risk = sum(1 for s in sessions if _needs_compliance_fix(s))
+    if notes_at_risk > 0:
+        org_alerts.append({
+            "type": "documentation",
+            "severity": "medium",
+            "message": f"{notes_at_risk} session note{'s' if notes_at_risk > 1 else ''} require attention",
+        })
+    if incidents_this_month > 0:
+        org_alerts.append({
+            "type": "incident",
+            "severity": "high" if incidents_this_month >= 3 else "low",
+            "message": f"{incidents_this_month} incident flag{'s' if incidents_this_month > 1 else ''} this month",
+        })
+
+    return {
+        "active_participants": len(participants),
+        "active_staff": len(active_workers),
+        "support_workers": len(support_workers),
+        "staff_retention_rate": retention_rate,
+        "sessions_this_week": len(sessions_this_week),
+        "compliance_score": compliance_score,
+        "compliance_target": compliance_target,
+        "incidents_this_month": incidents_this_month,
+        "goal_achievement_rate": goal_rate,
+        "workers_at_risk": workers_at_risk[:10],
+        "workers_needing_attention": workers_at_risk[:10],
+        "common_issues": common_issues,
+        "org_alerts": org_alerts,
+        "team_compliance_breakdown": {
+            "compliant": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "compliant"),
+            "at_risk": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "at_risk"),
+            "non_compliant": sum(1 for s in sessions if _score_status(s.get("compliance_score")) == "non_compliant"),
+        },
+        "worker_rankings": sorted(
+            [
+                {
+                    "id": wid,
+                    "full_name": worker_map.get(wid, {}).get("full_name") or "Worker",
+                    "compliance_score": round(sum(sc) / len(sc)) if sc else 0,
+                    "sessions": worker_sessions_count.get(wid, 0),
+                }
+                for wid, sc in worker_scores.items()
+                if sc
+            ],
+            key=lambda x: x["compliance_score"],
+            reverse=True,
+        )[:20],
+        "revenue_summary": revenue_summary,
+        "staff_directory": staff_directory,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/compliance-trend")
+async def compliance_trend(current_user: dict = Depends(get_current_user)):
+    """90-day compliance trend grouped by ISO week. Accessible to coordinator + MD."""
+    if not (is_coordinator_role(current_user) or is_managing_director(current_user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Coordinator or Managing Director access required.")
+
+    sessions = await session_service.get_all_sessions(2000, current_user)
+
+    from datetime import timedelta
+    cutoff = (date.today() - timedelta(days=90)).isoformat()
+    recent = [
+        s for s in sessions
+        if s.get("session_date") and _date_part(s.get("session_date")) >= cutoff
+    ]
+
+    # Group by ISO week
+    week_data: dict[str, list[float]] = defaultdict(list)
+    week_counts: dict[str, int] = defaultdict(int)
+    for session in recent:
+        raw_date = _date_part(session.get("session_date"))
+        if not raw_date:
+            continue
+        try:
+            d = date.fromisoformat(raw_date)
+            week_key = f"{d.isocalendar()[0]}-W{d.isocalendar()[1]:02d}"
+        except ValueError:
+            continue
+        week_counts[week_key] += 1
+        if session.get("compliance_score") is not None:
+            week_data[week_key].append(float(session["compliance_score"]))
+
+    # Build sorted list
+    trend = []
+    for week_key in sorted(set(list(week_data.keys()) + list(week_counts.keys()))):
+        scores = week_data.get(week_key, [])
+        trend.append({
+            "week": week_key,
+            "avg_score": round(sum(scores) / len(scores), 1) if scores else None,
+            "session_count": week_counts.get(week_key, 0),
+        })
+
+    return {"trend": trend, "days": 90}

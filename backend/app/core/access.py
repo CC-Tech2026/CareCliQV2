@@ -9,7 +9,8 @@ from fastapi import HTTPException, status
 
 COORDINATOR_ROLES = {"support_coordinator"}
 SCOPED_ROLES = {"support_worker", "allied_health"}
-VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES
+EXECUTIVE_ROLES = {"managing_director"}
+VALID_ROLES = COORDINATOR_ROLES | SCOPED_ROLES | EXECUTIVE_ROLES
 
 SUPPORT_WORKER_PARTICIPANT_FIELDS = (
     "assigned_worker_id",
@@ -105,12 +106,21 @@ def is_coordinator_role(user: Optional[dict]) -> bool:
     return get_user_role(user) in COORDINATOR_ROLES
 
 
+def has_org_wide_access(user: Optional[dict]) -> bool:
+    """True for any role with organisation-wide read access (coordinator + MD)."""
+    return get_user_role(user) in COORDINATOR_ROLES | EXECUTIVE_ROLES
+
+
 def is_support_worker(user: Optional[dict]) -> bool:
     return get_user_role(user) == "support_worker"
 
 
 def is_allied_health(user: Optional[dict]) -> bool:
     return get_user_role(user) == "allied_health"
+
+
+def is_managing_director(user: Optional[dict]) -> bool:
+    return get_user_role(user) == "managing_director"
 
 
 def record_belongs_to_user_org(row: dict, user: Optional[dict]) -> bool:
@@ -169,7 +179,7 @@ def can_access_participant(row: dict, user: Optional[dict]) -> bool:
         return False
     if not record_belongs_to_user_org(row, user):
         return False
-    if is_coordinator_role(user):
+    if has_org_wide_access(user):
         return record_belongs_to_user_org(row, user)
     if is_support_worker(user) or is_allied_health(user):
         return record_assigned_to_user(row, user)
@@ -192,7 +202,7 @@ def can_access_session(
     if not org_match:
         return False
 
-    if is_coordinator_role(user):
+    if has_org_wide_access(user):
         return org_match
 
     session_assigned = record_assigned_to_user(row, user, is_session=True)
@@ -258,6 +268,80 @@ def owner_payload(user: Optional[dict]) -> dict:
         payload["clinician_id"] = uid
         payload["practitioner_id"] = uid
     return payload
+
+
+def get_coordinator_team_ids(coordinator_user: dict, supabase) -> list[str]:
+    """Return IDs of support workers whose coordinator_id matches this coordinator.
+
+    Fallback behaviour (backward-compatible rollout):
+    - If ANY worker in the org already has coordinator_id set, the feature is
+      considered "rolled out". A coordinator with no linked workers gets an
+      empty list — they truly have no team yet.
+    - If NO worker in the org has coordinator_id set at all, the FK column has
+      just been migrated and no assignments exist yet. In this case we fall back
+      to returning all org support_workers so existing coordinator features
+      (dashboard, session review, credential alerts) continue working unchanged.
+
+    Args:
+        coordinator_user: The authenticated coordinator user dict.
+        supabase: A Supabase admin client instance.
+
+    Returns:
+        List of user ID strings (never raises — returns [] on error).
+    """
+    coordinator_id = get_user_id(coordinator_user)
+    org_id = get_user_organization_id(coordinator_user)
+    if not coordinator_id or not org_id:
+        return []
+
+    try:
+        linked = (
+            supabase.table("users")
+            .select("id")
+            .eq("coordinator_id", coordinator_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        ids = [str(row["id"]) for row in (linked.data or []) if row.get("id")]
+    except Exception:
+        ids = []
+
+    if ids:
+        return ids
+
+    # Check whether coordinator_id has been assigned to anyone in this org yet.
+    # If some workers have it set (but none for this coordinator), this
+    # coordinator genuinely has no team — return empty to avoid cross-team leak.
+    try:
+        any_linked = (
+            supabase.table("users")
+            .select("id")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .not_.is_("coordinator_id", "null")
+            .limit(1)
+            .execute()
+        )
+        rollout_started = bool(any_linked.data)
+    except Exception:
+        rollout_started = False
+
+    if rollout_started:
+        return []
+
+    # Global initial state: no worker has coordinator_id set yet. Fall back to
+    # all org support_workers so the coordinator dashboard keeps working.
+    try:
+        all_workers = (
+            supabase.table("users")
+            .select("id")
+            .eq("organization_id", org_id)
+            .eq("role", "support_worker")
+            .execute()
+        )
+        return [str(row["id"]) for row in (all_workers.data or []) if row.get("id")]
+    except Exception:
+        return []
 
 
 # Backward-compatible aliases used by existing services.

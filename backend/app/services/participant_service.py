@@ -57,6 +57,9 @@ def _strip_optional_columns(payload: dict) -> dict:
     if migration_state.biological_sex_column_missing:
         payload.pop("biological_sex", None)
 
+    if migration_state.upcoming_review_date_column_missing:
+        payload.pop("upcoming_review_date", None)
+
     return payload
 
 
@@ -634,7 +637,7 @@ async def get_dashboard_stats(
             supabase.table("alerts")
             .select("id")
             .eq("organization_id", organization_id(current_user))
-            .eq("is_read", False)
+            .eq("is_read", "false")
             .execute()
         )
 
@@ -678,7 +681,7 @@ async def _get_assignment_ids(current_user: Optional[dict]) -> tuple[set[str], s
             .select("patient_id, allocated_role, organization_id")
             .eq("user_id", uid)
             .eq("organization_id", org_id)
-            .eq("is_active", True)
+            .eq("is_active", "true")
             .execute()
         )
     except Exception as exc:

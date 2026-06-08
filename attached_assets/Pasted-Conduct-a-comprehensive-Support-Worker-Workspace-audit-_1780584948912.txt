@@ -1,0 +1,181 @@
+Conduct a comprehensive Support Worker Workspace audit before implementing any new features.
+
+Context:
+
+This is an NDIS platform.
+
+The backend, database, APIs, session workflows, participant records, and permissions already exist.
+
+We do NOT want duplicate functionality.
+
+We do NOT want new database tables unless absolutely necessary.
+
+We want to understand what already exists and identify gaps in the Support Worker experience.
+
+--------------------------------------------------
+PHASE 1: SUPPORT WORKER DISCOVERY
+--------------------------------------------------
+
+Analyze the current Support Worker experience.
+
+Identify:
+
+1. Dashboard Features
+- My Sessions
+- Upcoming Sessions
+- Active Sessions
+- Completed Sessions
+- Tasks
+- Notifications
+
+2. Participant Access
+- Participant Profile
+- Communication Preferences
+- Emergency Contacts
+- Risk Alerts
+- Allergies
+- Medical Information
+- Behaviour Support Information
+
+3. Session Features
+- Session Start
+- Session End
+- Session Notes
+- Session History
+- Session Timeline
+- Shift Notes
+
+4. Goal Features
+- Active Goals
+- Goal Progress
+- Goal Evidence
+- Goal History
+- Goal Instructions
+
+5. Incident Features
+- Incident Reporting
+- Risk Reporting
+- Escalation Workflows
+
+6. Documentation Features
+- Notes
+- Attachments
+- Recommendations
+- Observations
+
+--------------------------------------------------
+PHASE 2: ROLE VALIDATION
+--------------------------------------------------
+
+Review everything currently accessible to Support Workers.
+
+Identify features that should NOT be visible to workers.
+
+Examples:
+
+- NDIS Plans
+- Funding Information
+- Budget Utilisation
+- Coordinator Notes
+- Review Documents
+- Internal Compliance Notes
+
+For each feature found:
+
+Status:
+- Appropriate for Worker
+- Coordinator Only
+- Needs Permission Review
+
+--------------------------------------------------
+PHASE 3: FEATURE GAP ANALYSIS
+--------------------------------------------------
+
+Compare the current system against the ideal Support Worker workflow.
+
+Ideal Workflow:
+
+View Assigned Session
+↓
+Review Participant Information
+↓
+Review Active Goals
+↓
+Start Session
+↓
+Deliver Supports
+↓
+Record Notes
+↓
+Record Goal Evidence
+↓
+Record Participant Choice & Control
+↓
+Record Outcome
+↓
+Submit Recommendations
+↓
+Complete Session
+
+Identify:
+
+- Missing screens
+- Missing widgets
+- Missing actions
+- Missing integrations
+- Missing UX flows
+
+--------------------------------------------------
+PHASE 4: NDIS COMPLIANCE REVIEW
+--------------------------------------------------
+
+Assess whether Support Workers can currently document:
+
+1. Participant Choice & Control
+2. Goal Progress
+3. Goal Evidence
+4. Participant Outcomes
+5. Worker Observations
+6. Recommendations
+7. Risk Observations
+8. Incident Reports
+
+For each item provide:
+
+- Existing
+- Partially Implemented
+- Missing
+
+--------------------------------------------------
+PHASE 5: RECOMMENDED JIRA TICKETS
+--------------------------------------------------
+
+Generate only Support Worker Workspace tickets.
+
+For each ticket include:
+
+- Title
+- Description
+- Business Value
+- Existing Components To Reuse
+- Frontend Work Required
+- Acceptance Criteria
+
+Prioritise:
+
+P1 = Critical Compliance
+P2 = Workflow Improvements
+P3 = UX Enhancements
+
+--------------------------------------------------
+IMPORTANT RULES
+--------------------------------------------------
+
+- Do not write code.
+- Do not create new database schemas.
+- Do not create new APIs.
+- Do not create new services.
+- Focus on discovering existing functionality.
+- Focus on frontend gaps.
+- Reference existing files, routes, hooks, services, and components.
+- Recommend the smallest implementation required.

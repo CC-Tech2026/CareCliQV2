@@ -194,6 +194,37 @@ async def rewrite_clinical(body: ClinicalRewriteRequest, current_user: dict = De
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class IncidentComplyRequest(BaseModel):
+    incident_type: str
+    severity: str
+    title: str
+    description: str
+    worker_actions: Optional[str] = ""
+    participant_name: Optional[str] = "the participant"
+
+
+@router.post("/incidents/comply")
+async def comply_incident_endpoint(
+    body: IncidentComplyRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Rewrite a raw incident report in NDIS-compliant clinical English and return
+    a compliance score, per-criterion breakdown, flags, and reporting requirements."""
+    try:
+        result = await ai_service.comply_incident(
+            incident_type=body.incident_type,
+            severity=body.severity,
+            title=body.title,
+            description=body.description,
+            worker_actions=body.worker_actions or "",
+            participant_name=body.participant_name or "the participant",
+        )
+        return result
+    except Exception as e:
+        logger.error("Incident comply error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/assess-note")
 async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_current_user)):
     """Real-time 4-criteria compliance scoring for a clinical note entry.

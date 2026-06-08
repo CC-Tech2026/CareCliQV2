@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding
 from .core.security import get_current_user
 from .services import migration_state
 import logging
@@ -72,6 +72,7 @@ async def _apply_startup_migrations():
             ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
             ("patient_goals",        "patient_goals",           "id, plan_id, description",                                                    "patient_goals table OK",                "patient_goals table missing — run backend/supabase_setup.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
+            ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -109,6 +110,8 @@ async def _apply_startup_migrations():
                 migration_state.patient_goals_table_missing = not ok
             elif key == "practitioner_allocs":
                 migration_state.practitioner_allocations_table_missing = not ok
+            elif key == "upcoming_review_date":
+                migration_state.upcoming_review_date_column_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -156,6 +159,8 @@ app.include_router(onboarding.router, prefix="/api")
 app.include_router(credentials.router, prefix="/api")
 app.include_router(toolkit.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(hub.router, prefix="/api")
+app.include_router(md_onboarding.router, prefix="/api")
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 

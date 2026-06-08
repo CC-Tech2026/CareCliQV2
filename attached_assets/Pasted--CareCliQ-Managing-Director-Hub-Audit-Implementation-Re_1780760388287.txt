@@ -1,0 +1,374 @@
+# CareCliQ – Managing Director Hub Audit & Implementation Review
+
+## Objective
+
+Review the existing CareCliQ codebase and determine whether a Managing Director (MD) Hub can be implemented using existing architecture, components, services, APIs, database tables, and design patterns.
+
+### Critical Instruction
+
+DO NOT modify, refactor, replace, rename, remove, or break any existing frontend or backend functionality.
+
+The following workspaces must remain fully functional:
+
+* Support Worker Workspace
+* Support Coordinator Workspace
+* Existing Hub/Dashboard experiences
+
+Only extend existing functionality where required.
+
+Before creating any:
+
+* Database tables
+* API endpoints
+* Services
+* Hooks
+* Components
+* Types
+* Routes
+
+First verify whether existing implementations can be reused.
+
+---
+
+# Phase 1 – Existing Architecture Audit
+
+Audit:
+
+## Frontend
+
+* Role-based routing
+* Hub architecture
+* Dashboard components
+* Metric cards
+* Charts
+* Alert components
+* Announcement widgets
+* Calendar widgets
+* Navigation systems
+* Workspace launchers
+
+## Backend
+
+* Existing analytics services
+* Existing participant counts
+* Existing session metrics
+* Existing compliance calculations
+* Existing financial reporting data
+* Existing incident reporting
+* Existing retention calculations
+
+---
+
+# Managing Director Role Validation
+
+Verify:
+
+* Does managing_director role already exist?
+* Are permissions already implemented?
+* Is there existing role-based routing?
+* Is there existing role-based navigation?
+* Is there an existing executive dashboard?
+
+Provide findings.
+
+---
+
+# Managing Director Hub Requirements
+
+When:
+
+user.role === "managing_director"
+
+The user must see:
+
+## Managing Director Hub
+
+Instead of:
+
+* Worker Hub
+* Coordinator Hub
+
+---
+
+# Organization Dashboard
+
+Verify implementation or build requirements for:
+
+### Key Metrics
+
+* Active Participants
+* Active Staff
+* Staff Retention Rate
+* Sessions This Week
+* Organization Compliance Score
+* Compliance Target Comparison
+* Revenue This Month
+* Budget Comparison
+* Incidents This Month
+* Goal Achievement Rate
+
+Requirements:
+
+* Organization-wide data
+* Real-time updates where supported
+* Executive-level presentation
+
+---
+
+# Organization Alerts
+
+Verify implementation or build requirements for:
+
+### Alerts
+
+* Workers below compliance threshold
+* Staff retention risks
+* Audit preparation status
+* Budget risks
+* Compliance target misses
+* High-risk incidents
+
+Requirements:
+
+* Actionable alerts
+* Executive visibility
+* Priority ordering
+
+---
+
+# Compliance Trends
+
+Verify implementation or build requirements for:
+
+### Trend Analytics
+
+* 90-day compliance trend
+* Compliance by rule
+* Compliance by team
+* Worker performance rankings
+* Trend direction indicators
+
+Requirements:
+
+* Reuse existing chart components where possible
+* Reuse existing compliance calculations
+* Avoid duplicate analytics systems
+
+---
+
+# Financial Summary
+
+Verify implementation or build requirements for:
+
+### Financial Metrics
+
+* Revenue vs budget
+* Monthly performance
+* YTD summary
+* Projected year-end performance
+* Cost per session
+* Margin indicators
+
+Requirements:
+
+* Use existing financial data sources
+* Avoid introducing duplicate financial models
+
+---
+
+# Existing Shared Components
+
+Verify reuse of:
+
+## News & Announcements
+
+Use same implementation as:
+
+* Worker Hub
+* Coordinator Hub
+
+## Organization Calendar
+
+Use same implementation as:
+
+* Worker Hub
+* Coordinator Hub
+
+No duplicate versions should be created.
+
+---
+
+# Workspace Launcher
+
+Verify implementation or build requirements for:
+
+### Executive Dashboard Launcher
+
+Links to:
+
+* Executive Dashboard
+* Staff Management
+* Compliance Dashboard
+* Financial Overview
+
+Requirements:
+
+* Reuse existing workspace navigation architecture
+* Maintain consistency with current UX
+
+---
+
+# UI / UX Requirements
+
+The Managing Director Hub must:
+
+* Match Worker Hub styling
+* Match Coordinator Hub styling
+* Use existing design system
+* Reuse existing cards
+* Reuse existing charts
+* Reuse existing typography
+* Reuse existing spacing
+* Reuse existing layouts
+* Remain responsive
+
+Do NOT introduce a separate design language.
+
+The MD Hub should feel like a natural extension of the CareCliQ platform.
+
+---
+
+# Security Validation
+
+Verify:
+
+* MD can view organization-wide metrics
+* MD cannot bypass existing security rules improperly
+* Existing RLS policies are respected
+* Existing role permissions remain intact
+* No impact on Worker or Coordinator permissions
+
+---
+
+# Phase 2 – Gap Analysis
+
+Provide:
+
+## Already Implemented
+
+Features already available.
+
+## Partially Implemented
+
+Features requiring enhancement.
+
+## Missing
+
+Features requiring implementation.
+
+## Reusable Assets
+
+List:
+
+* Components
+* Services
+* APIs
+* Database tables
+* Charts
+* Hooks
+
+that can be leveraged.
+
+---
+
+# Phase 3 – Implementation Plan
+
+Generate a step-by-step implementation plan that:
+
+1. Preserves all existing functionality.
+2. Does not break Worker Workspace.
+3. Does not break Coordinator Workspace.
+4. Reuses existing frontend components.
+5. Reuses existing backend services.
+6. Introduces only minimal additions where necessary.
+7. Avoids unnecessary database changes.
+8. Follows current CareCliQ architecture and coding standards.
+
+For each missing feature provide:
+
+* Estimated effort
+* Reusable dependencies
+* Backend impact
+* Frontend impact
+
+---
+
+# Acceptance Criteria
+
+✓ Managing Director logs in and sees MD Hub
+
+✓ Worker Hub remains unchanged
+
+✓ Coordinator Hub remains unchanged
+
+✓ Organization Dashboard displays executive metrics
+
+✓ Organization Alerts display compliance, audit, staffing, and budget risks
+
+✓ Compliance Trends display organization-wide analytics
+
+✓ Financial Summary displays revenue and performance metrics
+
+✓ News & Announcements reuse existing implementation
+
+✓ Organization Calendar reuse existing implementation
+
+✓ Workspace Launcher functions correctly
+
+✓ Styling matches existing CareCliQ design system
+
+✓ Data updates correctly
+
+✓ Organization-level data is displayed securely
+
+✓ No unnecessary backend or database changes introduced
+
+Create MD-specific Hub view:
+
+```
+Managing Director Hub Structure:
+├─ Header (shows "Managing Director" role)
+├─ ORGANIZATION DASHBOARD (NEW - main focus)
+│  ├─ Active Participants: 156
+│  ├─ Active Staff: 48 (Retention: 96%)
+│  ├─ Sessions This Week: 342
+│  ├─ Organization Compliance: 88% (vs target 90%)
+│  ├─ Revenue This Month: $42.7K (vs budget)
+│  ├─ Incidents This Month: 3 (down from 5)
+│  └─ Goal Achievement Rate: 92%
+│
+├─ ORGANIZATION ALERTS (NEW - top priority)
+│  ├─ 1 worker below 80% compliance
+│  ├─ 2 staff showing retention risks
+│  ├─ Audit prep status
+│  └─ Budget status
+│
+├─ COMPLIANCE TRENDS (NEW)
+│  ├─ 90-day compliance trend chart
+│  ├─ Rule-by-rule breakdown
+│  └─ Worker performance rankings
+│
+├─ FINANCIAL SUMMARY (NEW)
+│  ├─ Revenue vs budget
+│  ├─ YTD summary
+│  ├─ Projected year-end
+│  └─ Cost per session
+│
+├─ NEWS & ANNOUNCEMENTS (Same as worker/coordinator)
+├─ ORGANIZATION CALENDAR (Same)
+└─ WORKSPACE LAUNCHER
+   ├─ Executive Dashboard (4 workspaces)
+   ├─ Staff Management
+   ├─ Compliance Dashboard
+   └─ Financial Overview
+```

@@ -6,11 +6,14 @@ import {
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
+  ClipboardCheck,
   ClipboardList,
   FileText,
   ShieldCheck,
   UserPlus,
   Users,
+  BadgeCheck,
+  GraduationCap,
 } from "lucide-react";
 import { InviteModal } from "@/components/InviteModal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +25,7 @@ import {
   type DashboardSession,
   type WorkerDashboard,
 } from "@/services/dashboardService";
+import { getCoordinatorFlaggedSessions, getCoordinatorCredentialAlerts } from "@/services/coordinatorService";
 
 const PLUM = "#5533CC";
 const CORAL = "#F03060";
@@ -390,6 +394,89 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
   );
 }
 
+function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
+  const { data: flaggedSessions = [] } = useQuery({
+    queryKey: ["coordinator-flagged-sessions"],
+    queryFn: getCoordinatorFlaggedSessions,
+    staleTime: 60_000,
+  });
+
+  const { data: credentialData } = useQuery({
+    queryKey: ["coordinator-credential-alerts"],
+    queryFn: getCoordinatorCredentialAlerts,
+    staleTime: 5 * 60_000,
+  });
+
+  const flaggedCount    = flaggedSessions.length;
+  const incidentCount   = (data.incident_alerts ?? []).length;
+  const credentialCount = (credentialData?.alerts ?? (data.credential_alerts ?? [])).length;
+  const trainingCount   = credentialData?.training_due_count ?? 0;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Link href="/session-review">
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Flagged Sessions</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: flaggedCount > 0 ? CORAL : "#059669" }}>{flaggedCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: flaggedCount > 0 ? "#FFF0F3" : "#F0FDF4", color: flaggedCount > 0 ? CORAL : "#059669" }}>
+              <ClipboardCheck size={20} strokeWidth={2.5} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>Review queue →</p>
+        </div>
+      </Link>
+
+      <Link href="/incidents">
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Pending Incidents</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: incidentCount > 0 ? "#D97706" : TEXT }}>{incidentCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: incidentCount > 0 ? "#FFFBEB" : "#F5F3FC", color: incidentCount > 0 ? "#D97706" : MUTED }}>
+              <AlertTriangle size={20} strokeWidth={2.5} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>View incidents →</p>
+        </div>
+      </Link>
+
+      <Link href="/credentials">
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiring Credentials</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: credentialCount > 0 ? "#DC2626" : TEXT }}>{credentialCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: credentialCount > 0 ? "#FEF2F2" : "#F5F3FC", color: credentialCount > 0 ? "#DC2626" : MUTED }}>
+              <BadgeCheck size={20} strokeWidth={2.5} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>Check credentials →</p>
+        </div>
+      </Link>
+
+      <Link href="/toolkit">
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Training Due</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: trainingCount > 0 ? "#D97706" : TEXT }}>{trainingCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: trainingCount > 0 ? "#FFFBEB" : "#F5F3FC", color: trainingCount > 0 ? "#D97706" : MUTED }}>
+              <GraduationCap size={20} strokeWidth={2.5} />
+            </div>
+          </div>
+          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>View toolkit →</p>
+        </div>
+      </Link>
+    </div>
+  );
+}
+
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -419,6 +506,8 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
           <DashboardStatCard label="Notes At Risk" value={data.notes_at_risk} caption="Notes needing review" icon={ClipboardList} valueColor="#D97706" />
           <DashboardStatCard label="RP Flags" value={data.rp_flags} caption="Restrictive practice flags" icon={AlertTriangle} valueColor={CORAL} />
         </div>
+
+        <CoordinatorQuickActionCards data={data} />
 
         <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
           <CoordinatorTeamComplianceCard data={data} />

@@ -1,12 +1,12 @@
-interface CareScribeLogoProps {
+interface CareCliQLogoProps {
   compact?: boolean;
   className?: string;
 }
 
-export function CareScribeLogo({
+export function CareCliQLogo({
   compact = false,
   className = "",
-}: CareScribeLogoProps) {
+}: CareCliQLogoProps) {
   return (
     <div
       className={`
@@ -16,11 +16,11 @@ export function CareScribeLogo({
         ${compact ? "justify-center" : "justify-start"}
         ${className}
       `}
-      title="CareScribe"
+      title="CareCliQ"
     >
       {compact ? (
         <img
-          src="/cs.png"
+          src="/carecliQ_logo.png"
           alt="CS"
           className="
             object-contain
@@ -29,14 +29,14 @@ export function CareScribeLogo({
             hover:scale-[1.03]
           "
           style={{
-            height: 48,
-            width: 48,
+            height: 70,
+            width: 70,
           }}
         />
       ) : (
         <img
-          src="/logo.png"
-          alt="CareScribe"
+          src="/carecliQ_logo.png"
+          alt="CareCliQ"
           className="
             object-contain
             shrink-0
@@ -44,9 +44,9 @@ export function CareScribeLogo({
             max-h-full
           "
           style={{
-            height: "clamp(50px, 3.2vh, 64px)", // 👈 responsive scaling (key upgrade)
+            height: "clamp(45px, 5vh, 150px)",
             width: "auto",
-            maxWidth: 180,
+            maxWidth: 200,
           }}
         />
       )}
@@ -58,11 +58,11 @@ export function CareScribeLogo({
    Mobile Logo
 ────────────────────────────────────────── */
 
-interface CareScribeLogoSmProps {
+interface CareCliQLogoSmProps {
   className?: string;
 }
 
-export function CareScribeLogoSm({ className = "" }: CareScribeLogoSmProps) {
+export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
   return (
     <div
       className={`
@@ -73,17 +73,17 @@ export function CareScribeLogoSm({ className = "" }: CareScribeLogoSmProps) {
       `}
     >
       <img
-        src="/logo.png"
-        alt="CareScribe"
+        src="/carecliQ_logo.png"
+        alt="CareCliQ"
         className="
           object-contain
           shrink-0
           transition-all duration-200 ease-out
         "
         style={{
-          height: 40,
+          height: 100,
           width: "auto",
-          maxWidth: 150,
+          maxWidth: 180,
         }}
       />
     </div>

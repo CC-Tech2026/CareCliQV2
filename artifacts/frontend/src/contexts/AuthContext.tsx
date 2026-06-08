@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { setAuthTokenGetter, customFetch } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
 
-export type UserRole = "support_coordinator" | "support_worker" | "allied_health";
+export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
 
 export interface AuthUser {

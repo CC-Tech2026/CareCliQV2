@@ -1,0 +1,335 @@
+# CareCliQ Hub Implementation Brief
+
+## Objective
+
+Build a fully functional front-end prototype of the new CareCliQ Hub that acts as the organizational landing experience after login.
+
+This implementation is intended to demonstrate the future direction of CareCliQ as an Organizational Intelligence Platform.
+
+The Hub must coexist alongside the existing CareCliQ platform and must not modify any existing workspace functionality.
+
+---
+
+## Critical Constraints
+
+### DO NOT MODIFY
+
+Under no circumstances should you modify:
+
+* Existing authentication logic
+* Existing user roles
+* Existing database schema
+* Existing API endpoints
+* Existing backend services
+* Existing Supabase tables
+* Existing session management workflows
+* Existing participant management workflows
+* Existing support worker workspace functionality
+* Existing support coordinator workspace functionality
+* Existing clinician workspace functionality
+* Existing compliance engine functionality
+* Existing AI suggestion functionality
+* Existing navigation structures currently used by workspaces
+
+The current CareCliQ system is considered production functionality.
+
+The Hub must be additive only.
+
+---
+
+## Build Strategy
+
+Create the Hub as a completely isolated feature layer.
+
+Think of it as:
+
+Login
+→ CareCliQ Hub
+→ Existing Workspace
+
+The Hub should consume existing data where available.
+
+Where data is unavailable, use realistic mock data.
+
+No backend changes are required.
+
+No migrations are required.
+
+No new services are required.
+
+No API contract changes are required.
+
+---
+
+## New Route
+
+Create a completely new route:
+
+/hub
+
+Examples:
+
+/hub
+/hub/overview
+
+The Hub must not replace existing routes.
+
+The Hub must not become the default landing page.
+
+We are currently evaluating the concept.
+
+---
+
+## Required Deliverables
+
+### 1. Hub Landing Page
+
+Create a modern enterprise dashboard containing:
+
+#### Organization Header
+
+Display:
+
+* Organization logo
+* Organization name
+* Provider number
+* Welcome message
+* Current date
+
+Example:
+
+Good Morning Sarah
+
+Welcome to Sunshine Disability Services
+
+---
+
+### 2. Company News Feed
+
+Mock data is acceptable.
+
+Display:
+
+* Policy updates
+* Training announcements
+* Audit reminders
+* Staff achievements
+* Organizational updates
+
+Include:
+
+* Severity badges
+* Relative timestamps
+* Modern card design
+
+---
+
+### 3. Compliance Centre
+
+Display mock organizational compliance alerts.
+
+Examples:
+
+* First Aid expiring
+* WWCC expiring
+* Training overdue
+* Policy acknowledgements required
+
+Use:
+
+* Critical
+* High
+* Medium
+* Information
+* Positive
+
+severity states.
+
+---
+
+### 4. Staff Community
+
+Display:
+
+* Birthdays
+* Work anniversaries
+* New starters
+* Team recognition
+
+This section should resemble a lightweight internal company community feed.
+
+---
+
+### 5. Organization Calendar
+
+Display:
+
+* Audits
+* Training events
+* Team meetings
+* Goal reviews
+* Plan review periods
+
+Mock data acceptable.
+
+---
+
+### 6. Workspace Launcher
+
+This is the most important section.
+
+Display cards that launch existing workspaces.
+
+Examples:
+
+Support Worker Workspace
+
+Support Coordinator Workspace
+
+Clinician Workspace
+
+Managing Director Workspace
+
+Each card should include:
+
+* Icon
+* Description
+* Launch button
+
+For the prototype, launch buttons may simply navigate to existing routes.
+
+Do not modify those routes.
+
+---
+
+## Role-Based Hub Experiences
+
+Create role-aware layouts.
+
+### Support Worker
+
+Show:
+
+* Personal compliance reminders
+* Personal KPIs
+* Organization announcements
+* Community updates
+* Workspace launcher
+
+### Support Coordinator
+
+Show:
+
+* Team alerts
+* Team compliance status
+* Participant review reminders
+* Organization announcements
+* Workspace launcher
+
+### Managing Director
+
+Show:
+
+* Executive dashboard
+* Organization KPIs
+* Compliance trends
+* Workforce metrics
+* Organizational alerts
+* Workspace launcher
+
+Use mock data where required.
+
+---
+
+## Managing Director Workspace Concept
+
+Create a prototype card only.
+
+Do not build functionality.
+
+Examples:
+
+* Executive Dashboard
+* Compliance Dashboard
+* Workforce Analytics
+* Financial Insights
+
+These are concept placeholders only.
+
+---
+
+## UI Expectations
+
+The Hub should feel like:
+
+* Microsoft Teams Home
+* SharePoint Home
+* Monday.com Dashboard
+* Notion Workspace
+* Modern SaaS Executive Portal
+
+Design goals:
+
+* Clean
+* Executive
+* Enterprise
+* Mobile responsive
+* Professional
+* Consistent with CareCliQ branding
+
+---
+
+## Technical Requirements
+
+Create:
+
+* HubPage.tsx
+* HubHeader.tsx
+* NewsFeed.tsx
+* ComplianceCentre.tsx
+* StaffCommunity.tsx
+* OrganizationCalendar.tsx
+* WorkspaceLauncher.tsx
+
+Use component separation.
+
+Avoid large monolithic files.
+
+---
+
+## Data Requirements
+
+If existing APIs already expose useful information:
+
+Read only.
+
+Do not modify.
+
+Do not extend.
+
+Do not change responses.
+
+If information is unavailable:
+
+Use mock data.
+
+This is a prototype.
+
+---
+
+## Validation Checklist
+
+Before completing implementation verify:
+
+* No backend files modified
+* No database migrations created
+* No API changes introduced
+* No authentication changes introduced
+* No existing workspace routes modified
+* No participant functionality altered
+* No session functionality altered
+* No compliance engine functionality altered
+
+The final result must be a completely isolated Organizational Hub prototype that demonstrates the future CareCliQ vision while preserving all current production functionality.
+
+Success means the Hub can be removed tomorrow and the existing platform continues functioning exactly as it does today.

@@ -584,15 +584,15 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
 
-CREATE INDEX IF NOT EXISTS idx_patients_organization_id ON public.patients(organization_id);
-CREATE INDEX IF NOT EXISTS idx_patients_assigned_worker_id ON public.patients(assigned_worker_id);
-CREATE INDEX IF NOT EXISTS idx_patients_allied_health_id ON public.patients(allied_health_id);
-CREATE INDEX IF NOT EXISTS idx_patients_clinician_id ON public.patients(clinician_id);
-CREATE INDEX IF NOT EXISTS idx_patients_created_by ON public.patients(created_by);
-CREATE INDEX IF NOT EXISTS idx_sessions_organization_id ON public.sessions(organization_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_worker_id ON public.sessions(worker_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id ON public.sessions(practitioner_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_created_by ON public.sessions(created_by);
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_organization_id    ON public.patients(organization_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_assigned_worker_id ON public.patients(assigned_worker_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_allied_health_id   ON public.patients(allied_health_id);   EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_clinician_id       ON public.patients(clinician_id);       EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_patients_created_by         ON public.patients(created_by);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_organization_id    ON public.sessions(organization_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_worker_id          ON public.sessions(worker_id);          EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_practitioner_id    ON public.sessions(practitioner_id);    EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sessions_created_by         ON public.sessions(created_by);         EXCEPTION WHEN others THEN NULL; END $$;
 
 -- NOTE: After running this SQL, create your first support coordinator user:
 --   1. Sign up via POST /api/auth/register with account_type="small_provider"
@@ -651,6 +651,20 @@ CREATE TABLE IF NOT EXISTS organizations (
     contact_number      TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Column guards: add any missing columns to pre-existing organizations tables.
+-- Wrapped in DO block so it is safe whether the table exists or not.
+DO $$ BEGIN
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS owner_user_id       UUID;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS organization_name   TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS provider_type       TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS registration_status TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS team_size           TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS participant_volume  TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS contact_number      TEXT;
+    ALTER TABLE public.organizations ADD COLUMN IF NOT EXISTS created_at          TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 
 -- RLS on organizations
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
@@ -711,12 +725,23 @@ CREATE TABLE IF NOT EXISTS incidents (
     updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS incidents_participant_id_idx ON incidents(participant_id);
-CREATE INDEX IF NOT EXISTS incidents_organization_id_idx ON incidents(organization_id);
-CREATE INDEX IF NOT EXISTS incidents_user_id_idx ON incidents(user_id);
-CREATE INDEX IF NOT EXISTS incidents_status_idx ON incidents(status);
-CREATE INDEX IF NOT EXISTS incidents_severity_idx ON incidents(severity);
-CREATE INDEX IF NOT EXISTS incidents_incident_date_idx ON incidents(incident_date DESC);
+-- Column guards: incidents may have been created by an older schema without these columns.
+-- Must run BEFORE any CREATE INDEX that references these columns.
+DO $$ BEGIN
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS user_id          UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS organization_id  UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS participant_id   UUID;
+    ALTER TABLE public.incidents ADD COLUMN IF NOT EXISTS created_by       UUID;
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- Indexes wrapped in DO blocks so they never abort the script
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_participant_id_idx   ON incidents(participant_id);      EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_organization_id_idx  ON incidents(organization_id);     EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_user_id_idx          ON incidents(user_id);             EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_status_idx           ON incidents(status);              EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_severity_idx         ON incidents(severity);            EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS incidents_incident_date_idx    ON incidents(incident_date DESC);  EXCEPTION WHEN others THEN NULL; END $$;
 
 -- ============================================================
 -- ORGANIZATION MEMBERS — central RBAC table
@@ -731,7 +756,8 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
                                     'support_worker',
-                                    'support_coordinator', 'allied_health'
+                                    'support_coordinator', 'allied_health',
+                                    'managing_director', 'admin'
                                 )),
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
     invited_by      UUID        REFERENCES public.users(id),
@@ -739,9 +765,40 @@ CREATE TABLE IF NOT EXISTS public.organization_members (
     CONSTRAINT uq_org_member UNIQUE (user_id, organization_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id);
-CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);
+-- Column guards: add any missing columns to pre-existing organization_members tables.
+-- These run even when the CREATE TABLE above was skipped (table already existed).
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS user_id         UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS organization_id UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS role            TEXT NOT NULL DEFAULT 'support_worker';
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS is_active       BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS invited_by      UUID;
+ALTER TABLE public.organization_members ADD COLUMN IF NOT EXISTS joined_at       TIMESTAMPTZ DEFAULT NOW();
+
+-- Normalise any legacy role values then widen constraint idempotently.
+-- Existing rows with values like 'manager' are mapped before the constraint is applied.
+DO $$ BEGIN
+    UPDATE public.organization_members
+    SET role = CASE role
+        WHEN 'manager'             THEN 'support_coordinator'
+        WHEN 'coordinator'         THEN 'support_coordinator'
+        WHEN 'support_coordinator' THEN 'support_coordinator'
+        WHEN 'allied_health'       THEN 'allied_health'
+        WHEN 'managing_director'   THEN 'managing_director'
+        WHEN 'admin'               THEN 'admin'
+        ELSE 'support_worker'
+    END
+    WHERE role NOT IN ('support_worker','support_coordinator','allied_health','managing_director','admin');
+
+    ALTER TABLE public.organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
+    ALTER TABLE public.organization_members ADD CONSTRAINT organization_members_role_check
+        CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- Indexes (wrapped in DO blocks so they never fail even if a column was just added)
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_user_id  ON public.organization_members(user_id);         EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_org_id   ON public.organization_members(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_org_members_role     ON public.organization_members(role);            EXCEPTION WHEN others THEN NULL; END $$;
 
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
 
@@ -759,25 +816,32 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Backfill existing users who already have an organization_id
-INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
-SELECT
-    u.id,
-    u.organization_id,
-    CASE u.role
-        WHEN 'admin'               THEN 'support_coordinator'
-        WHEN 'manager'             THEN 'support_coordinator'
-        WHEN 'support_coordinator' THEN 'support_coordinator'
-        WHEN 'allied_health'       THEN 'allied_health'
-        ELSE 'support_worker'
-    END,
-    u.is_active
-FROM public.users u
-WHERE u.organization_id IS NOT NULL
-  AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
-ON CONFLICT (user_id, organization_id) DO UPDATE
-    SET role      = EXCLUDED.role,
-        is_active = EXCLUDED.is_active;
+-- Backfill existing users who already have an organization_id.
+-- Wrapped in a DO block so it silently skips if user_id / organization_id are still NULL
+-- (e.g. when the columns were just added to a pre-existing table with no data yet).
+DO $$ BEGIN
+    INSERT INTO public.organization_members (user_id, organization_id, role, is_active)
+    SELECT
+        u.id,
+        u.organization_id,
+        CASE u.role
+            WHEN 'managing_director'   THEN 'managing_director'
+            WHEN 'admin'               THEN 'admin'
+            WHEN 'manager'             THEN 'support_coordinator'
+            WHEN 'support_coordinator' THEN 'support_coordinator'
+            WHEN 'allied_health'       THEN 'allied_health'
+            ELSE 'support_worker'
+        END,
+        COALESCE(u.is_active, TRUE)
+    FROM public.users u
+    WHERE u.organization_id IS NOT NULL
+      AND u.id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM public.organizations o WHERE o.id = u.organization_id)
+    ON CONFLICT (user_id, organization_id) DO UPDATE
+        SET role      = EXCLUDED.role,
+            is_active = EXCLUDED.is_active;
+EXCEPTION WHEN others THEN NULL;
+END $$;
 
 -- ============================================================
 -- INVITATIONS — staff onboarding via secure token
@@ -791,7 +855,8 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     role            TEXT        NOT NULL DEFAULT 'support_worker'
                                 CHECK (role IN (
                                     'support_worker',
-                                    'support_coordinator', 'allied_health'
+                                    'support_coordinator', 'allied_health',
+                                    'managing_director', 'admin'
                                 )),
     token           TEXT        NOT NULL UNIQUE,
     expires_at      TIMESTAMPTZ NOT NULL,
@@ -799,9 +864,29 @@ CREATE TABLE IF NOT EXISTS public.invitations (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_invitations_token          ON public.invitations(token);
-CREATE INDEX IF NOT EXISTS idx_invitations_org_id         ON public.invitations(organization_id);
-CREATE INDEX IF NOT EXISTS idx_invitations_email          ON public.invitations(email);
+-- Column guards: invitations may pre-exist without all columns
+DO $$ BEGIN
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS organization_id UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS invited_by      UUID;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS email           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS token           TEXT;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS expires_at      TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS accepted_at     TIMESTAMPTZ;
+    ALTER TABLE public.invitations ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ DEFAULT NOW();
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+-- Widen role constraint idempotently (covers tables created before this update)
+DO $$ BEGIN
+    ALTER TABLE public.invitations DROP CONSTRAINT IF EXISTS invitations_role_check;
+    ALTER TABLE public.invitations ADD CONSTRAINT invitations_role_check
+        CHECK (role IN ('support_worker','support_coordinator','allied_health','managing_director','admin'));
+EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_token  ON public.invitations(token);          EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_org_id ON public.invitations(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_invitations_email  ON public.invitations(email);           EXCEPTION WHEN others THEN NULL; END $$;
 
 ALTER TABLE public.invitations ENABLE ROW LEVEL SECURITY;
 
@@ -879,5 +964,183 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='patients' AND column_name='medical_alerts') THEN
         ALTER TABLE patients ADD COLUMN medical_alerts TEXT;
+    END IF;
+END $$;
+
+-- ============================================================
+-- Hub: Org Events + Announcements tables (idempotent)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.org_events (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    title           TEXT NOT NULL,
+    event_date      DATE NOT NULL,
+    duration        TEXT NOT NULL DEFAULT '1 hour',
+    event_type      TEXT NOT NULL DEFAULT 'meeting',
+    location        TEXT,
+    participants_desc TEXT,
+    created_by      UUID,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.announcements (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    title           TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    severity        TEXT NOT NULL DEFAULT 'info',
+    category        TEXT NOT NULL DEFAULT 'Announcement',
+    created_by      UUID,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- date_of_birth on users (for birthday community items)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='date_of_birth') THEN
+        ALTER TABLE public.users ADD COLUMN date_of_birth DATE;
+    END IF;
+END $$;
+
+-- upcoming_review_date on patients (coordinator goal review scheduling)
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS upcoming_review_date TEXT;
+
+-- recipient_user_id on alerts (targeted in-app alerts, e.g. bulk credential reminders)
+ALTER TABLE public.alerts ADD COLUMN IF NOT EXISTS recipient_user_id UUID;
+
+-- ============================================================
+-- ORG HIERARCHY: coordinator_id on users
+-- Stores which coordinator a support worker reports to.
+-- NULL = no direct coordinator assigned (valid for coordinators, MDs, admins,
+--        and support workers not yet linked to a coordinator).
+-- Set this when assigning a worker to a coordinator via staff management.
+-- Used by get_coordinator_team_ids() in access.py to scope team queries.
+-- ============================================================
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS coordinator_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_users_coordinator_id ON public.users(coordinator_id);
+
+-- ── Managing Director role support ───────────────────────────────────────────
+-- Extend check constraints to allow the managing_director role and account type.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_role_check;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('support_worker','support_coordinator','allied_health','admin','managing_director'));
+
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_account_type_check') THEN
+    ALTER TABLE public.users DROP CONSTRAINT users_account_type_check;
+  END IF;
+  ALTER TABLE public.users ADD CONSTRAINT users_account_type_check
+    CHECK (account_type IN ('independent_worker','allied_health','small_provider','managing_director'));
+END $$;
+
+-- ============================================================
+-- MD Onboarding Centre tables (idempotent)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.onboarding_programs (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id      UUID NOT NULL,
+    name        TEXT NOT NULL,
+    description TEXT,
+    created_by  UUID,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_programs_org ON public.onboarding_programs(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stages (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id              UUID NOT NULL REFERENCES public.onboarding_programs(id) ON DELETE CASCADE,
+    org_id                  UUID NOT NULL,
+    title                   TEXT NOT NULL,
+    instructions            TEXT,
+    stage_order             INT NOT NULL DEFAULT 0,
+    completion_requirements JSONB DEFAULT '{}'::jsonb,
+    created_at              TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_stages_program ON public.onboarding_stages(program_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stage_resources (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    stage_id        UUID REFERENCES public.onboarding_stages(id) ON DELETE SET NULL,
+    org_id          UUID NOT NULL,
+    name            TEXT NOT NULL,
+    resource_type   TEXT NOT NULL DEFAULT 'document',
+    file_key        TEXT,                   -- storage path used to generate signed URLs
+    url             TEXT,                   -- legacy column (kept for backward compat)
+    file_size_bytes BIGINT,
+    category        TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+-- Idempotent migration: add file_key if upgrading from an older schema
+ALTER TABLE public.onboarding_stage_resources ADD COLUMN IF NOT EXISTS file_key TEXT;
+CREATE INDEX IF NOT EXISTS idx_onboarding_resources_stage ON public.onboarding_stage_resources(stage_id);
+CREATE INDEX IF NOT EXISTS idx_onboarding_resources_org ON public.onboarding_stage_resources(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_assignments (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    program_id  UUID NOT NULL REFERENCES public.onboarding_programs(id) ON DELETE CASCADE,
+    user_id     UUID NOT NULL,
+    org_id      UUID NOT NULL,
+    assigned_by UUID,
+    assigned_at TIMESTAMPTZ DEFAULT NOW(),
+    status      TEXT NOT NULL DEFAULT 'active'
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_assignments_org ON public.onboarding_assignments(org_id);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_stage_progress (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    assignment_id UUID NOT NULL REFERENCES public.onboarding_assignments(id) ON DELETE CASCADE,
+    stage_id      UUID NOT NULL REFERENCES public.onboarding_stages(id) ON DELETE CASCADE,
+    org_id        UUID NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'not_started',
+    submitted_at  TIMESTAMPTZ,
+    approved_by   UUID,
+    approved_at   TIMESTAMPTZ,
+    notes         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_assignment ON public.onboarding_stage_progress(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_onboarding_progress_org ON public.onboarding_stage_progress(org_id);
+
+-- ── Onboarding Storage Bucket ─────────────────────────────────────────────────
+-- Run this block in Supabase SQL editor to create the onboarding-resources
+-- storage bucket used by POST /api/md/onboarding/resources/upload.
+-- The bucket is private; access is controlled by the service-role key on the backend.
+--
+-- NOTE: Supabase Storage bucket creation is not possible via plain SQL in all
+-- versions. If the INSERT below fails, create the bucket manually:
+--   Supabase Dashboard → Storage → New Bucket → Name: onboarding-resources → Private
+--
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'onboarding-resources',
+    'onboarding-resources',
+    false,
+    52428800,   -- 50 MB limit
+    ARRAY['application/pdf','video/mp4','video/quicktime','video/webm',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain','image/png','image/jpeg']
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- RLS policy: backend service-role can read/write; no anon access
+-- Uses idempotent DO-block pattern (CREATE POLICY IF NOT EXISTS is not valid Postgres syntax)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage'
+          AND tablename  = 'objects'
+          AND policyname = 'onboarding_resources_service_rw'
+    ) THEN
+        CREATE POLICY "onboarding_resources_service_rw"
+            ON storage.objects FOR ALL
+            TO service_role
+            USING (bucket_id = 'onboarding-resources')
+            WITH CHECK (bucket_id = 'onboarding-resources');
     END IF;
 END $$;

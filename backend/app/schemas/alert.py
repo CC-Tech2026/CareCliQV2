@@ -9,6 +9,7 @@ class AlertCreate(BaseModel):
     severity: str = "medium"
     title: str
     message: str
+    recipient_user_id: Optional[str] = None
 
 
 class AlertUpdate(BaseModel):

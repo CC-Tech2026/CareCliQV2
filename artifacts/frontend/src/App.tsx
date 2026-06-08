@@ -11,6 +11,7 @@ import ResetPassword from "@/pages/reset-password";
 import Signup from "@/pages/signup";
 import AcceptInvite from "@/pages/accept-invite";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { HubLayout } from "@/components/layout/HubLayout";
 import { AuthSessionGuards } from "@/components/auth/AuthSessionGuards";
 import Dashboard from "@/pages/dashboard";
 import Patients from "@/pages/patients";
@@ -31,13 +32,21 @@ import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
 import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
+import CoordinatorGoals from "@/pages/coordinator-goals";
 import AuditPack from "@/pages/audit-pack";
+import SessionReview from "@/pages/session-review";
 import Credentials from "@/pages/credentials";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
 import ProfileCompletion from "@/pages/profile-completion";
 import WorkerOnboarding from "@/pages/worker-onboarding";
 import CoordinatorOnboarding from "@/pages/coordinator-onboarding";
+import HubPage from "@/pages/hub/HubPage";
+import MDExecutivePage from "@/pages/md/executive";
+import MDStaffPage from "@/pages/md/staff";
+import MDCompliancePage from "@/pages/md/compliance";
+import MDFinancialPage from "@/pages/md/financial";
+import MDOnboardingPage from "@/pages/md/onboarding";
 import { useAuth } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient({
@@ -55,14 +64,17 @@ const queryClient = new QueryClient({
 });
 
 // All authenticated roles
-const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health"] as const;
+const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
 
-// Support Coordinator / CareScribe Parent only — oversight, billing, team, compliance.
+// Support Coordinator / CareCliQ Parent only — oversight, billing, team, compliance.
 const COORDINATOR_ROLES = ["support_coordinator"] as const;
 
 // Coordinator + allied health — reports contain clinical documentation allied health needs.
 const COORDINATOR_AND_ALLIED = ["support_coordinator", "allied_health"] as const;
 const WORKER_ROLES = ["support_worker"] as const;
+
+// Managing Director only
+const MD_ROLES = ["managing_director"] as const;
 
 function LegacyLiveRedirect({ sessionId }: { sessionId: string }) {
   const { user } = useAuth();
@@ -101,6 +113,44 @@ function Router() {
       <Route path="/getting-started">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <CoordinatorOnboarding />
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Hub — org intelligence layer, all roles ───────────────────────── */}
+      <Route path="/hub">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <HubLayout><HubPage /></HubLayout>
+        </ProtectedRoute>
+      </Route>
+
+      {/* ── Managing Director Workspaces ──────────────────────────────────── */}
+      <Route path="/md/executive">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDExecutivePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/staff">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDStaffPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/compliance">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDCompliancePage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/financial">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDFinancialPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/md/onboarding">
+        <ProtectedRoute allowedRoles={[...MD_ROLES]}>
+          <MDOnboardingPage />
         </ProtectedRoute>
       </Route>
 
@@ -157,9 +207,21 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/coordinator-goals">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorGoals /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/audit-pack">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><AuditPack /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/session-review">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><SessionReview /></AppLayout>
         </ProtectedRoute>
       </Route>
 

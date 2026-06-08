@@ -109,6 +109,7 @@ class ParticipantUpdate(BaseModel):
     goals: Optional[List[NDISGoal]] = None
     external_pseudonym: Optional[str] = None
     disposal_date: Optional[date] = None
+    upcoming_review_date: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

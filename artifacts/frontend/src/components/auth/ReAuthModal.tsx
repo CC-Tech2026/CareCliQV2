@@ -29,7 +29,7 @@ export function ReAuthModal({ open, busy, error, onCancel, onSubmit }: Props) {
             Confirm your identity
           </DialogTitle>
           <DialogDescription>
-            This action affects sensitive CareScribe records. Re-enter your password to continue.
+            This action affects sensitive CareCliQ records. Re-enter your password to continue.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">

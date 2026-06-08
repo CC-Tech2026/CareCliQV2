@@ -20,7 +20,7 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
             Session timeout warning
           </DialogTitle>
           <DialogDescription>
-            You have been inactive. CareScribe will sign you out to protect participant records.
+            You have been inactive. CareCliQ will sign you out to protect participant records.
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-2xl bg-[#F5F3FC] px-5 py-4 text-center">

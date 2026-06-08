@@ -1,0 +1,1118 @@
+# CareCliQ Organization Hierarchy & Data Scoping — Technical Specification
+
+## Executive Summary
+
+This document defines the organizational structure, data hierarchy, role permissions, and data scoping rules for CareCliQ. It ensures:
+- ✅ Correct data isolation between organizations
+- ✅ Proper role-based access control (RBAC)
+- ✅ Secure team/hierarchical data visibility
+- ✅ Support for multiple organizational structures
+- ✅ Alignment with existing backend architecture
+
+---
+
+# Part 1: Organization Hierarchy Models
+
+## Current Reality Check
+
+**Before we design, let's understand YOUR current system:**
+
+### Questions to Answer:
+1. **Organization Structure**
+   - How many organizations will use the system?
+   - Can organizations have sub-departments/divisions?
+   - Are coordinators assigned to specific teams or org-wide?
+   - Can support workers report to multiple coordinators?
+
+2. **Existing Database Schema**
+   - Do you have an `organizations` table?
+   - Do you have a `users` table with `organization_id` foreign key?
+   - Do you track coordinator assignments (who manages whom)?
+   - Do you have a `roles` table or enum field on users?
+
+3. **Current Relationships**
+   - How are support workers linked to coordinators?
+   - How are coordinators linked to managing directors?
+   - How are participants linked to organizations?
+   - Is there a team concept or just org-wide visibility?
+
+---
+
+## Standard Organization Hierarchy Model
+
+```
+ORGANIZATION (single tenant)
+│
+├─ MANAGING DIRECTOR(S) (1-3 per organization)
+│  │
+│  ├─ SUPPORT COORDINATOR(S) (multiple)
+│  │  │
+│  │  ├─ SUPPORT WORKER 1 (reports to this coordinator)
+│  │  ├─ SUPPORT WORKER 2 (reports to this coordinator)
+│  │  ├─ SUPPORT WORKER 3 (reports to this coordinator)
+│  │  │
+│  │  └─ PARTICIPANT 1 (coordinator oversees)
+│  │  └─ PARTICIPANT 2 (coordinator oversees)
+│  │
+│  ├─ SUPPORT COORDINATOR(S) (another team)
+│  │  ├─ SUPPORT WORKER 4
+│  │  ├─ SUPPORT WORKER 5
+│  │  └─ PARTICIPANT 3
+│  │
+│  └─ ALLIED HEALTH PROFESSIONAL(S) (clinical staff)
+│     ├─ Can view medical history
+│     └─ Can contribute to behavior support plans
+│
+└─ ORGANIZATION ADMIN(S) (manages system settings)
+
+Example:
+─────────
+
+Sunshine Disability Services (Organization)
+│
+├─ Rebecca Williams (Managing Director)
+│  │
+│  ├─ Michael Chen (Coordinator - Community Team)
+│  │  ├─ Sarah Johnson (Support Worker)
+│  │  ├─ James Mitchell (Support Worker)
+│  │  └─ Emma Thompson (Support Worker)
+│  │
+│  └─ Lisa Anderson (Coordinator - Residential Team)
+│     ├─ David Brown (Support Worker)
+│     └─ Sophie Lee (Support Worker)
+│
+└─ Admin User (Organization Admin)
+```
+
+---
+
+## Database Schema for Hierarchy
+
+### Core Tables Required
+
+```sql
+-- Organizations (top level)
+CREATE TABLE organizations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name VARCHAR(255) NOT NULL,
+  provider_number VARCHAR(50) UNIQUE NOT NULL,
+  logo_url VARCHAR(255),
+  status VARCHAR(20) NOT NULL DEFAULT 'active', -- active, inactive, archived
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Users (all users, cross-role)
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  role VARCHAR(50) NOT NULL, -- 'support_worker', 'coordinator', 'managing_director', 'admin', 'allied_health'
+  
+  -- Coordinator field: which coordinator does this worker report to?
+  coordinator_id UUID REFERENCES users(id), -- NULL if user is coordinator/MD/admin
+  
+  -- Status tracking
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  is_active BOOLEAN DEFAULT true,
+  last_login TIMESTAMP,
+  
+  -- Compliance tracking
+  compliance_score FLOAT DEFAULT 0,
+  
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  -- Constraints
+  CONSTRAINT org_isolation CHECK (organization_id IS NOT NULL),
+  CONSTRAINT valid_coordinator CHECK (
+    (role = 'support_worker' AND coordinator_id IS NOT NULL) OR
+    (role IN ('coordinator', 'managing_director', 'admin', 'allied_health') AND coordinator_id IS NULL)
+  ),
+  CONSTRAINT no_self_coordination CHECK (id != coordinator_id)
+);
+
+-- Participants (who receives care)
+CREATE TABLE participants (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  first_name VARCHAR(100) NOT NULL,
+  last_name VARCHAR(100) NOT NULL,
+  ndis_number VARCHAR(50),
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Participant Allocations (which workers serve which participants)
+CREATE TABLE participant_allocations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  participant_id UUID NOT NULL REFERENCES participants(id),
+  worker_id UUID NOT NULL REFERENCES users(id),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  coordinator_id UUID NOT NULL REFERENCES users(id), -- For quick access to coordinator
+  allocation_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  CONSTRAINT valid_worker CHECK (
+    -- Verify worker is a support_worker
+    EXISTS (SELECT 1 FROM users u WHERE u.id = worker_id AND u.role = 'support_worker')
+  ),
+  CONSTRAINT valid_coordinator_for_worker CHECK (
+    -- Verify coordinator is the worker's coordinator
+    EXISTS (
+      SELECT 1 FROM users u 
+      WHERE u.id = worker_id 
+      AND u.coordinator_id = coordinator_id
+    )
+  )
+);
+
+-- Sessions (support delivery evidence)
+CREATE TABLE sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  participant_id UUID NOT NULL REFERENCES participants(id),
+  worker_id UUID NOT NULL REFERENCES users(id),
+  coordinator_id UUID NOT NULL REFERENCES users(id), -- Coordinator for this worker
+  session_date DATE NOT NULL,
+  start_time TIME NOT NULL,
+  end_time TIME NOT NULL,
+  duration_minutes INT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'draft',
+  compliance_score FLOAT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  
+  CONSTRAINT org_isolation CHECK (organization_id IS NOT NULL)
+);
+
+-- Incidents (safety events)
+CREATE TABLE incidents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  participant_id UUID NOT NULL REFERENCES participants(id),
+  worker_id UUID NOT NULL REFERENCES users(id),
+  coordinator_id UUID NOT NULL REFERENCES users(id),
+  incident_date DATE NOT NULL,
+  incident_type VARCHAR(100) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Certifications (worker compliance tracking)
+CREATE TABLE certifications (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  certification_type VARCHAR(100) NOT NULL, -- 'wwc', 'first_aid', 'rsa', etc.
+  issue_date DATE NOT NULL,
+  expiry_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'valid',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Index Strategy
+
+```sql
+-- Critical indexes for data scoping queries
+CREATE INDEX idx_users_organization_id ON users(organization_id);
+CREATE INDEX idx_users_coordinator_id ON users(coordinator_id);
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_org_role ON users(organization_id, role);
+
+CREATE INDEX idx_participants_organization_id ON participants(organization_id);
+
+CREATE INDEX idx_participant_allocations_worker_id ON participant_allocations(worker_id);
+CREATE INDEX idx_participant_allocations_coordinator_id ON participant_allocations(coordinator_id);
+CREATE INDEX idx_participant_allocations_participant_id ON participant_allocations(participant_id);
+CREATE INDEX idx_participant_allocations_org_id ON participant_allocations(organization_id);
+
+CREATE INDEX idx_sessions_worker_id ON sessions(worker_id);
+CREATE INDEX idx_sessions_coordinator_id ON sessions(coordinator_id);
+CREATE INDEX idx_sessions_organization_id ON sessions(organization_id);
+CREATE INDEX idx_sessions_participant_id ON sessions(participant_id);
+
+CREATE INDEX idx_incidents_organization_id ON incidents(organization_id);
+CREATE INDEX idx_certifications_organization_id ON certifications(organization_id);
+CREATE INDEX idx_certifications_user_id ON certifications(user_id);
+```
+
+---
+
+# Part 2: Role-Based Access Control (RBAC)
+
+## Role Definitions
+
+### 1. Support Worker (frontline staff)
+**Responsibilities:**
+- Create and document sessions
+- Report incidents
+- Manage their own credentials/certifications
+- View their own compliance score
+
+**Data Access:**
+- ✅ Can see: Only their own data
+- ✅ Can modify: Only their own sessions (draft status)
+- ❌ Cannot see: Other workers' data
+- ❌ Cannot see: Team/organization metrics
+- ❌ Cannot see: Financial data
+
+**Example Queries:**
+```sql
+-- Get my sessions
+SELECT * FROM sessions 
+WHERE worker_id = current_user.id 
+AND organization_id = current_user.organization_id
+
+-- Get my participants
+SELECT DISTINCT p.* FROM participants p
+INNER JOIN participant_allocations pa ON p.id = pa.participant_id
+WHERE pa.worker_id = current_user.id
+AND p.organization_id = current_user.organization_id
+
+-- Get my certifications
+SELECT * FROM certifications
+WHERE user_id = current_user.id
+AND organization_id = current_user.organization_id
+```
+
+---
+
+### 2. Support Coordinator (team lead)
+**Responsibilities:**
+- Manage team of support workers
+- Oversee participant care
+- Review and approve sessions
+- Track team compliance
+- Manage incidents
+
+**Data Access:**
+- ✅ Can see: All data for workers assigned to them + participants
+- ✅ Can modify: Sessions from their team (approve/flag)
+- ✅ Can modify: Incident records for their team
+- ❌ Cannot see: Other teams' data (if multi-team organization)
+- ❌ Cannot see: Organization-wide metrics (MD's domain)
+- ❌ Cannot see: Financial data
+
+**Example Queries:**
+```sql
+-- Get my team members
+SELECT * FROM users
+WHERE coordinator_id = current_user.id
+AND organization_id = current_user.organization_id
+AND role = 'support_worker'
+
+-- Get my team's sessions
+SELECT s.* FROM sessions s
+WHERE s.coordinator_id = current_user.id
+AND s.organization_id = current_user.organization_id
+AND s.session_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+
+-- Get participants my team serves
+SELECT DISTINCT p.* FROM participants p
+INNER JOIN participant_allocations pa ON p.id = pa.participant_id
+WHERE pa.coordinator_id = current_user.id
+AND p.organization_id = current_user.organization_id
+
+-- Get team compliance
+SELECT u.id, u.first_name, u.last_name, AVG(s.compliance_score) as avg_compliance
+FROM users u
+LEFT JOIN sessions s ON u.id = s.worker_id
+WHERE u.coordinator_id = current_user.id
+AND u.organization_id = current_user.organization_id
+GROUP BY u.id
+
+-- Get team certifications expiring
+SELECT u.id, u.first_name, c.certification_type, c.expiry_date
+FROM users u
+INNER JOIN certifications c ON u.id = c.user_id
+WHERE u.coordinator_id = current_user.id
+AND c.expiry_date BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 30 DAY)
+AND u.organization_id = current_user.organization_id
+```
+
+---
+
+### 3. Managing Director (organization lead)
+**Responsibilities:**
+- Oversee entire organization
+- Monitor all metrics and trends
+- Manage coordinators
+- Strategic decision-making
+- Financial oversight
+
+**Data Access:**
+- ✅ Can see: ALL organization data
+- ✅ Can modify: All organization settings
+- ✅ Can modify: Staff assignments, role changes
+- ✅ Can access: Financial data
+- ✅ Can access: Organization-wide metrics
+
+**Example Queries:**
+```sql
+-- Get organization overview
+SELECT 
+  (SELECT COUNT(*) FROM participants WHERE organization_id = current_user.organization_id) as active_participants,
+  (SELECT COUNT(*) FROM users WHERE organization_id = current_user.organization_id AND is_active = true) as active_staff,
+  (SELECT COUNT(*) FROM sessions WHERE organization_id = current_user.organization_id AND session_date >= CURDATE()) as sessions_today,
+  (SELECT AVG(compliance_score) FROM users WHERE organization_id = current_user.organization_id) as avg_compliance
+  
+-- Get all coordinators
+SELECT * FROM users
+WHERE organization_id = current_user.organization_id
+AND role = 'coordinator'
+
+-- Get all incidents
+SELECT * FROM incidents
+WHERE organization_id = current_user.organization_id
+ORDER BY incident_date DESC
+
+-- Get organization compliance trend
+SELECT DATE(created_at), AVG(compliance_score)
+FROM sessions
+WHERE organization_id = current_user.organization_id
+GROUP BY DATE(created_at)
+ORDER BY DATE(created_at) DESC
+```
+
+---
+
+### 4. Admin (organization configuration)
+**Responsibilities:**
+- Configure organization settings
+- Manage user accounts
+- Manage system integrations
+- Monitor system health
+
+**Data Access:**
+- ✅ Can see: All organization data
+- ✅ Can modify: All organization settings
+- ✅ Cannot modify: Session data (audit trail)
+- ✅ Can create/disable users
+- ✅ Can reset passwords
+
+---
+
+### 5. Allied Health Professional (optional)
+**Responsibilities:**
+- Contribute to behavior support plans
+- View medical history
+- Provide clinical recommendations
+- Create goals and objectives
+
+**Data Access:**
+- ✅ Can see: Medical history for assigned participants
+- ✅ Can see: Behavior support plans
+- ✅ Can modify: BSPs and goals
+- ❌ Cannot see: Session notes (unless specifically assigned)
+- ❌ Cannot modify: Session data
+
+---
+
+## Role Permission Matrix
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      ROLE PERMISSION MATRIX                             │
+├──────────────────┬────────┬────────┬───────────┬────────┬──────────────┤
+│ ACTION           │ WORKER │ COORD  │    MD     │ ADMIN  │ ALLIED HLTH  │
+├──────────────────┼────────┼────────┼───────────┼────────┼──────────────┤
+│ View Own Data    │   ✓    │   ✓    │     ✓     │   ✓    │      ✓       │
+│ View Team Data   │   ✗    │   ✓    │     ✓     │   ✓    │      ✓*      │
+│ View Org Data    │   ✗    │   ✗    │     ✓     │   ✓    │      ✗       │
+│ Create Session   │   ✓    │   ✗    │     ✗     │   ✗    │      ✗       │
+│ Edit Own Session │   ✓    │   ✗    │     ✗     │   ✗    │      ✗       │
+│ Review Session   │   ✗    │   ✓    │     ✗     │   ✗    │      ✗       │
+│ Flag Session     │   ✗    │   ✓    │     ✗     │   ✗    │      ✗       │
+│ Approve Session  │   ✗    │   ✓    │     ✗     │   ✗    │      ✗       │
+│ Create Incident  │   ✓    │   ✓    │     ✗     │   ✗    │      ✗       │
+│ Manage Incident  │   ✗    │   ✓    │     ✓     │   ✓    │      ✗       │
+│ View Metrics     │   ✗    │   ✓    │     ✓     │   ✓    │      ✗       │
+│ View Financial   │   ✗    │   ✗    │     ✓     │   ✓    │      ✗       │
+│ Manage Users     │   ✗    │   ✗    │     ✓     │   ✓    │      ✗       │
+│ Configure Org    │   ✗    │   ✗    │     ✓     │   ✓    │      ✗       │
+│ View Med Hist    │   ✗    │   ✗    │     ✗     │   ✗    │      ✓       │
+│ Modify BSP       │   ✗    │   ✗    │     ✗     │   ✗    │      ✓       │
+└──────────────────┴────────┴────────┴───────────┴────────┴──────────────┘
+
+Legend:
+✓ = Can perform
+✗ = Cannot perform
+✓* = Can view for assigned participants only
+```
+
+---
+
+# Part 3: Data Scoping Implementation
+
+## The Data Scoping Rule
+
+**CRITICAL SECURITY RULE:**
+Every single query must filter by BOTH `organization_id` AND role-based visibility.
+
+```
+FUNDAMENTAL RULE:
+No user can EVER see data outside their organization.
+No user can EVER see data they don't have permission to see.
+```
+
+---
+
+## Implementation Pattern
+
+### Pattern 1: Support Worker (Only Own Data)
+
+```typescript
+// Support Worker Backend Service
+class SupportWorkerService {
+  
+  // Get my sessions
+  async getMyS sessions(userId: string) {
+    const user = await this.getUser(userId)
+    
+    // RULE 1: Only from my organization
+    // RULE 2: Only my sessions
+    return db.query(`
+      SELECT * FROM sessions
+      WHERE worker_id = $1
+      AND organization_id = $2
+    `, [userId, user.organization_id])
+  }
+  
+  // Get my participants
+  async getMyParticipants(userId: string) {
+    const user = await this.getUser(userId)
+    
+    return db.query(`
+      SELECT DISTINCT p.* FROM participants p
+      INNER JOIN participant_allocations pa ON p.id = pa.participant_id
+      WHERE pa.worker_id = $1
+      AND p.organization_id = $2
+    `, [userId, user.organization_id])
+  }
+  
+  // Update session (only draft sessions)
+  async updateSession(userId: string, sessionId: string, updates: any) {
+    const user = await this.getUser(userId)
+    
+    // Verify ownership
+    const session = await db.query(`
+      SELECT * FROM sessions
+      WHERE id = $1
+      AND worker_id = $2
+      AND organization_id = $3
+    `, [sessionId, userId, user.organization_id])
+    
+    if (!session || session.status !== 'draft') {
+      throw new UnauthorizedError('Cannot modify this session')
+    }
+    
+    return db.query(`
+      UPDATE sessions
+      SET ${updateClause}
+      WHERE id = $1
+      AND worker_id = $2
+      AND organization_id = $3
+    `, [...updateValues, sessionId, userId, user.organization_id])
+  }
+}
+```
+
+### Pattern 2: Coordinator (Team Data)
+
+```typescript
+// Coordinator Backend Service
+class CoordinatorService {
+  
+  // Get my team
+  async getMyTeam(coordinatorId: string) {
+    const user = await this.getUser(coordinatorId)
+    
+    // RULE 1: Only from my organization
+    // RULE 2: Only workers assigned to me
+    return db.query(`
+      SELECT * FROM users
+      WHERE coordinator_id = $1
+      AND organization_id = $2
+      AND role = 'support_worker'
+    `, [coordinatorId, user.organization_id])
+  }
+  
+  // Get my team's participants
+  async getMyTeamParticipants(coordinatorId: string) {
+    const user = await this.getUser(coordinatorId)
+    
+    return db.query(`
+      SELECT DISTINCT p.* FROM participants p
+      INNER JOIN participant_allocations pa ON p.id = pa.participant_id
+      WHERE pa.coordinator_id = $1
+      AND p.organization_id = $2
+    `, [coordinatorId, user.organization_id])
+  }
+  
+  // Get my team's flagged sessions
+  async getFlaggedSessions(coordinatorId: string) {
+    const user = await this.getUser(coordinatorId)
+    
+    return db.query(`
+      SELECT s.* FROM sessions s
+      WHERE s.coordinator_id = $1
+      AND s.organization_id = $2
+      AND s.status IN ('flagged', 'needs_review')
+    `, [coordinatorId, user.organization_id])
+  }
+  
+  // Approve/Flag session (only my team's sessions)
+  async flagSession(coordinatorId: string, sessionId: string, reason: string) {
+    const user = await this.getUser(coordinatorId)
+    
+    // Verify this session belongs to my team
+    const session = await db.query(`
+      SELECT * FROM sessions
+      WHERE id = $1
+      AND coordinator_id = $2
+      AND organization_id = $3
+    `, [sessionId, coordinatorId, user.organization_id])
+    
+    if (!session) {
+      throw new UnauthorizedError('Cannot access this session')
+    }
+    
+    return db.query(`
+      UPDATE sessions
+      SET status = 'flagged',
+          flagged_reason = $1,
+          flagged_at = NOW()
+      WHERE id = $2
+      AND coordinator_id = $3
+      AND organization_id = $4
+    `, [reason, sessionId, coordinatorId, user.organization_id])
+  }
+}
+```
+
+### Pattern 3: Managing Director (Organization Data)
+
+```typescript
+// MD Backend Service
+class ManagingDirectorService {
+  
+  // Get all team members
+  async getAllStaff(mdId: string) {
+    const user = await this.getUser(mdId)
+    
+    // RULE: All staff in my organization
+    return db.query(`
+      SELECT * FROM users
+      WHERE organization_id = $1
+      AND is_active = true
+    `, [user.organization_id])
+  }
+  
+  // Get organization metrics
+  async getOrgMetrics(mdId: string) {
+    const user = await this.getUser(mdId)
+    
+    return db.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM participants WHERE organization_id = $1) as total_participants,
+        (SELECT COUNT(*) FROM users WHERE organization_id = $1 AND role = 'support_worker') as total_workers,
+        (SELECT AVG(compliance_score) FROM users WHERE organization_id = $1) as avg_compliance,
+        (SELECT COUNT(*) FROM sessions WHERE organization_id = $1 AND session_date = CURDATE()) as sessions_today
+    `, [user.organization_id])
+  }
+  
+  // Get compliance trend (all organization data)
+  async getComplianceTrend(mdId: string, days: number = 90) {
+    const user = await this.getUser(mdId)
+    
+    return db.query(`
+      SELECT 
+        DATE(created_at) as date,
+        AVG(compliance_score) as avg_compliance,
+        COUNT(*) as session_count
+      FROM sessions
+      WHERE organization_id = $1
+      AND created_at >= DATE_SUB(NOW(), INTERVAL $2 DAY)
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+    `, [user.organization_id, days])
+  }
+}
+```
+
+---
+
+## The Data Scoping Middleware
+
+```typescript
+// Critical middleware that enforces data scoping on EVERY request
+
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string
+    organization_id: string
+    role: 'support_worker' | 'coordinator' | 'managing_director' | 'admin'
+    coordinator_id?: string // if support_worker
+  }
+}
+
+// Apply to every API endpoint
+async function enforceDat aScoping(req: AuthenticatedRequest, res: Response, next: Function) {
+  
+  // Get the resource being requested
+  const resourceId = req.params.id
+  const resourceType = req.baseUrl // /api/v1/sessions, /api/v1/participants, etc.
+  
+  // Verify organization isolation
+  const resource = await getResource(resourceType, resourceId)
+  
+  if (!resource) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+  
+  // CRITICAL CHECK: Organization must match
+  if (resource.organization_id !== req.user.organization_id) {
+    return res.status(403).json({ error: 'Unauthorized: Access denied' })
+  }
+  
+  // Role-based visibility check
+  if (!hasPermission(req.user, resource)) {
+    return res.status(403).json({ error: 'Unauthorized: Insufficient permissions' })
+  }
+  
+  next()
+}
+
+function hasPermission(user: any, resource: any): boolean {
+  
+  // Support Worker: Can only access own data
+  if (user.role === 'support_worker') {
+    if (resource.type === 'session') {
+      return resource.worker_id === user.id
+    }
+    if (resource.type === 'certification') {
+      return resource.user_id === user.id
+    }
+    return false
+  }
+  
+  // Coordinator: Can access team data
+  if (user.role === 'coordinator') {
+    if (resource.type === 'session') {
+      return resource.coordinator_id === user.id
+    }
+    if (resource.type === 'incident') {
+      return resource.coordinator_id === user.id
+    }
+    if (resource.type === 'participant_allocation') {
+      return resource.coordinator_id === user.id
+    }
+    return false
+  }
+  
+  // MD/Admin: Can access all organization data
+  if (user.role === 'managing_director' || user.role === 'admin') {
+    return true
+  }
+  
+  return false
+}
+```
+
+---
+
+# Part 4: Alignment Checklist
+
+## Database Schema Questions
+
+Before implementing, verify you have:
+
+- [ ] `organizations` table
+- [ ] `users` table with `organization_id` foreign key
+- [ ] `users.role` field (enum or varchar)
+- [ ] `users.coordinator_id` for support worker assignment
+- [ ] `participants` table with `organization_id`
+- [ ] `participant_allocations` table (links workers to participants)
+- [ ] `sessions` table with `organization_id`, `worker_id`, `coordinator_id`
+- [ ] `incidents` table with `organization_id`
+- [ ] `certifications` table with `organization_id`, `user_id`
+- [ ] Foreign key constraints on all tables
+- [ ] Indexes on `organization_id`, role fields, and relationship keys
+
+---
+
+## API Endpoint Audit
+
+Check every API endpoint has data scoping:
+
+**Example Audit:**
+
+```
+GET /api/v1/sessions
+  Current: SELECT * FROM sessions WHERE worker_id = ? ✓
+  Needs: AND organization_id = current_user.organization_id ✓
+  
+GET /api/v1/coordinator/team
+  Current: SELECT * FROM users WHERE coordinator_id = ? ✓
+  Needs: AND organization_id = current_user.organization_id ✓
+  
+GET /api/v1/admin/all-users
+  Current: SELECT * FROM users ✗ CRITICAL VULNERABILITY
+  Needs: WHERE organization_id = current_user.organization_id ✓
+  
+POST /api/v1/sessions/:id/flag
+  Current: UPDATE sessions ... WHERE id = ? ✗ Missing coordinator check
+  Needs: WHERE id = ? AND coordinator_id = current_user.id ✓
+  AND organization_id = current_user.organization_id ✓
+```
+
+---
+
+## Frontend Data Scoping
+
+The frontend must also enforce data scoping (belt and suspenders):
+
+```typescript
+// Hub Component - Role Detection
+const Hub = ({ user }) => {
+  
+  // WRONG: Show same hub for all users
+  // return <BaseHub />
+  
+  // CORRECT: Role-specific view
+  switch(user.role) {
+    case 'support_worker':
+      return <WorkerHub userId={user.id} orgId={user.organization_id} />
+    
+    case 'coordinator':
+      return <CoordinatorHub coordinatorId={user.id} orgId={user.organization_id} />
+    
+    case 'managing_director':
+      return <MDHub userId={user.id} orgId={user.organization_id} />
+    
+    default:
+      return <Unauthorized />
+  }
+}
+
+// API Service - Enforce org_id in all requests
+class APIService {
+  
+  constructor(private currentUser: User) {}
+  
+  async getMyData(endpoint: string) {
+    // ALWAYS include organization_id in headers
+    const response = await fetch(`/api/v1/${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${this.token}`,
+        'X-Organization-Id': this.currentUser.organization_id // Validate in backend
+      }
+    })
+    
+    return response.json()
+  }
+}
+```
+
+---
+
+## Security Checklist
+
+- [ ] Every database query filters by `organization_id`
+- [ ] Every API endpoint validates organization ownership
+- [ ] Data scoping middleware applied to all routes
+- [ ] Role-based visibility enforced before returning data
+- [ ] Support Workers cannot see other workers' data
+- [ ] Coordinators cannot see other coordinators' teams
+- [ ] Foreign key constraints prevent invalid relationships
+- [ ] Indexes exist for common query patterns
+- [ ] Cross-organization data leakage tests written
+- [ ] Logging tracks data access for audit
+- [ ] Environment variables separate dev/staging/prod orgs
+
+---
+
+## Performance Optimization
+
+After security is locked in, optimize queries:
+
+```sql
+-- BAD: N+1 queries
+SELECT * FROM sessions WHERE worker_id = ?
+  (then loop and query participants for each)
+
+-- GOOD: Single optimized query
+SELECT s.*, p.name 
+FROM sessions s
+INNER JOIN participants p ON s.participant_id = p.id
+WHERE s.worker_id = ? AND s.organization_id = ?
+
+-- BETTER: With caching
+SELECT s.*, p.name 
+FROM sessions s
+INNER JOIN participants p ON s.participant_id = p.id
+WHERE s.worker_id = ? AND s.organization_id = ?
+ORDER BY s.session_date DESC
+LIMIT 50  -- Pagination
+
+-- Cache key: "sessions:worker:{worker_id}:org:{org_id}"
+-- Invalidate on: New session created, session updated
+```
+
+---
+
+## Example Implementation: Your Code
+
+### Before (Vulnerable)
+```typescript
+// ❌ WRONG - No organization scoping
+app.get('/api/sessions/:id', (req, res) => {
+  const session = db.query(
+    'SELECT * FROM sessions WHERE id = ?',
+    [req.params.id]
+  )
+  res.json(session)
+})
+
+// ❌ WRONG - No role-based checks
+app.post('/api/sessions/:id/approve', (req, res) => {
+  db.query(
+    'UPDATE sessions SET status = "approved" WHERE id = ?',
+    [req.params.id]
+  )
+  res.json({ ok: true })
+})
+```
+
+### After (Secure)
+```typescript
+// ✅ CORRECT - Organization + role checks
+app.get('/api/sessions/:id', authenticate, async (req, res) => {
+  const user = req.user // From auth middleware
+  const sessionId = req.params.id
+  
+  // Get session with organization check
+  const session = await db.query(`
+    SELECT * FROM sessions
+    WHERE id = ?
+    AND organization_id = ?
+  `, [sessionId, user.organization_id])
+  
+  if (!session) return res.status(404).json({ error: 'Not found' })
+  
+  // Check role-based visibility
+  if (user.role === 'support_worker' && session.worker_id !== user.id) {
+    return res.status(403).json({ error: 'Unauthorized' })
+  }
+  
+  if (user.role === 'coordinator' && session.coordinator_id !== user.id) {
+    return res.status(403).json({ error: 'Unauthorized' })
+  }
+  
+  res.json(session)
+})
+
+// ✅ CORRECT - Organization + role + status checks
+app.post('/api/sessions/:id/approve', authenticate, async (req, res) => {
+  const user = req.user
+  const sessionId = req.params.id
+  
+  // Only coordinators can approve
+  if (user.role !== 'coordinator') {
+    return res.status(403).json({ error: 'Only coordinators can approve' })
+  }
+  
+  // Verify ownership
+  const session = await db.query(`
+    SELECT * FROM sessions
+    WHERE id = ?
+    AND coordinator_id = ?
+    AND organization_id = ?
+    AND status IN ('flagged', 'needs_review')
+  `, [sessionId, user.id, user.organization_id])
+  
+  if (!session) return res.status(404).json({ error: 'Not found or not approvable' })
+  
+  // Update
+  await db.query(`
+    UPDATE sessions
+    SET status = 'approved', updated_at = NOW()
+    WHERE id = ? AND organization_id = ?
+  `, [sessionId, user.organization_id])
+  
+  res.json({ ok: true, session })
+})
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+```typescript
+describe('Data Scoping', () => {
+  
+  test('Support Worker cannot see other worker sessions', async () => {
+    const worker1 = await createUser('support_worker', org1)
+    const worker2 = await createUser('support_worker', org1)
+    
+    const session = await createSession(worker2)
+    
+    // Worker1 requests worker2's session
+    const result = await getSessions(worker1, { filter: { worker_id: worker2.id } })
+    
+    expect(result).toEqual([]) // Should be empty
+  })
+  
+  test('Coordinator can see team sessions', async () => {
+    const coordinator = await createUser('coordinator', org1)
+    const worker = await createUser('support_worker', org1, { coordinator_id: coordinator.id })
+    const session = await createSession(worker)
+    
+    const result = await getSessions(coordinator, { filter: { coordinator_id: coordinator.id } })
+    
+    expect(result).toContain(session)
+  })
+  
+  test('User cannot access different organization', async () => {
+    const org1User = await createUser('support_worker', org1)
+    const org2User = await createUser('support_worker', org2)
+    
+    const org1Session = await createSession(org1User, org1)
+    
+    // Org2 user tries to access Org1 data
+    const result = await getSessions(org2User, { include_org: org1.id })
+    
+    expect(result).toEqual([]) // Should be empty
+  })
+})
+```
+
+### Integration Tests
+```typescript
+describe('API Data Scoping', () => {
+  
+  test('GET /api/sessions returns only authorized sessions', async () => {
+    const worker = await createUser('support_worker')
+    const token = await getToken(worker)
+    
+    const res = await request(app)
+      .get('/api/sessions')
+      .set('Authorization', `Bearer ${token}`)
+    
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual(expect.arrayContaining([]))
+    
+    // Verify no cross-org data
+    expect(res.body.some(s => s.organization_id !== worker.organization_id)).toBe(false)
+  })
+  
+  test('POST /api/sessions/:id/flag requires coordinator role', async () => {
+    const worker = await createUser('support_worker')
+    const session = await createSession(worker)
+    const token = await getToken(worker)
+    
+    const res = await request(app)
+      .post(`/api/sessions/${session.id}/flag`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Invalid' })
+    
+    expect(res.status).toBe(403) // Forbidden
+  })
+})
+```
+
+---
+
+## Organization Hierarchy Variations
+
+Depending on your needs, the hierarchy might vary:
+
+### Variation 1: Simple (Single Coordinator per Org)
+```
+Organization
+├─ Managing Director
+└─ Coordinator (oversees all workers)
+   ├─ Worker 1
+   ├─ Worker 2
+   └─ Worker 3
+```
+
+### Variation 2: Multi-Team (Multiple Coordinators)
+```
+Organization
+├─ Managing Director
+├─ Coordinator A (Community Team)
+│  ├─ Worker 1
+│  └─ Worker 2
+└─ Coordinator B (Residential Team)
+   ├─ Worker 3
+   └─ Worker 4
+```
+
+### Variation 3: Hierarchical (Coordinator > Team Lead > Workers)
+```
+Organization
+├─ Managing Director
+└─ Coordinator
+   ├─ Team Lead A
+   │  ├─ Worker 1
+   │  └─ Worker 2
+   └─ Team Lead B
+      ├─ Worker 3
+      └─ Worker 4
+```
+
+**For now, build Variation 2** (Multi-Team) as it covers most cases.
+
+---
+
+## Verification Checklist for Your Backend
+
+Review your existing backend against this:
+
+- [ ] Do you have organization isolation? (every query filters org_id)
+- [ ] Do you validate user's organization on every request?
+- [ ] Do you enforce role permissions? (not just role detection)
+- [ ] Do you have a coordinator_id field on support workers?
+- [ ] Can coordinators only see their team?
+- [ ] Can workers only see their own data?
+- [ ] Can MDs see organization-wide data?
+- [ ] Are there foreign key constraints?
+- [ ] Are there indexes on frequently-queried fields?
+- [ ] Are relationships validated (worker→coordinator match)?
+
+---
+
+## Summary
+
+```
+GOLDEN RULES FOR ORGANIZATION HIERARCHY:
+
+1. EVERY query filters by organization_id
+2. EVERY user request validates organization ownership
+3. Support Workers see ONLY their own data
+4. Coordinators see ONLY their team's data
+5. MDs see ALL organization data
+6. Role-based visibility is enforced on backend (not frontend)
+7. Data scoping is security-critical (not optional)
+8. Test data scoping separately from business logic
+```
+
+When you're ready, I can create specific implementation guides for:
+- Fixing vulnerabilities in your current code
+- Adding missing data scoping to endpoints
+- Creating comprehensive test suite
+- Performance optimization queries
+
+**What does your current backend look like? I can audit it specifically.**

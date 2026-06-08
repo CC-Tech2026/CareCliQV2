@@ -4,13 +4,14 @@ import {
   Menu, X, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
-  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench,
+  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck,
+  BarChart2, UserCheck, DollarSign, GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
-import { CareScribeLogo, CareScribeLogoSm } from "@/components/CareScribeLogo";
+import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#5533CC";
@@ -20,7 +21,7 @@ const TEXT   = "#1E1640";
 const APP_BG = "#F5F3FC";
 const ACTIVE = "#EDEAFF";
 
-type NavRole = "support_coordinator" | "support_worker" | "allied_health";
+type NavRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string };
 
 interface NavItem {
@@ -44,17 +45,19 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "People & Care",
       items: [
-        { href: "/team",       label: "Team",          icon: Users },
-        { href: "/patients",   label: "Participants",   icon: UserRound },
-        { href: "/sessions",   label: "Sessions",       icon: CalendarDays },
+        { href: "/team",               label: "Team",             icon: Users },
+        { href: "/patients",           label: "Participants",      icon: UserRound },
+        { href: "/sessions",           label: "Sessions",          icon: CalendarDays },
+        { href: "/coordinator-goals",  label: "Goals & Planning",  icon: Target },
       ],
     },
     {
       group: "Quality & Safety",
       items: [
-        { href: "/compliance", label: "Compliance",    icon: ShieldCheck },
-        { href: "/audit-pack", label: "Audit Pack",    icon: FileCheck2 },
-        { href: "/incidents",  label: "Incidents",     icon: AlertTriangle },
+        { href: "/compliance",      label: "Compliance",      icon: ShieldCheck },
+        { href: "/session-review",  label: "Session Review",  icon: ClipboardCheck },
+        { href: "/audit-pack",      label: "Audit Pack",      icon: FileCheck2 },
+        { href: "/incidents",       label: "Incidents",       icon: AlertTriangle },
       ],
     },
     {
@@ -122,6 +125,23 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       ],
     },
   ],
+  managing_director: [
+    {
+      items: [
+        { href: "/hub", label: "Hub", icon: LayoutDashboard },
+      ],
+    },
+    {
+      group: "MD Workspaces",
+      items: [
+        { href: "/md/executive",   label: "Executive",   icon: BarChart2 },
+        { href: "/md/staff",       label: "Staff",        icon: UserCheck },
+        { href: "/md/compliance",  label: "Compliance",   icon: ShieldCheck },
+        { href: "/md/financial",   label: "Financial",    icon: DollarSign },
+        { href: "/md/onboarding",  label: "Onboarding",   icon: GraduationCap },
+      ],
+    },
+  ],
 };
 
 // ── Mobile bottom tabs ────────────────────────────────────────────────────────
@@ -145,6 +165,13 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
     { href: "/sessions",   label: "Sessions",     icon: CalendarDays },
     { href: "/reports",    label: "Reports",      icon: FileBarChart2 },
     { href: "/credentials",label: "Creds",        icon: BadgeCheck },
+  ],
+  managing_director: [
+    { href: "/hub",           label: "Hub",        icon: LayoutDashboard },
+    { href: "/md/executive",  label: "Executive",  icon: BarChart2 },
+    { href: "/md/staff",      label: "Staff",      icon: UserCheck },
+    { href: "/md/compliance", label: "Compliance", icon: ShieldCheck },
+    { href: "/md/financial",  label: "Financial",  icon: DollarSign },
   ],
 };
 
@@ -193,7 +220,7 @@ function SidebarContents({
           )}
         >
           <div className={cn("flex items-center overflow-visible", compact ? "justify-center" : "justify-start")}>
-            <CareScribeLogo compact={compact} />
+            <CareCliQLogo compact={compact} />
           </div>
         </Link>
         {!compact && !isDrawer && (
@@ -394,7 +421,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Mobile header */}
           <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10 border-b border-black/5">
             <Link href="/dashboard" className="flex items-center focus:outline-none py-1 active:opacity-75 transition-opacity">
-              <CareScribeLogoSm />
+              <CareCliQLogoSm />
             </Link>
             <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
               <Menu size={22} />
@@ -482,7 +509,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white/90 backdrop-blur-md"
         style={{ boxShadow: "0 -8px 30px rgba(0,0,0,0.04)", paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        {(userRole ? ROLE_BOTTOM_NAV[userRole] : ROLE_BOTTOM_NAV.support_worker).map((item) => {
+        {(ROLE_BOTTOM_NAV[userRole as NavRole] ?? ROLE_BOTTOM_NAV.support_worker).map((item) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
           return (

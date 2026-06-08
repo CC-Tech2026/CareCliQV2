@@ -1,0 +1,162 @@
+## Core Platform Architecture
+
+A critical principle of this implementation is that CareCliQ consists of two separate layers:
+
+### Layer 1: CareCliQ Hub
+
+The Hub is the organizational experience.
+
+It serves as the digital headquarters for an NDIS provider.
+
+The Hub is where staff:
+
+* View organizational announcements
+* View compliance alerts
+* View staff updates
+* View company news
+* View organization calendars
+* View KPIs and dashboards
+* Connect with their organization
+* Launch workspaces
+
+The Hub is organizationally focused.
+
+Think of it as the organization's home page.
+
+---
+
+### Layer 2: CareCliQ Workspaces
+
+Workspaces are operational environments.
+
+They already exist within the platform and are considered production-ready functionality.
+
+Examples include:
+
+* Support Worker Workspace
+* Support Coordinator Workspace
+* Clinician Workspace
+* Team Leader Workspace
+* Managing Director Workspace
+
+Workspaces are where staff actually perform their day-to-day work.
+
+Examples:
+
+Support Worker Workspace:
+
+* Participant management
+* Session management
+* Progress notes
+* Goal tracking
+* Incident reporting
+* Compliance feedback
+
+Support Coordinator Workspace:
+
+* Participant oversight
+* Goal reviews
+* Team compliance
+* Plan management
+* Service coordination
+
+These workspaces must remain completely untouched.
+
+---
+
+## Non-Negotiable Rule
+
+The CareCliQ Hub must never replace, redesign, refactor, relocate, or modify any existing workspace.
+
+The Hub exists only as a gateway and organizational layer.
+
+Once a user selects a workspace from the Hub:
+
+Hub
+→ Launch Workspace
+→ Existing Workspace
+
+The user should be redirected directly into the current workspace experience exactly as it exists today.
+
+No UI changes should be made to those workspaces.
+
+No routes should be changed.
+
+No functionality should be changed.
+
+No components should be modified.
+
+No backend logic should be modified.
+
+No API contracts should be modified.
+
+No database changes should be made.
+
+---
+
+## Workspace Launcher Behaviour
+
+The Workspace Launcher should function as a navigation portal only.
+
+Example:
+
+Support Worker Workspace Card
+
+[ Launch Workspace ]
+
+Action:
+
+Navigate user to the existing Support Worker Workspace route.
+
+Support Coordinator Workspace Card
+
+[ Launch Workspace ]
+
+Action:
+
+Navigate user to the existing Support Coordinator Workspace route.
+
+The launcher should simply redirect users into the current production workspace.
+
+---
+
+## Design Vision
+
+The relationship between Hub and Workspaces should feel like:
+
+Microsoft 365
+→ Home Portal
+→ Word / Excel / Teams
+
+Google Workspace
+→ Workspace Home
+→ Docs / Sheets / Gmail
+
+CareCliQ
+→ CareCliQ Hub
+→ Support Worker Workspace
+→ Support Coordinator Workspace
+→ Clinician Workspace
+→ Managing Director Workspace
+
+The Hub provides organizational awareness.
+
+The Workspaces provide operational functionality.
+
+Both are separate experiences that work together.
+
+---
+
+## Success Criteria
+
+A successful implementation means:
+
+* CareCliQ Hub is fully functional
+* Existing Workspaces remain unchanged
+* Launch buttons navigate into existing workspaces
+* No existing workflow is affected
+* No backend changes are required
+* No database changes are required
+* The Hub can be completely removed and all existing Workspaces continue to operate exactly as they do today
+
+The Hub should be treated as a new product layer sitting above the existing CareCliQ Workspaces, not a replacement for them.

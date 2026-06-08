@@ -14,3 +14,4 @@ invitations_table_missing: bool = False
 session_messages_table_missing: bool = False
 patient_goals_table_missing: bool = False
 practitioner_allocations_table_missing: bool = False
+upcoming_review_date_column_missing: bool = False

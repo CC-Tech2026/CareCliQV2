@@ -25,12 +25,12 @@ export default function Login() {
 
     setBusy(true);
     try {
-      await login(email, password);
+      const authUser = await login(email, password);
       toast({
         title: "Welcome back!",
         description: "Your terminal instance has safely initialized.",
       });
-      navigate("/dashboard");
+      navigate("/hub");
     } catch (err) {
       toast({
         title: "Authentication Failed",
@@ -44,7 +44,10 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden" style={{ animation: "authPageEnter 0.3s ease-out" }}>
+    <div
+      className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden"
+      style={{ animation: "authPageEnter 0.3s ease-out" }}
+    >
       {/* ── Injection of Fluid Animation Keyframes ────────────────────────── */}
       <style
         dangerouslySetInnerHTML={{
@@ -115,9 +118,9 @@ export default function Login() {
         {/* Top brand header utilizing logo.png */}
         <div className="flex items-center gap-3">
           <img
-            src="/logo.png"
-            alt="CareScribe"
-            className="h-9 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
+            src="/carecliQ_logo.png"
+            alt="CareCliQ"
+            className="h-13 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]"
           />
           <div className="h-4 w-[1px] bg-gray-200" />
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">
@@ -295,7 +298,7 @@ export default function Login() {
           <div className="w-full aspect-[4/3] bg-white/40 backdrop-blur-md rounded-[2.5rem] p-4 border border-solid border-white/20 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] relative overflow-hidden flex items-center justify-center group">
             <img
               src="/login_welcome.jpg"
-              alt="CareScribe Connections Workspace Overview"
+              alt="CareCliQ Connections Workspace Overview"
               className="w-full h-full object-cover rounded-[1.75rem] transition-transform duration-700 ease-out group-hover:scale-[1.01]"
             />
           </div>

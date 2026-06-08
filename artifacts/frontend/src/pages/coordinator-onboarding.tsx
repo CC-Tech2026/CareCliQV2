@@ -136,7 +136,7 @@ export default function CoordinatorOnboarding() {
           </div>
         </div>
         <h1 className="text-3xl font-black mb-2" style={{ color: PLUM }}>
-          Welcome to CareScribe{orgName ? `, ${orgName}` : ""}!
+          Welcome to CareCliQ{orgName ? `, ${orgName}` : ""}!
         </h1>
         <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: MUTED }}>
           Follow the steps below to get your organisation set up. You can complete these now or come back anytime.
