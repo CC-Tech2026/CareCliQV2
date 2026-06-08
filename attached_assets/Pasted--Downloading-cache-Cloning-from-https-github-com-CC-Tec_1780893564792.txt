@@ -1,0 +1,57 @@
+==> Downloading cache...
+==> Cloning from https://github.com/CC-Tech2026/Supabase-Python-Hub
+==> Checking out commit 83d649f3b4e8d9e4c5b1fd973460b3c1830f77ae in branch main
+==> Downloaded 204MB in 9s. Extraction took 14s.
+==> Installing dependencies with pnpm...
+==> Using Node.js version 24.14.1 (default)
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'pnpm install --frozen-lockfile && pnpm --filter @workspace/frontend run build'...
+> @workspace/frontend@0.0.0 build /opt/render/project/src/artifacts/frontend
+> vite build --config vite.config.ts
+vite v7.3.2 building client environment for production...
+transforming...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 1117 modules transformed.
+✗ Build failed in 1.88s
+error during build:
+[vite:esbuild] Transform failed with 3 errors:
+/opt/render/project/src/artifacts/frontend/src/pages/my-client-detail.tsx:870:11: ERROR: The character "}" is not valid inside a JSX element
+/opt/render/project/src/artifacts/frontend/src/pages/my-client-detail.tsx:960:8: ERROR: Unexpected closing "div" tag does not match opening fragment tag
+/opt/render/project/src/artifacts/frontend/src/pages/my-client-detail.tsx:962:6: ERROR: Expected ")" but found "{"
+file: /opt/render/project/src/artifacts/frontend/src/pages/my-client-detail.tsx:870:11
+The character "}" is not valid inside a JSX element
+868 |                </button>
+869 |              </div>
+870 |            )}
+    |             ^
+871 |  
+872 |            {ended && (
+Unexpected closing "div" tag does not match opening fragment tag
+958 |            )}
+959 |          </div>
+960 |        </div>
+    |          ^
+961 |  
+962 |        {/* Step: choice & control (SCRUM-227) */}
+Expected ")" but found "{"
+960 |        </div>
+961 |  
+962 |        {/* Step: choice & control (SCRUM-227) */}
+    |        ^
+963 |        {composerStep === "choice" && (
+964 |          <>
+    at failureErrorWithLog (/opt/render/project/src/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:1467:15)
+    at /opt/render/project/src/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:736:50
+    at responseCallbacks.<computed> (/opt/render/project/src/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/opt/render/project/src/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/opt/render/project/src/node_modules/.pnpm/esbuild@0.27.3/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+/opt/render/project/src/artifacts/frontend:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/frontend@0.0.0 build: `vite build --config vite.config.ts`
+Exit status 1
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
