@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
-import { setAuthTokenGetter, customFetch } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setOrgIdGetter, customFetch } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { queryClient } from "@/lib/query-client";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -35,9 +36,11 @@ const TOKEN_KEY = "carescribe_token";
 const USER_KEY = "carescribe_user";
 const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
-// Wire the token getter immediately on module load so API calls always have the latest token
+// Wire token + org getters immediately on module load so API calls always have the latest values
 let _currentToken: string | null = null;
+let _currentOrgId: string | null = null;
 setAuthTokenGetter(() => _currentToken);
+setOrgIdGetter(() => _currentOrgId);
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -55,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const persistSession = useCallback((newToken: string, newUser: AuthUser) => {
     _currentToken = newToken;
+    _currentOrgId = newUser.organizationId ?? null;
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USER_KEY, JSON.stringify(newUser));
     setToken(newToken);
@@ -63,9 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearSession = useCallback(() => {
     _currentToken = null;
+    _currentOrgId = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(REAUTH_TOKEN_KEY);
+    // CCQ-113: clear query cache on logout so stale cross-org data is never served
+    queryClient.clear();
     setToken(null);
     setUser(null);
   }, []);
@@ -117,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = newToken;
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);
+    // _currentOrgId will be refreshed via the /me call below
     try {
       const res = await apiFetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${newToken}` },
@@ -137,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
           profile_photo_url: data.user.profile_photo_url ?? null,
         };
+        _currentOrgId = fresh.organizationId ?? null;
         localStorage.setItem(USER_KEY, JSON.stringify(fresh));
         setUser(fresh);
       }

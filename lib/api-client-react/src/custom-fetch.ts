@@ -9,6 +9,7 @@ export type ErrorType<T = unknown> = ApiError<T>;
 export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type OrgIdGetter = () => string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -19,6 +20,7 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _orgIdGetter: OrgIdGetter | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -44,6 +46,16 @@ export function setBaseUrl(url: string | null): void {
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register a getter that supplies the current user's organisation ID.
+ * When set, every request automatically receives an
+ * `X-Organisation-ID` header as a secondary safety net on top of
+ * server-side middleware enforcement (CCQ-112).
+ */
+export function setOrgIdGetter(getter: OrgIdGetter | null): void {
+  _orgIdGetter = getter;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -364,6 +376,14 @@ export async function customFetch<T = unknown>(
     const accessReason = getRequestContext().accessReason;
     if (accessReason) {
       headers.set("x-access-reason", accessReason);
+    }
+  }
+
+  // CCQ-112: attach org header as a secondary safety net alongside JWT claim
+  if (_orgIdGetter && !headers.has("x-organisation-id")) {
+    const orgId = _orgIdGetter();
+    if (orgId) {
+      headers.set("x-organisation-id", orgId);
     }
   }
 

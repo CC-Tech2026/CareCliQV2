@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/query-client";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -48,20 +49,6 @@ import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import { useAuth } from "@/contexts/AuthContext";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error: unknown) => {
-        if (error && typeof error === "object" && "status" in error) {
-          const s = (error as { status: number }).status;
-          if (s === 401 || s === 403) return false;
-        }
-        return failureCount < 2;
-      },
-    },
-  },
-});
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
