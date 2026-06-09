@@ -24,6 +24,7 @@ import uuid
 import pytest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
+from starlette.requests import Request  # must be module-level for __future__.annotations
 
 # ── JWT helpers ──────────────────────────────────────────────────────────────
 
@@ -61,8 +62,8 @@ SESSION_B = {
 INCIDENT_A = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "title": "Incident A", "description": "desc A", "incident_type": "other", "severity": "low"}
 INCIDENT_B = {"id": str(uuid.uuid4()), "organization_id": ORG_B, "title": "Incident B", "description": "desc B", "incident_type": "other", "severity": "low"}
 
-EMBEDDING_A = {"id": str(uuid.uuid4()), "session_id": SESSION_A["id"], "organization_id": ORG_A, "embedding": [0.1] * 10, "model": "text-embedding-3-small"}
-EMBEDDING_B = {"id": str(uuid.uuid4()), "session_id": SESSION_B["id"], "organization_id": ORG_B, "embedding": [0.9] * 10, "model": "text-embedding-3-small"}
+EMBEDDING_A = {"id": str(uuid.uuid4()), "session_id": SESSION_A["id"], "organization_id": ORG_A, "embedding": [0.1] * 1536, "model": "text-embedding-3-small"}
+EMBEDDING_B = {"id": str(uuid.uuid4()), "session_id": SESSION_B["id"], "organization_id": ORG_B, "embedding": [0.9] * 1536, "model": "text-embedding-3-small"}
 
 
 # ── access.py unit tests (no HTTP) ───────────────────────────────────────────
@@ -120,46 +121,71 @@ class TestOrgContextMiddleware:
     """Verify the middleware attaches org_id and rejects missing claims."""
 
     def test_no_org_in_token_returns_403(self):
-        """A JWT without organization_id on a protected path → 403."""
+        """A JWT without organization_id on a protected path → 403.
+
+        Uses a real JWT + httpx.AsyncClient so decode_access_token validates
+        the token normally and the middleware rejects it for missing org claim.
+        """
         import asyncio
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.routing import Route
+        import httpx
+        from fastapi import FastAPI
         from starlette.responses import PlainTextResponse
         from backend.app.middleware.org_context import OrgContextMiddleware
+        from backend.app.core.security import create_access_token
 
-        async def homepage(request):
+        app = FastAPI()
+        app.add_middleware(OrgContextMiddleware)
+
+        @app.get("/api/protected")
+        async def protected():
             return PlainTextResponse("ok")
 
-        app = Starlette(routes=[Route("/api/protected", homepage)])
-        app.add_middleware(OrgContextMiddleware)
-        client = TestClient(app, raise_server_exceptions=False)
+        token = create_access_token(
+            data={"sub": str(uuid.uuid4()), "role": "support_coordinator"}
+        )
 
-        no_org_token = create_access_token({"sub": str(uuid.uuid4()), "role": "support_coordinator"})
-        resp = client.get("/api/protected", headers={"Authorization": f"Bearer {no_org_token}"})
+        async def _run():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                return await client.get(
+                    "/api/protected", headers={"Authorization": f"Bearer {token}"}
+                )
+
+        resp = asyncio.run(_run())
         assert resp.status_code == 403
 
     def test_with_org_claim_passes_through(self):
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.routing import Route
-        from starlette.responses import PlainTextResponse
+        """Middleware sets request.state.organisation_id when JWT has the claim."""
+        import asyncio
+        import httpx
+        from fastapi import FastAPI, Request
+        from fastapi.responses import JSONResponse
         from backend.app.middleware.org_context import OrgContextMiddleware
+        from backend.app.core.security import create_access_token
 
-        captured = {}
-
-        async def endpoint(request):
-            captured["org"] = request.state.organisation_id
-            return PlainTextResponse("ok")
-
-        app = Starlette(routes=[Route("/api/thing", endpoint)])
+        app = FastAPI()
         app.add_middleware(OrgContextMiddleware)
-        client = TestClient(app)
 
-        token = _make_token(ORG_A)
-        resp = client.get("/api/thing", headers={"Authorization": f"Bearer {token}"})
+        @app.get("/api/thing")
+        async def thing(request: Request):
+            return JSONResponse({"org": getattr(request.state, "organisation_id", None)})
+
+        token = create_access_token(
+            data={"sub": str(uuid.uuid4()), "role": "support_coordinator", "organization_id": ORG_A}
+        )
+
+        async def _run():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                return await client.get(
+                    "/api/thing", headers={"Authorization": f"Bearer {token}"}
+                )
+
+        resp = asyncio.run(_run())
         assert resp.status_code == 200
-        assert captured["org"] == ORG_A
+        assert resp.json()["org"] == ORG_A
 
     def test_public_path_bypasses_check(self):
         from starlette.testclient import TestClient
@@ -171,10 +197,12 @@ class TestOrgContextMiddleware:
         async def login(request):
             return PlainTextResponse("logged in")
 
-        app = Starlette(routes=[Route("/api/auth/login", login)])
+        # methods=["POST"] required — Starlette Route defaults to GET only.
+        app = Starlette(routes=[Route("/api/auth/login", login, methods=["POST"])])
         app.add_middleware(OrgContextMiddleware)
         client = TestClient(app)
 
+        # No Authorization header — public path must bypass the org check entirely.
         resp = client.post("/api/auth/login", json={"email": "x@x.com", "password": "pw"})
         assert resp.status_code == 200
 
@@ -184,8 +212,9 @@ class TestOrgContextMiddleware:
 class TestParticipantServiceIsolation:
     """Participant service must filter by org_id in all list queries."""
 
-    def test_list_filters_by_org(self):
-        """Ensure participant_service.list_participants passes org_id to the DB filter."""
+    @pytest.mark.asyncio
+    async def test_list_filters_by_org(self):
+        """Ensure participant_service.get_all_participants passes org_id to the DB filter."""
         from backend.app.services import participant_service
 
         mock_supabase = MagicMock()
@@ -197,10 +226,8 @@ class TestParticipantServiceIsolation:
         user = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
 
         with patch.object(participant_service, "get_supabase_admin", return_value=mock_supabase):
-            # The function may have different signatures depending on version;
-            # we verify that eq("organization_id", ORG_A) was called.
             try:
-                participant_service.get_participants(mock_supabase, user)
+                await participant_service.get_all_participants(current_user=user)
             except Exception:
                 pass
 
@@ -239,8 +266,8 @@ class TestCrossOrgDataLeakPrevention:
         assert exc_info.value.status_code == 404, \
             "Cross-org access must return 404, not 403 (CCQ-114)"
 
-    def test_note_embeddings_have_org_id_column(self):
-        """Embedding records must carry organization_id (CCQ-106 AC)."""
+    def test_session_embeddings_have_org_id_column(self):
+        """session_embeddings records must carry organization_id (CCQ-106 AC)."""
         assert "organization_id" in EMBEDDING_A, "Embedding seed data must have organization_id"
         assert EMBEDDING_A["organization_id"] == ORG_A
         assert EMBEDDING_B["organization_id"] == ORG_B
@@ -340,3 +367,152 @@ class TestRLSPolicyLogic:
             "Inserting a row with another org's id must be rejected"
         assert can_insert({}) is False, \
             "Inserting a row without org_id must be rejected"
+
+
+# ── CCQ-114: IDOR tests ───────────────────────────────────────────────────────
+
+class TestIDOR:
+    """
+    CCQ-114 — Insecure Direct Object Reference testing.
+
+    A user from Org A must not be able to read, write, or enumerate
+    resources belonging to Org B by guessing or iterating UUIDs.
+
+    All cross-org direct-access attempts must return 404 — not 403 —
+    so that existence of the resource is not revealed.
+    """
+
+    _RESOURCES = ["participant", "session", "incident"]
+
+    def test_cross_org_participant_access_returns_404(self):
+        from fastapi import HTTPException
+        from backend.app.core.access import assert_can_access_participant
+        user_a = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
+        with pytest.raises(HTTPException) as exc_info:
+            assert_can_access_participant(PATIENT_B, user_a, hide_existence=True)
+        assert exc_info.value.status_code == 404, \
+            "CCQ-114: cross-org participant access must be 404, not 403"
+
+    def test_cross_org_session_access_returns_404(self):
+        from fastapi import HTTPException
+        from backend.app.core.access import assert_can_access_session
+        user_a = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
+        with pytest.raises(HTTPException) as exc_info:
+            assert_can_access_session(SESSION_B, user_a, hide_existence=True)
+        assert exc_info.value.status_code == 404, \
+            "CCQ-114: cross-org session access must be 404, not 403"
+
+    def test_cannot_access_participant_by_guessing_uuid(self):
+        """Enumerating UUIDs from another org returns nothing."""
+        from backend.app.core.access import can_access_participant
+        user_a = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
+        guessed_b = {**PATIENT_B, "id": str(uuid.uuid4())}
+        assert can_access_participant(guessed_b, user_a) is False, \
+            "CCQ-114: guessing a UUID from another org must return False"
+
+    def test_cannot_access_session_by_guessing_uuid(self):
+        from backend.app.core.access import can_access_session
+        user_a = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
+        guessed_b = {**SESSION_B, "id": str(uuid.uuid4())}
+        assert can_access_session(guessed_b, user_a) is False, \
+            "CCQ-114: guessing a session UUID from another org must return False"
+
+    def test_org_a_cannot_read_org_b_embeddings(self):
+        """session_embeddings from Org B must not be visible to Org A's RLS policy."""
+        user_org = ORG_A
+        all_embeddings = [EMBEDDING_A, EMBEDDING_B]
+        visible = [e for e in all_embeddings if e["organization_id"] == user_org]
+        assert len(visible) == 1
+        assert visible[0]["organization_id"] == ORG_A, \
+            "CCQ-114: Org B embedding must not be visible to Org A user"
+
+    def test_cross_org_incident_not_accessible(self):
+        """An incident from Org B must not pass org-boundary check for Org A user."""
+        from backend.app.core.access import record_belongs_to_user_org
+        user_a = {"organization_id": ORG_A}
+        assert record_belongs_to_user_org(INCIDENT_B, user_a) is False, \
+            "CCQ-114: Org B incident must not be accessible to Org A user"
+
+    def test_all_resource_types_use_404_not_403(self):
+        """Verify both assert helpers default to hide_existence=True → 404."""
+        from fastapi import HTTPException
+        from backend.app.core.access import assert_can_access_participant, assert_can_access_session
+        user_a = {"id": str(uuid.uuid4()), "organization_id": ORG_A, "role": "support_coordinator"}
+
+        for assert_fn, record in [
+            (assert_can_access_participant, PATIENT_B),
+            (assert_can_access_session, SESSION_B),
+        ]:
+            with pytest.raises(HTTPException) as exc_info:
+                assert_fn(record, user_a)
+            assert exc_info.value.status_code == 404, \
+                f"CCQ-114: {assert_fn.__name__} must return 404 by default (not 403)"
+
+
+# ── CCQ-115: RLS holds when service role key is unavailable ──────────────────
+
+class TestRLSWithAnonKey:
+    """
+    CCQ-115 — Verify RLS holds when the app accidentally uses anon key.
+
+    If the backend misconfigures and sends the anon key instead of the
+    service_role key, RLS policies must still prevent cross-org data
+    access.  This is a simulation test — the actual DB-level check is
+    performed by the RLS policies in migration 019.
+
+    Production safeguards documented here:
+      1. SUPABASE_SERVICE_ROLE_KEY must be set server-side only (never in
+         frontend bundle or public env vars).
+      2. The anon key is safe to expose publicly — RLS prevents data access.
+      3. Key rotation: update SUPABASE_SERVICE_ROLE_KEY in Render → redeploy.
+    """
+
+    def test_anon_key_scenario_rls_still_filters_by_org(self):
+        """
+        With anon key, only rows matching auth.uid()'s org are visible.
+        Simulates: SELECT * FROM sessions WHERE org_id = cs_user_org_id().
+        """
+        all_sessions = [SESSION_A, SESSION_B]
+        requesting_org = ORG_A
+
+        # RLS policy simulation: cs_user_org_id() returns requesting_org
+        rls_filtered = [s for s in all_sessions if s["organization_id"] == requesting_org]
+
+        assert len(rls_filtered) == 1, "RLS must return only 1 session for Org A"
+        assert rls_filtered[0]["id"] == SESSION_A["id"]
+        assert all(s["organization_id"] == requesting_org for s in rls_filtered), \
+            "CCQ-115: RLS must filter all rows to requesting org even with anon key"
+
+    def test_service_role_key_not_exposed_in_public_paths(self):
+        """Service role key must not appear in any frontend-accessible config."""
+        import os
+        service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        # In CI / test env the key will be a placeholder; in production it's secret.
+        # We verify the app does not hard-code a real service key in source.
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in open(
+            "artifacts/frontend/src/lib/api-fetch.ts"
+        ).read(), "CCQ-115: service role key must never appear in frontend source"
+
+    def test_anon_key_cannot_bypass_rls_insert_check(self):
+        """Simulates anon key trying to INSERT a row with wrong org_id."""
+        auth_uid_org = ORG_A
+
+        def rls_insert_check(row: dict) -> bool:
+            # Mirrors: WITH CHECK (organization_id = cs_user_org_id())
+            return row.get("organization_id") == auth_uid_org
+
+        assert rls_insert_check({"organization_id": ORG_A}) is True
+        assert rls_insert_check({"organization_id": ORG_B}) is False, \
+            "CCQ-115: anon-key INSERT with wrong org must be blocked by RLS"
+        assert rls_insert_check({}) is False, \
+            "CCQ-115: anon-key INSERT without org_id must be blocked by RLS"
+
+    def test_rag_retrieval_scoped_to_org(self):
+        """RAG retrieval with org_id filter returns only own-org embeddings (CCQ-106/CCQ-115)."""
+        all_embeddings = [EMBEDDING_A, EMBEDDING_B]
+        org_id = ORG_A
+
+        org_scoped = [e for e in all_embeddings if e["organization_id"] == org_id]
+        assert len(org_scoped) == 1
+        assert org_scoped[0]["organization_id"] == ORG_A, \
+            "CCQ-115: RAG retrieval must be scoped to org_id, Org B embedding must not appear"

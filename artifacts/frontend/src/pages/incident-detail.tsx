@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,9 +98,10 @@ export default function IncidentDetail({ id }: { id: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { requireReAuth, modal } = useReAuth();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: incident, isLoading } = useQuery<Incident>({
-    queryKey: ["incident", id],
+  const { data: incident, isLoading } = useOrgQuery<Incident>(["incident", id], {
     queryFn: () => getIncident<Incident>(id),
   });
 
@@ -123,9 +126,9 @@ export default function IncidentDetail({ id }: { id: string }) {
       return updateIncident(id, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["incident", id] });
-      queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      queryClient.invalidateQueries({ queryKey: ["incident-stats"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident", id] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "incidents"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "incident-stats"] });
       toast({ title: "Incident updated" });
     },
     onError: () => toast({ title: "Update failed", variant: "destructive" }),

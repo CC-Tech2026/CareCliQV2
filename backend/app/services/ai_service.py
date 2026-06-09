@@ -790,8 +790,8 @@ Respond with JSON:
     }
 
 
-async def generate_note_embedding(text: str) -> list[float]:
-    """Generate a text-embedding-3-small vector for a clinical note."""
+async def generate_session_embedding(text: str) -> list[float]:
+    """Generate a text-embedding-3-small vector for a session note."""
     if not text or not text.strip():
         return []
     truncated = text[:8000]

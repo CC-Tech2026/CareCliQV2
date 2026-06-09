@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -58,12 +58,10 @@ export default function Incidents() {
   const [filterSeverity, setFilterSeverity] = useState("all");
   const [filterStatus,   setFilterStatus  ] = useState("all");
 
-  const { data: incidents = [], isLoading } = useQuery<Incident[]>({
-    queryKey: ["incidents"],
+  const { data: incidents = [], isLoading } = useOrgQuery<Incident[]>(["incidents"], {
     queryFn: () => listIncidents<Incident[]>(),
   });
-  const { data: stats } = useQuery<IncidentStats>({
-    queryKey: ["incident-stats"],
+  const { data: stats } = useOrgQuery<IncidentStats>(["incident-stats"], {
     queryFn: () => getIncidentStats<IncidentStats>(),
   });
 

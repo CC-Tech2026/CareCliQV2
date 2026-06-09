@@ -1,0 +1,59 @@
+name: CCQ-109 — Multi-Tenant Isolation Tests
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/**"
+      - "backend/tests/**"
+      - "backend/supabase/migrations/**"
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  isolation-tests:
+    name: Run multi-tenant isolation suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            fastapi "uvicorn[standard]" httpx \
+            openai anthropic \
+            "supabase>=2.29.0" \
+            "python-jose[cryptography]" \
+            pydantic "pydantic-settings>=2.0" \
+            python-dotenv "passlib[bcrypt]" \
+            python-multipart aiofiles \
+            pytest "pytest-asyncio>=0.23"
+
+      - name: Run isolation tests
+        working-directory: .
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'http://localhost:54321' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'test-key' }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'test-secret-32-chars-minimum-pad' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'sk-test' }}
+        run: |
+          mkdir -p test-results
+          pytest backend/tests/test_multitenant_isolation.py \
+                 backend/tests/test_ccq_108_report_isolation.py \
+                 -v --tb=short \
+                 --junit-xml=test-results/isolation.xml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolation-test-results
+          path: test-results/isolation.xml

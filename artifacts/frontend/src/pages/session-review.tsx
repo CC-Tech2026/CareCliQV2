@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
 import {
@@ -47,8 +49,7 @@ function RuleIcon({ passed, warning }: { passed: boolean; warning?: boolean }) {
 }
 
 function useAiSuggestions(sessionId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ["ai-compliance-explain", sessionId],
+  return useOrgQuery(["ai-compliance-explain", sessionId], {
     queryFn: () =>
       jsonFetch<{ explanation: string; suggestions: string[] }>(
         `/api/ai/explain-compliance`,
@@ -65,8 +66,7 @@ function useAiSuggestions(sessionId: string, enabled: boolean) {
 }
 
 function useSessionDetail(sessionId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ["session-detail-review", sessionId],
+  return useOrgQuery(["session-detail-review", sessionId], {
     queryFn: () => jsonFetch<Record<string, unknown>>(`/api/sessions/${sessionId}`),
     enabled,
     staleTime: 2 * 60 * 1000,
@@ -83,13 +83,15 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
   async function handleSend() {
     if (!note.trim()) return;
     setLoading(true);
     try {
       await flagSessionForReview(sessionId, true, note.trim());
-      qc.invalidateQueries({ queryKey: ["coordinator-flagged-sessions"] });
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
       toast({ title: "Session sent back", description: "The worker will see your note." });
       onSent();
     } catch {
@@ -153,6 +155,8 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   const [approving, setApproving]     = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
   const { data: detail }     = useSessionDetail(session.id, expanded);
   const { data: aiData, isFetching: aiFetching } = useAiSuggestions(session.id, showAi);
@@ -188,7 +192,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
     setApproving(true);
     try {
       await approveSession(session.id);
-      qc.invalidateQueries({ queryKey: ["coordinator-flagged-sessions"] });
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
       toast({ title: "Session approved", description: "Removed from the review queue." });
       onApproved();
     } catch {
@@ -354,9 +358,10 @@ export default function SessionReview() {
   const [bulkApproving, setBulkApproving] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: sessions = [], isLoading, refetch } = useQuery({
-    queryKey: ["coordinator-flagged-sessions"],
+  const { data: sessions = [], isLoading, refetch } = useOrgQuery(["coordinator-flagged-sessions"], {
     queryFn: getCoordinatorFlaggedSessions,
     staleTime: 30_000,
   });
@@ -386,7 +391,7 @@ export default function SessionReview() {
     const ids = Array.from(selected);
     try {
       await Promise.all(ids.map((id) => approveSession(id)));
-      qc.invalidateQueries({ queryKey: ["coordinator-flagged-sessions"] });
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
       toast({
         title: `${ids.length} session${ids.length > 1 ? "s" : ""} approved`,
         description: "Removed from the review queue.",

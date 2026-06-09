@@ -8,44 +8,58 @@ logger = logging.getLogger(__name__)
 TABLE = "alerts"
 
 
-async def get_all_alerts(limit: int = 50) -> List[dict]:
+async def get_all_alerts(org_id: Optional[str] = None, limit: int = 50) -> List[dict]:
     supabase = get_supabase_admin()
     try:
-        result = supabase.table(TABLE).select("*, patients(full_name)").order("created_at", desc=True).limit(limit).execute()
+        query = supabase.table(TABLE).select("*, patients(full_name)").order("created_at", desc=True).limit(limit)
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        result = query.execute()
         return [_normalize(r) for r in (result.data or [])]
     except Exception as e:
         logger.warning(f"alerts table not available: {e}")
         return []
 
 
-async def get_unread_alerts() -> List[dict]:
+async def get_unread_alerts(org_id: Optional[str] = None) -> List[dict]:
     supabase = get_supabase_admin()
     try:
-        result = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", "false").order("created_at", desc=True).execute()
+        query = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", "false").order("created_at", desc=True)
+        if org_id:
+            query = query.eq("organization_id", org_id)
+        result = query.execute()
         return [_normalize(r) for r in (result.data or [])]
     except Exception as e:
         logger.warning(f"alerts table not available: {e}")
         return []
 
 
-async def create_alert(data: AlertCreate) -> dict:
+async def create_alert(data: AlertCreate, org_id: Optional[str] = None) -> dict:
     supabase = get_supabase_admin()
     payload = data.model_dump(exclude_none=True)
     if "participant_id" in payload:
         payload["patient_id"] = payload.pop("participant_id")
+    if org_id:
+        payload["organization_id"] = org_id
     result = supabase.table(TABLE).insert(payload).execute()
     return result.data[0] if result.data else {}
 
 
-async def mark_alert_read(alert_id: str) -> Optional[dict]:
+async def mark_alert_read(alert_id: str, org_id: Optional[str] = None) -> Optional[dict]:
     supabase = get_supabase_admin()
-    result = supabase.table(TABLE).update({"is_read": True}).eq("id", alert_id).execute()
+    query = supabase.table(TABLE).update({"is_read": True}).eq("id", alert_id)
+    if org_id:
+        query = query.eq("organization_id", org_id)
+    result = query.execute()
     return result.data[0] if result.data else None
 
 
-async def mark_all_read() -> bool:
+async def mark_all_read(org_id: Optional[str] = None) -> bool:
     supabase = get_supabase_admin()
-    supabase.table(TABLE).update({"is_read": True}).eq("is_read", "false").execute()
+    query = supabase.table(TABLE).update({"is_read": True}).eq("is_read", "false")
+    if org_id:
+        query = query.eq("organization_id", org_id)
+    query.execute()
     return True
 
 

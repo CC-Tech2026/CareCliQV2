@@ -195,6 +195,23 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         if session.get("translation_status") in {"failed", "unsupported", "pending"} or not compliance_input_text:
             raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
 
+        # Per-message translation gate: block if any voice note message has an
+        # incomplete or failed translation (AC: CARECLIQV2 translation audit trail).
+        messages = await message_service.get_session_messages(session_id)
+        blocked_messages = [
+            m for m in messages
+            if m.get("translation_status") in {"failed", "pending"}
+        ]
+        if blocked_messages:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Session cannot be approved: {len(blocked_messages)} message(s) "
+                    "have an incomplete or failed translation. "
+                    "Resolve all translation errors before approving."
+                ),
+            )
+
         session_for_analysis = {
             **session,
             "notes": compliance_input_text,
@@ -400,14 +417,14 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         except Exception as side_e:
             logger.warning(f"Audit log failed (non-critical): {side_e}")
 
-        # Stage 7: Generate and store note embedding for semantic search (non-critical)
+        # Stage 7: Generate and store session embedding for semantic search (non-critical)
         try:
-            embedding_vector = await ai_service.generate_note_embedding(compliance_input_text)
+            embedding_vector = await ai_service.generate_session_embedding(compliance_input_text)
             if embedding_vector:
                 from ..services.supabase_client import get_supabase_admin as _get_admin
                 supabase_emb = _get_admin()
                 _org_id = session.get("organization_id") or get_user_organization_id(current_user)
-                supabase_emb.table("note_embeddings").upsert(
+                supabase_emb.table("session_embeddings").upsert(
                     {
                         "session_id": session_id,
                         "embedding": embedding_vector,
@@ -417,7 +434,7 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                     on_conflict="session_id",
                 ).execute()
         except Exception as emb_err:
-            logger.warning(f"Note embedding generation failed (non-critical): {emb_err}")
+            logger.warning(f"Session embedding generation failed (non-critical): {emb_err}")
 
         # 4. Record budget usage (non-critical)
         try:

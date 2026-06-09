@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { setAuthTokenGetter, setOrgIdGetter, customFetch } from "@workspace/api-client-react";
 import { apiFetch } from "@/lib/api-fetch";
-import { queryClient } from "@/lib/query-client";
+import { queryClient, setQueryOrgId } from "@/lib/query-client";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const persistSession = useCallback((newToken: string, newUser: AuthUser) => {
     _currentToken = newToken;
     _currentOrgId = newUser.organizationId ?? null;
+    setQueryOrgId(_currentOrgId);   // CCQ-113: scope cache keys to this org
     localStorage.setItem(TOKEN_KEY, newToken);
     localStorage.setItem(USER_KEY, JSON.stringify(newUser));
     setToken(newToken);
@@ -68,10 +69,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearSession = useCallback(() => {
     _currentToken = null;
     _currentOrgId = null;
+    setQueryOrgId(null);            // CCQ-113: clear org scope on logout
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(REAUTH_TOKEN_KEY);
-    // CCQ-113: clear query cache on logout so stale cross-org data is never served
+    // CCQ-113: purge entire cache so stale cross-org data is never served
     queryClient.clear();
     setToken(null);
     setUser(null);
@@ -99,6 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
         profile_photo_url: data.user.profile_photo_url ?? null,
       };
+      // CCQ-112c: block login for accounts not linked to an organisation
+      if (!authUser.organizationId) {
+        throw new Error("Organisation not found. Contact your administrator.");
+      }
       persistSession(data.access_token, authUser);
       return authUser;
     } finally {

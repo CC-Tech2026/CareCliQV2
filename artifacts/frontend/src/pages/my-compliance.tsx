@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { getMyCompliance } from "@/services/workerService";
@@ -25,7 +25,7 @@ function badgeClass(status?: string) {
 }
 
 export default function MyCompliance() {
-  const { data, isLoading, error } = useQuery({ queryKey: ["worker", "my-compliance"], queryFn: getMyCompliance });
+  const { data, isLoading, error } = useOrgQuery(["worker", "my-compliance"], { queryFn: getMyCompliance });
 
   if (isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading compliance...</div>;
   if (error) return <div className="p-6 text-sm font-bold text-red-600">{(error as Error).message}</div>;

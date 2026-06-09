@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import { useGetSession, useUpdateSession, useSaveSessionWithAI, useGetParticipant } from "@workspace/api-client-react";
@@ -335,8 +336,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const statusCfg = STATUS_CONFIG[claimStatus];
 
   // AI explanation query (fetch on demand for failed rules)
-  const { data: explanation, isFetching: explanationLoading, refetch: fetchExplanation } = useQuery({
-    queryKey: ["explainCompliance", sessionId, rulesResult?.failed_rules?.length],
+  const { data: explanation, isFetching: explanationLoading, refetch: fetchExplanation } = useOrgQuery(["explainCompliance", sessionId, rulesResult?.failed_rules?.length], {
     queryFn: async () => {
       const failed = rulesResult?.failed_rules ?? [];
       if (!failed.length) return null;

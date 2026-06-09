@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, ArrowRight, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
@@ -54,7 +54,7 @@ function ClientRow({ client }: { client: WorkerClient }) {
 }
 
 export default function MyClients() {
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["worker", "my-clients"], queryFn: getMyClients });
+  const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], { queryFn: getMyClients });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { ClipboardList } from "lucide-react";
 import { getMyClients, getMyClientNdisPlan } from "@/services/workerService";
 
@@ -9,7 +9,7 @@ const MUTED = "#7A6A9E";
 const BORDER = "#E2DEF2";
 
 function ClientPlan({ id }: { id: string }) {
-  const { data } = useQuery({ queryKey: ["worker", "plan", id], queryFn: () => getMyClientNdisPlan(id) });
+  const { data } = useOrgQuery(["worker", "plan", id], { queryFn: () => getMyClientNdisPlan(id) });
   return (
     <div className="space-y-2">
       {(data?.goals || []).slice(0, 3).map((goal, index) => (
@@ -23,7 +23,7 @@ function ClientPlan({ id }: { id: string }) {
 }
 
 export default function WorkerNdisPlan() {
-  const { data = [], isLoading, error } = useQuery({ queryKey: ["worker", "my-clients"], queryFn: getMyClients });
+  const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], { queryFn: getMyClients });
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   CalendarDays, ChevronDown, ChevronUp, Loader2,
   Search, Target, User,
@@ -70,6 +72,8 @@ function ScheduleReviewDialog({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
   const [reviewDate, setReviewDate] = useState(group.upcoming_review_date ?? "");
 
   const mutation = useMutation({
@@ -80,7 +84,7 @@ function ScheduleReviewDialog({
         body: JSON.stringify({ upcoming_review_date: reviewDate }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["coordinator-goals"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "coordinator-goals"] });
       toast({ title: "Review scheduled", description: `Set for ${reviewDate}` });
       onClose();
     },
@@ -226,8 +230,7 @@ export default function CoordinatorGoals() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
 
-  const { data = [], isLoading, error } = useQuery({
-    queryKey: ["coordinator-goals"],
+  const { data = [], isLoading, error } = useOrgQuery(["coordinator-goals"], {
     queryFn: getCoordinatorGoals,
   });
 

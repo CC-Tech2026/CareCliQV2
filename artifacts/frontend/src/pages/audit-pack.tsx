@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   AlertTriangle, FileCheck2, ShieldCheck, Download,
   TrendingUp, TrendingDown, Minus, Users, Flag,
@@ -39,10 +39,10 @@ type ExportTab = "summary" | "workers" | "flagged";
 export default function AuditPack() {
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
 
-  const compliance = useQuery({ queryKey: ["coordinator", "compliance-overview"], queryFn: getCoordinatorComplianceOverview });
-  const flags      = useQuery({ queryKey: ["coordinator", "rp-flags"],             queryFn: getCoordinatorRpFlags });
-  const workers    = useQuery({ queryKey: ["coordinator", "worker-stats"],          queryFn: getCoordinatorWorkerStats });
-  const flagged    = useQuery({ queryKey: ["coordinator", "flagged-sessions"],      queryFn: getCoordinatorFlaggedSessions });
+  const compliance = useOrgQuery(["coordinator", "compliance-overview"], { queryFn: getCoordinatorComplianceOverview });
+  const flags      = useOrgQuery(["coordinator", "rp-flags"],             { queryFn: getCoordinatorRpFlags });
+  const workers    = useOrgQuery(["coordinator", "worker-stats"],          { queryFn: getCoordinatorWorkerStats });
+  const flagged    = useOrgQuery(["coordinator", "flagged-sessions"],      { queryFn: getCoordinatorFlaggedSessions });
 
   const handleExport = useCallback(() => {
     const report = {

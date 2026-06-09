@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Plus, TrendingUp } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getRevenueReport } from "@/services/coordinatorService";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -421,7 +421,7 @@ export default function Billing() {
 }
 
 function RevenueReportPanel() {
-  const { data, isLoading } = useQuery({ queryKey: ["billing", "revenue-report"], queryFn: getRevenueReport });
+  const { data, isLoading } = useOrgQuery(["billing", "revenue-report"], { queryFn: getRevenueReport });
 
   function fmt(value?: number | null, currency = "AUD") {
     return new Intl.NumberFormat("en-AU", { style: "currency", currency }).format((value || 0) / 100);
