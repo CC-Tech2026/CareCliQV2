@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { useState, type ComponentType } from "react";
 import {
@@ -395,14 +396,12 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
 }
 
 function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
-  const { data: flaggedSessions = [] } = useQuery({
-    queryKey: ["coordinator-flagged-sessions"],
+  const { data: flaggedSessions = [] } = useOrgQuery(["coordinator-flagged-sessions"], {
     queryFn: getCoordinatorFlaggedSessions,
     staleTime: 60_000,
   });
 
-  const { data: credentialData } = useQuery({
-    queryKey: ["coordinator-credential-alerts"],
+  const { data: credentialData } = useOrgQuery(["coordinator-credential-alerts"], {
     queryFn: getCoordinatorCredentialAlerts,
     staleTime: 5 * 60_000,
   });
@@ -480,6 +479,8 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
   return (
     <>
@@ -521,8 +522,8 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         onInviteSent={() => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard", "coordinator"] });
-          queryClient.invalidateQueries({ queryKey: ["coordinator", "team"] });
+          queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "coordinator"] });
+          queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "team"] });
         }}
       />
     </>
@@ -547,13 +548,11 @@ function AlliedFallbackDashboard() {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const workerQuery = useQuery({
-    queryKey: ["dashboard", "worker"],
+  const workerQuery = useOrgQuery(["dashboard", "worker"], {
     queryFn: getWorkerDashboard,
     enabled: user?.role === "support_worker",
   });
-  const coordinatorQuery = useQuery({
-    queryKey: ["dashboard", "coordinator"],
+  const coordinatorQuery = useOrgQuery(["dashboard", "coordinator"], {
     queryFn: getCoordinatorDashboard,
     enabled: user?.role === "support_coordinator",
   });

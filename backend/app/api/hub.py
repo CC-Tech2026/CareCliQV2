@@ -38,12 +38,12 @@ async def get_org_info(current_user: dict = Depends(get_current_user)):
     try:
         res = (
             supabase.table("organizations")
-            .select("organization_name")
-            .eq("id", org_id)
+            .select("name")
+            .eq("organization_id", org_id)
             .single()
             .execute()
         )
-        return {"organization_name": (res.data or {}).get("organization_name")}
+        return {"organization_name": (res.data or {}).get("name")}
     except Exception:
         return {"organization_name": None}
 

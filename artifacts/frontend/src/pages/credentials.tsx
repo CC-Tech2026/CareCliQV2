@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { BadgeCheck, Bell, FileUp, Loader2, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,8 +144,7 @@ function BulkRemindersModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [customMessage, setCustomMessage] = useState("Your credential is expiring soon. Please update it to remain compliant.");
 
-  const { data: alertsData, isLoading: alertsLoading } = useQuery({
-    queryKey: ["coordinator-credential-alerts"],
+  const { data: alertsData, isLoading: alertsLoading } = useOrgQuery(["coordinator-credential-alerts"], {
     queryFn: getCoordinatorCredentialAlerts,
     enabled: open,
   });
@@ -254,10 +254,10 @@ export default function Credentials() {
   const { requireReAuth, modal } = useReAuth();
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
+  const orgId = user?.organizationId ?? "__no_org__";
   const credentialTypes = user?.role === "allied_health" ? ALLIED_TYPES : WORKER_TYPES;
-  const queryKey = isCoordinator ? ["credentials", "team"] : ["credentials", "me"];
-  const { data = [], isLoading, error } = useQuery({
-    queryKey,
+  const baseKey = isCoordinator ? ["credentials", "team"] : ["credentials", "me"];
+  const { data = [], isLoading, error } = useOrgQuery(baseKey, {
     queryFn: isCoordinator ? listTeamCredentials : listMyCredentials,
   });
   const [form, setForm] = useState({
@@ -277,7 +277,7 @@ export default function Credentials() {
     pending: data.filter((item) => item.status === "pending_review").length,
   }), [data]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [orgId, ...baseKey] });
 
   const createMutation = useMutation({
     mutationFn: createCredential,

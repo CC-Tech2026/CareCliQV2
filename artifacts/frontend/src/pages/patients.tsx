@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useForm } from "react-hook-form";
@@ -682,28 +683,23 @@ function SetupPlanDialog({
 // ---------------------------------------------------------------------------
 
 function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
-  const participantQuery = useQuery({
-    queryKey: ["participant", id],
+  const participantQuery = useOrgQuery(["participant", id], {
     queryFn: () => fetchJson<ParticipantRecord>(`/api/participants/${id}`),
   });
-  const sessionsQuery = useQuery({
-    queryKey: ["participant", id, "sessions"],
+  const sessionsQuery = useOrgQuery(["participant", id, "sessions"], {
     queryFn: () => fetchJson<SessionRecord[]>(`/api/sessions/participant/${id}`),
   });
-  const budgetQuery = useQuery({
-    queryKey: ["participant", id, "budget-summary"],
+  const budgetQuery = useOrgQuery(["participant", id, "budget-summary"], {
     queryFn: () => fetchJson<BudgetSummary>(`/api/participants/${id}/budget-summary`),
   });
-  const complianceQuery = useQuery({
-    queryKey: ["participant", id, "compliance-history"],
+  const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
     queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
 
   const { user } = useAuth();
   const isCoordinator = user?.role === "coordinator";
 
-  const restrictedQuery = useQuery({
-    queryKey: ["participant", id, "restricted-clinical"],
+  const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
     queryFn: () => fetchJson<{
       restricted_behavioural_notes: string | null;
       behaviour_support_plan: string | null;

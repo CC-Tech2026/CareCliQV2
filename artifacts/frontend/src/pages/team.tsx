@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   Mail, UserPlus, Users, ShieldCheck, AlertTriangle, Clock,
   FileText, CheckCircle2, XCircle, ToggleLeft, ToggleRight,
@@ -27,6 +28,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { jsonFetch } from "@/services/http";
+import { useAuth } from "@/contexts/AuthContext";
 
 const PLUM  = "#5533CC";
 const CORAL = "#F03060";
@@ -68,25 +70,27 @@ export default function Team() {
   const [assignWorker, setAssignWorker] = useState<WorkerStats | null>(null);
   const [assignPatientId, setAssignPatientId] = useState("");
 
-  const stats = useQuery({ queryKey: ["coordinator", "worker-stats"], queryFn: getCoordinatorWorkerStats });
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
+  const stats = useOrgQuery(["coordinator", "worker-stats"], { queryFn: getCoordinatorWorkerStats });
   const participants = useGetParticipants();
 
   const deactivateMut = useMutation({
     mutationFn: (id: string) => deactivateWorker(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["coordinator"] }); toast({ title: "Worker deactivated" }); setDeactivateTarget(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Worker deactivated" }); setDeactivateTarget(null); },
     onError: () => toast({ title: "Failed to deactivate", variant: "destructive" }),
   });
 
   const activateMut = useMutation({
     mutationFn: (id: string) => activateWorker(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["coordinator"] }); toast({ title: "Worker reactivated" }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Worker reactivated" }); },
     onError: () => toast({ title: "Failed to reactivate", variant: "destructive" }),
   });
 
   const assignMut = useMutation({
     mutationFn: ({ workerId, patientId }: { workerId: string; patientId: string }) =>
       assignWorkerToClient(workerId, patientId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["coordinator"] }); toast({ title: "Client assigned" }); setAssignWorker(null); setAssignPatientId(""); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Client assigned" }); setAssignWorker(null); setAssignPatientId(""); },
     onError: () => toast({ title: "Assignment failed", variant: "destructive" }),
   });
 

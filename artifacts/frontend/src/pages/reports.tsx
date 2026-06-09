@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
 import {
   useGetSessions, useGetParticipants, useGetUnreadAlerts,
@@ -129,8 +129,7 @@ function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title
 
 function ClinicalReportGenerator() {
   const { data: participants = [] } = useGetParticipants();
-  const { data: history = [], refetch } = useQuery<any[]>({
-    queryKey: ["report-history"],
+  const { data: history = [], refetch } = useOrgQuery<any[]>(["report-history"], {
     queryFn: async () => {
       const response = await authenticatedFetch("/api/reports/history");
       if (!response.ok) throw new Error("Could not load report history");
@@ -262,8 +261,8 @@ function HubSection() {
   const { data: sessions = [] } = useGetSessions({ limit: 100 });
   const { data: alerts = [] }   = useGetUnreadAlerts();
   const { data: rawOv }         = useGetComplianceOverview();
-  const { data: incidents = [] } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch<any[]>("/incidents") });
-  const { data: iStats }         = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch<any>("/incidents/stats") });
+  const { data: incidents = [] } = useOrgQuery<any[]>(["incidents"], { queryFn: () => apiFetch<any[]>("/incidents") });
+  const { data: iStats }         = useOrgQuery<any>(["incident-stats"], { queryFn: () => apiFetch<any>("/incidents/stats") });
 
   const ov = rawOv as any;
   const now = new Date();
@@ -450,8 +449,8 @@ function SessionReportsSection() {
 function IncidentReportsSection() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
-  const { data: incidents = [], isLoading } = useQuery<any[]>({ queryKey: ["incidents"], queryFn: () => apiFetch<any[]>("/incidents") });
-  const { data: stats } = useQuery<any>({ queryKey: ["incident-stats"], queryFn: () => apiFetch<any>("/incidents/stats") });
+  const { data: incidents = [], isLoading } = useOrgQuery<any[]>(["incidents"], { queryFn: () => apiFetch<any[]>("/incidents") });
+  const { data: stats } = useOrgQuery<any>(["incident-stats"], { queryFn: () => apiFetch<any>("/incidents/stats") });
 
   const filtered = useMemo(() => (incidents as any[]).filter(i => {
     if (!search) return true;

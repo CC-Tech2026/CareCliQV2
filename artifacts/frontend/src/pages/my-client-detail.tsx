@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAuth } from "@/contexts/AuthContext";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { useLocation } from "wouter";
 import {
@@ -1501,10 +1503,11 @@ export default function MyClientDetail({ id }: { id: string }) {
   const dictationBaseRef = useRef("");
   const dictationFinalRef = useRef("");
   const queryClient = useQueryClient();
-  const detailQuery = useQuery({ queryKey: ["worker", "my-client", id], queryFn: () => getMyClientDetail(id) });
-  const planQuery = useQuery({ queryKey: ["worker", "my-client", id, "plan"], queryFn: () => getMyClientNdisPlan(id) });
-  const incidentsQuery = useQuery({
-    queryKey: ["worker", "participant-incidents", id],
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
+  const detailQuery = useOrgQuery(["worker", "my-client", id], { queryFn: () => getMyClientDetail(id) });
+  const planQuery = useOrgQuery(["worker", "my-client", id, "plan"], { queryFn: () => getMyClientNdisPlan(id) });
+  const incidentsQuery = useOrgQuery(["worker", "participant-incidents", id], {
     queryFn: () => getIncidentsByParticipant<Array<Record<string, unknown>>>(id),
     enabled: !!id,
   });
@@ -1535,8 +1538,8 @@ export default function MyClientDetail({ id }: { id: string }) {
       stopSessionDictation();
       setComposerError("");
       setSessionComposerOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["worker", "my-client", id] });
-      queryClient.invalidateQueries({ queryKey: ["worker", "my-compliance"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-client", id] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
       toast({ title: "Draft saved", description: "The session draft is saved against this client." });
     },
     onError: (error) => {
@@ -1548,8 +1551,8 @@ export default function MyClientDetail({ id }: { id: string }) {
     mutationFn: () => createMyClientNote(id, { notes: noteText }),
     onSuccess: () => {
       setNoteText("");
-      queryClient.invalidateQueries({ queryKey: ["worker", "my-client", id] });
-      queryClient.invalidateQueries({ queryKey: ["worker", "my-compliance"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-client", id] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
     },
   });
 

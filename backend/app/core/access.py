@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 
 COORDINATOR_ROLES = {"support_coordinator"}
@@ -342,6 +342,23 @@ def get_coordinator_team_ids(coordinator_user: dict, supabase) -> list[str]:
         return [str(row["id"]) for row in (all_workers.data or []) if row.get("id")]
     except Exception:
         return []
+
+
+def get_org_id(request: Request) -> str:
+    """FastAPI Depends() that returns the organisation_id from request state.
+
+    Raises HTTP 403 if the middleware did not inject an org claim (i.e. the
+    request is authenticated but the JWT has no organisation_id — this means
+    the user was created before the CCQ-110 hook went live or their account
+    is misconfigured).
+    """
+    org_id: Optional[str] = getattr(request.state, "organisation_id", None)
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organisation not found. Contact your administrator.",
+        )
+    return org_id
 
 
 # Backward-compatible aliases used by existing services.

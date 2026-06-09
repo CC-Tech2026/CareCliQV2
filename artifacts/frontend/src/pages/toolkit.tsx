@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { AlertTriangle, Loader2, PackagePlus, RotateCcw, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,13 +83,12 @@ export default function Toolkit() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
-  const queryKey = isCoordinator ? ["toolkit", "team"] : ["toolkit", "me"];
-  const { data, isLoading, error } = useQuery({
-    queryKey,
+  const orgId = user?.organizationId ?? "__no_org__";
+  const baseKey = isCoordinator ? ["toolkit", "team"] : ["toolkit", "me"];
+  const { data, isLoading, error } = useOrgQuery(baseKey, {
     queryFn: isCoordinator ? getTeamToolkit : getMyToolkit,
   });
-  const { data: restockRequests = [] } = useQuery({
-    queryKey: ["toolkit", "restock-requests"],
+  const { data: restockRequests = [] } = useOrgQuery(["toolkit", "restock-requests"], {
     queryFn: listRestockRequests,
     enabled: isCoordinator,
   });
@@ -109,8 +109,8 @@ export default function Toolkit() {
   }), [items]);
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey });
-    queryClient.invalidateQueries({ queryKey: ["toolkit", "restock-requests"] });
+    queryClient.invalidateQueries({ queryKey: [orgId, ...baseKey] });
+    queryClient.invalidateQueries({ queryKey: [orgId, "toolkit", "restock-requests"] });
   };
 
   const createMutation = useMutation({

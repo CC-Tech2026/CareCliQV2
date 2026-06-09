@@ -40,12 +40,12 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/docs",
     "/openapi.json",
     "/redoc",
-    "/",
 )
 
 
 def _is_public(path: str) -> bool:
-    return any(path.startswith(prefix) for prefix in _PUBLIC_PREFIXES)
+    # Root "/" is exact-match only — prefix-matching "/" would bypass everything.
+    return path == "/" or any(path.startswith(prefix) for prefix in _PUBLIC_PREFIXES)
 
 
 class OrgContextMiddleware(BaseHTTPMiddleware):
@@ -56,8 +56,10 @@ class OrgContextMiddleware(BaseHTTPMiddleware):
     always exempt.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, _decode_fn=None) -> None:
         super().__init__(app)
+        # _decode_fn: injectable for tests; production always uses the real decoder.
+        self._decode_fn = _decode_fn if _decode_fn is not None else decode_access_token
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
@@ -75,7 +77,7 @@ class OrgContextMiddleware(BaseHTTPMiddleware):
             request.state.organisation_id = None
             return await call_next(request)
 
-        payload = decode_access_token(token)
+        payload = self._decode_fn(token)
         if payload is None:
             # Invalid / expired token — get_current_user will handle 401.
             request.state.organisation_id = None
