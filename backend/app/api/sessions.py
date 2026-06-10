@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from ..services.compliance_engine import run_compliance_check, check_budget_not_
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
+from ..services.embedding_pipeline import run_session_embedding_pipeline
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
 from ..core.access import get_user_organization_id
@@ -185,6 +186,7 @@ async def update_session(session_id: str, body: SessionUpdate, current_user: dic
 @router.post("/{session_id}/save-with-ai")
 async def save_session_with_ai(
     session_id: str,
+    background_tasks: BackgroundTasks,
     body: Optional[SaveWithAIBody] = None,
     current_user: dict = Depends(get_current_user),
 ):
@@ -467,24 +469,19 @@ async def save_session_with_ai(
         except Exception as side_e:
             logger.warning(f"Audit log failed (non-critical): {side_e}")
 
-        # Stage 7: Generate and store session embedding for semantic search (non-critical)
-        try:
-            embedding_vector = await ai_service.generate_session_embedding(compliance_input_text)
-            if embedding_vector:
-                from ..services.supabase_client import get_supabase_admin as _get_admin
-                supabase_emb = _get_admin()
-                _org_id = session.get("organization_id") or get_user_organization_id(current_user)
-                supabase_emb.table("session_embeddings").upsert(
-                    {
-                        "session_id": session_id,
-                        "embedding": embedding_vector,
-                        "model": "text-embedding-3-small",
-                        "organization_id": _org_id,
-                    },
-                    on_conflict="session_id",
-                ).execute()
-        except Exception as emb_err:
-            logger.warning(f"Session embedding generation failed (non-critical): {emb_err}")
+        # Stage 7: Enqueue embedding pipeline as background task (CARECLIQV2-30).
+        # Only embed when the session reaches "completed" status so partial/blocked
+        # notes never pollute the vector store.
+        if updates.get("status") == "completed" and compliance_input_text:
+            _org_id = session.get("organization_id") or get_user_organization_id(current_user)
+            background_tasks.add_task(
+                run_session_embedding_pipeline,
+                session_id=session_id,
+                organization_id=_org_id,
+                text=compliance_input_text,
+                participant_id=participant_id,
+                worker_id=session.get("worker_id"),
+            )
 
         # 4. Record budget usage (non-critical)
         try:

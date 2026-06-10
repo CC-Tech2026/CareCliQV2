@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from typing import Optional
 from ..core.access import is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
 from .security import require_recent_reauth
 from ..schemas.incident import IncidentCreate, IncidentUpdate
 from ..services import audit_service, incident_service, participant_service, session_service
+from ..services.embedding_pipeline import run_incident_embedding_pipeline
 import logging
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ async def get_incident(incident_id: str, user: dict = Depends(get_current_user))
 @router.post("", status_code=201)
 async def create_incident(
     body: IncidentCreate,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
 ):
     try:
@@ -95,6 +97,32 @@ async def create_incident(
             organization_id=org_id,
             after_state={"id": result.get("id"), "title": result.get("title"), "severity": result.get("severity")},
         )
+
+        # Enqueue incident text embedding (CARECLIQV2-30).
+        # Embed title + description + worker_actions so the incident is
+        # discoverable via semantic search from the RAG context retriever.
+        incident_id = result.get("id", "")
+        incident_text = " ".join(
+            filter(
+                None,
+                [
+                    result.get("title", ""),
+                    result.get("description", "") or body.description,
+                    result.get("worker_actions", "") or getattr(body, "worker_actions", None),
+                ],
+            )
+        ).strip()
+        if incident_id and incident_text and body.session_id:
+            background_tasks.add_task(
+                run_incident_embedding_pipeline,
+                incident_id=incident_id,
+                session_id=body.session_id,
+                organization_id=org_id,
+                text=incident_text,
+                participant_id=str(body.participant_id) if body.participant_id else None,
+                worker_id=user.get("sub"),
+            )
+
         return result
     except ValueError as e:
         if "Compliance blocked" in str(e):
