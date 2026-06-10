@@ -41,18 +41,18 @@ class ComplianceBlockedError(ValueError):
 # ---------------------------------------------------------------------------
 
 _RULE_DEFAULTS: dict[str, dict] = {
-    "R1":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R2":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R3":  {"severity": "medium", "is_active": True, "is_blocking": False},
-    "R4":  {"severity": "medium", "is_active": True, "is_blocking": True},
-    "R5":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R6":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R7":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R8":  {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R9":  {"severity": "high",   "is_active": True, "is_blocking": False},
-    "R10": {"severity": "high",   "is_active": True, "is_blocking": True},
-    "R11": {"severity": "medium", "is_active": True, "is_blocking": False},
-    "R12": {"severity": "medium", "is_active": True, "is_blocking": False},
+    "R1":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "block"},
+    "R2":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "warn"},
+    "R3":  {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
+    "R4":  {"severity": "medium", "is_active": True, "is_blocking": True,  "enforcement_tier": "block"},
+    "R5":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "warn"},
+    "R6":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "info"},
+    "R7":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "warn"},
+    "R8":  {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "block"},
+    "R9":  {"severity": "high",   "is_active": True, "is_blocking": False, "enforcement_tier": "warn"},
+    "R10": {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "block"},
+    "R11": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
+    "R12": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
 }
 
 
@@ -82,7 +82,7 @@ def load_rule_configs() -> dict[str, dict]:
         supabase = get_supabase_admin()
         resp = (
             supabase.table("compliance_rules")
-            .select("rule_code,severity,is_active,is_blocking,config,category,guidance_text")
+            .select("rule_code,severity,is_active,is_blocking,enforcement_tier,config,category,guidance_text")
             .execute()
         )
         if resp.data:
@@ -1124,6 +1124,9 @@ def run_compliance_check(
             result["severity"] = row["severity"]
 
         result["is_blocking"] = row.get("is_blocking", False)
+        # enforcement_tier: DB value takes precedence, fallback to _RULE_DEFAULTS
+        default_tier = _RULE_DEFAULTS.get(rule_code, {}).get("enforcement_tier", "block")
+        result["enforcement_tier"] = row.get("enforcement_tier") or default_tier
         rules.append(result)
 
     total = len(rules)

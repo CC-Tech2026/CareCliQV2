@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
-import { useGetSession, useUpdateSession, useSaveSessionWithAI, useGetParticipant } from "@workspace/api-client-react";
+import { useGetSession, useUpdateSession, useGetParticipant } from "@workspace/api-client-react";
 import type { Session } from "@workspace/api-client-react";
 import { exportSingleSessionPDF } from "@/lib/pdf-export";
 
@@ -240,7 +240,6 @@ export default function SessionDetail({ id }: { id?: string }) {
   });
 
   const updateSession = useUpdateSession();
-  const saveWithAI = useSaveSessionWithAI();
 
   const [notes, setNotes] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -251,6 +250,8 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [showExplanation, setShowExplanation] = useState(false);
   const [showRpAcknowledge, setShowRpAcknowledge] = useState(false);
   const [rpAcknowledged, setRpAcknowledged] = useState(false);
+  const [acknowledgedWarnRules, setAcknowledgedWarnRules] = useState<Set<string>>(new Set());
+  const [isAISaving, setIsAISaving] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
   const { user } = useAuth();
@@ -298,6 +299,24 @@ export default function SessionDetail({ id }: { id?: string }) {
   }, [session?.ai_insights]);
 
   const rulesResult = aiInsights?.rules_result ?? null;
+
+  // Group rules by enforcement_tier for the three-section panel.
+  // Rules without enforcement_tier fall back to is_blocking for backward compat.
+  type RuleResult = {
+    rule: string; label?: string; status: string; message?: string;
+    severity?: string; enforcement_tier?: string; is_blocking?: boolean;
+  };
+  const _allRules: RuleResult[] = Array.isArray(rulesResult?.rules) ? rulesResult.rules : [];
+  const _effectiveTier = (r: RuleResult) => {
+    if (r.enforcement_tier === "block" || r.enforcement_tier === "warn" || r.enforcement_tier === "info") return r.enforcement_tier;
+    return r.is_blocking ? "block" : "info";
+  };
+  const blockFailures = _allRules.filter(r => r.status === "fail" && _effectiveTier(r) === "block");
+  const warnFailures  = _allRules.filter(r => r.status === "fail" && _effectiveTier(r) === "warn");
+  const infoFailures  = _allRules.filter(r => r.status === "fail" && _effectiveTier(r) === "info");
+  const passingRules  = _allRules.filter(r => r.status === "pass");
+  const unackedWarnCount = warnFailures.filter(r => !acknowledgedWarnRules.has(r.rule)).length;
+  const hasBlockers = blockFailures.length > 0;
 
   // Stage 2: 3-second polling for live compliance (catches time-based rules)
   useEffect(() => {
@@ -413,16 +432,38 @@ export default function SessionDetail({ id }: { id?: string }) {
     }
   };
 
-  const handleAIAnalysis = () => {
+  const handleAIAnalysis = async () => {
     if (!sessionId) return;
-    saveWithAI.mutate({ sessionId }, {
-      onSuccess: () => {
-        toast({ title: "AI Analysis complete", description: "Compliance score and insights updated." });
-        refetch();
-        setShowExplanation(false);
-      },
-      onError: () => toast({ title: "AI Analysis failed", variant: "destructive" }),
-    });
+    setIsAISaving(true);
+    try {
+      const res = await apiFetch(`/api/sessions/${sessionId}/save-with-ai`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acknowledged_warn_rules: Array.from(acknowledgedWarnRules) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = data?.detail ?? {};
+        if (detail?.code === "COMPLIANCE_WARN_UNACKNOWLEDGED") {
+          toast({
+            title: "Acknowledgement required",
+            description: `Tick the checkbox for each issue in the compliance panel before saving.`,
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "AI Analysis failed", description: detail?.message ?? "Please try again.", variant: "destructive" });
+        }
+        return;
+      }
+      toast({ title: "AI Analysis complete", description: "Compliance score and insights updated." });
+      refetch();
+      setShowExplanation(false);
+      setAcknowledgedWarnRules(new Set());
+    } catch {
+      toast({ title: "AI Analysis failed", variant: "destructive" });
+    } finally {
+      setIsAISaving(false);
+    }
   };
 
   const handleExportAudit = async () => {
@@ -705,13 +746,14 @@ export default function SessionDetail({ id }: { id?: string }) {
             Re-check
           </Button>
           <Button
-            className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity"
+            className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
             onClick={handleAIAnalysis}
-            disabled={saveWithAI.isPending}
+            disabled={isAISaving || hasBlockers}
+            title={hasBlockers ? "Fix critical issues before running AI analysis" : undefined}
             data-testid="button-ai-analyze"
           >
-            {saveWithAI.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {isAISaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Analyze with AI
           </Button>
         </div>
@@ -1026,30 +1068,111 @@ export default function SessionDetail({ id }: { id?: string }) {
                 </div>
               )}
 
-              {/* Rules Verification Matrix */}
+              {/* Three-tier compliance panel */}
               {rulesResult && (
-                <div className="pt-2 space-y-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Rule Parameters Check</p>
-                  <div className="space-y-2 text-xs">
-                    {Array.isArray(rulesResult.passed_rules) && rulesResult.passed_rules.map((rule: { rule: string } | string) => {
-                      const ruleName = typeof rule === "string" ? rule : (rule?.rule ?? String(rule));
-                      return (
-                        <div key={ruleName} className="flex items-center gap-2 text-slate-600 bg-slate-50 p-1.5 rounded-lg">
-                          <RuleIcon status="pass" />
-                          <span className="capitalize">{ruleName.replace(/_/g, " ")}</span>
+                <div className="pt-2 space-y-3">
+
+                  {/* Block tier — Must Fix */}
+                  {blockFailures.length > 0 && (
+                    <div className="rounded-xl border border-red-200 bg-red-50/60 overflow-hidden">
+                      <div className="px-3 py-2 bg-red-100/60 border-b border-red-200 flex items-center gap-1.5">
+                        <XCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-red-700">Must Fix</p>
+                        <span className="ml-auto text-[10px] font-semibold text-red-500 bg-red-100 rounded-full px-1.5 py-0.5">{blockFailures.length}</span>
+                      </div>
+                      <div className="p-2 space-y-1.5">
+                        {blockFailures.map(r => (
+                          <div key={r.rule} className="flex items-start gap-2 text-xs text-red-800 px-1">
+                            <XCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-red-500" />
+                            <div>
+                              <span className="font-semibold">{r.label ?? r.rule}</span>
+                              {r.message && <p className="text-red-600 text-[11px] mt-0.5 leading-snug">{r.message}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warn tier — Acknowledge to Proceed */}
+                  {warnFailures.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/50 overflow-hidden">
+                      <div className="px-3 py-2 bg-amber-100/60 border-b border-amber-200 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Acknowledge to Proceed</p>
+                        <span className="ml-auto text-[10px] font-semibold text-amber-600 bg-amber-100 rounded-full px-1.5 py-0.5">
+                          {warnFailures.filter(r => acknowledgedWarnRules.has(r.rule)).length}/{warnFailures.length}
+                        </span>
+                      </div>
+                      <div className="p-2 space-y-2">
+                        {warnFailures.map(r => {
+                          const acked = acknowledgedWarnRules.has(r.rule);
+                          return (
+                            <label key={r.rule} className={`flex items-start gap-2.5 text-xs cursor-pointer rounded-lg px-2 py-1.5 transition-colors ${acked ? "bg-amber-100/60" : "bg-white/60"}`}>
+                              <input
+                                type="checkbox"
+                                checked={acked}
+                                onChange={() => setAcknowledgedWarnRules(prev => {
+                                  const next = new Set(prev);
+                                  acked ? next.delete(r.rule) : next.add(r.rule);
+                                  return next;
+                                })}
+                                className="mt-0.5 h-3.5 w-3.5 accent-amber-600 shrink-0 cursor-pointer"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className={`font-semibold ${acked ? "text-amber-700 line-through" : "text-amber-800"}`}>
+                                  {r.label ?? r.rule}
+                                </span>
+                                {r.message && <p className="text-amber-700 text-[11px] mt-0.5 leading-snug">{r.message}</p>}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {unackedWarnCount > 0 && (
+                        <div className="px-3 py-2 border-t border-amber-200 bg-amber-50/80">
+                          <p className="text-[10px] text-amber-700">Tick each issue above to acknowledge before running AI analysis.</p>
                         </div>
-                      );
-                    })}
-                    {Array.isArray(rulesResult.failed_rules) && rulesResult.failed_rules.map((rule: { rule: string } | string) => {
-                      const ruleName = typeof rule === "string" ? rule : (rule?.rule ?? String(rule));
-                      return (
-                        <div key={ruleName} className="flex items-center gap-2 text-red-800 bg-red-50/60 p-1.5 rounded-lg">
-                          <RuleIcon status="fail" />
-                          <span className="capitalize font-medium">{ruleName.replace(/_/g, " ")}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Info tier — Suggestions */}
+                  {infoFailures.length > 0 && (
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/30 overflow-hidden">
+                      <div className="px-3 py-2 bg-blue-50/60 border-b border-blue-100 flex items-center gap-1.5">
+                        <Lightbulb className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">Suggestions</p>
+                        <span className="ml-auto text-[10px] font-semibold text-blue-400 bg-blue-100 rounded-full px-1.5 py-0.5">{infoFailures.length}</span>
+                      </div>
+                      <div className="p-2 space-y-1.5">
+                        {infoFailures.map(r => (
+                          <div key={r.rule} className="flex items-start gap-2 text-xs text-blue-700 px-1">
+                            <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-400" />
+                            <div>
+                              <span className="font-medium">{r.label ?? r.rule}</span>
+                              {r.message && <p className="text-blue-500 text-[11px] mt-0.5 leading-snug">{r.message}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Passing rules */}
+                  {passingRules.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">Passed</p>
+                      <div className="space-y-1">
+                        {passingRules.map(r => (
+                          <div key={r.rule} className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50/80 px-2 py-1.5 rounded-lg">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span>{r.label ?? r.rule}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

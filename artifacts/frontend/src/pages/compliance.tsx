@@ -58,6 +58,30 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Derives which severity tier caused a session's compliance flag.
+// non_compliant + incomplete session = hard-blocked by a Block-tier rule.
+// at_risk + completed session = worker acknowledged Warn-tier rules.
+// at_risk + incomplete = flagged, not yet submitted.
+function TierChip({ complianceStatus, sessionStatus }: { complianceStatus: string; sessionStatus?: string }) {
+  if (complianceStatus === "non_compliant" && sessionStatus !== "completed") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 h-4 rounded-full leading-none"
+        style={{ background: "rgba(239,68,68,0.10)", color: "#DC2626" }}>
+        Blocked
+      </span>
+    );
+  }
+  if (complianceStatus === "at_risk" && sessionStatus === "completed") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 h-4 rounded-full leading-none"
+        style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}>
+        Warned
+      </span>
+    );
+  }
+  return null;
+}
+
 function aggregateFailingRules(sessions: ExtendedReportItem[]) {
   const counts: Record<string, number> = {};
   for (const s of sessions) {
@@ -391,7 +415,12 @@ export default function Compliance() {
                             <span className="text-[13px] font-medium" style={{ color: T3 }}>—</span>
                           )}
                         </td>
-                        <td className="px-5 py-3.5 whitespace-nowrap"><StatusBadge status={status} /></td>
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <StatusBadge status={status} />
+                            <TierChip complianceStatus={status} sessionStatus={item.status} />
+                          </div>
+                        </td>
                         <td className="px-5 py-3.5 whitespace-nowrap">
                           <div className="flex items-center gap-2 h-5">
                             {item.checks ? (

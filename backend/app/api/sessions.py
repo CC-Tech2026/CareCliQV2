@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timezone
+from pydantic import BaseModel
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
 from ..services import session_service, ai_service, alert_service, funding_service, message_service
 from ..services.compliance_engine import run_compliance_check, check_budget_not_exceeded
@@ -34,6 +35,18 @@ ALLOWED_ATTACHMENT_TYPES = {
     "audio/wav",
     "audio/webm",
 }
+
+
+class SaveWithAIBody(BaseModel):
+    acknowledged_warn_rules: List[str] = []
+
+
+def _effective_tier(rule: dict) -> str:
+    """Return enforcement_tier for a rule result, falling back to is_blocking."""
+    tier = rule.get("enforcement_tier")
+    if tier in ("block", "warn", "info"):
+        return tier
+    return "block" if rule.get("is_blocking") else "info"
 
 
 def _attachment_url(bucket, path: str) -> Optional[str]:
@@ -170,7 +183,11 @@ async def update_session(session_id: str, body: SessionUpdate, current_user: dic
 
 
 @router.post("/{session_id}/save-with-ai")
-async def save_session_with_ai(session_id: str, current_user: dict = Depends(get_current_user)):
+async def save_session_with_ai(
+    session_id: str,
+    body: Optional[SaveWithAIBody] = None,
+    current_user: dict = Depends(get_current_user),
+):
     session = await session_service.get_session_by_id(session_id, current_user)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -229,12 +246,17 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         custom_physical_types = await get_physical_exam_session_types()
         rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
 
-        # Identify rules that hard-block approval (is_blocking=True + status=fail).
-        # These prevent status from advancing to "completed" regardless of the blended score.
-        blocking_failures = [
-            r for r in rules_result.get("rules", [])
-            if r.get("status") == "fail" and r.get("is_blocking", False)
-        ]
+        # Three-tier failure classification.
+        # block  → hard-stop; status never advances regardless of acknowledgements
+        # warn   → worker must acknowledge each failing rule before save is allowed
+        # info   → logged, scored, never gated
+        acknowledged = set(body.acknowledged_warn_rules if body else [])
+        _failing = [r for r in rules_result.get("rules", []) if r.get("status") == "fail"]
+        block_failures      = [r for r in _failing if _effective_tier(r) == "block"]
+        warn_failures       = [r for r in _failing if _effective_tier(r) == "warn"]
+        unacked_warn_failures = [r for r in warn_failures if r["rule"] not in acknowledged]
+        # Keep backward-compat alias so existing callers that check blocking_failures still work
+        blocking_failures = block_failures
 
         # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
@@ -264,10 +286,14 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "assessment": (analysis.get("compliance") or {}).get("recommendations", []),
         }
 
-        # Derive compliance status from score, then override if blocking rules failed.
-        # A blocking failure forces non_compliant regardless of the numeric score.
-        if blocking_failures:
+        # Derive compliance status from tier failures, then score.
+        # block failures → non_compliant (cannot be saved)
+        # warn failures (even acked) → at_risk (coordinator can see it was acknowledged)
+        # score-only → compliant / at_risk / non_compliant
+        if block_failures:
             compliance_status = "non_compliant"
+        elif warn_failures:
+            compliance_status = "at_risk"
         elif blended_score >= 85:
             compliance_status = "compliant"
         elif blended_score >= 60:
@@ -346,11 +372,13 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
-        # Only advance to "completed" when no blocking rules failed.
-        # Compliance data is always persisted so the worker and coordinator
-        # can see the score and which rules failed even when saving is blocked.
-        if not blocking_failures:
+        # Only advance to "completed" when no block-tier failures AND all warn-tier
+        # failures have been explicitly acknowledged by the worker.
+        if not block_failures and not unacked_warn_failures:
             updates["status"] = "completed"
+        # Persist acknowledged warn rules for the coordinator audit trail.
+        if acknowledged:
+            updates["acknowledged_warn_rules"] = json.dumps(sorted(acknowledged))
 
         updated = await session_service.update_session(session_id, updates, current_user)
 
@@ -382,6 +410,7 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                         "status": rule.get("status"),
                         "message": rule.get("message"),
                         "severity": rule.get("severity"),
+                        "enforcement_tier": rule.get("enforcement_tier"),
                         "checked_at": compliance_checked_at,
                     },
                     on_conflict="session_id,rule_id",
@@ -389,10 +418,11 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
         except Exception as rp_persist_err:
             logger.warning(f"Compliance rule/RP flag persistence failed (non-critical): {rp_persist_err}")
 
-        # Gate approval: if any blocking rule failed, return 422 now.
-        # Compliance data and per-rule results have already been persisted above
-        # so the worker and coordinator can review the score and failure details.
-        if blocking_failures:
+        # Gate approval: block-tier failures always stop the save.
+        # Warn-tier failures stop the save until each failing rule is acknowledged.
+        # Compliance data has already been persisted above so both the worker
+        # and coordinator can review the score and failure details.
+        if block_failures:
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -403,8 +433,28 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                             "rule": r["rule"],
                             "label": r.get("label", r["rule"]),
                             "message": r.get("message", ""),
+                            "enforcement_tier": "block",
                         }
-                        for r in blocking_failures
+                        for r in block_failures
+                    ],
+                    "compliance_score": blended_score,
+                },
+            )
+
+        if unacked_warn_failures:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "COMPLIANCE_WARN_UNACKNOWLEDGED",
+                    "message": "Note requires acknowledgement: one or more rules need your confirmation before saving.",
+                    "warn_rules": [
+                        {
+                            "rule": r["rule"],
+                            "label": r.get("label", r["rule"]),
+                            "message": r.get("message", ""),
+                            "enforcement_tier": "warn",
+                        }
+                        for r in unacked_warn_failures
                     ],
                     "compliance_score": blended_score,
                 },
@@ -541,6 +591,9 @@ async def save_session_with_ai(session_id: str, current_user: dict = Depends(get
                 **ai_compliance,
                 "score": blended_score,
                 "rules_result": rules_result,
+                "block_failures": block_failures,
+                "warn_failures": warn_failures,
+                "acknowledged_warn_rules": sorted(acknowledged),
                 "rp_flags": rp_flags,
                 "restrictive_practice_detected": rp_detected,
                 "restrictive_practice_types": rp_categories,
