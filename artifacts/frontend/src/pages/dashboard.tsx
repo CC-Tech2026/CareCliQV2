@@ -3,6 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { useState, type ComponentType } from "react";
+import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
+import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
+import { getWorkerComplianceDetail } from "@/services/workerService";
 import {
   AlertTriangle,
   CalendarDays,
@@ -84,39 +87,6 @@ function DashboardStatCard({
       <p className="mt-3 text-sm font-medium" style={{ color: captionColor }}>
         {caption}
       </p>
-    </section>
-  );
-}
-
-function ComplianceScoreCard({
-  score,
-  status,
-  title = "Compliance Score",
-}: {
-  score: number;
-  status: string;
-  title?: string;
-}) {
-  const pct = Math.max(0, Math.min(100, score || 0));
-  return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="flex items-center justify-between gap-5">
-        <div>
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Calculated from completed legal records.</p>
-          <span className={`mt-4 inline-flex rounded-full border px-3 py-1 text-xs font-bold capitalize ${statusTone(status)}`}>
-            {status.replace("_", " ")}
-          </span>
-        </div>
-        <div
-          className="relative grid h-28 w-28 place-items-center rounded-full"
-          style={{ background: `conic-gradient(${PLUM} ${pct * 3.6}deg, #EEEAFB 0deg)` }}
-        >
-          <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
-            <span className="text-2xl font-black" style={{ color: PLUM }}>{pct}%</span>
-          </div>
-        </div>
-      </div>
     </section>
   );
 }
@@ -360,7 +330,13 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
 }
 
 function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
+  const [trendDays, setTrendDays] = useState<7 | 30>(7);
+  const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
+    queryFn: () => getWorkerComplianceDetail(trendDays),
+    staleTime: 30_000,
+  });
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
+  const complianceDetail = complianceQuery.data;
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -382,8 +358,33 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         <DashboardStatCard label="Pending Fixes" value={data.pending_compliance_fixes.length} caption="Items needing review" icon={AlertTriangle} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <ComplianceScoreCard score={data.compliance_score} status={data.compliance_status} title="My Compliance Score" />
+      {complianceQuery.isLoading ? (
+        <div className="rounded-lg border bg-white p-6 text-sm font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
+          Loading compliance details...
+        </div>
+      ) : complianceDetail ? (
+        <ComplianceDetailCard
+          score={complianceDetail.score}
+          status={complianceDetail.status}
+          rules={complianceDetail.rules}
+          failedRules={complianceDetail.failed_rules}
+          title="My Compliance Score"
+          compact
+        />
+      ) : (
+        <div className="rounded-lg border bg-white p-6 text-sm font-bold text-red-600 shadow-sm" style={{ borderColor: BORDER }}>
+          Could not load compliance details.
+        </div>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        {complianceDetail && (
+          <ComplianceTrendChart
+            data={complianceDetail.trend}
+            days={trendDays}
+            onDaysChange={setTrendDays}
+          />
+        )}
         <ClientListCard clients={todayClients} />
       </div>
 

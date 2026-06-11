@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
-import { getMyCompliance } from "@/services/workerService";
+import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
+import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
+import { getMyCompliance, getWorkerComplianceDetail } from "@/services/workerService";
 
 const PLUM = "#5533CC";
 const CORAL = "#F03060";
@@ -25,10 +28,19 @@ function badgeClass(status?: string) {
 }
 
 export default function MyCompliance() {
+  const [trendDays, setTrendDays] = useState<7 | 30>(7);
   const { data, isLoading, error } = useOrgQuery(["worker", "my-compliance"], { queryFn: getMyCompliance });
+  const complianceDetailQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
+    queryFn: () => getWorkerComplianceDetail(trendDays),
+    staleTime: 30_000,
+  });
 
-  if (isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading compliance...</div>;
+  if (isLoading || complianceDetailQuery.isLoading) {
+    return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading compliance...</div>;
+  }
   if (error) return <div className="p-6 text-sm font-bold text-red-600">{(error as Error).message}</div>;
+
+  const complianceDetail = complianceDetailQuery.data;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
@@ -54,6 +66,23 @@ export default function MyCompliance() {
           <p className="text-sm font-bold" style={{ color: MUTED }}>Needs attention</p>
         </section>
       </div>
+
+      {complianceDetail && (
+        <>
+          <ComplianceDetailCard
+            score={complianceDetail.score}
+            status={complianceDetail.status}
+            rules={complianceDetail.rules}
+            failedRules={complianceDetail.failed_rules}
+            title="Real-Time Compliance"
+          />
+          <ComplianceTrendChart
+            data={complianceDetail.trend}
+            days={trendDays}
+            onDaysChange={setTrendDays}
+          />
+        </>
+      )}
 
       <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center justify-between gap-3">

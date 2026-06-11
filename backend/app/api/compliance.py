@@ -6,11 +6,18 @@ from ..services.compliance_engine import (
     ComplianceBlockedError,
     run_compliance_check,
 )
+from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.settings_service import get_physical_exam_session_types
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/compliance", tags=["compliance"])
+
+
+@router.get("/rules")
+async def list_compliance_rules(current_user: dict = Depends(get_current_user)):
+    """Return the CareScribe 12-rule catalog with explanations for UI tooltips."""
+    return {"rules": get_rules_catalog()}
 
 
 def _derive_status(score) -> str:
@@ -78,11 +85,13 @@ async def run_compliance(session_id: str, current_user: dict = Depends(get_curre
         except Exception as e:
             logger.warning(f"AI explanation failed: {e}")
 
+    enriched_rules = enrich_rule_results(rules_result.get("rules", []))
+
     return {
         "session_id": session_id,
         "score": score,
         "status": status,
-        "rules_result": rules_result,
+        "rules_result": {**rules_result, "rules": enriched_rules},
         "explanation": explanation,
     }
 

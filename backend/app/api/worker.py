@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Optional
+import json
+from collections import defaultdict
+from datetime import date, timedelta
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
 from ..services import audit_service, funding_service, goals_service, participant_service, session_service
+from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -82,6 +85,77 @@ def _score_status(score) -> str:
     if value >= 60:
         return "at_risk"
     return "non_compliant"
+
+
+def _date_part(value: Any) -> str:
+    if not value:
+        return ""
+    return str(value)[:10]
+
+
+def _safe_json(value: Any) -> Any:
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return {}
+    return value if value is not None else {}
+
+
+def _compliance_trend(sessions: list[dict], days: int) -> list[dict]:
+    """Daily average compliance scores for the last N days (inclusive of today)."""
+    days = max(1, min(days, 90))
+    start = date.today() - timedelta(days=days - 1)
+    day_scores: dict[str, list[float]] = defaultdict(list)
+    day_counts: dict[str, int] = defaultdict(int)
+
+    for session in sessions:
+        session_day = _date_part(session.get("session_date"))
+        if not session_day:
+            continue
+        try:
+            if date.fromisoformat(session_day) < start:
+                continue
+        except ValueError:
+            continue
+        day_counts[session_day] += 1
+        if session.get("compliance_score") is not None:
+            day_scores[session_day].append(float(session["compliance_score"]))
+
+    trend: list[dict] = []
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).isoformat()
+        scores = day_scores.get(day, [])
+        trend.append({
+            "date": day,
+            "avg_score": round(sum(scores) / len(scores), 1) if scores else None,
+            "session_count": day_counts.get(day, 0),
+        })
+    return trend
+
+
+def _latest_rule_results(sessions: list[dict]) -> tuple[list[dict], str | None]:
+    """Return rules from the most recently checked scored session."""
+    scored = [
+        s for s in sessions
+        if s.get("compliance_score") is not None
+    ]
+    if not scored:
+        return [], None
+
+    def _sort_key(session: dict) -> str:
+        return str(
+            session.get("compliance_checked_at")
+            or session.get("updated_at")
+            or session.get("session_date")
+            or ""
+        )
+
+    latest = sorted(scored, key=_sort_key, reverse=True)[0]
+    insights = _safe_json(latest.get("ai_insights"))
+    rules_result = insights.get("rules_result") if isinstance(insights, dict) else {}
+    rules = rules_result.get("rules") if isinstance(rules_result, dict) else []
+    return rules if isinstance(rules, list) else [], str(latest.get("id"))
 
 
 def _limited_participant(participant: dict) -> dict:
@@ -252,6 +326,45 @@ async def my_compliance(current_user: dict = Depends(get_current_user)):
         "reviewed_sessions": len(scored),
         "at_risk": sum(1 for score in scores if score < 85),
         "sessions": [_session_payload(session) for session in sessions],
+    }
+
+
+@router.get("/compliance-detail")
+async def worker_compliance_detail(
+    days: int = Query(default=7, ge=7, le=30),
+    current_user: dict = Depends(get_current_user),
+):
+    """Real-time compliance score, 12-rule breakdown, red flags, and daily trend."""
+    _require_worker(current_user)
+    sessions = await session_service.get_all_sessions(500, current_user)
+    scored = [s for s in sessions if s.get("compliance_score") is not None]
+    scores = [float(s["compliance_score"]) for s in scored]
+    average = round(sum(scores) / len(scores), 1) if scores else 0
+
+    raw_rules, _ = _latest_rule_results(sessions)
+    rules = enrich_rule_results(raw_rules)
+    failed_rules = [
+        {
+            "rule": r.get("rule"),
+            "label": r.get("label"),
+            "message": r.get("message"),
+            "explanation": r.get("explanation"),
+            "severity": r.get("severity"),
+            "enforcement_tier": r.get("enforcement_tier"),
+        }
+        for r in rules
+        if r.get("status") in {"fail", "warning"}
+    ]
+
+    return {
+        "score": average,
+        "status": _score_status(average),
+        "reviewed_sessions": len(scored),
+        "rules": rules,
+        "failed_rules": failed_rules,
+        "rules_catalog": get_rules_catalog(),
+        "trend": _compliance_trend(sessions, days),
+        "trend_days": days,
     }
 
 

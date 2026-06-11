@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useSettings } from "@/lib/use-settings";
 import { apiFetch } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
@@ -446,6 +448,9 @@ export default function SessionLive() {
   const { id } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId ?? "__no_org__";
 
   const { data: session, isLoading } = useGetSession(id as string, {
     query: { enabled: !!id, queryKey: ["getSession", id] },
@@ -1287,6 +1292,9 @@ export default function SessionLive() {
 
       setIsSaving(false);
       setPostSaveResult(localResult);
+      queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
       toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
     } catch (err) {
       setIsSaving(false);

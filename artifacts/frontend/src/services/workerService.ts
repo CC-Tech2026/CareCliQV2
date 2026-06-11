@@ -53,6 +53,40 @@ export type WorkerCompliance = {
   sessions: DashboardSession[];
 };
 
+export type ComplianceRuleResult = {
+  rule: string;
+  label: string;
+  status: "pass" | "fail" | "warning" | "pending" | string;
+  message?: string;
+  explanation?: string;
+  severity?: string;
+  enforcement_tier?: string;
+};
+
+export type ComplianceTrendPoint = {
+  date: string;
+  avg_score: number | null;
+  session_count: number;
+};
+
+export type WorkerComplianceDetail = {
+  score: number;
+  status: "compliant" | "at_risk" | "non_compliant";
+  reviewed_sessions: number;
+  rules: ComplianceRuleResult[];
+  failed_rules: Array<{
+    rule?: string;
+    label?: string;
+    message?: string;
+    explanation?: string;
+    severity?: string;
+    enforcement_tier?: string;
+  }>;
+  rules_catalog: ComplianceRuleResult[];
+  trend: ComplianceTrendPoint[];
+  trend_days: number;
+};
+
 export type WorkerNdisPlan = {
   participant_id: string;
   participant_name?: string;
@@ -99,6 +133,10 @@ export function getMyClientNdisPlan(id: string) {
 
 export function getMyCompliance() {
   return jsonFetch<WorkerCompliance>("/api/worker/my-compliance");
+}
+
+export function getWorkerComplianceDetail(days: 7 | 30 = 7) {
+  return jsonFetch<WorkerComplianceDetail>(`/api/worker/compliance-detail?days=${days}`);
 }
 
 export function createMyClientSession(id: string, body: CreateWorkerSessionInput = {}) {
