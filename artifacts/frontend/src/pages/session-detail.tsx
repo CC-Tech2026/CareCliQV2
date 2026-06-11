@@ -457,6 +457,10 @@ export default function SessionDetail({ id }: { id?: string }) {
       }
       toast({ title: "AI Analysis complete", description: "Compliance score and insights updated." });
       refetch();
+      const orgId = user?.organizationId ?? "__no_org__";
+      qc.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
+      qc.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
       setShowExplanation(false);
       setAcknowledgedWarnRules(new Set());
     } catch {

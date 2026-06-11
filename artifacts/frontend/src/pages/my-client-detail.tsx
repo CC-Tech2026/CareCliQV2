@@ -1540,6 +1540,8 @@ export default function MyClientDetail({ id }: { id: string }) {
       setSessionComposerOpen(false);
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-client", id] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
       toast({ title: "Draft saved", description: "The session draft is saved against this client." });
     },
     onError: (error) => {
@@ -1553,6 +1555,8 @@ export default function MyClientDetail({ id }: { id: string }) {
       setNoteText("");
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-client", id] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
+      queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
     },
   });
 
