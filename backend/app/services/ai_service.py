@@ -1216,3 +1216,72 @@ Return ONLY valid JSON — no markdown, no explanation:
         "reporting_requirements": raw.get("reporting_requirements"),
         "suggested_follow_up": raw.get("suggested_follow_up"),
     }
+
+
+# ---------------------------------------------------------------------------
+# Incident pattern recognition (CARECLIQV2-32)
+# ---------------------------------------------------------------------------
+
+async def analyze_incident_patterns(
+    new_incident: dict,
+    similar_incidents: list[dict],
+) -> dict:
+    """Use GPT-4o to analyse whether a pattern has been seen before and
+    recommend de-escalation strategies and support-plan changes."""
+
+    fallback = {
+        "pattern_recognised": (
+            "Unable to generate pattern analysis — AI service unavailable. "
+            "Review the similar past incidents listed below manually."
+        ),
+        "past_strategies": "Refer to the worker actions and corrective actions in the matched incidents.",
+        "recommendations": "Consult the coordinator to review the participant support plan based on matched incidents.",
+    }
+
+    if not similar_incidents:
+        return fallback
+
+    if not _openai_configured():
+        return fallback
+
+    import json as _json
+
+    past_block = _json.dumps(similar_incidents, indent=2, default=str)
+    new_block = _json.dumps(new_incident, indent=2, default=str)
+
+    user_prompt = f"""Given this new incident and the following similar past incidents from this organisation, provide: (1) whether this pattern has been seen before, (2) what de-escalation strategies worked previously, (3) any recommended changes to the participant's support plan.
+
+NEW INCIDENT:
+{new_block}
+
+SIMILAR PAST INCIDENTS:
+{past_block}
+
+Return ONLY valid JSON — no markdown:
+{{
+  "pattern_recognised": "2-4 sentences on whether this pattern has been seen before and how it compares to past incidents",
+  "past_strategies": "2-4 sentences summarising de-escalation strategies that worked in past similar incidents",
+  "recommendations": "2-4 sentences with recommended changes to the participant's support plan"
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.2,
+            max_tokens=700,
+            response_format={"type": "json_object"},
+        )
+        raw = _json.loads(resp.choices[0].message.content or "{}")
+    except Exception as exc:
+        logger.warning("analyze_incident_patterns AI call failed: %s", exc)
+        return fallback
+
+    return {
+        "pattern_recognised": raw.get("pattern_recognised") or fallback["pattern_recognised"],
+        "past_strategies": raw.get("past_strategies") or fallback["past_strategies"],
+        "recommendations": raw.get("recommendations") or fallback["recommendations"],
+    }

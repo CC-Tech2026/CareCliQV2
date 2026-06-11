@@ -21,6 +21,8 @@ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are set.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
+
 import pytest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
@@ -485,13 +487,15 @@ class TestRLSWithAnonKey:
 
     def test_service_role_key_not_exposed_in_public_paths(self):
         """Service role key must not appear in any frontend-accessible config."""
-        import os
-        service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-        # In CI / test env the key will be a placeholder; in production it's secret.
-        # We verify the app does not hard-code a real service key in source.
-        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in open(
-            "artifacts/frontend/src/lib/api-fetch.ts"
-        ).read(), "CCQ-115: service role key must never appear in frontend source"
+        repo_root = Path(__file__).resolve().parents[2]
+        api_fetch = repo_root / "artifacts" / "frontend" / "src" / "lib" / "api-fetch.ts"
+        if not api_fetch.is_file():
+            pytest.skip(
+                "frontend sources not available in this runtime (e.g. backend-only Docker image)"
+            )
+        assert "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9" not in api_fetch.read_text(
+            encoding="utf-8"
+        ), "CCQ-115: service role key must never appear in frontend source"
 
     def test_anon_key_cannot_bypass_rls_insert_check(self):
         """Simulates anon key trying to INSERT a row with wrong org_id."""

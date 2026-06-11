@@ -48,20 +48,51 @@ def _session(**overrides) -> dict:
     return base
 
 
+def _effective_tier(rule: dict) -> str:
+    """Mirror sessions API: enforcement_tier takes precedence over is_blocking."""
+    tier = rule.get("enforcement_tier")
+    if tier in ("block", "warn", "info"):
+        return tier
+    return "block" if rule.get("is_blocking") else "info"
+
+
+def _failed_rules_by_tier(result: dict, tier: str) -> list[str]:
+    return [
+        r["rule"]
+        for r in result["rules"]
+        if r["status"] == "fail" and _effective_tier(r) == tier
+    ]
+
+
+def _block_tier_rules(result: dict) -> list[str]:
+    """Rules that hard-block save/approve (enforcement_tier=block)."""
+    return _failed_rules_by_tier(result, "block")
+
+
+def _warn_tier_rules(result: dict) -> list[str]:
+    """Rules that require worker acknowledgement before save (enforcement_tier=warn)."""
+    return _failed_rules_by_tier(result, "warn")
+
+
 def _report(result: dict) -> str:
     """Format a compact compliance result for test failure messages."""
-    blocking = [r for r in result["rules"] if r.get("is_blocking") and r["status"] == "fail"]
+    block_fails = [r for r in result["rules"] if r["status"] == "fail" and _effective_tier(r) == "block"]
+    warn_fails = [r for r in result["rules"] if r["status"] == "fail" and _effective_tier(r) == "warn"]
+    info_fails = [r for r in result["rules"] if r["status"] == "fail" and _effective_tier(r) == "info"]
     warnings = [r for r in result["rules"] if r["status"] == "warning"]
     lines = [
         f"Score: {result['score']} | passed={result['passed']} warn={result['warnings']} fail={result['failed']}",
-        *[f"  BLOCKED  [{r['rule']}] {r['message']}" for r in blocking],
+        *[f"  BLOCK    [{r['rule']}] {r['message']}" for r in block_fails],
+        *[f"  WARN     [{r['rule']}] {r['message']}" for r in warn_fails],
+        *[f"  INFO     [{r['rule']}] {r['message']}" for r in info_fails],
         *[f"  WARNING  [{r['rule']}] {r['message']}" for r in warnings],
     ]
     return "\n".join(lines)
 
 
 def _blocking_rules(result: dict) -> list[str]:
-    return [r["rule"] for r in result["rules"] if r.get("is_blocking") and r["status"] == "fail"]
+    """Alias kept for readability — means block-tier failures only."""
+    return _block_tier_rules(result)
 
 
 def _rule(result: dict, rule_id: str) -> dict:
@@ -232,14 +263,14 @@ class TestScenario04_IncidentLanguage(unittest.TestCase):
 
 
 # ===========================================================================
-# SCENARIO 5 — Subjective language in note (R6 blocks)
+# SCENARIO 5 — Subjective language in note (R6 fails, info tier)
 # ===========================================================================
 
 class TestScenario05_SubjectiveLanguage(unittest.TestCase):
     """
     Worker writes their opinion rather than observable facts.
     "I think the participant is struggling" / "I feel she needs more help".
-    Expected: R6 blocks approval.
+    Expected: R6 fails (info tier — surfaced in panel, does not hard-block).
     """
 
     _SUBJECTIVE_NOTE = _GOOD_NOTE + (
@@ -251,9 +282,16 @@ class TestScenario05_SubjectiveLanguage(unittest.TestCase):
     def setUp(self):
         self.result = run_compliance_check(_session(compliance_input_text=self._SUBJECTIVE_NOTE))
 
-    def test_r6_blocks(self):
-        self.assertIn("R6", _blocking_rules(self.result),
-            f"R6 should block on subjective language:\n{_report(self.result)}")
+    def test_r6_fails(self):
+        r6 = _rule(self.result, "R6")
+        self.assertEqual(r6["status"], "fail",
+            f"R6 should fail on subjective language:\n{_report(self.result)}")
+
+    def test_r6_is_info_tier(self):
+        r6 = _rule(self.result, "R6")
+        self.assertEqual(_effective_tier(r6), "info",
+            f"R6 is info-tier and must not hard-block:\n{_report(self.result)}")
+        self.assertNotIn("R6", _block_tier_rules(self.result))
 
     def test_r6_message_quotes_phrase(self):
         r6 = _rule(self.result, "R6")
@@ -264,14 +302,14 @@ class TestScenario05_SubjectiveLanguage(unittest.TestCase):
 
 
 # ===========================================================================
-# SCENARIO 6 — Non-person-first language (R7 blocks)
+# SCENARIO 6 — Non-person-first language (R7 fails, warn tier)
 # ===========================================================================
 
 class TestScenario06_PersonFirstLanguage(unittest.TestCase):
     """
     Worker uses outdated disability language.
     "The wheelchair-bound client" / "suffers from autism".
-    Expected: R7 blocks approval.
+    Expected: R7 fails (warn tier — worker must acknowledge before save).
     """
 
     _PFL_NOTE = _GOOD_NOTE.replace(
@@ -282,9 +320,10 @@ class TestScenario06_PersonFirstLanguage(unittest.TestCase):
     def setUp(self):
         self.result = run_compliance_check(_session(compliance_input_text=self._PFL_NOTE))
 
-    def test_r7_blocks(self):
-        self.assertIn("R7", _blocking_rules(self.result),
-            f"R7 should block on 'wheelchair-bound':\n{_report(self.result)}")
+    def test_r7_fails_warn_tier(self):
+        self.assertIn("R7", _warn_tier_rules(self.result),
+            f"R7 should fail on warn tier for 'wheelchair-bound':\n{_report(self.result)}")
+        self.assertNotIn("R7", _block_tier_rules(self.result))
 
     def test_r7_suggests_correction(self):
         r7 = _rule(self.result, "R7")
@@ -293,13 +332,13 @@ class TestScenario06_PersonFirstLanguage(unittest.TestCase):
 
 
 # ===========================================================================
-# SCENARIO 7 — No goals linked (R5 blocks)
+# SCENARIO 7 — No goals linked (R5 fails, warn tier)
 # ===========================================================================
 
 class TestScenario07_NoGoalsLinked(unittest.TestCase):
     """
     Worker submits a note but forgets to link any NDIS goals to the session.
-    Expected: R5 blocks approval.
+    Expected: R5 fails (warn tier — worker must acknowledge before save).
     """
 
     def setUp(self):
@@ -307,9 +346,10 @@ class TestScenario07_NoGoalsLinked(unittest.TestCase):
             _session(goals_addressed="[]")
         )
 
-    def test_r5_blocks(self):
-        self.assertIn("R5", _blocking_rules(self.result),
-            f"R5 should block when no goals are linked:\n{_report(self.result)}")
+    def test_r5_fails_warn_tier(self):
+        self.assertIn("R5", _warn_tier_rules(self.result),
+            f"R5 should fail on warn tier when no goals are linked:\n{_report(self.result)}")
+        self.assertNotIn("R5", _block_tier_rules(self.result))
 
     def test_r5_message_mentions_goals(self):
         r5 = _rule(self.result, "R5")
@@ -342,14 +382,14 @@ class TestScenario08_MissingTimes(unittest.TestCase):
 
 
 # ===========================================================================
-# SCENARIO 9 — Note submitted 10 days late (R2 blocks)
+# SCENARIO 9 — Note submitted 10 days late (R2 fails, warn tier)
 # ===========================================================================
 
 class TestScenario09_LateDocumentation(unittest.TestCase):
     """
     Worker submits a note 10 days after the session.
     NDIS requires documentation within 48 hours.
-    Expected: R2 blocks approval.
+    Expected: R2 fails (warn tier — worker must acknowledge before save).
     """
 
     def setUp(self):
@@ -360,9 +400,10 @@ class TestScenario09_LateDocumentation(unittest.TestCase):
             )
         )
 
-    def test_r2_blocks(self):
-        self.assertIn("R2", _blocking_rules(self.result),
-            f"R2 should block when note is >7 days late:\n{_report(self.result)}")
+    def test_r2_fails_warn_tier(self):
+        self.assertIn("R2", _warn_tier_rules(self.result),
+            f"R2 should fail on warn tier when note is >7 days late:\n{_report(self.result)}")
+        self.assertNotIn("R2", _block_tier_rules(self.result))
 
     def test_r2_message_mentions_days(self):
         r2 = _rule(self.result, "R2")
@@ -423,9 +464,11 @@ class TestScenario11_FillerNote(unittest.TestCase):
         self.assertEqual(r3["status"], "fail",
             "R3 should fail on filler phrases")
 
-    def test_r3_does_not_block(self):
-        self.assertNotIn("R3", _blocking_rules(self.result),
-            "R3 must NOT block — it is a warning per spec (is_blocking=false)")
+    def test_r3_is_info_tier(self):
+        r3 = _rule(self.result, "R3")
+        self.assertEqual(_effective_tier(r3), "info",
+            "R3 must be info-tier — surfaced in panel without hard-blocking save")
+        self.assertNotIn("R3", _block_tier_rules(self.result))
 
 
 # ===========================================================================
@@ -457,20 +500,26 @@ class TestScenario12_WorstCase(unittest.TestCase):
             )
         )
 
-    def test_multiple_blocks_fire(self):
-        blocks = _blocking_rules(self.result)
-        self.assertGreaterEqual(len(blocks), 3,
-            f"Expected at least 3 blocking failures:\n{_report(self.result)}")
+    def test_multiple_failures_fire(self):
+        block_fails = _block_tier_rules(self.result)
+        warn_fails = _warn_tier_rules(self.result)
+        self.assertGreaterEqual(len(block_fails), 2,
+            f"Expected at least 2 block-tier failures:\n{_report(self.result)}")
+        self.assertGreaterEqual(len(block_fails) + len(warn_fails), 3,
+            f"Expected multiple tiered failures:\n{_report(self.result)}")
 
     def test_score_is_very_low(self):
         self.assertLess(self.result["score"], 45,
             f"Score should be very low for worst-case note:\n{_report(self.result)}")
 
-    def test_r1_r6_r7_r8_all_block(self):
-        blocks = _blocking_rules(self.result)
-        for expected in ("R1", "R6", "R7", "R8"):
-            self.assertIn(expected, blocks,
-                f"{expected} should block on worst-case note. Actual blocks: {blocks}\n{_report(self.result)}")
+    def test_worst_case_tiered_failures(self):
+        self.assertIn("R1", _block_tier_rules(self.result),
+            f"R1 should be block-tier on worst-case note:\n{_report(self.result)}")
+        self.assertIn("R8", _block_tier_rules(self.result),
+            f"R8 should be block-tier on worst-case note:\n{_report(self.result)}")
+        self.assertEqual(_rule(self.result, "R6")["status"], "fail")
+        self.assertIn("R7", _warn_tier_rules(self.result),
+            f"R7 should fail on warn tier:\n{_report(self.result)}")
 
 
 if __name__ == "__main__":
