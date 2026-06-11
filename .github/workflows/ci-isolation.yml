@@ -48,6 +48,7 @@ jobs:
           mkdir -p test-results
           pytest backend/tests/test_multitenant_isolation.py \
                  backend/tests/test_ccq_108_report_isolation.py \
+                 backend/tests/test_rag_retrieval.py \
                  -v --tb=short \
                  --junit-xml=test-results/isolation.xml
 

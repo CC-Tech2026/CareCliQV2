@@ -792,14 +792,9 @@ Respond with JSON:
 
 async def generate_session_embedding(text: str) -> list[float]:
     """Generate a text-embedding-3-small vector for a session note."""
-    if not text or not text.strip():
-        return []
-    truncated = text[:8000]
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=truncated,
-    )
-    return response.data[0].embedding
+    from .query_embedding_service import generate_query_embedding
+
+    return await generate_query_embedding(text)
 
 
 # ---------------------------------------------------------------------------

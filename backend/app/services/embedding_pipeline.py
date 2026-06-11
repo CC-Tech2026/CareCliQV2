@@ -16,7 +16,7 @@ import logging
 import re
 from typing import Any
 
-from .ai_service import generate_session_embedding
+from .query_embedding_service import generate_query_embedding
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ async def _embed_with_retry(text: str) -> list[float]:
     """Return embedding vector, retrying up to MAX_RETRIES times."""
     for attempt in range(_MAX_RETRIES):
         try:
-            vec = await generate_session_embedding(text)
+            vec = await generate_query_embedding(text)
             if vec:
                 return vec
         except Exception as exc:

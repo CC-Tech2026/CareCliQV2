@@ -1,5 +1,5 @@
 """
-CCQ-106 / CARECLIQV2-30 — RAG retrieval: org-scoped semantic search over
+CARECLIQV2-31 — RAG retrieval: org-scoped semantic search over
 session_embeddings using native pgvector HNSW cosine-similarity via the
 match_session_embeddings RPC function.
 
@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import datetime
 from typing import Any
 
-from .ai_service import generate_session_embedding
+from ..schemas.retrieval import RetrievalResult
+from .query_embedding_service import generate_query_embedding
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -32,11 +34,91 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (norm_a * norm_b)
 
 
+def _parse_session_date(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_compliance_score(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _row_to_retrieval_result(row: dict[str, Any]) -> RetrievalResult:
+    participant = row.get("participant_id")
+    return RetrievalResult(
+        content=row.get("content"),
+        session_id=str(row["session_id"]),
+        participant_id=str(participant) if participant else None,
+        session_date=_parse_session_date(row.get("session_date")),
+        compliance_score=_parse_compliance_score(row.get("compliance_score")),
+        similarity_score=round(float(row.get("similarity_score", row.get("similarity", 0))), 4),
+    )
+
+
+def _fetch_session_metadata(
+    supabase, session_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Batch-fetch session_date, compliance_score, patient_id for enrichment."""
+    if not session_ids:
+        return {}
+    try:
+        result = (
+            supabase.table("sessions")
+            .select("id, session_date, compliance_score, patient_id")
+            .in_("id", session_ids)
+            .execute()
+        )
+        return {str(r["id"]): r for r in (result.data or [])}
+    except Exception as exc:
+        logger.warning("Session metadata fetch failed during RAG enrichment: %s", exc)
+        return {}
+
+
+def _enrich_chunk_rows(
+    supabase,
+    chunks: list[dict[str, Any]],
+) -> list[RetrievalResult]:
+    """Attach session metadata to raw chunk rows (Python fallback path)."""
+    session_ids = list({str(c["session_id"]) for c in chunks if c.get("session_id")})
+    meta_by_session = _fetch_session_metadata(supabase, session_ids)
+
+    enriched: list[RetrievalResult] = []
+    for chunk in chunks:
+        sid = str(chunk["session_id"])
+        meta = meta_by_session.get(sid, {})
+        participant = chunk.get("participant_id") or meta.get("patient_id")
+        enriched.append(
+            RetrievalResult(
+                content=chunk.get("content"),
+                session_id=sid,
+                participant_id=str(participant) if participant else None,
+                session_date=_parse_session_date(
+                    chunk.get("session_date") or meta.get("session_date")
+                ),
+                compliance_score=_parse_compliance_score(
+                    chunk.get("compliance_score") or meta.get("compliance_score")
+                ),
+                similarity_score=round(float(chunk.get("similarity", 0)), 4),
+            )
+        )
+    return enriched
+
+
 def _python_similarity_search(
     rows: list[dict],
     query_vector: list[float],
     limit: int,
-    min_similarity: float,
 ) -> list[dict[str, Any]]:
     """Client-side cosine search used when the RPC is unavailable."""
     scored: list[tuple[float, dict]] = []
@@ -49,19 +131,17 @@ def _python_similarity_search(
             if len(candidate) != _EMBEDDING_DIM:
                 continue
             sim = _cosine_similarity(query_vector, candidate)
-            if sim >= min_similarity:
-                scored.append(
-                    (
-                        sim,
-                        {
-                            "session_id": row["session_id"],
-                            "chunk_index": row.get("chunk_index", 0),
-                            "content": row.get("content"),
-                            "similarity": round(sim, 4),
-                            "metadata": row.get("metadata", {}),
-                        },
-                    )
+            scored.append(
+                (
+                    sim,
+                    {
+                        "session_id": row["session_id"],
+                        "content": row.get("content"),
+                        "participant_id": row.get("participant_id"),
+                        "similarity": round(sim, 4),
+                    },
                 )
+            )
         except Exception:
             continue
     scored.sort(key=lambda t: t[0], reverse=True)
@@ -73,32 +153,21 @@ def _python_similarity_search(
 def _rpc_similarity_search(
     supabase,
     query_vector: list[float],
-    org_id: str,
-    limit: int,
-    min_similarity: float,
-) -> list[dict[str, Any]] | None:
+    organisation_id: str,
+    top_k: int,
+) -> list[RetrievalResult] | None:
     """Call match_session_embeddings RPC.  Returns None on failure."""
     try:
         result = supabase.rpc(
             "match_session_embeddings",
             {
                 "query_embedding": query_vector,
-                "match_threshold": min_similarity,
-                "match_count": limit,
-                "p_org_id": org_id,
+                "organisation_id": organisation_id,
+                "top_k": top_k,
             },
         ).execute()
         rows = result.data or []
-        return [
-            {
-                "session_id": r["session_id"],
-                "chunk_index": r.get("chunk_index", 0),
-                "content": r.get("content"),
-                "similarity": round(float(r.get("similarity", 0)), 4),
-                "metadata": r.get("metadata", {}),
-            }
-            for r in rows
-        ]
+        return [_row_to_retrieval_result(r) for r in rows]
     except Exception as exc:
         logger.warning("match_session_embeddings RPC failed, falling back: %s", exc)
         return None
@@ -106,44 +175,40 @@ def _rpc_similarity_search(
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-async def retrieve_similar_sessions(
-    query_text: str,
-    org_id: str,
-    limit: int = 5,
-    min_similarity: float = 0.70,
-) -> list[dict[str, Any]]:
-    """Return up to *limit* session chunks semantically similar to *query_text*.
+async def retrieve_similar(
+    query: str,
+    organisation_id: str,
+    k: int = 5,
+) -> list[RetrievalResult]:
+    """Return up to *k* session chunks semantically similar to *query*.
 
-    Results are strictly scoped to *org_id* — no cross-org leakage is possible.
+    Results are strictly scoped to *organisation_id* — no cross-org leakage.
 
-    Primary path: pgvector HNSW via match_session_embeddings RPC.
-    Fallback:     client-side cosine similarity on full row scan.
-
-    Returns:
-        List of dicts: session_id, chunk_index, content, similarity, metadata.
+    Primary path: pgvector HNSW via match_session_embeddings RPC (org filter
+    applied before ranking).  Fallback: client-side cosine on org-scoped rows.
     """
-    if not query_text or not query_text.strip():
+    if not query or not query.strip():
         return []
-    if not org_id:
-        raise ValueError("org_id is required for RAG retrieval (CCQ-106)")
+    if not organisation_id:
+        raise ValueError("organisation_id is required for RAG retrieval (CARECLIQV2-31)")
+    if k <= 0:
+        return []
 
-    query_vector = await generate_session_embedding(query_text)
+    query_vector = await generate_query_embedding(query)
     if not query_vector:
         return []
 
     supabase = get_supabase_admin()
 
-    # Preferred: native pgvector HNSW search.
-    rpc_result = _rpc_similarity_search(supabase, query_vector, org_id, limit, min_similarity)
+    rpc_result = _rpc_similarity_search(supabase, query_vector, organisation_id, k)
     if rpc_result is not None:
         return rpc_result
 
-    # Fallback: fetch all org rows and compute cosine in Python.
     try:
         result = (
             supabase.table("session_embeddings")
-            .select("session_id, chunk_index, content, embedding, metadata")
-            .eq("organization_id", org_id)
+            .select("session_id, content, embedding, participant_id")
+            .eq("organization_id", organisation_id)
             .execute()
         )
         rows = result.data or []
@@ -151,7 +216,31 @@ async def retrieve_similar_sessions(
         logger.warning("RAG fallback DB query failed: %s", exc)
         return []
 
-    return _python_similarity_search(rows, query_vector, limit, min_similarity)
+    chunks = _python_similarity_search(rows, query_vector, k)
+    return _enrich_chunk_rows(supabase, chunks)
+
+
+async def retrieve_similar_sessions(
+    query_text: str,
+    org_id: str,
+    limit: int = 5,
+    min_similarity: float = 0.70,
+) -> list[dict[str, Any]]:
+    """Backward-compatible wrapper returning dicts (filters by min_similarity)."""
+    results = await retrieve_similar(query_text, org_id, k=limit)
+    filtered = [r for r in results if r.similarity_score >= min_similarity]
+    return [
+        {
+            "session_id": r.session_id,
+            "content": r.content,
+            "similarity": r.similarity_score,
+            "participant_id": r.participant_id,
+            "session_date": r.session_date.isoformat() if r.session_date else None,
+            "compliance_score": r.compliance_score,
+            "metadata": {},
+        }
+        for r in filtered
+    ]
 
 
 def _extract_incident_id(row: dict[str, Any]) -> str | None:
@@ -313,10 +402,7 @@ async def retrieve_compliance_context(
     org_id: str,
     limit: int = 3,
 ) -> list[dict[str, Any]]:
-    """Retrieve past similar session chunks to augment compliance rule evaluation.
-
-    Used by the RAC (Retrieval-Augmented Compliance) engine.
-    """
+    """Retrieve past similar session chunks to augment compliance rule evaluation."""
     return await retrieve_similar_sessions(
         query_text=session_notes,
         org_id=org_id,
