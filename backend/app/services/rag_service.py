@@ -18,6 +18,7 @@ from .supabase_client import get_supabase_admin
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_DIM = 1536
+_MIN_INCIDENTS_FOR_PATTERN = 10
 
 
 # ── Python fallback ───────────────────────────────────────────────────────────
@@ -151,6 +152,160 @@ async def retrieve_similar_sessions(
         return []
 
     return _python_similarity_search(rows, query_vector, limit, min_similarity)
+
+
+def _extract_incident_id(row: dict[str, Any]) -> str | None:
+    """Resolve incident_id from a session_embeddings row."""
+    if row.get("incident_id"):
+        return str(row["incident_id"])
+    metadata = row.get("metadata") or {}
+    if isinstance(metadata, dict) and metadata.get("incident_id"):
+        return str(metadata["incident_id"])
+    return None
+
+
+def _incident_rpc_similarity_search(
+    supabase,
+    query_vector: list[float],
+    org_id: str,
+    limit: int,
+    min_similarity: float,
+    exclude_incident_id: str | None = None,
+) -> list[dict[str, Any]] | None:
+    """Call match_incident_embeddings RPC. Returns None on failure."""
+    try:
+        params: dict[str, Any] = {
+            "query_embedding": query_vector,
+            "match_threshold": min_similarity,
+            "match_count": limit * 3,  # over-fetch; dedupe by incident below
+            "p_org_id": org_id,
+        }
+        if exclude_incident_id:
+            params["p_exclude_incident_id"] = exclude_incident_id
+        result = supabase.rpc("match_incident_embeddings", params).execute()
+        rows = result.data or []
+        return [
+            {
+                "session_id": r.get("session_id"),
+                "incident_id": _extract_incident_id(r),
+                "chunk_index": r.get("chunk_index", 0),
+                "content": r.get("content"),
+                "similarity": round(float(r.get("similarity", 0)), 4),
+                "metadata": r.get("metadata", {}),
+                "participant_id": r.get("participant_id"),
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        logger.warning("match_incident_embeddings RPC failed, falling back: %s", exc)
+        return None
+
+
+def _dedupe_incident_matches(
+    chunks: list[dict[str, Any]], limit: int
+) -> list[dict[str, Any]]:
+    """Keep the highest-similarity chunk per incident, up to *limit*."""
+    best_by_incident: dict[str, dict[str, Any]] = {}
+    for chunk in chunks:
+        iid = chunk.get("incident_id")
+        if not iid:
+            continue
+        existing = best_by_incident.get(iid)
+        if not existing or chunk.get("similarity", 0) > existing.get("similarity", 0):
+            best_by_incident[iid] = chunk
+    ranked = sorted(
+        best_by_incident.values(),
+        key=lambda c: c.get("similarity", 0),
+        reverse=True,
+    )
+    return ranked[:limit]
+
+
+async def count_incidents_in_vector_db(org_id: str) -> int:
+    """Return the number of distinct incidents embedded for *org_id*."""
+    if not org_id:
+        return 0
+    supabase = get_supabase_admin()
+    try:
+        result = supabase.rpc("count_incident_embeddings", {"p_org_id": org_id}).execute()
+        if result.data is not None:
+            return int(result.data)
+    except Exception as exc:
+        logger.warning("count_incident_embeddings RPC failed, falling back: %s", exc)
+
+    try:
+        result = (
+            supabase.table("session_embeddings")
+            .select("incident_id, metadata")
+            .eq("organization_id", org_id)
+            .eq("metadata->>source", "incident")
+            .execute()
+        )
+        incident_ids: set[str] = set()
+        for row in result.data or []:
+            iid = _extract_incident_id(row)
+            if iid:
+                incident_ids.add(iid)
+        return len(incident_ids)
+    except Exception as exc:
+        logger.warning("count incidents fallback failed: %s", exc)
+        return 0
+
+
+async def retrieve_similar_incidents(
+    query_text: str,
+    org_id: str,
+    exclude_incident_id: str | None = None,
+    limit: int = 5,
+    min_similarity: float = 0.65,
+) -> list[dict[str, Any]]:
+    """Return up to *limit* past incident chunks similar to *query_text*.
+
+    Results are strictly scoped to *org_id* and filtered to incident embeddings only.
+    """
+    if not query_text or not query_text.strip():
+        return []
+    if not org_id:
+        raise ValueError("org_id is required for incident RAG retrieval (CARECLIQV2-32)")
+
+    query_vector = await generate_session_embedding(query_text)
+    if not query_vector:
+        return []
+
+    supabase = get_supabase_admin()
+    fetch_limit = limit * 3
+
+    rpc_result = _incident_rpc_similarity_search(
+        supabase,
+        query_vector,
+        org_id,
+        fetch_limit,
+        min_similarity,
+        exclude_incident_id=exclude_incident_id,
+    )
+    if rpc_result is not None:
+        return _dedupe_incident_matches(rpc_result, limit)
+
+    try:
+        result = (
+            supabase.table("session_embeddings")
+            .select("session_id, incident_id, chunk_index, content, embedding, metadata, participant_id")
+            .eq("organization_id", org_id)
+            .eq("metadata->>source", "incident")
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as exc:
+        logger.warning("Incident RAG fallback DB query failed: %s", exc)
+        return []
+
+    if exclude_incident_id:
+        rows = [r for r in rows if _extract_incident_id(r) != exclude_incident_id]
+
+    scored = _python_similarity_search(rows, query_vector, fetch_limit, min_similarity)
+    for item in scored:
+        item["incident_id"] = _extract_incident_id(item)
+    return _dedupe_incident_matches(scored, limit)
 
 
 async def retrieve_compliance_context(

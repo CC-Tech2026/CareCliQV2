@@ -6,6 +6,7 @@ from .security import require_recent_reauth
 from ..schemas.incident import IncidentCreate, IncidentUpdate
 from ..services import audit_service, incident_service, participant_service, session_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
+from ..services.incident_pattern_service import get_incident_pattern_analysis
 import logging
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,23 @@ async def get_participant_incidents(participant_id: str, user: dict = Depends(ge
     return await incident_service.get_incidents_by_participant(participant_id, current_user=user)
 
 
+@router.get("/{incident_id}/similar-patterns")
+async def get_similar_incident_patterns(
+    incident_id: str,
+    user: dict = Depends(get_current_user),
+):
+    """CARECLIQV2-32 — RAG-powered similar past incidents with GPT-4o analysis."""
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required")
+
+    incident = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    return await get_incident_pattern_analysis(incident, org_id)
+
+
 @router.get("/{incident_id}")
 async def get_incident(incident_id: str, user: dict = Depends(get_current_user)):
     incident = await incident_service.get_incident_by_id(incident_id, current_user=user)
@@ -112,11 +130,11 @@ async def create_incident(
                 ],
             )
         ).strip()
-        if incident_id and incident_text and body.session_id:
+        if incident_id and incident_text:
             background_tasks.add_task(
                 run_incident_embedding_pipeline,
                 incident_id=incident_id,
-                session_id=body.session_id,
+                session_id=str(body.session_id) if body.session_id else None,
                 organization_id=org_id,
                 text=incident_text,
                 participant_id=str(body.participant_id) if body.participant_id else None,

@@ -107,6 +107,13 @@ async def _embed_with_retry(text: str) -> list[float]:
     return []
 
 
+def _upsert_conflict_key(row: dict[str, Any]) -> str:
+    """Return the on_conflict column pair for a session_embeddings row."""
+    if row.get("incident_id") and not row.get("session_id"):
+        return "incident_id,chunk_index"
+    return "session_id,chunk_index"
+
+
 async def _store_chunks_with_retry(rows: list[dict[str, Any]]) -> int:
     """Upsert *rows* into session_embeddings, retrying on failure.
 
@@ -116,11 +123,12 @@ async def _store_chunks_with_retry(rows: list[dict[str, Any]]) -> int:
         return 0
 
     supabase = get_supabase_admin()
+    conflict_key = _upsert_conflict_key(rows[0])
     for attempt in range(_MAX_RETRIES):
         try:
             supabase.table("session_embeddings").upsert(
                 rows,
-                on_conflict="session_id,chunk_index",
+                on_conflict=conflict_key,
             ).execute()
             return len(rows)
         except Exception as exc:
@@ -137,10 +145,11 @@ async def _store_chunks_with_retry(rows: list[dict[str, Any]]) -> int:
     # Last attempt: try rows one-by-one so partial success is captured.
     stored = 0
     for row in rows:
+        row_conflict = _upsert_conflict_key(row)
         for attempt in range(_MAX_RETRIES):
             try:
                 supabase.table("session_embeddings").upsert(
-                    row, on_conflict="session_id,chunk_index"
+                    row, on_conflict=row_conflict
                 ).execute()
                 stored += 1
                 break
@@ -164,12 +173,13 @@ async def _run_pipeline(
     *,
     source: str,
     source_id: str,
-    session_id: str,
+    session_id: str | None,
     organization_id: str,
     text: str,
     participant_id: str | None = None,
     worker_id: str | None = None,
     extra_metadata: dict[str, Any] | None = None,
+    incident_id: str | None = None,
 ) -> None:
     """Chunk *text*, embed each chunk, and persist to session_embeddings.
 
@@ -228,18 +238,20 @@ async def _run_pipeline(
             )
             continue
 
-        rows.append(
-            {
-                "organization_id": organization_id,
-                "session_id": session_id,
-                "participant_id": participant_id,
-                "worker_id": worker_id,
-                "chunk_index": idx,
-                "content": chunk,
-                "embedding": vec,
-                "metadata": {**base_metadata, "chunk_index": idx, "total_chunks": len(chunks)},
-            }
-        )
+        row: dict[str, Any] = {
+            "organization_id": organization_id,
+            "participant_id": participant_id,
+            "worker_id": worker_id,
+            "chunk_index": idx,
+            "content": chunk,
+            "embedding": vec,
+            "metadata": {**base_metadata, "chunk_index": idx, "total_chunks": len(chunks)},
+        }
+        if session_id:
+            row["session_id"] = session_id
+        if incident_id:
+            row["incident_id"] = incident_id
+        rows.append(row)
 
     if not rows:
         logger.warning(
@@ -293,9 +305,9 @@ async def run_session_embedding_pipeline(
 async def run_incident_embedding_pipeline(
     *,
     incident_id: str,
-    session_id: str,
     organization_id: str,
     text: str,
+    session_id: str | None = None,
     participant_id: str | None = None,
     worker_id: str | None = None,
 ) -> None:
@@ -313,6 +325,7 @@ async def run_incident_embedding_pipeline(
             text=text,
             participant_id=participant_id,
             worker_id=worker_id,
+            incident_id=incident_id,
             extra_metadata={"incident_id": incident_id},
         )
     except Exception as exc:

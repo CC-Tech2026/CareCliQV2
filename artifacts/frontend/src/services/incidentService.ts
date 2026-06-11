@@ -45,6 +45,33 @@ export function getIncidentsByParticipant<T = unknown>(participantId: string) {
   return jsonFetch<T>(`/api/incidents/participant/${participantId}`);
 }
 
+export interface SimilarIncidentMatch {
+  incident_id: string;
+  date: string;
+  participant_label: string;
+  similarity_score: number;
+  excerpt: string;
+}
+
+export interface IncidentPatternSummary {
+  pattern_recognised: string;
+  past_strategies: string;
+  recommendations: string;
+}
+
+export interface SimilarIncidentPatternsResult {
+  sufficient_context: boolean;
+  incident_count: number;
+  matches: SimilarIncidentMatch[];
+  ai_summary: IncidentPatternSummary | null;
+}
+
+export function getSimilarIncidentPatterns(incidentId: string) {
+  return jsonFetch<SimilarIncidentPatternsResult>(
+    `/api/incidents/${incidentId}/similar-patterns`,
+  );
+}
+
 export interface IncidentComplyPayload {
   incident_type: string;
   severity: string;

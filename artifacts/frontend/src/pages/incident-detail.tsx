@@ -26,8 +26,11 @@ import {
   MapPin,
   Users,
   User,
+  Sparkles,
+  History,
 } from "lucide-react";
-import { getIncident, updateIncident } from "@/services/incidentService";
+import { getIncident, updateIncident, getSimilarIncidentPatterns } from "@/services/incidentService";
+import type { SimilarIncidentPatternsResult } from "@/services/incidentService";
 import { useReAuth } from "@/hooks/useReAuth";
 
 const SEVERITIES = [
@@ -104,6 +107,18 @@ export default function IncidentDetail({ id }: { id: string }) {
   const { data: incident, isLoading } = useOrgQuery<Incident>(["incident", id], {
     queryFn: () => getIncident<Incident>(id),
   });
+
+  const { data: patternData, isLoading: patternsLoading } = useOrgQuery<SimilarIncidentPatternsResult>(
+    ["incident-patterns", id],
+    {
+      queryFn: () => getSimilarIncidentPatterns(id),
+      enabled: !!incident,
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+
+  const showPatternsPanel =
+    patternData?.sufficient_context === true && (patternData.matches?.length ?? 0) > 0;
 
   const [investigationNotes, setInvestigationNotes] = useState("");
   const [correctiveActions, setCorrectiveActions] = useState("");
@@ -369,6 +384,80 @@ export default function IncidentDetail({ id }: { id: string }) {
           </div>
         </div>
       </div>
+
+      {/* Similar past incidents — CARECLIQV2-32 */}
+      {(patternsLoading || showPatternsPanel) && (
+        <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            <div className="flex items-center gap-2">
+              <History size={15} style={{ color: "#7A6A8A" }} />
+              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Similar Past Incidents</p>
+            </div>
+            <p className="text-[11px] mt-1" style={{ color: "#7A6A8A" }}>
+              Semantically matched from your organisation&apos;s incident history
+            </p>
+          </div>
+
+          {patternsLoading ? (
+            <div className="p-6 space-y-3">
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </div>
+          ) : showPatternsPanel && patternData ? (
+            <div className="p-6 space-y-5">
+              {patternData.ai_summary && (
+                <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(241,115,138,0.06)", border: "1px solid rgba(241,115,138,0.15)" }}>
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} style={{ color: "#542269" }} />
+                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#542269" }}>AI Pattern Analysis</p>
+                  </div>
+                  <div className="space-y-3 text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Pattern Recognised</p>
+                      <p>{patternData.ai_summary.pattern_recognised}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Past Strategies</p>
+                      <p>{patternData.ai_summary.past_strategies}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Recommendations</p>
+                      <p>{patternData.ai_summary.recommendations}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                {patternData.matches.map((match) => (
+                  <div
+                    key={match.incident_id}
+                    className="rounded-xl p-4"
+                    style={{ border: "1px solid rgba(232,213,232,0.6)", background: "rgba(250,248,252,0.5)" }}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: "#7A6A8A" }}>
+                        <span className="flex items-center gap-1">
+                          <Calendar size={11} />
+                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : "—"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User size={11} />
+                          {match.participant_label}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] px-2 py-0 shrink-0 bg-violet-50 text-violet-700 border-violet-200">
+                        {Math.round(match.similarity_score * 100)}% match
+                      </Badge>
+                    </div>
+                    <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{match.excerpt}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {/* Investigation & corrective actions */}
       <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
