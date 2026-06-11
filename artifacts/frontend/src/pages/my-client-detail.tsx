@@ -186,6 +186,10 @@ function activeGoals(goals?: Array<Record<string, unknown>>) {
   });
 }
 
+function goalLabel(goal: Record<string, unknown>, index: number) {
+  return String(goal.title || goal.name || goal.description || `Goal ${index + 1}`);
+}
+
 function ProminentAlertCard({
   title,
   icon: Icon,
@@ -505,6 +509,9 @@ function InlineSessionComposer({
   translatedFromLang,
   isSaving,
   error,
+  selectedGoals,
+  goalNotes,
+  choiceControl,
   activeGoals: composerGoals,
   goalsAddressed,
   outcome,
@@ -521,6 +528,9 @@ function InlineSessionComposer({
   onGenerate,
   onSave,
   onClose,
+  onToggleGoal,
+  onGoalNoteChange,
+  onChoiceControlChange,
   onGoalsAddressedChange,
   onOutcomeChange,
   onChoiceAndControlChange,
@@ -847,117 +857,160 @@ function InlineSessionComposer({
       {composerStep === "goals" && (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <div className="mx-auto max-w-3xl space-y-3">
+            <div className="mx-auto max-w-3xl space-y-4">
               <p className="text-sm font-medium" style={{ color: MUTED }}>
-                Select the goals you worked on during this session and document the evidence, outcome, and observation for each.
+                {ended
+                  ? "Document which goals were addressed and summarise the session outcome before saving."
+                  : "Select the goals you worked on during this session and document the evidence, outcome, and observation for each."}
               </p>
-              <GoalSelector
-                goals={activeGoals}
-                selected={selectedGoals}
-                notes={goalNotes}
-                onToggle={onToggleGoal}
-                onNoteChange={onGoalNoteChange}
-              />
-            </div>
-          </div>
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
-            <button type="button" onClick={() => setComposerStep("record")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
-              ← Back
-            </button>
-            <div className="flex gap-3">
-              <button type="button" onClick={() => setComposerStep("choice")} className="text-sm font-black px-4 py-2 rounded-full text-white" style={{ background: PLUM }}>
-                Next: Choice & Control →
-              </button>
-            </div>
-          </div>
 
-          {ended && (
-            <div className="space-y-4 border-t pt-4" style={{ borderColor: "#EEEAFB" }}>
+              {ended && (
+                <div
+                  className="space-y-4 rounded-xl border p-4"
+                  style={{ borderColor: "#EEEAFB", background: "#FBFAFF" }}
+                >
+                  {composerGoals && composerGoals.length > 0 && (
+                    <div>
+                      <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                        <Target size={12} />
+                        Goals Addressed This Session
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {composerGoals.map((goal, idx) => {
+                          const gid = String(goal.id ?? idx);
+                          const selected = Boolean(goalsAddressed?.includes(gid));
+                          return (
+                            <button
+                              key={gid}
+                              type="button"
+                              onClick={() => {
+                                if (!onGoalsAddressedChange) return;
+                                onGoalsAddressedChange(
+                                  selected
+                                    ? (goalsAddressed || []).filter((id) => id !== gid)
+                                    : [...(goalsAddressed || []), gid],
+                                );
+                              }}
+                              className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
+                              style={{
+                                borderColor: selected ? PLUM : BORDER,
+                                background: selected ? SOFT : "white",
+                                color: selected ? PLUM : MUTED,
+                              }}
+                            >
+                              {goalLabel(goal, idx)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-              {composerGoals && composerGoals.length > 0 && (
-                <div>
-                  <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
-                    <Target size={12} />
-                    Goals Addressed This Session
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {composerGoals.map((goal, idx) => {
-                      const gid = String(goal.id ?? idx);
-                      const selected = Boolean(goalsAddressed?.includes(gid));
-                      return (
-                        <button
-                          key={gid}
-                          type="button"
-                          onClick={() => {
-                            if (!onGoalsAddressedChange) return;
-                            onGoalsAddressedChange(
-                              selected
-                                ? (goalsAddressed || []).filter((id) => id !== gid)
-                                : [...(goalsAddressed || []), gid],
-                            );
-                          }}
-                          className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
-                          style={{
-                            borderColor: selected ? PLUM : BORDER,
-                            background: selected ? SOFT : "white",
-                            color: selected ? PLUM : MUTED,
-                          }}
-                        >
-                          {goalLabel(goal, idx)}
-                        </button>
-                      );
-                    })}
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                      <CheckCircle2 size={12} />
+                      Session Outcome <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={outcome ?? ""}
+                      onChange={(event) => onOutcomeChange?.(event.target.value)}
+                      placeholder="What was achieved? Describe measurable progress and participant response..."
+                      rows={2}
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                      <MessageCircle size={12} />
+                      Participant Choice &amp; Control <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={choiceAndControl ?? ""}
+                      onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
+                      placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
+                      rows={2}
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                      <Sparkles size={12} />
+                      Recommendations
+                    </label>
+                    <textarea
+                      value={recommendations ?? ""}
+                      onChange={(event) => onRecommendationsChange?.(event.target.value)}
+                      placeholder="Recommendations for coordinator or next session (optional)..."
+                      rows={2}
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      style={{ borderColor: BORDER, color: TEXT }}
+                    />
                   </div>
                 </div>
               )}
 
-              <div>
-                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
-                  <CheckCircle2 size={12} />
-                  Session Outcome *
-                </p>
-                <textarea
-                  value={outcome ?? ""}
-                  onChange={(event) => onOutcomeChange?.(event.target.value)}
-                  placeholder="What was achieved? Describe measurable progress and participant response..."
-                  rows={3}
-                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
-                  style={{ borderColor: BORDER, color: TEXT }}
-                />
-              </div>
-
-              <div>
-                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
-                  <MessageCircle size={12} />
-                  Participant Choice &amp; Control *
-                </p>
-                <textarea
-                  value={choiceAndControl ?? ""}
-                  onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
-                  placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
-                  rows={3}
-                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
-                  style={{ borderColor: BORDER, color: TEXT }}
-                />
-              </div>
-
-              <div>
-                <p className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
-                  <Sparkles size={12} />
-                  Recommendations
-                </p>
-                <textarea
-                  value={recommendations ?? ""}
-                  onChange={(event) => onRecommendationsChange?.(event.target.value)}
-                  placeholder="Recommendations for coordinator or next session (optional)..."
-                  rows={2}
-                  className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
-                  style={{ borderColor: BORDER, color: TEXT }}
-                />
-              </div>
-
+              {activeGoals.length > 0 && (
+                <div>
+                  {!ended && (
+                    <p className="mb-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                      Goal Evidence
+                    </p>
+                  )}
+                  {ended && (
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                      <ListChecks size={12} />
+                      Per-Goal Evidence (optional)
+                    </p>
+                  )}
+                  <GoalSelector
+                    goals={activeGoals}
+                    selected={selectedGoals}
+                    notes={goalNotes}
+                    onToggle={onToggleGoal}
+                    onNoteChange={onGoalNoteChange}
+                  />
+                </div>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
+            <button
+              type="button"
+              onClick={() => setComposerStep("record")}
+              className="text-sm font-black px-4 py-2 rounded-full border"
+              style={{ borderColor: BORDER, color: MUTED }}
+            >
+              ← Back
+            </button>
+            <div className="flex gap-3">
+              {ended ? (
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={!canSave}
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white transition disabled:opacity-50"
+                  style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                >
+                  {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                  Save Draft
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setComposerStep("choice")}
+                  className="text-sm font-black px-4 py-2 rounded-full text-white"
+                  style={{ background: PLUM }}
+                >
+                  Next: Choice & Control →
+                </button>
+              )}
+            </div>
+          </div>
         </>
       )}
 
@@ -1922,6 +1975,9 @@ export default function MyClientDetail({ id }: { id: string }) {
                 onTranslate={translateNote}
                 onGenerate={generateCompliantNote}
                 onSave={() => saveSessionDraft.mutate()}
+                onToggleGoal={toggleGoal}
+                onGoalNoteChange={handleGoalNoteChange}
+                onChoiceControlChange={setChoiceControl}
                 onClose={() => {
                   stopSessionDictation();
                   setSessionComposerOpen(false);
