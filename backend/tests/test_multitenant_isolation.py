@@ -511,12 +511,35 @@ class TestRLSWithAnonKey:
         assert rls_insert_check({}) is False, \
             "CCQ-115: anon-key INSERT without org_id must be blocked by RLS"
 
-    def test_rag_retrieval_scoped_to_org(self):
-        """RAG retrieval with org_id filter returns only own-org embeddings (CCQ-106/CCQ-115)."""
-        all_embeddings = [EMBEDDING_A, EMBEDDING_B]
-        org_id = ORG_A
+    @pytest.mark.asyncio
+    async def test_rag_retrieval_scoped_to_org(self):
+        """RAG retrieval with org_id filter returns only own-org embeddings (CARECLIQV2-31)."""
+        from backend.app.services import rag_service
 
-        org_scoped = [e for e in all_embeddings if e["organization_id"] == org_id]
-        assert len(org_scoped) == 1
-        assert org_scoped[0]["organization_id"] == ORG_A, \
-            "CCQ-115: RAG retrieval must be scoped to org_id, Org B embedding must not appear"
+        rpc_rows = [
+            {
+                "content": "Org A clinical note",
+                "session_id": SESSION_A["id"],
+                "participant_id": PATIENT_A["id"],
+                "session_date": SESSION_A["session_date"],
+                "compliance_score": 85.0,
+                "similarity_score": 0.92,
+            }
+        ]
+        mock_supabase = MagicMock()
+        mock_supabase.rpc.return_value.execute.return_value = MagicMock(data=rpc_rows)
+
+        with patch(
+            "backend.app.services.rag_service.generate_query_embedding",
+            return_value=[0.1] * 1536,
+        ), patch(
+            "backend.app.services.rag_service.get_supabase_admin",
+            return_value=mock_supabase,
+        ):
+            results = await rag_service.retrieve_similar("clinical note", ORG_A, k=5)
+
+        assert len(results) == 1
+        assert results[0].session_id == SESSION_A["id"]
+        assert all(r.session_id != SESSION_B["id"] for r in results)
+        call_params = mock_supabase.rpc.call_args[0][1]
+        assert call_params["organisation_id"] == ORG_A
