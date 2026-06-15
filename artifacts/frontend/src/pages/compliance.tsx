@@ -1,9 +1,17 @@
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGetComplianceOverview, useGetComplianceReport } from "@workspace/api-client-react";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import {
+  dismissCoordinatorPattern,
+  getCoordinatorAiDetectedPatterns,
+  type AiDetectedPattern,
+} from "@/services/coordinatorService";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   ShieldCheck, ShieldAlert, AlertTriangle, FileCheck2, Info, TrendingUp,
-  XCircle, CheckCircle2, DollarSign, BarChart3, Filter, Lightbulb,
+  XCircle, CheckCircle2, DollarSign, BarChart3, Filter, Lightbulb, Sparkles, X,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Link } from "wouter";
@@ -113,9 +121,34 @@ function Check({ pass, warn = false }: { pass: boolean; warn?: boolean }) {
 
 // ── Page Component ────────────────────────────────────────────────────────────
 export default function Compliance() {
+  const queryClient = useQueryClient();
   const { data: rawOverview, isLoading: overviewLoading } = useGetComplianceOverview();
   const { data: rawReport,   isLoading: reportLoading   } = useGetComplianceReport();
+  const { data: patternsData, isLoading: patternsLoading } = useOrgQuery(
+    ["coordinator", "ai-detected-patterns"],
+    { queryFn: getCoordinatorAiDetectedPatterns },
+  );
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ClaimStatus>("all");
+
+  const aiPatterns = patternsData?.patterns ?? [];
+
+  const handleDismissPattern = async (patternId: string) => {
+    setDismissingId(patternId);
+    try {
+      await dismissCoordinatorPattern(patternId);
+      await queryClient.invalidateQueries({ queryKey: ["coordinator", "ai-detected-patterns"] });
+      await queryClient.invalidateQueries({ queryKey: ["coordinator", "compliance-overview"] });
+    } finally {
+      setDismissingId(null);
+    }
+  };
+
+  const patternTypeLabel = (type: AiDetectedPattern["pattern_type"]) => {
+    if (type === "low_compliance_pair") return "Coaching need";
+    if (type === "incident_escalation") return "Incident escalation";
+    return "Behaviour support";
+  };
 
   const overview    = rawOverview as unknown as ExtendedComplianceOverview | undefined;
   const reportItems = (rawReport  as unknown as ExtendedReportItem[] | undefined) ?? [];
@@ -369,6 +402,79 @@ export default function Compliance() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* AI Detected Patterns — CARECLIQV2-34 */}
+      <div className="bg-white rounded-2xl p-5 shrink-0" style={{ boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center gap-2 mb-1">
+          <Sparkles size={15} style={{ color: PLUM }} />
+          <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>AI Detected Patterns</h2>
+        </div>
+        <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>
+          Cross-session risk patterns from weekly org analysis — dismiss when reviewed
+        </p>
+
+        {patternsLoading ? (
+          <div className="space-y-2">
+            {Array(2).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+          </div>
+        ) : aiPatterns.length === 0 ? (
+          <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-slate-50/80 border border-slate-100 text-[13px]" style={{ color: T3 }}>
+            <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
+            <span className="font-medium">No active patterns detected for your organisation.</span>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {aiPatterns.map((pattern) => {
+              const isHigh = pattern.severity === "high";
+              return (
+                <div
+                  key={pattern.id}
+                  className="flex items-start justify-between gap-3 rounded-xl border px-4 py-3"
+                  style={{
+                    borderColor: isHigh ? "rgba(239,68,68,0.25)" : "rgba(245,158,11,0.25)",
+                    background: isHigh ? "rgba(254,242,242,0.5)" : "rgba(255,251,235,0.5)",
+                  }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style={{
+                          color: isHigh ? "#DC2626" : "#D97706",
+                          background: isHigh ? "rgba(239,68,68,0.1)" : "rgba(245,158,11,0.1)",
+                        }}
+                      >
+                        {patternTypeLabel(pattern.pattern_type)}
+                      </span>
+                      <span className="text-[13px] font-bold truncate" style={{ color: T1 }}>
+                        {pattern.title}
+                      </span>
+                    </div>
+                    <p className="text-[12px] font-medium leading-snug" style={{ color: T2 }}>
+                      {pattern.message}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 h-8 px-2 text-[11px] font-bold"
+                    disabled={dismissingId === pattern.id}
+                    onClick={() => handleDismissPattern(pattern.id)}
+                  >
+                    {dismissingId === pattern.id ? "…" : (
+                      <>
+                        <X size={12} className="mr-1" />
+                        Dismiss
+                      </>
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Audit Table Records Panel ── */}
