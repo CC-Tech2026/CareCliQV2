@@ -25,7 +25,18 @@ const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,
 interface ExtendedComplianceOverview {
   average_score: number; total_sessions: number;
   compliant: number; at_risk: number; non_compliant: number;
+  budget_warnings?: BudgetRuleAlert[];
   sessions?: ExtendedReportItem[];
+}
+interface BudgetRuleAlert {
+  session_id?: string;
+  participant_id?: string;
+  participant_name?: string;
+  session_date?: string;
+  rule: string;
+  status?: string;
+  severity?: string;
+  message?: string;
 }
 interface ExtendedReportItem {
   session_id: string; participant_name: string;
@@ -114,6 +125,10 @@ export default function Compliance() {
     [reportItems, statusFilter],
   );
   const failingRules = useMemo(() => aggregateFailingRules(reportItems), [reportItems]);
+  const budgetWarnings = useMemo(
+    () => (overview?.budget_warnings ?? []).filter(w => w.rule === "budget_warning" || w.rule === "budget_exceeded"),
+    [overview?.budget_warnings],
+  );
 
   const estimatedLostRevenue = useMemo(() => {
     const mins = reportItems
@@ -317,6 +332,31 @@ export default function Compliance() {
                   </p>
                 </div>
               </div>
+
+              {budgetWarnings.length > 0 && (
+                <div className="rounded-xl border border-amber-100/80 bg-amber-50/30 p-3 space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#D97706" }}>
+                    NDIS Plan Budget Advisories
+                  </p>
+                  {budgetWarnings.slice(0, 4).map((w, i) => (
+                    <div key={`${w.session_id}-${w.rule}-${i}`} className="text-[12px] leading-snug" style={{ color: T2 }}>
+                      <span className="font-bold">{w.participant_name ?? "Participant"}</span>
+                      {w.session_date ? (() => {
+                        try { return ` · ${format(parseISO(String(w.session_date)), "MMM d, yyyy")}`; }
+                        catch { return ` · ${w.session_date}`; }
+                      })() : ""}
+                      <p className="mt-0.5 font-medium" style={{ color: w.rule === "budget_exceeded" ? "#DC2626" : "#D97706" }}>
+                        {w.message}
+                      </p>
+                    </div>
+                  ))}
+                  {budgetWarnings.length > 4 && (
+                    <p className="text-[11px] font-semibold" style={{ color: T3 }}>
+                      +{budgetWarnings.length - 4} more budget advisory{budgetWarnings.length - 4 !== 1 ? "ies" : ""}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {nonCompliant > 0 && (
                 <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 bg-amber-50/40 border border-amber-100/70">

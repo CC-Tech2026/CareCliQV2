@@ -25,7 +25,19 @@ export type ComplianceOverview = {
   compliant: number;
   at_risk: number;
   non_compliant: number;
+  budget_warnings?: BudgetRuleAlert[];
   sessions: DashboardSession[];
+};
+
+export type BudgetRuleAlert = {
+  session_id?: string;
+  participant_id?: string;
+  participant_name?: string;
+  session_date?: string;
+  rule: "budget_exceeded" | "budget_warning";
+  status?: string;
+  severity?: string;
+  message?: string;
 };
 
 export type RpFlag = {

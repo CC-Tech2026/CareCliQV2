@@ -3,8 +3,8 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
-from ..services import session_service, ai_service, alert_service, funding_service, message_service
-from ..services.compliance_engine import run_compliance_check, check_budget_not_exceeded
+from ..services import session_service, ai_service, alert_service, funding_service, message_service, shift_service
+from ..services.compliance_engine import run_compliance_check
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
@@ -293,7 +293,24 @@ async def save_session_with_ai(
             existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
         custom_physical_types = await get_physical_exam_session_types()
-        rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
+
+        budget_context = None
+        if participant_id:
+            plan = await funding_service.get_plan_for_participant(participant_id)
+            budget_context = funding_service.build_budget_alignment_context(
+                session_for_analysis, plan
+            )
+
+        duration_context = shift_service.build_duration_consistency_context(session_for_analysis)
+
+        rules_result = run_compliance_check(
+            session_for_analysis,
+            participant,
+            existing_sessions,
+            custom_physical_types,
+            budget_context=budget_context,
+            duration_context=duration_context,
+        )
 
         # Three-tier failure classification.
         # block  → hard-stop; status never advances regardless of acknowledgements
@@ -624,16 +641,23 @@ async def save_session_with_ai(
                     ),
                 ))
 
-            # Budget check runs separately (not part of R1–R12 NDIS rules)
-            budget_result = check_budget_not_exceeded(session, participant)
-            if budget_result["status"] in ("warning", "fail") and participant_id:
+            for rule in rules_result.get("rules", []):
+                code = rule.get("rule")
+                if code not in ("budget_exceeded", "budget_warning"):
+                    continue
+                if code == "budget_exceeded" and rule.get("status") != "fail":
+                    continue
+                if code == "budget_warning" and rule.get("status") != "warning":
+                    continue
+                if not participant_id:
+                    continue
                 await alert_service.create_alert(AlertCreate(
                     participant_id=participant_id,
                     session_id=session_id,
                     alert_type="budget",
-                    severity="high" if budget_result["status"] == "fail" else "medium",
-                    title="Budget Alert",
-                    message=budget_result["message"],
+                    severity="high" if code == "budget_exceeded" else "medium",
+                    title="NDIS Budget Exceeded" if code == "budget_exceeded" else "NDIS Budget Low",
+                    message=rule.get("message") or "NDIS plan budget advisory",
                 ))
         except Exception as side_e:
             logger.warning(f"Alert creation failed (non-critical): {side_e}")
