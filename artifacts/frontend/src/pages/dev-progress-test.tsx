@@ -50,7 +50,8 @@ type TicketId =
   | "CARECLIQV2-33"
   | "CARECLIQV2-36"
   | "CARECLIQV2-87"
-  | "CARECLIQV2-35";
+  | "CARECLIQV2-35"
+  | "CARECLIQV2-34";
 
 type TicketDef = {
   id: TicketId;
@@ -117,6 +118,13 @@ const TICKETS: TicketDef[] = [
       "When session.shift_id is set, compare session.duration_minutes vs shift.duration_minutes; warning >30 min, fail >60 min (-10 score).",
     keywords: "duration consistency shift compliance rules_result warning error",
   },
+  {
+    id: "CARECLIQV2-34",
+    title: "Cross-session AI detected patterns",
+    description:
+      "Weekly org pattern job: low compliance pairs, incident escalation, refused activity without de-escalation; coordinator Compliance Centre UI.",
+    keywords: "pattern detection ai coordinator compliance dashboard weekly dismiss",
+  },
 ];
 
 type ApiResult = {
@@ -156,6 +164,10 @@ type TestContext = {
   setSessionComplianceResult: (r: ApiResult | null) => void;
   complianceOverviewResult: ApiResult | null;
   setComplianceOverviewResult: (r: ApiResult | null) => void;
+  patternRunResult: ApiResult | null;
+  setPatternRunResult: (r: ApiResult | null) => void;
+  patternListResult: ApiResult | null;
+  setPatternListResult: (r: ApiResult | null) => void;
 };
 
 function readUnlocked(): boolean {
@@ -304,6 +316,69 @@ function DurationRulesStatusNote({
               <code className="text-[11px]">{String(r.rule)}</code> — {String(r.message ?? "")}
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PatternsMigrationNote({ result }: { result: ApiResult | null }) {
+  if (!result?.ok || !result.data || typeof result.data !== "object") return null;
+  const data = result.data as { ai_detected_patterns_table_missing?: boolean };
+  const ok = data.ai_detected_patterns_table_missing === false;
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 text-xs leading-relaxed"
+      style={{
+        borderColor: ok ? "#BBF7D0" : "#FDE68A",
+        background: ok ? "#F0FDF4" : "#FFFBEB",
+        color: ok ? "#166534" : "#92400E",
+      }}
+    >
+      {ok ? (
+        <p>
+          <code className="text-[11px]">ai_detected_patterns_table_missing: false</code> — schema ready.
+        </p>
+      ) : (
+        <p>
+          Run <code className="text-[11px]">030_ai_detected_patterns.sql</code> in Supabase, then restart backend.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PatternsStatusNote({ run, list }: { run: ApiResult | null; list: ApiResult | null }) {
+  const extract = (data: unknown): unknown[] => {
+    if (!data || typeof data !== "object") return [];
+    const root = data as Record<string, unknown>;
+    const patterns = root.patterns;
+    return Array.isArray(patterns) ? patterns : [];
+  };
+  const patterns = extract(run?.data).length > 0 ? extract(run?.data) : extract(list?.data);
+  if (!run && !list) return null;
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
+      style={{ borderColor: BORDER, background: "#FAFAFF", color: TEXT }}
+    >
+      <p className="font-semibold">How to read this (CARECLIQV2-34)</p>
+      {patterns.length === 0 ? (
+        <p>
+          No active patterns — ensure org has ≥4 low-scoring sessions per worker–participant pair, incident spike,
+          or 2+ refused-activity notes without de-escalation, then run POST patterns/run again.
+        </p>
+      ) : (
+        <ul className="list-disc pl-4 space-y-1">
+          {patterns.slice(0, 5).map((p, i) => {
+            const row = p as Record<string, unknown>;
+            return (
+              <li key={i}>
+                <code className="text-[11px]">{String(row.pattern_type ?? "pattern")}</code> —{" "}
+                {String(row.message ?? row.title ?? "")}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -933,6 +1008,79 @@ function TicketTestPanel({ ticketId, ctx }: { ticketId: TicketId; ctx: TestConte
         </div>
       );
 
+    case "CARECLIQV2-34":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <ul className="text-sm space-y-1 list-disc pl-5" style={{ color: MUTED }}>
+            <li>Migration: <code className="text-xs">030_ai_detected_patterns.sql</code></li>
+            <li>Weekly cron: <code className="text-xs">python3 -m backend.scripts.pattern_detection_cron</code> (Sun 00:00 UTC)</li>
+            <li>Coordinator login required for all endpoints below.</li>
+          </ul>
+          <ol className="text-sm list-decimal pl-5 space-y-2" style={{ color: MUTED }}>
+            <li>Run migration, restart backend.</li>
+            <li>POST <code className="text-xs">/ai-detected-patterns/run</code> to scan org sessions/incidents.</li>
+            <li>GET patterns → open <code className="text-xs">/compliance</code> → <strong>AI Detected Patterns</strong> section.</li>
+            <li>Dismiss a pattern from Compliance Centre or via API.</li>
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!isCoordinator || ctx.busy === "migration34"}
+              onClick={() =>
+                ctx.run("migration34", async () => {
+                  const r = await callApi("/api/system/migration-status");
+                  ctx.setMigrationResult(r);
+                })
+              }
+            >
+              {ctx.busy === "migration34" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Check migration status
+            </Button>
+            <Button
+              size="sm"
+              disabled={!isCoordinator || ctx.busy === "patternrun34"}
+              onClick={() =>
+                ctx.run("patternrun34", async () => {
+                  const r = await callApi("/api/coordinator/ai-detected-patterns/run", { method: "POST" });
+                  ctx.setPatternRunResult(r);
+                })
+              }
+              style={{ background: PLUM }}
+              className="text-white"
+            >
+              {ctx.busy === "patternrun34" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              POST patterns/run
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!isCoordinator || ctx.busy === "patternlist34"}
+              onClick={() =>
+                ctx.run("patternlist34", async () => {
+                  const r = await callApi("/api/coordinator/ai-detected-patterns");
+                  ctx.setPatternListResult(r);
+                })
+              }
+            >
+              {ctx.busy === "patternlist34" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              GET patterns
+            </Button>
+            <Link href="/compliance">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                Compliance Centre <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+          <ResultBox title="Migration status" result={ctx.migrationResult} />
+          <PatternsMigrationNote result={ctx.migrationResult} />
+          <ResultBox title="Pattern detection run" result={ctx.patternRunResult} />
+          <ResultBox title="Active patterns" result={ctx.patternListResult} />
+          <PatternsStatusNote run={ctx.patternRunResult} list={ctx.patternListResult} />
+        </div>
+      );
+
     default:
       return null;
   }
@@ -1044,6 +1192,8 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
   const [complianceRunResult, setComplianceRunResult] = useState<ApiResult | null>(null);
   const [sessionComplianceResult, setSessionComplianceResult] = useState<ApiResult | null>(null);
   const [complianceOverviewResult, setComplianceOverviewResult] = useState<ApiResult | null>(null);
+  const [patternRunResult, setPatternRunResult] = useState<ApiResult | null>(null);
+  const [patternListResult, setPatternListResult] = useState<ApiResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -1112,6 +1262,10 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
     setSessionComplianceResult,
     complianceOverviewResult,
     setComplianceOverviewResult,
+    patternRunResult,
+    setPatternRunResult,
+    patternListResult,
+    setPatternListResult,
   };
 
   return (

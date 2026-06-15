@@ -77,6 +77,7 @@ async def _apply_startup_migrations():
             ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
             ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
             ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
+            ("ai_detected_patterns", "ai_detected_patterns",  "id, organization_id, pattern_type, title, message",                           "ai_detected_patterns table OK",         "ai_detected_patterns missing — run backend/supabase/migrations/030_ai_detected_patterns.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -122,6 +123,8 @@ async def _apply_startup_migrations():
                 migration_state.shifts_table_missing = not ok
             elif key == "sessions_shift_id":
                 migration_state.sessions_shift_id_column_missing = not ok
+            elif key == "ai_detected_patterns":
+                migration_state.ai_detected_patterns_table_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -203,6 +206,7 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
         "progress_delta_column_missing":              migration_state.progress_delta_column_missing,
         "shifts_table_missing":                       migration_state.shifts_table_missing,
         "sessions_shift_id_column_missing":           migration_state.sessions_shift_id_column_missing,
+        "ai_detected_patterns_table_missing":         migration_state.ai_detected_patterns_table_missing,
         "migration_sql_file":                         "backend/supabase_setup.sql",
         "patch_sql_file":                             "backend/supabase_patch_missing_tables.sql",
         "supabase_sql_editor":                        _MIGRATION_URL,
@@ -218,6 +222,7 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
             migration_state.progress_delta_column_missing,
             migration_state.shifts_table_missing,
             migration_state.sessions_shift_id_column_missing,
+            migration_state.ai_detected_patterns_table_missing,
         ]),
     }
 

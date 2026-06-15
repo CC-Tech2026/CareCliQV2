@@ -349,7 +349,28 @@ DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS updated_at TIMEST
 DO $$ BEGIN ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS shift_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_shifts_org_worker_scheduled ON public.shifts (organization_id, worker_id, scheduled_start DESC); EXCEPTION WHEN others THEN NULL; END $$;
 
--- ── 12. is_active / role guards on users ─────────────────────────────────────
+-- ── 12. CARECLIQV2-34 — ai_detected_patterns ───────────────────────────────────
+DO $$ BEGIN
+    CREATE TABLE IF NOT EXISTS public.ai_detected_patterns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id UUID NOT NULL,
+        pattern_type TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'medium',
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        worker_id UUID,
+        participant_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        dismissed_at TIMESTAMPTZ,
+        dismissed_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- ── 13. is_active / role guards on users ─────────────────────────────────────
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role       TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT TRUE;
 

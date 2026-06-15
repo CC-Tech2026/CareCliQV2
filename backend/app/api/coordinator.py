@@ -10,6 +10,11 @@ from pydantic import BaseModel
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
 from ..core.security import get_current_user
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
+from ..services.pattern_detection_service import (
+    dismiss_pattern,
+    get_active_patterns,
+    run_pattern_detection_for_org,
+)
 from ..services import participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
@@ -240,7 +245,7 @@ async def all_sessions(limit: int = 500, current_user: dict = Depends(get_curren
 
 @router.get("/compliance-overview")
 async def compliance_overview(current_user: dict = Depends(get_current_user)):
-    _require_coordinator(current_user)
+    org_id = _require_coordinator(current_user)
     sessions = await session_service.get_compliance_report(current_user)
     scores = [float(s["compliance_score"]) for s in sessions if s.get("compliance_score") is not None]
     average = round(sum(scores) / len(scores), 1) if scores else 0
@@ -251,8 +256,41 @@ async def compliance_overview(current_user: dict = Depends(get_current_user)):
         "at_risk": sum(1 for score in scores if 60 <= score < 85),
         "non_compliant": sum(1 for score in scores if score < 60),
         "budget_warnings": collect_budget_rule_alerts_from_sessions(sessions),
+        "ai_detected_patterns": get_active_patterns(org_id),
         "sessions": [_session_payload(session) for session in sessions],
     }
+
+
+@router.get("/ai-detected-patterns")
+async def list_ai_detected_patterns(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    return {"patterns": get_active_patterns(org_id)}
+
+
+@router.post("/ai-detected-patterns/run")
+async def run_ai_pattern_detection(current_user: dict = Depends(get_current_user)):
+    """Manual trigger for QA / dev (weekly cron uses the same service)."""
+    org_id = _require_coordinator(current_user)
+    result = run_pattern_detection_for_org(org_id)
+    return {
+        **result,
+        "patterns": get_active_patterns(org_id),
+    }
+
+
+@router.post("/ai-detected-patterns/{pattern_id}/dismiss")
+async def dismiss_ai_detected_pattern(
+    pattern_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    user_id = get_user_id(current_user)
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User id required")
+    row = dismiss_pattern(pattern_id, org_id, str(user_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Pattern not found or already dismissed")
+    return {"ok": True, "pattern": row}
 
 
 @router.get("/rp-flags")

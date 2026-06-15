@@ -26,7 +26,24 @@ export type ComplianceOverview = {
   at_risk: number;
   non_compliant: number;
   budget_warnings?: BudgetRuleAlert[];
+  ai_detected_patterns?: AiDetectedPattern[];
   sessions: DashboardSession[];
+};
+
+export type AiDetectedPattern = {
+  id: string;
+  pattern_type:
+    | "low_compliance_pair"
+    | "incident_escalation"
+    | "refused_activity_no_deescalation";
+  severity?: "low" | "medium" | "high";
+  title: string;
+  message: string;
+  worker_id?: string | null;
+  participant_id?: string | null;
+  metadata?: Record<string, unknown>;
+  detected_at?: string;
+  dismissed_at?: string | null;
 };
 
 export type BudgetRuleAlert = {
@@ -107,6 +124,24 @@ export function getCoordinatorSessions() {
 
 export function getCoordinatorComplianceOverview() {
   return jsonFetch<ComplianceOverview>("/api/coordinator/compliance-overview");
+}
+
+export function getCoordinatorAiDetectedPatterns() {
+  return jsonFetch<{ patterns: AiDetectedPattern[] }>("/api/coordinator/ai-detected-patterns");
+}
+
+export function runCoordinatorPatternDetection() {
+  return jsonFetch<{ patterns: AiDetectedPattern[]; detected: number; created: number }>(
+    "/api/coordinator/ai-detected-patterns/run",
+    { method: "POST" },
+  );
+}
+
+export function dismissCoordinatorPattern(patternId: string) {
+  return jsonFetch<{ ok: boolean; pattern: AiDetectedPattern }>(
+    `/api/coordinator/ai-detected-patterns/${patternId}/dismiss`,
+    { method: "POST" },
+  );
 }
 
 export function getCoordinatorRpFlags() {
