@@ -18,7 +18,8 @@ from ..schemas.participant import (
     ParticipantCreate,
     ParticipantUpdate,
 )
-from ..services import funding_service, participant_service
+from ..schemas.progress import ParticipantProgressResponse
+from ..services import funding_service, participant_service, progress_service
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,24 @@ async def get_participant(
         participant_id,
         current_user,
     )
+
+
+@router.get("/{participant_id}/progress", response_model=ParticipantProgressResponse)
+async def get_participant_progress(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Per-goal progress trajectories and plan renewal readiness (CARECLIQV2-76)."""
+    from ..core.access import is_support_worker
+
+    if is_support_worker(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Support workers cannot access participant progress trajectories",
+        )
+
+    await _require_participant_access(participant_id, current_user)
+    return await progress_service.get_participant_progress(participant_id, current_user)
 
 
 @router.put("/{participant_id}")

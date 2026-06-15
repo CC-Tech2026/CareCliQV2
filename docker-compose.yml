@@ -31,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: artifacts/frontend/Dockerfile
+      args:
+        VITE_DEV_CONSOLE_PASSWORD: ${VITE_DEV_CONSOLE_PASSWORD:-}
     depends_on:
       backend:
         condition: service_healthy

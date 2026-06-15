@@ -383,6 +383,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           notes: session?.notes ?? notes,
           failed_rules: failed,
           rp_flags: rp,
+          participant_id: participantId || undefined,
         }),
       });
       if (!res.ok) throw new Error("Failed to generate improved note");

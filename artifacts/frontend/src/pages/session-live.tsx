@@ -47,6 +47,7 @@ import {
   ShieldCheck,
   Radio,
   Paperclip,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -541,8 +542,12 @@ export default function SessionLive() {
     status: string;
     rules?: Array<{ label: string; pass: boolean; note?: string }>;
     rpFlags?: RPFlag[];
+    deltaSummaries?: string[];
   }
   const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
+  const [previewDeltaSummaries, setPreviewDeltaSummaries] = useState<string[]>([]);
+  const [previewProgressLoading, setPreviewProgressLoading] = useState(false);
+  const [previewProgressNotice, setPreviewProgressNotice] = useState<string | null>(null);
 
   // ── Reminder ──
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -727,6 +732,95 @@ export default function SessionLive() {
         console.error("attachment load failed", error);
       });
   }, [session?.id]);
+
+  useEffect(() => {
+    if (!showSummary || !id || postSaveResult || summaryLoading) {
+      if (!showSummary || postSaveResult) {
+        setPreviewDeltaSummaries([]);
+        setPreviewProgressNotice(null);
+      }
+      return;
+    }
+
+    const payload = {
+      notes: editableNotes.trim() || undefined,
+      activities_performed: structuredNotes.activitiesPerformed.trim() || undefined,
+      outcomes: structuredNotes.outcomes.trim() || undefined,
+      participant_response: structuredNotes.participantResponse.trim() || undefined,
+      progress_toward_goals: structuredNotes.progressTowardGoals.trim() || undefined,
+      goals_addressed:
+        (session?.goals_addressed?.length ?? 0) > 0
+          ? session?.goals_addressed
+          : goals.filter((g) => g.status !== "not_started").map((g) => g.id),
+    };
+    const hasNoteContent = Boolean(
+      payload.notes ||
+        payload.activities_performed ||
+        payload.outcomes ||
+        payload.participant_response ||
+        payload.progress_toward_goals,
+    );
+    if (!hasNoteContent) {
+      setPreviewProgressLoading(false);
+      setPreviewDeltaSummaries([]);
+      setPreviewProgressNotice("Add session notes before a progress summary can be generated.");
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewProgressLoading(true);
+    setPreviewProgressNotice(null);
+    apiFetch(`/api/sessions/${id}/preview-progress`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(
+            typeof data?.detail === "string" ? data.detail : `Preview failed (${r.status})`,
+          );
+        }
+        return data as { delta_summaries?: string[] };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const summaries = Array.isArray(data.delta_summaries)
+          ? data.delta_summaries.filter((s) => typeof s === "string" && s.trim())
+          : [];
+        setPreviewDeltaSummaries(summaries);
+        if (summaries.length === 0) {
+          setPreviewProgressNotice(
+            "No measurable progress detected yet. You can still approve — progress will be extracted on save.",
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPreviewDeltaSummaries([]);
+        setPreviewProgressNotice(
+          err instanceof Error
+            ? err.message
+            : "Could not generate progress summary. You can still approve and save.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewProgressLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showSummary,
+    id,
+    postSaveResult,
+    summaryLoading,
+    structuredNotes,
+    editableNotes,
+    session?.goals_addressed,
+    goals,
+  ]);
 
   // ── Init body markers ──
   useEffect(() => {
@@ -1288,6 +1382,14 @@ export default function SessionLive() {
                 (f.suggested_rewrite as string | undefined) ??
                 (f.suggestion as string | undefined),
             }));
+          }
+          const progressDelta = aiData?.progress_delta;
+          if (Array.isArray(progressDelta)) {
+            localResult.deltaSummaries = progressDelta
+              .map((e: Record<string, unknown>) => String(e.delta_summary ?? ""))
+              .filter((s: string) => s.trim());
+          } else if (Array.isArray(aiData?.delta_summaries)) {
+            localResult.deltaSummaries = aiData.delta_summaries;
           }
 
       setIsSaving(false);
@@ -1872,6 +1974,18 @@ export default function SessionLive() {
                 rules={postSaveResult.rules}
                 rpFlags={postSaveResult.rpFlags}
               />
+              {postSaveResult.deltaSummaries && postSaveResult.deltaSummaries.length > 0 && (
+                <div className="rounded-xl p-4 border space-y-2 bg-emerald-50 border-emerald-200">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-800">
+                    Progress Recorded
+                  </p>
+                  {postSaveResult.deltaSummaries.map((line, idx) => (
+                    <p key={idx} className="text-[13px] text-emerald-900">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
                 className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
@@ -2146,6 +2260,56 @@ export default function SessionLive() {
                   </div>
                 )}
               </div>
+
+              {/* Progress delta preview (read-only, CARECLIQV2-78) */}
+              {(previewProgressLoading ||
+                previewDeltaSummaries.length > 0 ||
+                previewProgressNotice) && (
+                <div
+                  className="rounded-xl p-4 border space-y-2"
+                  style={{
+                    background: previewDeltaSummaries.length > 0 ? "#F0FDF4" : "#FFFBEB",
+                    borderColor: previewDeltaSummaries.length > 0 ? "#BBF7D0" : "#FDE68A",
+                  }}
+                >
+                  <p
+                    className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5"
+                    style={{ color: previewDeltaSummaries.length > 0 ? "#065F46" : "#92400E" }}
+                  >
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Progress Summary
+                    {previewDeltaSummaries.length > 0 && (
+                      <span className="font-normal normal-case tracking-normal">
+                        — confirm before approving
+                      </span>
+                    )}
+                  </p>
+                  {previewProgressLoading ? (
+                    <div
+                      className="flex items-center gap-2 text-[12px]"
+                      style={{ color: previewDeltaSummaries.length > 0 ? "#047857" : "#B45309" }}
+                    >
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Generating progress summary…
+                    </div>
+                  ) : previewDeltaSummaries.length > 0 ? (
+                    <ul className="space-y-2">
+                      {previewDeltaSummaries.map((summaryLine, idx) => (
+                        <li
+                          key={idx}
+                          className="text-[13px] leading-relaxed text-emerald-900 bg-white/60 rounded-lg px-3 py-2"
+                        >
+                          {summaryLine}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    previewProgressNotice && (
+                      <p className="text-[12px] leading-relaxed text-amber-900">{previewProgressNotice}</p>
+                    )
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.5)" }}>

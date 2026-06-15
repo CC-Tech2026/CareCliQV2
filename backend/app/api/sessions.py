@@ -42,12 +42,59 @@ class SaveWithAIBody(BaseModel):
     acknowledged_warn_rules: List[str] = []
 
 
+class PreviewProgressBody(BaseModel):
+    """Optional draft note content — used before PATCH on approve (CARECLIQV2-78)."""
+    notes: Optional[str] = None
+    activities_performed: Optional[str] = None
+    outcomes: Optional[str] = None
+    participant_response: Optional[str] = None
+    progress_toward_goals: Optional[str] = None
+    goals_addressed: Optional[List[str]] = None
+
+
 def _effective_tier(rule: dict) -> str:
     """Return enforcement_tier for a rule result, falling back to is_blocking."""
     tier = rule.get("enforcement_tier")
     if tier in ("block", "warn", "info"):
         return tier
     return "block" if rule.get("is_blocking") else "info"
+
+
+def _resolve_goal_ids(session: dict, participant: dict | None) -> list[str]:
+    raw = session.get("goals_addressed") or []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            raw = []
+    goal_ids = [str(g) for g in raw if g]
+    if goal_ids:
+        return goal_ids
+    if participant:
+        for g in participant.get("goals") or []:
+            if isinstance(g, dict) and g.get("id"):
+                goal_ids.append(str(g["id"]))
+    return goal_ids[:5]
+
+
+async def _build_prior_trajectory(
+    session: dict,
+    participant: dict | None,
+    participant_id: str | None,
+    current_user: dict,
+) -> dict[str, list[dict]]:
+    if not participant_id:
+        return {}
+    goal_ids = _resolve_goal_ids(session, participant)
+    if not goal_ids:
+        return {}
+    return await session_service.get_prior_progress_sessions(
+        participant_id=participant_id,
+        goal_ids=goal_ids,
+        exclude_session_id=str(session.get("id") or ""),
+        current_user=current_user,
+        limit=5,
+    )
 
 
 def _attachment_url(bucket, path: str) -> Optional[str]:
@@ -263,9 +310,16 @@ async def save_session_with_ai(
         # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
-        analysis = await ai_service.generate_session_analysis(
-            session_for_analysis, participant_data, rp_flags=rp_flags_for_ai
+        prior_trajectory = await _build_prior_trajectory(
+            session, participant, participant_id, current_user
         )
+        analysis = await ai_service.generate_session_analysis(
+            session_for_analysis,
+            participant_data,
+            rp_flags=rp_flags_for_ai,
+            prior_trajectory=prior_trajectory,
+        )
+        progress_delta = analysis.get("progress_delta")
 
         # AI spec compliance score (from weighted 5-dimension breakdown)
         ai_spec_score = float((analysis.get("compliance") or {}).get("score") or 0)
@@ -374,6 +428,8 @@ async def save_session_with_ai(
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
+        if progress_delta is not None:
+            updates["progress_delta"] = json.dumps(progress_delta)
         # Only advance to "completed" when no block-tier failures AND all warn-tier
         # failures have been explicitly acknowledged by the worker.
         if not block_failures and not unacked_warn_failures:
@@ -597,6 +653,7 @@ async def save_session_with_ai(
                 "checked_at": compliance_checked_at,
             },
             "insights": insights,
+            "progress_delta": progress_delta,
         }
     except HTTPException:
         raise
@@ -605,6 +662,81 @@ async def save_session_with_ai(
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{session_id}/preview-progress")
+async def preview_session_progress(
+    session_id: str,
+    body: Optional[PreviewProgressBody] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Dry-run progress_delta extraction for the approval modal (CARECLIQV2-78)."""
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+
+    participant_data = {
+        "full_name": participant.get("full_name", "") if participant else session.get("participant_name", ""),
+        "ndis_number": participant.get("ndis_number", "") if participant else session.get("participant_ndis", ""),
+        "goals": participant.get("goals") if participant else [],
+    }
+
+    draft = body or PreviewProgressBody()
+    structured_parts = [
+        draft.activities_performed or session.get("activities_performed") or "",
+        draft.outcomes or session.get("outcomes") or "",
+        draft.participant_response or session.get("participant_response") or "",
+        draft.progress_toward_goals or session.get("progress_toward_goals") or "",
+    ]
+    structured_text = "\n".join(p.strip() for p in structured_parts if str(p).strip())
+    free_notes = (draft.notes or session.get("notes") or "").strip()
+    combined_notes = f"{structured_text}\n\n{free_notes}".strip() if structured_text and free_notes else (structured_text or free_notes)
+
+    compliance_input_text = (
+        combined_notes
+        or session.get("compliance_input_text")
+        or session.get("translated_english_note")
+        or ""
+    ).strip()
+    if not compliance_input_text:
+        return {"progress_delta": None, "delta_summaries": []}
+
+    session_for_analysis = {
+        **session,
+        "notes": compliance_input_text,
+        "activities_performed": draft.activities_performed or session.get("activities_performed") or "",
+        "outcomes": draft.outcomes or session.get("outcomes") or "",
+        "participant_response": draft.participant_response or session.get("participant_response") or "",
+        "progress_toward_goals": draft.progress_toward_goals or session.get("progress_toward_goals") or "",
+    }
+    if draft.goals_addressed:
+        session_for_analysis["goals_addressed"] = draft.goals_addressed
+
+    try:
+        prior_trajectory = await _build_prior_trajectory(
+            session, participant, participant_id, current_user
+        )
+        analysis = await ai_service.generate_session_analysis(
+            session_for_analysis,
+            participant_data,
+            rp_flags=[],
+            prior_trajectory=prior_trajectory,
+        )
+        progress_delta = analysis.get("progress_delta")
+        summaries = [
+            str(e.get("delta_summary"))
+            for e in (progress_delta or [])
+            if isinstance(e, dict) and e.get("delta_summary")
+        ]
+        return {"progress_delta": progress_delta, "delta_summaries": summaries}
+    except Exception as exc:
+        logger.warning("preview-progress failed (non-critical): %s", exc)
+        return {"progress_delta": None, "delta_summaries": []}
 
 
 @router.get("/{session_id}/compliance")

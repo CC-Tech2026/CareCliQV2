@@ -409,3 +409,71 @@ async def retrieve_compliance_context(
         limit=limit,
         min_similarity=0.75,
     )
+
+
+async def retrieve_high_scoring_participant_notes(
+    participant_id: str,
+    organisation_id: str,
+    query_text: str,
+    min_score: float = 85.0,
+    k: int = 3,
+) -> list[dict[str, Any]]:
+    """CARECLIQV2-33 — RAG retrieval of high-scoring past notes for same participant."""
+    if not participant_id or not organisation_id:
+        return []
+
+    supabase = get_supabase_admin()
+    direct: list[dict[str, Any]] = []
+    try:
+        result = (
+            supabase.table("sessions")
+            .select(
+                "id, session_date, compliance_score, compliance_input_text, "
+                "translated_english_note, notes"
+            )
+            .eq("organization_id", organisation_id)
+            .eq("patient_id", participant_id)
+            .eq("status", "completed")
+            .gte("compliance_score", min_score)
+            .order("session_date", desc=True)
+            .limit(k)
+            .execute()
+        )
+        for row in result.data or []:
+            content = (
+                row.get("compliance_input_text")
+                or row.get("translated_english_note")
+                or row.get("notes")
+                or ""
+            )
+            if not str(content).strip():
+                continue
+            direct.append({
+                "session_id": str(row.get("id")),
+                "session_date": row.get("session_date"),
+                "compliance_score": row.get("compliance_score"),
+                "content": str(content).strip(),
+            })
+    except Exception as exc:
+        logger.warning("High-scoring session lookup failed: %s", exc)
+
+    if direct:
+        return direct[:k]
+
+    if not query_text or not query_text.strip():
+        return []
+
+    semantic = await retrieve_similar(query_text, organisation_id, k=k * 2)
+    filtered = [
+        {
+            "session_id": r.session_id,
+            "session_date": r.session_date.isoformat() if r.session_date else None,
+            "compliance_score": r.compliance_score,
+            "content": r.content or "",
+        }
+        for r in semantic
+        if r.participant_id == participant_id
+        and (r.compliance_score is None or r.compliance_score >= min_score)
+        and (r.content or "").strip()
+    ]
+    return filtered[:k]

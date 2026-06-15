@@ -207,6 +207,7 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS practitioner_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS progress_delta JSONB;
 
 -- 7. Add coordinator_id to users (org hierarchy: which coordinator a worker reports to)
 -- NULL = no coordinator assigned yet (valid for coordinators, MDs, and unlinked workers).
