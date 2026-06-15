@@ -39,6 +39,7 @@ const UNLOCK_STORAGE_KEY = "ccq_dev_progress_console_unlocked";
 
 const DEMO_JAMES_PARTICIPANT = "0ac8f871-6ca6-4a73-a300-eac933d07232";
 const DEMO_JAMES_DRAFT_SESSION = "a1000001-0000-4000-8000-000000000099";
+const DEMO_JAMES_SHIFT = "b2000002-0000-4000-8000-000000000088";
 
 type TicketId =
   | "CARECLIQV2-72"
@@ -46,7 +47,10 @@ type TicketId =
   | "CARECLIQV2-79"
   | "CARECLIQV2-78"
   | "CARECLIQV2-76"
-  | "CARECLIQV2-33";
+  | "CARECLIQV2-33"
+  | "CARECLIQV2-36"
+  | "CARECLIQV2-87"
+  | "CARECLIQV2-35";
 
 type TicketDef = {
   id: TicketId;
@@ -92,6 +96,27 @@ const TICKETS: TicketDef[] = [
     description: "improve-note uses high-scoring past notes for the participant when participant_id is sent.",
     keywords: "rag improve note ai documentation",
   },
+  {
+    id: "CARECLIQV2-36",
+    title: "NDIS plan budget alignment rules",
+    description:
+      "On compliance scoring, add budget_exceeded / budget_warning to rules_result from ndis_plan per-category budgets; surface advisories on compliance overview.",
+    keywords: "budget ndis plan exceeded warning compliance rules_result coordinator",
+  },
+  {
+    id: "CARECLIQV2-87",
+    title: "Shifts table (MyShift schema)",
+    description:
+      "Create shifts table with scheduling, clock-in/out, participant snapshot, care instructions, status enum; add sessions.shift_id FK.",
+    keywords: "shifts migration 029 myshift schema shift_id table",
+  },
+  {
+    id: "CARECLIQV2-35",
+    title: "Duration consistency compliance rule",
+    description:
+      "When session.shift_id is set, compare session.duration_minutes vs shift.duration_minutes; warning >30 min, fail >60 min (-10 score).",
+    keywords: "duration consistency shift compliance rules_result warning error",
+  },
 ];
 
 type ApiResult = {
@@ -123,6 +148,14 @@ type TestContext = {
   setSaveAiResult: (r: ApiResult | null) => void;
   improveResult: ApiResult | null;
   setImproveResult: (r: ApiResult | null) => void;
+  budgetSummaryResult: ApiResult | null;
+  setBudgetSummaryResult: (r: ApiResult | null) => void;
+  complianceRunResult: ApiResult | null;
+  setComplianceRunResult: (r: ApiResult | null) => void;
+  sessionComplianceResult: ApiResult | null;
+  setSessionComplianceResult: (r: ApiResult | null) => void;
+  complianceOverviewResult: ApiResult | null;
+  setComplianceOverviewResult: (r: ApiResult | null) => void;
 };
 
 function readUnlocked(): boolean {
@@ -155,6 +188,194 @@ async function callApi(input: RequestInfo, init?: RequestInit): Promise<ApiResul
   } catch (e) {
     return { ok: false, status: 0, data: null, error: String(e) };
   }
+}
+
+function extractDurationRules(data: unknown): Array<Record<string, unknown>> {
+  if (!data || typeof data !== "object") return [];
+  const root = data as Record<string, unknown>;
+  const rulesResult = root.rules_result as Record<string, unknown> | undefined;
+  const rules = (rulesResult?.rules ?? root.rules) as unknown;
+  if (!Array.isArray(rules)) return [];
+  return rules.filter(
+    (r): r is Record<string, unknown> =>
+      typeof r === "object" &&
+      r !== null &&
+      (r.rule === "duration_consistency_warning" || r.rule === "duration_consistency_error"),
+  );
+}
+
+function extractBudgetRules(data: unknown): Array<Record<string, unknown>> {
+  if (!data || typeof data !== "object") return [];
+  const root = data as Record<string, unknown>;
+  const rulesResult = root.rules_result as Record<string, unknown> | undefined;
+  const rules = (rulesResult?.rules ?? root.rules) as unknown;
+  if (!Array.isArray(rules)) return [];
+  return rules.filter(
+    (r): r is Record<string, unknown> =>
+      typeof r === "object" &&
+      r !== null &&
+      (r.rule === "budget_exceeded" || r.rule === "budget_warning"),
+  );
+}
+
+function ShiftsMigrationStatusNote({ result }: { result: ApiResult | null }) {
+  if (!result?.ok || !result.data || typeof result.data !== "object") return null;
+  const data = result.data as {
+    shifts_table_missing?: boolean;
+    sessions_shift_id_column_missing?: boolean;
+  };
+  const shiftsOk = data.shifts_table_missing === false;
+  const shiftIdOk = data.sessions_shift_id_column_missing === false;
+  const allOk = shiftsOk && shiftIdOk;
+
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
+      style={{
+        borderColor: allOk ? "#BBF7D0" : "#FDE68A",
+        background: allOk ? "#F0FDF4" : "#FFFBEB",
+        color: allOk ? "#166534" : "#92400E",
+      }}
+    >
+      <p className="font-semibold">How to read this (CARECLIQV2-87)</p>
+      <ul className="list-disc pl-4 space-y-1">
+        <li>
+          <code className="text-[11px]">shifts_table_missing: false</code> — shifts table exists
+        </li>
+        <li>
+          <code className="text-[11px]">sessions_shift_id_column_missing: false</code> —{" "}
+          <code className="text-[11px]">sessions.shift_id</code> column exists
+        </li>
+      </ul>
+      {!allOk && (
+        <p>
+          Run <code className="text-[11px]">029_shifts.sql</code> in Supabase SQL Editor, restart backend,
+          then check again.
+        </p>
+      )}
+      {allOk && (
+        <p>
+          Optional demo data: <code className="text-[11px]">045_shifts_demo_james_chen.sql</code> links shift{" "}
+          <code className="text-[11px]">{DEMO_JAMES_SHIFT}</code> to James draft session.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DurationRulesStatusNote({
+  complianceRun,
+  sessionCompliance,
+}: {
+  complianceRun: ApiResult | null;
+  sessionCompliance: ApiResult | null;
+}) {
+  const durationRules =
+    extractDurationRules(complianceRun?.data).length > 0
+      ? extractDurationRules(complianceRun?.data)
+      : extractDurationRules(sessionCompliance?.data);
+
+  if (!complianceRun && !sessionCompliance) return null;
+
+  const hasError = durationRules.some((r) => r.rule === "duration_consistency_error");
+  const hasWarning = durationRules.some((r) => r.rule === "duration_consistency_warning");
+  const none = durationRules.length === 0;
+
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
+      style={{
+        borderColor: hasError ? "#FECACA" : hasWarning ? "#FDE68A" : none ? "#E2E8F0" : "#BBF7D0",
+        background: hasError ? "#FEF2F2" : hasWarning ? "#FFFBEB" : none ? "#F8FAFC" : "#F0FDF4",
+        color: hasError ? "#991B1B" : hasWarning ? "#92400E" : "#475569",
+      }}
+    >
+      <p className="font-semibold">How to read this (CARECLIQV2-35)</p>
+      {none ? (
+        <p>
+          No duration rules fired — session may lack <code className="text-[11px]">shift_id</code>, shift has no{" "}
+          <code className="text-[11px]">duration_minutes</code>, or deviation is ≤30 min. Demo shift is 135 min;
+          set session <code className="text-[11px]">duration_minutes</code> to 170 (warning) or 200 (error) to test.
+        </p>
+      ) : (
+        <ul className="list-disc pl-4 space-y-1">
+          {durationRules.map((r, i) => (
+            <li key={i}>
+              <code className="text-[11px]">{String(r.rule)}</code> — {String(r.message ?? "")}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function BudgetRulesStatusNote({
+  budgetSummary,
+  complianceRun,
+  sessionCompliance,
+}: {
+  budgetSummary: ApiResult | null;
+  complianceRun: ApiResult | null;
+  sessionCompliance: ApiResult | null;
+}) {
+  const budgetRules =
+    extractBudgetRules(complianceRun?.data).length > 0
+      ? extractBudgetRules(complianceRun?.data)
+      : extractBudgetRules(sessionCompliance?.data);
+
+  const hasPlan =
+    budgetSummary?.ok &&
+    budgetSummary.data &&
+    typeof budgetSummary.data === "object" &&
+    (budgetSummary.data as { has_plan?: boolean }).has_plan === true;
+
+  const exceeded = budgetRules.some((r) => r.rule === "budget_exceeded");
+  const warning = budgetRules.some((r) => r.rule === "budget_warning");
+
+  if (!budgetSummary && !complianceRun && !sessionCompliance) return null;
+
+  return (
+    <div
+      className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
+      style={{
+        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E2DEF2",
+        background: exceeded ? "#FEF2F2" : warning ? "#FFFBEB" : hasPlan ? "#F0FDF4" : "#F8F7FC",
+        color: TEXT,
+      }}
+    >
+      <p className="font-semibold">How to read this (CARECLIQV2-36)</p>
+      {budgetSummary?.ok && (
+        <p>
+          <code className="text-[11px]">has_plan: {String(hasPlan)}</code>
+          {hasPlan
+            ? " — NDIS plan found; budget rules can run on compliance scoring."
+            : " — no active NDIS plan; budget rules should be skipped (not failed)."}
+        </p>
+      )}
+      {exceeded && (
+        <p>
+          <code className="text-[11px]">budget_exceeded</code> detected — session estimated cost exceeds
+          remaining category budget.
+        </p>
+      )}
+      {warning && !exceeded && (
+        <p>
+          <code className="text-[11px]">budget_warning</code> detected — category budget is within 10% of
+          exhausted.
+        </p>
+      )}
+      {hasPlan && budgetRules.length === 0 && (complianceRun?.ok || sessionCompliance?.ok) && (
+        <p>No budget rules fired — plan budget is healthy for this session category.</p>
+      )}
+      <p style={{ color: MUTED }}>
+        Uses <code className="text-[11px]">apiFetch</code> (respects{" "}
+        <code className="text-[11px]">VITE_API_URL</code> for direct backend). Coordinator overview:{" "}
+        <code className="text-[11px]">GET /api/coordinator/compliance-overview</code> →{" "}
+        <code className="text-[11px]">budget_warnings[]</code>.
+      </p>
+    </div>
+  );
 }
 
 function MigrationStatusNote({ result }: { result: ApiResult | null }) {
@@ -506,6 +727,212 @@ function TicketTestPanel({ ticketId, ctx }: { ticketId: TicketId; ctx: TestConte
         </div>
       );
 
+    case "CARECLIQV2-36":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <ParticipantFields ctx={ctx} />
+          <SessionField ctx={ctx} />
+          <ol className="text-sm list-decimal pl-5 space-y-2" style={{ color: MUTED }}>
+            <li>Confirm participant has an active NDIS plan with per-category budgets.</li>
+            <li>
+              Session needs a legal English note (<code className="text-xs">compliance_input_text</code> or
+              translated note) or <code className="text-xs">POST /compliance/run</code> returns 422.
+            </li>
+            <li>
+              Run compliance → inspect <code className="text-xs">rules_result.rules</code> for{" "}
+              <code className="text-xs">budget_exceeded</code> / <code className="text-xs">budget_warning</code>.
+            </li>
+            <li>Coordinator: check overview <code className="text-xs">budget_warnings[]</code>.</li>
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.participantId || ctx.busy === "budget36"}
+              onClick={() =>
+                ctx.run("budget36", async () => {
+                  const r = await callApi(`/api/participants/${ctx.participantId}/budget-summary`);
+                  ctx.setBudgetSummaryResult(r);
+                })
+              }
+            >
+              {ctx.busy === "budget36" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              GET budget-summary
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.sessionId || ctx.busy === "compliance36"}
+              onClick={() =>
+                ctx.run("compliance36", async () => {
+                  const r = await callApi(`/api/compliance/run/${ctx.sessionId}`, { method: "POST" });
+                  ctx.setComplianceRunResult(r);
+                })
+              }
+            >
+              {ctx.busy === "compliance36" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              POST compliance/run
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.sessionId || ctx.busy === "sessioncomp36"}
+              onClick={() =>
+                ctx.run("sessioncomp36", async () => {
+                  const r = await callApi(`/api/sessions/${ctx.sessionId}/compliance`);
+                  ctx.setSessionComplianceResult(r);
+                })
+              }
+            >
+              {ctx.busy === "sessioncomp36" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              GET session compliance
+            </Button>
+            {isCoordinator ? (
+              <Button
+                size="sm"
+                disabled={ctx.busy === "overview36"}
+                onClick={() =>
+                  ctx.run("overview36", async () => {
+                    const r = await callApi("/api/coordinator/compliance-overview");
+                    ctx.setComplianceOverviewResult(r);
+                  })
+                }
+                style={{ background: PLUM }}
+                className="text-white"
+              >
+                {ctx.busy === "overview36" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                GET coordinator overview
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={ctx.busy === "overview36"}
+                onClick={() =>
+                  ctx.run("overview36", async () => {
+                    const r = await callApi("/api/reports/compliance-overview");
+                    ctx.setComplianceOverviewResult(r);
+                  })
+                }
+                style={{ background: PLUM }}
+                className="text-white"
+              >
+                {ctx.busy === "overview36" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                GET reports overview
+              </Button>
+            )}
+            {ctx.sessionId && (
+              <Link href={`/sessions/${ctx.sessionId}`}>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Open session detail <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+            <Link href="/compliance">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                Compliance Centre <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+          <ResultBox title="Budget summary" result={ctx.budgetSummaryResult} />
+          <ResultBox title="Compliance run" result={ctx.complianceRunResult} />
+          <ResultBox title="Stored session compliance" result={ctx.sessionComplianceResult} />
+          <ResultBox title="Compliance overview (budget_warnings)" result={ctx.complianceOverviewResult} />
+          <BudgetRulesStatusNote
+            budgetSummary={ctx.budgetSummaryResult}
+            complianceRun={ctx.complianceRunResult}
+            sessionCompliance={ctx.sessionComplianceResult}
+          />
+        </div>
+      );
+
+    case "CARECLIQV2-87":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <ul className="text-sm space-y-1 list-disc pl-5" style={{ color: MUTED }}>
+            <li>Migration file: <code className="text-xs">029_shifts.sql</code></li>
+            <li>Demo seed: <code className="text-xs">045_shifts_demo_james_chen.sql</code></li>
+            <li>
+              Expect <code className="text-xs">shifts_table_missing: false</code> and{" "}
+              <code className="text-xs">sessions_shift_id_column_missing: false</code>
+            </li>
+          </ul>
+          <Button
+            variant="outline"
+            disabled={ctx.busy === "migration87" || !isCoordinator}
+            onClick={() =>
+              ctx.run("migration87", async () => {
+                const r = await callApi("/api/system/migration-status");
+                ctx.setMigrationResult(r);
+              })
+            }
+          >
+            {ctx.busy === "migration87" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Check migration status
+          </Button>
+          <ResultBox title="Migration status" result={ctx.migrationResult} />
+          <ShiftsMigrationStatusNote result={ctx.migrationResult} />
+        </div>
+      );
+
+    case "CARECLIQV2-35":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <SessionField ctx={ctx} />
+          <ol className="text-sm list-decimal pl-5 space-y-2" style={{ color: MUTED }}>
+            <li>Apply <code className="text-xs">029_shifts.sql</code> then optional demo seed <code className="text-xs">045_shifts_demo_james_chen.sql</code>.</li>
+            <li>Session must have <code className="text-xs">shift_id</code> set and shift must have <code className="text-xs">duration_minutes</code>.</li>
+            <li>Demo: shift 135 min — set session duration 170 (warning) or 200 (error).</li>
+            <li>Run compliance → inspect <code className="text-xs">duration_consistency_warning</code> / <code className="text-xs">duration_consistency_error</code> in rules matrix.</li>
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.sessionId || ctx.busy === "compliance35"}
+              onClick={() =>
+                ctx.run("compliance35", async () => {
+                  const r = await callApi(`/api/compliance/run/${ctx.sessionId}`, { method: "POST" });
+                  ctx.setComplianceRunResult(r);
+                })
+              }
+            >
+              {ctx.busy === "compliance35" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              POST compliance/run
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.sessionId || ctx.busy === "sessioncomp35"}
+              onClick={() =>
+                ctx.run("sessioncomp35", async () => {
+                  const r = await callApi(`/api/sessions/${ctx.sessionId}/compliance`);
+                  ctx.setSessionComplianceResult(r);
+                })
+              }
+            >
+              {ctx.busy === "sessioncomp35" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              GET session compliance
+            </Button>
+            {ctx.sessionId && (
+              <Link href={`/sessions/${ctx.sessionId}`}>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Open session detail <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+          </div>
+          <ResultBox title="Compliance run" result={ctx.complianceRunResult} />
+          <ResultBox title="Stored session compliance" result={ctx.sessionComplianceResult} />
+          <DurationRulesStatusNote
+            complianceRun={ctx.complianceRunResult}
+            sessionCompliance={ctx.sessionComplianceResult}
+          />
+        </div>
+      );
+
     default:
       return null;
   }
@@ -613,6 +1040,10 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
   const [saveAiResult, setSaveAiResult] = useState<ApiResult | null>(null);
   const [improveResult, setImproveResult] = useState<ApiResult | null>(null);
   const [migrationResult, setMigrationResult] = useState<ApiResult | null>(null);
+  const [budgetSummaryResult, setBudgetSummaryResult] = useState<ApiResult | null>(null);
+  const [complianceRunResult, setComplianceRunResult] = useState<ApiResult | null>(null);
+  const [sessionComplianceResult, setSessionComplianceResult] = useState<ApiResult | null>(null);
+  const [complianceOverviewResult, setComplianceOverviewResult] = useState<ApiResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -673,6 +1104,14 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
     setSaveAiResult,
     improveResult,
     setImproveResult,
+    budgetSummaryResult,
+    setBudgetSummaryResult,
+    complianceRunResult,
+    setComplianceRunResult,
+    sessionComplianceResult,
+    setSessionComplianceResult,
+    complianceOverviewResult,
+    setComplianceOverviewResult,
   };
 
   return (

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
 from ..core.security import get_current_user
+from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services import participant_service, session_service
 from ..services.supabase_client import get_supabase_admin
 
@@ -249,6 +250,7 @@ async def compliance_overview(current_user: dict = Depends(get_current_user)):
         "compliant": sum(1 for score in scores if score >= 85),
         "at_risk": sum(1 for score in scores if 60 <= score < 85),
         "non_compliant": sum(1 for score in scores if score < 60),
+        "budget_warnings": collect_budget_rule_alerts_from_sessions(sessions),
         "sessions": [_session_payload(session) for session in sessions],
     }
 

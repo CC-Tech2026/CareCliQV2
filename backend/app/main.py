@@ -75,6 +75,8 @@ async def _apply_startup_migrations():
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
             ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
             ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
+            ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
+            ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -116,6 +118,10 @@ async def _apply_startup_migrations():
                 migration_state.upcoming_review_date_column_missing = not ok
             elif key == "progress_delta":
                 migration_state.progress_delta_column_missing = not ok
+            elif key == "shifts":
+                migration_state.shifts_table_missing = not ok
+            elif key == "sessions_shift_id":
+                migration_state.sessions_shift_id_column_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -195,6 +201,8 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
         "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
         "practitioner_allocations_table_missing":     migration_state.practitioner_allocations_table_missing,
         "progress_delta_column_missing":              migration_state.progress_delta_column_missing,
+        "shifts_table_missing":                       migration_state.shifts_table_missing,
+        "sessions_shift_id_column_missing":           migration_state.sessions_shift_id_column_missing,
         "migration_sql_file":                         "backend/supabase_setup.sql",
         "patch_sql_file":                             "backend/supabase_patch_missing_tables.sql",
         "supabase_sql_editor":                        _MIGRATION_URL,
@@ -208,6 +216,8 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
             migration_state.patient_goals_table_missing,
             migration_state.practitioner_allocations_table_missing,
             migration_state.progress_delta_column_missing,
+            migration_state.shifts_table_missing,
+            migration_state.sessions_shift_id_column_missing,
         ]),
     }
 

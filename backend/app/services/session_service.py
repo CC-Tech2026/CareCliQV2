@@ -34,6 +34,7 @@ OPTIONAL_SESSION_COLUMNS = {
     "legal_record_text",
     "display_notes",
     "progress_delta",
+    "shift_id",
 }
 
 
