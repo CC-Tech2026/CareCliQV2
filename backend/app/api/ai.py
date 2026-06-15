@@ -129,12 +129,20 @@ async def improve_note_endpoint(
     notes = (body.get("notes") or "").strip()
     failed_rules = body.get("failed_rules") or []
     rp_flags = body.get("rp_flags") or []
+    participant_id = body.get("participant_id")
 
     if not notes:
         raise HTTPException(status_code=422, detail="notes field is required")
 
     try:
-        result = await ai_service.improve_note(notes, failed_rules, rp_flags)
+        org_id = current_user.get("organization_id")
+        result = await ai_service.improve_note(
+            notes,
+            failed_rules,
+            rp_flags,
+            participant_id=participant_id,
+            organisation_id=org_id,
+        )
         return result
     except Exception as e:
         logger.error(f"Improve-note error: {str(e)}")

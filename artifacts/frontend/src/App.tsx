@@ -48,7 +48,8 @@ import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
-import { useAuth } from "@/contexts/AuthContext";
+import DevProgressTestPage from "@/pages/dev-progress-test";
+import SessionLive from "@/pages/session-live";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -62,11 +63,6 @@ const WORKER_ROLES = ["support_worker"] as const;
 
 // Managing Director only
 const MD_ROLES = ["managing_director"] as const;
-
-function LegacyLiveRedirect({ sessionId }: { sessionId: string }) {
-  const { user } = useAuth();
-  return <Redirect to={user?.role === "support_worker" ? "/my-clients" : `/sessions/${sessionId}`} />;
-}
 
 function Router() {
   return (
@@ -250,7 +246,7 @@ function Router() {
       <Route path="/sessions/:id/live">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <LegacyLiveRedirect sessionId={params.id} />
+            <SessionLive />
           </ProtectedRoute>
         )}
       </Route>
@@ -315,6 +311,12 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Settings /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/dev/progress-test">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <DevProgressTestPage />
         </ProtectedRoute>
       </Route>
 

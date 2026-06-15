@@ -47,6 +47,78 @@ class TranslationProviderFailure(RuntimeError):
 BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
 LEGAL_RECORD_REQUIRED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
 
+VALID_PROMPT_LEVELS = frozenset({"full", "partial", "independent"})
+_PRIOR_TRAJECTORY_MAX_CHARS = 1600  # ~400 tokens
+
+
+def parse_progress_delta(raw) -> list[dict] | None:
+    """Validate GPT progress_delta output; return None on malformed data (never blocks save)."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            logger.warning("progress_delta parse failed: invalid JSON string")
+            return None
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        logger.warning("progress_delta parse failed: expected list or object")
+        return None
+
+    cleaned: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        entry: dict = {}
+        if item.get("goal_id"):
+            entry["goal_id"] = str(item["goal_id"])
+        prompt = str(item.get("prompt_level") or "").strip().lower()
+        if prompt in VALID_PROMPT_LEVELS:
+            entry["prompt_level"] = prompt
+        try:
+            rating = item.get("independence_rating")
+            if rating is not None:
+                rating_int = int(rating)
+                if 1 <= rating_int <= 5:
+                    entry["independence_rating"] = rating_int
+        except (TypeError, ValueError):
+            pass
+        if item.get("skill_step"):
+            entry["skill_step"] = str(item["skill_step"]).strip()[:500]
+        if item.get("delta_summary"):
+            entry["delta_summary"] = str(item["delta_summary"]).strip()[:2000]
+        if entry:
+            cleaned.append(entry)
+
+    return cleaned or None
+
+
+def format_prior_trajectory_context(prior_by_goal: dict[str, list[dict]]) -> str:
+    """Compact prior-session trajectory for GPT prompt (CARECLIQV2-79)."""
+    if not prior_by_goal:
+        return ""
+    lines = ["PRIOR TRAJECTORY (based on past session records):"]
+    for goal_id, sessions in prior_by_goal.items():
+        if not sessions:
+            continue
+        lines.append(f"Goal {goal_id}:")
+        for row in sessions[:5]:
+            delta = row.get("progress_delta") or {}
+            date = row.get("session_date") or "unknown date"
+            prompt = delta.get("prompt_level") or "n/a"
+            rating = delta.get("independence_rating", "n/a")
+            summary = (delta.get("delta_summary") or "")[:120]
+            lines.append(
+                f"  {date}: prompt={prompt}, independence={rating}"
+                + (f' — "{summary}"' if summary else "")
+            )
+    text = "\n".join(lines)
+    if len(text) > _PRIOR_TRAJECTORY_MAX_CHARS:
+        return text[:_PRIOR_TRAJECTORY_MAX_CHARS] + "\n[truncated]"
+    return text
+
 
 def _legal_record_text_or_raise(session_data: dict) -> str:
     """Return the English legal record text, failing closed on raw/source notes."""
@@ -308,6 +380,7 @@ async def generate_session_analysis(
     session_data: dict,
     participant_data: dict,
     rp_flags: list | None = None,
+    prior_trajectory: dict[str, list[dict]] | None = None,
 ) -> dict:
     """Run the full CareScribe compliance analysis on a session.
 
@@ -386,6 +459,8 @@ Structured Fields Already Completed:
   Outcomes: {existing_structured['outcomes'] or 'Not entered'}
   Progress Toward Goals: {existing_structured['progress_toward_goals'] or 'Not entered'}"""
 
+    prior_context = format_prior_trajectory_context(prior_trajectory or {})
+
     # Estimate cost context
     duration = int(session_data.get("duration_minutes") or 0)
     session_type = session_data.get("session_type") or "Support"
@@ -411,6 +486,15 @@ SESSION INFORMATION:
 
 {notes_section}
 {rp_context}
+{prior_context}
+
+PROGRESS EXTRACTION (NDIS terminology):
+For each goal addressed this session, extract measurable progress signals into progress_delta.
+- prompt_level: full | partial | independent (support prompting required)
+- independence_rating: integer 1-5 (1=full support, 5=independent)
+- skill_step: brief skill acquisition stage label
+- delta_summary: plain-language change vs prior sessions when prior trajectory is available
+Reference prior trajectory when present (e.g. "improvement from full to partial prompting").
 
 SCORING INSTRUCTIONS:
 Calculate compliance.score (0-100) using these EXACT weights:
@@ -453,10 +537,20 @@ Return ONLY this JSON (no markdown, no explanation):
   "key_observations": ["specific clinical observation"],
   "concerns": ["clinical concern if any"],
   "next_session_recommendations": ["specific recommendation"],
-  "progress_trend": "improving | stable | declining"
+  "progress_trend": "improving | stable | declining",
+  "progress_delta": [
+    {{
+      "goal_id": "goal id when known",
+      "prompt_level": "full | partial | independent",
+      "independence_rating": 1,
+      "skill_step": "skill acquisition step",
+      "delta_summary": "plain-language progress vs prior sessions"
+    }}
+  ]
 }}
 
-If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty."""
+If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty.
+If no measurable progress is documented, return progress_delta as an empty array []."""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -495,6 +589,7 @@ If structured_notes are already completed above, preserve them exactly (do not r
     result.setdefault("next_session_recommendations", [])
     result.setdefault("progress_trend", "stable")
     result.setdefault("summary", result.get("session_summary", ""))
+    result["progress_delta"] = parse_progress_delta(result.get("progress_delta"))
 
     return result
 
@@ -720,18 +815,50 @@ Write in plain English. Be specific about what information is actually missing. 
     return result
 
 
-async def improve_note(notes: str, failed_rules: list[dict], rp_flags: list[dict] | None = None) -> dict:
+async def improve_note(
+    notes: str,
+    failed_rules: list[dict],
+    rp_flags: list[dict] | None = None,
+    participant_id: str | None = None,
+    organisation_id: str | None = None,
+) -> dict:
     """Generate an improved clinical note that fixes all failed compliance rules.
 
-    Returns:
-        improved_note: str  — full rewrite of the note
-        rule_suggestions: list[{rule, issue, suggestion}]  — per-rule targeted fixes
+    When participant context is available, retrieves high-scoring past notes via RAG
+    (CARECLIQV2-33) so suggestions reference participant-specific documentation.
     """
     if not notes or not notes.strip():
         return {
             "improved_note": "",
             "rule_suggestions": [],
         }
+
+    rag_context = ""
+    if participant_id and organisation_id:
+        try:
+            from .rag_service import retrieve_high_scoring_participant_notes
+
+            past_notes = await retrieve_high_scoring_participant_notes(
+                participant_id=participant_id,
+                organisation_id=organisation_id,
+                query_text=notes[:500],
+                min_score=85.0,
+                k=3,
+            )
+            if past_notes:
+                snippets = []
+                for n in past_notes:
+                    date = n.get("session_date") or "prior session"
+                    score = n.get("compliance_score")
+                    content = (n.get("content") or "")[:400]
+                    snippets.append(f"[{date}, score={score}]: {content}")
+                rag_context = (
+                    "\n\nHIGH-SCORING PAST SESSION RECORDS FOR THIS PARTICIPANT "
+                    "(based on past session records — use for participant-specific context):\n"
+                    + "\n".join(snippets)
+                )
+        except Exception as rag_err:
+            logger.warning("RAG context for note improvement failed (non-critical): %s", rag_err)
 
     rules_text = "\n".join([
         f"- {r.get('rule', '').replace('_', ' ').title()}: {r.get('message', '')}"
@@ -751,9 +878,10 @@ ORIGINAL NOTE:
 {notes[:2000]}
 
 FAILED COMPLIANCE RULES:
-{rules_text}{rp_text}
+{rules_text}{rp_text}{rag_context}
 
 Requirements for the improved note:
+- When past session records are provided, reference participant-specific context (e.g. "Jordan previously demonstrated…")
 - Use objective, observable, third-person language (no "I think", "seems", "probably")
 - Use person-first language (e.g. "participant" not "the disabled person")
 - Include what was done (activities), how the participant responded, and what was achieved (outcome)
