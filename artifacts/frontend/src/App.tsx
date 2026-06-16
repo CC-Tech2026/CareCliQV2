@@ -50,6 +50,9 @@ import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
 import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
+import MyShifts from "@/pages/my-shifts";
+import MyShiftDetail from "@/pages/my-shift-detail";
+import Tasks from "@/pages/tasks";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -163,6 +166,26 @@ function Router() {
       <Route path="/my-compliance">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><MyCompliance /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><MyShifts /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyShiftDetail id={params.id} /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/tasks">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
       </Route>
 
