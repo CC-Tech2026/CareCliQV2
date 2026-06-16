@@ -4,7 +4,7 @@ import {
   Menu, X, ChevronLeft, ChevronRight,
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
-  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck,
+  CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -78,7 +78,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "My Work",
       items: [
+        { href: "/my-shifts",    label: "My Shifts",       icon: CalendarDays },
         { href: "/my-clients",   label: "My Clients",      icon: UserRound },
+        { href: "/tasks",        label: "Tasks",           icon: ClipboardList },
       ],
     },
     {
@@ -155,9 +157,10 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   ],
   support_worker: [
     { href: "/dashboard",     label: "Home",       icon: LayoutDashboard },
+    { href: "/my-shifts",     label: "Shifts",     icon: CalendarDays },
     { href: "/my-clients",    label: "Clients",    icon: UserRound },
+    { href: "/tasks",         label: "Tasks",      icon: ClipboardList },
     { href: "/my-compliance", label: "Compliance", icon: ShieldCheck },
-    { href: "/toolkit",       label: "Toolkit",    icon: Wrench },
   ],
   allied_health: [
     { href: "/dashboard",  label: "Home",         icon: LayoutDashboard },
@@ -180,7 +183,9 @@ function isActive(location: string, href: string) {
     location === href ||
     location.startsWith(href + "/") ||
     (href === "/patients" && (location.startsWith("/patients") || location.startsWith("/participants"))) ||
-    (href === "/my-clients" && location.startsWith("/my-clients"))
+    (href === "/my-clients" && location.startsWith("/my-clients")) ||
+    (href === "/my-shifts" && location.startsWith("/my-shifts")) ||
+    (href === "/tasks" && location.startsWith("/tasks"))
   );
 }
 
