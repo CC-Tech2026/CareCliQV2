@@ -31,6 +31,7 @@ export type ShiftSupportInstruction = {
   category: string;
   body: string;
   critical?: string;
+  image_url?: string;
 };
 
 export type ShiftCompletionSummary = {
@@ -50,6 +51,7 @@ export type ParticipantProfile = {
   email?: string;
   emergency_contact?: string;
   primary_disability?: string;
+  medications?: string;
 };
 
 export type ParticipantPreferences = {
@@ -119,6 +121,15 @@ export function getWorkerShiftCounts() {
 
 export function getWorkerShift(id: string) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}`);
+}
+
+export type ShiftSupportInstructionsResponse = {
+  shift_id: string;
+  support_instructions: ShiftSupportInstruction[];
+};
+
+export function getWorkerShiftSupportInstructions(id: string) {
+  return jsonFetch<ShiftSupportInstructionsResponse>(`/api/worker/shifts/${id}/support-instructions`);
 }
 
 export function clockInShift(id: string) {

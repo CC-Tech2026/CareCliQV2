@@ -56,7 +56,8 @@ BEGIN
     scheduled_start, scheduled_end,
     participant_name, participant_address, participant_phone,
     coordinator_notes, entry_instructions, health_alerts, active_goals,
-    status, tasks, visit_notes, allergies, health_flags, access_instructions
+    status, tasks, visit_notes, allergies, health_flags, access_instructions,
+    support_instructions
   ) VALUES (
     v_shift_today,
     v_org_id,
@@ -76,7 +77,40 @@ BEGIN
     'Use gait belt for transfers. Prompt morning medications with MAR chart.',
     'Peanuts, tree nuts — EpiPen in kitchen drawer',
     'Falls risk — use non-slip mat in bathroom',
-    'Wheelchair ramp on left side; knock loudly — hearing aid in use'
+    'Wheelchair ramp on left side; knock loudly — hearing aid in use',
+    $si$[
+      {
+        "category": "Mobility",
+        "body": "Use wheelchair ramp on left side of house.\nKnock loudly — participant wears a hearing aid.",
+        "critical": false
+      },
+      {
+        "category": "Transfers",
+        "body": "⛔ Use gait belt for all transfers.\nStand-by assist from bed to chair.\nLock wheelchair brakes before every transfer.",
+        "critical": true
+      },
+      {
+        "category": "Medication Prompts",
+        "body": "Prompt morning medications using MAR chart in kitchen.\nOffer water after each dose.\nDo not administer — prompt only.",
+        "critical": false
+      },
+      {
+        "category": "Meals",
+        "body": "Prepare light breakfast before 9:30am.\nAvoid all nut products.\nEncourage fluids every hour.",
+        "critical": false
+      },
+      {
+        "category": "Behaviour Support",
+        "body": "Use calm, short sentences when participant is anxious.\nOffer a five-minute break before redirecting.",
+        "critical": false
+      },
+      {
+        "category": "Personal Care",
+        "body": "⛔ Check non-slip mat is in place before shower.\nSupport with upper-body dressing only unless requested.",
+        "critical": true,
+        "image_url": "https://images.unsplash.com/photo-1581579438747-1dc8dcccbb50?auto=format&fit=crop&w=640&q=80"
+      }
+    ]$si$::jsonb
   )
   ON CONFLICT (id) DO UPDATE SET
     worker_id = EXCLUDED.worker_id,
@@ -89,6 +123,7 @@ BEGIN
     allergies = EXCLUDED.allergies,
     health_flags = EXCLUDED.health_flags,
     access_instructions = EXCLUDED.access_instructions,
+    support_instructions = EXCLUDED.support_instructions,
     active_goals = EXCLUDED.active_goals,
     status = 'scheduled',
     updated_at = now();

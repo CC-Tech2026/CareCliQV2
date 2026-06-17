@@ -120,22 +120,151 @@ def _parse_health_alerts(value: Any) -> list[dict[str, str]]:
     return []
 
 
-def _parse_support_instructions(shift: dict) -> list[dict[str, str]]:
-    """Build category sections from shift snapshot fields (CARECLIQV2-157)."""
+SUPPORT_INSTRUCTION_CATEGORIES = (
+    "Mobility",
+    "Transfers",
+    "Medication Prompts",
+    "Meals",
+    "Behaviour Support",
+    "Personal Care",
+)
+
+
+def _normalise_instruction_section(raw: Any) -> Optional[dict[str, str]]:
+    if not isinstance(raw, dict):
+        return None
+    category = (raw.get("category") or "").strip()
+    body = (raw.get("body") or "").strip()
+    if not category or not body:
+        return None
+    critical = raw.get("critical")
+    if isinstance(critical, bool):
+        critical_flag = "true" if critical else "false"
+    else:
+        critical_flag = "true" if str(critical or "").lower() in {"true", "1", "yes"} else "false"
+    section: dict[str, str] = {
+        "category": category,
+        "body": body,
+        "critical": critical_flag,
+    }
+    image_url = (raw.get("image_url") or "").strip()
+    if image_url:
+        section["image_url"] = image_url
+    return section
+
+
+def _stored_support_instructions(shift: dict) -> list[dict[str, str]]:
+    raw = shift.get("support_instructions")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        sections = [_normalise_instruction_section(item) for item in raw]
+        return [section for section in sections if section]
+    return []
+
+
+def _line_is_critical(text: str) -> bool:
+    stripped = text.strip()
+    return stripped.startswith("⛔") or stripped.lower().startswith("critical:")
+
+
+def _body_has_critical_lines(body: str) -> bool:
+    return any(_line_is_critical(line) for line in body.splitlines())
+
+
+def _instruction_section(category: str, body: str, *, critical: bool = False, image_url: str = "") -> dict[str, str]:
+    text = body.strip()
+    is_critical = critical or _body_has_critical_lines(text)
+    section: dict[str, str] = {
+        "category": category,
+        "body": text,
+        "critical": "true" if is_critical else "false",
+    }
+    if image_url.strip():
+        section["image_url"] = image_url.strip()
+    return section
+
+
+def _append_section(sections: list[dict[str, str]], category: str, body: str, **kwargs: Any) -> None:
+    text = (body or "").strip()
+    if not text:
+        return
+    sections.append(_instruction_section(category, text, **kwargs))
+
+
+def _legacy_support_instructions(shift: dict, participant_ctx: Optional[dict[str, Any]] = None) -> list[dict[str, str]]:
+    """Map legacy shift snapshot + participant fields into CARECLIQV2-157 categories."""
     sections: list[dict[str, str]] = []
+    prefs = (participant_ctx or {}).get("preferences") or {}
+    profile = (participant_ctx or {}).get("profile") or {}
+
+    _append_section(sections, "Mobility", shift.get("access_instructions") or "")
+
     visit = (shift.get("visit_notes") or "").strip()
-    if visit:
-        sections.append({"category": "Visit Notes", "body": visit, "critical": "false"})
-    allergies = (shift.get("allergies") or "").strip()
-    if allergies:
-        sections.append({"category": "Allergies", "body": allergies, "critical": "true"})
+    transfer_lines = [line for line in visit.splitlines() if "transfer" in line.lower() or "gait belt" in line.lower()]
+    if transfer_lines:
+        _append_section(sections, "Transfers", "\n".join(transfer_lines), critical=True)
+    elif visit and "transfer" in visit.lower():
+        _append_section(sections, "Transfers", visit, critical=True)
+
+    med_lines = [
+        line for line in visit.splitlines()
+        if any(token in line.lower() for token in ("medication", "medications", "mar chart", "meds"))
+    ]
+    medications = (profile.get("medications") or "").strip()
+    if med_lines:
+        _append_section(sections, "Medication Prompts", "\n".join(med_lines))
+    elif medications:
+        _append_section(sections, "Medication Prompts", medications)
+    elif visit and any(token in visit.lower() for token in ("medication", "medications", "mar chart")):
+        _append_section(sections, "Medication Prompts", visit)
+
+    meal_hint = (shift.get("coordinator_notes") or "").strip()
+    if meal_hint and any(token in meal_hint.lower() for token in ("meal", "hydration", "food", "snack")):
+        _append_section(sections, "Meals", meal_hint)
+
+    behaviour = (prefs.get("behaviour_support") or "").strip()
+    if behaviour:
+        _append_section(sections, "Behaviour Support", behaviour)
+
+    personal_parts: list[str] = []
     flags = (shift.get("health_flags") or "").strip()
     if flags:
-        sections.append({"category": "Health Flags", "body": flags, "critical": "true"})
-    access = (shift.get("access_instructions") or "").strip()
-    if access:
-        sections.append({"category": "Access & Mobility", "body": access, "critical": "false"})
+        personal_parts.append(flags)
+    allergies = (shift.get("allergies") or "").strip()
+    if allergies:
+        personal_parts.append(f"Allergies: {allergies}")
+    remaining_visit = "\n".join(
+        line for line in visit.splitlines()
+        if line not in transfer_lines and line not in med_lines
+    ).strip()
+    if remaining_visit and not any(
+        token in remaining_visit.lower()
+        for token in ("transfer", "gait belt", "medication", "medications", "mar chart")
+    ):
+        personal_parts.append(remaining_visit)
+    if personal_parts:
+        _append_section(sections, "Personal Care", "\n\n".join(personal_parts), critical=bool(allergies or flags))
+
     return sections
+
+
+def build_support_instructions(
+    shift: dict,
+    participant_ctx: Optional[dict[str, Any]] = None,
+) -> list[dict[str, str]]:
+    """Return labelled support-instruction sections for a shift (CARECLIQV2-157)."""
+    stored = _stored_support_instructions(shift)
+    if stored:
+        return stored
+    return _legacy_support_instructions(shift, participant_ctx)
+
+
+def _parse_support_instructions(
+    shift: dict,
+    participant_ctx: Optional[dict[str, Any]] = None,
+) -> list[dict[str, str]]:
+    return build_support_instructions(shift, participant_ctx)
 
 
 def _session_counts_as_active(session: Optional[dict[str, Any]]) -> bool:
@@ -188,7 +317,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "allergies": shift.get("allergies"),
         "visit_notes": shift.get("visit_notes"),
         "health_flags": shift.get("health_flags"),
-        "support_instructions": _parse_support_instructions(shift),
+        "support_instructions": _parse_support_instructions(shift, None),
         "risks_acknowledged_at": shift.get("risks_acknowledged_at"),
         "risks_acknowledged_by": shift.get("risks_acknowledged_by"),
         "risks_acknowledged": bool(shift.get("risks_acknowledged_at")),
@@ -215,7 +344,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
                 "id, full_name, ndis_number, date_of_birth, phone, email, "
                 "communication_preferences, allergies, primary_disability, "
                 "emergency_contact, behaviour_support_plan, restricted_behavioural_notes, "
-                "visit_notes, health_flags"
+                "visit_notes, health_flags, medications"
             )
             .eq("id", participant_id)
             .eq("organization_id", organization_id)
@@ -235,6 +364,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
                 "email": row.get("email"),
                 "emergency_contact": row.get("emergency_contact"),
                 "primary_disability": row.get("primary_disability"),
+                "medications": row.get("medications"),
             },
             "preferences": {
                 "communication_style": row.get("communication_preferences"),
@@ -462,7 +592,28 @@ def get_shift_detail_for_worker(
     payload = _shift_card_payload(shift, session)
     ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
     payload.update(ctx)
+    payload["support_instructions"] = build_support_instructions(shift, ctx)
     return payload
+
+
+def get_support_instructions_for_worker(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Dedicated support-instructions payload for MyShift detail (CARECLIQV2-157)."""
+    shift = get_shift_by_id(shift_id)
+    if not shift:
+        return None
+    if str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+    if str(shift.get("organization_id") or "") != str(organization_id):
+        return None
+    ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
+    return {
+        "shift_id": shift_id,
+        "support_instructions": build_support_instructions(shift, ctx),
+    }
 
 
 def _default_tasks_copy() -> list[dict[str, Any]]:

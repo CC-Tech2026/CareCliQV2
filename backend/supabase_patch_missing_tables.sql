@@ -339,6 +339,7 @@ DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS health_flags TEXT
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS health_alerts TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS visit_notes TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS access_instructions TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS support_instructions JSONB NOT NULL DEFAULT '[]'::jsonb; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS coordinator_notes TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS entry_instructions TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS active_goals TEXT[]; EXCEPTION WHEN undefined_table THEN NULL; END $$;

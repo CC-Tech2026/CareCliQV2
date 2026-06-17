@@ -422,3 +422,86 @@ def test_end_shift_completes_shift(mock_get, mock_admin, mock_session):
     assert result is not None
     assert result["visual_state"] == "completed"
     assert result["completion_summary"]["mandatory_completed"] == 4
+
+
+def test_build_support_instructions_uses_stored_json():
+    shift = _sample_shift(
+        support_instructions=[
+            {
+                "category": "Mobility",
+                "body": "Use ramp on left side.",
+                "critical": False,
+                "image_url": "https://example.com/ramp.png",
+            },
+            {"category": "Meals", "body": "Offer fluids hourly.", "critical": "false"},
+        ]
+    )
+    sections = shift_service.build_support_instructions(shift)
+    assert len(sections) == 2
+    assert sections[0]["category"] == "Mobility"
+    assert sections[0]["image_url"] == "https://example.com/ramp.png"
+    assert sections[1]["category"] == "Meals"
+
+
+def test_build_support_instructions_legacy_mapping():
+    shift = _sample_shift(
+        access_instructions="Wheelchair ramp on left.",
+        visit_notes="Use gait belt for transfers.\nPrompt morning medications with MAR chart.",
+        health_flags="Falls risk in bathroom",
+        allergies="Peanuts",
+        coordinator_notes="Focus on hydration and meals today.",
+    )
+    ctx = {
+        "preferences": {"behaviour_support": "Use calm redirection when anxious."},
+        "profile": {"medications": "Metformin 500mg morning"},
+    }
+    sections = shift_service.build_support_instructions(shift, ctx)
+    categories = [section["category"] for section in sections]
+    assert "Mobility" in categories
+    assert "Transfers" in categories
+    assert "Medication Prompts" in categories
+    assert "Behaviour Support" in categories
+    assert "Personal Care" in categories
+    transfers = next(section for section in sections if section["category"] == "Transfers")
+    assert transfers["critical"] == "true"
+
+
+def test_get_support_instructions_for_worker():
+    shift = _sample_shift(
+        support_instructions=[
+            {"category": "Transfers", "body": "⛔ Use gait belt.", "critical": True},
+        ]
+    )
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with patch(
+            "backend.app.services.shift_service._fetch_participant_context",
+            return_value={},
+        ):
+            payload = shift_service.get_support_instructions_for_worker(
+                "shift-1", "worker-1", "org-1"
+            )
+    assert payload is not None
+    assert payload["shift_id"] == "shift-1"
+    assert payload["support_instructions"][0]["category"] == "Transfers"
+
+
+@patch("backend.app.services.shift_service._fetch_participant_context")
+@patch("backend.app.services.shift_service._get_session_for_shift")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_get_shift_detail_rebuilds_support_instructions(mock_get, mock_session, mock_ctx):
+    shift = _sample_shift(
+        visit_notes="Prompt medications at 9am.",
+        access_instructions="Ramp on left.",
+    )
+    mock_get.return_value = shift
+    mock_session.return_value = None
+    mock_ctx.return_value = {
+        "preferences": {"behaviour_support": "Offer breaks when overwhelmed."},
+        "profile": {},
+    }
+    detail = shift_service.get_shift_detail_for_worker("shift-1", "worker-1", "org-1")
+    assert detail is not None
+    categories = [section["category"] for section in detail["support_instructions"]]
+    assert "Mobility" in categories
+    assert "Medication Prompts" in categories
+    assert "Behaviour Support" in categories
