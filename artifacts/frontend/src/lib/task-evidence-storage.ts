@@ -1,4 +1,4 @@
-export type TaskEvidenceType = "photo" | "voice" | "text";
+export type TaskEvidenceType = "photo" | "voice" | "text" | "file";
 
 export type TaskEvidenceRecord = {
   evidence_id: string;
@@ -9,6 +9,10 @@ export type TaskEvidenceRecord = {
   content: string;
   duration_seconds?: number | null;
   file_size_bytes?: number | null;
+  file_name?: string | null;
+  file_url?: string | null;
+  attachment_id?: string | null;
+  mime_type?: string | null;
   created_at: string;
   synced: boolean;
 };
@@ -72,6 +76,11 @@ export async function deleteAllTaskEvidenceForTask(sessionId: string, taskId: st
 }
 
 export async function listTaskEvidence(sessionId: string, taskId: string): Promise<TaskEvidenceRecord[]> {
+  const rows = await listSessionEvidence(sessionId);
+  return rows.filter((r) => r.task_id === taskId);
+}
+
+export async function listSessionEvidence(sessionId: string): Promise<TaskEvidenceRecord[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readonly");
@@ -79,7 +88,7 @@ export async function listTaskEvidence(sessionId: string, taskId: string): Promi
     const index = store.index("session_id");
     const request = index.getAll(sessionId);
     request.onsuccess = () => {
-      const rows = (request.result as TaskEvidenceRecord[]).filter((r) => r.task_id === taskId);
+      const rows = request.result as TaskEvidenceRecord[];
       resolve(rows.sort((a, b) => a.created_at.localeCompare(b.created_at)));
     };
     request.onerror = () => reject(request.error);

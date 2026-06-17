@@ -28,10 +28,11 @@ def _sample_shift(**overrides):
 
 
 def test_default_tasks_has_five_categories():
-    assert len(shift_service.DEFAULT_SHIFT_TASKS) == 5
+    assert len(shift_service.DEFAULT_SHIFT_TASKS) == 6
     labels = {t["label"] for t in shift_service.DEFAULT_SHIFT_TASKS}
     assert "Personal Hygiene / Showering" in labels
     assert "Documentation / Notes" in labels
+    assert "Health & Wellness Check" in labels
     mandatory = [t for t in shift_service.DEFAULT_SHIFT_TASKS if t.get("mandatory")]
     assert len(mandatory) == 4
 
@@ -225,7 +226,7 @@ def test_clock_in_initialises_default_tasks(mock_admin):
     result = shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
     assert result is not None
     assert result["visual_state"] == "clocked_in"
-    assert len(result["tasks"]) == 5
+    assert len(result["tasks"]) == 6
     table.update.assert_called()
 
 

@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { format } from "date-fns";
 import {
   AlertTriangle,
   Camera,
   Check,
   FileText,
+  MessageCircle,
   Mic,
+  Paperclip,
   Pause,
   Play,
   Square,
@@ -23,13 +25,16 @@ import {
   saveTaskEvidence,
   type TaskEvidenceRecord,
 } from "@/lib/task-evidence-storage";
-import { syncSessionEvidence } from "@/services/taskEvidenceService";
+import { syncSessionEvidence, uploadSessionAttachment } from "@/services/taskEvidenceService";
 import type { ShiftTask } from "@/services/shiftService";
 import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
 
 const NOTE_MAX = 500;
 const VOICE_MAX_SECONDS = 60;
 const MAX_PHOTOS = 2;
+const MAX_FILES = 3;
+const SAVED_STATUS_MS = 1500;
 
 type SaveState = "idle" | "saving" | "saved" | "offline";
 
@@ -40,6 +45,7 @@ type Props = {
   disabled?: boolean;
   onTaskPatch: (patch: Partial<ShiftTask>) => void;
   onMarkComplete: () => void;
+  variant?: "full" | "thread";
 };
 
 function formatVoiceTimer(seconds: number) {
@@ -64,12 +70,14 @@ export function ShiftTaskEvidencePanel({
   disabled,
   onTaskPatch,
   onMarkComplete,
+  variant = "full",
 }: Props) {
   const [note, setNote] = useState(task.note ?? "");
   const [records, setRecords] = useState<TaskEvidenceRecord[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
@@ -83,11 +91,34 @@ export function ShiftTaskEvidencePanel({
   const recordSecondsRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const savedStatusTimerRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const photos = records.filter((r) => r.type === "photo");
+  const fileRecords = records.filter((r) => r.type === "file");
   const voiceRecord = records.find((r) => r.type === "voice");
   const hasStrongEvidence = photos.length > 0 || Boolean(voiceRecord);
   const weakNoteOnly = !hasStrongEvidence;
+
+  const clearSavedStatusTimer = () => {
+    if (savedStatusTimerRef.current != null) {
+      window.clearTimeout(savedStatusTimerRef.current);
+      savedStatusTimerRef.current = null;
+    }
+  };
+
+  const scheduleSavedStatusClear = useCallback(() => {
+    clearSavedStatusTimer();
+    savedStatusTimerRef.current = window.setTimeout(() => {
+      setSaveState("idle");
+      savedStatusTimerRef.current = null;
+    }, SAVED_STATUS_MS);
+  }, []);
+
+  const markThreadSaved = useCallback(() => {
+    setSaveState("saved");
+    scheduleSavedStatusClear();
+  }, [scheduleSavedStatusClear]);
 
   const loadRecords = useCallback(async () => {
     try {
@@ -130,9 +161,14 @@ export function ShiftTaskEvidencePanel({
   );
 
   useEffect(() => {
-    setNote(task.note ?? "");
+    if (variant === "thread") {
+      setNote("");
+    } else {
+      setNote(task.note ?? "");
+    }
+    clearSavedStatusTimer();
     void loadRecords();
-  }, [task.task_id, task.note, loadRecords]);
+  }, [task.task_id, task.note, loadRecords, variant]);
 
   useEffect(() => {
     const retry = async () => {
@@ -148,6 +184,60 @@ export function ShiftTaskEvidencePanel({
     window.addEventListener("online", handler);
     return () => window.removeEventListener("online", handler);
   }, [sessionId, queueSync]);
+
+  const maybeAutoComplete = useCallback(
+    (patch: Partial<ShiftTask>) => {
+      const hasEvidence =
+        Boolean(patch.photo_evidence) ||
+        Boolean(patch.voice_evidence) ||
+        Boolean(patch.note?.trim());
+      if (hasEvidence && !task.completed) {
+        onMarkComplete();
+      }
+    },
+    [onMarkComplete, task.completed],
+  );
+
+  const appendThreadEvidence = useCallback(
+    async (record: TaskEvidenceRecord) => {
+      await saveTaskEvidence(record);
+      await queueSync([record]);
+      notifyTaskEvidenceUpdated();
+      await loadRecords();
+      if (variant === "thread") markThreadSaved();
+    },
+    [loadRecords, markThreadSaved, queueSync, variant],
+  );
+
+  const submitProgressUpdate = useCallback(async () => {
+    const trimmed = note.trim();
+    if (!trimmed || disabled) return;
+
+    const record: TaskEvidenceRecord = {
+      evidence_id: newEvidenceId(),
+      task_id: task.task_id,
+      goal_id: task.goal_id ?? null,
+      session_id: sessionId,
+      type: "text",
+      content: trimmed.slice(0, NOTE_MAX),
+      created_at: new Date().toISOString(),
+      synced: false,
+    };
+
+    setNote("");
+    onTaskPatch({ note: trimmed });
+    maybeAutoComplete({ note: trimmed });
+    await appendThreadEvidence(record);
+  }, [
+    appendThreadEvidence,
+    disabled,
+    maybeAutoComplete,
+    note,
+    onTaskPatch,
+    sessionId,
+    task.goal_id,
+    task.task_id,
+  ]);
 
   const persistText = useCallback(
     async (text: string) => {
@@ -166,11 +256,13 @@ export function ShiftTaskEvidencePanel({
       };
       await saveTaskEvidence(record);
       await queueSync([record]);
+      notifyTaskEvidenceUpdated();
     },
     [onTaskPatch, queueSync, records, sessionId, task.goal_id, task.task_id],
   );
 
   useEffect(() => {
+    if (variant === "thread") return;
     if (saveTimerRef.current) window.clearInterval(saveTimerRef.current);
     saveTimerRef.current = window.setInterval(() => {
       if (note !== (task.note ?? "")) void persistText(note);
@@ -178,12 +270,51 @@ export function ShiftTaskEvidencePanel({
     return () => {
       if (saveTimerRef.current) window.clearInterval(saveTimerRef.current);
     };
-  }, [note, task.note, persistText]);
+  }, [note, task.note, persistText, variant]);
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraOpen(false);
+  };
+
+  const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || disabled || uploadingFile) return;
+    if (fileRecords.length >= MAX_FILES) {
+      setCameraError(`Maximum ${MAX_FILES} files per task`);
+      return;
+    }
+
+    setCameraError(null);
+    setUploadingFile(true);
+    setSaveState("saving");
+    try {
+      const attachment = await uploadSessionAttachment(sessionId, file);
+      const record: TaskEvidenceRecord = {
+        evidence_id: newEvidenceId(),
+        task_id: task.task_id,
+        goal_id: task.goal_id ?? null,
+        session_id: sessionId,
+        type: "file",
+        content: attachment.file_name || file.name,
+        file_name: attachment.file_name || file.name,
+        file_url: attachment.public_url || attachment.file_path || null,
+        attachment_id: attachment.id,
+        mime_type: attachment.mime_type || file.type,
+        file_size_bytes: file.size,
+        created_at: attachment.created_at || new Date().toISOString(),
+        synced: false,
+      };
+      if (!task.completed) onMarkComplete();
+      await appendThreadEvidence(record);
+    } catch (err) {
+      setCameraError((err as Error).message || "Could not upload file");
+      setSaveState("idle");
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   const startCamera = async () => {
@@ -235,6 +366,9 @@ export function ShiftTaskEvidencePanel({
     await queueSync([record]);
     stopCamera();
     await loadRecords();
+    maybeAutoComplete({ photo_evidence: record.evidence_id });
+    notifyTaskEvidenceUpdated();
+    if (variant === "thread") markThreadSaved();
   };
 
   const removePhoto = async (evidenceId: string) => {
@@ -295,6 +429,9 @@ export function ShiftTaskEvidencePanel({
           });
           await queueSync([record]);
           await loadRecords();
+          maybeAutoComplete({ voice_evidence: record.evidence_id });
+          notifyTaskEvidenceUpdated();
+          if (variant === "thread") markThreadSaved();
         };
         reader.readAsDataURL(blob);
         stream.getTracks().forEach((t) => t.stop());
@@ -342,8 +479,185 @@ export function ShiftTaskEvidencePanel({
   useEffect(() => () => {
     stopCamera();
     stopRecording();
+    clearSavedStatusTimer();
     if (saveTimerRef.current) window.clearInterval(saveTimerRef.current);
   }, []);
+
+  if (variant === "thread") {
+    return (
+      <div className="border-t border-[#ECE6FB] bg-[#FBFAFF] p-3">
+        {task.description && (
+          <p className="mb-2 text-xs font-semibold italic leading-relaxed" style={{ color: MUTED }}>
+            {task.description}
+          </p>
+        )}
+
+        <div
+          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-[#E2DEF2] p-3"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, #E8E4F4 1px, transparent 0)",
+            backgroundSize: "14px 14px",
+          }}
+        >
+          {records.length === 0 ? (
+            <div className="flex h-full min-h-[96px] flex-col items-center justify-center text-center">
+              <span className="mb-2 grid h-10 w-10 place-items-center rounded-full bg-[#F1EAFF]">
+                <MessageCircle size={18} className="text-[#8B75D9]" />
+              </span>
+              <p className="text-xs font-black" style={{ color: TEXT }}>
+                No updates yet
+              </p>
+              <p className="mt-1 max-w-[220px] text-[11px] font-semibold" style={{ color: MUTED }}>
+                Type a note, take a photo, or record your voice below.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {records.map((record) => (
+                <div
+                  key={record.evidence_id}
+                  className="rounded-lg border border-[#E2DEF2] bg-white/90 px-3 py-2 text-xs font-semibold"
+                  style={{ color: TEXT }}
+                >
+                  {record.type === "photo" && (
+                    <div className="flex items-center gap-2">
+                      <Camera size={14} className="text-[#8B75D9]" />
+                      <span>Photo added</span>
+                    </div>
+                  )}
+                  {record.type === "voice" && (
+                    <div className="flex items-center gap-2">
+                      <Mic size={14} className="text-[#8B75D9]" />
+                      <span>
+                        Voice note
+                        {record.duration_seconds
+                          ? ` (${formatVoiceTimer(record.duration_seconds)})`
+                          : ""}
+                      </span>
+                    </div>
+                  )}
+                  {record.type === "text" && (
+                    <p className="whitespace-pre-wrap leading-relaxed">{record.content}</p>
+                  )}
+                  {record.type === "file" && (
+                    <div className="flex items-center gap-2">
+                      <Paperclip size={14} className="text-[#8B75D9]" />
+                      {record.file_url ? (
+                        <a
+                          href={record.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate underline-offset-2 hover:underline"
+                        >
+                          {record.file_name || record.content}
+                        </a>
+                      ) : (
+                        <span className="truncate">{record.file_name || record.content}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {cameraError && (
+          <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            {cameraError}
+          </p>
+        )}
+
+        {cameraOpen && (
+          <div className="mb-2 space-y-2 rounded-xl border border-[#E2DEF2] bg-white p-2">
+            <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 rounded-xl font-bold text-white"
+                style={{ background: PLUM }}
+                onClick={() => void capturePhoto()}
+              >
+                Capture
+              </Button>
+              <Button variant="outline" className="rounded-xl" onClick={stopCamera}>
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {recording && (
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+            <span className="text-sm font-bold text-red-700">
+              {formatVoiceTimer(recordSeconds)} / {formatVoiceTimer(VOICE_MAX_SECONDS)}
+            </span>
+            <Button size="sm" variant="outline" className="rounded-lg" onClick={stopRecording}>
+              <Square size={14} className="mr-1" /> Stop
+            </Button>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={disabled || photos.length >= MAX_PHOTOS}
+            onClick={() => void startCamera()}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
+            aria-label="Add photo"
+          >
+            <Camera size={14} />
+          </button>
+          <button
+            type="button"
+            disabled={disabled || uploadingFile || fileRecords.length >= MAX_FILES}
+            onClick={() => fileInputRef.current?.click()}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
+            aria-label="Attach file"
+          >
+            <Paperclip size={14} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,image/*"
+            onChange={(e) => void handleFileUpload(e)}
+          />
+          <input
+            value={note}
+            disabled={disabled}
+            maxLength={NOTE_MAX}
+            placeholder="Write a progress update..."
+            className="h-9 min-w-0 flex-1 rounded-full border border-[#E2DEF2] bg-white px-4 text-sm"
+            onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void submitProgressUpdate();
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={disabled || Boolean(voiceRecord)}
+            onClick={() => (recording ? stopRecording() : void startRecording())}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#6D4BDA] text-white"
+            aria-label="Record voice note"
+          >
+            <Mic size={14} />
+          </button>
+        </div>
+
+        <p className="mt-2 text-[10px] font-bold" style={{ color: MUTED }}>
+          {saveState === "saving" && (uploadingFile ? "Uploading file…" : "Saving…")}
+          {saveState === "saved" && "Saved"}
+          {saveState === "offline" && "Offline — saved locally"}
+          {saveState === "idle" && note.length > 0 && `${note.length}/${NOTE_MAX}`}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="border-t border-[#E2DEF2]">

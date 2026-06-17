@@ -135,7 +135,13 @@ export function ShiftListCard({ shift }: Props) {
   const tagStyle = SERVICE_TAG_STYLES[serviceTagKey(shift.service_category)] ?? SERVICE_TAG_STYLES.CORE;
   const isCancelled = shift.status === "cancelled";
   const isCompleted = shift.status === "completed" || shift.visual_state === "completed";
-  const isScheduledToday = isShiftToday(shift) && shift.visual_state === "scheduled";
+  const isTodayActive = isShiftToday(shift) && !isCancelled && !isCompleted;
+  const isSessionLive = shift.visual_state === "session_active";
+  const sessionButtonLabel = starting
+    ? "Starting…"
+    : isSessionLive
+      ? "Resume Session"
+      : "Start Session";
   const stateStyle = isCancelled
     ? { border: "#FECACA", badge: "bg-red-50 text-red-700 border-red-200", label: "Cancelled", avatar: "#EF4444" }
     : (STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled);
@@ -165,6 +171,14 @@ export function ShiftListCard({ shift }: Props) {
     return null;
   })();
 
+  const handleSessionAction = async () => {
+    if (isSessionLive) {
+      navigate(`/my-shifts/${shift.id}`);
+      return;
+    }
+    await handleStartSession();
+  };
+
   const handleStartSession = async () => {
     if (starting) return;
     setStarting(true);
@@ -188,17 +202,17 @@ export function ShiftListCard({ shift }: Props) {
     }
   };
 
-  const primaryActions = isScheduledToday && (
+  const primaryActions = isTodayActive && (
     <div className="mt-3 flex gap-2">
       <button
         type="button"
         disabled={starting}
         className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black text-white disabled:opacity-60"
         style={{ background: PLUM }}
-        onClick={() => void handleStartSession()}
+        onClick={() => void handleSessionAction()}
       >
         <Zap size={14} />
-        {starting ? "Starting…" : "Start Session"}
+        {sessionButtonLabel}
       </button>
       {mapsUrl && (
         <a

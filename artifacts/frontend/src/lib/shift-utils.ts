@@ -205,6 +205,67 @@ export function isMandatoryTask(task: ShiftTask) {
   );
 }
 
+export function hasStrongTaskEvidence(task: ShiftTask) {
+  return (
+    Boolean(task.photo_evidence) ||
+    (task.photo_thumbnails?.length ?? 0) > 0 ||
+    Boolean(task.voice_evidence) ||
+    Boolean(task.voice_duration_seconds)
+  );
+}
+
+export function taskUpdateCount(task: ShiftTask) {
+  let count = 0;
+  if (task.note?.trim()) count += 1;
+  count += task.photo_thumbnails?.length ?? (task.photo_evidence ? 1 : 0);
+  if (task.voice_evidence || task.voice_duration_seconds) count += 1;
+  return count;
+}
+
+export function groupShiftTasksByGoal(tasks: ShiftTask[]) {
+  type GoalGroup = {
+    key: string;
+    title: string;
+    tasks: ShiftTask[];
+    category: string;
+    accent: { main: string; soft: string; border: string };
+  };
+  const groups = new Map<string, GoalGroup>();
+  tasks.forEach((task) => {
+    const raw = (task.goal_title || "").trim();
+    const title = raw || "General Support";
+    const key = (task.goal_id || title).toLowerCase();
+    const existing = groups.get(key);
+    if (existing) {
+      existing.tasks.push(task);
+      return;
+    }
+    const lower = title.toLowerCase();
+    let category = "CORE SUPPORT";
+    let accent = { main: "#6D4BDA", soft: "#F1EAFF", border: "#D7CCF4" };
+    if (lower.includes("community")) {
+      category = "COMMUNITY SUPPORT";
+      accent = { main: "#2497B7", soft: "#E8F8FC", border: "#BFE6F1" };
+    } else if (lower.includes("document") || lower.includes("reporting") || lower.includes("plan")) {
+      category = "PLAN MANAGEMENT";
+      accent = { main: "#D48A22", soft: "#FFF3E3", border: "#F7D9AF" };
+    } else if (lower.includes("health") || lower.includes("wellbeing")) {
+      category = "CORE SUPPORT";
+      accent = { main: "#2BAE86", soft: "#E9FBF4", border: "#BFEEDA" };
+    } else if (
+      lower.includes("daily") ||
+      lower.includes("living") ||
+      lower.includes("independence") ||
+      lower.includes("develop")
+    ) {
+      category = "CORE SUPPORT";
+      accent = { main: "#6D4BDA", soft: "#F1EAFF", border: "#D7CCF4" };
+    }
+    groups.set(key, { key, title, tasks: [task], category, accent });
+  });
+  return [...groups.values()];
+}
+
 export function taskEvidenceScore(tasks: ShiftTask[]) {
   const mandatory = tasks.filter(isMandatoryTask);
   if (!mandatory.length) return { score: 100, label: "High" as const };
@@ -212,14 +273,30 @@ export function taskEvidenceScore(tasks: ShiftTask[]) {
     (t) =>
       t.completed ||
       Boolean(t.note?.trim()) ||
-      Boolean(t.photo_evidence) ||
-      Boolean(t.voice_evidence) ||
-      (t.photo_thumbnails?.length ?? 0) > 0 ||
-      Boolean(t.voice_duration_seconds),
+      hasStrongTaskEvidence(t),
   ).length;
   const score = Math.round((withEvidence / mandatory.length) * 100);
   const label = score >= 80 ? ("High" as const) : score >= 50 ? ("Medium" as const) : ("Low" as const);
   return { score, label };
+}
+
+export function taskFeedSummary(tasks: ShiftTask[]) {
+  const goalGroups = groupShiftTasksByGoal(tasks);
+  const goalsTotal = goalGroups.length;
+  const goalsComplete = goalGroups.filter((group) =>
+    group.tasks.every((task) => task.completed),
+  ).length;
+  const strongEvidenceCount = tasks.filter(hasStrongTaskEvidence).length;
+  const totalUpdates = tasks.reduce((sum, task) => sum + taskUpdateCount(task), 0);
+  const progressPercent =
+    tasks.length > 0 ? Math.round((tasks.filter((t) => t.completed).length / tasks.length) * 100) : 0;
+  return {
+    goalsTotal,
+    goalsComplete,
+    strongEvidenceCount,
+    totalUpdates,
+    progressPercent,
+  };
 }
 
 export function resolveActiveShiftTasks(shiftTasks: ShiftTask[] | undefined, localTasks: ShiftTask[]) {

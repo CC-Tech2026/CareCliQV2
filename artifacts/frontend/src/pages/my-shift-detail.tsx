@@ -6,7 +6,6 @@ import { useShiftTimer } from "@/hooks/useShiftTimer";
 import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
   ArrowLeft,
-  BarChart3,
   CheckCircle2,
   ChevronDown,
   Loader2,
@@ -22,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DuringShiftAccordion } from "@/components/shifts/DuringShiftAccordion";
 import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
+import { SessionTimeline } from "@/components/shifts/SessionTimeline";
 import { ShiftProgressStepper } from "@/components/shifts/ShiftProgressStepper";
 import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
 import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
@@ -74,6 +74,7 @@ import {
   shiftDurationMinutes,
   shiftInitials,
   taskEvidenceScore,
+  taskFeedSummary,
   timerAnchorIso,
 } from "@/lib/shift-utils";
 
@@ -101,6 +102,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [briefingOpen, setBriefingOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [duringShiftOpen, setDuringShiftOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(true);
   const [preferencesOpen, setPreferencesOpen] = useState(true);
@@ -315,6 +317,8 @@ export default function MyShiftDetail({ id }: Props) {
       setTasksOpen={setTasksOpen}
       duringShiftOpen={duringShiftOpen}
       setDuringShiftOpen={setDuringShiftOpen}
+      timelineOpen={timelineOpen}
+      setTimelineOpen={setTimelineOpen}
       safetyOpen={safetyOpen}
       setSafetyOpen={setSafetyOpen}
       profileOpen={profileOpen}
@@ -459,6 +463,8 @@ function ShiftWorkflow({
   setTasksOpen,
   duringShiftOpen,
   setDuringShiftOpen,
+  timelineOpen,
+  setTimelineOpen,
   safetyOpen,
   setSafetyOpen,
   profileOpen,
@@ -492,6 +498,8 @@ function ShiftWorkflow({
   setTasksOpen: (v: boolean) => void;
   duringShiftOpen: boolean;
   setDuringShiftOpen: (v: boolean) => void;
+  timelineOpen: boolean;
+  setTimelineOpen: (v: boolean) => void;
   safetyOpen: boolean;
   setSafetyOpen: (v: boolean) => void;
   profileOpen: boolean;
@@ -531,6 +539,7 @@ function ShiftWorkflow({
   const pulseAvatar = avatarShouldPulse(visualState);
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const mandatoryIncomplete = hasIncompleteMandatoryTasks(activeTasks);
+  const feedSummary = taskFeedSummary(activeTasks);
   const evidence = taskEvidenceScore(activeTasks);
 
   const scrollToTasks = () => {
@@ -822,22 +831,37 @@ function ShiftWorkflow({
             <span className="flex items-center gap-2">
               <span
                 className={cn(
-                  "flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black",
-                  evidence.label === "Low"
-                    ? "border-amber-200 bg-amber-50 text-amber-700"
-                    : evidence.label === "Medium"
-                      ? "border-blue-200 bg-blue-50 text-blue-700"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  "rounded-full border px-2.5 py-1 text-[10px] font-black",
+                  feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-[#E2DEF2] bg-white text-[#6D4BDA]",
                 )}
               >
-                <BarChart3 size={12} />
-                {evidence.score}% · {evidence.label}
+                {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
               </span>
               <ChevronDown size={18} className={cn("transition", tasksOpen && "rotate-180")} style={{ color: MUTED }} />
             </span>
           </button>
           {tasksOpen && (
             <div className="border-t px-4 py-3" style={{ borderColor: BORDER }}>
+              {isSessionActive && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold" style={{ color: MUTED }}>
+                    {feedSummary.strongEvidenceCount} task{feedSummary.strongEvidenceCount === 1 ? "" : "s"} with
+                    strong evidence · {feedSummary.totalUpdates} total update
+                    {feedSummary.totalUpdates === 1 ? "" : "s"}
+                  </p>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E8E4F4]">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${feedSummary.progressPercent}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right text-[10px] font-black text-emerald-600">
+                    {feedSummary.progressPercent}%
+                  </p>
+                </div>
+              )}
               <ShiftTaskChecklist
                 shiftId={shift.id}
                 sessionId={shift.session_id}
@@ -847,6 +871,17 @@ function ShiftWorkflow({
                 disabled={isCompleted}
                 sessionStyle={isSessionActive}
               />
+
+              {isSessionActive && shift.session_id && activeTasks.length > 0 && (
+                <div className="mt-4">
+                  <SessionTimeline
+                    sessionId={shift.session_id}
+                    tasks={activeTasks}
+                    open={timelineOpen}
+                    onToggle={() => setTimelineOpen(!timelineOpen)}
+                  />
+                </div>
+              )}
             </div>
           )}
         </section>
