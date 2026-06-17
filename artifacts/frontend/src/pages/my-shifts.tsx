@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { format } from "date-fns";
+import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, FileText } from "lucide-react";
+import { Link } from "wouter";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { listPendingActions } from "@/lib/shift-offline-queue";
@@ -29,6 +30,58 @@ const FILTERS: { id: ShiftFilter; label: string }[] = [
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
 ];
+
+function formatGroupLabel(dateKey: string) {
+  if (dateKey === "unknown") return "Unscheduled";
+  const date = parseISO(`${dateKey}T12:00:00`);
+  const day = startOfDay(date);
+  const today = startOfDay(new Date());
+  const yesterday = startOfDay(subDays(today, 1));
+  const formatted = format(date, "EEE d MMM").toUpperCase();
+  if (isSameDay(day, yesterday)) return `Yesterday, ${formatted}`;
+  if (isSameDay(day, today)) return `Today, ${formatted}`;
+  return format(date, "EEEE, d MMM").toUpperCase();
+}
+
+function ShiftFilterTabs({
+  filter,
+  onChange,
+  counts,
+}: {
+  filter: ShiftFilter;
+  onChange: (next: ShiftFilter) => void;
+  counts?: Record<"today" | "upcoming" | "completed" | "cancelled", number>;
+}) {
+  return (
+    <div className="rounded-full bg-[#F0EDF8] p-1">
+      <div className="grid grid-cols-4 gap-1">
+        {FILTERS.map((f) => {
+          const active = filter === f.id;
+          const count = counts?.[f.id as keyof typeof counts] ?? 0;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onChange(f.id)}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-full px-2 py-2.5 text-[11px] font-black transition sm:px-3 sm:text-xs",
+                active ? "bg-white text-[#1E1640] shadow-sm" : "text-[#7A6A9E]",
+              )}
+            >
+              <span className="truncate">{f.label}</span>
+              <span
+                className="grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full px-1 text-[10px] font-black text-white"
+                style={{ background: PLUM }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function ShiftSkeleton() {
   return (
@@ -89,18 +142,52 @@ export default function MyShifts() {
 
   const dateLabel = format(new Date(), "EEEE d MMMM");
 
+  const groupedList = useMemo(() => {
+    if (filter === "today") {
+      return [{ label: null as string | null, shifts: list }];
+    }
+    const groups = new Map<string, WorkerShift[]>();
+    for (const shift of list) {
+      const key = shift.scheduled_start
+        ? format(parseISO(shift.scheduled_start), "yyyy-MM-dd")
+        : "unknown";
+      const bucket = groups.get(key) ?? [];
+      bucket.push(shift);
+      groups.set(key, bucket);
+    }
+    const sorted =
+      filter === "completed"
+        ? Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a))
+        : Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+    return sorted.map(([key, shifts]) => ({
+      label: key === "unknown" ? "Unscheduled" : formatGroupLabel(key),
+      shifts,
+    }));
+  }, [filter, list]);
+
   return (
-    <div className="mx-auto max-w-lg space-y-5 pb-10">
-      <header>
-        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
-          Support Worker
-        </p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
-          {greetingForHour()}, {firstName}
-        </h1>
-        <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
-          {dateLabel}
-        </p>
+    <div className="mx-auto w-full max-w-4xl space-y-5 pb-10">
+      <header className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
+            Support Worker
+          </p>
+          <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+            {greetingForHour()}, {firstName} 👋
+          </h1>
+          <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
+            {dateLabel}
+          </p>
+        </div>
+        <Link href="/sessions/new">
+          <button
+            type="button"
+            className="shrink-0 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm"
+            style={{ background: CORAL }}
+          >
+            + Quick Start
+          </button>
+        </Link>
       </header>
 
       <OfflineSyncBanner pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
@@ -111,29 +198,7 @@ export default function MyShifts() {
         <StatCard value={hoursScheduled} label="Hrs scheduled" />
       </div>
 
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        {FILTERS.map((f) => {
-          const count = filterCounts?.[f.id as keyof typeof filterCounts] ?? 0;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                "shrink-0 rounded-full px-4 py-2 text-xs font-black transition",
-                filter === f.id ? "text-white shadow-sm" : "bg-white border",
-              )}
-              style={{
-                background: filter === f.id ? PLUM : undefined,
-                color: filter === f.id ? "#fff" : MUTED,
-                borderColor: filter === f.id ? PLUM : BORDER,
-              }}
-            >
-              {f.label} ({count})
-            </button>
-          );
-        })}
-      </div>
+      <ShiftFilterTabs filter={filter} onChange={setFilter} counts={filterCounts} />
 
       {isLoading && (
         <div className="space-y-3">
@@ -161,9 +226,18 @@ export default function MyShifts() {
         </section>
       )}
 
-      <div className="space-y-3">
-        {list.map((shift: WorkerShift) => (
-          <ShiftListCard key={shift.id} shift={shift} />
+      <div className="space-y-4">
+        {groupedList.map((group) => (
+          <div key={group.label ?? "default"} className="space-y-3">
+            {group.label && (
+              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
+                {group.label}
+              </p>
+            )}
+            {group.shifts.map((shift: WorkerShift) => (
+              <ShiftListCard key={shift.id} shift={shift} />
+            ))}
+          </div>
         ))}
       </div>
 

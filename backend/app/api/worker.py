@@ -528,6 +528,18 @@ async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_cu
     return shift
 
 
+@router.get("/shifts/{shift_id}/support-instructions")
+async def worker_shift_support_instructions(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Category-based support instructions for a shift (CARECLIQV2-157)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_support_instructions_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
 @router.post("/shifts/{shift_id}/clock-in")
 async def worker_clock_in(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Clock in to a shift and initialise the task checklist (CARECLIQV2-116 / CARECLIQV2-134)."""
