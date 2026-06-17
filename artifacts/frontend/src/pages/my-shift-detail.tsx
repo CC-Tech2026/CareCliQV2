@@ -94,7 +94,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
   const [timerNow, setTimerNow] = useState(Date.now());
-  const [notePanelOpen, setNotePanelOpen] = useState(true);
+  const [notePanelOpen, setNotePanelOpen] = useState(false);
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
@@ -109,6 +109,14 @@ export default function MyShiftDetail({ id }: Props) {
     if (shift?.risks_acknowledged) setAckChecked(true);
     if (shift?.tasks?.length) setTasks(shift.tasks);
   }, [shift?.risks_acknowledged, shift?.tasks]);
+
+  useEffect(() => {
+    if (shift?.visual_state === "session_active") {
+      setNotePanelOpen(true);
+    } else if (shift?.visual_state === "clocked_in") {
+      setNotePanelOpen(false);
+    }
+  }, [shift?.visual_state]);
 
   useEffect(() => {
     if (shift?.visual_state !== "clocked_in" && shift?.visual_state !== "session_active") return;
@@ -265,9 +273,7 @@ export default function MyShiftDetail({ id }: Props) {
     );
   }
 
-  const isSessionActive =
-    shift.visual_state === "session_active" ||
-    (Boolean(shift.session_id) && shift.visual_state !== "scheduled" && shift.visual_state !== "completed");
+  const isSessionActive = shift.visual_state === "session_active";
   const workflow = (
     <ShiftWorkflow
       shift={shift}
@@ -474,15 +480,12 @@ function ShiftWorkflow({
   const risksAcked = shift.risks_acknowledged ?? false;
   const showTasks =
     shift.visual_state === "clocked_in" ||
-    shift.visual_state === "session_active" ||
-    Boolean(shift.session_id);
+    shift.visual_state === "session_active";
   const serviceTag = (shift.service_category || "CORE").toUpperCase();
   const tagStyle = SERVICE_TAG_STYLES[serviceTag] ?? SERVICE_TAG_STYLES.CORE;
   const entryNote = shift.entry_instructions || shift.access_instructions;
-  const isSessionActive =
-    shift.visual_state === "session_active" ||
-    (Boolean(shift.session_id) && shift.visual_state !== "scheduled" && shift.visual_state !== "completed");
-  const isClockedIn = shift.visual_state === "clocked_in" && !isSessionActive;
+  const isSessionActive = shift.visual_state === "session_active";
+  const isClockedIn = shift.visual_state === "clocked_in";
   const isCompleted = shift.visual_state === "completed";
   const pulseAvatar = avatarShouldPulse(shift.visual_state);
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);

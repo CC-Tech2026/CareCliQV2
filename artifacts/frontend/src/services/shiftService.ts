@@ -104,8 +104,16 @@ export type WorkerShiftsResponse = {
   filter: ShiftFilter;
 };
 
+export type WorkerShiftCountsResponse = {
+  counts: Record<"today" | "upcoming" | "completed" | "cancelled", number>;
+};
+
 export function getWorkerShifts(filter: ShiftFilter = "today") {
   return jsonFetch<WorkerShiftsResponse>(`/api/worker/shifts?filter=${filter}`);
+}
+
+export function getWorkerShiftCounts() {
+  return jsonFetch<WorkerShiftCountsResponse>("/api/worker/shifts/counts");
 }
 
 export function getWorkerShift(id: string) {

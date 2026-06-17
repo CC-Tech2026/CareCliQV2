@@ -507,6 +507,16 @@ async def worker_shifts(
     return {"shifts": shifts, "filter": filter}
 
 
+@router.get("/shifts/counts")
+async def worker_shift_counts(current_user: dict = Depends(get_current_user)):
+    """Per-filter shift counts for My Shifts tabs (CARECLIQV2-133)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    counts = shift_service.count_shifts_for_worker(worker_id, org_id)
+    return {"counts": counts}
+
+
 @router.get("/shifts/{shift_id}")
 async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
