@@ -11,7 +11,8 @@ import {
   TEXT,
   MUTED,
   PLUM,
-  BORDER,
+  STATE_STYLES,
+  avatarShouldPulse,
 } from "@/lib/shift-utils";
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
@@ -26,16 +27,21 @@ export function ShiftListCard({ shift }: Props) {
   const durationLabel = formatDurationLabel(duration);
   const serviceTag = (shift.service_category || "CORE").toUpperCase();
   const tagStyle = SERVICE_TAG_STYLES[serviceTag] ?? SERVICE_TAG_STYLES.CORE;
+  const stateStyle = STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled;
+  const pulse = avatarShouldPulse(shift.visual_state);
 
   return (
     <article
-      className="rounded-2xl border bg-white p-4 shadow-sm"
-      style={{ borderColor: BORDER }}
+      className="rounded-2xl border-2 bg-white p-4 shadow-sm transition-[border-color] duration-300"
+      style={{ borderColor: stateStyle.border }}
     >
       <div className="flex items-start gap-3">
         <div
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-black text-white"
-          style={{ background: avatarColor(shift.participant_name) }}
+          className={cn(
+            "grid h-11 w-11 shrink-0 place-items-center rounded-full text-xs font-black text-white",
+            pulse && "animate-pulse",
+          )}
+          style={{ background: stateStyle.avatar }}
         >
           {shiftInitials(shift.participant_name)}
         </div>
@@ -79,10 +85,4 @@ export function ShiftListCard({ shift }: Props) {
       </div>
     </article>
   );
-}
-
-function avatarColor(name?: string) {
-  const palette = ["#10B981", "#5533CC", "#0EA5E9", "#F59E0B"];
-  const code = (name || "A").charCodeAt(0);
-  return palette[code % palette.length];
 }

@@ -94,6 +94,7 @@ export type WorkerShift = {
   tasks?: ShiftTask[];
   session_id?: string | null;
   session_status?: string | null;
+  session_started_at?: string | null;
   service_category?: string;
 };
 
@@ -130,6 +131,28 @@ export function acknowledgeShiftRisks(id: string) {
 
 export function startShiftSession(id: string) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/start-session`, { method: "POST" });
+}
+
+export type StartSessionResponse = {
+  success: boolean;
+  session: {
+    sessionId: string;
+    status: string;
+    startedAt: string;
+    participantId?: string;
+    shiftId?: string;
+  };
+  shift?: WorkerShift;
+};
+
+export function startSessionById(
+  sessionId: string,
+  body?: { startedAt?: string; workerLocation?: { lat: number; lng: number } },
+) {
+  return jsonFetch<StartSessionResponse>(`/api/sessions/${sessionId}/start`, {
+    method: "POST",
+    body: JSON.stringify(body ?? {}),
+  });
 }
 
 export function clockOutShift(id: string) {
@@ -182,5 +205,41 @@ export function loadTasksLocally(shiftId: string): ShiftTask[] | null {
     return JSON.parse(raw) as ShiftTask[];
   } catch {
     return null;
+  }
+}
+
+export type PendingStartSession = {
+  shiftId: string;
+  startedAt: string;
+};
+
+function pendingStartSessionKey(shiftId: string) {
+  return `ccq_pending_start_session_${shiftId}`;
+}
+
+export function savePendingStartSession(shiftId: string, startedAt: string) {
+  try {
+    const payload: PendingStartSession = { shiftId, startedAt };
+    localStorage.setItem(pendingStartSessionKey(shiftId), JSON.stringify(payload));
+  } catch {
+    /* noop */
+  }
+}
+
+export function loadPendingStartSession(shiftId: string): PendingStartSession | null {
+  try {
+    const raw = localStorage.getItem(pendingStartSessionKey(shiftId));
+    if (!raw) return null;
+    return JSON.parse(raw) as PendingStartSession;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingStartSession(shiftId: string) {
+  try {
+    localStorage.removeItem(pendingStartSessionKey(shiftId));
+  } catch {
+    /* noop */
   }
 }

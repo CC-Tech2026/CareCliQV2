@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { useShiftTimer } from "@/hooks/useShiftTimer";
+import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
   ArrowLeft,
   BarChart3,
@@ -14,7 +16,6 @@ import {
   ShieldAlert,
   Mic,
   Square,
-  Zap,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,13 @@ import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLayout";
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
+import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
+import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,9 +52,10 @@ import {
   clockInShift,
   clockOutShift,
   endShift,
+  clearPendingStartSession,
   getWorkerShift,
-  startShiftSession,
   type ShiftTask,
+  type ShiftVisualState,
   type WorkerShift,
 } from "@/services/shiftService";
 import {
@@ -63,7 +67,6 @@ import {
   TEXT,
   avatarShouldPulse,
   formatDurationLabel,
-  formatElapsedTimer,
   formatShiftTimeRange,
   hasIncompleteMandatoryTasks,
   isMandatoryTask,
@@ -71,6 +74,7 @@ import {
   shiftDurationMinutes,
   shiftInitials,
   taskEvidenceScore,
+  timerAnchorIso,
 } from "@/lib/shift-utils";
 
 type Props = { id: string };
@@ -80,9 +84,20 @@ const SERVICE_TAG_STYLES: Record<string, string> = {
   "CAPACITY BUILDING": "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
+function resolveDisplayVisualState(
+  shift: WorkerShift,
+  instantSessionActive: boolean,
+): ShiftVisualState {
+  if (instantSessionActive && shift.visual_state === "clocked_in") {
+    return "session_active";
+  }
+  return shift.visual_state;
+}
+
 export default function MyShiftDetail({ id }: Props) {
-  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const orgId = user?.organizationId ?? "__no_org__";
   const [briefingOpen, setBriefingOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [duringShiftOpen, setDuringShiftOpen] = useState(false);
@@ -93,7 +108,6 @@ export default function MyShiftDetail({ id }: Props) {
   const [ackChecked, setAckChecked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
-  const [timerNow, setTimerNow] = useState(Date.now());
   const [notePanelOpen, setNotePanelOpen] = useState(false);
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
@@ -105,6 +119,21 @@ export default function MyShiftDetail({ id }: Props) {
     { queryFn: () => getWorkerShift(id) },
   );
 
+  const {
+    instantSessionActive,
+    setInstantSessionActive,
+    startSession,
+    syncing,
+    pendingCount,
+    invalidate,
+  } = useShiftSessionActions({
+    shiftId: id,
+    orgId,
+    shift,
+    onTasksUpdated: setTasks,
+    onSessionStarted: () => setNotePanelOpen(true),
+  });
+
   useEffect(() => {
     if (shift?.risks_acknowledged) setAckChecked(true);
     if (shift?.tasks?.length) setTasks(shift.tasks);
@@ -112,21 +141,27 @@ export default function MyShiftDetail({ id }: Props) {
 
   useEffect(() => {
     if (shift?.visual_state === "session_active") {
+      setInstantSessionActive(false);
+      clearPendingStartSession(id);
       setNotePanelOpen(true);
-    } else if (shift?.visual_state === "clocked_in") {
-      setNotePanelOpen(false);
     }
-  }, [shift?.visual_state]);
+  }, [shift?.visual_state, id]);
 
-  useEffect(() => {
-    if (shift?.visual_state !== "clocked_in" && shift?.visual_state !== "session_active") return;
-    const t = setInterval(() => setTimerNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [shift?.visual_state]);
+  const displayVisualState = shift
+    ? resolveDisplayVisualState(shift, instantSessionActive)
+    : "scheduled";
+  const timerActive =
+    displayVisualState === "clocked_in" || displayVisualState === "session_active";
+  const timerAnchor = shift
+    ? timerAnchorIso(displayVisualState, shift.session_started_at, shift.clocked_in_at)
+    : null;
+  const { elapsed } = useShiftTimer(shift?.session_id, {
+    serverStartIso: timerAnchor,
+    active: timerActive,
+  });
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shift", id] });
+  const invalidateShifts = () => {
+    invalidate();
   };
 
   const handleAcknowledge = async () => {
@@ -135,7 +170,7 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       await acknowledgeShiftRisks(shift.id);
       setAckChecked(true);
-      invalidate();
+      invalidateShifts();
       await refetch();
     } finally {
       setBusy(null);
@@ -151,7 +186,7 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       const updated = await clockInShift(shift.id);
       setTasks(updated.tasks ?? []);
-      invalidate();
+      invalidateShifts();
       await refetch();
       toast({
         title: "Clocked in!",
@@ -169,18 +204,10 @@ export default function MyShiftDetail({ id }: Props) {
   };
 
   const handleStartSession = async () => {
-    if (!shift) return;
+    if (!shift || busy !== null) return;
     setBusy("start");
     try {
-      const updated = await startShiftSession(shift.id);
-      setTasks(updated.tasks ?? []);
-      setNotePanelOpen(true);
-      invalidate();
-      await refetch();
-      toast({
-        title: "Session started!",
-        description: `Live note open for ${shift.participant_name ?? "participant"}.`,
-      });
+      await startSession();
     } finally {
       setBusy(null);
     }
@@ -192,7 +219,7 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       await clockOutShift(shift.id);
       setClockOutOpen(false);
-      invalidate();
+      invalidateShifts();
       await refetch();
       toast({
         title: "Clocked out",
@@ -218,7 +245,7 @@ export default function MyShiftDetail({ id }: Props) {
       setEndShiftOpen(false);
       setMandatoryAlertOpen(false);
       setForceEndPending(false);
-      invalidate();
+      invalidateShifts();
       await refetch();
       toast({
         title: "Shift ended",
@@ -273,13 +300,15 @@ export default function MyShiftDetail({ id }: Props) {
     );
   }
 
-  const isSessionActive = shift.visual_state === "session_active";
+  const isSessionActive = shift.visual_state === "session_active" || instantSessionActive;
+  const showLiveSession = isSessionActive && notePanelOpen && !!shift.session_id;
   const workflow = (
     <ShiftWorkflow
       shift={shift}
+      visualState={displayVisualState}
       tasks={tasks}
       setTasks={setTasks}
-      timerNow={timerNow}
+      elapsed={elapsed}
       briefingOpen={briefingOpen}
       setBriefingOpen={setBriefingOpen}
       tasksOpen={tasksOpen}
@@ -359,9 +388,10 @@ export default function MyShiftDetail({ id }: Props) {
     </>
   );
 
-  if (isSessionActive && notePanelOpen) {
+  if (showLiveSession) {
     return (
       <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
+        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
         <Link href="/my-shifts">
           <button
             type="button"
@@ -372,7 +402,11 @@ export default function MyShiftDetail({ id }: Props) {
           </button>
         </Link>
 
-        <ShiftStageBanner visualState={shift.visual_state} participantName={shift.participant_name} />
+        <ShiftStageBanner
+          visualState={displayVisualState}
+          participantName={shift.participant_name}
+          elapsed={elapsed}
+        />
 
         <ShiftSessionSplitLayout
           className="min-h-0 flex-1"
@@ -392,6 +426,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-10">
+      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       <Link href="/my-shifts">
         <button
           type="button"
@@ -401,7 +436,11 @@ export default function MyShiftDetail({ id }: Props) {
           <ArrowLeft size={18} /> My Shifts
         </button>
       </Link>
-      <ShiftStageBanner visualState={shift.visual_state} participantName={shift.participant_name} />
+      <ShiftStageBanner
+        visualState={displayVisualState}
+        participantName={shift.participant_name}
+        elapsed={elapsed}
+      />
       {workflow}
       {dialogs}
     </div>
@@ -410,9 +449,10 @@ export default function MyShiftDetail({ id }: Props) {
 
 function ShiftWorkflow({
   shift,
+  visualState,
   tasks,
   setTasks,
-  timerNow,
+  elapsed,
   briefingOpen,
   setBriefingOpen,
   tasksOpen,
@@ -442,9 +482,10 @@ function ShiftWorkflow({
   onEndShiftAnyway,
 }: {
   shift: WorkerShift;
+  visualState: ShiftVisualState;
   tasks: ShiftTask[];
   setTasks: (tasks: ShiftTask[]) => void;
-  timerNow: number;
+  elapsed: string;
   briefingOpen: boolean;
   setBriefingOpen: (v: boolean) => void;
   tasksOpen: boolean;
@@ -473,21 +514,21 @@ function ShiftWorkflow({
   onDismissMandatoryAlert: () => void;
   onEndShiftAnyway: () => void;
 }) {
-  const state = STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled;
+  const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
   const durationLabel = formatDurationLabel(duration);
   const hasAlerts = (shift.health_alerts?.length ?? 0) > 0;
   const risksAcked = shift.risks_acknowledged ?? false;
   const showTasks =
-    shift.visual_state === "clocked_in" ||
-    shift.visual_state === "session_active";
+    visualState === "clocked_in" ||
+    visualState === "session_active";
   const serviceTag = (shift.service_category || "CORE").toUpperCase();
   const tagStyle = SERVICE_TAG_STYLES[serviceTag] ?? SERVICE_TAG_STYLES.CORE;
   const entryNote = shift.entry_instructions || shift.access_instructions;
-  const isSessionActive = shift.visual_state === "session_active";
-  const isClockedIn = shift.visual_state === "clocked_in";
-  const isCompleted = shift.visual_state === "completed";
-  const pulseAvatar = avatarShouldPulse(shift.visual_state);
+  const isSessionActive = visualState === "session_active";
+  const isClockedIn = visualState === "clocked_in";
+  const isCompleted = visualState === "completed";
+  const pulseAvatar = avatarShouldPulse(visualState);
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const mandatoryIncomplete = hasIncompleteMandatoryTasks(activeTasks);
   const evidence = taskEvidenceScore(activeTasks);
@@ -513,8 +554,6 @@ function ShiftWorkflow({
   const timerDot = isSessionActive ? "bg-emerald-500" : "bg-amber-500";
   const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
 
-  const timerFrom = isSessionActive ? shift.clocked_in_at : shift.clocked_in_at;
-
   return (
     <div className="space-y-4 pb-4">
       {isCompleted && (
@@ -522,10 +561,10 @@ function ShiftWorkflow({
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border-2 bg-white shadow-sm"
+        className="overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
       >
-        <div className="h-1" style={{ background: state.border }} />
+        <div className="h-1 transition-[background-color] duration-300 ease-in-out" style={{ background: state.border }} />
         <div className="p-5">
           <div className="flex items-start gap-4">
             <div
@@ -550,7 +589,7 @@ function ShiftWorkflow({
                 <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase", tagStyle)}>
                   {serviceTag}
                 </span>
-                <ShiftStatusBadge visualState={shift.visual_state} className="ml-auto" />
+                <ShiftStatusBadge visualState={visualState} className="ml-auto" />
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
@@ -596,16 +635,16 @@ function ShiftWorkflow({
                 {timerLabel}
               </span>
               <span className={cn("font-mono text-sm font-black", timerMono)}>
-                {formatElapsedTimer(timerFrom, timerNow)}
+                {elapsed}
               </span>
             </div>
           )}
         </div>
       </section>
 
-      <ShiftProgressStepper visualState={shift.visual_state} />
+      <ShiftProgressStepper visualState={visualState} />
 
-      {!isCompleted && shift.visual_state === "scheduled" && (
+      {!isCompleted && visualState === "scheduled" && (
         <Button
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
@@ -625,20 +664,13 @@ function ShiftWorkflow({
 
       {isClockedIn && (
         <div className="space-y-2">
-          <Button
-            className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"
-            style={{ background: PLUM }}
-            disabled={busy !== null}
-            onClick={onStartSession}
-          >
-            {busy === "start" ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <Zap size={18} className="mr-2 inline" /> Start Session
-              </>
-            )}
-          </Button>
+          <StartSessionButton
+            shiftId={shift.id}
+            participantName={shift.participant_name}
+            onStartSession={onStartSession}
+            isLoading={busy === "start"}
+            disabled={busy !== null && busy !== "start"}
+          />
           <button
             type="button"
             className="w-full text-center text-xs font-semibold underline-offset-2 hover:underline"
@@ -707,7 +739,7 @@ function ShiftWorkflow({
         </div>
       )}
 
-      {hasAlerts && !risksAcked && shift.visual_state === "scheduled" && (
+      {hasAlerts && !risksAcked && visualState === "scheduled" && (
         <RisksAcknowledgementSection
           shift={shift}
           safetyOpen={safetyOpen}

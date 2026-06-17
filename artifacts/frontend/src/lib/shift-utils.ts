@@ -120,12 +120,35 @@ export function stageBannerText(visualState: ShiftVisualState, participantName?:
     case "clocked_in":
       return `Arrived — ${name}`;
     case "session_active":
-      return `Session in progress — ${name}`;
+      return `Session Active — ${name}`;
     case "completed":
       return `Shift completed — ${name}`;
     default:
       return null;
   }
+}
+
+export function stageBannerShortText(visualState: ShiftVisualState) {
+  switch (visualState) {
+    case "clocked_in":
+      return "Arrived";
+    case "session_active":
+      return "Active";
+    case "completed":
+      return "Done";
+    default:
+      return null;
+  }
+}
+
+export function timerAnchorIso(
+  visualState: ShiftVisualState,
+  sessionStartedAt?: string | null,
+  clockedInAt?: string | null,
+) {
+  if (visualState === "session_active" && sessionStartedAt) return sessionStartedAt;
+  if (visualState === "clocked_in" || visualState === "session_active") return clockedInAt ?? null;
+  return null;
 }
 
 export function avatarShouldPulse(visualState: ShiftVisualState) {

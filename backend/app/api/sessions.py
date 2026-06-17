@@ -11,7 +11,8 @@ from ..services.settings_service import get_physical_exam_session_types
 from ..services.embedding_pipeline import run_session_embedding_pipeline
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
-from ..core.access import get_user_organization_id
+from ..core.access import get_user_organization_id, get_user_id
+from ..services import audit_service
 from .security import require_recent_reauth
 import logging
 import json
@@ -40,6 +41,16 @@ ALLOWED_ATTACHMENT_TYPES = {
 
 class SaveWithAIBody(BaseModel):
     acknowledged_warn_rules: List[str] = []
+
+
+class WorkerLocationBody(BaseModel):
+    lat: float
+    lng: float
+
+
+class StartSessionBody(BaseModel):
+    startedAt: Optional[str] = None
+    workerLocation: Optional[WorkerLocationBody] = None
 
 
 class PreviewProgressBody(BaseModel):
@@ -212,6 +223,43 @@ async def get_session(session_id: str, current_user: dict = Depends(get_current_
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.post("/{session_id}/start")
+async def start_session(
+    session_id: str,
+    body: StartSessionBody = StartSessionBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """Start an active session (CARECLIQV2-244)."""
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_location = body.workerLocation.model_dump() if body.workerLocation else None
+    try:
+        result = shift_service.start_session_by_id(
+            session_id,
+            worker_id,
+            org_id,
+            started_at=body.startedAt,
+            worker_location=worker_location,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        message = str(exc)
+        if "not found" in message.lower():
+            raise HTTPException(status_code=404, detail=message)
+        raise HTTPException(status_code=409, detail=message)
+
+    await audit_service.log_action(
+        action_type="session.started",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"startedAt": result.get("session", {}).get("startedAt")},
+    )
+    return result
 
 
 @router.patch("/{session_id}")
