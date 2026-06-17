@@ -149,6 +149,12 @@ export default function MyShiftDetail({ id }: Props) {
         title: "Clocked in!",
         description: `Shift with ${shift.participant_name ?? "participant"} is active.`,
       });
+    } catch (err) {
+      toast({
+        title: "Failed to clock in",
+        description: (err as Error).message || "Check your connection and try again.",
+        variant: "destructive",
+      });
     } finally {
       setBusy(null);
     }
