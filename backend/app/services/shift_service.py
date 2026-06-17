@@ -196,6 +196,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "tasks": shift.get("tasks") or [],
         "session_id": shift.get("session_id"),
         "session_status": session_status,
+        "session_started_at": (session or {}).get("start_time"),
         "service_category": shift.get("service_category") or "CORE",
         "participant_dob": shift.get("participant_dob"),
         "participant_gender": shift.get("participant_gender"),
@@ -281,7 +282,7 @@ def _get_session_for_shift(shift: dict) -> Optional[dict[str, Any]]:
         resp = (
             get_supabase_admin()
             .table("sessions")
-            .select("id, status, session_date, duration_minutes")
+            .select("id, status, session_date, duration_minutes, start_time")
             .eq("id", str(session_id))
             .limit(1)
             .execute()
@@ -750,7 +751,9 @@ def start_shift_session(
     existing_session_id = shift.get("session_id")
     if existing_session_id:
         session = _get_session_for_shift(shift)
-        return _shift_card_payload(shift, session)
+        if _session_counts_as_active(session):
+            return _shift_card_payload(shift, session)
+        # Stale link (e.g. prior completed session) — start a fresh draft below.
 
     duration = 60
     if shift.get("scheduled_start") and shift.get("scheduled_end"):
@@ -761,6 +764,8 @@ def start_shift_session(
         except ValueError:
             pass
 
+    started_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
     payload = _prepare_session_payload({
         "participant_id": str(participant_id),
         "session_date": date.today(),
@@ -768,6 +773,7 @@ def start_shift_session(
         "session_type": "support_work",
         "status": "draft",
         "shift_id": shift_id,
+        "start_time": started_at,
     })
 
     ownership = owner_payload(current_user)
@@ -791,6 +797,7 @@ def start_shift_session(
         if _is_missing_schema_error(exc):
             payload.pop("tasks", None)
             payload.pop("shift_id", None)
+            payload.pop("start_time", None)
             resp = get_supabase_admin().table("sessions").insert(payload).execute()
         else:
             raise
@@ -811,6 +818,111 @@ def start_shift_session(
     updated_shift = get_shift_by_id(shift_id) or shift
     session = _get_session_for_shift(updated_shift)
     return _shift_card_payload(updated_shift, session)
+
+
+def _format_start_session_response(session: dict, shift: Optional[dict] = None) -> dict[str, Any]:
+    status = (session.get("status") or "draft").lower()
+    api_status = "active" if status in ("draft", "in_progress", "active") else status
+    started_at = session.get("start_time") or _now_iso()
+    payload = {
+        "success": True,
+        "session": {
+            "sessionId": str(session.get("id")),
+            "status": api_status,
+            "startedAt": started_at,
+            "participantId": session.get("participant_id") or session.get("patient_id"),
+            "shiftId": session.get("shift_id") or (shift or {}).get("id"),
+        },
+    }
+    if shift:
+        payload["shift"] = _shift_card_payload(shift, session)
+    return payload
+
+
+def start_session_by_id(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+    started_at: Optional[str] = None,
+    worker_location: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Start an existing session by id (CARECLIQV2-244)."""
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("*")
+            .eq("id", str(session_id))
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            raise ValueError("Session not found") from exc
+        raise
+
+    rows = resp.data or []
+    if not rows:
+        raise ValueError("Session not found")
+    session = rows[0]
+
+    session_org = str(session.get("organization_id") or "")
+    if session_org and session_org != str(organization_id):
+        raise ValueError("Session not found")
+
+    shift = get_shift_for_session(session)
+    if shift:
+        if str(shift.get("worker_id") or "") != str(worker_id):
+            raise PermissionError("Not authorized to start this session")
+        if str(shift.get("organization_id") or "") != str(organization_id):
+            raise ValueError("Session not found")
+        if not shift.get("clocked_in_at"):
+            raise ValueError("Clock in before starting a session.")
+        if shift.get("health_alerts") and not shift.get("risks_acknowledged_at"):
+            raise ValueError("Acknowledge risks before starting a session.")
+    else:
+        owner = str(session.get("worker_id") or session.get("created_by") or "")
+        if owner and owner != str(worker_id):
+            raise PermissionError("Not authorized to start this session")
+
+    status = (session.get("status") or "").lower()
+    if status in ("completed", "cancelled"):
+        raise ValueError("Session cannot be started")
+
+    if _session_counts_as_active(session) and session.get("start_time"):
+        return _format_start_session_response(session, shift)
+
+    started = started_at or _now_iso()
+    update_payload: dict[str, Any] = {
+        "start_time": started,
+        "status": "draft",
+    }
+    if worker_location and isinstance(worker_location, dict):
+        lat = worker_location.get("lat")
+        lng = worker_location.get("lng")
+        if lat is not None and lng is not None:
+            update_payload["worker_location"] = {"lat": lat, "lng": lng}
+
+    try:
+        get_supabase_admin().table("sessions").update(update_payload).eq("id", str(session_id)).execute()
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            update_payload.pop("worker_location", None)
+            get_supabase_admin().table("sessions").update(update_payload).eq("id", str(session_id)).execute()
+        else:
+            raise
+
+    refreshed = (
+        get_supabase_admin()
+        .table("sessions")
+        .select("*")
+        .eq("id", str(session_id))
+        .limit(1)
+        .execute()
+    )
+    updated_session = (refreshed.data or [session])[0]
+    updated_shift = get_shift_for_session(updated_session) or shift
+    return _format_start_session_response(updated_session, updated_shift)
 
 
 def _mandatory_tasks_complete(tasks: list[dict[str, Any]]) -> bool:

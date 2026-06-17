@@ -307,7 +307,83 @@ def test_start_shift_session_uses_shift_ownership_not_assignment(mock_get, mock_
 
     assert result is not None
     assert result["visual_state"] == "session_active"
+    insert_payload = table.insert.call_args[0][0]
+    assert insert_payload.get("start_time")
     mock_link.assert_called_once_with("shift-1", "sess-1")
+
+
+@patch("backend.app.services.shift_service.link_shift_session")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_start_shift_session_replaces_completed_session(mock_get, mock_admin, mock_link):
+    """Stale completed session link must not block a new live session."""
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        session_id="old-sess",
+        risks_acknowledged_at=datetime.now(timezone.utc).isoformat(),
+    )
+    new_session = {"id": "sess-new", "status": "draft"}
+    mock_get.side_effect = [shift, {**shift, "session_id": "sess-new"}]
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    patients_chain = table.select.return_value.eq.return_value.eq.return_value.limit.return_value
+    patients_chain.execute.return_value = MagicMock(data=[{"id": "patient-1"}])
+    table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"id": "old-sess", "status": "completed"}]
+    )
+    table.insert.return_value.execute.return_value = MagicMock(data=[new_session])
+
+    user = {"id": "worker-1", "role": "support_worker", "organization_id": "org-1"}
+    result = shift_service.start_shift_session("shift-1", "worker-1", "org-1", user)
+
+    assert result is not None
+    assert result["visual_state"] == "session_active"
+    mock_link.assert_called_once_with("shift-1", "sess-new")
+
+
+@patch("backend.app.services.shift_service.get_shift_for_session")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+def test_start_session_by_id_updates_start_time(mock_admin, mock_get_shift):
+    session = {
+        "id": "sess-1",
+        "status": "draft",
+        "organization_id": "org-1",
+        "participant_id": "patient-1",
+        "shift_id": "shift-1",
+    }
+    shift = _sample_shift(
+        status="in_progress",
+        clocked_in_at=datetime.now(timezone.utc).isoformat(),
+        session_id="sess-1",
+        risks_acknowledged_at=datetime.now(timezone.utc).isoformat(),
+    )
+    mock_get_shift.return_value = shift
+
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[session]
+    )
+    updated_session = {**session, "start_time": "2026-06-17T10:00:00Z"}
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[updated_session])
+    table.select.return_value.eq.return_value.limit.return_value.execute.side_effect = [
+        MagicMock(data=[session]),
+        MagicMock(data=[updated_session]),
+    ]
+
+    result = shift_service.start_session_by_id(
+        "sess-1",
+        "worker-1",
+        "org-1",
+        started_at="2026-06-17T10:00:00Z",
+    )
+
+    assert result["success"] is True
+    assert result["session"]["sessionId"] == "sess-1"
+    assert result["session"]["status"] == "active"
+    assert result["session"]["startedAt"] == "2026-06-17T10:00:00Z"
 
 
 def test_mandatory_tasks_complete():

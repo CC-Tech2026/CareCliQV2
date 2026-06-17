@@ -302,7 +302,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
                     commitMessage();
                   }
                 }}
-                placeholder="Message"
+                placeholder={`What progress did ${participantName || "the participant"} make today?`}
                 className="min-h-11 min-w-0 flex-1 bg-transparent px-2 text-base font-medium outline-none placeholder:text-[#9A8BC4]"
                 style={{ color: TEXT }}
               />

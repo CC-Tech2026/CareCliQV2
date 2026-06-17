@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, FileText } from "lucide-react";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
+import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
+import { listPendingActions } from "@/lib/shift-offline-queue";
 import {
   getWorkerShiftCounts,
   getWorkerShifts,
@@ -44,7 +46,17 @@ function ShiftSkeleton() {
 export default function MyShifts() {
   const { user } = useAuth();
   const [filter, setFilter] = useState<ShiftFilter>("today");
+  const [pendingCount, setPendingCount] = useState(0);
   const firstName = (user?.full_name || "there").split(" ")[0];
+
+  useEffect(() => {
+    void listPendingActions().then((actions) => setPendingCount(actions.length));
+    const onOnline = () => {
+      void listPendingActions().then((actions) => setPendingCount(actions.length));
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
 
   const { data, isLoading, error } = useOrgQuery(["worker", "shifts", filter], {
     queryFn: () => getWorkerShifts(filter),
@@ -90,6 +102,8 @@ export default function MyShifts() {
           {dateLabel}
         </p>
       </header>
+
+      <OfflineSyncBanner pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
 
       <div className="grid grid-cols-3 gap-2">
         <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label="Shifts today" />
