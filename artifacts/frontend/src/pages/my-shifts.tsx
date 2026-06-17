@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
-import { format, isToday, parseISO, startOfDay } from "date-fns";
+import { format } from "date-fns";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, FileText } from "lucide-react";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
-import { getWorkerShifts, type ShiftFilter, type WorkerShift } from "@/services/shiftService";
+import {
+  getWorkerShiftCounts,
+  getWorkerShifts,
+  type ShiftFilter,
+  type WorkerShift,
+} from "@/services/shiftService";
 import { cn } from "@/lib/utils";
 import {
   BORDER,
@@ -12,7 +17,6 @@ import {
   greetingForHour,
   MUTED,
   PLUM,
-  SOFT,
   TEXT,
   shiftDurationMinutes,
 } from "@/lib/shift-utils";
@@ -37,37 +41,27 @@ function ShiftSkeleton() {
   );
 }
 
-function filterShifts(shifts: WorkerShift[], filter: ShiftFilter): WorkerShift[] {
-  const today = startOfDay(new Date());
-  return shifts.filter((shift) => {
-    const status = (shift.status || "scheduled").toLowerCase();
-    if (filter === "completed") return status === "completed";
-    if (filter === "cancelled") return status === "cancelled";
-    if (!shift.scheduled_start) return filter === "all";
-    const day = startOfDay(parseISO(shift.scheduled_start));
-    if (filter === "today") return isToday(day) && status !== "cancelled";
-    if (filter === "upcoming") return day > today && !["completed", "cancelled"].includes(status);
-    return true;
-  });
-}
-
-function countForFilter(shifts: WorkerShift[], filter: ShiftFilter) {
-  return filterShifts(shifts, filter).length;
-}
-
 export default function MyShifts() {
   const { user } = useAuth();
   const [filter, setFilter] = useState<ShiftFilter>("today");
   const firstName = (user?.full_name || "there").split(" ")[0];
 
-  const { data, isLoading, error } = useOrgQuery(["worker", "shifts", "all"], {
-    queryFn: () => getWorkerShifts("all"),
+  const { data, isLoading, error } = useOrgQuery(["worker", "shifts", filter], {
+    queryFn: () => getWorkerShifts(filter),
   });
 
-  const allShifts = data?.shifts ?? [];
-  const list = useMemo(() => filterShifts(allShifts, filter), [allShifts, filter]);
+  const { data: countsData } = useOrgQuery(["worker", "shifts", "counts"], {
+    queryFn: () => getWorkerShiftCounts(),
+  });
 
-  const todayShifts = useMemo(() => filterShifts(allShifts, "today"), [allShifts]);
+  const list = data?.shifts ?? [];
+  const filterCounts = countsData?.counts;
+
+  const { data: todayData } = useOrgQuery(["worker", "shifts", "today"], {
+    queryFn: () => getWorkerShifts("today"),
+  });
+  const todayShifts = todayData?.shifts ?? [];
+
   const completedToday = todayShifts.filter((s) => s.status === "completed").length;
   const hoursScheduled = useMemo(() => {
     const mins = todayShifts.reduce(
@@ -98,14 +92,14 @@ export default function MyShifts() {
       </header>
 
       <div className="grid grid-cols-3 gap-2">
-        <StatCard value={String(todayShifts.length)} label="Shifts today" />
+        <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label="Shifts today" />
         <StatCard value={String(completedToday)} label="Completed" />
         <StatCard value={hoursScheduled} label="Hrs scheduled" />
       </div>
 
       <div className="flex gap-1 overflow-x-auto pb-1">
         {FILTERS.map((f) => {
-          const count = countForFilter(allShifts, f.id);
+          const count = filterCounts?.[f.id as keyof typeof filterCounts] ?? 0;
           return (
             <button
               key={f.id}
@@ -154,7 +148,7 @@ export default function MyShifts() {
       )}
 
       <div className="space-y-3">
-        {list.map((shift) => (
+        {list.map((shift: WorkerShift) => (
           <ShiftListCard key={shift.id} shift={shift} />
         ))}
       </div>

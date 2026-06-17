@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import owner_payload
@@ -138,17 +138,30 @@ def _parse_support_instructions(shift: dict) -> list[dict[str, str]]:
     return sections
 
 
+def _session_counts_as_active(session: Optional[dict[str, Any]]) -> bool:
+    if not session:
+        return False
+    return (session.get("status") or "") in {"draft", "in_progress", "active"}
+
+
+def _should_keep_shift_session_link(shift: dict) -> bool:
+    """Keep session link only when resuming a shift that already started documenting."""
+    if shift.get("status") != "in_progress" or not shift.get("clocked_in_at"):
+        return False
+    return _session_counts_as_active(_get_session_for_shift(shift))
+
+
 def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str, Any]:
     scheduled_start = shift.get("scheduled_start")
     scheduled_end = shift.get("scheduled_end")
     status = shift.get("status") or "scheduled"
     clocked_in = bool(shift.get("clocked_in_at"))
     session_status = (session or {}).get("status")
-    session_active = session_status in {"draft", "in_progress", "active"}
+    session_active = _session_counts_as_active(session)
 
     if status == "completed":
         visual_state = "completed"
-    elif status == "in_progress" and session_active:
+    elif status == "in_progress" and clocked_in and session_active:
         visual_state = "session_active"
     elif status == "in_progress" and clocked_in:
         visual_state = "clocked_in"
@@ -279,10 +292,25 @@ def _get_session_for_shift(shift: dict) -> Optional[dict[str, Any]]:
         return None
 
 
+WORKER_SHIFT_FILTERS = frozenset({"today", "upcoming", "past", "completed", "cancelled", "all"})
+WORKER_SHIFT_COUNT_FILTERS = ("today", "upcoming", "completed", "cancelled")
+
+
+def _normalize_shift_filter(filter_name: str) -> str:
+    name = (filter_name or "today").lower()
+    return name if name in WORKER_SHIFT_FILTERS else "today"
+
+
 def _date_part(value: Any) -> str:
     if not value:
         return ""
     return str(value)[:10]
+
+
+def _utc_day_bounds(today: date) -> tuple[str, str]:
+    day_start = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
+    next_day = day_start + timedelta(days=1)
+    return day_start.isoformat(), next_day.isoformat()
 
 
 def _matches_filter(shift: dict, filter_name: str, today: date) -> bool:
@@ -311,35 +339,105 @@ def _matches_filter(shift: dict, filter_name: str, today: date) -> bool:
     return True
 
 
-def list_shifts_for_worker(
+def filter_shift_rows(
+    rows: list[dict[str, Any]],
+    filter_name: str,
+    today: Optional[date] = None,
+) -> list[dict[str, Any]]:
+    """Filter shift rows by bucket (CARECLIQV2-132)."""
+    bucket = _normalize_shift_filter(filter_name)
+    ref = today or date.today()
+    return [row for row in rows if _matches_filter(row, bucket, ref)]
+
+
+def count_shifts_by_filter(
+    rows: list[dict[str, Any]],
+    today: Optional[date] = None,
+) -> dict[str, int]:
+    """Count shifts per UI filter bucket (CARECLIQV2-133)."""
+    ref = today or date.today()
+    return {
+        name: sum(1 for row in rows if _matches_filter(row, name, ref))
+        for name in WORKER_SHIFT_COUNT_FILTERS
+    }
+
+
+def _apply_shift_list_query(query: Any, filter_name: str, today: date) -> Any:
+    """Push list filters to the DB query when possible (CARECLIQV2-133)."""
+    if filter_name == "all":
+        return query
+    if filter_name == "completed":
+        return query.eq("status", "completed")
+    if filter_name == "cancelled":
+        return query.eq("status", "cancelled")
+
+    day_start_iso, next_day_iso = _utc_day_bounds(today)
+    if filter_name == "today":
+        return (
+            query.gte("scheduled_start", day_start_iso)
+            .lt("scheduled_start", next_day_iso)
+            .neq("status", "cancelled")
+        )
+    if filter_name == "upcoming":
+        return (
+            query.gte("scheduled_start", next_day_iso)
+            .not_.in_("status", ["completed", "cancelled"])
+        )
+    if filter_name == "past":
+        return query.lt("scheduled_start", day_start_iso).neq("status", "cancelled")
+    return query
+
+
+def _fetch_worker_shift_rows(
     worker_id: str,
     organization_id: str,
-    filter_name: str = "today",
+    *,
+    columns: str = "*",
+    filter_name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """Return shift cards for a worker, filtered by date bucket."""
-    filter_name = (filter_name or "today").lower()
-    if filter_name not in {"today", "upcoming", "past", "completed", "cancelled", "all"}:
-        filter_name = "today"
-
     try:
-        resp = (
+        query = (
             get_supabase_admin()
             .table("shifts")
-            .select("*")
+            .select(columns)
             .eq("organization_id", organization_id)
             .eq("worker_id", worker_id)
-            .order("scheduled_start", desc=False)
-            .execute()
         )
-        rows = resp.data or []
+        if filter_name:
+            query = _apply_shift_list_query(query, filter_name, date.today())
+        resp = query.order("scheduled_start", desc=False).execute()
+        return resp.data or []
     except Exception as exc:
         if _is_missing_schema_error(exc):
             logger.debug("shifts table unavailable: %s", exc)
             return []
         raise
 
+
+def count_shifts_for_worker(worker_id: str, organization_id: str) -> dict[str, int]:
+    """Lightweight per-filter counts without building full shift cards (CARECLIQV2-133)."""
+    rows = _fetch_worker_shift_rows(
+        worker_id,
+        organization_id,
+        columns="status, scheduled_start",
+    )
+    return count_shifts_by_filter(rows)
+
+
+def list_shifts_for_worker(
+    worker_id: str,
+    organization_id: str,
+    filter_name: str = "today",
+) -> list[dict[str, Any]]:
+    """Return shift cards for a worker, filtered by date bucket."""
+    bucket = _normalize_shift_filter(filter_name)
     today = date.today()
-    filtered = [row for row in rows if _matches_filter(row, filter_name, today)]
+    rows = _fetch_worker_shift_rows(
+        worker_id,
+        organization_id,
+        filter_name=None if bucket == "all" else bucket,
+    )
+    filtered = filter_shift_rows(rows, bucket, today)
     cards: list[dict[str, Any]] = []
     for shift in filtered:
         session = _get_session_for_shift(shift)
@@ -397,6 +495,8 @@ def clock_in_shift(
         "tasks": tasks,
         "updated_at": now,
     }
+    if not _should_keep_shift_session_link(shift):
+        update_payload["session_id"] = None
 
     try:
         resp = (

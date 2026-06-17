@@ -47,6 +47,125 @@ def test_matches_filter_upcoming():
     assert shift_service._matches_filter(shift, "upcoming", date.today()) is True
 
 
+@pytest.mark.parametrize(
+    "filter_name,shift_overrides,expected",
+    [
+        ("today", {}, True),
+        ("today", {"status": "cancelled"}, False),
+        ("today", {"scheduled_start": "2020-01-01T09:00:00+00:00"}, False),
+        ("upcoming", {"scheduled_start": "2099-06-01T09:00:00+00:00"}, True),
+        ("upcoming", {"scheduled_start": "2099-06-01T09:00:00+00:00", "status": "completed"}, False),
+        ("upcoming", {"scheduled_start": "2099-06-01T09:00:00+00:00", "status": "cancelled"}, False),
+        ("completed", {"status": "completed"}, True),
+        ("completed", {"status": "scheduled"}, False),
+        ("cancelled", {"status": "cancelled"}, True),
+        ("cancelled", {"status": "in_progress"}, False),
+        ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00"}, True),
+        ("past", {"scheduled_start": "2020-01-01T09:00:00+00:00", "status": "cancelled"}, False),
+        ("all", {"status": "scheduled"}, True),
+        ("all", {}, True),
+    ],
+)
+def test_matches_filter_combinations(filter_name, shift_overrides, expected):
+    """CARECLIQV2-132 — cover all My Shifts filter buckets."""
+    shift = _sample_shift(**shift_overrides)
+    assert shift_service._matches_filter(shift, filter_name, date.today()) is expected
+
+
+def test_matches_filter_without_scheduled_start_only_all():
+    shift = _sample_shift(scheduled_start=None)
+    today = date.today()
+    assert shift_service._matches_filter(shift, "all", today) is True
+    assert shift_service._matches_filter(shift, "today", today) is False
+    assert shift_service._matches_filter(shift, "upcoming", today) is False
+
+
+def test_filter_shift_rows_returns_matching_subset():
+    today = date.today()
+    future = (today.replace(year=today.year + 1)).isoformat()
+    rows = [
+        _sample_shift(id="s1"),
+        _sample_shift(id="s2", status="completed"),
+        _sample_shift(id="s3", scheduled_start=f"{future}T09:00:00+00:00"),
+        _sample_shift(id="s4", status="cancelled"),
+    ]
+    today_rows = shift_service.filter_shift_rows(rows, "today", today)
+    assert {r["id"] for r in today_rows} == {"s1", "s2"}
+
+    completed_rows = shift_service.filter_shift_rows(rows, "completed", today)
+    assert {r["id"] for r in completed_rows} == {"s2"}
+
+
+def test_count_shifts_by_filter():
+    today = date.today()
+    future = (today.replace(year=today.year + 1)).isoformat()
+    rows = [
+        _sample_shift(id="s1"),
+        _sample_shift(id="s2", status="completed"),
+        _sample_shift(id="s3", scheduled_start=f"{future}T09:00:00+00:00"),
+        _sample_shift(id="s4", status="cancelled"),
+        _sample_shift(id="s5", scheduled_start=f"{future}T10:00:00+00:00"),
+    ]
+    counts = shift_service.count_shifts_by_filter(rows, today)
+    assert counts == {"today": 2, "upcoming": 2, "completed": 1, "cancelled": 1}
+
+
+def test_filter_performance_with_large_dataset():
+    """CARECLIQV2-133 — filter logic stays fast on large in-memory sets."""
+    import time
+
+    today = date.today()
+    future = (today.replace(year=today.year + 1)).isoformat()
+    rows = [
+        _sample_shift(
+            id=f"shift-{i}",
+            scheduled_start=f"{future}T09:00:00+00:00" if i % 3 else f"{today.isoformat()}T09:00:00+00:00",
+            status="completed" if i % 17 == 0 else "scheduled",
+        )
+        for i in range(2000)
+    ]
+
+    start = time.perf_counter()
+    for filter_name in shift_service.WORKER_SHIFT_COUNT_FILTERS:
+        shift_service.filter_shift_rows(rows, filter_name, today)
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 0.5
+
+
+@patch("backend.app.services.shift_service._fetch_worker_shift_rows")
+def test_count_shifts_for_worker_uses_lightweight_rows(mock_fetch):
+    mock_fetch.return_value = [
+        {"status": "scheduled", "scheduled_start": f"{date.today().isoformat()}T09:00:00+00:00"},
+        {"status": "completed", "scheduled_start": f"{date.today().isoformat()}T11:00:00+00:00"},
+    ]
+    counts = shift_service.count_shifts_for_worker("worker-1", "org-1")
+    mock_fetch.assert_called_once_with(
+        "worker-1",
+        "org-1",
+        columns="status, scheduled_start",
+    )
+    assert counts["today"] == 2
+    assert counts["completed"] == 1
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift")
+@patch("backend.app.services.shift_service._fetch_worker_shift_rows")
+def test_list_shifts_for_worker_applies_server_filter(mock_fetch, mock_session):
+    """CARECLIQV2-133 — list endpoint should not load every shift when filtered."""
+    shift = _sample_shift(status="completed")
+    mock_fetch.return_value = [shift]
+    mock_session.return_value = None
+
+    shift_service.list_shifts_for_worker("worker-1", "org-1", "completed")
+
+    mock_fetch.assert_called_once_with(
+        "worker-1",
+        "org-1",
+        filter_name="completed",
+    )
+
+
 def test_shift_card_payload_scheduled_state():
     payload = shift_service._shift_card_payload(_sample_shift())
     assert payload["visual_state"] == "scheduled"
@@ -66,13 +185,41 @@ def test_shift_card_payload_session_active_state():
 
 
 @patch("backend.app.services.shift_service.get_supabase_admin")
+def test_clock_in_clears_stale_session_link(mock_admin):
+    """Fresh clock-in must not inherit an old session (CARECLIQV2-127)."""
+    shift = _sample_shift(status="scheduled", session_id="old-sess")
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"id": "old-sess", "status": "draft"}]
+    )
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{
+            **shift,
+            "status": "in_progress",
+            "clocked_in_at": datetime.now(timezone.utc).isoformat(),
+            "session_id": None,
+            "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS),
+        }]
+    )
+
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        result = shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+
+    assert result is not None
+    assert result["visual_state"] == "clocked_in"
+    update_payload = table.update.call_args[0][0]
+    assert update_payload.get("session_id") is None
+
+
+@patch("backend.app.services.shift_service.get_supabase_admin")
 def test_clock_in_initialises_default_tasks(mock_admin):
     shift = _sample_shift()
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
     table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[shift])
     table.update.return_value.eq.return_value.execute.return_value = MagicMock(
-        data=[{**shift, "status": "in_progress", "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)}]
+        data=[{**shift, "status": "in_progress", "clocked_in_at": datetime.now(timezone.utc).isoformat(), "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)}]
     )
 
     result = shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
