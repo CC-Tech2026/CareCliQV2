@@ -31,6 +31,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
+import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   Select,
@@ -697,7 +698,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   });
 
   const { user } = useAuth();
-  const isCoordinator = user?.role === "coordinator";
+  const isCoordinator = user?.role === "support_coordinator";
 
   const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
     queryFn: () => fetchJson<{
@@ -1224,6 +1225,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 </Button>
               </div>
             )}
+            <ParticipantShiftContextEditor participantId={id} />
           </section>
         )}
 

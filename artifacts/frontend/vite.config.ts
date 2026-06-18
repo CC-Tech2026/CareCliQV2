@@ -73,4 +73,9 @@ export default defineConfig({
     host: "0.0.0.0",
     allowedHosts: true,
   },
+  test: {
+    environment: "jsdom",
+    globals: false,
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  },
 });

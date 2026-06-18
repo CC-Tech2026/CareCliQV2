@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -578,3 +579,123 @@ async def update_restricted_clinical(
         return result.data[0] if result.data else update_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+
+
+# ── Shift context (Coordinator authoring — CARECLIQV2-295) ─────────────────────
+
+class AllergyItem(BaseModel):
+    id: Optional[str] = None
+    allergen: str
+    severity: str = "mild"
+    notes: Optional[str] = None
+
+
+class BehaviouralNoteItem(BaseModel):
+    title: str = "Behavioural note"
+    body: str
+
+
+class ShiftContextUpdate(BaseModel):
+    preferred_name: Optional[str] = None
+    case_manager_name: Optional[str] = None
+    case_manager_phone: Optional[str] = None
+    emergency_contact: Optional[dict] = None
+    likes_dislikes: Optional[str] = None
+    sensory_preferences: Optional[str] = None
+    cultural_preferences: Optional[str] = None
+    communication_preferences: Optional[str] = None
+    communication_guidance: Optional[str] = None
+    preferred_activities: Optional[list[str]] = None
+    previous_visit_notes: Optional[str] = None
+    current_conditions: Optional[str] = None
+    behavioural_notes: Optional[list[BehaviouralNoteItem]] = None
+    allergies: Optional[list[AllergyItem]] = None
+
+
+@router.get("/{participant_id}/shift-context")
+async def get_shift_context(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Coordinator view of participant shift-context fields."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services.shift_service import _fetch_participant_allergies, _fetch_participant_context
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    ctx = _fetch_participant_context(participant_id, org_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    return ctx
+
+
+@router.patch("/{participant_id}/shift-context")
+async def update_shift_context(
+    participant_id: str,
+    body: ShiftContextUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update participant shift-context fields — coordinator only."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services.supabase_client import get_supabase_admin
+
+    supabase = get_supabase_admin()
+    org_id = str(get_user_organization_id(current_user) or "")
+    now = datetime.utcnow().isoformat() + "Z"
+
+    patient_fields = {
+        k: v
+        for k, v in {
+            "preferred_name": body.preferred_name,
+            "case_manager_name": body.case_manager_name,
+            "case_manager_phone": body.case_manager_phone,
+            "emergency_contact": body.emergency_contact,
+            "likes_dislikes": body.likes_dislikes,
+            "sensory_preferences": body.sensory_preferences,
+            "cultural_preferences": body.cultural_preferences,
+            "communication_preferences": body.communication_preferences,
+            "communication_guidance": body.communication_guidance,
+            "preferred_activities": body.preferred_activities,
+            "current_conditions": body.current_conditions,
+            "behavioural_notes": (
+                [n.model_dump() for n in body.behavioural_notes]
+                if body.behavioural_notes is not None
+                else None
+            ),
+        }.items()
+        if v is not None
+    }
+    if body.previous_visit_notes is not None:
+        patient_fields["previous_visit_notes"] = body.previous_visit_notes
+        patient_fields["previous_visit_notes_updated_at"] = now
+
+    if patient_fields:
+        try:
+            supabase.table("patients").update(patient_fields).eq("id", participant_id).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Update failed: {e}") from e
+
+    if body.allergies is not None:
+        try:
+            supabase.table("participant_allergies").delete().eq(
+                "participant_id", participant_id
+            ).eq("organization_id", org_id).execute()
+            for item in body.allergies:
+                supabase.table("participant_allergies").insert({
+                    "participant_id": participant_id,
+                    "organization_id": org_id,
+                    "allergen": item.allergen,
+                    "severity": item.severity,
+                    "notes": item.notes,
+                    "updated_at": now,
+                }).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Allergy update failed: {e}") from e
+
+    from ..services.shift_service import _fetch_participant_context
+    return _fetch_participant_context(participant_id, org_id)

@@ -57,18 +57,54 @@ export type ParticipantProfile = {
   ndis_number?: string;
   phone?: string;
   email?: string;
-  emergency_contact?: string;
+  emergency_contact?: string | {
+    name?: string | null;
+    phone?: string | null;
+    relationship?: string | null;
+    display?: string;
+  };
+  case_manager?: {
+    name?: string | null;
+    phone?: string | null;
+  };
   primary_disability?: string;
   medications?: string;
 };
 
 export type ParticipantPreferences = {
   communication_style?: string;
-  behaviour_support?: string;
-  restricted_notes?: string;
-  routines?: string;
-  health_flags?: string;
   likes_dislikes?: string;
+  routines?: string;
+  sensory_preferences?: string;
+  cultural_preferences?: string;
+  behaviour_support?: string;
+  health_flags?: string;
+};
+
+export type ParticipantAllergy = {
+  id?: string;
+  allergen: string;
+  severity: "mild" | "moderate" | "severe" | "anaphylactic" | string;
+  notes?: string | null;
+};
+
+export type ParticipantBehaviouralNote = {
+  title: string;
+  body: string;
+};
+
+export type ParticipantContext = {
+  medical?: {
+    allergies?: ParticipantAllergy[];
+    conditions?: string | null;
+    medications?: string | null;
+    alerts?: string | null;
+  };
+  behavioural_notes?: ParticipantBehaviouralNote[];
+  preferred_activities?: string[];
+  previous_visit_notes?: string | null;
+  previous_visit_notes_updated_at?: string | null;
+  communication_guidance?: string | null;
 };
 
 export type WorkerShift = {
@@ -97,6 +133,8 @@ export type WorkerShift = {
   risks_acknowledged_by?: string | null;
   profile?: ParticipantProfile;
   preferences?: ParticipantPreferences;
+  context?: ParticipantContext;
+  context_synced_at?: string | null;
   completion_summary?: ShiftCompletionSummary;
   participant_dob?: string;
   participant_gender?: string;
@@ -138,6 +176,28 @@ export type ShiftSupportInstructionsResponse = {
 
 export function getWorkerShiftSupportInstructions(id: string) {
   return jsonFetch<ShiftSupportInstructionsResponse>(`/api/worker/shifts/${id}/support-instructions`);
+}
+
+export type ShiftParticipantProfileResponse = {
+  shift_id: string;
+  participant_id?: string;
+  profile: ParticipantProfile;
+  context_synced_at?: string | null;
+};
+
+export type ShiftParticipantPreferencesResponse = {
+  shift_id: string;
+  participant_id?: string;
+  preferences: ParticipantPreferences;
+  context_synced_at?: string | null;
+};
+
+export function getWorkerShiftParticipantProfile(id: string) {
+  return jsonFetch<ShiftParticipantProfileResponse>(`/api/worker/shifts/${id}/participant-profile`);
+}
+
+export function getWorkerShiftParticipantPreferences(id: string) {
+  return jsonFetch<ShiftParticipantPreferencesResponse>(`/api/worker/shifts/${id}/participant-preferences`);
 }
 
 export function clockInShift(id: string) {

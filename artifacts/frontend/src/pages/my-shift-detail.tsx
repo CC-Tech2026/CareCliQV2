@@ -34,6 +34,12 @@ import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
+import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
+import {
+  cacheParticipantContext,
+  loadCachedParticipantContext,
+  type CachedParticipantContext,
+} from "@/lib/participant-context-cache";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
@@ -59,6 +65,9 @@ import {
   type ShiftTask,
   type ShiftVisualState,
   type WorkerShift,
+  type ParticipantProfile,
+  type ParticipantPreferences,
+  type ParticipantContext,
 } from "@/services/shiftService";
 import {
   BORDER,
@@ -108,6 +117,8 @@ export default function MyShiftDetail({ id }: Props) {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(true);
   const [preferencesOpen, setPreferencesOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
+  const [offlineContext, setOfflineContext] = useState<CachedParticipantContext | null>(null);
   const [supportOpen, setSupportOpen] = useState(true);
   const [ackChecked, setAckChecked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -149,6 +160,30 @@ export default function MyShiftDetail({ id }: Props) {
     if (shift?.risks_acknowledged) setAckChecked(true);
     if (shift?.tasks?.length) setTasks(shift.tasks);
   }, [shift?.risks_acknowledged, shift?.tasks]);
+
+  useEffect(() => {
+    if (!shift?.participant_id) return;
+    const syncedAt = shift.context_synced_at || new Date().toISOString();
+    if (shift.profile || shift.preferences || shift.context) {
+      void cacheParticipantContext({
+        participantId: shift.participant_id,
+        profile: shift.profile,
+        preferences: shift.preferences,
+        context: shift.context,
+        syncedAt,
+      });
+    }
+  }, [shift?.participant_id, shift?.profile, shift?.preferences, shift?.context, shift?.context_synced_at]);
+
+  useEffect(() => {
+    if (!shift?.participant_id) return;
+    const hydrate = () => {
+      void loadCachedParticipantContext(shift.participant_id!).then(setOfflineContext);
+    };
+    if (!navigator.onLine) hydrate();
+    window.addEventListener("offline", hydrate);
+    return () => window.removeEventListener("offline", hydrate);
+  }, [shift?.participant_id]);
 
   useEffect(() => {
     if (shift?.visual_state === "session_active") {
@@ -197,6 +232,15 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       const updated = await clockInShift(shift.id);
       setTasks(updated.tasks ?? []);
+      if (shift.participant_id && (updated.profile || updated.context)) {
+        void cacheParticipantContext({
+          participantId: shift.participant_id,
+          profile: updated.profile ?? shift.profile,
+          preferences: updated.preferences ?? shift.preferences,
+          context: updated.context ?? shift.context,
+          syncedAt: updated.context_synced_at || new Date().toISOString(),
+        });
+      }
       invalidateShifts();
       await refetch();
       toast({
@@ -313,9 +357,38 @@ export default function MyShiftDetail({ id }: Props) {
 
   const isSessionActive = shift.visual_state === "session_active" || instantSessionActive;
   const showLiveSession = isSessionActive && notePanelOpen && !!shift.session_id;
+  const baseProfile = shift.profile ?? offlineContext?.profile;
+  const displayProfile: ParticipantProfile = {
+    ...baseProfile,
+    preferred_name: baseProfile?.preferred_name ?? shift.participant_name,
+    date_of_birth: baseProfile?.date_of_birth ?? shift.participant_dob ?? undefined,
+    phone: baseProfile?.phone ?? shift.participant_phone ?? undefined,
+  };
+  const basePreferences = shift.preferences ?? offlineContext?.preferences;
+  const displayPreferences: ParticipantPreferences = {
+    ...basePreferences,
+    routines: basePreferences?.routines ?? shift.visit_notes ?? undefined,
+    health_flags: basePreferences?.health_flags ?? shift.health_flags ?? undefined,
+    likes_dislikes: basePreferences?.likes_dislikes ?? shift.allergies ?? undefined,
+  };
+  const baseContext = shift.context ?? offlineContext?.context;
+  const displayContext: ParticipantContext = {
+    ...baseContext,
+    medical: {
+      ...baseContext?.medical,
+      alerts: baseContext?.medical?.alerts ?? shift.allergies ?? undefined,
+    },
+  };
+  const contextSyncedAt = shift.context_synced_at ?? offlineContext?.syncedAt ?? null;
+  const participantFirstName = (displayProfile?.preferred_name || shift.participant_name || "").split(" ")[0];
   const workflow = (
     <ShiftWorkflow
       shift={shift}
+      displayProfile={displayProfile}
+      displayPreferences={displayPreferences}
+      displayContext={displayContext}
+      contextSyncedAt={contextSyncedAt}
+      participantFirstName={participantFirstName}
       visualState={displayVisualState}
       tasks={tasks}
       setTasks={setTasks}
@@ -334,6 +407,8 @@ export default function MyShiftDetail({ id }: Props) {
       setProfileOpen={setProfileOpen}
       preferencesOpen={preferencesOpen}
       setPreferencesOpen={setPreferencesOpen}
+      contextOpen={contextOpen}
+      setContextOpen={setContextOpen}
       supportOpen={supportOpen}
       setSupportOpen={setSupportOpen}
       ackChecked={ackChecked}
@@ -478,6 +553,11 @@ export default function MyShiftDetail({ id }: Props) {
 
 function ShiftWorkflow({
   shift,
+  displayProfile,
+  displayPreferences,
+  displayContext,
+  contextSyncedAt,
+  participantFirstName,
   visualState,
   tasks,
   setTasks,
@@ -496,6 +576,8 @@ function ShiftWorkflow({
   setProfileOpen,
   preferencesOpen,
   setPreferencesOpen,
+  contextOpen,
+  setContextOpen,
   supportOpen,
   setSupportOpen,
   ackChecked,
@@ -513,6 +595,11 @@ function ShiftWorkflow({
   onEndShiftAnyway,
 }: {
   shift: WorkerShift;
+  displayProfile?: ParticipantProfile;
+  displayPreferences?: ParticipantPreferences;
+  displayContext?: ParticipantContext;
+  contextSyncedAt?: string | null;
+  participantFirstName?: string;
   visualState: ShiftVisualState;
   tasks: ShiftTask[];
   setTasks: (tasks: ShiftTask[]) => void;
@@ -531,6 +618,8 @@ function ShiftWorkflow({
   setProfileOpen: (v: boolean) => void;
   preferencesOpen: boolean;
   setPreferencesOpen: (v: boolean) => void;
+  contextOpen: boolean;
+  setContextOpen: (v: boolean) => void;
   supportOpen: boolean;
   setSupportOpen: (v: boolean) => void;
   ackChecked: boolean;
@@ -814,16 +903,24 @@ function ShiftWorkflow({
       )}
 
       <ParticipantProfileCard
-        profile={shift.profile}
+        profile={displayProfile}
         fallbackName={shift.participant_name}
         open={profileOpen}
         onToggle={() => setProfileOpen(!profileOpen)}
       />
 
       <ParticipantPreferencesCard
-        preferences={shift.preferences}
+        preferences={displayPreferences}
         open={preferencesOpen}
         onToggle={() => setPreferencesOpen(!preferencesOpen)}
+      />
+
+      <ParticipantContextPanel
+        context={displayContext}
+        participantFirstName={participantFirstName}
+        syncedAt={contextSyncedAt}
+        open={contextOpen}
+        onToggle={() => setContextOpen(!contextOpen)}
       />
 
       <SupportInstructionsAccordion
