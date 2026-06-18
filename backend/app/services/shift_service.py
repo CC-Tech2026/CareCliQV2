@@ -346,10 +346,199 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
     }
 
 
+def _parse_emergency_contact(raw: Any) -> dict[str, Any] | str | None:
+    """Normalise emergency contact for worker profile display."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        name = (raw.get("name") or raw.get("contact_name") or "").strip()
+        phone = (raw.get("phone") or raw.get("contact_phone") or "").strip()
+        relationship = (raw.get("relationship") or "").strip()
+        if not name and not phone:
+            return None
+        return {
+            "name": name or None,
+            "phone": phone or None,
+            "relationship": relationship or None,
+            "display": " — ".join(p for p in (name, relationship, phone) if p) or phone or name,
+        }
+    text = str(raw).strip()
+    return text or None
+
+
+def _fetch_participant_allergies(participant_id: str, organization_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("participant_allergies")
+            .select("id, allergen, severity, notes")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", organization_id)
+            .order("severity", desc=False)
+            .execute()
+        )
+        return [dict(row) for row in (resp.data or []) if isinstance(row, dict)]
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        logger.debug("participant allergies lookup failed: %s", exc)
+        return []
+
+
+def _normalise_behavioural_notes(raw: Any) -> list[dict[str, str]]:
+    if not raw:
+        return []
+    if isinstance(raw, str):
+        text = raw.strip()
+        return [{"title": "Behavioural note", "body": text}] if text else []
+    if not isinstance(raw, list):
+        return []
+    notes: list[dict[str, str]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            body = (item.get("body") or item.get("text") or "").strip()
+            if not body:
+                continue
+            notes.append({
+                "title": (item.get("title") or "Behavioural note").strip(),
+                "body": body,
+            })
+        elif isinstance(item, str) and item.strip():
+            notes.append({"title": "Behavioural note", "body": item.strip()})
+    return notes
+
+
+def _normalise_activities(raw: Any) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    if isinstance(raw, str) and raw.strip():
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+    return []
+
+
+def _enrich_shift_participant_context(payload: dict[str, Any], shift: dict[str, Any]) -> None:
+    """Merge shift snapshot + participant row into worker-facing profile/preferences/context."""
+    profile = dict(payload.get("profile") or {})
+    preferences = dict(payload.get("preferences") or {})
+    context = dict(payload.get("context") or {})
+    medical = dict(context.get("medical") or {})
+
+    if not profile.get("preferred_name") and shift.get("participant_name"):
+        profile["preferred_name"] = shift.get("participant_name")
+    if not profile.get("phone") and shift.get("participant_phone"):
+        profile["phone"] = shift.get("participant_phone")
+    if not profile.get("date_of_birth") and shift.get("participant_dob"):
+        profile["date_of_birth"] = shift.get("participant_dob")
+
+    if not preferences.get("routines") and shift.get("visit_notes"):
+        preferences["routines"] = shift.get("visit_notes")
+    if not preferences.get("health_flags") and shift.get("health_flags"):
+        preferences["health_flags"] = shift.get("health_flags")
+    if not preferences.get("likes_dislikes") and shift.get("allergies"):
+        preferences["likes_dislikes"] = shift.get("allergies")
+    if not preferences.get("communication_style") and shift.get("coordinator_notes"):
+        preferences["communication_style"] = shift.get("coordinator_notes")
+
+    if not medical.get("alerts") and shift.get("allergies"):
+        medical["alerts"] = shift.get("allergies")
+    if not medical.get("conditions") and profile.get("primary_disability"):
+        medical["conditions"] = profile.get("primary_disability")
+
+    context["medical"] = medical
+    payload["profile"] = profile
+    payload["preferences"] = preferences
+    payload["context"] = context
+    payload.setdefault("context_synced_at", _now_iso())
+
+
 def _fetch_participant_context(participant_id: str, organization_id: str) -> dict[str, Any]:
-    """Load read-only participant profile + preferences for shift detail (CARECLIQV2-195/196)."""
+    """Load read-only participant profile + preferences + context (CARECLIQV2-195/196/295)."""
     if not participant_id:
         return {}
+    synced_at = _now_iso()
+    # Note: visit_notes / health_flags live on shifts, not patients.
+    select_cols = (
+        "id, full_name, preferred_name, ndis_number, date_of_birth, phone, email, "
+        "communication_preferences, allergies, primary_disability, "
+        "emergency_contact, behaviour_support_plan, restricted_behavioural_notes, "
+        "medications, medical_alerts, current_conditions, "
+        "case_manager_name, case_manager_phone, likes_dislikes, sensory_preferences, "
+        "cultural_preferences, preferred_activities, communication_guidance, "
+        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes"
+    )
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("patients")
+            .select(select_cols)
+            .eq("id", participant_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            return {}
+        row = rows[0]
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return _fetch_participant_context_legacy(participant_id, organization_id)
+        logger.debug("participant context lookup failed: %s", exc)
+        return {}
+
+    allergies = _fetch_participant_allergies(participant_id, organization_id)
+    behavioural = _normalise_behavioural_notes(row.get("behavioural_notes"))
+    if not behavioural and (row.get("restricted_behavioural_notes") or "").strip():
+        behavioural = _normalise_behavioural_notes(row.get("restricted_behavioural_notes"))
+
+    preferred_name = (row.get("preferred_name") or row.get("full_name") or "").strip() or None
+    emergency = _parse_emergency_contact(row.get("emergency_contact"))
+
+    return {
+        "profile": {
+            "preferred_name": preferred_name,
+            "date_of_birth": row.get("date_of_birth"),
+            "ndis_number": row.get("ndis_number"),
+            "phone": row.get("phone"),
+            "email": row.get("email"),
+            "emergency_contact": emergency,
+            "case_manager": {
+                "name": row.get("case_manager_name"),
+                "phone": row.get("case_manager_phone"),
+            },
+            "primary_disability": row.get("primary_disability"),
+            "medications": row.get("medications"),
+        },
+        "preferences": {
+            "communication_style": row.get("communication_preferences"),
+            "likes_dislikes": row.get("likes_dislikes") or row.get("allergies"),
+            "routines": None,
+            "sensory_preferences": row.get("sensory_preferences"),
+            "cultural_preferences": row.get("cultural_preferences"),
+            "behaviour_support": row.get("behaviour_support_plan"),
+            "health_flags": None,
+        },
+        "context": {
+            "medical": {
+                "allergies": allergies,
+                "conditions": row.get("current_conditions") or row.get("primary_disability"),
+                "medications": row.get("medications"),
+                "alerts": row.get("medical_alerts"),
+            },
+            "behavioural_notes": behavioural,
+            "preferred_activities": _normalise_activities(row.get("preferred_activities")),
+            "previous_visit_notes": row.get("previous_visit_notes"),
+            "previous_visit_notes_updated_at": row.get("previous_visit_notes_updated_at"),
+            "communication_guidance": row.get("communication_guidance"),
+        },
+        "context_synced_at": synced_at,
+    }
+
+
+def _fetch_participant_context_legacy(participant_id: str, organization_id: str) -> dict[str, Any]:
+    """Fallback when 036 migration columns are not yet applied."""
     try:
         resp = (
             get_supabase_admin()
@@ -357,8 +546,8 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
             .select(
                 "id, full_name, ndis_number, date_of_birth, phone, email, "
                 "communication_preferences, allergies, primary_disability, "
-                "emergency_contact, behaviour_support_plan, restricted_behavioural_notes, "
-                "visit_notes, health_flags, medications"
+                "behaviour_support_plan, restricted_behavioural_notes, "
+                "medications, medical_alerts"
             )
             .eq("id", participant_id)
             .eq("organization_id", organization_id)
@@ -369,6 +558,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
         if not rows:
             return {}
         row = rows[0]
+        synced_at = _now_iso()
         return {
             "profile": {
                 "preferred_name": row.get("full_name"),
@@ -376,7 +566,8 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
                 "ndis_number": row.get("ndis_number"),
                 "phone": row.get("phone"),
                 "email": row.get("email"),
-                "emergency_contact": row.get("emergency_contact"),
+                "emergency_contact": _parse_emergency_contact(row.get("emergency_contact")),
+                "case_manager": {"name": None, "phone": None},
                 "primary_disability": row.get("primary_disability"),
                 "medications": row.get("medications"),
             },
@@ -384,15 +575,29 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
                 "communication_style": row.get("communication_preferences"),
                 "behaviour_support": row.get("behaviour_support_plan"),
                 "restricted_notes": row.get("restricted_behavioural_notes"),
-                "routines": row.get("visit_notes"),
-                "health_flags": row.get("health_flags"),
+                "routines": None,
+                "health_flags": None,
                 "likes_dislikes": row.get("allergies"),
             },
+            "context": {
+                "medical": {
+                    "allergies": [],
+                    "conditions": row.get("primary_disability"),
+                    "medications": row.get("medications"),
+                    "alerts": row.get("medical_alerts"),
+                },
+                "behavioural_notes": _normalise_behavioural_notes(row.get("restricted_behavioural_notes")),
+                "preferred_activities": [],
+                "previous_visit_notes": None,
+                "previous_visit_notes_updated_at": None,
+                "communication_guidance": row.get("communication_preferences"),
+            },
+            "context_synced_at": synced_at,
         }
     except Exception as exc:
         if _is_missing_schema_error(exc):
             return {}
-        logger.debug("participant context lookup failed: %s", exc)
+        logger.debug("participant context legacy lookup failed: %s", exc)
         return {}
 
 
@@ -606,8 +811,24 @@ def get_shift_detail_for_worker(
     payload = _shift_card_payload(shift, session)
     ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
     payload.update(ctx)
-    payload["support_instructions"] = build_support_instructions(shift, ctx)
+    _enrich_shift_participant_context(payload, shift)
+    payload["support_instructions"] = build_support_instructions(shift, payload)
     return payload
+
+
+def _get_worker_shift_or_none(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    shift = get_shift_by_id(shift_id)
+    if not shift:
+        return None
+    if str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+    if str(shift.get("organization_id") or "") != str(organization_id):
+        return None
+    return shift
 
 
 def get_support_instructions_for_worker(
@@ -616,17 +837,55 @@ def get_support_instructions_for_worker(
     organization_id: str,
 ) -> Optional[dict[str, Any]]:
     """Dedicated support-instructions payload for MyShift detail (CARECLIQV2-157)."""
-    shift = get_shift_by_id(shift_id)
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
     if not shift:
-        return None
-    if str(shift.get("worker_id") or "") != str(worker_id):
-        return None
-    if str(shift.get("organization_id") or "") != str(organization_id):
         return None
     ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
     return {
         "shift_id": shift_id,
         "support_instructions": build_support_instructions(shift, ctx),
+    }
+
+
+def get_participant_profile_for_worker(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Dedicated participant profile payload for My Shift (CARECLIQV2-195 / subtask 150)."""
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    payload: dict[str, Any] = {}
+    ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
+    payload.update(ctx)
+    _enrich_shift_participant_context(payload, shift)
+    return {
+        "shift_id": shift_id,
+        "participant_id": shift.get("participant_id"),
+        "profile": payload.get("profile") or {},
+        "context_synced_at": payload.get("context_synced_at"),
+    }
+
+
+def get_participant_preferences_for_worker(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Dedicated participant preferences payload for My Shift (CARECLIQV2-196 / subtask 160)."""
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    payload: dict[str, Any] = {}
+    ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
+    payload.update(ctx)
+    _enrich_shift_participant_context(payload, shift)
+    return {
+        "shift_id": shift_id,
+        "participant_id": shift.get("participant_id"),
+        "preferences": payload.get("preferences") or {},
+        "context_synced_at": payload.get("context_synced_at"),
     }
 
 

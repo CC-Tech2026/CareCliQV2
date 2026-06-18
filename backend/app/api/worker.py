@@ -567,6 +567,30 @@ async def worker_shift_support_instructions(shift_id: str, current_user: dict = 
     return payload
 
 
+@router.get("/shifts/{shift_id}/participant-profile")
+async def worker_shift_participant_profile(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Read-only participant profile for an assigned shift (CARECLIQV2-195)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_profile_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.get("/shifts/{shift_id}/participant-preferences")
+async def worker_shift_participant_preferences(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Read-only participant preferences for an assigned shift (CARECLIQV2-196)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_preferences_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
 @router.post("/shifts/{shift_id}/clock-in")
 async def worker_clock_in(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Clock in to a shift and initialise the task checklist (CARECLIQV2-116 / CARECLIQV2-134)."""

@@ -517,3 +517,157 @@ def test_get_shift_detail_rebuilds_support_instructions(mock_get, mock_session, 
     assert "Mobility" in categories
     assert "Medication Prompts" in categories
     assert "Behaviour Support" in categories
+
+
+def test_fetch_participant_context_shapes_payload():
+    row = {
+        "id": "patient-1",
+        "full_name": "James Chen",
+        "preferred_name": "Jamie",
+        "ndis_number": "430123456",
+        "date_of_birth": "1990-01-15",
+        "phone": "0400000000",
+        "email": "jamie@example.com",
+        "emergency_contact": {"name": "Sam Chen", "phone": "0400111222", "relationship": "Mother"},
+        "case_manager_name": "Alex Rivera",
+        "case_manager_phone": "0400333444",
+        "communication_preferences": "Short sentences",
+        "likes_dislikes": "Enjoys puzzles",
+        "sensory_preferences": "Quiet spaces",
+        "cultural_preferences": "Prefers morning visits",
+        "visit_notes": "Shower before 10am",
+        "medications": "Metformin",
+        "current_conditions": "Type 2 diabetes",
+        "medical_alerts": "Falls risk",
+        "communication_guidance": "Offer choices, not yes/no",
+        "previous_visit_notes": "Hydration plan worked well",
+        "previous_visit_notes_updated_at": "2026-06-01T10:00:00Z",
+        "preferred_activities": ["Gardening", "Music"],
+        "behavioural_notes": [{"title": "Transitions", "body": "Give 10 min warning"}],
+        "primary_disability": "Intellectual disability",
+        "health_flags": None,
+        "behaviour_support_plan": None,
+        "restricted_behavioural_notes": None,
+        "allergies": None,
+    }
+    with patch("backend.app.services.shift_service.get_supabase_admin") as mock_admin:
+        patients_table = MagicMock()
+        patients_table.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+            data=[row]
+        )
+        allergies_table = MagicMock()
+        allergies_table.select.return_value.eq.return_value.eq.return_value.order.return_value.execute.return_value = MagicMock(
+            data=[{"id": "a1", "allergen": "Peanuts", "severity": "anaphylactic", "notes": None}]
+        )
+
+        def table_router(name):
+            if name == "patients":
+                return patients_table
+            if name == "participant_allergies":
+                return allergies_table
+            return MagicMock()
+
+        mock_admin.return_value.table.side_effect = table_router
+        ctx = shift_service._fetch_participant_context("patient-1", "org-1")
+
+    assert ctx["profile"]["preferred_name"] == "Jamie"
+    assert ctx["profile"]["case_manager"]["name"] == "Alex Rivera"
+    assert ctx["preferences"]["likes_dislikes"] == "Enjoys puzzles"
+    assert ctx["preferences"]["sensory_preferences"] == "Quiet spaces"
+    assert ctx["context"]["medical"]["allergies"][0]["severity"] == "anaphylactic"
+    assert ctx["context"]["preferred_activities"] == ["Gardening", "Music"]
+    assert ctx["context_synced_at"]
+
+
+def test_enrich_shift_participant_context_uses_shift_snapshot():
+    payload: dict = {}
+    shift = {
+        "participant_name": "James Chen",
+        "participant_phone": "0400111222",
+        "participant_dob": "1990-05-01",
+        "visit_notes": "Shower before 10am",
+        "health_flags": "Falls risk",
+        "allergies": "Peanuts — anaphylactic",
+    }
+    shift_service._enrich_shift_participant_context(payload, shift)
+    assert payload["profile"]["preferred_name"] == "James Chen"
+    assert payload["profile"]["phone"] == "0400111222"
+    assert payload["preferences"]["routines"] == "Shower before 10am"
+    assert payload["context"]["medical"]["alerts"] == "Peanuts — anaphylactic"
+
+
+def test_get_participant_profile_for_worker():
+    shift = _sample_shift(
+        participant_id="patient-1",
+        participant_name="James Chen",
+        participant_phone="0400111222",
+        participant_dob="1990-05-01",
+    )
+    ctx = {
+        "profile": {
+            "preferred_name": "Jamie",
+            "ndis_number": "430123456",
+            "emergency_contact": {"name": "Sam", "phone": "0400999888"},
+            "case_manager": {"name": "Alex Rivera", "phone": "0400777666"},
+        },
+        "context_synced_at": "2026-06-18T10:00:00Z",
+    }
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with patch(
+            "backend.app.services.shift_service._fetch_participant_context",
+            return_value=ctx,
+        ):
+            payload = shift_service.get_participant_profile_for_worker(
+                "shift-1", "worker-1", "org-1"
+            )
+    assert payload is not None
+    assert payload["shift_id"] == "shift-1"
+    assert payload["participant_id"] == "patient-1"
+    assert payload["profile"]["preferred_name"] == "Jamie"
+    assert payload["profile"]["ndis_number"] == "430123456"
+    assert payload["profile"]["emergency_contact"]["phone"] == "0400999888"
+    assert payload["profile"]["case_manager"]["name"] == "Alex Rivera"
+    assert payload["context_synced_at"] == "2026-06-18T10:00:00Z"
+
+
+def test_get_participant_preferences_for_worker():
+    shift = _sample_shift(
+        participant_id="patient-1",
+        visit_notes="Shower before 10am",
+        health_flags="Falls risk",
+    )
+    ctx = {
+        "preferences": {
+            "communication_style": "Short sentences",
+            "likes_dislikes": "Enjoys puzzles",
+            "sensory_preferences": "Quiet spaces",
+            "cultural_preferences": "Prefers morning visits",
+            "behaviour_support": "Use calm redirection",
+        },
+        "context_synced_at": "2026-06-18T10:00:00Z",
+    }
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with patch(
+            "backend.app.services.shift_service._fetch_participant_context",
+            return_value=ctx,
+        ):
+            payload = shift_service.get_participant_preferences_for_worker(
+                "shift-1", "worker-1", "org-1"
+            )
+    assert payload is not None
+    assert payload["shift_id"] == "shift-1"
+    prefs = payload["preferences"]
+    assert prefs["communication_style"] == "Short sentences"
+    assert prefs["likes_dislikes"] == "Enjoys puzzles"
+    assert prefs["routines"] == "Shower before 10am"
+    assert prefs["health_flags"] == "Falls risk"
+    assert prefs["behaviour_support"] == "Use calm redirection"
+
+
+def test_get_participant_profile_for_worker_denies_other_worker():
+    shift = _sample_shift(worker_id="other-worker")
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        payload = shift_service.get_participant_profile_for_worker(
+            "shift-1", "worker-1", "org-1"
+        )
+    assert payload is None
