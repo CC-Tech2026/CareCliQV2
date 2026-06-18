@@ -285,10 +285,13 @@ def test_delete_custom_shift_task_rejects_default(mock_get):
         )
 
 
+@patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.link_shift_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_start_shift_session_uses_shift_ownership_not_assignment(mock_get, mock_admin, mock_link):
+def test_start_shift_session_uses_shift_ownership_not_assignment(
+    mock_get, mock_admin, mock_link, mock_get_session,
+):
     shift = _sample_shift(
         status="in_progress",
         clocked_in_at=datetime.now(timezone.utc).isoformat(),
@@ -296,6 +299,7 @@ def test_start_shift_session_uses_shift_ownership_not_assignment(mock_get, mock_
     )
     session_row = {"id": "sess-1", "status": "draft"}
     mock_get.side_effect = [shift, {**shift, "session_id": "sess-1"}]
+    mock_get_session.return_value = {"id": "sess-1", "status": "draft", "start_time": "2026-01-15T09:00:00Z"}
 
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -313,10 +317,13 @@ def test_start_shift_session_uses_shift_ownership_not_assignment(mock_get, mock_
     mock_link.assert_called_once_with("shift-1", "sess-1")
 
 
+@patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.link_shift_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_start_shift_session_replaces_completed_session(mock_get, mock_admin, mock_link):
+def test_start_shift_session_replaces_completed_session(
+    mock_get, mock_admin, mock_link, mock_get_session,
+):
     """Stale completed session link must not block a new live session."""
     shift = _sample_shift(
         status="in_progress",
@@ -326,6 +333,10 @@ def test_start_shift_session_replaces_completed_session(mock_get, mock_admin, mo
     )
     new_session = {"id": "sess-new", "status": "draft"}
     mock_get.side_effect = [shift, {**shift, "session_id": "sess-new"}]
+    mock_get_session.side_effect = [
+        {"id": "old-sess", "status": "completed"},
+        {"id": "sess-new", "status": "draft", "start_time": "2026-01-15T09:00:00Z"},
+    ]
 
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -422,7 +433,7 @@ def test_end_shift_completes_shift(mock_get, mock_admin, mock_session):
     result = shift_service.end_shift("shift-1", "worker-1", "org-1")
     assert result is not None
     assert result["visual_state"] == "completed"
-    assert result["completion_summary"]["mandatory_completed"] == 4
+    assert result["completion_summary"]["mandatory_completed"] == 5
 
 
 def test_build_support_instructions_uses_stored_json():

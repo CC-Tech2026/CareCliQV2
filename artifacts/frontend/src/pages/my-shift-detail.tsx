@@ -29,6 +29,8 @@ import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLa
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
+import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
+import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
@@ -135,6 +137,13 @@ export default function MyShiftDetail({ id }: Props) {
     onTasksUpdated: setTasks,
     onSessionStarted: () => setNotePanelOpen(true),
   });
+
+  const {
+    online: evidenceOnline,
+    snapshot: evidenceSync,
+    retrySync: retryEvidenceSync,
+    showBanner: showEvidenceBanner,
+  } = useEvidenceSync(shift?.session_id);
 
   useEffect(() => {
     if (shift?.risks_acknowledged) setAckChecked(true);
@@ -396,6 +405,14 @@ export default function MyShiftDetail({ id }: Props) {
     return (
       <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
         <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+        {showEvidenceBanner && (
+          <EvidenceSyncBanner
+            online={evidenceOnline}
+            snapshot={evidenceSync}
+            onRetry={() => void retryEvidenceSync()}
+            className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
+          />
+        )}
         <Link href="/my-shifts">
           <button
             type="button"
@@ -431,6 +448,14 @@ export default function MyShiftDetail({ id }: Props) {
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-10">
       <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      {showEvidenceBanner && (
+        <EvidenceSyncBanner
+          online={evidenceOnline}
+          snapshot={evidenceSync}
+          onRetry={() => void retryEvidenceSync()}
+          className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
+        />
+      )}
       <Link href="/my-shifts">
         <button
           type="button"

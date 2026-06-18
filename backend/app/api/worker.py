@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, funding_service, goals_service, participant_service, session_service, shift_service
+from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.supabase_client import get_supabase_admin
 
@@ -53,7 +53,15 @@ class ShiftTaskItem(BaseModel):
     description: str = ""
     completed: bool = False
     completed_at: Optional[str] = None
+    checked_at: Optional[str] = None
+    evidence_status: Optional[str] = None
+    evidence_added_at: Optional[str] = None
+    evidence_ids: Optional[list[str]] = None
+    has_photo: Optional[bool] = None
+    has_voice: Optional[bool] = None
+    has_text_notes: Optional[bool] = None
     note: str = ""
+    context_note: str = ""
     order: int = 0
     mandatory: Optional[bool] = None
     goal_id: Optional[str] = None
@@ -92,6 +100,25 @@ class TaskEvidenceItem(BaseModel):
 
 class TaskEvidenceSyncBody(BaseModel):
     evidence: list[TaskEvidenceItem]
+
+
+class UploadEvidenceMeta(BaseModel):
+    evidence_id: str
+    task_id: str
+    type: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    goal_id: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    created_at: str
+    content: Optional[str] = None
+
+
+class UploadEvidenceBody(BaseModel):
+    session_id: str
+    evidence: list[UploadEvidenceMeta]
+    files: dict[str, str] = {}
 
 
 def _require_worker(user: dict) -> None:
@@ -713,6 +740,48 @@ async def worker_end_shift(
         after_state={"session_id": shift.get("session_id")},
     )
     return shift
+
+
+@router.post("/sessions/{session_id}/upload-evidence")
+async def worker_upload_session_evidence(
+    session_id: str,
+    body: UploadEvidenceBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload task evidence media to object storage (CARECLIQV2-230)."""
+    _require_worker(current_user)
+    if body.session_id != session_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id mismatch")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+
+    try:
+        result = evidence_upload_service.upload_session_evidence_media(
+            session_id=session_id,
+            worker_id=worker_id,
+            organization_id=org_id,
+            evidence_items=[item.model_dump() for item in body.evidence],
+            files=body.files,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "exceeds" in msg.lower() or "mb limit" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=msg) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from exc
+
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    await audit_service.log_action(
+        action_type="worker.session.evidence_uploaded",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"uploaded_count": len(result.get("uploaded_evidence") or [])},
+    )
+    return result
 
 
 @router.post("/sessions/{session_id}/evidence")

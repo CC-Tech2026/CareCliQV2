@@ -63,6 +63,25 @@ class PreviewProgressBody(BaseModel):
     goals_addressed: Optional[List[str]] = None
 
 
+class UploadEvidenceMeta(BaseModel):
+    evidence_id: str
+    task_id: str
+    type: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    goal_id: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    created_at: str
+    content: Optional[str] = None
+
+
+class UploadEvidenceBody(BaseModel):
+    session_id: str
+    evidence: List[UploadEvidenceMeta]
+    files: dict[str, str] = {}
+
+
 def _effective_tier(rule: dict) -> str:
     """Return enforcement_tier for a rule result, falling back to is_blocking."""
     tier = rule.get("enforcement_tier")
@@ -1186,6 +1205,53 @@ async def delete_session_attachment(
         logger.warning("Attachment storage delete failed: %s", exc)
     supabase.table("session_attachments").delete().eq("id", attachment_id).execute()
     return None
+
+
+@router.post("/{session_id}/upload-evidence")
+async def upload_session_evidence(
+    session_id: str,
+    body: UploadEvidenceBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload task evidence media (photo/voice) to object storage (CARECLIQV2-230)."""
+    from ..services import evidence_upload_service
+
+    if body.session_id != session_id:
+        raise HTTPException(status_code=400, detail="session_id mismatch")
+
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+
+    try:
+        result = evidence_upload_service.upload_session_evidence_media(
+            session_id=session_id,
+            worker_id=worker_id,
+            organization_id=org_id,
+            evidence_items=[item.model_dump() for item in body.evidence],
+            files=body.files,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "exceeds" in msg.lower() or "mb limit" in msg.lower():
+            raise HTTPException(status_code=413, detail=msg) from exc
+        raise HTTPException(status_code=400, detail=msg) from exc
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await audit_service.log_action(
+        action_type="session.evidence_uploaded",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"uploaded_count": len(result.get("uploaded_evidence") or [])},
+    )
+    return result
 
 
 @router.post("/{session_id}/upload-photo")
