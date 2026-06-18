@@ -26,6 +26,7 @@ import {
   type TaskEvidenceRecord,
 } from "@/lib/task-evidence-storage";
 import { syncSessionEvidence, uploadSessionAttachment } from "@/services/taskEvidenceService";
+import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
 import type { ShiftTask } from "@/services/shiftService";
 import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
@@ -44,6 +45,7 @@ type Props = {
   participantName?: string;
   disabled?: boolean;
   onTaskPatch: (patch: Partial<ShiftTask>) => void;
+  onStrongEvidence?: (patch: Partial<ShiftTask>) => void;
   onMarkComplete: () => void;
   variant?: "full" | "thread";
 };
@@ -69,12 +71,14 @@ export function ShiftTaskEvidencePanel({
   participantName,
   disabled,
   onTaskPatch,
+  onStrongEvidence,
   onMarkComplete,
   variant = "full",
 }: Props) {
   const [note, setNote] = useState(task.note ?? "");
   const [records, setRecords] = useState<TaskEvidenceRecord[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [evidenceAddedFlash, setEvidenceAddedFlash] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -127,6 +131,8 @@ export function ShiftTaskEvidencePanel({
       const voice = rows.find((r) => r.type === "voice");
       if (voice?.content?.startsWith("data:audio")) {
         setVoiceUrl(voice.content);
+      } else if (voice?.file_url) {
+        setVoiceUrl(voice.file_url);
       }
     } catch {
       setRecords([]);
@@ -142,15 +148,27 @@ export function ShiftTaskEvidencePanel({
           setSaveState("offline");
           return;
         }
-        const unsynced = batch.filter((r) => !r.synced);
-        if (!unsynced.length) {
-          setSaveState("saved");
-          return;
+        const textOnly = batch.filter((r) => r.type === "text" && !r.synced);
+        const media = batch.filter((r) => r.type === "photo" || r.type === "voice");
+
+        if (textOnly.length) {
+          await syncSessionEvidence(sessionId, textOnly);
+          for (const row of textOnly) {
+            await saveTaskEvidence({ ...row, synced: true, upload_status: "uploaded" });
+          }
         }
-        await syncSessionEvidence(sessionId, unsynced);
-        for (const row of unsynced) {
-          await saveTaskEvidence({ ...row, synced: true });
+
+        if (media.length) {
+          for (const row of media) {
+            await saveTaskEvidence({
+              ...row,
+              upload_status: row.upload_status ?? "pending",
+              synced: false,
+            });
+          }
+          await syncEvidenceUploadQueue(sessionId);
         }
+
         setSaveState("saved");
         await loadRecords();
       } catch {
@@ -173,9 +191,7 @@ export function ShiftTaskEvidencePanel({
   useEffect(() => {
     const retry = async () => {
       try {
-        const { listUnsyncedEvidence } = await import("@/lib/task-evidence-storage");
-        const pending = await listUnsyncedEvidence(sessionId);
-        if (pending.length) void queueSync(pending);
+        await syncEvidenceUploadQueue(sessionId);
       } catch {
         /* ignore offline storage errors */
       }
@@ -183,19 +199,28 @@ export function ShiftTaskEvidencePanel({
     const handler = () => void retry();
     window.addEventListener("online", handler);
     return () => window.removeEventListener("online", handler);
-  }, [sessionId, queueSync]);
+  }, [sessionId]);
 
-  const maybeAutoComplete = useCallback(
+  const markEvidenceAdded = useCallback(() => {
+    setEvidenceAddedFlash(true);
+    clearSavedStatusTimer();
+    savedStatusTimerRef.current = window.setTimeout(() => {
+      setEvidenceAddedFlash(false);
+      savedStatusTimerRef.current = null;
+    }, 2000);
+  }, []);
+
+  const applyStrongEvidence = useCallback(
     (patch: Partial<ShiftTask>) => {
-      const hasEvidence =
-        Boolean(patch.photo_evidence) ||
-        Boolean(patch.voice_evidence) ||
-        Boolean(patch.note?.trim());
-      if (hasEvidence && !task.completed) {
-        onMarkComplete();
+      if (onStrongEvidence) {
+        onStrongEvidence(patch);
+      } else {
+        onTaskPatch(patch);
+        if (!task.completed) onMarkComplete();
       }
+      markEvidenceAdded();
     },
-    [onMarkComplete, task.completed],
+    [markEvidenceAdded, onMarkComplete, onStrongEvidence, onTaskPatch, task.completed],
   );
 
   const appendThreadEvidence = useCallback(
@@ -226,12 +251,10 @@ export function ShiftTaskEvidencePanel({
 
     setNote("");
     onTaskPatch({ note: trimmed });
-    maybeAutoComplete({ note: trimmed });
     await appendThreadEvidence(record);
   }, [
     appendThreadEvidence,
     disabled,
-    maybeAutoComplete,
     note,
     onTaskPatch,
     sessionId,
@@ -282,6 +305,10 @@ export function ShiftTaskEvidencePanel({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || disabled || uploadingFile) return;
+    if (!file.type.startsWith("image/")) {
+      setCameraError("Only image files can be attached.");
+      return;
+    }
     if (fileRecords.length >= MAX_FILES) {
       setCameraError(`Maximum ${MAX_FILES} files per task`);
       return;
@@ -357,16 +384,18 @@ export function ShiftTaskEvidencePanel({
       type: "photo",
       content: dataUrl,
       file_size_bytes: bytes,
+      mime_type: "image/jpeg",
       created_at: new Date().toISOString(),
       synced: false,
+      upload_status: "pending",
+      retry_count: 0,
     };
     await saveTaskEvidence(record);
     const thumbs = [...(task.photo_thumbnails ?? []), dataUrl].slice(-MAX_PHOTOS);
-    onTaskPatch({ photo_evidence: record.evidence_id, photo_thumbnails: thumbs });
+    applyStrongEvidence({ photo_evidence: record.evidence_id, photo_thumbnails: thumbs });
     await queueSync([record]);
     stopCamera();
     await loadRecords();
-    maybeAutoComplete({ photo_evidence: record.evidence_id });
     notifyTaskEvidenceUpdated();
     if (variant === "thread") markThreadSaved();
   };
@@ -397,8 +426,16 @@ export function ShiftTaskEvidencePanel({
   const startRecording = async () => {
     if (disabled || voiceRecord) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000 },
+      });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: 64000,
+      });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -418,18 +455,20 @@ export function ShiftTaskEvidencePanel({
             content: dataUrl,
             duration_seconds: duration,
             file_size_bytes: blob.size,
+            mime_type: mimeType.split(";")[0],
             created_at: new Date().toISOString(),
             synced: false,
+            upload_status: "pending",
+            retry_count: 0,
           };
           await saveTaskEvidence(record);
           setVoiceUrl(dataUrl);
-          onTaskPatch({
+          applyStrongEvidence({
             voice_evidence: record.evidence_id,
             voice_duration_seconds: duration,
           });
           await queueSync([record]);
           await loadRecords();
-          maybeAutoComplete({ voice_evidence: record.evidence_id });
           notifyTaskEvidenceUpdated();
           if (variant === "thread") markThreadSaved();
         };
@@ -613,7 +652,7 @@ export function ShiftTaskEvidencePanel({
             disabled={disabled || uploadingFile || fileRecords.length >= MAX_FILES}
             onClick={() => fileInputRef.current?.click()}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
-            aria-label="Attach file"
+            aria-label="Attach image"
           >
             <Paperclip size={14} />
           </button>
@@ -621,7 +660,7 @@ export function ShiftTaskEvidencePanel({
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,image/*"
+            accept="image/*"
             onChange={(e) => void handleFileUpload(e)}
           />
           <input
@@ -650,10 +689,11 @@ export function ShiftTaskEvidencePanel({
         </div>
 
         <p className="mt-2 text-[10px] font-bold" style={{ color: MUTED }}>
+          {evidenceAddedFlash && <span className="text-emerald-700">✓ Evidence added · </span>}
           {saveState === "saving" && (uploadingFile ? "Uploading file…" : "Saving…")}
           {saveState === "saved" && "Saved"}
           {saveState === "offline" && "Offline — saved locally"}
-          {saveState === "idle" && note.length > 0 && `${note.length}/${NOTE_MAX}`}
+          {saveState === "idle" && !evidenceAddedFlash && note.length > 0 && `${note.length}/${NOTE_MAX}`}
         </p>
       </div>
     );
@@ -736,7 +776,7 @@ export function ShiftTaskEvidencePanel({
               {photos.map((photo) => (
                 <div key={photo.evidence_id} className="relative">
                   <img
-                    src={photo.content}
+                    src={photo.file_url || photo.content}
                     alt="Task evidence"
                     className="h-[150px] w-[150px] rounded-xl border object-cover"
                   />
@@ -827,11 +867,11 @@ export function ShiftTaskEvidencePanel({
         <Button
           className="h-11 w-full rounded-xl border-0 text-sm font-black text-white"
           style={{ background: PLUM }}
-          disabled={disabled}
+          disabled={disabled || task.completed}
           onClick={onMarkComplete}
         >
           <Check size={16} className="mr-2 inline" />
-          {task.completed ? "Mark incomplete" : "Mark task complete"}
+          Mark task complete
         </Button>
       </div>
     </div>

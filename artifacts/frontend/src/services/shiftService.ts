@@ -15,7 +15,15 @@ export type ShiftTask = {
   description?: string;
   completed: boolean;
   completed_at?: string | null;
+  checked_at?: string | null;
+  evidence_status?: "with_evidence" | "without_evidence" | null;
+  evidence_added_at?: string | null;
+  evidence_ids?: string[];
+  has_photo?: boolean;
+  has_voice?: boolean;
+  has_text_notes?: boolean;
   note?: string;
+  context_note?: string;
   order: number;
   mandatory?: boolean;
   goal_id?: string | null;

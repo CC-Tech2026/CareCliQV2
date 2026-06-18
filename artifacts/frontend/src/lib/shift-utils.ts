@@ -207,6 +207,8 @@ export function isMandatoryTask(task: ShiftTask) {
 
 export function hasStrongTaskEvidence(task: ShiftTask) {
   return (
+    task.has_photo === true ||
+    task.has_voice === true ||
     Boolean(task.photo_evidence) ||
     (task.photo_thumbnails?.length ?? 0) > 0 ||
     Boolean(task.voice_evidence) ||
@@ -267,16 +269,13 @@ export function groupShiftTasksByGoal(tasks: ShiftTask[]) {
 }
 
 export function taskEvidenceScore(tasks: ShiftTask[]) {
-  const mandatory = tasks.filter(isMandatoryTask);
-  if (!mandatory.length) return { score: 100, label: "High" as const };
-  const withEvidence = mandatory.filter(
-    (t) =>
-      t.completed ||
-      Boolean(t.note?.trim()) ||
-      hasStrongTaskEvidence(t),
-  ).length;
-  const score = Math.round((withEvidence / mandatory.length) * 100);
-  const label = score >= 80 ? ("High" as const) : score >= 50 ? ("Medium" as const) : ("Low" as const);
+  const { score, label } = (() => {
+    if (!tasks.length) return { score: 100, label: "High" as const };
+    const strongCount = tasks.filter(hasStrongTaskEvidence).length;
+    const score = Math.round((strongCount / tasks.length) * 100);
+    const label = score >= 80 ? ("High" as const) : score >= 50 ? ("Medium" as const) : ("Low" as const);
+    return { score, label };
+  })();
   return { score, label };
 }
 

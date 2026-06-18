@@ -35,6 +35,22 @@ class Settings(BaseSettings):
     smtp_from_name: str = os.environ.get("SMTP_FROM_NAME", "CareScribe")
     smtp_use_starttls: bool = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
 
+    # Task evidence object storage (CARECLIQV2-230)
+    # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below
+    evidence_storage_provider: str = os.environ.get("EVIDENCE_STORAGE_PROVIDER", "supabase")
+    evidence_storage_s3_enabled: bool = os.environ.get("EVIDENCE_STORAGE_S3_ENABLED", "false").lower() == "true"
+    evidence_storage_azure_enabled: bool = os.environ.get("EVIDENCE_STORAGE_AZURE_ENABLED", "false").lower() == "true"
+    evidence_storage_bucket: str = os.environ.get("EVIDENCE_STORAGE_BUCKET", "session-evidence")
+    # AWS S3
+    evidence_s3_bucket: str = os.environ.get("EVIDENCE_AWS_S3_BUCKET", "")
+    evidence_s3_endpoint_url: str = os.environ.get("EVIDENCE_S3_ENDPOINT_URL", "")
+    aws_access_key_id: str = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    aws_secret_access_key: str = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    aws_s3_region: str = os.environ.get("AWS_S3_REGION", "ap-southeast-2")
+    # Azure Blob
+    evidence_azure_container: str = os.environ.get("EVIDENCE_AZURE_CONTAINER", "")
+    azure_storage_connection_string: str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+
     class Config:
         env_file = ".env"
         extra = "ignore"

@@ -1,5 +1,7 @@
 export type TaskEvidenceType = "photo" | "voice" | "text" | "file";
 
+export type EvidenceUploadStatus = "pending" | "uploading" | "uploaded" | "failed";
+
 export type TaskEvidenceRecord = {
   evidence_id: string;
   task_id: string;
@@ -11,10 +13,13 @@ export type TaskEvidenceRecord = {
   file_size_bytes?: number | null;
   file_name?: string | null;
   file_url?: string | null;
+  storage_path?: string | null;
   attachment_id?: string | null;
   mime_type?: string | null;
   created_at: string;
   synced: boolean;
+  upload_status?: EvidenceUploadStatus;
+  retry_count?: number;
 };
 
 const DB_NAME = "carecliq_task_evidence";
@@ -103,7 +108,15 @@ export async function listUnsyncedEvidence(sessionId: string): Promise<TaskEvide
     const store = tx.objectStore(STORE);
     const request = store.index("session_id").getAll(sessionId);
     request.onsuccess = () => {
-      resolve((request.result as TaskEvidenceRecord[]).filter((r) => !r.synced));
+      resolve(
+        (request.result as TaskEvidenceRecord[]).filter(
+          (r) =>
+            !r.synced ||
+            r.upload_status === "pending" ||
+            r.upload_status === "uploading" ||
+            r.upload_status === "failed",
+        ),
+      );
     };
     request.onerror = () => reject(request.error);
     tx.oncomplete = () => db.close();
@@ -140,9 +153,10 @@ export async function compressImageFile(file: File, maxBytes = 2 * 1024 * 1024):
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement("canvas");
   let { width, height } = bitmap;
-  const maxDim = 1280;
-  if (width > maxDim || height > maxDim) {
-    const scale = maxDim / Math.max(width, height);
+  const maxW = 1920;
+  const maxH = 1080;
+  if (width > maxW || height > maxH) {
+    const scale = Math.min(maxW / width, maxH / height);
     width = Math.round(width * scale);
     height = Math.round(height * scale);
   }
@@ -152,7 +166,7 @@ export async function compressImageFile(file: File, maxBytes = 2 * 1024 * 1024):
   if (!ctx) throw new Error("Canvas unavailable");
   ctx.drawImage(bitmap, 0, 0, width, height);
 
-  let quality = 0.9;
+  let quality = 0.85;
   let dataUrl = canvas.toDataURL("image/jpeg", quality);
   while (dataUrl.length > maxBytes * 1.37 && quality > 0.35) {
     quality -= 0.1;

@@ -1333,7 +1333,13 @@ def sync_session_task_evidence(
         eid = str(item.get("evidence_id") or "")
         if not eid:
             continue
-        by_id[eid] = {**item, "session_id": session_id, "synced": True}
+        stored = {**item, "session_id": session_id, "synced": True}
+        etype = str(item.get("type") or "")
+        if etype in ("photo", "voice") and not item.get("file_url"):
+            content = str(item.get("content") or "")
+            if content.startswith("data:") and len(content) > 500:
+                stored["content"] = ""
+        by_id[eid] = stored
         synced_ids.append(eid)
 
     merged = list(by_id.values())

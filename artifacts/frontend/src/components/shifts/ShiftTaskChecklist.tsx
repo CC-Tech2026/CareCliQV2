@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, MessageCircle, Target } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  MessageCircle,
+  Target,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShiftTaskEvidencePanel } from "@/components/shifts/ShiftTaskEvidencePanel";
 import {
@@ -8,6 +16,12 @@ import {
   updateShiftTasks,
   type ShiftTask,
 } from "@/services/shiftService";
+import {
+  applyEvidencePatch,
+  applyTaskCompletion,
+  countTasksWithoutEvidence,
+  QUICK_NOTE_MAX,
+} from "@/lib/task-evidence-status";
 import {
   groupShiftTasksByGoal,
   isMandatoryTask,
@@ -29,6 +43,63 @@ type Props = {
 
 function isMandatory(task: ShiftTask) {
   return isMandatoryTask(task);
+}
+
+function TaskStatusCheckbox({
+  task,
+  disabled,
+  onToggle,
+}: {
+  task: ShiftTask;
+  disabled?: boolean;
+  onToggle: () => void;
+}) {
+  if (!task.completed) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-[#D8D0EE] bg-white"
+        aria-label={`Mark ${task.label} complete`}
+      />
+    );
+  }
+
+  if (task.evidence_status === "with_evidence") {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-emerald-500 bg-emerald-500"
+        aria-label={`Mark ${task.label} incomplete`}
+      >
+        <CheckCircle2 size={12} className="text-white" />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+      className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-amber-400 bg-amber-100"
+      aria-label={`Mark ${task.label} incomplete`}
+    >
+      <AlertTriangle size={11} className="text-amber-700" />
+    </button>
+  );
 }
 
 export function ShiftTaskChecklist({
@@ -69,40 +140,53 @@ export function ShiftTaskChecklist({
     [shiftId, onTasksChange],
   );
 
+  const toggleTaskComplete = async (taskId: string) => {
+    const now = new Date().toISOString();
+    const next = localTasks.map((task) =>
+      task.task_id === taskId ? applyTaskCompletion(task, !task.completed, now) : task,
+    );
+    await persist(next);
+  };
+
   const markTaskComplete = async (taskId: string, completed = true) => {
     const now = new Date().toISOString();
     const next = localTasks.map((task) =>
-      task.task_id === taskId
-        ? {
-            ...task,
-            completed,
-            completed_at: completed ? task.completed_at ?? now : null,
-          }
-        : task,
+      task.task_id === taskId ? applyTaskCompletion(task, completed, now) : task,
     );
     await persist(next);
   };
 
   const saveEvidence = async (taskId: string, patch: Partial<ShiftTask>) => {
     const now = new Date().toISOString();
+    const next = localTasks.map((task) =>
+      task.task_id === taskId ? applyEvidencePatch(task, patch, now) : task,
+    );
+    await persist(next);
+  };
+
+  const saveQuickNote = async (taskId: string, contextNote: string) => {
+    const now = new Date().toISOString();
+    const next = localTasks.map((task) =>
+      task.task_id === taskId
+        ? applyEvidencePatch(task, { context_note: contextNote.slice(0, QUICK_NOTE_MAX) }, now)
+        : task,
+    );
+    await persist(next);
+  };
+
+  const saveStrongEvidence = async (taskId: string, patch: Partial<ShiftTask>) => {
+    const now = new Date().toISOString();
     const next = localTasks.map((task) => {
       if (task.task_id !== taskId) return task;
-      const updated = { ...task, ...patch };
-      const hasEvidence =
-        Boolean(patch.photo_evidence) ||
-        Boolean(patch.voice_evidence) ||
-        Boolean(patch.note?.trim());
-      if (sessionStyle && hasEvidence && !updated.completed) {
-        updated.completed = true;
-        updated.completed_at = now;
-      }
-      return updated;
+      const withEvidence = applyEvidencePatch(task, patch, now);
+      return withEvidence.completed ? withEvidence : applyTaskCompletion(withEvidence, true, now);
     });
     await persist(next);
   };
 
   const sorted = [...localTasks].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const goalGroups = groupShiftTasksByGoal(sorted);
+  const noEvidenceCount = countTasksWithoutEvidence(localTasks);
 
   useEffect(() => {
     if (!sessionStyle) return;
@@ -173,11 +257,16 @@ export function ShiftTaskChecklist({
       <div className="rounded-xl border border-dashed border-[#DCD4F2] bg-[#F7F4FF] px-3 py-2.5">
         <p className="flex items-center gap-2 text-[11px] font-black" style={{ color: PLUM }}>
           <MessageCircle size={13} />
-          Message-style task tracking
+          Task completion with evidence tracking
         </p>
         <p className="mt-1 text-[11px] font-semibold" style={{ color: MUTED }}>
-          Tap any task to open its thread. Add a photo, voice note, or quick text — the task completes automatically.
+          Tap the circle to check off a task. Green = strong evidence (photo/voice). Yellow ⚠️ = no evidence yet.
         </p>
+        {noEvidenceCount > 0 && (
+          <p className="mt-1 text-[11px] font-bold text-amber-700">
+            {noEvidenceCount} task{noEvidenceCount === 1 ? "" : "s"} flagged for review at shift end
+          </p>
+        )}
       </div>
 
       {goalGroups.map((group) => {
@@ -225,6 +314,9 @@ export function ShiftTaskChecklist({
                   setExpandedNote={setExpandedNote}
                   disabled={disabled || busy}
                   saveEvidence={saveEvidence}
+                  saveStrongEvidence={saveStrongEvidence}
+                  saveQuickNote={saveQuickNote}
+                  toggleTaskComplete={toggleTaskComplete}
                   markTaskComplete={markTaskComplete}
                   sessionId={sessionId}
                   participantName={participantName}
@@ -256,12 +348,69 @@ function PreviewTaskRow({ task }: { task: ShiftTask }) {
   );
 }
 
+function QuickNoteField({
+  task,
+  disabled,
+  onSave,
+}: {
+  task: ShiftTask;
+  disabled?: boolean;
+  onSave: (note: string) => void;
+}) {
+  const [draft, setDraft] = useState(task.context_note ?? "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setDraft(task.context_note ?? "");
+  }, [task.context_note, task.task_id]);
+
+  if (!open && !task.context_note) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className="text-[11px] font-bold text-[#6D4BDA] underline-offset-2 hover:underline"
+        onClick={() => setOpen(true)}
+      >
+        Add note
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-1">
+      <input
+        type="text"
+        disabled={disabled}
+        maxLength={QUICK_NOTE_MAX}
+        value={draft}
+        placeholder="Quick context note (not counted as evidence)"
+        className="w-full rounded-lg border border-[#E2DEF2] bg-white px-2.5 py-1.5 text-xs"
+        onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
+        onBlur={() => onSave(draft.trim())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onSave(draft.trim());
+          }
+        }}
+      />
+      <p className="text-[10px] font-semibold" style={{ color: MUTED }}>
+        {draft.length}/{QUICK_NOTE_MAX} · Note only, not evidence
+      </p>
+    </div>
+  );
+}
+
 function SessionTaskGroup({
   tasks,
   expandedNote,
   setExpandedNote,
   disabled,
   saveEvidence,
+  saveStrongEvidence,
+  saveQuickNote,
+  toggleTaskComplete,
   markTaskComplete,
   sessionId,
   participantName,
@@ -271,6 +420,9 @@ function SessionTaskGroup({
   setExpandedNote: (id: string | null) => void;
   disabled?: boolean;
   saveEvidence: (taskId: string, patch: Partial<ShiftTask>) => void;
+  saveStrongEvidence: (taskId: string, patch: Partial<ShiftTask>) => void;
+  saveQuickNote: (taskId: string, note: string) => void;
+  toggleTaskComplete: (taskId: string) => void;
   markTaskComplete: (taskId: string, completed?: boolean) => void;
   sessionId?: string | null;
   participantName?: string;
@@ -281,25 +433,63 @@ function SessionTaskGroup({
         const required = isMandatory(task);
         const expanded = expandedNote === task.task_id;
         const updates = taskUpdateCount(task);
+        const withEvidence = task.evidence_status === "with_evidence";
+        const withoutEvidence = task.completed && task.evidence_status === "without_evidence";
 
         if (task.completed && !expanded) {
           return (
-            <button
+            <div
               key={task.task_id}
-              type="button"
-              className="flex w-full items-center gap-3 rounded-xl border-2 border-emerald-400 bg-emerald-50/60 p-3 text-left"
-              onClick={() => setExpandedNote(task.task_id)}
+              className={cn(
+                "overflow-hidden rounded-xl border-2 p-3",
+                withEvidence ? "border-emerald-400 bg-emerald-50/60" : "border-amber-300 bg-amber-50/70",
+              )}
             >
-              <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-black" style={{ color: TEXT }}>{task.label}</p>
-                <p className="mt-0.5 text-[11px] font-semibold text-emerald-700">
-                  {updates || 1} update{updates === 1 ? "" : "s"} · Complete ✓
-                </p>
+              <div className="flex items-center gap-3">
+                <TaskStatusCheckbox
+                  task={task}
+                  disabled={disabled}
+                  onToggle={() => void toggleTaskComplete(task.task_id)}
+                />
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => setExpandedNote(task.task_id)}
+                >
+                  <p className="text-sm font-black" style={{ color: TEXT }}>{task.label}</p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-[11px] font-semibold",
+                      withEvidence ? "text-emerald-700" : "text-amber-800",
+                    )}
+                  >
+                    {withEvidence
+                      ? `${updates || 1} update${updates === 1 ? "" : "s"} · With evidence ✓`
+                      : "No evidence · Tap to add photo or voice"}
+                  </p>
+                  {task.context_note && (
+                    <p className="mt-1 line-clamp-2 text-[11px] font-medium italic" style={{ color: MUTED }}>
+                      {task.context_note}
+                    </p>
+                  )}
+                </button>
+                {withoutEvidence ? (
+                  <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+                ) : (
+                  <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+                )}
+                <ChevronRight size={18} className="shrink-0" style={{ color: MUTED }} />
               </div>
-              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">{updates || 1}</span>
-              <ChevronRight size={18} className="shrink-0" style={{ color: MUTED }} />
-            </button>
+              {withoutEvidence && (
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-[11px] font-bold text-amber-800"
+                  onClick={() => setExpandedNote(task.task_id)}
+                >
+                  Add evidence
+                </button>
+              )}
+            </div>
           );
         }
 
@@ -313,27 +503,32 @@ function SessionTaskGroup({
             )}
           >
             <div className="flex w-full items-center gap-1 p-3">
+              <TaskStatusCheckbox
+                task={task}
+                disabled={disabled}
+                onToggle={() => void toggleTaskComplete(task.task_id)}
+              />
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setExpandedNote(expanded ? null : task.task_id)}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <span
-                  className={cn(
-                    "grid h-5 w-5 shrink-0 place-items-center rounded-full border-2",
-                    task.completed ? "border-emerald-500 bg-emerald-500" : "border-[#D8D0EE] bg-white",
-                  )}
-                >
-                  {task.completed && <span className="h-2 w-2 rounded-full bg-white" />}
-                </span>
                 <div className="min-w-0 flex-1">
                   <p className={cn("text-sm font-bold", task.completed && "text-slate-500")} style={{ color: task.completed ? undefined : TEXT }}>
                     {task.label}
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold" style={{ color: MUTED }}>
-                    {required ? "Required" : "Optional"} · Tap to add updates
+                    {required ? "Required" : "Optional"}
+                    {task.completed && withoutEvidence && " · ⚠️ No evidence"}
+                    {task.completed && withEvidence && " · With evidence"}
+                    {!task.completed && " · Tap checkbox or add evidence"}
                   </p>
+                  {task.context_note && !expanded && (
+                    <p className="mt-1 line-clamp-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
+                      {task.context_note}
+                    </p>
+                  )}
                 </div>
                 {expanded ? (
                   <ChevronUp size={18} className="shrink-0" style={{ color: MUTED }} />
@@ -343,6 +538,16 @@ function SessionTaskGroup({
               </button>
             </div>
 
+            {!expanded && (
+              <div className="border-t border-[#ECE6FB] px-3 pb-3">
+                <QuickNoteField
+                  task={task}
+                  disabled={disabled}
+                  onSave={(note) => void saveQuickNote(task.task_id, note)}
+                />
+              </div>
+            )}
+
             {expanded && sessionId && (
               <ShiftTaskEvidencePanel
                 task={task}
@@ -351,6 +556,7 @@ function SessionTaskGroup({
                 disabled={disabled}
                 variant="thread"
                 onTaskPatch={(patch) => void saveEvidence(task.task_id, patch)}
+                onStrongEvidence={(patch) => void saveStrongEvidence(task.task_id, patch)}
                 onMarkComplete={() => void markTaskComplete(task.task_id, true)}
               />
             )}
