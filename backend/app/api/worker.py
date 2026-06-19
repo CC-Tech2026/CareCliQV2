@@ -555,6 +555,18 @@ async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_cu
     return shift
 
 
+@router.get("/shifts/{shift_id}/participant-risks")
+async def worker_shift_participant_risks(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Structured safety alerts for a shift (CARECLIQV2-158)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_risks_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
 @router.get("/shifts/{shift_id}/support-instructions")
 async def worker_shift_support_instructions(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Category-based support instructions for a shift (CARECLIQV2-157)."""
@@ -676,7 +688,10 @@ async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(g
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
-    shift = shift_service.acknowledge_shift_risks(shift_id, worker_id, org_id)
+    try:
+        shift = shift_service.acknowledge_shift_risks(shift_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     await audit_service.log_action(

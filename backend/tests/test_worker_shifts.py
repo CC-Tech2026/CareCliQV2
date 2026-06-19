@@ -185,8 +185,9 @@ def test_shift_card_payload_session_active_state():
     assert payload["visual_state"] == "session_active"
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_clears_stale_session_link(mock_admin):
+def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard):
     """Fresh clock-in must not inherit an old session (CARECLIQV2-127)."""
     shift = _sample_shift(status="scheduled", session_id="old-sess")
     table = MagicMock()
@@ -213,8 +214,9 @@ def test_clock_in_clears_stale_session_link(mock_admin):
     assert update_payload.get("session_id") is None
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_initialises_default_tasks(mock_admin):
+def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard):
     shift = _sample_shift()
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -671,3 +673,82 @@ def test_get_participant_profile_for_worker_denies_other_worker():
             "shift-1", "worker-1", "org-1"
         )
     assert payload is None
+
+
+def test_build_participant_risks_from_shift_text():
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products\n⛔ Risk of falls — supervise transfers",
+        allergies="Peanuts, tree nuts",
+    )
+    risks = shift_service.build_participant_risks(shift, "org-1")
+    assert len(risks) >= 2
+    types = {r["type"] for r in risks}
+    assert "allergy" in types
+    assert "falls_risk" in types
+    assert all(r.get("title") and r.get("instructions") for r in risks)
+
+
+def test_infer_risk_type_covers_ticket_categories():
+    assert shift_service._infer_risk_type("Legal blindness") == "legal_blindness"
+    assert shift_service._infer_risk_type("History of seizures") == "seizures"
+    assert shift_service._infer_risk_type("Behaviour Support Plan in place") == "bsp"
+    assert shift_service._infer_risk_type("Swallowing risk — thickened fluids") == "swallowing_risk"
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_acknowledge_shift_risks_requires_alerts(mock_get, _mock_session):
+    mock_get.return_value = _sample_shift(health_alerts=None, allergies=None)
+    with pytest.raises(ValueError, match="No safety alerts"):
+        shift_service.acknowledge_shift_risks("shift-1", "worker-1", "org-1")
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_acknowledge_shift_risks_persists_timestamp(mock_get, mock_admin, _mock_session):
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products",
+    )
+    mock_get.return_value = shift
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**shift, "risks_acknowledged_at": "2026-06-19T10:00:00+00:00", "risks_acknowledged_by": "worker-1"}]
+    )
+
+    result = shift_service.acknowledge_shift_risks("shift-1", "worker-1", "org-1")
+
+    assert result is not None
+    assert result["risks_acknowledged"] is True
+    update_payload = table.update.call_args[0][0]
+    assert update_payload["risks_acknowledged_by"] == "worker-1"
+    assert update_payload["risks_acknowledged_at"]
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_shift_blocked_without_risk_acknowledgement(mock_get, _mock_session):
+    mock_get.return_value = _sample_shift(
+        health_alerts="⛔ Risk of falls — supervise transfers",
+    )
+    with pytest.raises(ValueError, match="Acknowledge risks"):
+        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_get_participant_risks_for_worker(mock_get, mock_admin, _mock_session):
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products",
+    )
+    mock_get.return_value = shift
+    mock_admin.return_value.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+    payload = shift_service.get_participant_risks_for_worker("shift-1", "worker-1", "org-1")
+
+    assert payload is not None
+    assert payload["shift_id"] == "shift-1"
+    assert len(payload["alerts"]) >= 1
+    assert payload["risks_acknowledged"] is False

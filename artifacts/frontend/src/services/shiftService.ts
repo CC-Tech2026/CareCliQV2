@@ -3,9 +3,37 @@ import { jsonFetch } from "@/services/http";
 export type ShiftVisualState = "scheduled" | "clocked_in" | "session_active" | "completed";
 
 export type ShiftHealthAlert = {
+  type?: ParticipantRiskType | string;
   title: string;
   severity: "critical" | "important" | string;
+  description?: string;
+  instructions?: string;
   detail?: string;
+};
+
+export type ParticipantRiskType =
+  | "allergy"
+  | "legal_blindness"
+  | "falls_risk"
+  | "seizures"
+  | "bsp"
+  | "swallowing_risk"
+  | "other";
+
+export type ParticipantRiskAlert = ShiftHealthAlert & {
+  type: ParticipantRiskType;
+  description: string;
+  instructions: string;
+};
+
+export type ParticipantRisksResponse = {
+  shift_id: string;
+  participant_id?: string;
+  alerts: ParticipantRiskAlert[];
+  risks_acknowledged: boolean;
+  risks_acknowledged_at?: string | null;
+  risks_acknowledged_by?: string | null;
+  risks_acknowledged_by_name?: string | null;
 };
 
 export type ShiftTask = {
@@ -124,6 +152,7 @@ export type WorkerShift = {
   entry_instructions?: string | null;
   access_instructions?: string | null;
   health_alerts?: ShiftHealthAlert[];
+  has_risk_alerts?: boolean;
   allergies?: string | null;
   visit_notes?: string | null;
   health_flags?: string | null;
@@ -131,6 +160,7 @@ export type WorkerShift = {
   risks_acknowledged?: boolean;
   risks_acknowledged_at?: string | null;
   risks_acknowledged_by?: string | null;
+  risks_acknowledged_by_name?: string | null;
   profile?: ParticipantProfile;
   preferences?: ParticipantPreferences;
   context?: ParticipantContext;
@@ -198,6 +228,10 @@ export function getWorkerShiftParticipantProfile(id: string) {
 
 export function getWorkerShiftParticipantPreferences(id: string) {
   return jsonFetch<ShiftParticipantPreferencesResponse>(`/api/worker/shifts/${id}/participant-preferences`);
+}
+
+export function getWorkerShiftParticipantRisks(id: string) {
+  return jsonFetch<ParticipantRisksResponse>(`/api/worker/shifts/${id}/participant-risks`);
 }
 
 export function clockInShift(id: string) {

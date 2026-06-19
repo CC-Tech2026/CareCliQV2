@@ -8,6 +8,7 @@ type Props = {
   instructions?: ShiftSupportInstruction[];
   open?: boolean;
   onToggle?: () => void;
+  sectionId?: string;
 };
 
 function isCriticalLine(line: string): boolean {
@@ -89,11 +90,15 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
   );
 }
 
-export function SupportInstructionsAccordion({ instructions, open = true, onToggle }: Props) {
+export function SupportInstructionsAccordion({ instructions, open = true, onToggle, sectionId }: Props) {
   if (!instructions?.length) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section
+      id={sectionId}
+      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+      style={{ borderColor: BORDER }}
+    >
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
