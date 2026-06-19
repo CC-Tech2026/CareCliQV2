@@ -70,10 +70,12 @@ export default function Team() {
   const [assignWorker, setAssignWorker] = useState<WorkerStats | null>(null);
   const [assignPatientId, setAssignPatientId] = useState("");
 
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const stats = useOrgQuery(["coordinator", "worker-stats"], { queryFn: getCoordinatorWorkerStats });
-  const participants = useGetParticipants();
+  const participants = useGetParticipants({
+    query: { enabled: isAuthenticated && !!user?.organizationId },
+  });
 
   const deactivateMut = useMutation({
     mutationFn: (id: string) => deactivateWorker(id),

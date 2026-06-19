@@ -50,8 +50,20 @@ const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
 let _currentToken: string | null = null;
 let _currentOrgId: string | null = null;
-setAuthTokenGetter(() => _currentToken);
-setOrgIdGetter(() => _currentOrgId);
+
+function readStoredOrgId(): string | null {
+  try {
+    const { userJson } = readStoredSession();
+    if (!userJson) return null;
+    const parsed = JSON.parse(userJson) as AuthUser;
+    return parsed.organizationId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+setAuthTokenGetter(() => _currentToken ?? readStoredSession().token);
+setOrgIdGetter(() => _currentOrgId ?? readStoredOrgId());
 
 const AuthContext = createContext<AuthContextType | null>(null);
 

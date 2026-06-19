@@ -146,6 +146,9 @@ export type WorkerShift = {
   duration_minutes?: number;
   clocked_in_at?: string | null;
   clocked_out_at?: string | null;
+  clock_in_method?: "gps" | "qr" | "manual" | null;
+  clock_in_location?: { lat: number; lng: number; accuracy?: number } | null;
+  clock_in_verified?: boolean;
   status: string;
   visual_state: ShiftVisualState;
   coordinator_notes?: string | null;
@@ -234,8 +237,18 @@ export function getWorkerShiftParticipantRisks(id: string) {
   return jsonFetch<ParticipantRisksResponse>(`/api/worker/shifts/${id}/participant-risks`);
 }
 
-export function clockInShift(id: string) {
-  return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-in`, { method: "POST" });
+export type ClockInRequest = {
+  method: "gps" | "qr";
+  location?: { lat: number; lng: number; accuracy?: number } | null;
+  qr_token?: string | null;
+  client_timestamp?: string;
+};
+
+export function clockInShift(id: string, body?: ClockInRequest) {
+  return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-in`, {
+    method: "POST",
+    body: body ? JSON.stringify(body) : undefined,
+  });
 }
 
 export function acknowledgeShiftRisks(id: string) {

@@ -38,7 +38,12 @@ import {
   loadCachedParticipantContext,
   type CachedParticipantContext,
 } from "@/lib/participant-context-cache";
-import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
+import { ClockInFlow } from "@/components/shifts/ClockInFlow";
+import {
+  enqueueClockIn,
+  getPendingClockIn,
+  removePendingAction,
+} from "@/lib/shift-offline-queue";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
@@ -60,6 +65,7 @@ import {
   endShift,
   clearPendingStartSession,
   getWorkerShift,
+  type ClockInRequest,
   type ShiftTask,
   type ShiftVisualState,
   type WorkerShift,
@@ -129,6 +135,8 @@ export default function MyShiftDetail({ id }: Props) {
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [forceEndPending, setForceEndPending] = useState(false);
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
+  const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
+  const [pendingClockInCount, setPendingClockInCount] = useState(0);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -202,6 +210,130 @@ export default function MyShiftDetail({ id }: Props) {
     }
   }, [shift?.visual_state, id]);
 
+  const refreshPendingClockIn = async () => {
+    const pending = await getPendingClockIn(id);
+    setPendingClockInCount(pending ? 1 : 0);
+  };
+
+  const applyClockInResult = async (updated: WorkerShift) => {
+    if (!shift) return;
+    setTasks(updated.tasks ?? []);
+    if (shift.participant_id && (updated.profile || updated.context)) {
+      void cacheParticipantContext({
+        participantId: shift.participant_id,
+        profile: updated.profile ?? shift.profile,
+        preferences: updated.preferences ?? shift.preferences,
+        context: updated.context ?? shift.context,
+        syncedAt: updated.context_synced_at || new Date().toISOString(),
+      });
+    }
+    invalidateShifts();
+    await refetch();
+  };
+
+  const performVerifiedClockIn = async (payload: ClockInRequest) => {
+    if (!shift) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await enqueueClockIn({
+        shiftId: shift.id,
+        method: payload.method,
+        clientTimestamp: payload.client_timestamp || new Date().toISOString(),
+        location: payload.location ?? null,
+        qrToken: payload.qr_token ?? null,
+      });
+      await refreshPendingClockIn();
+      setClockInFlowOpen(false);
+      toast({
+        title: "Offline check-in saved",
+        description: "Your check-in will sync when you are back online.",
+      });
+      return;
+    }
+    try {
+      const updated = await clockInShift(shift.id, payload);
+      await applyClockInResult(updated);
+      setClockInFlowOpen(false);
+      toast({
+        title: "Clocked in!",
+        description: `Verified arrival for ${shift.participant_name ?? "participant"}.`,
+      });
+    } catch (err) {
+      const apiErr = err as Error & { status?: number };
+      const status = apiErr.status;
+      const isRejection =
+        status === 422 ||
+        status === 403 ||
+        status === 404 ||
+        (status !== undefined && status >= 400 && status < 500);
+
+      if (isRejection) {
+        toast({
+          title: "Check-in not allowed",
+          description: apiErr.message || "This check-in could not be verified.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await enqueueClockIn({
+        shiftId: shift.id,
+        method: payload.method,
+        clientTimestamp: payload.client_timestamp || new Date().toISOString(),
+        location: payload.location ?? null,
+        qrToken: payload.qr_token ?? null,
+      });
+      await refreshPendingClockIn();
+      setClockInFlowOpen(false);
+      toast({
+        title: "Check-in saved locally",
+        description: apiErr.message || "Will retry when connection improves.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    void refreshPendingClockIn();
+  }, [id]);
+
+  useEffect(() => {
+    const syncPendingClockIn = async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      const pending = await getPendingClockIn(id);
+      if (!pending || shift?.visual_state !== "scheduled") return;
+      try {
+        await clockInShift(id, {
+          method: pending.method,
+          location: pending.location ?? undefined,
+          qr_token: pending.qrToken ?? undefined,
+          client_timestamp: pending.clientTimestamp,
+        });
+        await removePendingAction(pending.id);
+        await refreshPendingClockIn();
+        invalidateShifts();
+        await refetch();
+        toast({ title: "Check-in synced", description: "Offline check-in uploaded." });
+      } catch (err) {
+        const apiErr = err as Error & { status?: number };
+        if (apiErr.status === 422 || (apiErr.status !== undefined && apiErr.status >= 400 && apiErr.status < 500)) {
+          await removePendingAction(pending.id);
+          await refreshPendingClockIn();
+          toast({
+            title: "Check-in not allowed",
+            description: apiErr.message || "This check-in could not be verified.",
+            variant: "destructive",
+          });
+          return;
+        }
+        await refreshPendingClockIn();
+      }
+    };
+    const onOnline = () => void syncPendingClockIn();
+    window.addEventListener("online", onOnline);
+    void syncPendingClockIn();
+    return () => window.removeEventListener("online", onOnline);
+  }, [id, shift?.visual_state, invalidate, refetch, toast]);
+
   const displayVisualState = shift
     ? resolveDisplayVisualState(shift, instantSessionActive)
     : "scheduled";
@@ -240,7 +372,7 @@ export default function MyShiftDetail({ id }: Props) {
     }
   };
 
-  const handleClockIn = async () => {
+  const handleClockIn = () => {
     if (!shift) return;
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
       setSafetyOpen(true);
@@ -251,31 +383,14 @@ export default function MyShiftDetail({ id }: Props) {
       });
       return;
     }
+    setClockInFlowOpen(true);
+  };
+
+  const handleVerifiedClockIn = async (payload: ClockInRequest) => {
+    if (!shift) return;
     setBusy("clock");
     try {
-      const updated = await clockInShift(shift.id);
-      setTasks(updated.tasks ?? []);
-      if (shift.participant_id && (updated.profile || updated.context)) {
-        void cacheParticipantContext({
-          participantId: shift.participant_id,
-          profile: updated.profile ?? shift.profile,
-          preferences: updated.preferences ?? shift.preferences,
-          context: updated.context ?? shift.context,
-          syncedAt: updated.context_synced_at || new Date().toISOString(),
-        });
-      }
-      invalidateShifts();
-      await refetch();
-      toast({
-        title: "Clocked in!",
-        description: `Shift with ${shift.participant_name ?? "participant"} is active.`,
-      });
-    } catch (err) {
-      toast({
-        title: "Failed to clock in",
-        description: (err as Error).message || "Check your connection and try again.",
-        variant: "destructive",
-      });
+      await performVerifiedClockIn(payload);
     } finally {
       setBusy(null);
     }
@@ -467,6 +582,16 @@ export default function MyShiftDetail({ id }: Props) {
 
   const dialogs = (
     <>
+      {shift && (
+        <ClockInFlow
+          open={clockInFlowOpen}
+          shift={shift}
+          busy={busy === "clock"}
+          onClose={() => setClockInFlowOpen(false)}
+          onConfirm={handleVerifiedClockIn}
+        />
+      )}
+
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -541,7 +666,7 @@ export default function MyShiftDetail({ id }: Props) {
   if (showLiveSession) {
     return (
       <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
-        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
         {showEvidenceBanner && (
           <EvidenceSyncBanner
             online={evidenceOnline}
@@ -584,7 +709,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-10">
-      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner
           online={evidenceOnline}
