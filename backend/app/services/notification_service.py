@@ -336,6 +336,91 @@ async def notify_coordinator_message(
     )
 
 
+def _org_coordinator_user_ids(org_id: str) -> list[str]:
+    try:
+        result = (
+            get_supabase_admin()
+            .table("users")
+            .select("id")
+            .eq("organization_id", org_id)
+            .in_("role", ["support_coordinator", "managing_director", "admin"])
+            .execute()
+        )
+        return [str(row["id"]) for row in (result.data or []) if row.get("id")]
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        logger.debug("Coordinator lookup failed: %s", exc)
+        return []
+
+
+async def _notify_office_staff(
+    *,
+    org_id: str,
+    title: str,
+    message: str,
+    reference_key: str,
+    severity: str = "medium",
+    participant_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> None:
+    for coordinator_id in _org_coordinator_user_ids(org_id):
+        await notify_worker(
+            user_id=coordinator_id,
+            org_id=org_id,
+            event="coordinator_message",
+            title=title,
+            message=message,
+            reference_key=reference_key,
+            severity=severity,
+            participant_id=participant_id,
+            session_id=session_id,
+            action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents",
+            email_subject=title,
+        )
+
+
+async def notify_incident_reported(
+    *,
+    org_id: str,
+    incident_id: str,
+    title: str,
+    message: str,
+    severity: str = "medium",
+    participant_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    escalate: bool = False,
+) -> None:
+    await _notify_office_staff(
+        org_id=org_id,
+        title=title,
+        message=message,
+        reference_key=f"incident:{incident_id}",
+        severity="critical" if escalate or severity in ("high", "critical") else severity,
+        participant_id=participant_id,
+        session_id=session_id,
+    )
+
+
+async def notify_office_worker_message(
+    *,
+    org_id: str,
+    shift_id: str,
+    worker_id: str,
+    message: str,
+    priority: str = "normal",
+) -> None:
+    severity = "critical" if priority == "emergency" else ("high" if priority == "urgent" else "medium")
+    preview = message[:280] + ("…" if len(message) > 280 else "")
+    await _notify_office_staff(
+        org_id=org_id,
+        title="Worker message during shift",
+        message=preview,
+        reference_key=f"shift-message:{shift_id}:{worker_id}:{int(datetime.now(timezone.utc).timestamp())}",
+        severity=severity,
+    )
+
+
 def _format_shift_time(value: Any) -> str:
     if not value:
         return "TBC"

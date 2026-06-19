@@ -244,10 +244,11 @@ export type ClockInRequest = {
   client_timestamp?: string;
 };
 
-export function clockInShift(id: string, body?: ClockInRequest) {
+export function clockInShift(id: string, body: ClockInRequest) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/clock-in`, {
     method: "POST",
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
@@ -368,4 +369,63 @@ export function clearPendingStartSession(shiftId: string) {
   } catch {
     /* noop */
   }
+}
+
+export type ShiftVisitNote = {
+  id: string;
+  shift_id: string;
+  session_id?: string | null;
+  content: string;
+  category?: string | null;
+  created_at: string;
+};
+
+export type ShiftOfficeMessage = {
+  id: string;
+  shift_id: string;
+  message: string;
+  priority: "normal" | "urgent" | "emergency";
+  created_at: string;
+};
+
+export type ShiftLocationDetails = {
+  shift_id: string;
+  participant_name?: string;
+  address?: string | null;
+  access_instructions?: string | null;
+  entry_instructions?: string | null;
+  visit_notes?: string | null;
+  coordinator_notes?: string | null;
+};
+
+export function listShiftNotes(shiftId: string) {
+  return jsonFetch<ShiftVisitNote[]>(`/api/worker/shifts/${shiftId}/notes`);
+}
+
+export function createShiftNote(
+  shiftId: string,
+  body: { content: string; category?: string; session_id?: string },
+) {
+  return jsonFetch<ShiftVisitNote>(`/api/worker/shifts/${shiftId}/notes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function listShiftMessages(shiftId: string) {
+  return jsonFetch<ShiftOfficeMessage[]>(`/api/worker/shifts/${shiftId}/messages`);
+}
+
+export function sendShiftOfficeMessage(
+  shiftId: string,
+  body: { message: string; priority?: "normal" | "urgent" | "emergency" },
+) {
+  return jsonFetch<ShiftOfficeMessage>(`/api/worker/shifts/${shiftId}/messages`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getShiftLocation(shiftId: string) {
+  return jsonFetch<ShiftLocationDetails>(`/api/worker/shifts/${shiftId}/location`);
 }

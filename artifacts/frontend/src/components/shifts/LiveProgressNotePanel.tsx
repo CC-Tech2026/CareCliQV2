@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Camera, Languages, Mic, MicOff, Paperclip, StopCircle, X } from "lucide-react";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { createShiftNote, listShiftNotes, type ShiftVisitNote } from "@/services/shiftService";
 
 type LiveSpeechRecognitionEvent = {
   resultIndex: number;
@@ -52,12 +53,13 @@ const SPEECH_LANGUAGE_CODES: Record<string, string> = {
 };
 
 type Props = {
+  shiftId: string;
   participantName?: string;
   sessionId?: string | null;
   onClose?: () => void;
 };
 
-export function LiveProgressNotePanel({ participantName, sessionId, onClose }: Props) {
+export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onClose }: Props) {
   const [, navigate] = useLocation();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
@@ -70,6 +72,57 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
   const [isListening, setIsListening] = useState(false);
   const [ended, setEnded] = useState(false);
   const [attachmentName, setAttachmentName] = useState("");
+  const [savedNotes, setSavedNotes] = useState<ShiftVisitNote[]>([]);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const autosaveTimerRef = useRef<number | null>(null);
+  const lastSavedRef = useRef("");
+
+  useEffect(() => {
+    void listShiftNotes(shiftId)
+      .then((rows) => {
+        const list = rows || [];
+        setSavedNotes(list);
+        const latest = list[0]?.content?.trim();
+        if (latest) {
+          setDraft(latest);
+          lastSavedRef.current = latest;
+        }
+      })
+      .catch(() => undefined);
+  }, [shiftId]);
+
+  const persistDraft = useCallback(
+    async (text: string) => {
+      const clean = text.trim();
+      if (!clean || clean === lastSavedRef.current) return;
+      setSaveStatus("saving");
+      try {
+        const note = await createShiftNote(shiftId, {
+          content: clean,
+          session_id: sessionId ?? undefined,
+          category: "general",
+        });
+        lastSavedRef.current = clean;
+        setSavedNotes((prev) => [note, ...prev]);
+        setSaveStatus("saved");
+        window.setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch {
+        setSaveStatus("error");
+      }
+    },
+    [shiftId, sessionId],
+  );
+
+  useEffect(() => {
+    if (!draft.trim()) return;
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void persistDraft(draft);
+    }, 30_000);
+    return () => {
+      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    };
+  }, [draft, persistDraft]);
 
   useEffect(() => () => stopDictation(), []);
 
@@ -92,6 +145,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
     if (!clean) return;
     appendDraft(clean);
     setMessage("");
+    void persistDraft([draft.trim(), clean].filter(Boolean).join("\n\n"));
   }
 
   function attachFile(file: File | null) {
@@ -188,7 +242,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
                 color: ended ? MUTED : "#047857",
               }}
             >
-              {ended ? "Ended" : "In progress"}
+              {ended ? "Ended" : saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "In progress"}
             </span>
           </div>
           <h2 className="mt-1 truncate text-lg font-black" style={{ color: TEXT }}>
@@ -275,6 +329,22 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               </p>
             )}
           </div>
+
+          {savedNotes.length > 0 && (
+            <div className="rounded-xl border bg-white p-3" style={{ borderColor: BORDER }}>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+                Note history
+              </p>
+              <ul className="max-h-32 space-y-2 overflow-y-auto text-xs" style={{ color: TEXT }}>
+                {savedNotes.slice(0, 8).map((note) => (
+                  <li key={note.id} className="rounded-lg bg-[#F8F6FE] px-2 py-1.5">
+                    <span className="font-bold">{new Date(note.created_at).toLocaleString()}</span>
+                    <p className="mt-0.5 whitespace-pre-wrap">{note.content}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 

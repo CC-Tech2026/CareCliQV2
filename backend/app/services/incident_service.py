@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import logging
+import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import logging
-
+from .object_storage import upload_evidence_bytes
 from .supabase_client import get_supabase_admin
 from .documentation_normalization_service import normalize_documentation_for_legal_record
 from .compliance_engine import BLOCKING_TRANSLATION_STATUSES, COMPLIANCE_BLOCKED_MESSAGE
@@ -20,6 +23,7 @@ from ..schemas.incident import (
 logger = logging.getLogger(__name__)
 
 TABLE = "incidents"
+DATA_URL_RE = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.DOTALL)
 LEGAL_TEXT_FIELDS = (
     "title",
     "description",
@@ -453,8 +457,10 @@ async def create_incident(
     supabase = get_supabase_admin()
 
     payload: dict[str, Any] = data.model_dump(
-        exclude_none=True
+        exclude_none=True,
+        exclude={"photo_data"},
     )
+    photo_data = list(data.photo_data or [])
 
     try:
         await _apply_legal_record_normalization(
@@ -509,6 +515,17 @@ async def create_incident(
         datetime.now(timezone.utc).isoformat()
     )
 
+    if data.escalate:
+        payload["severity"] = "critical"
+
+    incident_id = str(uuid.uuid4())
+    payload["id"] = incident_id
+
+    if photo_data and org_id:
+        uploaded = _upload_incident_photos(photo_data, str(org_id), incident_id)
+        if uploaded:
+            payload["photo_urls"] = uploaded
+
     result = (
         supabase
         .table(TABLE)
@@ -524,6 +541,34 @@ async def create_incident(
         )
 
     return _enrich(rows[0])
+
+
+def _upload_incident_photos(photo_data: list[str], org_id: str, incident_id: str) -> list[str]:
+    urls: list[str] = []
+    for index, raw in enumerate(photo_data[:6]):
+        if not raw or not isinstance(raw, str):
+            continue
+        mime = "image/jpeg"
+        payload = raw.strip()
+        match = DATA_URL_RE.match(payload)
+        if match:
+            mime = match.group(1)
+            payload = match.group(2)
+        try:
+            binary = base64.b64decode(payload, validate=False)
+        except Exception:
+            continue
+        if not binary:
+            continue
+        ext = "jpg" if "jpeg" in mime or "jpg" in mime else "png"
+        path = f"incidents/{org_id}/{incident_id}/{uuid.uuid4().hex}_{index}.{ext}"
+        try:
+            stored = upload_evidence_bytes(path, binary, mime)
+            if stored.file_url:
+                urls.append(stored.file_url)
+        except Exception as exc:
+            logger.warning("Incident photo upload failed: %s", exc)
+    return urls
 
 
 # ---------------------------------------------------------------------------

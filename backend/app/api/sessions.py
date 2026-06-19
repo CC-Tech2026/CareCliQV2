@@ -16,6 +16,7 @@ from ..services import audit_service
 from .security import require_recent_reauth
 import logging
 import json
+import mimetypes
 import os
 import uuid
 
@@ -162,8 +163,18 @@ async def _persist_session_attachment(
 ) -> dict:
     from ..services.supabase_client import get_supabase_admin
 
-    if file.content_type not in ALLOWED_ATTACHMENT_TYPES:
-        raise HTTPException(status_code=415, detail="Unsupported attachment type")
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if not content_type:
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        content_type = (guessed or "application/octet-stream").lower()
+    if content_type not in ALLOWED_ATTACHMENT_TYPES:
+        if content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported attachment type: {file.content_type or 'unknown'}",
+            )
 
     contents = await file.read()
     if len(contents) == 0:
@@ -177,21 +188,39 @@ async def _persist_session_attachment(
     path = f"{session.get('organization_id')}/{session_id}/{storage_name}"
     bucket = supabase.storage.from_(ATTACHMENT_BUCKET)
 
-    bucket.upload(path, contents, {"content-type": file.content_type, "upsert": "false"})
+    try:
+        bucket.upload(path, contents, {"content-type": content_type, "upsert": "false"})
+    except Exception as exc:
+        logger.exception("Attachment storage upload failed for session %s: %s", session_id, exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Could not upload attachment. Ensure the session-attachments storage bucket exists.",
+        ) from exc
     url = _attachment_url(bucket, path)
 
     record = {
         "session_id": session_id,
         "organization_id": session.get("organization_id"),
-        "uploaded_by": current_user.get("sub"),
+        "uploaded_by": get_user_id(current_user),
         "file_name": original_name,
         "file_path": path,
         "public_url": url,
-        "mime_type": file.content_type,
+        "mime_type": content_type,
         "size_bytes": len(contents),
         "attachment_type": attachment_type,
     }
-    result = supabase.table("session_attachments").insert(record).execute()
+    try:
+        result = supabase.table("session_attachments").insert(record).execute()
+    except Exception as exc:
+        logger.exception("session_attachments insert failed for session %s: %s", session_id, exc)
+        try:
+            bucket.remove([path])
+        except Exception:
+            logger.warning("Could not clean up uploaded attachment after DB insert failure")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save attachment record. Run migration 006 or supabase_patch_features.sql.",
+        ) from exc
     if not result.data:
         try:
             bucket.remove([path])

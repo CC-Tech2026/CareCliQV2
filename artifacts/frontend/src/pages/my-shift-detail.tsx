@@ -24,6 +24,7 @@ import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
 import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLayout";
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
+import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
@@ -45,6 +46,7 @@ import {
   removePendingAction,
 } from "@/lib/shift-offline-queue";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
+import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
   AlertDialog,
@@ -126,6 +128,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [contextOpen, setContextOpen] = useState(true);
   const [offlineContext, setOfflineContext] = useState<CachedParticipantContext | null>(null);
   const [supportOpen, setSupportOpen] = useState(true);
+  const [locationOpen, setLocationOpen] = useState(false);
   const [ackChecked, setAckChecked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
@@ -298,6 +301,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   useEffect(() => {
     const syncPendingClockIn = async () => {
+      if (clockInFlowOpen) return;
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       const pending = await getPendingClockIn(id);
       if (!pending || shift?.visual_state !== "scheduled") return;
@@ -330,9 +334,8 @@ export default function MyShiftDetail({ id }: Props) {
     };
     const onOnline = () => void syncPendingClockIn();
     window.addEventListener("online", onOnline);
-    void syncPendingClockIn();
     return () => window.removeEventListener("online", onOnline);
-  }, [id, shift?.visual_state, invalidate, refetch, toast]);
+  }, [id, shift?.visual_state, clockInFlowOpen, invalidate, refetch, toast]);
 
   const displayVisualState = shift
     ? resolveDisplayVisualState(shift, instantSessionActive)
@@ -444,6 +447,8 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       const updated = await endShift(shift.id, { force: forceEndPending });
       setTasks(updated.tasks ?? []);
+      setNotePanelOpen(false);
+      setInstantSessionActive(false);
       setEndShiftOpen(false);
       setMandatoryAlertOpen(false);
       setForceEndPending(false);
@@ -470,6 +475,10 @@ export default function MyShiftDetail({ id }: Props) {
     if (hasIncompleteMandatoryTasks(activeTasks)) {
       setForceEndPending(false);
       setMandatoryAlertOpen(true);
+      setTasksOpen(true);
+      requestAnimationFrame(() => {
+        document.getElementById("shift-task-checklist")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       return;
     }
     setForceEndPending(false);
@@ -558,6 +567,8 @@ export default function MyShiftDetail({ id }: Props) {
       setContextOpen={setContextOpen}
       supportOpen={supportOpen}
       setSupportOpen={setSupportOpen}
+      locationOpen={locationOpen}
+      setLocationOpen={setLocationOpen}
       ackChecked={ackChecked}
       setAckChecked={setAckChecked}
       busy={busy}
@@ -628,7 +639,10 @@ export default function MyShiftDetail({ id }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-[#F03060] hover:bg-[#d92854]"
-              onClick={() => void handleEndShift()}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleEndShift();
+              }}
               disabled={busy === "end"}
             >
               {forceEndPending ? "End Anyway" : "End Shift"}
@@ -696,6 +710,7 @@ export default function MyShiftDetail({ id }: Props) {
           left={workflow}
           right={
             <LiveProgressNotePanel
+              shiftId={shift.id}
               participantName={shift.participant_name}
               sessionId={shift.session_id}
               onClose={() => setNotePanelOpen(false)}
@@ -767,6 +782,8 @@ function ShiftWorkflow({
   setContextOpen,
   supportOpen,
   setSupportOpen,
+  locationOpen,
+  setLocationOpen,
   ackChecked,
   setAckChecked,
   busy,
@@ -810,6 +827,8 @@ function ShiftWorkflow({
   setContextOpen: (v: boolean) => void;
   supportOpen: boolean;
   setSupportOpen: (v: boolean) => void;
+  locationOpen: boolean;
+  setLocationOpen: (v: boolean) => void;
   ackChecked: boolean;
   setAckChecked: (v: boolean) => void;
   busy: string | null;
@@ -957,8 +976,18 @@ function ShiftWorkflow({
 
       <ShiftProgressStepper visualState={visualState} />
 
+      {!isCompleted && (
+        <ShiftMapPanel
+          shiftId={shift.id}
+          address={shift.participant_address}
+          open={locationOpen}
+          onToggle={() => setLocationOpen(!locationOpen)}
+        />
+      )}
+
       {!isCompleted && visualState === "scheduled" && (
         <Button
+          type="button"
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
           disabled={busy !== null || (needsRiskAck && !ackChecked)}
@@ -1190,6 +1219,7 @@ function ShiftWorkflow({
 
       {(isClockedIn || isSessionActive) && (
         <DuringShiftAccordion
+          shiftId={shift.id}
           participantId={shift.participant_id}
           participantName={shift.participant_name}
           sessionId={shift.session_id}

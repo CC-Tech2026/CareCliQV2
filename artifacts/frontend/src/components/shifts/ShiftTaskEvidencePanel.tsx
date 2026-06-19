@@ -25,10 +25,20 @@ import {
   saveTaskEvidence,
   type TaskEvidenceRecord,
 } from "@/lib/task-evidence-storage";
-import { syncSessionEvidence, uploadSessionAttachment } from "@/services/taskEvidenceService";
+import { syncSessionEvidence } from "@/services/taskEvidenceService";
 import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
 import type { ShiftTask } from "@/services/shiftService";
-import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import {
+  MUTED,
+  PLUM,
+  SOFT,
+  TEXT,
+  canMarkTaskComplete,
+  hasStrongTaskEvidence,
+  isMandatoryTask,
+  isReadyToMarkTaskComplete,
+  resolveEffectiveTaskNote,
+} from "@/lib/shift-utils";
 import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
 
 const NOTE_MAX = 500;
@@ -44,9 +54,10 @@ type Props = {
   sessionId: string;
   participantName?: string;
   disabled?: boolean;
-  onTaskPatch: (patch: Partial<ShiftTask>) => void;
-  onStrongEvidence?: (patch: Partial<ShiftTask>) => void;
-  onMarkComplete: () => void;
+  onTaskPatch: (patch: Partial<ShiftTask>) => void | Promise<void>;
+  onStrongEvidence?: (patch: Partial<ShiftTask>) => void | Promise<void>;
+  onMarkComplete: (merge?: Partial<ShiftTask>) => void | Promise<void>;
+  onReadyChange?: (ready: boolean) => void;
   variant?: "full" | "thread";
 };
 
@@ -73,6 +84,7 @@ export function ShiftTaskEvidencePanel({
   onTaskPatch,
   onStrongEvidence,
   onMarkComplete,
+  onReadyChange,
   variant = "full",
 }: Props) {
   const [note, setNote] = useState(task.note ?? "");
@@ -101,8 +113,13 @@ export function ShiftTaskEvidencePanel({
   const photos = records.filter((r) => r.type === "photo");
   const fileRecords = records.filter((r) => r.type === "file");
   const voiceRecord = records.find((r) => r.type === "voice");
+  const textNoteContents = records.filter((r) => r.type === "text").map((r) => r.content ?? "");
   const hasStrongEvidence = photos.length > 0 || Boolean(voiceRecord);
   const weakNoteOnly = !hasStrongEvidence;
+  const effectiveNote = resolveEffectiveTaskNote(note, task, textNoteContents);
+  const readyToMarkComplete = isReadyToMarkTaskComplete(task, effectiveNote, {
+    hasLocalStrongEvidence: hasStrongEvidence,
+  });
 
   const clearSavedStatusTimer = () => {
     if (savedStatusTimerRef.current != null) {
@@ -189,6 +206,32 @@ export function ShiftTaskEvidencePanel({
   }, [task.task_id, task.note, loadRecords, variant]);
 
   useEffect(() => {
+    onReadyChange?.(readyToMarkComplete);
+  }, [onReadyChange, readyToMarkComplete]);
+
+  // Sync saved thread notes to parent so header status updates without checkbox click.
+  useEffect(() => {
+    if (variant !== "thread") return;
+    const saved = resolveEffectiveTaskNote("", task, textNoteContents);
+    if (saved.length >= 20 && saved !== (task.note ?? "").trim()) {
+      void onTaskPatch({ note: saved });
+    }
+  }, [onTaskPatch, task, textNoteContents, variant]);
+
+  // Debounce draft note to parent while typing (≥20 chars).
+  useEffect(() => {
+    if (variant !== "thread" || disabled) return;
+    const inputDraft = note.trim();
+    if (inputDraft.length < 20) return;
+    const timer = window.setTimeout(() => {
+      if (inputDraft !== (task.note ?? "").trim()) {
+        void onTaskPatch({ note: inputDraft });
+      }
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [disabled, note, onTaskPatch, task.note, variant]);
+
+  useEffect(() => {
     const retry = async () => {
       try {
         await syncEvidenceUploadQueue(sessionId);
@@ -249,15 +292,21 @@ export function ShiftTaskEvidencePanel({
       synced: false,
     };
 
+    await onTaskPatch({ note: trimmed });
     setNote("");
-    onTaskPatch({ note: trimmed });
     await appendThreadEvidence(record);
+
+    if (!task.completed && canMarkTaskComplete({ ...task, note: trimmed })) {
+      await onMarkComplete({ note: trimmed });
+    }
   }, [
     appendThreadEvidence,
     disabled,
     note,
+    onMarkComplete,
     onTaskPatch,
     sessionId,
+    task,
     task.goal_id,
     task.task_id,
   ]);
@@ -265,7 +314,7 @@ export function ShiftTaskEvidencePanel({
   const persistText = useCallback(
     async (text: string) => {
       const trimmed = text.slice(0, NOTE_MAX);
-      onTaskPatch({ note: trimmed });
+      await onTaskPatch({ note: trimmed });
       const existing = records.find((r) => r.type === "text");
       const record: TaskEvidenceRecord = {
         evidence_id: existing?.evidence_id ?? newEvidenceId(),
@@ -309,8 +358,8 @@ export function ShiftTaskEvidencePanel({
       setCameraError("Only image files can be attached.");
       return;
     }
-    if (fileRecords.length >= MAX_FILES) {
-      setCameraError(`Maximum ${MAX_FILES} files per task`);
+    if (photos.length >= MAX_PHOTOS) {
+      setCameraError(`Maximum ${MAX_PHOTOS} photos per task`);
       return;
     }
 
@@ -318,26 +367,30 @@ export function ShiftTaskEvidencePanel({
     setUploadingFile(true);
     setSaveState("saving");
     try {
-      const attachment = await uploadSessionAttachment(sessionId, file);
+      const { dataUrl, bytes } = await compressImageFile(file);
       const record: TaskEvidenceRecord = {
         evidence_id: newEvidenceId(),
         task_id: task.task_id,
         goal_id: task.goal_id ?? null,
         session_id: sessionId,
-        type: "file",
-        content: attachment.file_name || file.name,
-        file_name: attachment.file_name || file.name,
-        file_url: attachment.public_url || attachment.file_path || null,
-        attachment_id: attachment.id,
-        mime_type: attachment.mime_type || file.type,
-        file_size_bytes: file.size,
-        created_at: attachment.created_at || new Date().toISOString(),
+        type: "photo",
+        content: dataUrl,
+        file_name: file.name,
+        file_size_bytes: bytes,
+        mime_type: file.type || "image/jpeg",
+        created_at: new Date().toISOString(),
         synced: false,
+        upload_status: "pending",
+        retry_count: 0,
       };
-      if (!task.completed) onMarkComplete();
-      await appendThreadEvidence(record);
+      await saveTaskEvidence(record);
+      const thumbs = [...(task.photo_thumbnails ?? []), dataUrl].slice(-MAX_PHOTOS);
+      applyStrongEvidence({ photo_evidence: record.evidence_id, photo_thumbnails: thumbs });
+      await queueSync([record]);
+      notifyTaskEvidenceUpdated();
+      if (variant === "thread") markThreadSaved();
     } catch (err) {
-      setCameraError((err as Error).message || "Could not upload file");
+      setCameraError((err as Error).message || "Could not attach image");
       setSaveState("idle");
     } finally {
       setUploadingFile(false);
@@ -515,6 +568,71 @@ export function ShiftTaskEvidencePanel({
     }
   };
 
+  const handleMarkComplete = useCallback(async () => {
+    const trimmed = resolveEffectiveTaskNote(note, task, textNoteContents);
+    if (
+      !isReadyToMarkTaskComplete(task, trimmed, { hasLocalStrongEvidence: hasStrongEvidence })
+    ) {
+      setCameraError(
+        isMandatoryTask(task)
+          ? "Mandatory tasks need a photo, voice memo, or note of at least 20 characters."
+          : "Add at least 20 characters or attach photo/voice before completing.",
+      );
+      return;
+    }
+
+    setCameraError(null);
+    setSaveState("saving");
+    try {
+      const merge: Partial<ShiftTask> = {};
+      if (trimmed) merge.note = trimmed;
+
+      const inputDraft = note.trim();
+      if (trimmed) {
+        await onTaskPatch({ note: trimmed });
+        if (variant === "thread" && inputDraft) {
+          const record: TaskEvidenceRecord = {
+            evidence_id: newEvidenceId(),
+            task_id: task.task_id,
+            goal_id: task.goal_id ?? null,
+            session_id: sessionId,
+            type: "text",
+            content: trimmed.slice(0, NOTE_MAX),
+            created_at: new Date().toISOString(),
+            synced: false,
+          };
+          await appendThreadEvidence(record);
+          setNote("");
+        } else if (variant === "full" && inputDraft) {
+          await persistText(trimmed);
+        }
+      }
+
+      await onMarkComplete(Object.keys(merge).length ? merge : undefined);
+      if (variant === "full") {
+        setSaveState("saved");
+        scheduleSavedStatusClear();
+      }
+    } catch (err) {
+      setCameraError((err as Error).message || "Could not complete task");
+      setSaveState("idle");
+    }
+  }, [
+    appendThreadEvidence,
+    hasStrongEvidence,
+    note,
+    onMarkComplete,
+    onTaskPatch,
+    persistText,
+    scheduleSavedStatusClear,
+    sessionId,
+    task,
+    textNoteContents,
+    task.goal_id,
+    task.task_id,
+    variant,
+  ]);
+
   useEffect(() => () => {
     stopCamera();
     stopRecording();
@@ -649,7 +767,7 @@ export function ShiftTaskEvidencePanel({
           </button>
           <button
             type="button"
-            disabled={disabled || uploadingFile || fileRecords.length >= MAX_FILES}
+            disabled={disabled || uploadingFile || photos.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
             aria-label="Attach image"
@@ -693,8 +811,50 @@ export function ShiftTaskEvidencePanel({
           {saveState === "saving" && (uploadingFile ? "Uploading file…" : "Saving…")}
           {saveState === "saved" && "Saved"}
           {saveState === "offline" && "Offline — saved locally"}
-          {saveState === "idle" && !evidenceAddedFlash && note.length > 0 && `${note.length}/${NOTE_MAX}`}
+          {saveState === "idle" &&
+            !evidenceAddedFlash &&
+            readyToMarkComplete &&
+            !task.completed && (
+              <span className="text-emerald-700">Ready — tap Mark task complete or press Enter</span>
+            )}
+          {saveState === "idle" &&
+            !evidenceAddedFlash &&
+            !readyToMarkComplete &&
+            isMandatoryTask(task) &&
+            !task.completed &&
+            note.trim().length > 0 &&
+            note.trim().length < 20 && (
+              <span className="text-amber-700">
+                {20 - note.trim().length} more character{20 - note.trim().length === 1 ? "" : "s"} to mark complete
+              </span>
+            )}
+          {saveState === "idle" &&
+            !evidenceAddedFlash &&
+            !readyToMarkComplete &&
+            note.length > 0 &&
+            !(isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20) &&
+            `${note.length}/${NOTE_MAX}`}
+          {saveState === "idle" &&
+            !evidenceAddedFlash &&
+            !readyToMarkComplete &&
+            note.length === 0 &&
+            isMandatoryTask(task) &&
+            !task.completed && (
+              <span className="text-amber-700">Type 20+ characters or add photo/voice</span>
+            )}
         </p>
+
+        {readyToMarkComplete && (
+          <Button
+            className="mt-2 h-10 w-full rounded-xl border-0 text-sm font-black text-white"
+            style={{ background: PLUM }}
+            disabled={disabled}
+            onClick={() => void handleMarkComplete()}
+          >
+            <Check size={16} className="mr-2 inline" />
+            Mark task complete
+          </Button>
+        )}
       </div>
     );
   }
@@ -854,25 +1014,37 @@ export function ShiftTaskEvidencePanel({
           />
           <p className="mt-1 text-[10px] font-bold" style={{ color: MUTED }}>
             {note.length}/{NOTE_MAX}
+            {!readyToMarkComplete && isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20 && (
+              <span className="ml-2 text-amber-700">
+                · {20 - note.trim().length} more to mark complete
+              </span>
+            )}
+            {readyToMarkComplete && !task.completed && (
+              <span className="ml-2 text-emerald-700">· Ready to mark complete</span>
+            )}
           </p>
         </section>
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
           <p className="flex items-start gap-2 text-xs font-semibold leading-relaxed text-amber-900">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
-            Completing without evidence will flag this task weak in your compliance report.
+            {isMandatoryTask(task)
+              ? "Mandatory tasks need a photo, voice memo, or note of at least 20 characters."
+              : "Completing without evidence will flag this task weak in your compliance report."}
           </p>
         </div>
 
-        <Button
-          className="h-11 w-full rounded-xl border-0 text-sm font-black text-white"
-          style={{ background: PLUM }}
-          disabled={disabled || task.completed}
-          onClick={onMarkComplete}
-        >
-          <Check size={16} className="mr-2 inline" />
-          Mark task complete
-        </Button>
+        {readyToMarkComplete && (
+          <Button
+            className="h-11 w-full rounded-xl border-0 text-sm font-black text-white"
+            style={{ background: PLUM }}
+            disabled={disabled}
+            onClick={() => void handleMarkComplete()}
+          >
+            <Check size={16} className="mr-2 inline" />
+            Mark task complete
+          </Button>
+        )}
       </div>
     </div>
   );
