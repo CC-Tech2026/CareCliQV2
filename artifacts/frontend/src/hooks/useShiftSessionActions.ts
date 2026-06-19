@@ -15,6 +15,7 @@ import {
   startShiftSession,
   type WorkerShift,
 } from "@/services/shiftService";
+import { shiftNeedsRiskAck } from "@/lib/shift-utils";
 
 type Options = {
   shiftId: string;
@@ -142,6 +143,15 @@ export function useShiftSessionActions({
 
   const startSession = useCallback(async () => {
     if (!shift) return { ok: false as const };
+
+    if (shiftNeedsRiskAck(shift)) {
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
+        variant: "destructive",
+      });
+      return { ok: false as const };
+    }
 
     const startedAt = new Date().toISOString();
     setInstantSessionActive(true);

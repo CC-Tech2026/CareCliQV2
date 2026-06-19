@@ -6,19 +6,16 @@ import { useShiftTimer } from "@/hooks/useShiftTimer";
 import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronDown,
   Loader2,
   MapPin,
   Navigation,
   Phone,
-  ShieldAlert,
   Mic,
   Square,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DuringShiftAccordion } from "@/components/shifts/DuringShiftAccordion";
 import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import { SessionTimeline } from "@/components/shifts/SessionTimeline";
@@ -32,6 +29,7 @@ import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
+import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
 import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
@@ -83,7 +81,9 @@ import {
   isMandatoryTask,
   resolveActiveShiftTasks,
   shiftDurationMinutes,
+  shiftHasRiskAlerts,
   shiftInitials,
+  shiftNeedsRiskAck,
   taskEvidenceScore,
   taskFeedSummary,
   timerAnchorIso,
@@ -128,6 +128,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [forceEndPending, setForceEndPending] = useState(false);
+  const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -160,6 +161,14 @@ export default function MyShiftDetail({ id }: Props) {
     if (shift?.risks_acknowledged) setAckChecked(true);
     if (shift?.tasks?.length) setTasks(shift.tasks);
   }, [shift?.risks_acknowledged, shift?.tasks]);
+
+  useEffect(() => {
+    if (!shift) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("focus") === "safety" || shiftNeedsRiskAck(shift)) {
+      setSafetyOpen(true);
+    }
+  }, [shift]);
 
   useEffect(() => {
     if (!shift?.participant_id) return;
@@ -216,8 +225,16 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       await acknowledgeShiftRisks(shift.id);
       setAckChecked(true);
+      setAckConfirmOpen(false);
       invalidateShifts();
       await refetch();
+    } catch (err) {
+      setAckChecked(false);
+      toast({
+        title: "Could not acknowledge risks",
+        description: (err as Error).message || "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setBusy(null);
     }
@@ -225,9 +242,15 @@ export default function MyShiftDetail({ id }: Props) {
 
   const handleClockIn = async () => {
     if (!shift) return;
-    const hasAlerts = (shift.health_alerts?.length ?? 0) > 0;
-    const risksAcked = shift.risks_acknowledged ?? false;
-    if (hasAlerts && !risksAcked && !ackChecked) return;
+    if (shiftNeedsRiskAck(shift) && !ackChecked) {
+      setSafetyOpen(true);
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before clocking in.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusy("clock");
     try {
       const updated = await clockInShift(shift.id);
@@ -260,6 +283,15 @@ export default function MyShiftDetail({ id }: Props) {
 
   const handleStartSession = async () => {
     if (!shift || busy !== null) return;
+    if (shiftNeedsRiskAck(shift)) {
+      setSafetyOpen(true);
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusy("start");
     try {
       await startSession();
@@ -414,7 +446,13 @@ export default function MyShiftDetail({ id }: Props) {
       ackChecked={ackChecked}
       setAckChecked={setAckChecked}
       busy={busy}
-      onAcknowledge={handleAcknowledge}
+      onRequestAcknowledge={() => setAckConfirmOpen(true)}
+      onViewSupportInstructions={() => {
+        setSupportOpen(true);
+        requestAnimationFrame(() => {
+          document.getElementById("shift-support-instructions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }}
       onClockIn={handleClockIn}
       onStartSession={handleStartSession}
       onRequestClockOut={() => setClockOutOpen(true)}
@@ -469,6 +507,30 @@ export default function MyShiftDetail({ id }: Props) {
               disabled={busy === "end"}
             >
               {forceEndPending ? "End Anyway" : "End Shift"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={ackConfirmOpen}
+        onOpenChange={(open) => {
+          setAckConfirmOpen(open);
+          if (!open && !shift?.risks_acknowledged) setAckChecked(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acknowledge safety alerts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirm you have read and understand all safety alerts for {shift?.participant_name ?? "this participant"}.
+              This will be logged with your name and timestamp.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
+              Acknowledge Risks
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -583,7 +645,8 @@ function ShiftWorkflow({
   ackChecked,
   setAckChecked,
   busy,
-  onAcknowledge,
+  onRequestAcknowledge,
+  onViewSupportInstructions,
   onClockIn,
   onStartSession,
   onRequestClockOut,
@@ -625,7 +688,8 @@ function ShiftWorkflow({
   ackChecked: boolean;
   setAckChecked: (v: boolean) => void;
   busy: string | null;
-  onAcknowledge: () => void;
+  onRequestAcknowledge: () => void;
+  onViewSupportInstructions: () => void;
   onClockIn: () => void;
   onStartSession: () => void;
   onRequestClockOut: () => void;
@@ -639,8 +703,9 @@ function ShiftWorkflow({
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
   const durationLabel = formatDurationLabel(duration);
-  const hasAlerts = (shift.health_alerts?.length ?? 0) > 0;
+  const hasAlerts = shiftHasRiskAlerts(shift);
   const risksAcked = shift.risks_acknowledged ?? false;
+  const needsRiskAck = shiftNeedsRiskAck(shift);
   const showTasks =
     visualState === "clocked_in" ||
     visualState === "session_active";
@@ -771,7 +836,7 @@ function ShiftWorkflow({
         <Button
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
-          disabled={busy !== null || (hasAlerts && !risksAcked && !ackChecked)}
+          disabled={busy !== null || (needsRiskAck && !ackChecked)}
           onClick={onClockIn}
         >
           {busy === "clock" ? (
@@ -792,7 +857,7 @@ function ShiftWorkflow({
             participantName={shift.participant_name}
             onStartSession={onStartSession}
             isLoading={busy === "start"}
-            disabled={busy !== null && busy !== "start"}
+            disabled={(busy !== null && busy !== "start") || needsRiskAck}
           />
           <button
             type="button"
@@ -862,44 +927,32 @@ function ShiftWorkflow({
         </div>
       )}
 
-      {hasAlerts && !risksAcked && visualState === "scheduled" && (
-        <RisksAcknowledgementSection
-          shift={shift}
-          safetyOpen={safetyOpen}
-          setSafetyOpen={setSafetyOpen}
+      {needsRiskAck && !isCompleted && (
+        <ParticipantRiskAcknowledgementSection
+          alerts={shift.health_alerts ?? []}
+          open={safetyOpen}
+          onToggle={() => setSafetyOpen(!safetyOpen)}
           ackChecked={ackChecked}
-          setAckChecked={setAckChecked}
-          busy={busy}
-          onAcknowledge={onAcknowledge}
+          busy={busy === "ack"}
+          onRequestAcknowledge={onRequestAcknowledge}
+          onUncheck={() => setAckChecked(false)}
+          onViewSupportInstructions={onViewSupportInstructions}
         />
       )}
 
       {hasAlerts && risksAcked && (
-        <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4">
-          <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
-            <CheckCircle2 size={16} /> Risks acknowledged
-          </p>
-          {shift.risks_acknowledged_at && (
-            <p className="mt-1 text-xs font-semibold text-emerald-700">
-              Logged {new Date(shift.risks_acknowledged_at).toLocaleString()}
-            </p>
-          )}
-          <ul className="mt-3 space-y-2">
-            {shift.health_alerts!.map((alert, i) => (
-              <li
-                key={i}
-                className={cn(
-                  "rounded-xl px-3 py-2 text-sm font-semibold",
-                  alert.severity === "critical"
-                    ? "border border-red-200 bg-red-50 text-red-900"
-                    : "border border-orange-200 bg-orange-50 text-orange-900",
-                )}
-              >
-                {alert.title || alert.detail}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <ParticipantRiskAcknowledgementSection
+          alerts={shift.health_alerts ?? []}
+          open={safetyOpen}
+          onToggle={() => setSafetyOpen(!safetyOpen)}
+          acknowledged
+          acknowledgedAt={shift.risks_acknowledged_at}
+          acknowledgedByName={shift.risks_acknowledged_by_name}
+          ackChecked
+          busy={false}
+          onRequestAcknowledge={onRequestAcknowledge}
+          onUncheck={() => {}}
+        />
       )}
 
       <ParticipantProfileCard
@@ -927,6 +980,7 @@ function ShiftWorkflow({
         instructions={shift.support_instructions}
         open={supportOpen}
         onToggle={() => setSupportOpen(!supportOpen)}
+        sectionId="shift-support-instructions"
       />
 
       <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
@@ -1020,69 +1074,5 @@ function ShiftWorkflow({
         />
       )}
     </div>
-  );
-}
-
-function RisksAcknowledgementSection({
-  shift,
-  safetyOpen,
-  setSafetyOpen,
-  ackChecked,
-  setAckChecked,
-  busy,
-  onAcknowledge,
-}: {
-  shift: WorkerShift;
-  safetyOpen: boolean;
-  setSafetyOpen: (v: boolean) => void;
-  ackChecked: boolean;
-  setAckChecked: (v: boolean) => void;
-  busy: string | null;
-  onAcknowledge: () => void;
-}) {
-  return (
-    <section className="rounded-2xl border-2 border-red-200 bg-red-50/60 p-4">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between text-left"
-        onClick={() => setSafetyOpen(!safetyOpen)}
-      >
-        <span className="flex items-center gap-2 text-sm font-black text-red-700">
-          <ShieldAlert size={18} /> Safety — acknowledge before clock-in
-        </span>
-        <ChevronDown size={18} className={cn("transition", safetyOpen && "rotate-180")} />
-      </button>
-      {safetyOpen && (
-        <ul className="mt-3 space-y-2">
-          {shift.health_alerts!.map((alert, i) => (
-            <li
-              key={i}
-              className={cn(
-                "rounded-xl px-3 py-2 text-sm font-semibold",
-                alert.severity === "critical"
-                  ? "border border-red-300 bg-white text-red-900"
-                  : "border border-orange-300 bg-white text-orange-900",
-              )}
-            >
-              {alert.title || alert.detail}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-white p-3">
-        <Checkbox
-          id="ack-risks"
-          checked={ackChecked}
-          disabled={busy === "ack"}
-          onCheckedChange={(v) => {
-            if (v) void onAcknowledge();
-            else setAckChecked(false);
-          }}
-        />
-        <label htmlFor="ack-risks" className="text-sm font-bold leading-snug" style={{ color: TEXT }}>
-          I acknowledge the risks and safety alerts for this participant
-        </label>
-      </div>
-    </section>
   );
 }

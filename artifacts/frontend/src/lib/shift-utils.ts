@@ -305,3 +305,24 @@ export function resolveActiveShiftTasks(shiftTasks: ShiftTask[] | undefined, loc
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
   return tasks.some((t) => isMandatoryTask(t) && !t.completed);
 }
+
+type ShiftRiskFields = {
+  health_alerts?: unknown[] | null;
+  has_risk_alerts?: boolean;
+  allergies?: string | null;
+  health_flags?: string | null;
+  risks_acknowledged?: boolean;
+};
+
+export function shiftHasRiskAlerts(shift: ShiftRiskFields) {
+  return (
+    (shift.health_alerts?.length ?? 0) > 0 ||
+    !!shift.has_risk_alerts ||
+    !!shift.allergies?.trim() ||
+    !!shift.health_flags?.trim()
+  );
+}
+
+export function shiftNeedsRiskAck(shift: ShiftRiskFields) {
+  return shiftHasRiskAlerts(shift) && !shift.risks_acknowledged;
+}

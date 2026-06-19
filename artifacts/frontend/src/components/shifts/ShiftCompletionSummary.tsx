@@ -57,6 +57,17 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
             </div>
           </>
         )}
+        {shift.risks_acknowledged_at && (
+          <div className="rounded-xl bg-white p-3 sm:col-span-2">
+            <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              Safety acknowledgement
+            </dt>
+            <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
+              {new Date(shift.risks_acknowledged_at).toLocaleString()}
+              {shift.risks_acknowledged_by_name ? ` · ${shift.risks_acknowledged_by_name}` : ""}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <p className="mt-4 text-xs font-semibold" style={{ color: MUTED }}>
