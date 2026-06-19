@@ -8,6 +8,14 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import owner_payload
+from .check_in_service import (
+    log_shift_check_in,
+    normalize_client_timestamp,
+    resolve_participant_coordinates,
+    validate_clock_in_window,
+    verify_gps_location,
+    verify_qr_token_for_shift,
+)
 from .session_service import _prepare_session_payload
 from .supabase_client import get_supabase_admin
 
@@ -634,6 +642,9 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "service_category": shift.get("service_category") or "CORE",
         "participant_dob": shift.get("participant_dob"),
         "participant_gender": shift.get("participant_gender"),
+        "clock_in_method": shift.get("clock_in_method"),
+        "clock_in_location": shift.get("clock_in_location"),
+        "clock_in_verified": bool(shift.get("clock_in_verified")),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
     return payload
@@ -1211,10 +1222,72 @@ def _default_tasks_copy() -> list[dict[str, Any]]:
     return copy.deepcopy(DEFAULT_SHIFT_TASKS)
 
 
+def _apply_verified_check_in(
+    shift: dict[str, Any],
+    organization_id: str,
+    *,
+    method: str,
+    location: Optional[dict[str, Any]] = None,
+    qr_token: Optional[str] = None,
+) -> dict[str, Any]:
+    method = (method or "").strip().lower()
+    if method not in {"gps", "qr"}:
+        raise ValueError("Check-in method must be gps or qr.")
+
+    verified = False
+    verification_distance: Optional[float] = None
+    qr_code_id: Optional[str] = None
+
+    if method == "gps":
+        if not location or location.get("lat") is None or location.get("lng") is None:
+            raise ValueError("GPS check-in requires your device location.")
+        worker_lat = float(location["lat"])
+        worker_lng = float(location["lng"])
+        accuracy = location.get("accuracy")
+        coords = resolve_participant_coordinates(
+            shift,
+            shift.get("participant_id"),
+            organization_id,
+        )
+        if coords:
+            ok, verification_distance = verify_gps_location(
+                worker_lat,
+                worker_lng,
+                coords[0],
+                coords[1],
+                accuracy=float(accuracy) if accuracy is not None else None,
+            )
+            if not ok:
+                dist_label = int(verification_distance or 0)
+                raise ValueError(
+                    f"You are too far from the participant location ({dist_label}m away). "
+                    "Move closer or scan the location QR code."
+                )
+            verified = True
+    elif method == "qr":
+        if not qr_token:
+            raise ValueError("QR check-in requires a scanned code.")
+        _, qr_code_id, _ = verify_qr_token_for_shift(qr_token, shift, organization_id)
+        verified = True
+
+    return {
+        "clock_in_method": method,
+        "clock_in_location": location,
+        "clock_in_verified": verified,
+        "_verification_distance_meters": verification_distance,
+        "_qr_code_id": qr_code_id,
+    }
+
+
 def clock_in_shift(
     shift_id: str,
     worker_id: str,
     organization_id: str,
+    *,
+    method: Optional[str] = None,
+    location: Optional[dict[str, Any]] = None,
+    qr_token: Optional[str] = None,
+    client_timestamp: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     shift = get_shift_by_id(shift_id)
     if not shift:
@@ -1228,7 +1301,26 @@ def clock_in_shift(
 
     _ensure_risks_acknowledged_if_required(shift, organization_id)
 
-    now = _now_iso()
+    already_clocked = bool(shift.get("clocked_in_at"))
+    check_in_meta: dict[str, Any] = {}
+    verification_distance: Optional[float] = None
+    qr_code_id: Optional[str] = None
+
+    if not already_clocked:
+        validate_clock_in_window(str(shift.get("scheduled_start") or ""))
+        if method:
+            check_in_meta = _apply_verified_check_in(
+                shift,
+                organization_id,
+                method=method,
+                location=location,
+                qr_token=qr_token,
+            )
+            verification_distance = check_in_meta.pop("_verification_distance_meters", None)
+            qr_code_id = check_in_meta.pop("_qr_code_id", None)
+
+    normalized_client_ts = normalize_client_timestamp(client_timestamp)
+    now = normalized_client_ts or _now_iso()
     tasks = shift.get("tasks") or []
     if not tasks:
         tasks = _default_tasks_copy()
@@ -1237,8 +1329,9 @@ def clock_in_shift(
         "status": "in_progress",
         "clocked_in_at": shift.get("clocked_in_at") or now,
         "tasks": tasks,
-        "updated_at": now,
+        "updated_at": _now_iso(),
     }
+    update_payload.update(check_in_meta)
     if not _should_keep_shift_session_link(shift):
         update_payload["session_id"] = None
 
@@ -1254,9 +1347,41 @@ def clock_in_shift(
         updated = rows[0] if rows else {**shift, **update_payload}
     except Exception as exc:
         if _is_missing_schema_error(exc):
-            logger.debug("shifts table unavailable: %s", exc)
-            return None
-        raise
+            stripped = {
+                key: value
+                for key, value in update_payload.items()
+                if key not in {"clock_in_method", "clock_in_location", "clock_in_verified"}
+            }
+            try:
+                resp = (
+                    get_supabase_admin()
+                    .table("shifts")
+                    .update(stripped)
+                    .eq("id", shift_id)
+                    .execute()
+                )
+                rows = resp.data or []
+                updated = rows[0] if rows else {**shift, **stripped}
+            except Exception as retry_exc:
+                if _is_missing_schema_error(retry_exc):
+                    logger.debug("shifts table unavailable: %s", retry_exc)
+                    return None
+                raise
+        else:
+            raise
+
+    if check_in_meta and not already_clocked:
+        log_shift_check_in(
+            shift_id=shift_id,
+            worker_id=worker_id,
+            organization_id=organization_id,
+            method=str(check_in_meta.get("clock_in_method") or method or "manual"),
+            location=check_in_meta.get("clock_in_location"),
+            verified=bool(check_in_meta.get("clock_in_verified")),
+            verification_distance_meters=verification_distance,
+            qr_code_id=qr_code_id,
+            client_timestamp=normalized_client_ts,
+        )
 
     session = _get_session_for_shift(updated)
     return _shift_card_payload(updated, session)

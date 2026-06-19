@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -83,6 +83,19 @@ class CustomTaskCreate(BaseModel):
 
 class EndShiftBody(BaseModel):
     force: bool = False
+
+
+class ClockInLocationBody(BaseModel):
+    lat: float
+    lng: float
+    accuracy: Optional[float] = None
+
+
+class ClockInBody(BaseModel):
+    method: Literal["gps", "qr"]
+    location: Optional[ClockInLocationBody] = None
+    qr_token: Optional[str] = None
+    client_timestamp: Optional[str] = None
 
 
 class TaskEvidenceItem(BaseModel):
@@ -604,23 +617,54 @@ async def worker_shift_participant_preferences(shift_id: str, current_user: dict
 
 
 @router.post("/shifts/{shift_id}/clock-in")
-async def worker_clock_in(shift_id: str, current_user: dict = Depends(get_current_user)):
-    """Clock in to a shift and initialise the task checklist (CARECLIQV2-116 / CARECLIQV2-134)."""
+async def worker_clock_in(
+    shift_id: str,
+    body: Optional[ClockInBody] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Clock in to a shift with optional GPS/QR verification (CARECLIQV2-197)."""
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
+    location = body.location.model_dump() if body and body.location else None
     try:
-        shift = shift_service.clock_in_shift(shift_id, worker_id, org_id)
+        shift = shift_service.clock_in_shift(
+            shift_id,
+            worker_id,
+            org_id,
+            method=body.method if body else None,
+            location=location,
+            qr_token=body.qr_token if body else None,
+            client_timestamp=body.client_timestamp if body else None,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        message = str(exc)
+        status_code = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if any(
+                phrase in message.lower()
+                for phrase in ("too early", "too far", "window closed", "requires", "invalid qr", "qr code")
+            )
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=status_code, detail=message)
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    action_type = (
+        "worker.shift.checked_in_verified"
+        if body and body.method
+        else "worker.shift.clocked_in"
+    )
     await audit_service.log_action(
-        action_type="worker.shift.clocked_in",
+        action_type=action_type,
         entity_type="shift",
         entity_id=shift_id,
         user_id=worker_id,
         organization_id=org_id,
+        details={
+            "method": body.method if body else None,
+            "verified": shift.get("clock_in_verified"),
+        },
     )
     return shift
 

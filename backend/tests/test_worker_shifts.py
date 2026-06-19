@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from backend.app.services import shift_service
+
+
+def _shift_window_start(minutes_from_now: float = 5) -> str:
+    return (datetime.now(timezone.utc) + timedelta(minutes=minutes_from_now)).isoformat()
 
 
 def _sample_shift(**overrides):
@@ -18,8 +22,8 @@ def _sample_shift(**overrides):
         "worker_id": "worker-1",
         "participant_id": "patient-1",
         "participant_name": "James Chen",
-        "scheduled_start": f"{date.today().isoformat()}T09:00:00+00:00",
-        "scheduled_end": f"{date.today().isoformat()}T11:00:00+00:00",
+        "scheduled_start": _shift_window_start(),
+        "scheduled_end": (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
         "status": "scheduled",
         "tasks": [],
     }
@@ -752,3 +756,60 @@ def test_get_participant_risks_for_worker(mock_get, mock_admin, _mock_session):
     assert payload["shift_id"] == "shift-1"
     assert len(payload["alerts"]) >= 1
     assert payload["risks_acknowledged"] is False
+
+
+@patch("backend.app.services.shift_service.log_shift_check_in")
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.resolve_participant_coordinates", return_value=(-33.8688, 151.2093))
+@patch("backend.app.services.shift_service.get_supabase_admin")
+def test_clock_in_with_gps_verification(mock_admin, _mock_coords, _mock_ack, _mock_log):
+    shift = _sample_shift(participant_latitude=-33.8688, participant_longitude=151.2093)
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{
+            **shift,
+            "status": "in_progress",
+            "clocked_in_at": datetime.now(timezone.utc).isoformat(),
+            "clock_in_method": "gps",
+            "clock_in_verified": True,
+            "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS),
+        }]
+    )
+
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        result = shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
+        )
+
+    assert result is not None
+    assert result["clock_in_method"] == "gps"
+    assert result["clock_in_verified"] is True
+    _mock_log.assert_called_once()
+
+
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.resolve_participant_coordinates", return_value=(-33.8688, 151.2093))
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_gps_rejects_far_location(mock_get, _mock_coords, _mock_ack):
+    mock_get.return_value = _sample_shift()
+    with pytest.raises(ValueError, match="too far"):
+        shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -34.0, "lng": 151.5},
+        )
+
+
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_rejects_outside_time_window(mock_get, _mock_ack):
+    mock_get.return_value = _sample_shift(scheduled_start=_shift_window_start(60))
+    with pytest.raises(ValueError, match="Too early"):
+        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
