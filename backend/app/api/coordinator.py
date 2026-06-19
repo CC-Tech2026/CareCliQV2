@@ -15,7 +15,13 @@ from ..services.pattern_detection_service import (
     get_active_patterns,
     run_pattern_detection_for_org,
 )
-from ..services import participant_service, session_service
+from ..services import participant_service, session_service, shift_service
+from ..services.notification_service import (
+    notify_certification_expiry,
+    notify_coordinator_message,
+    notify_feedback_received,
+    notify_shift_change,
+)
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -132,7 +138,7 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
     try:
         memberships = (
             supabase.table("organization_members")
-            .select("user_id, role, is_active, joined_at")
+            .select("user_id, role, is_active, joined_at, employee_id")
             .eq("organization_id", org_id)
             .execute()
         )
@@ -153,7 +159,10 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
         try:
             profiles = (
                 supabase.table("users")
-                .select("id, email, full_name, role, is_active, last_login, organization_id")
+                .select(
+                    "id, email, full_name, role, is_active, last_login, organization_id, "
+                    "preferred_contact_method, phone"
+                )
                 .in_("id", user_ids)
                 .eq("organization_id", org_id)
                 .execute()
@@ -177,6 +186,9 @@ async def _team(org_id: str, coordinator_user: dict | None = None) -> list[dict]
             "is_active": bool(row.get("is_active")),
             "joined_at": row.get("joined_at"),
             "last_login": profile.get("last_login"),
+            "employee_id": row.get("employee_id"),
+            "preferred_contact_method": profile.get("preferred_contact_method"),
+            "phone": profile.get("phone"),
         })
     return output
 
@@ -204,7 +216,10 @@ async def _team_fallback(org_id: str, coordinator_user: dict | None = None) -> l
     try:
         query = (
             supabase.table("users")
-            .select("id, email, full_name, role, is_active, last_login, organization_id")
+            .select(
+                "id, email, full_name, role, is_active, last_login, organization_id, "
+                "preferred_contact_method, phone"
+            )
             .eq("organization_id", org_id)
             .in_("role", ["support_worker", "allied_health", "support_coordinator"])
         )
@@ -476,6 +491,14 @@ async def flag_session_for_review(
         supabase.table("sessions").update(update_data).eq("id", session_id).execute()
 
     try:
+        existing = supabase.table("sessions").select(
+            "id, participant_id, patient_id, worker_id, support_worker_id, owner_user_id, organization_id"
+        ).eq("id", session_id).maybe_single().execute()
+        session_row = existing.data if existing else None
+    except Exception:
+        session_row = None
+
+    try:
         _do_update()
     except Exception as e:
         err = str(e)
@@ -494,6 +517,23 @@ async def flag_session_for_review(
                 raise HTTPException(status_code=500, detail=f"Flag update failed: {e2}")
         else:
             raise HTTPException(status_code=500, detail=f"Flag update failed: {e}")
+
+    if body.flagged and session_row:
+        worker_id = str(
+            session_row.get("worker_id")
+            or session_row.get("support_worker_id")
+            or session_row.get("owner_user_id")
+            or ""
+        )
+        if worker_id:
+            participant_id = str(session_row.get("participant_id") or session_row.get("patient_id") or "") or None
+            await notify_feedback_received(
+                worker_id=worker_id,
+                org_id=org_id,
+                session_id=session_id,
+                review_note=body.review_note,
+                participant_id=participant_id,
+            )
 
     return {"session_id": session_id, "flagged": body.flagged}
 
@@ -696,10 +736,7 @@ async def bulk_reminders(
     body: BulkRemindersBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Send an in-app training_reminder alert to each selected worker."""
-    from ..services import alert_service
-    from ..schemas.alert import AlertCreate
-
+    """Send certification expiry notifications to selected workers (respects notification prefs)."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
     try:
@@ -715,20 +752,109 @@ async def bulk_reminders(
             errors.append(f"worker {worker_id} not in organisation")
             continue
         try:
-            await alert_service.create_alert(
-                AlertCreate(
-                    alert_type="training_reminder",
-                    severity="medium",
-                    title="Credential reminder",
-                    message=body.message,
-                    recipient_user_id=worker_id,
-                )
+            await notify_certification_expiry(
+                user_id=worker_id,
+                org_id=org_id,
+                credential_title="Credential compliance",
+                expiry_date=date.today().isoformat(),
+                status="expiring",
+                credential_id=f"bulk:{worker_id}:{date.today().isoformat()}",
+                custom_message=body.message,
             )
             count += 1
         except Exception as exc:
             errors.append(str(exc))
 
-    return {"alerts_created": count, "errors": errors}
+    return {"notifications_sent": count, "errors": errors}
+
+
+class WorkerMessageBody(BaseModel):
+    title: str = "Message from your coordinator"
+    message: str
+
+
+@router.post("/workers/{worker_id}/message")
+async def send_worker_message(
+    worker_id: str,
+    body: WorkerMessageBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a coordinator message to a worker (in-app + email per notification prefs)."""
+    org_id = _require_coordinator(current_user)
+    message = (body.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Message is required.")
+
+    supabase = get_supabase_admin()
+    try:
+        member = (
+            supabase.table("organization_members")
+            .select("user_id")
+            .eq("organization_id", org_id)
+            .eq("user_id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        if not member or not member.data:
+            raise HTTPException(status_code=404, detail="Worker not found in this organisation.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Worker lookup failed: {exc}")
+
+    result = await notify_coordinator_message(
+        user_id=worker_id,
+        org_id=org_id,
+        title=(body.title or "Message from your coordinator").strip(),
+        message=message,
+    )
+    return {"worker_id": worker_id, "delivered": result}
+
+
+class ShiftScheduleUpdateBody(BaseModel):
+    scheduled_start: Optional[str] = None
+    scheduled_end: Optional[str] = None
+
+
+@router.patch("/shifts/{shift_id}/schedule")
+async def update_shift_schedule(
+    shift_id: str,
+    body: ShiftScheduleUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reschedule a shift and notify the assigned worker."""
+    org_id = _require_coordinator(current_user)
+    if not body.scheduled_start and not body.scheduled_end:
+        raise HTTPException(status_code=422, detail="Provide scheduled_start and/or scheduled_end.")
+
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+
+    update_payload: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    changes: list[str] = []
+    if body.scheduled_start:
+        update_payload["scheduled_start"] = body.scheduled_start
+        changes.append("start time updated")
+    if body.scheduled_end:
+        update_payload["scheduled_end"] = body.scheduled_end
+        changes.append("end time updated")
+
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shifts")
+            .update(update_payload)
+            .eq("id", shift_id)
+            .execute()
+        )
+        updated = (result.data or [None])[0] or {**shift, **update_payload}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
+
+    summary = " and ".join(changes) if changes else "Schedule updated"
+    await notify_shift_change(shift=updated, change_summary=summary.capitalize() + ".")
+    return {"shift_id": shift_id, "shift": updated}
 
 
 @router.get("/workers/{worker_id}/clients")

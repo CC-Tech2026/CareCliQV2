@@ -8,7 +8,7 @@ type Options = {
 };
 
 export function useIdleTimeout({ enabled, onTimeout }: Options) {
-  const timeoutMinutes = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES || 15);
+  const timeoutMinutes = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES || 30);
   const warningSeconds = Number(import.meta.env.VITE_IDLE_WARNING_SECONDS || 120);
   const timeoutMs = Math.max(1, timeoutMinutes) * 60 * 1000;
   const warningMs = Math.min(Math.max(10, warningSeconds) * 1000, timeoutMs);

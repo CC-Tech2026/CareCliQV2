@@ -1,6 +1,22 @@
 import { apiFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 
+export type PreferredContactMethod = "phone_call" | "sms" | "in_app_message";
+
+export type NotificationEvent =
+  | "shift_reminder"
+  | "shift_change"
+  | "coordinator_message"
+  | "feedback_received"
+  | "certification_expiry";
+
+export type NotificationChannel = "push" | "email" | "sms";
+
+export type NotificationPreferences = Record<
+  NotificationEvent,
+  Record<NotificationChannel, boolean>
+>;
+
 export type UserProfile = {
   id: string;
   email: string;
@@ -21,6 +37,11 @@ export type UserProfile = {
   professional_indemnity_confirmed?: boolean;
   business_name?: string | null;
   profile_photo_url?: string | null;
+  employee_id?: string | null;
+  membership_role?: string | null;
+  preferred_contact_method?: PreferredContactMethod | null;
+  pending_email?: string | null;
+  joined_at?: string | null;
 };
 
 export async function getMe(): Promise<UserProfile> {
@@ -34,7 +55,46 @@ export async function updateMe(payload: Partial<UserProfile>): Promise<UserProfi
   });
 }
 
-export async function uploadProfilePhoto(file: File): Promise<UserProfile> {
+export async function updateContact(payload: {
+  email?: string;
+  phone?: string;
+  preferred_contact_method?: PreferredContactMethod;
+}): Promise<{ profile: UserProfile; message: string }> {
+  return jsonFetch("/api/users/me/contact", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<{ message: string }> {
+  return jsonFetch("/api/users/me/change-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getNotificationPreferences(deviceId: string): Promise<{
+  device_id: string;
+  preferences: NotificationPreferences;
+}> {
+  return jsonFetch(`/api/users/me/notification-preferences?device_id=${encodeURIComponent(deviceId)}`);
+}
+
+export async function saveNotificationPreferences(
+  deviceId: string,
+  preferences: NotificationPreferences,
+): Promise<{ device_id: string; preferences: NotificationPreferences }> {
+  return jsonFetch("/api/users/me/notification-preferences", {
+    method: "PUT",
+    body: JSON.stringify({ device_id: deviceId, preferences }),
+  });
+}
+
+export async function uploadProfilePhoto(file: File): Promise<{ profile_photo_url?: string | null }> {
   const formData = new FormData();
   formData.append("file", file);
   const response = await apiFetch("/api/users/me/photo", {
@@ -48,13 +108,12 @@ export async function uploadProfilePhoto(file: File): Promise<UserProfile> {
   return response.json();
 }
 
-export async function deleteProfilePhoto(): Promise<UserProfile> {
+export async function deleteProfilePhoto(): Promise<void> {
   const response = await apiFetch("/api/users/me/photo", { method: "DELETE" });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail || "Could not remove profile photo.");
   }
-  return { id: "", email: "", role: "", profile_photo_url: null };
 }
 
 export async function resendVerificationEmail(email: string) {
@@ -63,3 +122,23 @@ export async function resendVerificationEmail(email: string) {
     body: JSON.stringify({ email }),
   });
 }
+
+export const NOTIFICATION_EVENT_LABELS: Record<NotificationEvent, string> = {
+  shift_reminder: "Shift reminder",
+  shift_change: "Shift change",
+  coordinator_message: "Coordinator message",
+  feedback_received: "Feedback received",
+  certification_expiry: "Certification expiry",
+};
+
+export const NOTIFICATION_CHANNEL_LABELS: Record<NotificationChannel, string> = {
+  push: "Push",
+  email: "Email",
+  sms: "SMS",
+};
+
+export const PREFERRED_CONTACT_LABELS: Record<PreferredContactMethod, string> = {
+  phone_call: "Phone call",
+  sms: "SMS",
+  in_app_message: "In-app message",
+};

@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     smtp_from_email: str = os.environ.get("SMTP_FROM_EMAIL", os.environ.get("SMTP_USERNAME", ""))
     smtp_from_name: str = os.environ.get("SMTP_FROM_NAME", "CareScribe")
     smtp_use_starttls: bool = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
+    email_queue_workers: int = int(os.environ.get("EMAIL_QUEUE_WORKERS", "1") or 1)
+    email_queue_max_size: int = int(os.environ.get("EMAIL_QUEUE_MAX_SIZE", "1000") or 1000)
+    notification_scheduler_enabled: bool = os.environ.get("NOTIFICATION_SCHEDULER_ENABLED", "true").lower() == "true"
+    notification_scheduler_interval_minutes: int = int(
+        os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15
+    )
+    shift_reminder_hours_ahead: int = int(os.environ.get("SHIFT_REMINDER_HOURS_AHEAD", "24") or 24)
 
     # Task evidence object storage (CARECLIQV2-230)
     # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below

@@ -4,12 +4,14 @@ import logging
 import smtplib
 import ssl
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
 from html import escape
 from typing import Any
 
 from ..core.config import settings
+from .email_queue import get_email_queue
 
 logger = logging.getLogger(__name__)
 
@@ -55,29 +57,53 @@ def delivery_state() -> EmailDelivery:
             status="not_configured",
             message="SMTP settings are incomplete. Check SMTP_USERNAME, SMTP_PASSWORD, and SMTP_FROM_EMAIL.",
         )
-    return EmailDelivery(status="queued", message="Email queued for delivery.")
+    pending = get_email_queue().pending()
+    return EmailDelivery(
+        status="queued",
+        message=f"Email queued for delivery ({pending} pending).",
+    )
+
+
+def _merge_queue_result(base: EmailDelivery, queue_result: dict[str, str | int]) -> dict[str, str]:
+    payload = base.as_dict()
+    queue_status = str(queue_result.get("status", "queued"))
+    queue_size = queue_result.get("queue_size")
+    if queue_status == "queue_full":
+        payload["status"] = "queue_full"
+        payload["message"] = "Email queue is full. Try again shortly."
+    elif queue_status == "failed":
+        payload["status"] = "failed"
+        payload["message"] = "Email could not be sent."
+    else:
+        payload["message"] = f"Email queued for delivery ({queue_size} pending)."
+    return payload
+
+
+def queue_email_job(*, label: str, send: Any) -> dict[str, str]:
+    state = delivery_state()
+    if state.status not in {"queued"}:
+        return state.as_dict()
+    queue_result = get_email_queue().enqueue(label=label, send=send)
+    return _merge_queue_result(state, queue_result)
 
 
 def queue_invitation_email(
-    background_tasks: Any,
+    _background_tasks: Any | None = None,
     *,
     to_email: str,
     invite_url: str,
     organization_name: str | None,
     role: str,
 ) -> dict[str, str]:
-    state = delivery_state()
-    if state.status != "queued":
-        return state.as_dict()
-
-    background_tasks.add_task(
-        _send_invitation_email_safe,
-        to_email=to_email,
-        invite_url=invite_url,
-        organization_name=organization_name,
-        role=role,
+    return queue_email_job(
+        label=f"invitation:{to_email}",
+        send=lambda: _send_invitation_email_safe(
+            to_email=to_email,
+            invite_url=invite_url,
+            organization_name=organization_name,
+            role=role,
+        ),
     )
-    return state.as_dict()
 
 
 def _send_invitation_email_safe(
@@ -154,6 +180,213 @@ def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | 
             smtp.send_message(message)
 
     logger.info("Email sent to %s via %s:%s", to_email, settings.smtp_host, settings.smtp_port)
+
+
+def send_account_lockout_email_safe(
+    *,
+    to_email: str,
+    locked_until: datetime,
+) -> None:
+    queue_email_job(
+        label=f"lockout:{to_email}",
+        send=lambda: _send_account_lockout_email_safe(to_email=to_email, locked_until=locked_until),
+    )
+
+
+def _send_account_lockout_email_safe(*, to_email: str, locked_until: datetime) -> None:
+    try:
+        send_account_lockout_email(to_email=to_email, locked_until=locked_until)
+    except Exception as exc:
+        logger.error("Account lockout email failed for %s: %s", to_email, exc)
+        raise
+
+
+def send_account_lockout_email(*, to_email: str, locked_until: datetime) -> None:
+    until_label = locked_until.astimezone(timezone.utc).strftime("%H:%M UTC")
+    subject = "Your CareCliQ account was temporarily locked"
+    text_body = (
+        "Your CareCliQ account was temporarily locked after several failed sign-in attempts.\n\n"
+        f"You can try again after {until_label}.\n\n"
+        "If this wasn't you, contact your administrator immediately."
+    )
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">Account temporarily locked</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          Your CareCliQ account was locked after several failed sign-in attempts.
+        </p>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          You can try again after <strong>{escape(until_label)}</strong>.
+        </p>
+        <p style="font-size:12px;line-height:1.6;color:#7A6A9E;margin:0;">
+          If this wasn't you, contact your administrator immediately.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+
+
+def send_suspicious_login_email_safe(
+    *,
+    to_email: str,
+    device_name: str,
+    city: str,
+    country: str,
+    secure_url: str,
+) -> None:
+    queue_email_job(
+        label=f"suspicious-login:{to_email}",
+        send=lambda: _send_suspicious_login_email_safe(
+            to_email=to_email,
+            device_name=device_name,
+            city=city,
+            country=country,
+            secure_url=secure_url,
+        ),
+    )
+
+
+def _send_suspicious_login_email_safe(
+    *,
+    to_email: str,
+    device_name: str,
+    city: str,
+    country: str,
+    secure_url: str,
+) -> None:
+    try:
+        send_suspicious_login_email(
+            to_email=to_email,
+            device_name=device_name,
+            city=city,
+            country=country,
+            secure_url=secure_url,
+        )
+    except Exception as exc:
+        logger.error("Suspicious login email failed for %s: %s", to_email, exc)
+        raise
+
+
+def send_suspicious_login_email(
+    *,
+    to_email: str,
+    device_name: str,
+    city: str,
+    country: str,
+    secure_url: str,
+) -> None:
+    when = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    subject = "New sign-in to your CareCliQ account"
+    text_body = (
+        f"A new sign-in to your CareCliQ account was detected.\n\n"
+        f"When: {when}\n"
+        f"Device: {device_name}\n"
+        f"Location: {city}, {country} (approximate location)\n\n"
+        f"If this wasn't you, secure your account immediately:\n{secure_url}\n"
+    )
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">New sign-in detected</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          A new sign-in to your CareCliQ account was detected.
+        </p>
+        <ul style="font-size:15px;line-height:1.6;margin:0 0 18px;padding-left:20px;">
+          <li><strong>When:</strong> {escape(when)}</li>
+          <li><strong>Device:</strong> {escape(device_name)}</li>
+          <li><strong>Location:</strong> {escape(city)}, {escape(country)} (approximate location)</li>
+        </ul>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
+          If this wasn't you, secure your account immediately:
+        </p>
+        <a href="{escape(secure_url, quote=True)}" style="display:inline-block;background:#F03060;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
+          Secure your account
+        </a>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+
+
+def queue_worker_notification_email(
+    *,
+    to_email: str,
+    subject: str,
+    title: str,
+    message: str,
+    action_url: str,
+) -> dict[str, str]:
+    return queue_email_job(
+        label=f"worker-notification:{to_email}:{subject[:40]}",
+        send=lambda: _send_worker_notification_email_safe(
+            to_email=to_email,
+            subject=subject,
+            title=title,
+            message=message,
+            action_url=action_url,
+        ),
+    )
+
+
+def _send_worker_notification_email_safe(
+    *,
+    to_email: str,
+    subject: str,
+    title: str,
+    message: str,
+    action_url: str,
+) -> None:
+    try:
+        send_worker_notification_email(
+            to_email=to_email,
+            subject=subject,
+            title=title,
+            message=message,
+            action_url=action_url,
+        )
+    except Exception as exc:
+        logger.error("Worker notification email failed for %s: %s", to_email, exc)
+        raise
+
+
+def send_worker_notification_email(
+    *,
+    to_email: str,
+    subject: str,
+    title: str,
+    message: str,
+    action_url: str,
+) -> None:
+    text_body = f"{title}\n\n{message}\n\nOpen in CareCliQ:\n{action_url}\n"
+    html_body = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
+    <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
+      <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:22px;">{escape(title)}</h1>
+        <p style="font-size:15px;line-height:1.6;margin:0 0 24px;white-space:pre-wrap;">{escape(message)}</p>
+        <a href="{escape(action_url, quote=True)}" style="display:inline-block;background:#5533CC;color:#ffffff;text-decoration:none;font-weight:700;border-radius:999px;padding:12px 20px;">
+          View in CareCliQ
+        </a>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    send_email(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
 
 
 def _build_invitation_html(*, invite_url: str, organization_name: str, role_label: str) -> str:

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap,
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
@@ -97,6 +97,13 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/toolkit",      label: "Toolkit",          icon: Wrench },
       ],
     },
+    {
+      group: "Account",
+      items: [
+        { href: "/worker/profile", label: "My Profile",      icon: UserRound },
+        { href: "/worker/security", label: "Security",       icon: LockKeyhole },
+      ],
+    },
   ],
   allied_health: [
     {
@@ -185,7 +192,9 @@ function isActive(location: string, href: string) {
     (href === "/patients" && (location.startsWith("/patients") || location.startsWith("/participants"))) ||
     (href === "/my-clients" && location.startsWith("/my-clients")) ||
     (href === "/my-shifts" && location.startsWith("/my-shifts")) ||
-    (href === "/tasks" && location.startsWith("/tasks"))
+    (href === "/tasks" && location.startsWith("/tasks")) ||
+    (href === "/worker/profile" && location.startsWith("/worker/profile")) ||
+    (href === "/worker/security" && location.startsWith("/worker/security"))
   );
 }
 

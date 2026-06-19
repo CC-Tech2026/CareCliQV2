@@ -85,28 +85,43 @@ function StyledInput({
   required?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (showPassword ? "text" : "password") : type;
 
   return (
-    <input
-      name={name}
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      disabled={disabled}
-      autoComplete={autoComplete}
-      required={required}
-      spellCheck={false}
-      className="w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200"
-      style={{
-        background: BG,
-        border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
-        color: "#1E1640",
-        WebkitAppearance: "none",
-      }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    />
+    <div className="relative">
+      <input
+        name={name}
+        type={inputType}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete={autoComplete}
+        required={required}
+        spellCheck={false}
+        className={`w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200${isPassword ? " pr-11" : ""}`}
+        style={{
+          background: BG,
+          border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
+          color: "#1E1640",
+          WebkitAppearance: "none",
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {isPassword ? (
+        <button
+          type="button"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+          onClick={() => setShowPassword((value) => !value)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7A6A9E]"
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -181,7 +196,6 @@ export default function Signup() {
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormData>(EMPTY);
-  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
 
@@ -265,9 +279,10 @@ export default function Signup() {
       let token: string | null = null;
 
       try {
-        const u = await login(form.email, form.password);
-
-        token = u ? localStorage.getItem("carescribe_token") : null;
+        const result = await login(form.email, form.password);
+        if (result.status === "authenticated") {
+          token = localStorage.getItem("carescribe_token");
+        }
       } catch (err) {
         setEmailVerify(true);
         setStep(3);
@@ -587,26 +602,15 @@ export default function Signup() {
 
                 <div>
                   <Label>Password</Label>
-
-                  <div className="relative">
-                    <StyledInput
-                      name="password"
-                      type={showPass ? "text" : "password"}
-                      value={form.password}
-                      onChange={(v) => updateField("password", v)}
-                      placeholder="Minimum 8 characters"
-                      autoComplete="new-password"
-                      error={short}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPass((p) => !p)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2"
-                    >
-                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
+                  <StyledInput
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={(v) => updateField("password", v)}
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                    error={short}
+                  />
                 </div>
 
                 <div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 
 type Props = {
   open: boolean;
@@ -33,8 +33,7 @@ export function ReAuthModal({ open, busy, error, onCancel, onSubmit }: Props) {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
-          <Input
-            type="password"
+          <PasswordInput
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoFocus

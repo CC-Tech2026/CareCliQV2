@@ -162,7 +162,8 @@ function BulkRemindersModal({
   const mutation = useMutation({
     mutationFn: () => sendBulkReminders([...selectedIds], customMessage),
     onSuccess: (result) => {
-      toast({ title: "Reminders sent", description: `${result.alerts_created} alert(s) created.` });
+      const count = result.notifications_sent ?? result.alerts_created ?? 0;
+      toast({ title: "Reminders sent", description: `${count} notification(s) sent.` });
       onClose();
     },
     onError: (err) => toast({ title: "Failed to send reminders", description: (err as Error).message, variant: "destructive" }),

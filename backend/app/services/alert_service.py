@@ -8,12 +8,20 @@ logger = logging.getLogger(__name__)
 TABLE = "alerts"
 
 
-async def get_all_alerts(org_id: Optional[str] = None, limit: int = 50) -> List[dict]:
+async def get_all_alerts(
+    org_id: Optional[str] = None,
+    limit: int = 50,
+    *,
+    user_id: Optional[str] = None,
+    org_wide: bool = False,
+) -> List[dict]:
     supabase = get_supabase_admin()
     try:
         query = supabase.table(TABLE).select("*, patients(full_name)").order("created_at", desc=True).limit(limit)
         if org_id:
             query = query.eq("organization_id", org_id)
+        if user_id and not org_wide:
+            query = query.eq("recipient_user_id", user_id)
         result = query.execute()
         return [_normalize(r) for r in (result.data or [])]
     except Exception as e:
@@ -21,12 +29,19 @@ async def get_all_alerts(org_id: Optional[str] = None, limit: int = 50) -> List[
         return []
 
 
-async def get_unread_alerts(org_id: Optional[str] = None) -> List[dict]:
+async def get_unread_alerts(
+    org_id: Optional[str] = None,
+    *,
+    user_id: Optional[str] = None,
+    org_wide: bool = False,
+) -> List[dict]:
     supabase = get_supabase_admin()
     try:
         query = supabase.table(TABLE).select("*, patients(full_name)").eq("is_read", "false").order("created_at", desc=True)
         if org_id:
             query = query.eq("organization_id", org_id)
+        if user_id and not org_wide:
+            query = query.eq("recipient_user_id", user_id)
         result = query.execute()
         return [_normalize(r) for r in (result.data or [])]
     except Exception as e:

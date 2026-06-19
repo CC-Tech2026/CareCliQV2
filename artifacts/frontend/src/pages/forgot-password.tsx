@@ -73,9 +73,9 @@ export default function ForgotPassword() {
           {sent ? (
             <div className="rounded-2xl border p-5" style={{ borderColor: BORDER, background: "#F5F3FC" }}>
               <CheckCircle2 className="h-8 w-8 mb-3" style={{ color: PLUM }} />
-              <p className="text-[15px] font-bold" style={{ color: "#1E1640" }}>Check your inbox</p>
+              <p className="text-[15px] font-bold" style={{ color: "#1E1640" }}>Check your email</p>
               <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "#7A6A9E" }}>
-                If an account exists for this email, a reset link has been sent. The link opens the password reset screen.
+                If an account exists for this email, a reset link has been sent.
               </p>
             </div>
           ) : (

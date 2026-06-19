@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, LockKeyhole } from "lucide-react";
+import { PasswordNativeInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 
 const PLUM = "#5533CC";
@@ -24,7 +25,6 @@ export default function ResetPassword() {
   const hasRecoveryToken = !!(recovery.access_token || recovery.token_hash);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
 
@@ -119,32 +119,23 @@ export default function ResetPassword() {
                   New password
                 </label>
                 <div className="relative">
-                  <LockKeyhole className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7A6A9E]" />
-                  <input
-                    type={showPass ? "text" : "password"}
+                  <LockKeyhole className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-[#7A6A9E]" />
+                  <PasswordNativeInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 8 characters"
                     required
                     disabled={busy}
-                    className="w-full h-12 pl-11 pr-12 rounded-2xl text-[14px] font-medium outline-none border bg-[#F5F3FC]"
+                    className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#F5F3FC]"
                     style={{ borderColor: BORDER, color: "#1E1640" }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7A6A9E]"
-                  >
-                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
               </div>
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block" style={{ color: PLUM }}>
                   Confirm password
                 </label>
-                <input
-                  type="password"
+                <PasswordNativeInput
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Repeat password"

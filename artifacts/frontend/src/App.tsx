@@ -53,6 +53,9 @@ import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
 import Tasks from "@/pages/tasks";
+import WorkerProfile from "@/pages/worker-profile";
+import WorkerSecurity from "@/pages/worker-security";
+import AccountSecure from "@/pages/account-secure";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -76,6 +79,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
+      <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
       <Route path="/verify-email">
@@ -327,6 +331,18 @@ function Router() {
       <Route path="/billing">
         <ProtectedRoute allowedRoles={[...COORDINATOR_AND_ALLIED]}>
           <AppLayout><Billing /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/profile">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerProfile /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/security">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerSecurity /></AppLayout>
         </ProtectedRoute>
       </Route>
 
