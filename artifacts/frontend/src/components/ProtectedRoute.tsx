@@ -1,6 +1,7 @@
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
+import { saveAuthRestoreContext } from "@/lib/auth-session";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -45,6 +46,7 @@ export function ProtectedRoute({
    * Not logged in
    */
   if (!isAuthenticated || !user) {
+    saveAuthRestoreContext(`${location}${window.location.search || ""}`);
     return <Redirect to="/login" />;
   }
 
@@ -52,7 +54,7 @@ export function ProtectedRoute({
     return <Redirect to="/verify-email" />;
   }
 
-  const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/settings"];
+  const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/worker/profile", "/settings"];
   const isProfileGatePath = profileGatePaths.some((path) => location === path || location.startsWith(path + "/"));
   const needsRoleProfile =
     (user.role === "support_worker" || user.role === "allied_health") &&

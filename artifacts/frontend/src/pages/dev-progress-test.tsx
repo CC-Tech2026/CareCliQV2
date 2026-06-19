@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import {
   Loader2,
@@ -1142,9 +1143,8 @@ function DevConsolePasswordGate({ onUnlock }: { onUnlock: () => void }) {
               <Label htmlFor="dev-console-password" className="text-xs" style={{ color: MUTED }}>
                 Console password
               </Label>
-              <Input
+              <PasswordInput
                 id="dev-console-password"
-                type="password"
                 autoComplete="off"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

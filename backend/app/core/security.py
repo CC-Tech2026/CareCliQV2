@@ -55,6 +55,14 @@ async def get_current_user(
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    from ..services import device_security_service as dss
+
+    if payload.get("jti") and not dss.is_session_active(payload.get("jti")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has ended. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return payload
 
 

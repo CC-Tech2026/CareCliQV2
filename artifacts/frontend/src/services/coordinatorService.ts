@@ -294,11 +294,14 @@ export async function getCoordinatorGoals(): Promise<ParticipantGoalGroup[]> {
 }
 
 export function sendBulkReminders(workerIds: string[], message: string) {
-  return jsonFetch<{ alerts_created: number; errors: string[] }>("/api/coordinator/bulk-reminders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ worker_ids: workerIds, message }),
-  });
+  return jsonFetch<{ notifications_sent: number; alerts_created?: number; errors: string[] }>(
+    "/api/coordinator/bulk-reminders",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ worker_ids: workerIds, message }),
+    },
+  );
 }
 
 export type ApproveResult = {

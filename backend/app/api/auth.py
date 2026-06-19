@@ -1,17 +1,22 @@
 import asyncio
+import re
 import time
+import uuid
 import logging
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from fastapi import APIRouter, HTTPException, Request, status, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status, Depends
+from pydantic import BaseModel, Field, model_validator
 from ..core.config import settings
 from ..services.supabase_client import get_supabase, get_supabase_admin
-from ..core.security import create_access_token, get_current_user
+from ..core.security import create_access_token, decode_access_token, get_current_user
+from ..services import email_service
+from ..services import device_security_service as dss
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -35,6 +40,142 @@ def _check_rate_limit(ip: str) -> None:
             detail="Too many login attempts — please wait 60 seconds",
         )
     _login_attempts[ip].append(now)
+
+
+# ---------------------------------------------------------------------------
+# Account lockout (5 failed attempts → 15 min cooldown)
+# ---------------------------------------------------------------------------
+_LOCKOUT_MAX_ATTEMPTS = 5
+_LOCKOUT_COOLDOWN_MINUTES = 15
+_REMEMBER_DEVICE_DAYS = 30
+
+
+def _looks_like_email(identifier: str) -> bool:
+    return "@" in identifier
+
+
+def _normalize_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone or "")
+    if digits.startswith("61") and len(digits) >= 11:
+        digits = "0" + digits[2:]
+    return digits
+
+
+def _phone_lookup_candidates(phone: str) -> list[str]:
+    normalized = _normalize_phone(phone)
+    if not normalized:
+        return []
+    candidates = {normalized, normalized.lstrip("0")}
+    if normalized.startswith("0"):
+        candidates.add("+61" + normalized[1:])
+        candidates.add("61" + normalized[1:])
+    return [c for c in candidates if c]
+
+
+async def _resolve_login_email(identifier: str) -> str:
+    """Resolve email or mobile identifier to the auth email address."""
+    raw = (identifier or "").strip()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    if _looks_like_email(raw):
+        return raw.lower()
+
+    admin = get_supabase_admin()
+    for candidate in _phone_lookup_candidates(raw):
+        try:
+            result = await asyncio.to_thread(
+                lambda c=candidate: admin.table("users")
+                .select("email")
+                .eq("phone", c)
+                .maybe_single()
+                .execute()
+            )
+            if result and result.data and result.data.get("email"):
+                return str(result.data["email"]).lower()
+        except Exception as exc:
+            logger.debug("Phone lookup failed for %s: %s", candidate, exc)
+    return raw.lower()
+
+
+async def _get_lockout_state(email: str) -> dict:
+    admin = get_supabase_admin()
+    try:
+        result = await asyncio.to_thread(
+            lambda: admin.table("users")
+            .select("id, email, failed_login_count, locked_until")
+            .eq("email", email.lower())
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else {}
+    except Exception as exc:
+        logger.debug("Lockout lookup failed for %s: %s", email, exc)
+        return {}
+
+
+def _parse_locked_until(value) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+async def _check_account_lockout(email: str) -> None:
+    state = await _get_lockout_state(email)
+    locked_until = _parse_locked_until(state.get("locked_until"))
+    if locked_until and locked_until > datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "Too many failed attempts. Please try again in 15 minutes "
+                "or check your email."
+            ),
+        )
+
+
+async def _record_failed_login(email: str, background_tasks: BackgroundTasks) -> None:
+    state = await _get_lockout_state(email)
+    user_id = state.get("id")
+    if not user_id:
+        return
+
+    count = int(state.get("failed_login_count") or 0) + 1
+    payload: dict = {"failed_login_count": count}
+    if count >= _LOCKOUT_MAX_ATTEMPTS:
+        locked_until = datetime.now(timezone.utc) + timedelta(
+            minutes=_LOCKOUT_COOLDOWN_MINUTES
+        )
+        payload["locked_until"] = locked_until.isoformat()
+        email_service.send_account_lockout_email_safe(
+            to_email=email,
+            locked_until=locked_until,
+        )
+
+    admin = get_supabase_admin()
+    try:
+        await asyncio.to_thread(
+            lambda: admin.table("users").update(payload).eq("id", user_id).execute()
+        )
+    except Exception as exc:
+        logger.warning("Could not record failed login for %s: %s", email, exc)
+
+
+async def _clear_failed_login(user_id: str) -> None:
+    admin = get_supabase_admin()
+    try:
+        await asyncio.to_thread(
+            lambda: admin.table("users")
+            .update({"failed_login_count": 0, "locked_until": None})
+            .eq("id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        logger.debug("Could not clear failed login for %s: %s", user_id, exc)
 
 
 def _supabase_auth_request(
@@ -107,8 +248,27 @@ VALID_ACCOUNT_TYPES = set(_ACCOUNT_TYPE_TO_ROLE.keys())
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: str = ""
+    identifier: str = ""
     password: str
+    remember_device: bool = False
+    device_id: str = ""
+
+    @model_validator(mode="after")
+    def _require_identifier(self):
+        if not (self.identifier or self.email).strip():
+            raise ValueError("Email or mobile number is required")
+        return self
+
+    def resolved_identifier(self) -> str:
+        return (self.identifier or self.email).strip()
+
+
+class MfaLoginRequest(BaseModel):
+    mfa_challenge_token: str
+    code: str = Field(min_length=6, max_length=12)
+    trust_device: bool = False
+    device_id: str = ""
 
 
 class RegisterRequest(BaseModel):
@@ -421,23 +581,135 @@ async def register(body: RegisterRequest):
     }
 
 
+async def _finalize_login_response(
+    *,
+    auth_user,
+    profile: dict,
+    role: str,
+    account_type: str,
+    organization_id,
+    remember_device: bool,
+    request: Request,
+    device_id: str | None,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    onboarding_complete = profile.get("onboarding_complete")
+    if onboarding_complete is None:
+        onboarding_complete = True
+    full_name = profile.get("full_name") or (
+        auth_user.user_metadata.get("full_name", "") if auth_user.user_metadata else ""
+    )
+    email_verified = _is_auth_user_email_verified(auth_user)
+    if not email_verified:
+        email_verified = (
+            bool(profile.get("email_verified")) and settings.auth_auto_confirm_email
+        )
+
+    session_jti = str(uuid.uuid4())
+    token_expiry = (
+        timedelta(days=_REMEMBER_DEVICE_DAYS)
+        if remember_device
+        else timedelta(minutes=settings.access_token_expire_minutes)
+    )
+    token = create_access_token(
+        {
+            "sub": str(auth_user.id),
+            "email": str(auth_user.email),
+            "role": role,
+            "account_type": account_type,
+            "organization_id": organization_id,
+            "jti": session_jti,
+        },
+        expires_delta=token_expiry,
+    )
+
+    user_agent = request.headers.get("user-agent")
+    client_ip = request.client.host if request.client else "unknown"
+    city, country = await dss.record_login_event(
+        str(auth_user.id),
+        email=str(auth_user.email),
+        device_id=device_id,
+        user_agent=user_agent,
+        ip_address=client_ip,
+        background_tasks=background_tasks,
+    )
+    dss.create_session(
+        str(auth_user.id),
+        session_jti,
+        device_id=device_id,
+        user_agent=user_agent,
+        ip_address=client_ip,
+        city=city,
+        country=country,
+    )
+    if device_id and remember_device:
+        device_name, os_name = dss.parse_user_agent(user_agent)
+        dss.trust_device(
+            str(auth_user.id),
+            device_id,
+            device_name=device_name,
+            os_name=os_name,
+            user_agent=user_agent,
+        )
+
+    await _clear_failed_login(str(auth_user.id))
+    await _touch_last_login(str(auth_user.id))
+    if email_verified != bool(profile.get("email_verified")):
+        try:
+            _admin = get_supabase_admin()
+            await asyncio.to_thread(
+                lambda: _admin.table("users").update(
+                    {"email_verified": email_verified}
+                ).eq("id", str(auth_user.id)).execute()
+            )
+        except Exception as e:
+            logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": str(auth_user.id),
+            "email": str(auth_user.email),
+            "full_name": full_name,
+            "role": role,
+            "account_type": account_type,
+            "organization_id": organization_id,
+            "onboarding_complete": bool(onboarding_complete),
+            "email_verified": email_verified,
+            "profile_completed": bool(profile.get("profile_completed")),
+            "onboarding_completed": bool(
+                profile.get("onboarding_completed") or onboarding_complete
+            ),
+            "role_specific_profile_completed": bool(
+                profile.get("role_specific_profile_completed")
+            ),
+            "profile_photo_url": profile.get("profile_photo_url"),
+        },
+    }
+
+
 @router.post("/login")
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, background_tasks: BackgroundTasks):
     client_ip = request.client.host if request.client else "unknown"
     _check_rate_limit(client_ip)
+
+    login_email = await _resolve_login_email(body.resolved_identifier())
+    await _check_account_lockout(login_email)
 
     supabase = get_supabase()
     try:
         result = await asyncio.to_thread(
             supabase.auth.sign_in_with_password,
             {
-                "email": body.email,
+                "email": login_email,
                 "password": body.password,
             },
         )
         auth_user = result.user
         if not auth_user or not result.session:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            await _record_failed_login(login_email, background_tasks)
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
     except HTTPException:
         raise
     except Exception as e:
@@ -458,7 +730,7 @@ async def login(body: LoginRequest, request: Request):
         )
         if any(marker in msg for marker in provider_unavailable_markers):
             logger.error(
-                "Authentication provider unreachable for %s: %s", body.email, e
+                "Authentication provider unreachable for %s: %s", login_email, e
             )
             raise HTTPException(
                 status_code=503,
@@ -467,8 +739,9 @@ async def login(body: LoginRequest, request: Request):
                     "and Supabase configuration, then try again."
                 ),
             )
-        logger.warning(f"Login failed for {body.email}: {e}")
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        logger.warning("Login failed for %s: %s", login_email, e)
+        await _record_failed_login(login_email, background_tasks)
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     profile = await _get_user_profile(str(auth_user.id))
     role = profile.get("role") or "support_worker"
@@ -507,50 +780,85 @@ async def login(body: LoginRequest, request: Request):
     if organization_id:
         role = await _resolve_org_member_role(str(auth_user.id), organization_id, role)
 
-    token = create_access_token(
-        {
-            "sub": str(auth_user.id),
-            "email": str(auth_user.email),
-            "role": role,
-            "account_type": account_type,
-            "organization_id": organization_id,
+    device_id = (body.device_id or request.headers.get("x-device-id") or "").strip() or None
+    mfa_settings = dss.get_mfa_settings(str(auth_user.id))
+    if mfa_settings.get("mfa_enabled") and not dss.is_device_trusted(str(auth_user.id), device_id):
+        challenge = create_access_token(
+            {
+                "sub": str(auth_user.id),
+                "email": str(auth_user.email),
+                "type": "mfa_challenge",
+                "role": role,
+                "account_type": account_type,
+                "organization_id": organization_id,
+                "remember_device": body.remember_device,
+                "device_id": device_id,
+            },
+            expires_delta=timedelta(minutes=5),
+        )
+        return {
+            "mfa_required": True,
+            "mfa_challenge_token": challenge,
+            "mfa_method": mfa_settings.get("mfa_method") or "totp",
         }
+
+    return await _finalize_login_response(
+        auth_user=auth_user,
+        profile=profile,
+        role=role,
+        account_type=account_type,
+        organization_id=organization_id,
+        remember_device=body.remember_device,
+        request=request,
+        device_id=device_id,
+        background_tasks=background_tasks,
     )
 
-    await _touch_last_login(str(auth_user.id))
-    if email_verified != bool(profile.get("email_verified")):
-        try:
-            _admin = get_supabase_admin()
-            await asyncio.to_thread(
-                lambda: _admin.table("users").update(
-                    {"email_verified": email_verified}
-                ).eq("id", str(auth_user.id)).execute()
-            )
-        except Exception as e:
-            logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": str(auth_user.id),
-            "email": str(auth_user.email),
-            "full_name": full_name,
-            "role": role,
-            "account_type": account_type,
-            "organization_id": organization_id,
-            "onboarding_complete": bool(onboarding_complete),
-            "email_verified": email_verified,
-            "profile_completed": bool(profile.get("profile_completed")),
-            "onboarding_completed": bool(
-                profile.get("onboarding_completed") or onboarding_complete
-            ),
-            "role_specific_profile_completed": bool(
-                profile.get("role_specific_profile_completed")
-            ),
-            "profile_photo_url": profile.get("profile_photo_url"),
-        },
-    }
+@router.post("/login/mfa")
+async def login_mfa(body: MfaLoginRequest, request: Request, background_tasks: BackgroundTasks):
+    payload = decode_access_token(body.mfa_challenge_token)
+    if not payload or payload.get("type") != "mfa_challenge":
+        raise HTTPException(status_code=401, detail="MFA challenge expired. Sign in again.")
+
+    user_id = payload.get("sub")
+    if not user_id or not dss.verify_mfa_login(str(user_id), body.code):
+        raise HTTPException(status_code=401, detail="Invalid verification code.")
+
+    profile = await _get_user_profile(str(user_id))
+    role = payload.get("role") or profile.get("role") or "support_worker"
+    account_type = payload.get("account_type") or profile.get("account_type") or "independent_worker"
+    organization_id = payload.get("organization_id") or profile.get("organization_id")
+    device_id = (body.device_id or payload.get("device_id") or request.headers.get("x-device-id") or "").strip() or None
+    remember_device = bool(payload.get("remember_device"))
+
+    class _AuthUserShim:
+        id = str(user_id)
+        email = payload.get("email") or profile.get("email")
+        user_metadata = {"full_name": profile.get("full_name") or ""}
+        email_confirmed_at = None
+
+    response = await _finalize_login_response(
+        auth_user=_AuthUserShim(),
+        profile=profile,
+        role=role,
+        account_type=account_type,
+        organization_id=organization_id,
+        remember_device=remember_device,
+        request=request,
+        device_id=device_id,
+        background_tasks=background_tasks,
+    )
+    if body.trust_device and device_id:
+        device_name, os_name = dss.parse_user_agent(request.headers.get("user-agent"))
+        dss.trust_device(
+            str(user_id),
+            device_id,
+            device_name=device_name,
+            os_name=os_name,
+            user_agent=request.headers.get("user-agent"),
+        )
+    return response
 
 
 @router.post("/complete-onboarding")

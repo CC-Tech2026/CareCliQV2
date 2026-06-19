@@ -17,7 +17,7 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#1E1640]">
             <Clock size={18} className="text-[#F03060]" />
-            Session timeout warning
+            You'll be logged out in 2 minutes
           </DialogTitle>
           <DialogDescription>
             You have been inactive. CareCliQ will sign you out to protect participant records.
@@ -29,7 +29,7 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
         </div>
         <DialogFooter>
           <Button onClick={onStaySignedIn} className="w-full rounded-xl">
-            Stay signed in
+            Stay logged in
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,16 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { setAuthTokenGetter, setOrgIdGetter, customFetch } from "@workspace/api-client-react";
+import { getDeviceId } from "@/lib/device-id";
 import { apiFetch } from "@/lib/api-fetch";
 import { queryClient, setQueryOrgId } from "@/lib/query-client";
+import {
+  captureCurrentRestoreContext,
+  clearAuthSessionStorage,
+  getRememberDevicePreference,
+  persistAuthSession,
+  readStoredSession,
+  updateStoredUserJson,
+} from "@/lib/auth-session";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -21,22 +30,24 @@ export interface AuthUser {
   organizationId?: string;
 }
 
+export type LoginResult =
+  | { status: "authenticated"; user: AuthUser }
+  | { status: "mfa_required"; challengeToken: string; method: string };
+
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  login: (identifier: string, password: string, rememberDevice?: boolean) => Promise<LoginResult>;
+  completeMfaLogin: (challengeToken: string, code: string, trustDevice?: boolean) => Promise<AuthUser>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
   updateToken: (newToken: string) => Promise<void>;
 }
 
-const TOKEN_KEY = "carescribe_token";
-const USER_KEY = "carescribe_user";
 const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
-// Wire token + org getters immediately on module load so API calls always have the latest values
 let _currentToken: string | null = null;
 let _currentOrgId: string | null = null;
 setAuthTokenGetter(() => _currentToken);
@@ -44,24 +55,61 @@ setOrgIdGetter(() => _currentOrgId);
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+function parseStoredUser(raw: string | null): AuthUser | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+function mapAuthUser(data: { user: Record<string, unknown> }): AuthUser {
+  const user = data.user;
+  return {
+    id: String(user.id),
+    email: String(user.email),
+    full_name: String(user.full_name || ""),
+    role: (user.role as UserRole) || "support_worker",
+    account_type: (user.account_type as AccountType) || "independent_worker",
+    onboarding_complete: Boolean(user.onboarding_complete ?? true),
+    organizationId: user.organization_id ? String(user.organization_id) : undefined,
+    email_verified: Boolean(user.email_verified ?? false),
+    profile_completed: Boolean(user.profile_completed ?? user.onboarding_complete ?? false),
+    onboarding_completed: Boolean(user.onboarding_completed ?? user.onboarding_complete ?? false),
+    role_specific_profile_completed: Boolean(
+      user.role_specific_profile_completed ?? user.onboarding_complete ?? false,
+    ),
+    profile_photo_url: (user.profile_photo_url as string | null | undefined) ?? null,
+  };
+}
+
+function authRequestHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Device-Id": getDeviceId(),
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const initialSession = readStoredSession();
+  const initialUser = parseStoredUser(initialSession.userJson);
+
   const [token, setToken] = useState<string | null>(() => {
-    const t = localStorage.getItem(TOKEN_KEY);
-    _currentToken = t;
-    return t;
+    _currentToken = initialSession.token;
+    return initialSession.token;
   });
   const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = localStorage.getItem(USER_KEY);
-    try { return stored ? JSON.parse(stored) : null; } catch { return null; }
+    _currentOrgId = initialUser?.organizationId ?? null;
+    return initialUser;
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const persistSession = useCallback((newToken: string, newUser: AuthUser) => {
+  const persistSession = useCallback((newToken: string, newUser: AuthUser, rememberDevice: boolean) => {
     _currentToken = newToken;
     _currentOrgId = newUser.organizationId ?? null;
-    setQueryOrgId(_currentOrgId);   // CCQ-113: scope cache keys to this org
-    localStorage.setItem(TOKEN_KEY, newToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+    setQueryOrgId(_currentOrgId);
+    persistAuthSession(newToken, JSON.stringify(newUser), rememberDevice);
     setToken(newToken);
     setUser(newUser);
   }, []);
@@ -69,48 +117,99 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearSession = useCallback(() => {
     _currentToken = null;
     _currentOrgId = null;
-    setQueryOrgId(null);            // CCQ-113: clear org scope on logout
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(REAUTH_TOKEN_KEY);
-    // CCQ-113: purge entire cache so stale cross-org data is never served
+    setQueryOrgId(null);
+    clearAuthSessionStorage();
     queryClient.clear();
     setToken(null);
     setUser(null);
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<AuthUser> => {
+  const finalizeLogin = useCallback((
+    data: { access_token: string; user: Record<string, unknown> },
+    rememberDevice: boolean,
+  ): AuthUser => {
+    const authUser = mapAuthUser(data);
+    if (!authUser.organizationId) {
+      throw new Error("Organisation not found. Contact your administrator.");
+    }
+    persistSession(data.access_token, authUser, rememberDevice);
+    return authUser;
+  }, [persistSession]);
+
+  const login = useCallback(async (
+    identifier: string,
+    password: string,
+    rememberDevice = getRememberDevicePreference(),
+  ): Promise<LoginResult> => {
     setIsLoading(true);
     try {
-      const data = await customFetch<any>("/api/auth/login", {
+      const deviceId = getDeviceId();
+      const data = await customFetch<{
+        mfa_required?: boolean;
+        mfa_challenge_token?: string;
+        mfa_method?: string;
+        access_token?: string;
+        user?: Record<string, unknown>;
+      }>("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: authRequestHeaders(),
+        body: JSON.stringify({
+          identifier,
+          password,
+          remember_device: rememberDevice,
+          device_id: deviceId,
+        }),
       });
-      const authUser: AuthUser = {
-        id: data.user.id,
-        email: data.user.email,
-        full_name: data.user.full_name || "",
-        role: data.user.role || "support_worker",
-        account_type: data.user.account_type || "independent_worker",
-        onboarding_complete: data.user.onboarding_complete ?? true,
-        organizationId: data.user.organization_id ?? undefined,
-        email_verified: data.user.email_verified ?? false,
-        profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
-        onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
-        role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
-        profile_photo_url: data.user.profile_photo_url ?? null,
-      };
-      // CCQ-112c: block login for accounts not linked to an organisation
-      if (!authUser.organizationId) {
-        throw new Error("Organisation not found. Contact your administrator.");
+
+      if (data.mfa_required && data.mfa_challenge_token) {
+        return {
+          status: "mfa_required",
+          challengeToken: data.mfa_challenge_token,
+          method: data.mfa_method || "totp",
+        };
       }
-      persistSession(data.access_token, authUser);
-      return authUser;
+
+      if (!data.access_token || !data.user) {
+        throw new Error("Incorrect email or password");
+      }
+
+      const authUser = finalizeLogin(
+        { access_token: data.access_token, user: data.user },
+        rememberDevice,
+      );
+      return { status: "authenticated", user: authUser };
     } finally {
       setIsLoading(false);
     }
-  }, [persistSession]);
+  }, [finalizeLogin]);
+
+  const completeMfaLogin = useCallback(async (
+    challengeToken: string,
+    code: string,
+    trustDevice = false,
+  ): Promise<AuthUser> => {
+    setIsLoading(true);
+    try {
+      const rememberDevice = getRememberDevicePreference();
+      const deviceId = getDeviceId();
+      const data = await customFetch<{ access_token: string; user: Record<string, unknown> }>(
+        "/api/auth/login/mfa",
+        {
+          method: "POST",
+          headers: authRequestHeaders(),
+          body: JSON.stringify({
+            mfa_challenge_token: challengeToken,
+            code,
+            trust_device: trustDevice,
+            device_id: deviceId,
+          }),
+        },
+      );
+      return finalizeLogin(data, rememberDevice);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [finalizeLogin]);
 
   const logout = useCallback(() => {
     customFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -121,47 +220,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...updates };
-      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      updateStoredUserJson(JSON.stringify(updated));
       return updated;
     });
   }, []);
 
   const updateToken = useCallback(async (newToken: string): Promise<void> => {
     _currentToken = newToken;
-    localStorage.setItem(TOKEN_KEY, newToken);
+    const rememberDevice = getRememberDevicePreference();
+    if (rememberDevice) {
+      persistAuthSession(newToken, JSON.stringify(user), true);
+    } else if (user) {
+      persistAuthSession(newToken, JSON.stringify(user), false);
+    }
     setToken(newToken);
-    // _currentOrgId will be refreshed via the /me call below
     try {
       const res = await apiFetch("/api/auth/me", {
         headers: { Authorization: `Bearer ${newToken}` },
       });
       if (res.ok) {
         const data = await res.json();
-        const fresh: AuthUser = {
-          id: data.user.id,
-          email: data.user.email,
-          full_name: data.user.full_name || "",
-          role: data.user.role || "support_worker",
-          account_type: data.user.account_type || "independent_worker",
-          onboarding_complete: data.user.onboarding_complete ?? true,
-          organizationId: data.user.organization_id ?? undefined,
-          email_verified: data.user.email_verified ?? false,
-          profile_completed: data.user.profile_completed ?? data.user.onboarding_complete ?? false,
-          onboarding_completed: data.user.onboarding_completed ?? data.user.onboarding_complete ?? false,
-          role_specific_profile_completed: data.user.role_specific_profile_completed ?? data.user.onboarding_complete ?? false,
-          profile_photo_url: data.user.profile_photo_url ?? null,
-        };
+        const fresh = mapAuthUser({ user: data.user });
         _currentOrgId = fresh.organizationId ?? null;
-        localStorage.setItem(USER_KEY, JSON.stringify(fresh));
+        persistAuthSession(newToken, JSON.stringify(fresh), rememberDevice);
         setUser(fresh);
       }
     } catch {
       // Non-critical: token stored, user profile refresh failed
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const handleUnauthorized = () => {
+      captureCurrentRestoreContext(user?.id);
       clearSession();
       if (!window.location.pathname.startsWith("/login")) {
         window.location.assign("/login");
@@ -169,7 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("carescribe:unauthorized", handleUnauthorized);
     return () => window.removeEventListener("carescribe:unauthorized", handleUnauthorized);
-  }, [clearSession]);
+  }, [clearSession, user?.id]);
 
   return (
     <AuthContext.Provider
@@ -179,6 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         isAuthenticated: !!token && !!user,
         login,
+        completeMfaLogin,
         logout,
         updateUser,
         updateToken,

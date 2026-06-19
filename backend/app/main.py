@@ -6,6 +6,8 @@ from .api import auth, participants, sessions, alerts, plans, reports, ai, compl
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
+from .services.email_queue import start_email_queue, stop_email_queue
+from .services.notification_scheduler import start_notification_scheduler, stop_notification_scheduler
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -132,8 +134,12 @@ async def _apply_startup_migrations():
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    start_email_queue()
     await _apply_startup_migrations()
+    start_notification_scheduler()
     yield
+    await stop_notification_scheduler()
+    stop_email_queue()
 
 
 app = FastAPI(

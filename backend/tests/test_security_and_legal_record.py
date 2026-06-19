@@ -232,12 +232,7 @@ class EmailDeliveryTests(unittest.TestCase):
         self.assertEqual(state.status, "not_configured")
 
     def test_invitation_email_is_queued_when_smtp_configured(self):
-        class FakeBackgroundTasks:
-            def __init__(self):
-                self.tasks = []
-
-            def add_task(self, fn, **kwargs):
-                self.tasks.append((fn, kwargs))
+        from backend.app.services.email_queue import get_email_queue, start_email_queue, stop_email_queue
 
         settings.email_enabled = True
         settings.smtp_host = "smtp.gmail.com"
@@ -246,17 +241,20 @@ class EmailDeliveryTests(unittest.TestCase):
         settings.smtp_password = "app-password"
         settings.smtp_from_email = "sender@example.com"
 
-        tasks = FakeBackgroundTasks()
-        result = queue_invitation_email(
-            tasks,
-            to_email="worker@example.com",
-            invite_url="http://localhost:3000/accept-invite?token=test",
-            organization_name="Sunshine Supports",
-            role="support_worker",
-        )
+        start_email_queue()
+        try:
+            result = queue_invitation_email(
+                None,
+                to_email="worker@example.com",
+                invite_url="http://localhost:3000/accept-invite?token=test",
+                organization_name="Sunshine Supports",
+                role="support_worker",
+            )
 
-        self.assertEqual(result["status"], "queued")
-        self.assertEqual(len(tasks.tasks), 1)
+            self.assertEqual(result["status"], "queued")
+            self.assertGreaterEqual(get_email_queue().pending(), 1)
+        finally:
+            stop_email_queue()
 
 
 class AssignmentApiTests(unittest.IsolatedAsyncioTestCase):

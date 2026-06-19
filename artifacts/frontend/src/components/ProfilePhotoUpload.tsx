@@ -3,21 +3,32 @@ import { Camera, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { cropImageToCircle } from "@/lib/image-crop";
 import { deleteProfilePhoto, uploadProfilePhoto } from "@/services/userService";
 
-const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+type Props = {
+  currentUrl?: string | null;
+  cropCircle?: boolean;
+};
 
-export function ProfilePhotoUpload({ currentUrl }: { currentUrl?: string | null }) {
+export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user, updateUser } = useAuth();
   const [preview, setPreview] = useState(currentUrl || user?.profile_photo_url || "");
   const [busy, setBusy] = useState(false);
+  const allowedTypes = cropCircle
+    ? ["image/jpeg", "image/png"]
+    : ["image/jpeg", "image/png", "image/webp"];
 
   async function handleFile(file?: File) {
     if (!file) return;
-    if (!ALLOWED.includes(file.type)) {
-      toast({ title: "Unsupported image", description: "Upload JPG, PNG, or WebP.", variant: "destructive" });
+    if (!allowedTypes.includes(file.type)) {
+      toast({
+        title: "Unsupported image",
+        description: cropCircle ? "Upload JPEG or PNG." : "Upload JPG, PNG, or WebP.",
+        variant: "destructive",
+      });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -26,8 +37,9 @@ export function ProfilePhotoUpload({ currentUrl }: { currentUrl?: string | null 
     }
     setBusy(true);
     try {
-      setPreview(URL.createObjectURL(file));
-      const profile = await uploadProfilePhoto(file);
+      const uploadFile = cropCircle ? await cropImageToCircle(file) : file;
+      setPreview(URL.createObjectURL(uploadFile));
+      const profile = await uploadProfilePhoto(uploadFile);
       setPreview(profile.profile_photo_url || "");
       updateUser({ profile_photo_url: profile.profile_photo_url || null });
       toast({ title: "Profile photo saved" });
@@ -45,9 +57,8 @@ export function ProfilePhotoUpload({ currentUrl }: { currentUrl?: string | null 
   async function removePhoto() {
     setBusy(true);
     try {
-      const profile = await deleteProfilePhoto();
       setPreview("");
-      updateUser({ profile_photo_url: profile.profile_photo_url || null });
+      updateUser({ profile_photo_url: null });
       toast({ title: "Profile photo removed" });
     } catch (error) {
       toast({
@@ -82,7 +93,7 @@ export function ProfilePhotoUpload({ currentUrl }: { currentUrl?: string | null 
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={cropCircle ? "image/jpeg,image/png" : "image/jpeg,image/png,image/webp"}
           className="hidden"
           onChange={(event) => void handleFile(event.target.files?.[0])}
         />
@@ -104,7 +115,7 @@ export function ProfilePhotoUpload({ currentUrl }: { currentUrl?: string | null 
             </Button>
           )}
         </div>
-        <p className="text-xs font-medium text-[#7A6A9E]">JPG, PNG, or WebP. Maximum 5MB.</p>
+        <p className="text-xs font-medium text-[#7A6A9E]">JPEG or PNG. Maximum 5MB.{cropCircle ? " Cropped to a circle on upload." : ""}</p>
       </div>
     </div>
   );
