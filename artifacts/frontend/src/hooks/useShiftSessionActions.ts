@@ -94,6 +94,10 @@ export function useShiftSessionActions({
       await refreshPendingCount();
       return;
     }
+    if (shift?.visual_state === "scheduled" && !instantSessionActive) {
+      await refreshPendingCount();
+      return;
+    }
     if (shift?.visual_state === "session_active") {
       await removePendingAction(pending.id);
       clearPendingStartSession(shiftId);
@@ -121,6 +125,7 @@ export function useShiftSessionActions({
   }, [
     shiftId,
     shift?.visual_state,
+    instantSessionActive,
     processPendingAction,
     invalidate,
     onSessionStarted,

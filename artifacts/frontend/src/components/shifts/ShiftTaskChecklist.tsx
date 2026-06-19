@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { ShiftTaskEvidencePanel } from "@/components/shifts/ShiftTaskEvidencePanel";
 import {
   loadTasksLocally,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/task-evidence-status";
 import {
   groupShiftTasksByGoal,
+  canMarkTaskComplete,
   isMandatoryTask,
   MUTED,
   PLUM,
@@ -111,19 +113,41 @@ export function ShiftTaskChecklist({
   disabled,
   sessionStyle,
 }: Props) {
+  const { toast } = useToast();
   const [localTasks, setLocalTasks] = useState<ShiftTask[]>(tasks);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openGoals, setOpenGoals] = useState<Record<string, boolean>>({});
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     const cached = loadTasksLocally(shiftId);
     if (cached?.length) {
       setLocalTasks(cached);
+      if (!hydratedRef.current) {
+        hydratedRef.current = true;
+        onTasksChange(cached);
+      }
     } else {
       setLocalTasks(tasks);
+      hydratedRef.current = true;
     }
-  }, [shiftId, tasks]);
+  }, [shiftId, tasks, onTasksChange]);
+
+  const blockMandatoryComplete = useCallback(
+    (task: ShiftTask) => {
+      if (canMarkTaskComplete(task)) return false;
+      toast({
+        title: "Evidence required",
+        description:
+          "Mandatory tasks need a photo, voice memo, or written note of at least 20 characters. Type your note in the task thread and press Enter, or use Mark task complete.",
+        variant: "destructive",
+      });
+      setExpandedNote(task.task_id);
+      return true;
+    },
+    [toast],
+  );
 
   const persist = useCallback(
     async (next: ShiftTask[]) => {
@@ -133,25 +157,39 @@ export function ShiftTaskChecklist({
       setBusy(true);
       try {
         await updateShiftTasks(shiftId, next);
+      } catch (err) {
+        toast({
+          title: "Could not save tasks",
+          description: (err as Error).message || "Please try again.",
+          variant: "destructive",
+        });
+        throw err;
       } finally {
         setBusy(false);
       }
     },
-    [shiftId, onTasksChange],
+    [shiftId, onTasksChange, toast],
   );
 
   const toggleTaskComplete = async (taskId: string) => {
+    const task = localTasks.find((t) => t.task_id === taskId);
+    if (!task) return;
+    if (!task.completed && blockMandatoryComplete(task)) return;
     const now = new Date().toISOString();
-    const next = localTasks.map((task) =>
-      task.task_id === taskId ? applyTaskCompletion(task, !task.completed, now) : task,
+    const next = localTasks.map((t) =>
+      t.task_id === taskId ? applyTaskCompletion(t, !t.completed, now) : t,
     );
     await persist(next);
   };
 
-  const markTaskComplete = async (taskId: string, completed = true) => {
+  const markTaskComplete = async (taskId: string, completed = true, merge?: Partial<ShiftTask>) => {
+    const task = localTasks.find((t) => t.task_id === taskId);
+    if (!task) return;
+    const merged: ShiftTask = { ...task, ...merge };
+    if (completed && blockMandatoryComplete(merged)) return;
     const now = new Date().toISOString();
-    const next = localTasks.map((task) =>
-      task.task_id === taskId ? applyTaskCompletion(task, completed, now) : task,
+    const next = localTasks.map((t) =>
+      t.task_id === taskId ? applyTaskCompletion({ ...t, ...merge }, completed, now) : t,
     );
     await persist(next);
   };
@@ -260,7 +298,7 @@ export function ShiftTaskChecklist({
           Task completion with evidence tracking
         </p>
         <p className="mt-1 text-[11px] font-semibold" style={{ color: MUTED }}>
-          Tap the circle to check off a task. Green = strong evidence (photo/voice). Yellow ⚠️ = no evidence yet.
+          Expand a task to add photo, voice, or notes. Mandatory tasks cannot be checked off until evidence is added.
         </p>
         {noEvidenceCount > 0 && (
           <p className="mt-1 text-[11px] font-bold text-amber-700">
@@ -423,18 +461,25 @@ function SessionTaskGroup({
   saveStrongEvidence: (taskId: string, patch: Partial<ShiftTask>) => void;
   saveQuickNote: (taskId: string, note: string) => void;
   toggleTaskComplete: (taskId: string) => void;
-  markTaskComplete: (taskId: string, completed?: boolean) => void;
+  markTaskComplete: (taskId: string, completed?: boolean, merge?: Partial<ShiftTask>) => void;
   sessionId?: string | null;
   participantName?: string;
 }) {
+  const [evidenceReady, setEvidenceReady] = useState<Record<string, boolean>>({});
+
   return (
     <div className="space-y-2">
       {tasks.map((task) => {
         const required = isMandatory(task);
         const expanded = expandedNote === task.task_id;
+        const panelOpen = expanded || (required && !task.completed);
         const updates = taskUpdateCount(task);
         const withEvidence = task.evidence_status === "with_evidence";
         const withoutEvidence = task.completed && task.evidence_status === "without_evidence";
+        const readyToComplete =
+          !task.completed &&
+          (canMarkTaskComplete(task) || evidenceReady[task.task_id] === true);
+        const needsEvidence = required && !task.completed && !readyToComplete;
 
         if (task.completed && !expanded) {
           return (
@@ -498,8 +543,8 @@ function SessionTaskGroup({
             key={task.task_id}
             className={cn(
               "overflow-hidden rounded-xl border transition-colors",
-              expanded ? "border-[#C4B5FD] shadow-sm" : "border-[#E2DEF2]",
-              task.completed ? "bg-slate-50" : "bg-white",
+              panelOpen ? "border-[#C4B5FD] shadow-sm" : "border-[#E2DEF2]",
+              task.completed ? "bg-slate-50" : needsEvidence ? "bg-white" : readyToComplete ? "bg-emerald-50/30" : "bg-white",
             )}
           >
             <div className="flex w-full items-center gap-1 p-3">
@@ -519,18 +564,25 @@ function SessionTaskGroup({
                     {task.label}
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold" style={{ color: MUTED }}>
-                    {required ? "Required" : "Optional"}
+                    {required ? "Mandatory · evidence required" : "Optional"}
                     {task.completed && withoutEvidence && " · ⚠️ No evidence"}
                     {task.completed && withEvidence && " · With evidence"}
-                    {!task.completed && " · Tap checkbox or add evidence"}
+                    {!task.completed && needsEvidence && " · Add photo, voice, or note (20+ chars)"}
+                    {!task.completed && readyToComplete && " · Ready to complete"}
                   </p>
-                  {task.context_note && !expanded && (
+                  {task.context_note && !panelOpen && (
                     <p className="mt-1 line-clamp-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
                       {task.context_note}
                     </p>
                   )}
                 </div>
-                {expanded ? (
+                {!task.completed && needsEvidence && (
+                  <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+                )}
+                {!task.completed && readyToComplete && (
+                  <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
+                )}
+                {panelOpen ? (
                   <ChevronUp size={18} className="shrink-0" style={{ color: MUTED }} />
                 ) : (
                   <ChevronRight size={18} className="shrink-0" style={{ color: MUTED }} />
@@ -538,7 +590,7 @@ function SessionTaskGroup({
               </button>
             </div>
 
-            {!expanded && (
+            {!panelOpen && (
               <div className="border-t border-[#ECE6FB] px-3 pb-3">
                 <QuickNoteField
                   task={task}
@@ -548,19 +600,24 @@ function SessionTaskGroup({
               </div>
             )}
 
-            {expanded && sessionId && (
+            {panelOpen && sessionId && (
               <ShiftTaskEvidencePanel
                 task={task}
                 sessionId={sessionId}
                 participantName={participantName}
                 disabled={disabled}
                 variant="thread"
-                onTaskPatch={(patch) => void saveEvidence(task.task_id, patch)}
-                onStrongEvidence={(patch) => void saveStrongEvidence(task.task_id, patch)}
-                onMarkComplete={() => void markTaskComplete(task.task_id, true)}
+                onTaskPatch={(patch) => saveEvidence(task.task_id, patch)}
+                onStrongEvidence={(patch) => saveStrongEvidence(task.task_id, patch)}
+                onMarkComplete={(merge) => markTaskComplete(task.task_id, true, merge)}
+                onReadyChange={(ready) => {
+                  setEvidenceReady((prev) =>
+                    prev[task.task_id] === ready ? prev : { ...prev, [task.task_id]: ready },
+                  );
+                }}
               />
             )}
-            {expanded && !sessionId && (
+            {panelOpen && !sessionId && (
               <div className="border-t border-[#E2DEF2] bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
                 Start a session to capture photo, voice, and written evidence for this task.
               </div>

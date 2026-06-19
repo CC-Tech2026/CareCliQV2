@@ -1308,16 +1308,19 @@ def clock_in_shift(
 
     if not already_clocked:
         validate_clock_in_window(str(shift.get("scheduled_start") or ""))
-        if method:
-            check_in_meta = _apply_verified_check_in(
-                shift,
-                organization_id,
-                method=method,
-                location=location,
-                qr_token=qr_token,
+        if not method:
+            raise ValueError(
+                "Verified check-in required. Choose GPS or scan the location QR code."
             )
-            verification_distance = check_in_meta.pop("_verification_distance_meters", None)
-            qr_code_id = check_in_meta.pop("_qr_code_id", None)
+        check_in_meta = _apply_verified_check_in(
+            shift,
+            organization_id,
+            method=method,
+            location=location,
+            qr_token=qr_token,
+        )
+        verification_distance = check_in_meta.pop("_verification_distance_meters", None)
+        qr_code_id = check_in_meta.pop("_qr_code_id", None)
 
     normalized_client_ts = normalize_client_timestamp(client_timestamp)
     now = normalized_client_ts or _now_iso()
@@ -1400,6 +1403,18 @@ def update_shift_tasks(
         return None
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
+
+    for task in tasks:
+        is_mandatory = task.get("mandatory") is True or (
+            task.get("type") == "default"
+            and task.get("mandatory") is not False
+            and int(task.get("order") or 0) <= 4
+        )
+        if is_mandatory and task.get("completed") and not _mandatory_task_satisfied(task):
+            label = str(task.get("label") or "task")
+            raise ValueError(
+                f'Mandatory task "{label}" needs a photo, voice memo, or note of at least 20 characters.'
+            )
 
     now = _now_iso()
     try:
@@ -1805,12 +1820,27 @@ def start_session_by_id(
     return _format_start_session_response(updated_session, updated_shift)
 
 
+def _mandatory_task_satisfied(task: dict[str, Any]) -> bool:
+    if not task.get("completed"):
+        return False
+    note = str(task.get("note") or task.get("context_note") or "").strip()
+    has_photo = bool(task.get("photo_evidence")) or bool(task.get("has_photo")) or bool(task.get("photo_thumbnails"))
+    has_voice = bool(task.get("voice_evidence")) or bool(task.get("has_voice")) or bool(task.get("voice_duration_seconds"))
+    if has_photo or has_voice:
+        return True
+    if len(note) >= 20:
+        return True
+    return False
+
+
 def _mandatory_tasks_complete(tasks: list[dict[str, Any]]) -> bool:
     for task in tasks:
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default" and task.get("mandatory") is not False and int(task.get("order") or 0) <= 4
         )
-        if is_mandatory and not task.get("completed"):
+        if not is_mandatory:
+            continue
+        if not _mandatory_task_satisfied(task):
             return False
     return True
 
@@ -2073,4 +2103,146 @@ def sync_session_task_evidence(
         "session_id": session_id,
         "synced_ids": synced_ids,
         "task_evidence": merged,
+    }
+
+
+def list_shift_visit_notes(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return []
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("*")
+            .eq("shift_id", shift_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def create_shift_visit_note(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+    content: str,
+    category: Optional[str] = None,
+    session_id: Optional[str] = None,
+    attachment_urls: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    text = (content or "").strip()
+    if not text:
+        raise ValueError("Note content is required.")
+    now = _now_iso()
+    payload = {
+        "organization_id": organization_id,
+        "shift_id": shift_id,
+        "worker_id": worker_id,
+        "session_id": session_id or shift.get("session_id"),
+        "content": text,
+        "category": (category or "").strip() or None,
+        "attachment_urls": attachment_urls or [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        result = get_supabase_admin().table("shift_visit_notes").insert(payload).execute()
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+
+
+def list_shift_office_messages(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return []
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_office_messages")
+            .select("*")
+            .eq("shift_id", shift_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def create_shift_office_message(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+    message: str,
+    priority: str = "normal",
+    attachment_urls: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    text = (message or "").strip()
+    if not text:
+        raise ValueError("Message is required.")
+    priority_norm = priority if priority in ("normal", "urgent", "emergency") else "normal"
+    now = _now_iso()
+    payload = {
+        "organization_id": organization_id,
+        "shift_id": shift_id,
+        "worker_id": worker_id,
+        "message": text,
+        "priority": priority_norm,
+        "attachment_urls": attachment_urls or [],
+        "created_at": now,
+    }
+    try:
+        result = get_supabase_admin().table("shift_office_messages").insert(payload).execute()
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+
+
+def get_shift_location_details(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Navigation payload for CARECLIQV2-214."""
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    return {
+        "shift_id": shift_id,
+        "participant_name": shift.get("participant_name"),
+        "address": shift.get("participant_address"),
+        "access_instructions": shift.get("access_instructions"),
+        "entry_instructions": shift.get("entry_instructions"),
+        "visit_notes": shift.get("visit_notes"),
+        "coordinator_notes": shift.get("coordinator_notes"),
     }

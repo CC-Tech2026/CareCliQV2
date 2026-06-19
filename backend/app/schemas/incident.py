@@ -52,6 +52,7 @@ def is_ndis_reportable(incident_type: str, severity: str) -> bool:
 class IncidentCreate(BaseModel):
     participant_id: Optional[str] = None
     session_id: Optional[str] = None
+    shift_id: Optional[str] = None
     title: str
     description: str
     incident_type: str = "other"
@@ -63,6 +64,9 @@ class IncidentCreate(BaseModel):
     worker_actions: Optional[str] = None
     follow_up_required: bool = False
     follow_up_date: Optional[date] = None
+    escalate: bool = False
+    photo_urls: Optional[list[str]] = None
+    photo_data: Optional[list[str]] = None
     created_by: Optional[str] = None
 
 
