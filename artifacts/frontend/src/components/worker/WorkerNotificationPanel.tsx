@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { jsonFetch } from "@/services/http";
 import {
   Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
-  Search, Filter,
+  Search, Filter, Send, ChevronRight, Zap, AlertCircle,
 } from "lucide-react";
 
 const PLUM   = "#5533CC";
@@ -22,6 +22,16 @@ const SEVERITY_LEVELS = {
   low: { color: "#10B981", label: "Low", bg: "#F0FDF4" },
 };
 
+export interface MessageAction {
+  id: string;
+  type: "link" | "action" | "reply";
+  label: string;
+  icon?: React.ReactNode;
+  href?: string;
+  onClick?: () => void;
+  variant?: "primary" | "secondary";
+}
+
 export interface WorkerMessage {
   id: string;
   alert_type: string;
@@ -30,6 +40,9 @@ export interface WorkerMessage {
   severity: "urgent" | "high" | "medium" | "low";
   is_read: boolean;
   created_at: string;
+  patient_id?: string;
+  session_id?: string;
+  actions?: MessageAction[];
 }
 
 async function fetchWorkerMessages(unread_only = false): Promise<{ messages: WorkerMessage[]; count: number }> {
@@ -52,6 +65,8 @@ async function fetchWorkerMessages(unread_only = false): Promise<{ messages: Wor
         severity: msg.severity || "low",
         is_read: msg.is_read || false,
         created_at: msg.created_at,
+        patient_id: msg.patient_id,
+        session_id: msg.session_id,
       })),
       count: data.count || 0,
     };
@@ -78,6 +93,55 @@ async function markMessageRead(messageId: string): Promise<void> {
   }
 }
 
+async function replyToMessage(messageId: string, replyText: string): Promise<void> {
+  console.log("[WorkerNotificationPanel] Replying to message:", messageId);
+  
+  try {
+    await jsonFetch(`/api/worker/messages/${messageId}/reply`, {
+      method: "POST",
+      body: JSON.stringify({ message: replyText }),
+    });
+    console.log("[WorkerNotificationPanel] Reply sent successfully");
+  } catch (error) {
+    console.error("[WorkerNotificationPanel] Failed to send reply:", error);
+    throw error;
+  }
+}
+
+function generateMessageActions(message: WorkerMessage): MessageAction[] {
+  const actions: MessageAction[] = [];
+
+  if (message.alert_type === "credential_expiry") {
+    actions.push({
+      id: "update-credential",
+      type: "link",
+      label: "Update Credential",
+      icon: <CheckCircle2 size={16} />,
+      href: "/settings?tab=credentials",
+      variant: "primary",
+    });
+  } else if (message.alert_type === "missing_credential") {
+    actions.push({
+      id: "add-credential",
+      type: "link",
+      label: "Add Credential Now",
+      icon: <Zap size={16} />,
+      href: "/settings?tab=credentials",
+      variant: "primary",
+    });
+  } else if (message.alert_type === "coordinator_message") {
+    actions.push({
+      id: "reply",
+      type: "reply",
+      label: "Reply to Coordinator",
+      icon: <Send size={16} />,
+      variant: "primary",
+    });
+  }
+
+  return actions;
+}
+
 function relativeTime(iso?: string) {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
@@ -96,12 +160,278 @@ function getSeverityMeta(severity: string) {
   );
 }
 
+// ── Message Detail Modal ──────────────────────────────────────────────────────────
+function MessageDetailModal({
+  message,
+  onClose,
+  onRead,
+  onRefresh,
+}: {
+  message: WorkerMessage;
+  onClose: () => void;
+  onRead: () => void;
+  onRefresh?: () => void;
+}) {
+  const meta = getSeverityMeta(message.severity);
+  const [replyText, setReplyText] = useState("");
+  const [isReplying, setIsReplying] = useState(false);
+  const [replySent, setReplySent] = useState(false);
+  
+  const actions = generateMessageActions(message);
+  const qc = useQueryClient();
+  
+  const icon =
+    message.severity === "urgent" ? (
+      <AlertTriangle size={24} />
+    ) : message.severity === "high" ? (
+      <AlertTriangle size={24} />
+    ) : (
+      <Info size={24} />
+    );
+
+  const handleMarkRead = () => {
+    if (!message.is_read) {
+      onRead();
+    }
+  };
+
+  const handleAction = (action: MessageAction) => {
+    if (action.type === "link" && action.href) {
+      window.location.href = action.href;
+    } else if (action.type === "reply") {
+      setIsReplying(!isReplying);
+    } else if (action.onClick) {
+      action.onClick();
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!replyText.trim()) return;
+    
+    try {
+      await replyToMessage(message.id, replyText);
+      setReplySent(true);
+      setReplyText("");
+      setTimeout(() => {
+        setIsReplying(false);
+        setReplySent(false);
+        if (onRefresh) onRefresh();
+      }, 2000);
+    } catch (error) {
+      console.error("Failed to send reply:", error);
+    }
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40"
+        onClick={onClose}
+        style={{ zIndex: 40 }}
+      />
+
+      {/* Modal */}
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        onClick={onClose}
+        style={{ zIndex: 50 }}
+      >
+        <div
+          className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div
+            className="px-5 py-4 border-b flex items-start justify-between"
+            style={{ borderColor: BORDER }}
+          >
+            <div className="flex items-start gap-3 flex-1">
+              <div
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 flex-shrink-0"
+                style={{ background: meta.bg, color: meta.color }}
+              >
+                {icon}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-[15px] font-bold" style={{ color: TEXT }}>
+                  {message.title}
+                </h3>
+                <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>
+                  {relativeTime(message.created_at)}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+              title="Close"
+            >
+              <X size={18} style={{ color: MUTED }} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {/* Severity & Type */}
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <span
+                className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase"
+                style={{ background: meta.bg, color: meta.color }}
+              >
+                {meta.label}
+              </span>
+              <span
+                className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase"
+                style={{ background: SOFT, color: PLUM }}
+              >
+                {message.alert_type === "coordinator_message" ? "Coordinator" : message.alert_type}
+              </span>
+            </div>
+
+            {/* Message Body */}
+            <div className="mb-4">
+              <p
+                className="text-[14px] leading-relaxed whitespace-pre-wrap"
+                style={{ color: TEXT }}
+              >
+                {message.message}
+              </p>
+            </div>
+
+            {/* Actions */}
+            {actions.length > 0 && (
+              <div className="mb-4 flex flex-col gap-2">
+                {actions.map((action) => (
+                  <button
+                    key={action.id}
+                    onClick={() => handleAction(action)}
+                    className="w-full px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all flex items-center justify-center gap-2"
+                    style={{
+                      background: action.variant === "primary" ? PLUM : SOFT,
+                      color: action.variant === "primary" ? "#fff" : TEXT,
+                    }}
+                  >
+                    {action.icon}
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Reply Form */}
+            {isReplying && message.alert_type === "coordinator_message" && (
+              <div
+                className="mb-4 p-3 rounded-lg border"
+                style={{ background: SOFT, borderColor: BORDER }}
+              >
+                <p className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>
+                  Reply to Coordinator
+                </p>
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Type your message..."
+                  className="w-full p-2.5 rounded border text-[13px] resize-none focus:outline-none focus:ring-2"
+                  style={{
+                    borderColor: BORDER,
+                    "--tw-ring-color": `${PLUM}20`,
+                  } as any}
+                  rows={3}
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => setIsReplying(false)}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors"
+                    style={{ background: BORDER, color: TEXT }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendReply}
+                    disabled={!replyText.trim()}
+                    className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors text-white disabled:opacity-50"
+                    style={{ background: PLUM }}
+                  >
+                    {replySent ? "✓ Sent" : "Send Reply"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Meta Information */}
+            <div
+              className="p-3 rounded-lg"
+              style={{ background: SOFT, borderLeft: `3px solid ${meta.color}` }}
+            >
+              <p className="text-[11px] font-semibold" style={{ color: MUTED }}>
+                Message Details
+              </p>
+              <div className="mt-2 space-y-1 text-[12px]" style={{ color: TEXT }}>
+                <div className="flex justify-between">
+                  <span>Status:</span>
+                  <span className="font-semibold">
+                    {message.is_read ? "✓ Read" : "● Unread"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Received:</span>
+                  <span className="font-semibold">
+                    {new Date(message.created_at).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>ID:</span>
+                  <span
+                    className="font-mono text-[10px] truncate"
+                    title={message.id}
+                  >
+                    {message.id.slice(0, 8)}...
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div
+            className="px-5 py-3 border-t flex gap-2 justify-end"
+            style={{ borderColor: BORDER }}
+          >
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors"
+              style={{
+                background: BORDER,
+                color: TEXT,
+              }}
+            >
+              Close
+            </button>
+            {!message.is_read && !isReplying && (
+              <button
+                onClick={handleMarkRead}
+                className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors text-white"
+                style={{ background: PLUM }}
+              >
+                Mark as Read
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function MessageRow({
   message,
   onRead,
+  onSelectMessage,
 }: {
   message: WorkerMessage;
   onRead: (id: string) => void;
+  onSelectMessage: () => void;
 }) {
   const meta = getSeverityMeta(message.severity);
   const icon =
@@ -115,9 +445,9 @@ function MessageRow({
 
   return (
     <div
-      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer"
-      style={{ opacity: message.is_read ? 0.6 : 1 }}
-      onClick={() => !message.is_read && onRead(message.id)}
+      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer border-b"
+      style={{ opacity: message.is_read ? 0.6 : 1, borderColor: BORDER }}
+      onClick={onSelectMessage}
     >
       {/* Icon */}
       <div
@@ -132,10 +462,10 @@ function MessageRow({
         <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: message.is_read ? 400 : 600 }}>
           {message.title}
         </p>
-        <p className="text-[12px] text-[#7A6A9E] mt-0.5 line-clamp-1">
+        <p className="text-[12px] text-[#7A6A9E] mt-0.5 line-clamp-2 whitespace-pre-wrap">
           {message.message}
         </p>
-        <div className="flex items-center gap-2 mt-0.5">
+        <div className="flex items-center gap-2 mt-2">
           <span
             className="text-[10px] font-semibold uppercase"
             style={{ color: meta.color }}
@@ -144,6 +474,9 @@ function MessageRow({
           </span>
           <span className="text-[10px]" style={{ color: MUTED }}>
             {relativeTime(message.created_at)}
+          </span>
+          <span className="text-[10px] ml-auto" style={{ color: MUTED }}>
+            Click to view
           </span>
         </div>
       </div>
@@ -165,8 +498,9 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<WorkerMessage | null>(null);
 
-  const { data: response, isLoading, error } = useOrgQuery(
+  const { data: response, isLoading, error, refetch } = useOrgQuery(
     ["worker-messages", orgId],
     {
       queryFn: () => fetchWorkerMessages(),
@@ -359,9 +693,23 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
               key={message.id}
               message={message}
               onRead={(id) => readMut.mutate(id)}
+              onSelectMessage={() => setSelectedMessage(message)}
             />
           ))}
       </div>
+
+      {/* Message Detail Modal */}
+      {selectedMessage && (
+        <MessageDetailModal
+          message={selectedMessage}
+          onClose={() => setSelectedMessage(null)}
+          onRead={() => {
+            readMut.mutate(selectedMessage.id);
+            setSelectedMessage(null);
+          }}
+          onRefresh={() => refetch()}
+        />
+      )}
     </div>
   );
 }

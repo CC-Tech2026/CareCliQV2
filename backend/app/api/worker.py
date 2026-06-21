@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any, Literal, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -125,6 +126,10 @@ class ShiftVisitNoteCreate(BaseModel):
 class ShiftOfficeMessageCreate(BaseModel):
     message: str = Field(min_length=1)
     priority: Literal["normal", "urgent", "emergency"] = "normal"
+
+
+class MessageReplyCreate(BaseModel):
+    message: str = Field(min_length=1)
 
 
 class UploadEvidenceMeta(BaseModel):
@@ -1022,7 +1027,7 @@ async def get_worker_messages(
         # Get coordinator messages and credential reminders targeted at this worker
         query = (
             supabase.table("alerts")
-            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id")
+            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id")
             .eq("organization_id", org_id)
             .eq("recipient_user_id", worker_id)
             .order("created_at", desc=True)
@@ -1072,3 +1077,73 @@ async def mark_worker_message_read(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to mark message as read: {exc}")
+
+
+@router.post("/messages/{message_id}/reply")
+async def reply_to_message(
+    message_id: str,
+    body: MessageReplyCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Worker sends a reply to a coordinator message.
+    
+    Args:
+        message_id: ID of the original message to reply to
+        body: Request body with 'message' field containing the reply text
+        current_user: Authenticated user details
+    
+    Returns:
+        Success response with new reply message ID
+    """
+    _require_worker(current_user)
+    
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    reply_text = body.message.strip()
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Reply message cannot be empty")
+    
+    try:
+        # Verify the original message exists and is targeted at this worker
+        original_msg = (
+            supabase.table("alerts")
+            .select("id, recipient_user_id, patient_id, session_id")
+            .eq("id", message_id)
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        if not original_msg.data:
+            raise HTTPException(status_code=404, detail="Original message not found")
+        
+        # Get coordinator who sent the original message
+        # For now, we'll create the reply as a new alert for all coordinators in the org
+        # In a real scenario, you'd track who sent the original message
+        
+        # Create reply alert
+        reply_id = str(uuid4())
+        reply_alert = {
+            "id": reply_id,
+            "organization_id": org_id,
+            "alert_type": "worker_reply",
+            "title": f"Reply from Worker",
+            "message": reply_text,
+            "severity": "medium",
+            "is_read": False,
+            "patient_id": original_msg.data.get("patient_id"),
+            "session_id": original_msg.data.get("session_id"),
+            "sender_user_id": worker_id,  # Track who replied
+            "related_message_id": message_id,  # Link to original message
+        }
+        
+        supabase.table("alerts").insert(reply_alert).execute()
+        
+        return {"success": True, "reply_id": reply_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send reply: {exc}")
