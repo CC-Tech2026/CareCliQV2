@@ -41,14 +41,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Form,
   FormControl,
   FormField,
@@ -406,7 +398,7 @@ function ParticipantForm({
             )}
           />
         </div>
-        <DialogFooter>
+        <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel
           </Button>
@@ -414,17 +406,17 @@ function ParticipantForm({
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {submitLabel}
           </Button>
-        </DialogFooter>
+        </div>
       </form>
     </Form>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Edit Participant Dialog
+// Edit Participant Inline Panel
 // ---------------------------------------------------------------------------
 
-function EditParticipantDialog({
+function EditParticipantPanel({
   participant,
   onSaved,
 }: {
@@ -482,33 +474,31 @@ function EditParticipantDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <Edit className="h-3.5 w-3.5" /> Edit
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Edit Participant</DialogTitle>
-        </DialogHeader>
-        <ParticipantForm
-          form={editForm}
-          onSubmit={(data) => updateMutation.mutate(data)}
-          isPending={updateMutation.isPending}
-          onCancel={() => setOpen(false)}
-          submitLabel="Save Changes"
-        />
-      </DialogContent>
-    </Dialog>
+    <div>
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
+        <Edit className="h-3.5 w-3.5" /> {open ? "Close Edit" : "Edit"}
+      </Button>
+      {open && (
+        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Edit Participant</h4>
+          <ParticipantForm
+            form={editForm}
+            onSubmit={(data) => updateMutation.mutate(data)}
+            isPending={updateMutation.isPending}
+            onCancel={() => setOpen(false)}
+            submitLabel="Save Changes"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// NDIS Plan Setup Dialog
+// NDIS Plan Setup Inline Panel
 // ---------------------------------------------------------------------------
 
-function SetupPlanDialog({
+function SetupPlanPanel({
   participantId,
   onSaved,
 }: {
@@ -550,18 +540,15 @@ function SetupPlanDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <PlusCircle className="h-3.5 w-3.5" /> Set Up NDIS Plan
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Set Up NDIS Plan</DialogTitle>
-        </DialogHeader>
-        <Form {...planForm}>
-          <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
+    <div>
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
+        <PlusCircle className="h-3.5 w-3.5" /> {open ? "Close Plan Setup" : "Set Up NDIS Plan"}
+      </Button>
+      {open && (
+        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Set Up NDIS Plan</h4>
+          <Form {...planForm}>
+            <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={planForm.control}
@@ -663,7 +650,7 @@ function SetupPlanDialog({
                 )}
               />
             </div>
-            <DialogFooter>
+            <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
@@ -671,11 +658,12 @@ function SetupPlanDialog({
                 {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Save Plan
               </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+            </div>
+            </form>
+          </Form>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -742,7 +730,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
     onError: () => toastFn({ title: "Save failed", variant: "destructive" }),
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "restricted">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "shift_context" | "restricted">("overview");
 
   if (participantQuery.isLoading) {
     return (
@@ -816,6 +804,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     { id: "goals"       as const, label: "Goals",       icon: Target       },
     { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
     { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "shift_context" as const, label: "Shift Context", icon: Users }] : []),
     ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
   ];
 
@@ -839,11 +828,11 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             </h3>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <EditParticipantDialog
+            <EditParticipantPanel
               participant={participant}
               onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
             />
-            <SetupPlanDialog participantId={id} onSaved={onRefreshList} />
+            <SetupPlanPanel participantId={id} onSaved={onRefreshList} />
           </div>
         </div>
 
@@ -1225,6 +1214,27 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 </Button>
               </div>
             )}
+          </section>
+        )}
+
+        {/* SHIFT CONTEXT TAB — coordinator only */}
+        {activeTab === "shift_context" && isCoordinator && (
+          <section className="space-y-3">
+            <div className="rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5 text-violet-700" />
+                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">Worker Shift Context</p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
+                  Coordinator Authoring
+                </span>
+              </div>
+              <p className="text-[12px] leading-relaxed text-violet-700/80">
+                This information appears in the Support Worker My Shift experience. Keep instructions concise, current, and action-oriented.
+              </p>
+            </div>
+
             <ParticipantShiftContextEditor participantId={id} />
           </section>
         )}

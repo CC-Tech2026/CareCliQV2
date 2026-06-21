@@ -11,22 +11,16 @@ import {
   getCoordinatorWorkerStats, getCoordinatorTeam,
   deactivateWorker, activateWorker,
   assignWorkerToClient, unassignWorkerFromClient, getWorkerClients,
+  getCoordinatorCredentialAlerts, sendBulkReminders,
   type WorkerStats,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
+import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -69,10 +63,13 @@ export default function Team() {
   const [deactivateTarget, setDeactivateTarget] = useState<WorkerStats | null>(null);
   const [assignWorker, setAssignWorker] = useState<WorkerStats | null>(null);
   const [assignPatientId, setAssignPatientId] = useState("");
+  const [shiftAssignmentOpen, setShiftAssignmentOpen] = useState(false);
 
-  const { user } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user;
   const orgId = user?.organizationId ?? "__no_org__";
   const stats = useOrgQuery(["coordinator", "worker-stats"], { queryFn: getCoordinatorWorkerStats });
+  const credentialAlerts = useOrgQuery(["coordinator-credential-alerts"], { queryFn: getCoordinatorCredentialAlerts });
   const participants = useGetParticipants();
 
   const deactivateMut = useMutation({
@@ -92,6 +89,15 @@ export default function Team() {
       assignWorkerToClient(workerId, patientId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Client assigned" }); setAssignWorker(null); setAssignPatientId(""); },
     onError: () => toast({ title: "Assignment failed", variant: "destructive" }),
+  });
+
+  const reminderMut = useMutation({
+    mutationFn: (workerId: string) => sendBulkReminders([workerId], "Your credential is expiring soon. Please update it before your next shift."),
+    onSuccess: (_, workerId) => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator-credential-alerts"] });
+      toast({ title: "Reminder sent", description: `Credential reminder sent to ${workerId}.` });
+    },
+    onError: () => toast({ title: "Failed to send reminder", variant: "destructive" }),
   });
 
   const handleInvite = async () => {
@@ -115,6 +121,14 @@ export default function Team() {
 
   const workers = stats.data ?? [];
   const allParticipants = (participants.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
+  const alertRows = credentialAlerts.data?.alerts ?? [];
+
+  function getCredentialSummary(workerId: string) {
+    const workerAlerts = alertRows.filter((alert) => alert.user_id === workerId);
+    const expired = workerAlerts.filter((alert) => alert.status === "expired").length;
+    const expiring = workerAlerts.filter((alert) => alert.status === "expiring").length;
+    return { workerAlerts, expired, expiring };
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
@@ -125,13 +139,22 @@ export default function Team() {
           <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Team</h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>{workers.length} team member{workers.length !== 1 ? "s" : ""}</p>
         </div>
-        <Button
-          onClick={() => setInviteOpen(true)}
-          className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
-          style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
-        >
-          <UserPlus size={16} /> Invite Worker
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setShiftAssignmentOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
+            style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})` }}
+          >
+            <Clock size={16} /> Assign Shift
+          </Button>
+          <Button
+            onClick={() => setInviteOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
+            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          >
+            <UserPlus size={16} /> Invite Worker
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -170,6 +193,30 @@ export default function Team() {
                 className="rounded-2xl bg-white p-5 space-y-4"
                 style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}
               >
+                {(() => {
+                  const summary = getCredentialSummary(w.id);
+                  if (summary.workerAlerts.length === 0) return null;
+                  return (
+                    <div className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: summary.expired > 0 ? "#FECACA" : "#FDE68A", background: summary.expired > 0 ? "#FEF2F2" : "#FFFBEB", color: summary.expired > 0 ? "#B91C1C" : "#92400E" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black">
+                          {summary.expired > 0
+                            ? `${summary.expired} expired credential${summary.expired > 1 ? "s" : ""}`
+                            : `${summary.expiring} credential${summary.expiring > 1 ? "s" : ""} expiring soon`}
+                        </span>
+                        <button
+                          type="button"
+                          className="font-black underline underline-offset-2"
+                          onClick={() => reminderMut.mutate(w.id)}
+                          disabled={reminderMut.isPending}
+                        >
+                          Send reminder
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Worker identity */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -280,6 +327,16 @@ export default function Team() {
                     <Link2 size={12} /> Assign Client
                   </Button>
 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 border-amber-200 text-amber-700 hover:bg-amber-50"
+                    onClick={() => reminderMut.mutate(w.id)}
+                    disabled={reminderMut.isPending}
+                  >
+                    <Mail size={12} /> Reminder
+                  </Button>
+
                   {/* Activate / Deactivate */}
                   {w.is_active !== false ? (
                     <Button
@@ -308,11 +365,11 @@ export default function Team() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <CredentialChip
                   label="WWCC"
-                  status={w.is_active !== false ? "verified" : "inactive"}
+                  status={getCredentialSummary(w.id).expired > 0 ? "warn" : w.is_active !== false ? "verified" : "inactive"}
                 />
                 <CredentialChip
                   label="First Aid"
-                  status={w.is_active !== false ? "verified" : "inactive"}
+                  status={getCredentialSummary(w.id).expiring > 0 ? "warn" : w.is_active !== false ? "verified" : "inactive"}
                 />
                 <CredentialChip
                   label={`${w.total_sessions} sessions`}
@@ -334,16 +391,16 @@ export default function Team() {
         </div>
       )}
 
-      {/* ── INVITE DIALOG ────────────────────────────────── */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2" style={{ color: PLUM }}>
+      {inviteOpen && (
+        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-black flex items-center gap-2" style={{ color: PLUM }}>
               <UserPlus size={18} /> Invite Team Member
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
+            </h3>
+            <Button variant="outline" size="sm" onClick={() => setInviteOpen(false)}>Close</Button>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email Address</label>
               <Input
                 type="email"
@@ -366,7 +423,7 @@ export default function Team() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
             <Button
               onClick={handleInvite}
@@ -376,68 +433,70 @@ export default function Team() {
             >
               {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending…</> : "Send Invite"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </section>
+      )}
 
-      {/* ── DEACTIVATE CONFIRMATION ───────────────────────── */}
-      <AlertDialog open={!!deactivateTarget} onOpenChange={(o) => { if (!o) setDeactivateTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate {deactivateTarget?.full_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This worker will lose access to CareCliQ immediately. Their existing session records will be preserved. You can reactivate them at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+      {deactivateTarget && (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-3">
+          <h3 className="text-base font-black text-red-700">Deactivate {deactivateTarget.full_name}?</h3>
+          <p className="text-sm text-red-700">
+            This worker will lose access to CareCliQ immediately. Their existing session records will be preserved. You can reactivate them at any time.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>Cancel</Button>
+            <Button
               className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={() => deactivateTarget && deactivateMut.mutate(deactivateTarget.id)}
+              onClick={() => deactivateMut.mutate(deactivateTarget.id)}
               disabled={deactivateMut.isPending}
             >
               {deactivateMut.isPending ? "Deactivating…" : "Yes, Deactivate"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ── ASSIGN CLIENT DIALOG ──────────────────────────── */}
-      <Dialog open={!!assignWorker} onOpenChange={(o) => { if (!o) { setAssignWorker(null); setAssignPatientId(""); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle style={{ color: PLUM }}>
-              Assign Client to {assignWorker?.full_name}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Select Participant</label>
-              <Select value={assignPatientId} onValueChange={setAssignPatientId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a participant…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allParticipants.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            </Button>
           </div>
-          <DialogFooter>
+        </section>
+      )}
+
+      {assignWorker && (
+        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-lg font-black" style={{ color: PLUM }}>
+              Assign Client to {assignWorker.full_name}
+            </h3>
+            <Button variant="outline" size="sm" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>Close</Button>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Select Participant</label>
+            <Select value={assignPatientId} onValueChange={setAssignPatientId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a participant…" />
+              </SelectTrigger>
+              <SelectContent>
+                {allParticipants.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>Cancel</Button>
             <Button
-              onClick={() => assignWorker && assignPatientId && assignMut.mutate({ workerId: assignWorker.id, patientId: assignPatientId })}
+              onClick={() => assignPatientId && assignMut.mutate({ workerId: assignWorker.id, patientId: assignPatientId })}
               disabled={!assignPatientId || assignMut.isPending}
               className="text-white"
               style={{ background: PLUM }}
             >
               {assignMut.isPending ? "Assigning…" : "Assign"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </section>
+      )}
+
+      {/* Shift Assignment Modal */}
+      <ShiftAssignmentModal
+        open={shiftAssignmentOpen}
+        onOpenChange={setShiftAssignmentOpen}
+        workers={workers}
+      />
     </div>
   );
 }

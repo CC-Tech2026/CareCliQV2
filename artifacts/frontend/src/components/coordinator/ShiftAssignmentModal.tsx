@@ -1,0 +1,368 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, addHours } from "date-fns";
+import { useGetParticipants } from "@workspace/api-client-react";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
+import {
+  assignShift,
+  getCoordinatorCredentialAlerts,
+  getCoordinatorWorkerCredentialStatus,
+  type WorkerStats,
+} from "@/services/coordinatorService";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent,
+} from "@/components/ui/dialog";
+import {
+  CheckCircle2, AlertTriangle, Loader2, User2,
+  CalendarClock, ShieldCheck,
+} from "lucide-react";
+
+const PLUM   = "#5533CC";
+const CORAL  = "#F03060";
+const TEXT   = "#1E1640";
+const MUTED  = "#7A6A9E";
+const BORDER = "#E2DEF2";
+const SOFT   = "#F5F3FC";
+
+const SHIFT_TYPE_LABELS: Record<string, string> = {
+  standard_support: "Standard Support",
+  community_access: "Community Access",
+  allied_health:    "Allied Health Session",
+  respite_care:     "Respite Care",
+};
+
+interface ShiftAssignmentModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  worker?: WorkerStats | null;
+  workers?: WorkerStats[];
+}
+
+export function ShiftAssignmentModal({
+  open,
+  onOpenChange,
+  worker,
+  workers = [],
+}: ShiftAssignmentModalProps) {
+  const { toast } = useToast();
+  const qc   = useQueryClient();
+  const auth = useAuth();
+  const user = auth?.user;
+  const orgId = user?.organizationId ?? "__no_org__";
+
+  const [selectedWorkerId,      setSelectedWorkerId]      = useState(worker?.id ?? "");
+  const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [scheduledStart,        setScheduledStart]        = useState("");
+  const [scheduledEnd,          setScheduledEnd]          = useState("");
+  const [shiftType,             setShiftType]             = useState("standard_support");
+
+  useEffect(() => {
+    if (worker?.id) setSelectedWorkerId(worker.id);
+  }, [worker?.id, open]);
+
+  const participants   = useGetParticipants();
+  const credAlertsQuery = useOrgQuery([orgId, "coordinator-credential-alerts"], {
+    queryFn: getCoordinatorCredentialAlerts,
+    staleTime: 5 * 60_000,
+  });
+  const credStatusQuery = useOrgQuery(
+    [orgId, "coordinator-worker-credential-status", selectedWorkerId, shiftType],
+    {
+      queryFn: () => getCoordinatorWorkerCredentialStatus(selectedWorkerId, shiftType),
+      staleTime: 60_000,
+      enabled: Boolean(selectedWorkerId),
+    }
+  );
+
+  const assignMut = useMutation({
+    mutationFn: () =>
+      assignShift({
+        worker_id:       selectedWorkerId,
+        participant_id:  selectedParticipantId,
+        scheduled_start: scheduledStart,
+        scheduled_end:   scheduledEnd || undefined,
+        shift_type:      shiftType,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
+      toast({ title: "Shift assigned", description: "Worker has been notified of the new shift." });
+      resetForm();
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to assign shift",
+        description: error.message || "Please check the details and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetForm = () => {
+    if (!worker) setSelectedWorkerId("");
+    setSelectedParticipantId("");
+    setScheduledStart("");
+    setScheduledEnd("");
+    setShiftType("standard_support");
+  };
+
+  const handleQuickEnd = () => {
+    if (!scheduledStart) return;
+    try {
+      const end = addHours(new Date(scheduledStart), 4);
+      setScheduledEnd(end.toISOString().slice(0, 16));
+    } catch {}
+  };
+
+  const selectedWorkerData  = workers.find((w) => w.id === selectedWorkerId);
+  const workerAlerts        = (credAlertsQuery.data?.alerts ?? []).filter((a) => a.user_id === selectedWorkerId);
+  const credStatus          = credStatusQuery.data?.credential_status;
+  const hasExpired          = workerAlerts.some((a) => a.status === "expired");
+  const hasExpiring         = workerAlerts.some((a) => a.status === "expiring");
+  const hasBlock            = selectedWorkerId ? (credStatus ? !credStatus.valid : hasExpired) : false;
+  const participantList     = (participants.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
+  const selectedParticipant = participantList.find((p) => p.id === selectedParticipantId);
+
+  const canSubmit = Boolean(selectedWorkerId && selectedParticipantId && scheduledStart && !hasBlock && !assignMut.isPending);
+
+  const credColor = credStatusQuery.isLoading ? MUTED : hasBlock ? "#DC2626" : hasExpiring ? "#D97706" : "#16A34A";
+  const credLabel = credStatusQuery.isLoading
+    ? "Checking credentials…"
+    : hasBlock   ? "Credentials invalid — cannot assign"
+    : hasExpiring ? "Credentials expiring soon"
+    : "Credentials valid";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="max-w-lg rounded-2xl p-0 overflow-hidden gap-0"
+        style={{ borderColor: BORDER }}
+      >
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Assign Shift</h2>
+          <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
+            Create and assign a new shift for a support worker.
+          </p>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="max-h-[68vh] overflow-y-auto px-6 py-5 space-y-5">
+          {/* Worker */}
+          <div className="space-y-2">
+            <label className="text-[12px] font-black" style={{ color: TEXT }}>Support Worker</label>
+            {worker ? (
+              <div
+                className="flex items-center justify-between rounded-xl border px-4 py-3"
+                style={{ borderColor: BORDER, background: SOFT }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="h-9 w-9 rounded-full flex items-center justify-center text-[13px] font-black text-white"
+                    style={{ background: PLUM }}
+                  >
+                    {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-black" style={{ color: TEXT }}>{worker.full_name}</p>
+                    {worker.avg_compliance != null && (
+                      <p className="text-[11px]" style={{
+                        color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
+                      }}>
+                        {worker.avg_compliance.toFixed(0)}% compliance
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <ShieldCheck size={16} style={{ color: "#16A34A" }} />
+              </div>
+            ) : (
+              <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
+                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                  <SelectValue placeholder="Select a worker…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workers.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      <span className="flex items-center gap-2">
+                        <User2 size={12} />
+                        {w.full_name}
+                        {w.avg_compliance != null && (
+                          <span className="text-[11px]" style={{ color: MUTED }}>
+                            {w.avg_compliance.toFixed(0)}%
+                          </span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {/* Participant */}
+          <div className="space-y-2">
+            <label className="text-[12px] font-black" style={{ color: TEXT }}>Participant</label>
+            <Select value={selectedParticipantId} onValueChange={setSelectedParticipantId}>
+              <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                <SelectValue placeholder="Select a participant…" />
+              </SelectTrigger>
+              <SelectContent>
+                {participantList.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Shift type */}
+          <div className="space-y-2">
+            <label className="text-[12px] font-black" style={{ color: TEXT }}>Shift Type</label>
+            <Select value={shiftType} onValueChange={setShiftType}>
+              <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SHIFT_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date & time */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>Start</label>
+              <Input
+                type="datetime-local"
+                value={scheduledStart}
+                onChange={(e) => setScheduledStart(e.target.value)}
+                className="rounded-xl"
+                style={{ borderColor: BORDER }}
+              />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>End</label>
+                {scheduledStart && !scheduledEnd && (
+                  <button type="button" onClick={handleQuickEnd} className="text-[11px] font-bold" style={{ color: PLUM }}>
+                    +4 hrs
+                  </button>
+                )}
+              </div>
+              <Input
+                type="datetime-local"
+                value={scheduledEnd}
+                onChange={(e) => setScheduledEnd(e.target.value)}
+                className="rounded-xl"
+                style={{ borderColor: BORDER }}
+              />
+            </div>
+          </div>
+
+          {/* Credential status */}
+          {selectedWorkerId && (
+            <div
+              className="rounded-xl border p-3.5"
+              style={{
+                borderColor: hasBlock ? "#FECACA" : hasExpiring ? "#FDE68A" : "#BBF7D0",
+                background:  hasBlock ? "#FFF1F1" : hasExpiring ? "#FFFBEB" : "#F0FDF4",
+              }}
+            >
+              <div className="flex items-start gap-2.5">
+                {credStatusQuery.isLoading ? (
+                  <Loader2 size={14} className="mt-0.5 animate-spin" style={{ color: MUTED }} />
+                ) : hasBlock ? (
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" style={{ color: "#DC2626" }} />
+                ) : (
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: credColor }} />
+                )}
+                <div>
+                  <p className="text-[12px] font-black" style={{ color: credColor }}>{credLabel}</p>
+                  {credStatus?.warning && (
+                    <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{credStatus.warning}</p>
+                  )}
+                  {(credStatus?.missing_credentials ?? []).length > 0 && (
+                    <div className="mt-2 space-y-0.5">
+                      {credStatus!.missing_credentials.slice(0, 4).map((c) => (
+                        <p key={c} className="text-[11px] font-medium" style={{ color: "#991B1B" }}>✗ {c}</p>
+                      ))}
+                    </div>
+                  )}
+                  {workerAlerts.length > 0 && !hasBlock && (
+                    <div className="mt-2 space-y-0.5">
+                      {workerAlerts.slice(0, 3).map((a) => (
+                        <p key={`${a.credential_id ?? a.credential_type}`} className="text-[11px]" style={{ color: "#92400E" }}>
+                          {a.title || a.credential_type || "Credential"} – {a.status}
+                          {a.expiry_date ? ` (expires ${a.expiry_date})` : ""}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Summary */}
+          {selectedWorkerData && selectedParticipant && scheduledStart && (
+            <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
+              <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>Shift Summary</p>
+              <div className="space-y-1.5 text-[12px]">
+                {[
+                  ["Worker",      selectedWorkerData.full_name],
+                  ["Participant", selectedParticipant.full_name],
+                  ["Type",        SHIFT_TYPE_LABELS[shiftType] || shiftType],
+                  ["Start",       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
+                  ...(scheduledEnd ? [["End", format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-center justify-between gap-4">
+                    <span style={{ color: MUTED }}>{label}</span>
+                    <span className="font-bold text-right" style={{ color: TEXT }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-end gap-3 px-6 py-4"
+          style={{ borderTop: `1px solid ${BORDER}` }}
+        >
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={assignMut.isPending}
+            className="rounded-full"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => assignMut.mutate()}
+            disabled={!canSubmit}
+            className="rounded-full text-white flex items-center gap-2"
+            style={{ background: canSubmit ? `linear-gradient(135deg, ${PLUM}, ${CORAL})` : MUTED }}
+          >
+            {assignMut.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Assigning…</>
+            ) : hasBlock ? (
+              <><AlertTriangle size={14} /> Credentials Required</>
+            ) : (
+              <><CalendarClock size={14} /> Assign Shift</>
+            )}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

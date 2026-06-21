@@ -33,7 +33,9 @@ import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
 import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
+import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
 import CoordinatorGoals from "@/pages/coordinator-goals";
+import CoordinatorLivePage from "@/pages/coordinator-live";
 import AuditPack from "@/pages/audit-pack";
 import SessionReview from "@/pages/session-review";
 import Credentials from "@/pages/credentials";
@@ -214,6 +216,18 @@ function Router() {
       <Route path="/team">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><Team /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/rostering">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorRosteringPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/live">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorLivePage /></AppLayout>
         </ProtectedRoute>
       </Route>
 

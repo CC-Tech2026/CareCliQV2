@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
-import { format, parseISO, differenceInDays } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
+import {
+  format, parseISO, differenceInDays, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isSameMonth,
+  isToday, addMonths, subMonths,
+} from "date-fns";
 import {
   Calendar, ClipboardCheck, Users, BookOpen, Target,
-  Plus, Trash2, AlertTriangle, MapPin,
+  Plus, Trash2, AlertTriangle, MapPin, ChevronLeft, ChevronRight, Clock,
 } from "lucide-react";
 import { getOrgEvents, createOrgEvent, deleteOrgEvent, type OrgEvent } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,77 +19,71 @@ const PLUM   = "#5533CC";
 
 type EventType = "audit" | "training" | "meeting" | "review";
 
-const now = new Date();
-
-const EVENT_CONFIG: Record<
-  EventType,
-  { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; color: string; bg: string; chip: string }
-> = {
-  audit:    { icon: ClipboardCheck, label: "Audit",    color: "#EF4444", bg: "#FEF2F2", chip: "bg-red-50 text-red-700" },
-  training: { icon: BookOpen,       label: "Training", color: PLUM,      bg: "#EEEAFB", chip: "bg-purple-50 text-purple-700" },
-  meeting:  { icon: Users,          label: "Meeting",  color: "#0EA5E9", bg: "#E0F2FE", chip: "bg-sky-50 text-sky-700" },
-  review:   { icon: Target,         label: "Review",   color: "#10B981", bg: "#D1FAE5", chip: "bg-emerald-50 text-emerald-700" },
+const EVENT_CFG: Record<EventType, {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }>;
+  label: string;
+  color: string;
+  bg: string;
+  dot: string;
+}> = {
+  audit:    { icon: ClipboardCheck, label: "Audit",    color: "#EF4444", bg: "#FEF2F2", dot: "#EF4444" },
+  training: { icon: BookOpen,       label: "Training", color: PLUM,      bg: "#EDE9FF", dot: PLUM },
+  meeting:  { icon: Users,          label: "Meeting",  color: "#0EA5E9", bg: "#E0F2FE", dot: "#0EA5E9" },
+  review:   { icon: Target,         label: "Review",   color: "#10B981", bg: "#D1FAE5", dot: "#10B981" },
 };
 
 const EVENT_TYPES: EventType[] = ["audit", "training", "meeting", "review"];
 
-function EventRow({
-  event,
-  onDelete,
-  isCoordinator,
+function cfgOf(type: string) {
+  return EVENT_CFG[type as EventType] ?? EVENT_CFG.meeting;
+}
+
+const BLANK = {
+  title: "", event_date: "", duration: "1 hour",
+  event_type: "meeting" as EventType, location: "", participants_desc: "",
+};
+
+function EventCard({
+  event, onDelete, isCoordinator,
 }: {
   event: OrgEvent;
   onDelete?: (id: string) => void;
   isCoordinator: boolean;
 }) {
-  const cfg       = EVENT_CONFIG[event.event_type as EventType] ?? EVENT_CONFIG.meeting;
+  const cfg       = cfgOf(event.event_type);
   const Icon      = cfg.icon;
   const eventDate = parseISO(event.event_date);
-  const daysUntil = differenceInDays(eventDate, now);
-  const isImminent = daysUntil >= 0 && daysUntil < 7;
+  const daysLeft  = differenceInDays(eventDate, new Date());
+  const passed    = daysLeft < 0;
+  const soon      = daysLeft >= 0 && daysLeft < 7;
 
   return (
-    <div
-      className="flex items-start gap-3 py-3"
-      style={{ borderBottom: `1px solid ${BORDER}` }}
-    >
-      {/* Compact date block */}
+    <div className="flex items-start gap-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
       <div
-        className="flex w-10 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 text-center"
-        style={{ background: cfg.bg }}
+        className="flex w-10 shrink-0 flex-col items-center justify-center rounded-xl py-1.5"
+        style={{ background: passed ? "#F1F5F9" : cfg.bg, opacity: passed ? 0.6 : 1 }}
       >
-        <span className="text-[9px] font-black uppercase tracking-wide leading-none" style={{ color: cfg.color }}>
+        <span className="text-[9px] font-black uppercase tracking-wide leading-none" style={{ color: passed ? MUTED : cfg.color }}>
           {format(eventDate, "MMM")}
         </span>
-        <span className="text-[16px] font-black leading-none mt-0.5" style={{ color: cfg.color }}>
+        <span className="text-[17px] font-black leading-none mt-0.5" style={{ color: passed ? MUTED : cfg.color }}>
           {format(eventDate, "d")}
         </span>
       </div>
-
-      {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black ${cfg.chip}`}>
-            <Icon size={9} strokeWidth={2} />
-            {cfg.label}
+        <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+          <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: cfg.bg, color: cfg.color }}>
+            <Icon size={9} strokeWidth={2} /> {cfg.label}
           </span>
-          {isImminent && (
-            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
-              Soon
-            </span>
-          )}
+          {soon   && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">Soon</span>}
+          {passed && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-400">Past</span>}
         </div>
-        <p className="mt-1 truncate text-[12px] font-bold leading-snug" style={{ color: TEXT }}>
-          {event.title}
-        </p>
-        {event.location && (
-          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px]" style={{ color: MUTED }}>
-            <MapPin size={10} strokeWidth={2} />
-            {event.location}
-          </p>
-        )}
+        <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{event.title}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: MUTED }}>
+          {event.duration && <span className="flex items-center gap-1"><Clock size={9} /> {event.duration}</span>}
+          {event.location  && <span className="flex items-center gap-1"><MapPin size={9} /> {event.location}</span>}
+        </div>
       </div>
-
       {isCoordinator && onDelete && (
         <button
           onClick={() => onDelete(event.id)}
@@ -99,15 +97,6 @@ function EventRow({
   );
 }
 
-const BLANK_FORM = {
-  title: "",
-  event_date: "",
-  duration: "1 hour",
-  event_type: "meeting" as EventType,
-  location: "",
-  participants_desc: "",
-};
-
 export function OrganizationCalendar() {
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
@@ -119,12 +108,13 @@ export function OrganizationCalendar() {
   const [saving,      setSaving]      = useState(false);
   const [saveError,   setSaveError]   = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [form,        setForm]        = useState(BLANK_FORM);
+  const [form,        setForm]        = useState(BLANK);
+  const [calMonth,    setCalMonth]    = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setFetchError(false);
     getOrgEvents()
       .then((data) => { if (!cancelled) setEvents(data); })
       .catch(() => { if (!cancelled) setFetchError(true); })
@@ -132,7 +122,36 @@ export function OrganizationCalendar() {
     return () => { cancelled = true; };
   }, []);
 
-  const sorted = events ? [...events].sort((a, b) => a.event_date.localeCompare(b.event_date)) : [];
+  const sorted = useMemo(
+    () => (events ?? []).sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    [events]
+  );
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, OrgEvent[]>();
+    for (const ev of (events ?? [])) {
+      const key = ev.event_date.slice(0, 10);
+      map.set(key, [...(map.get(key) ?? []), ev]);
+    }
+    return map;
+  }, [events]);
+
+  const calGridStart = startOfWeek(startOfMonth(calMonth), { weekStartsOn: 1 });
+  const calGridEnd   = endOfWeek(endOfMonth(calMonth),     { weekStartsOn: 1 });
+  const calDays      = eachDayOfInterval({ start: calGridStart, end: calGridEnd });
+
+  const upcoming = useMemo(() => {
+    const now     = new Date();
+    const cutoff  = addMonths(now, 1);
+    return sorted.filter((e) => {
+      const d = parseISO(e.event_date);
+      return d >= now && d <= cutoff;
+    });
+  }, [sorted]);
+
+  const dayEvents = selectedDay
+    ? (eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) ?? [])
+    : [];
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -141,16 +160,16 @@ export function OrganizationCalendar() {
     setSaveError(null);
     try {
       const created = await createOrgEvent({
-        title:            form.title,
-        event_date:       form.event_date,
-        duration:         form.duration || "1 hour",
-        event_type:       form.event_type,
-        location:         form.location || null,
-        participants_desc:form.participants_desc || null,
+        title:             form.title,
+        event_date:        form.event_date,
+        duration:          form.duration || "1 hour",
+        event_type:        form.event_type,
+        location:          form.location || null,
+        participants_desc: form.participants_desc || null,
       });
       setEvents((prev) => [...(prev ?? []), created]);
       setShowForm(false);
-      setForm(BLANK_FORM);
+      setForm(BLANK);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Could not create event.");
     } finally {
@@ -163,88 +182,88 @@ export function OrganizationCalendar() {
     try {
       await deleteOrgEvent(id);
       setEvents((prev) => (prev ?? []).filter((e) => e.id !== id));
+      if (selectedDay && dayEvents.length <= 1) setSelectedDay(null);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : "Could not delete event.");
     }
   }
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-          Upcoming Events
-        </p>
+      <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>Team Calendar</p>
         <div className="flex items-center gap-2">
           {isCoordinator && (
             <button
               onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-colors"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#EDE9FF]"
               style={{ background: SOFT, color: PLUM }}
             >
-              <Plus size={11} strokeWidth={2} />
-              Add
+              <Plus size={11} strokeWidth={2} /> Add Event
             </button>
           )}
-          <div
-            className="flex h-7 w-7 items-center justify-center rounded-lg"
-            style={{ background: SOFT, color: PLUM }}
-          >
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
             <Calendar size={13} strokeWidth={2} />
           </div>
         </div>
       </div>
 
-      <div className="px-5">
+      <div className="px-4 pb-2">
         {deleteError && (
           <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700 border border-red-200">
             {deleteError}
           </p>
         )}
 
+        {/* Add event form */}
         {showForm && isCoordinator && (
-          <form
-            onSubmit={handleAdd}
-            className="mt-3 rounded-xl border p-4 space-y-3"
-            style={{ borderColor: BORDER, background: SOFT }}
-          >
-            <div className="space-y-2">
+          <form onSubmit={handleAdd} className="mt-3 rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: SOFT }}>
+            <div>
+              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
+              <input
+                className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-[#5533CC] transition-colors"
+                style={{ borderColor: BORDER }}
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Event title"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Date *</label>
                 <input
+                  type="date"
                   className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  placeholder="Event title"
+                  value={form.event_date}
+                  onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Date *</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
-                    style={{ borderColor: BORDER }}
-                    value={form.event_date}
-                    onChange={(e) => setForm((f) => ({ ...f, event_date: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Type</label>
-                  <select
-                    className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
-                    style={{ borderColor: BORDER }}
-                    value={form.event_type}
-                    onChange={(e) => setForm((f) => ({ ...f, event_type: e.target.value as EventType }))}
-                  >
-                    {EVENT_TYPES.map((t) => (
-                      <option key={t} value={t}>{EVENT_CONFIG[t].label}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Type</label>
+                <select
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
+                  style={{ borderColor: BORDER }}
+                  value={form.event_type}
+                  onChange={(e) => setForm((f) => ({ ...f, event_type: e.target.value as EventType }))}
+                >
+                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_CFG[t].label}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Duration</label>
+                <input
+                  className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
+                  style={{ borderColor: BORDER }}
+                  value={form.duration}
+                  onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
+                  placeholder="e.g. 2 hours"
+                />
               </div>
               <div>
                 <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Location</label>
@@ -258,11 +277,9 @@ export function OrganizationCalendar() {
               </div>
             </div>
             {saveError && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">
-                {saveError}
-              </p>
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">{saveError}</p>
             )}
-            <div className="flex gap-2 justify-end">
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => { setShowForm(false); setSaveError(null); }}
@@ -283,49 +300,153 @@ export function OrganizationCalendar() {
           </form>
         )}
 
-        {loading ? (
-          <div className="py-4 space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="h-10 w-10 animate-pulse rounded-xl" style={{ background: SOFT }} />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-28 animate-pulse rounded" style={{ background: SOFT }} />
-                  <div className="h-2.5 w-20 animate-pulse rounded" style={{ background: SOFT }} />
-                </div>
-              </div>
+        {/* Mini calendar */}
+        <div className="mt-3">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setCalMonth((m) => subMonths(m, 1))}
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F5F3FC]"
+              style={{ color: MUTED }}
+            >
+              <ChevronLeft size={13} />
+            </button>
+            <p className="text-[12px] font-black" style={{ color: TEXT }}>{format(calMonth, "MMMM yyyy")}</p>
+            <button
+              onClick={() => setCalMonth((m) => addMonths(m, 1))}
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F5F3FC]"
+              style={{ color: MUTED }}
+            >
+              <ChevronRight size={13} />
+            </button>
+          </div>
+
+          {/* Week labels */}
+          <div className="grid grid-cols-7 mb-0.5">
+            {["M", "T", "W", "T", "F", "S", "S"].map((l, i) => (
+              <div key={i} className="text-center text-[9px] font-black uppercase py-0.5" style={{ color: MUTED }}>{l}</div>
             ))}
           </div>
-        ) : fetchError ? (
-          <div className="py-6 text-center">
-            <AlertTriangle size={18} className="mx-auto mb-2" style={{ color: "#F97316" }} />
-            <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load calendar</p>
+
+          {/* Day cells */}
+          <div className="grid grid-cols-7">
+            {calDays.map((day) => {
+              const key        = format(day, "yyyy-MM-dd");
+              const evs        = eventsByDay.get(key) ?? [];
+              const today      = isToday(day);
+              const inMonth    = isSameMonth(day, calMonth);
+              const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSelectedDay(isSelected ? null : day)}
+                  className="flex flex-col items-center py-0.5 rounded-lg transition-colors hover:bg-[#F5F3FC]"
+                  style={{ background: isSelected ? "#EDE9FF" : "transparent", opacity: inMonth ? 1 : 0.3 }}
+                >
+                  <span
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold"
+                    style={{
+                      background: today ? PLUM : "transparent",
+                      color:      today ? "white" : isSelected ? PLUM : inMonth ? TEXT : MUTED,
+                    }}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  {evs.length > 0 && (
+                    <div className="flex gap-0.5 mt-0.5 mb-0.5">
+                      {evs.slice(0, 3).map((ev, idx) => (
+                        <span
+                          key={idx}
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: cfgOf(ev.event_type).dot }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
-        ) : sorted.length === 0 ? (
-          <div className="py-6 text-center">
-            <Calendar size={18} className="mx-auto mb-2" style={{ color: MUTED }} />
-            <p className="text-[12px] font-bold" style={{ color: TEXT }}>No upcoming events</p>
-            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
-              {isCoordinator ? "Use Add to schedule events." : "Your coordinator will add events here."}
+        </div>
+
+        {/* Selected day events */}
+        {selectedDay && dayEvents.length > 0 && (
+          <div className="mt-2 mb-1 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
+            <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>
+              {format(selectedDay, "EEEE d MMMM")}
             </p>
-          </div>
-        ) : (
-          <div>
-            {sorted.slice(0, 5).map((event) => (
-              <EventRow
-                key={event.id}
-                event={event}
-                onDelete={isCoordinator ? handleDelete : undefined}
-                isCoordinator={isCoordinator}
-              />
-            ))}
-            {sorted.length > 5 && (
-              <p className="py-3 text-[11px] font-bold" style={{ color: PLUM }}>
-                +{sorted.length - 5} more events
-              </p>
-            )}
-            <div style={{ marginBottom: "4px" }} />
+            {dayEvents.map((ev) => {
+              const cfg  = cfgOf(ev.event_type);
+              const Icon = cfg.icon;
+              return (
+                <div key={ev.id} className="flex items-center gap-2 py-1.5">
+                  <div className="h-5 w-5 shrink-0 flex items-center justify-center rounded" style={{ background: cfg.bg }}>
+                    <Icon size={10} style={{ color: cfg.color }} />
+                  </div>
+                  <p className="flex-1 truncate text-[12px] font-bold" style={{ color: TEXT }}>{ev.title}</p>
+                  {isCoordinator && (
+                    <button
+                      onClick={() => handleDelete(ev.id)}
+                      className="flex h-5 w-5 items-center justify-center rounded hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={10} style={{ color: MUTED }} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
+
+        {/* Upcoming events list */}
+        <div style={{ borderTop: `1px solid ${BORDER}` }} className="mt-2">
+          <p className="pt-3 pb-1 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+            Upcoming Events
+          </p>
+          {loading ? (
+            <div className="py-3 space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <div className="h-10 w-10 animate-pulse rounded-xl" style={{ background: SOFT }} />
+                  <div className="flex-1 space-y-1.5 pt-1">
+                    <div className="h-2.5 w-28 animate-pulse rounded" style={{ background: SOFT }} />
+                    <div className="h-2 w-20 animate-pulse rounded" style={{ background: SOFT }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : fetchError ? (
+            <div className="py-5 text-center">
+              <AlertTriangle size={16} className="mx-auto mb-1" style={{ color: "#F97316" }} />
+              <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load calendar</p>
+            </div>
+          ) : upcoming.length === 0 ? (
+            <div className="py-5 text-center">
+              <Calendar size={16} className="mx-auto mb-1.5" style={{ color: MUTED }} />
+              <p className="text-[12px] font-bold" style={{ color: TEXT }}>No upcoming events</p>
+              <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
+                {isCoordinator ? "Add an event to get started." : "Your coordinator will add events here."}
+              </p>
+            </div>
+          ) : (
+            <div className="pb-2">
+              {upcoming.slice(0, 6).map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onDelete={isCoordinator ? handleDelete : undefined}
+                  isCoordinator={isCoordinator}
+                />
+              ))}
+              {upcoming.length > 6 && (
+                <p className="py-2 text-[11px] font-bold" style={{ color: PLUM }}>
+                  +{upcoming.length - 6} more events
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

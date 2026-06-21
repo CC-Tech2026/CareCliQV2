@@ -255,7 +255,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
   const { user } = useAuth();
-  const isCoordinator = user?.role === "coordinator";
+  const isCoordinator = user?.role === "support_coordinator";
   const qc = useQueryClient();
   const flagMutation = useMutation({
     mutationFn: ({ flag, note }: { flag: boolean; note?: string }) =>

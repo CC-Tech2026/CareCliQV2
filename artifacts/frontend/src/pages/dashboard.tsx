@@ -1,5 +1,4 @@
 import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { useState, type ComponentType } from "react";
@@ -19,7 +18,6 @@ import {
   BadgeCheck,
   GraduationCap,
 } from "lucide-react";
-import { InviteModal } from "@/components/InviteModal";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   getCoordinatorDashboard,
@@ -478,35 +476,30 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
 }
 
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const orgId = user?.organizationId ?? "__no_org__";
+  const teamParticipants = data.team_participants ?? data.participants ?? 0;
+  const sessionsThisWeek = data.sessions_this_week ?? data.todays_sessions.length;
+  const incidentsThisMonth = data.incidents_this_month ?? data.incident_alerts.length;
+  const workersNeedingSupport = data.workers_needing_support ?? data.workers_needing_attention.length;
 
   return (
-    <>
-      <div className="mx-auto max-w-7xl space-y-6 pb-10">
+    <div className="mx-auto max-w-7xl space-y-6 pb-10">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Coordinator</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
           </div>
-          <button
-            type="button"
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
-          >
+          <Link href="/team" className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
             <UserPlus size={16} strokeWidth={2.5} />
-            Invite Worker
-          </button>
+            Open Team Workspace
+          </Link>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardStatCard label="Active Workers" value={data.active_workers} caption="Current active child accounts" icon={Users} valueColor={PLUM} />
-          <DashboardStatCard label="Compliant Today" value={data.compliant_today} caption="Sessions passing today" icon={CheckCircle2} valueColor="#059669" />
-          <DashboardStatCard label="Notes At Risk" value={data.notes_at_risk} caption="Notes needing review" icon={ClipboardList} valueColor="#D97706" />
-          <DashboardStatCard label="RP Flags" value={data.rp_flags} caption="Restrictive practice flags" icon={AlertTriangle} valueColor={CORAL} />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <DashboardStatCard label="Team Participants" value={teamParticipants} caption="Participants in your care team" icon={Users} valueColor={PLUM} />
+          <DashboardStatCard label="Sessions This Week" value={sessionsThisWeek} caption="Team sessions captured this week" icon={CalendarDays} valueColor="#059669" />
+          <DashboardStatCard label="Team Compliance Avg" value={`${Math.round(data.team_compliance_score)}%`} caption="Team-wide compliance score" icon={CheckCircle2} valueColor="#059669" />
+          <DashboardStatCard label="Incidents This Month" value={incidentsThisMonth} caption="Team incidents requiring review" icon={AlertTriangle} valueColor={CORAL} />
+          <DashboardStatCard label="Workers Needing Support" value={workersNeedingSupport} caption="Workers flagged for follow-up" icon={ClipboardList} valueColor="#D97706" />
         </div>
 
         <CoordinatorQuickActionCards data={data} />
@@ -518,16 +511,6 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
 
         <CoordinatorCommonIssuesCard issues={data.common_issues} />
       </div>
-
-      <InviteModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        onInviteSent={() => {
-          queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "coordinator"] });
-          queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "team"] });
-        }}
-      />
-    </>
   );
 }
 

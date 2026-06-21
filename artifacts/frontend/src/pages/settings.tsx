@@ -24,13 +24,14 @@ import {
   UserMinus,
   ChevronDown,
   Copy,
+  Bell,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { InviteModal } from "@/components/InviteModal";
 import { apiFetch } from "@/lib/api-fetch";
 import { useReAuth } from "@/hooks/useReAuth";
+import { Link } from "wouter";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
@@ -53,13 +54,14 @@ function isValidABN(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "team";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "team" | "notifications";
 
 const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }>; coordinatorOnly?: boolean }[] = [
   { id: "account",    label: "Account",          icon: User        },
   { id: "provider",   label: "Provider",          icon: Building2   },
   { id: "defaults",   label: "Session Defaults",  icon: Settings2   },
   { id: "compliance", label: "Compliance",        icon: ShieldCheck },
+  { id: "notifications", label: "Notifications", icon: Bell, coordinatorOnly: true },
   { id: "team",       label: "Team",              icon: Users2, coordinatorOnly: true },
 ];
 
@@ -190,6 +192,210 @@ interface PendingInvite {
   token?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CARECLIQV2-241 — Notification Preferences section
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
+  { key: "worker_clocked_in",    label: "Worker Clocked In",         description: "Notified when a worker clocks in to a shift" },
+  { key: "session_started",      label: "Session Started",           description: "Notified when a session begins" },
+  { key: "session_completed",    label: "Session Completed",         description: "Notified when a session is finalised" },
+  { key: "no_session_started",   label: "No Session Started (Alert)",description: "Alert when worker is clocked in but no session after 30 min" },
+  { key: "shift_assigned",       label: "Shift Assigned",            description: "Notified when you assign a shift to a worker" },
+  { key: "low_compliance",       label: "Low Compliance",            description: "Alert when a session has low compliance score" },
+  { key: "worker_offline",       label: "Worker Offline",            description: "Alert when a worker goes offline mid-shift" },
+  { key: "feedback_received",    label: "Feedback Received",         description: "Notified when a participant submits feedback" },
+];
+
+const NOTIF_CHANNELS = ["in_app", "email", "sms"] as const;
+type NotifChannel = (typeof NOTIF_CHANNELS)[number];
+
+const CHANNEL_LABELS: Record<NotifChannel, string> = { in_app: "In-App", email: "Email", sms: "SMS" };
+
+type NotifPrefs = {
+  events: Record<string, Record<NotifChannel, boolean>>;
+  quiet_hours_enabled: boolean;
+  quiet_from: string;
+  quiet_to: string;
+};
+
+function defaultPrefs(): NotifPrefs {
+  const events: Record<string, Record<NotifChannel, boolean>> = {};
+  for (const e of NOTIF_EVENTS) {
+    events[e.key] = { in_app: true, email: false, sms: false };
+  }
+  return { events, quiet_hours_enabled: false, quiet_from: "22:00", quiet_to: "07:00" };
+}
+
+function NotificationsSection() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetch("/api/users/me/notification-preferences?device_id=web")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.notification_events) {
+          const events = { ...defaultPrefs().events };
+          for (const ev of (data.notification_events as Array<{ event_type: string; channel: string; is_enabled: boolean }>)) {
+            if (events[ev.event_type] && NOTIF_CHANNELS.includes(ev.channel as NotifChannel)) {
+              events[ev.event_type][ev.channel as NotifChannel] = ev.is_enabled;
+            }
+          }
+          setPrefs((p) => ({
+            ...p, events,
+            quiet_hours_enabled: data.quiet_hours_enabled ?? false,
+            quiet_from: data.quiet_from ?? "22:00",
+            quiet_to: data.quiet_to ?? "07:00",
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const notification_events = Object.entries(prefs.events).flatMap(([event_type, channels]) =>
+        Object.entries(channels).map(([channel, is_enabled]) => ({ event_type, channel, is_enabled }))
+      );
+      await apiFetch("/api/users/me/notification-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: "web",
+          notification_events,
+          quiet_hours_enabled: prefs.quiet_hours_enabled,
+          quiet_from: prefs.quiet_from,
+          quiet_to: prefs.quiet_to,
+        }),
+      });
+      toast({ title: "Notification preferences saved" });
+    } catch {
+      toast({ variant: "destructive", title: "Save failed" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleEvent(eventKey: string, channel: NotifChannel) {
+    setPrefs((p) => ({
+      ...p,
+      events: {
+        ...p.events,
+        [eventKey]: { ...p.events[eventKey], [channel]: !p.events[eventKey][channel] },
+      },
+    }));
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "#7A6A9E" }}>
+        <Loader2 size={14} className="animate-spin" /> Loading preferences…
+      </div>
+    );
+  }
+
+  return (
+    <Section
+      title="Notifications"
+      description="Control which events trigger notifications and how you receive them."
+      icon={Bell}
+    >
+      {/* Events table */}
+      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E2DEF2" }}>
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr style={{ background: "#F5F3FC" }}>
+              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: "#7A6A9E" }}>Event</th>
+              {NOTIF_CHANNELS.map((ch) => (
+                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: "#7A6A9E" }}>
+                  {CHANNEL_LABELS[ch]}
+                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {NOTIF_EVENTS.map((ev, i) => (
+              <tr key={ev.key} style={{ background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                <td className="px-4 py-3">
+                  <p className="font-semibold" style={{ color: "#1E1640" }}>{ev.label}</p>
+                  <p className="text-[11px]" style={{ color: "#7A6A9E" }}>{ev.description}</p>
+                </td>
+                {NOTIF_CHANNELS.map((ch) => (
+                  <td key={ch} className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={prefs.events[ev.key]?.[ch] ?? false}
+                      disabled={ch === "in_app"}
+                      onChange={() => toggleEvent(ev.key, ch)}
+                      className="w-4 h-4 accent-[#5533CC] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Quiet hours */}
+      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "#F5F3FC", border: "1px solid #E2DEF2" }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-bold text-[14px]" style={{ color: "#1E1640" }}>Quiet Hours</p>
+            <p className="text-[12px]" style={{ color: "#7A6A9E" }}>Suppress non-critical notifications during these hours</p>
+          </div>
+          <Switch checked={prefs.quiet_hours_enabled} onCheckedChange={(v) => setPrefs((p) => ({ ...p, quiet_hours_enabled: v }))} />
+        </div>
+        {prefs.quiet_hours_enabled && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold" style={{ color: "#7A6A9E" }}>From</label>
+              <input
+                type="time"
+                value={prefs.quiet_from}
+                onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
+                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                style={{ border: "1px solid #E2DEF2" }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold" style={{ color: "#7A6A9E" }}>To</label>
+              <input
+                type="time"
+                value={prefs.quiet_to}
+                onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
+                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                style={{ border: "1px solid #E2DEF2" }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Save */}
+      <div className="flex justify-end pt-2">
+        <Button
+          className="rounded-2xl px-8"
+          style={{ background: "#5533CC", color: "#fff" }}
+          disabled={saving}
+          onClick={save}
+        >
+          {saving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving…</> : "Save Preferences"}
+        </Button>
+      </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Settings() {
   const { toast } = useToast();
   const { user, token: authToken } = useAuth();
@@ -249,7 +455,6 @@ export default function Settings() {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const fetchTeam = useCallback(async () => {
@@ -1156,6 +1361,11 @@ export default function Settings() {
         )}
 
         {/* ── Team section (support coordinator only) ─────────────────────── */}
+        {/* ── Notifications section (coordinator only) ── */}
+        {activeSection === "notifications" && isCoordinator && (
+          <NotificationsSection />
+        )}
+
         {activeSection === "team" && isCoordinator && (
           <Section
             title="Team"
@@ -1293,12 +1503,9 @@ export default function Settings() {
 
             {/* Invite button */}
             <div className="flex justify-end">
-              <Button
-                onClick={() => setShowInviteModal(true)}
-                className="gap-2 rounded-xl"
-              >
+              <Link href="/team" className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium">
                 <Plus size={15} /> Invite Staff Member
-              </Button>
+              </Link>
             </div>
 
             {/* Explainer */}
@@ -1328,13 +1535,6 @@ export default function Settings() {
       </main>
 
       </div>{/* end flex gap-6 */}
-
-      {/* ── Invite modal ────────────────────────────────────────────────────── */}
-      <InviteModal
-        open={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        onInviteSent={fetchTeam}
-      />
 
     </div>
   );

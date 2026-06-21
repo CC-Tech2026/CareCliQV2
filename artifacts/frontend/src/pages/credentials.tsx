@@ -9,12 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   createCredential,
   deleteCredential,
   listMyCredentials,
@@ -23,7 +17,15 @@ import {
   uploadCredentialFile,
   type Credential,
 } from "@/services/credentialsService";
-import { getCoordinatorCredentialAlerts, sendBulkReminders, type CredentialAlert } from "@/services/coordinatorService";
+import {
+  createShiftCredentialRequirement,
+  deleteShiftCredentialRequirement,
+  getCoordinatorCredentialAlerts,
+  listShiftCredentialRequirements,
+  sendBulkReminders,
+  type CredentialAlert,
+  type ShiftCredentialRequirement,
+} from "@/services/coordinatorService";
 
 const PLUM = "#5533CC";
 const CORAL = "#F03060";
@@ -49,6 +51,20 @@ const ALLIED_TYPES = [
   "Discipline-specific Certificate",
   "Other",
 ];
+
+const STATUS_FILTERS = ["all", "pending_review", "expiring", "expired", "valid", "rejected"] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const SHIFT_TYPES = [
+  "standard_support",
+  "community_access",
+  "allied_health",
+  "respite_care",
+];
+
+function humanize(value: string) {
+  return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function statusClass(status: string) {
   if (status === "valid") return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -133,20 +149,19 @@ function CredentialRow({
   );
 }
 
-function BulkRemindersModal({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
+function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [customMessage, setCustomMessage] = useState("Your credential is expiring soon. Please update it to remain compliant.");
+  const reminderTemplates = [
+    "Your credential is expiring soon. Please update it to remain compliant.",
+    "Your credential is now expired. Please upload the renewed document today to avoid assignment blocks.",
+    "Friendly reminder: please update your credential file and expiry date so we can keep your roster active.",
+  ];
 
   const { data: alertsData, isLoading: alertsLoading } = useOrgQuery(["coordinator-credential-alerts"], {
     queryFn: getCoordinatorCredentialAlerts,
-    enabled: open,
+    enabled: true,
   });
 
   const credentialAlerts: CredentialAlert[] = alertsData?.alerts ?? [];
@@ -184,14 +199,14 @@ function BulkRemindersModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-md rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-[#1E1640]">Send Credential Reminders</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-[#7A6A9E]">
-          Select workers with expiring or expired credentials to send them an in-app reminder.
-        </p>
+    <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="font-black text-[#1E1640]">Send Credential Reminders</h2>
+        <Button variant="outline" size="sm" className="rounded-xl" onClick={onClose}>Close</Button>
+      </div>
+      <p className="text-sm text-[#7A6A9E]">
+        Select workers with expiring or expired credentials to send them an in-app reminder.
+      </p>
 
         {alertsLoading ? (
           <div className="flex items-center gap-2 py-4 text-sm text-[#7A6A9E]">
@@ -224,6 +239,18 @@ function BulkRemindersModal({
 
         <div className="mt-2">
           <Label>Message</Label>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {reminderTemplates.map((template) => (
+              <button
+                key={template}
+                type="button"
+                className="rounded-full border border-[#E2DEF2] bg-[#F8F6FE] px-3 py-1 text-xs font-bold text-[#5533CC]"
+                onClick={() => setCustomMessage(template)}
+              >
+                Use Template
+              </button>
+            ))}
+          </div>
           <textarea
             className="mt-1 w-full rounded-xl border border-[#E2DEF2] p-3 text-sm"
             rows={3}
@@ -232,20 +259,19 @@ function BulkRemindersModal({
           />
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancel</Button>
-          <Button
-            disabled={selectedIds.size === 0 || mutation.isPending}
-            className="rounded-xl gap-1"
-            style={{ background: `linear-gradient(135deg, #F03060, #5533CC)` }}
-            onClick={() => mutation.mutate()}
-          >
-            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
-            Send Reminders ({selectedIds.size})
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancel</Button>
+        <Button
+          disabled={selectedIds.size === 0 || mutation.isPending}
+          className="rounded-xl gap-1"
+          style={{ background: `linear-gradient(135deg, #F03060, #5533CC)` }}
+          onClick={() => mutation.mutate()}
+        >
+          {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+          Send Reminders ({selectedIds.size})
+        </Button>
+      </div>
+    </section>
   );
 }
 
@@ -257,6 +283,10 @@ export default function Credentials() {
   const isCoordinator = user?.role === "support_coordinator";
   const orgId = user?.organizationId ?? "__no_org__";
   const credentialTypes = user?.role === "allied_health" ? ALLIED_TYPES : WORKER_TYPES;
+  const ruleCredentialTypes = useMemo(() => {
+    const merged = [...WORKER_TYPES, ...ALLIED_TYPES];
+    return [...new Set(merged)].sort((a, b) => a.localeCompare(b));
+  }, []);
   const baseKey = isCoordinator ? ["credentials", "team"] : ["credentials", "me"];
   const { data = [], isLoading, error } = useOrgQuery(baseKey, {
     queryFn: isCoordinator ? listTeamCredentials : listMyCredentials,
@@ -270,6 +300,10 @@ export default function Credentials() {
     expiry_date: "",
   });
   const [showBulkReminders, setShowBulkReminders] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [ruleShiftType, setRuleShiftType] = useState<string>(SHIFT_TYPES[0]);
+  const [ruleCredentialType, setRuleCredentialType] = useState<string>(WORKER_TYPES[0]);
 
   const summary = useMemo(() => ({
     total: data.length,
@@ -277,6 +311,34 @@ export default function Credentials() {
     expired: data.filter((item) => item.status === "expired").length,
     pending: data.filter((item) => item.status === "pending_review").length,
   }), [data]);
+
+  const filteredData = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return data.filter((item) => {
+      const statusMatch = statusFilter === "all" || item.status === statusFilter;
+      if (!statusMatch) return false;
+      if (!q) return true;
+      const haystack = [
+        item.title,
+        item.credential_type,
+        item.issuer,
+        item.user?.full_name,
+        item.user?.email,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [data, searchQuery, statusFilter]);
+
+  const { data: shiftRules = [], isLoading: shiftRulesLoading } = useOrgQuery(
+    ["coordinator", "shift-credential-requirements"],
+    {
+      queryFn: () => listShiftCredentialRequirements(),
+      enabled: isCoordinator,
+    },
+  );
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [orgId, ...baseKey] });
 
@@ -318,6 +380,28 @@ export default function Credentials() {
     onError: (err) => toast({ title: "Review failed", description: (err as Error).message, variant: "destructive" }),
   });
 
+  const createRuleMutation = useMutation({
+    mutationFn: () => createShiftCredentialRequirement({
+      shift_type: ruleShiftType,
+      required_credential_type: ruleCredentialType,
+      minimum_status: "valid",
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "shift-credential-requirements"] });
+      toast({ title: "Shift credential rule added" });
+    },
+    onError: (err) => toast({ title: "Could not add rule", description: (err as Error).message, variant: "destructive" }),
+  });
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: (rule: ShiftCredentialRequirement) => deleteShiftCredentialRequirement(rule.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "shift-credential-requirements"] });
+      toast({ title: "Shift credential rule removed" });
+    },
+    onError: (err) => toast({ title: "Could not remove rule", description: (err as Error).message, variant: "destructive" }),
+  });
+
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.title.trim()) {
@@ -339,10 +423,7 @@ export default function Credentials() {
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       {modal}
       {showBulkReminders && (
-        <BulkRemindersModal
-          open
-          onClose={() => setShowBulkReminders(false)}
-        />
+        <BulkRemindersPanel onClose={() => setShowBulkReminders(false)} />
       )}
       <div>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
@@ -382,6 +463,84 @@ export default function Credentials() {
             Send Reminders
           </Button>
         </div>
+      )}
+
+      {isCoordinator && (
+        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <div className="mb-4">
+            <h2 className="font-black text-[#1E1640]">Shift Credential Rules</h2>
+            <p className="mt-1 text-sm text-[#7A6A9E]">
+              Configure which credential types are required per shift type. Shift assignment will block when required credentials are missing.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+            <div>
+              <Label>Shift type</Label>
+              <select
+                value={ruleShiftType}
+                onChange={(event) => setRuleShiftType(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-[#E2DEF2] bg-white px-3 text-sm"
+              >
+                {SHIFT_TYPES.map((type) => (
+                  <option key={type} value={type}>{type.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Required credential</Label>
+              <select
+                value={ruleCredentialType}
+                onChange={(event) => setRuleCredentialType(event.target.value)}
+                className="mt-1 h-10 w-full rounded-xl border border-[#E2DEF2] bg-white px-3 text-sm"
+              >
+                {ruleCredentialTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                className="gap-2 rounded-xl"
+                style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                disabled={createRuleMutation.isPending}
+                onClick={() => createRuleMutation.mutate()}
+              >
+                {createRuleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Add rule
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-[#F8F6FE] p-3">
+            {shiftRulesLoading && <p className="text-sm font-semibold text-[#7A6A9E]">Loading rules...</p>}
+            {!shiftRulesLoading && shiftRules.length === 0 && (
+              <p className="text-sm font-semibold text-[#7A6A9E]">No shift credential rules configured yet.</p>
+            )}
+            {!shiftRulesLoading && shiftRules.length > 0 && (
+              <div className="space-y-2">
+                {shiftRules.map((rule) => (
+                  <div key={rule.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#E2DEF2] bg-white px-3 py-2">
+                    <p className="text-sm font-semibold text-[#1E1640]">
+                      <span className="capitalize">{humanize(rule.shift_type)}</span>
+                      <span className="text-[#7A6A9E]"> requires </span>
+                      {rule.required_credential_type}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[#F03060]"
+                      disabled={deleteRuleMutation.isPending}
+                      onClick={() => deleteRuleMutation.mutate(rule)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {!isCoordinator && (
@@ -433,6 +592,34 @@ export default function Credentials() {
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation credentials" : "My credentials"}</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <Input
+            placeholder="Search by title, type, issuer, worker..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            className="rounded-xl"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {STATUS_FILTERS.map((filter) => {
+              const active = statusFilter === filter;
+              return (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setStatusFilter(filter)}
+                  className="rounded-full border px-3 py-1 text-xs font-bold"
+                  style={{
+                    borderColor: active ? PLUM : "#E2DEF2",
+                    background: active ? "#F5F3FC" : "#fff",
+                    color: active ? PLUM : MUTED,
+                  }}
+                >
+                  {filter === "all" ? "All" : humanize(filter)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>Loading credentials...</p>}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && data.length === 0 && (
@@ -440,8 +627,13 @@ export default function Credentials() {
             No credentials have been recorded yet.
           </p>
         )}
+        {!isLoading && data.length > 0 && filteredData.length === 0 && (
+          <p className="mt-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm font-medium" style={{ color: MUTED }}>
+            No credentials match your current search or status filter.
+          </p>
+        )}
         <div className="mt-3">
-          {data.map((credential) => (
+          {filteredData.map((credential) => (
             <CredentialRow
               key={credential.id}
               credential={credential}
