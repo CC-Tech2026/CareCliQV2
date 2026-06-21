@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import copy
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from backend.app.services import shift_service
+
+
+def _shift_window_start(minutes_from_now: float = 5) -> str:
+    return (datetime.now(timezone.utc) + timedelta(minutes=minutes_from_now)).isoformat()
 
 
 def _sample_shift(**overrides):
@@ -18,8 +22,8 @@ def _sample_shift(**overrides):
         "worker_id": "worker-1",
         "participant_id": "patient-1",
         "participant_name": "James Chen",
-        "scheduled_start": f"{date.today().isoformat()}T09:00:00+00:00",
-        "scheduled_end": f"{date.today().isoformat()}T11:00:00+00:00",
+        "scheduled_start": _shift_window_start(),
+        "scheduled_end": (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(),
         "status": "scheduled",
         "tasks": [],
     }
@@ -185,8 +189,11 @@ def test_shift_card_payload_session_active_state():
     assert payload["visual_state"] == "session_active"
 
 
+@patch("backend.app.services.shift_service.log_shift_check_in")
+@patch("backend.app.services.shift_service._apply_verified_check_in", return_value={"clock_in_method": "gps", "clock_in_verified": True})
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_clears_stale_session_link(mock_admin):
+def test_clock_in_clears_stale_session_link(mock_admin, _mock_ack_guard, _mock_verify, _mock_log):
     """Fresh clock-in must not inherit an old session (CARECLIQV2-127)."""
     shift = _sample_shift(status="scheduled", session_id="old-sess")
     table = MagicMock()
@@ -205,7 +212,13 @@ def test_clock_in_clears_stale_session_link(mock_admin):
     )
 
     with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
-        result = shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+        result = shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
+        )
 
     assert result is not None
     assert result["visual_state"] == "clocked_in"
@@ -213,8 +226,11 @@ def test_clock_in_clears_stale_session_link(mock_admin):
     assert update_payload.get("session_id") is None
 
 
+@patch("backend.app.services.shift_service.log_shift_check_in")
+@patch("backend.app.services.shift_service._apply_verified_check_in", return_value={"clock_in_method": "gps", "clock_in_verified": True})
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_clock_in_initialises_default_tasks(mock_admin):
+def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_verify, _mock_log):
     shift = _sample_shift()
     table = MagicMock()
     mock_admin.return_value.table.return_value = table
@@ -223,11 +239,24 @@ def test_clock_in_initialises_default_tasks(mock_admin):
         data=[{**shift, "status": "in_progress", "clocked_in_at": datetime.now(timezone.utc).isoformat(), "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)}]
     )
 
-    result = shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+    result = shift_service.clock_in_shift(
+        "shift-1",
+        "worker-1",
+        "org-1",
+        method="gps",
+        location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
+    )
     assert result is not None
     assert result["visual_state"] == "clocked_in"
     assert len(result["tasks"]) == 6
     table.update.assert_called()
+
+
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_rejects_without_verification_method(mock_get):
+    mock_get.return_value = _sample_shift()
+    with pytest.raises(ValueError, match="Verified check-in required"):
+        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
 
 
 @patch("backend.app.services.shift_service.get_shift_by_id")
@@ -404,7 +433,17 @@ def test_mandatory_tasks_complete():
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
+            task["note"] = "Completed with sufficient written evidence."
     assert shift_service._mandatory_tasks_complete(tasks) is True
+
+
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
+    tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
+    tasks[0]["completed"] = True
+    mock_get.return_value = _sample_shift(tasks=tasks)
+    with pytest.raises(ValueError, match="Mandatory task"):
+        shift_service.update_shift_tasks("shift-1", "worker-1", "org-1", tasks)
 
 
 @patch("backend.app.services.shift_service._get_session_for_shift")
@@ -415,6 +454,7 @@ def test_end_shift_completes_shift(mock_get, mock_admin, mock_session):
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
             task["completed"] = True
+            task["note"] = "Completed with sufficient written evidence."
     shift = _sample_shift(
         status="in_progress",
         clocked_in_at=datetime.now(timezone.utc).isoformat(),
@@ -671,3 +711,139 @@ def test_get_participant_profile_for_worker_denies_other_worker():
             "shift-1", "worker-1", "org-1"
         )
     assert payload is None
+
+
+def test_build_participant_risks_from_shift_text():
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products\n⛔ Risk of falls — supervise transfers",
+        allergies="Peanuts, tree nuts",
+    )
+    risks = shift_service.build_participant_risks(shift, "org-1")
+    assert len(risks) >= 2
+    types = {r["type"] for r in risks}
+    assert "allergy" in types
+    assert "falls_risk" in types
+    assert all(r.get("title") and r.get("instructions") for r in risks)
+
+
+def test_infer_risk_type_covers_ticket_categories():
+    assert shift_service._infer_risk_type("Legal blindness") == "legal_blindness"
+    assert shift_service._infer_risk_type("History of seizures") == "seizures"
+    assert shift_service._infer_risk_type("Behaviour Support Plan in place") == "bsp"
+    assert shift_service._infer_risk_type("Swallowing risk — thickened fluids") == "swallowing_risk"
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_acknowledge_shift_risks_requires_alerts(mock_get, _mock_session):
+    mock_get.return_value = _sample_shift(health_alerts=None, allergies=None)
+    with pytest.raises(ValueError, match="No safety alerts"):
+        shift_service.acknowledge_shift_risks("shift-1", "worker-1", "org-1")
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_acknowledge_shift_risks_persists_timestamp(mock_get, mock_admin, _mock_session):
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products",
+    )
+    mock_get.return_value = shift
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{**shift, "risks_acknowledged_at": "2026-06-19T10:00:00+00:00", "risks_acknowledged_by": "worker-1"}]
+    )
+
+    result = shift_service.acknowledge_shift_risks("shift-1", "worker-1", "org-1")
+
+    assert result is not None
+    assert result["risks_acknowledged"] is True
+    update_payload = table.update.call_args[0][0]
+    assert update_payload["risks_acknowledged_by"] == "worker-1"
+    assert update_payload["risks_acknowledged_at"]
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_shift_blocked_without_risk_acknowledgement(mock_get, _mock_session):
+    mock_get.return_value = _sample_shift(
+        health_alerts="⛔ Risk of falls — supervise transfers",
+    )
+    with pytest.raises(ValueError, match="Acknowledge risks"):
+        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+
+
+@patch("backend.app.services.shift_service._get_session_for_shift", return_value=None)
+@patch("backend.app.services.shift_service.get_supabase_admin")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_get_participant_risks_for_worker(mock_get, mock_admin, _mock_session):
+    shift = _sample_shift(
+        health_alerts="⚠️ Peanut allergy — avoid all nut products",
+    )
+    mock_get.return_value = shift
+    mock_admin.return_value.table.return_value.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(data=[])
+
+    payload = shift_service.get_participant_risks_for_worker("shift-1", "worker-1", "org-1")
+
+    assert payload is not None
+    assert payload["shift_id"] == "shift-1"
+    assert len(payload["alerts"]) >= 1
+    assert payload["risks_acknowledged"] is False
+
+
+@patch("backend.app.services.shift_service.log_shift_check_in")
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.resolve_participant_coordinates", return_value=(-33.8688, 151.2093))
+@patch("backend.app.services.shift_service.get_supabase_admin")
+def test_clock_in_with_gps_verification(mock_admin, _mock_coords, _mock_ack, _mock_log):
+    shift = _sample_shift(participant_latitude=-33.8688, participant_longitude=151.2093)
+    table = MagicMock()
+    mock_admin.return_value.table.return_value = table
+    table.update.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[{
+            **shift,
+            "status": "in_progress",
+            "clocked_in_at": datetime.now(timezone.utc).isoformat(),
+            "clock_in_method": "gps",
+            "clock_in_verified": True,
+            "tasks": copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS),
+        }]
+    )
+
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        result = shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -33.8688, "lng": 151.2093, "accuracy": 10},
+        )
+
+    assert result is not None
+    assert result["clock_in_method"] == "gps"
+    assert result["clock_in_verified"] is True
+    _mock_log.assert_called_once()
+
+
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.resolve_participant_coordinates", return_value=(-33.8688, 151.2093))
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_gps_rejects_far_location(mock_get, _mock_coords, _mock_ack):
+    mock_get.return_value = _sample_shift()
+    with pytest.raises(ValueError, match="too far"):
+        shift_service.clock_in_shift(
+            "shift-1",
+            "worker-1",
+            "org-1",
+            method="gps",
+            location={"lat": -34.0, "lng": 151.5},
+        )
+
+
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
+@patch("backend.app.services.shift_service.get_shift_by_id")
+def test_clock_in_rejects_outside_time_window(mock_get, _mock_ack):
+    mock_get.return_value = _sample_shift(scheduled_start=_shift_window_start(60))
+    with pytest.raises(ValueError, match="Too early"):
+        shift_service.clock_in_shift("shift-1", "worker-1", "org-1")

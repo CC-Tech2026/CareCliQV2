@@ -3,6 +3,7 @@ import { jsonFetch } from "@/services/http";
 export interface IncidentPayload {
   participant_id?: string;
   session_id?: string;
+  shift_id?: string;
   incident_type: string;
   severity: string;
   title: string;
@@ -13,6 +14,8 @@ export interface IncidentPayload {
   worker_actions?: string;
   incident_date: string;
   follow_up_required?: boolean;
+  escalate?: boolean;
+  photo_data?: string[];
 }
 
 export function listIncidents<T = unknown>() {

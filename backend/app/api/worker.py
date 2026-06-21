@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
@@ -13,6 +13,7 @@ from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
 from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
+from ..services.notification_service import notify_office_worker_message
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -85,6 +86,19 @@ class EndShiftBody(BaseModel):
     force: bool = False
 
 
+class ClockInLocationBody(BaseModel):
+    lat: float
+    lng: float
+    accuracy: Optional[float] = None
+
+
+class ClockInBody(BaseModel):
+    method: Literal["gps", "qr"]
+    location: Optional[ClockInLocationBody] = None
+    qr_token: Optional[str] = None
+    client_timestamp: Optional[str] = None
+
+
 class TaskEvidenceItem(BaseModel):
     evidence_id: str
     task_id: str
@@ -100,6 +114,17 @@ class TaskEvidenceItem(BaseModel):
 
 class TaskEvidenceSyncBody(BaseModel):
     evidence: list[TaskEvidenceItem]
+
+
+class ShiftVisitNoteCreate(BaseModel):
+    content: str = Field(min_length=1)
+    category: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class ShiftOfficeMessageCreate(BaseModel):
+    message: str = Field(min_length=1)
+    priority: Literal["normal", "urgent", "emergency"] = "normal"
 
 
 class UploadEvidenceMeta(BaseModel):
@@ -555,6 +580,18 @@ async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_cu
     return shift
 
 
+@router.get("/shifts/{shift_id}/participant-risks")
+async def worker_shift_participant_risks(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Structured safety alerts for a shift (CARECLIQV2-158)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_risks_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
 @router.get("/shifts/{shift_id}/support-instructions")
 async def worker_shift_support_instructions(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Category-based support instructions for a shift (CARECLIQV2-157)."""
@@ -592,23 +629,54 @@ async def worker_shift_participant_preferences(shift_id: str, current_user: dict
 
 
 @router.post("/shifts/{shift_id}/clock-in")
-async def worker_clock_in(shift_id: str, current_user: dict = Depends(get_current_user)):
-    """Clock in to a shift and initialise the task checklist (CARECLIQV2-116 / CARECLIQV2-134)."""
+async def worker_clock_in(
+    shift_id: str,
+    body: ClockInBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Clock in to a shift with GPS/QR verification (CARECLIQV2-197)."""
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
+    location = body.location.model_dump() if body.location else None
     try:
-        shift = shift_service.clock_in_shift(shift_id, worker_id, org_id)
+        shift = shift_service.clock_in_shift(
+            shift_id,
+            worker_id,
+            org_id,
+            method=body.method,
+            location=location,
+            qr_token=body.qr_token,
+            client_timestamp=body.client_timestamp,
+        )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        message = str(exc)
+        status_code = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if any(
+                phrase in message.lower()
+                for phrase in ("too early", "too far", "window closed", "requires", "invalid qr", "qr code")
+            )
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=status_code, detail=message)
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    action_type = (
+        "worker.shift.checked_in_verified"
+        if body and body.method
+        else "worker.shift.clocked_in"
+    )
     await audit_service.log_action(
-        action_type="worker.shift.clocked_in",
+        action_type=action_type,
         entity_type="shift",
         entity_id=shift_id,
         user_id=worker_id,
         organization_id=org_id,
+        details={
+            "method": body.method if body else None,
+            "verified": shift.get("clock_in_verified"),
+        },
     )
     return shift
 
@@ -624,7 +692,10 @@ async def worker_update_shift_tasks(
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     tasks = [task.model_dump() for task in body.tasks]
-    shift = shift_service.update_shift_tasks(shift_id, worker_id, org_id, tasks)
+    try:
+        shift = shift_service.update_shift_tasks(shift_id, worker_id, org_id, tasks)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return shift
@@ -676,7 +747,10 @@ async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(g
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
-    shift = shift_service.acknowledge_shift_risks(shift_id, worker_id, org_id)
+    try:
+        shift = shift_service.acknowledge_shift_risks(shift_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     await audit_service.log_action(
@@ -831,3 +905,99 @@ async def worker_sync_task_evidence(
         after_state={"synced_count": len(result.get("synced_ids") or [])},
     )
     return result
+
+
+@router.get("/shifts/{shift_id}/notes")
+async def worker_list_shift_notes(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """List visit/daily notes for a shift (CARECLIQV2-209)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    notes = shift_service.list_shift_visit_notes(shift_id, worker_id, org_id)
+    if notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return notes
+
+
+@router.post("/shifts/{shift_id}/notes", status_code=status.HTTP_201_CREATED)
+async def worker_create_shift_note(
+    shift_id: str,
+    body: ShiftVisitNoteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a visit/daily note during a shift (CARECLIQV2-209)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        note = shift_service.create_shift_visit_note(
+            shift_id,
+            worker_id,
+            org_id,
+            content=body.content,
+            category=body.category,
+            session_id=body.session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return note
+
+
+@router.get("/shifts/{shift_id}/messages")
+async def worker_list_shift_messages(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """List office messages for a shift (CARECLIQV2-213)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    messages = shift_service.list_shift_office_messages(shift_id, worker_id, org_id)
+    if messages is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return messages
+
+
+@router.post("/shifts/{shift_id}/messages", status_code=status.HTTP_201_CREATED)
+async def worker_create_shift_message(
+    shift_id: str,
+    body: ShiftOfficeMessageCreate,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a message to office during a shift (CARECLIQV2-213)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        row = shift_service.create_shift_office_message(
+            shift_id,
+            worker_id,
+            org_id,
+            message=body.message,
+            priority=body.priority,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    background_tasks.add_task(
+        notify_office_worker_message,
+        org_id=org_id,
+        shift_id=shift_id,
+        worker_id=worker_id,
+        message=body.message,
+        priority=body.priority,
+    )
+    return row
+
+
+@router.get("/shifts/{shift_id}/location")
+async def worker_shift_location(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Navigation and location details for a shift (CARECLIQV2-214)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_shift_location_details(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload

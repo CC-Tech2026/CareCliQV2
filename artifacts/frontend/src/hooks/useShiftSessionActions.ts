@@ -15,6 +15,7 @@ import {
   startShiftSession,
   type WorkerShift,
 } from "@/services/shiftService";
+import { shiftNeedsRiskAck } from "@/lib/shift-utils";
 
 type Options = {
   shiftId: string;
@@ -93,6 +94,10 @@ export function useShiftSessionActions({
       await refreshPendingCount();
       return;
     }
+    if (shift?.visual_state === "scheduled" && !instantSessionActive) {
+      await refreshPendingCount();
+      return;
+    }
     if (shift?.visual_state === "session_active") {
       await removePendingAction(pending.id);
       clearPendingStartSession(shiftId);
@@ -120,6 +125,7 @@ export function useShiftSessionActions({
   }, [
     shiftId,
     shift?.visual_state,
+    instantSessionActive,
     processPendingAction,
     invalidate,
     onSessionStarted,
@@ -142,6 +148,15 @@ export function useShiftSessionActions({
 
   const startSession = useCallback(async () => {
     if (!shift) return { ok: false as const };
+
+    if (shiftNeedsRiskAck(shift)) {
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
+        variant: "destructive",
+      });
+      return { ok: false as const };
+    }
 
     const startedAt = new Date().toISOString();
     setInstantSessionActive(true);

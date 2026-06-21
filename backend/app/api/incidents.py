@@ -7,6 +7,7 @@ from ..schemas.incident import IncidentCreate, IncidentUpdate
 from ..services import audit_service, incident_service, participant_service, session_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
 from ..services.incident_pattern_service import get_incident_pattern_analysis
+from ..services.notification_service import notify_incident_reported
 import logging
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,22 @@ async def create_incident(
                 participant_id=str(body.participant_id) if body.participant_id else None,
                 worker_id=user.get("sub"),
             )
+
+        severity = str(result.get("severity") or body.severity or "medium")
+        if body.escalate or severity in ("high", "critical"):
+            severity = "critical" if body.escalate else severity
+
+        background_tasks.add_task(
+            notify_incident_reported,
+            org_id=org_id,
+            incident_id=incident_id,
+            title=f"Incident reported: {result.get('title') or body.title}",
+            message=(body.description or "")[:500],
+            severity=severity,
+            participant_id=str(body.participant_id) if body.participant_id else None,
+            session_id=str(body.session_id) if body.session_id else None,
+            escalate=bool(body.escalate),
+        )
 
         return result
     except ValueError as e:

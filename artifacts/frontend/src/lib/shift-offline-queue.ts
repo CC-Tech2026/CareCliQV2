@@ -9,7 +9,19 @@ export type PendingStartSessionAction = {
   createdAt: string;
 };
 
-export type PendingAction = PendingStartSessionAction;
+export type PendingClockInAction = {
+  id: string;
+  type: "clock_in";
+  shiftId: string;
+  method: "gps" | "qr";
+  location?: { lat: number; lng: number; accuracy?: number } | null;
+  qrToken?: string | null;
+  clientTimestamp: string;
+  retryCount: number;
+  createdAt: string;
+};
+
+export type PendingAction = PendingStartSessionAction | PendingClockInAction;
 
 const DB_NAME = "carecliq_shift_offline";
 const DB_VERSION = 1;
@@ -46,6 +58,33 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
 
 function newActionId() {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export async function enqueueClockIn(input: {
+  shiftId: string;
+  method: "gps" | "qr";
+  clientTimestamp: string;
+  location?: { lat: number; lng: number; accuracy?: number } | null;
+  qrToken?: string | null;
+}): Promise<PendingClockInAction> {
+  const action: PendingClockInAction = {
+    id: newActionId(),
+    type: "clock_in",
+    shiftId: input.shiftId,
+    method: input.method,
+    location: input.location ?? null,
+    qrToken: input.qrToken ?? null,
+    clientTimestamp: input.clientTimestamp,
+    retryCount: 0,
+    createdAt: new Date().toISOString(),
+  };
+  await withStore("readwrite", (store) => store.put(action));
+  return action;
+}
+
+export async function getPendingClockIn(shiftId: string): Promise<PendingClockInAction | null> {
+  const actions = await listPendingActions();
+  return actions.find((a) => a.type === "clock_in" && a.shiftId === shiftId) ?? null;
 }
 
 export async function enqueueStartSession(input: {

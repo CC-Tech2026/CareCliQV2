@@ -34,6 +34,7 @@ import {
   STATE_STYLES,
   avatarShouldPulse,
   isShiftToday,
+  shiftNeedsRiskAck,
 } from "@/lib/shift-utils";
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
@@ -176,7 +177,28 @@ export function ShiftListCard({ shift }: Props) {
       navigate(`/my-shifts/${shift.id}`);
       return;
     }
-    await handleStartSession();
+
+    if (shiftNeedsRiskAck(shift)) {
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
+        variant: "destructive",
+      });
+      navigate(`/my-shifts/${shift.id}?focus=safety`);
+      return;
+    }
+
+    if (shift.visual_state === "scheduled") {
+      navigate(`/my-shifts/${shift.id}`);
+      return;
+    }
+
+    if (shift.visual_state === "clocked_in") {
+      await handleStartSession();
+      return;
+    }
+
+    navigate(`/my-shifts/${shift.id}`);
   };
 
   const handleStartSession = async () => {

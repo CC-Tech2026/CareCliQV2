@@ -303,5 +303,78 @@ export function resolveActiveShiftTasks(shiftTasks: ShiftTask[] | undefined, loc
 }
 
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
-  return tasks.some((t) => isMandatoryTask(t) && !t.completed);
+  return tasks.some((t) => isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
+}
+
+export function mandatoryTaskSatisfied(task: ShiftTask) {
+  if (!task.completed) return false;
+  if (hasStrongTaskEvidence(task)) return true;
+  const note = (task.note || task.context_note || "").trim();
+  return note.length >= 20;
+}
+
+/** Whether a task may be marked complete (mandatory tasks need evidence first). */
+export function canMarkTaskComplete(task: ShiftTask, draftNote?: string) {
+  if (!isMandatoryTask(task)) return true;
+  const candidate: ShiftTask = { ...task, completed: true };
+  if (draftNote !== undefined) candidate.note = draftNote;
+  return mandatoryTaskSatisfied(candidate);
+}
+
+/** Show "Mark task complete" when note ≥20 chars or strong evidence is present. */
+export function isReadyToMarkTaskComplete(
+  task: ShiftTask,
+  draftNote?: string,
+  options?: { hasLocalStrongEvidence?: boolean },
+) {
+  if (task.completed) return false;
+  const note = resolveEffectiveTaskNote(draftNote, task).trim();
+  if (hasStrongTaskEvidence(task) || options?.hasLocalStrongEvidence) return true;
+  return note.length >= 20;
+}
+
+/** Draft input, saved thread notes, or persisted task note — whichever is available. */
+export function resolveEffectiveTaskNote(
+  draftNote: string | undefined,
+  task: ShiftTask,
+  savedTextNotes?: string[],
+): string {
+  const draft = (draftNote ?? "").trim();
+  if (draft) return draft;
+  if (savedTextNotes?.length) {
+    for (let i = savedTextNotes.length - 1; i >= 0; i -= 1) {
+      const saved = savedTextNotes[i]?.trim();
+      if (saved) return saved;
+    }
+  }
+  return (task.note || task.context_note || "").trim();
+}
+
+export function mandatoryTaskState(task: ShiftTask) {
+  if (!isMandatoryTask(task)) return "optional" as const;
+  if (mandatoryTaskSatisfied(task)) return "satisfied" as const;
+  const hasDraft = Boolean(task.note?.trim() || task.context_note?.trim() || hasStrongTaskEvidence(task));
+  if (hasDraft) return "draft" as const;
+  return "missing" as const;
+}
+
+type ShiftRiskFields = {
+  health_alerts?: unknown[] | null;
+  has_risk_alerts?: boolean;
+  allergies?: string | null;
+  health_flags?: string | null;
+  risks_acknowledged?: boolean;
+};
+
+export function shiftHasRiskAlerts(shift: ShiftRiskFields) {
+  return (
+    (shift.health_alerts?.length ?? 0) > 0 ||
+    !!shift.has_risk_alerts ||
+    !!shift.allergies?.trim() ||
+    !!shift.health_flags?.trim()
+  );
+}
+
+export function shiftNeedsRiskAck(shift: ShiftRiskFields) {
+  return shiftHasRiskAlerts(shift) && !shift.risks_acknowledged;
 }

@@ -6,19 +6,16 @@ import { useShiftTimer } from "@/hooks/useShiftTimer";
 import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronDown,
   Loader2,
   MapPin,
   Navigation,
   Phone,
-  ShieldAlert,
   Mic,
   Square,
   MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { DuringShiftAccordion } from "@/components/shifts/DuringShiftAccordion";
 import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import { SessionTimeline } from "@/components/shifts/SessionTimeline";
@@ -27,11 +24,13 @@ import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
 import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLayout";
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
+import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
+import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
 import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
@@ -40,8 +39,14 @@ import {
   loadCachedParticipantContext,
   type CachedParticipantContext,
 } from "@/lib/participant-context-cache";
-import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
+import { ClockInFlow } from "@/components/shifts/ClockInFlow";
+import {
+  enqueueClockIn,
+  getPendingClockIn,
+  removePendingAction,
+} from "@/lib/shift-offline-queue";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
+import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
   AlertDialog,
@@ -62,6 +67,7 @@ import {
   endShift,
   clearPendingStartSession,
   getWorkerShift,
+  type ClockInRequest,
   type ShiftTask,
   type ShiftVisualState,
   type WorkerShift,
@@ -83,7 +89,9 @@ import {
   isMandatoryTask,
   resolveActiveShiftTasks,
   shiftDurationMinutes,
+  shiftHasRiskAlerts,
   shiftInitials,
+  shiftNeedsRiskAck,
   taskEvidenceScore,
   taskFeedSummary,
   timerAnchorIso,
@@ -120,6 +128,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [contextOpen, setContextOpen] = useState(true);
   const [offlineContext, setOfflineContext] = useState<CachedParticipantContext | null>(null);
   const [supportOpen, setSupportOpen] = useState(true);
+  const [locationOpen, setLocationOpen] = useState(false);
   const [ackChecked, setAckChecked] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [tasks, setTasks] = useState<ShiftTask[]>([]);
@@ -128,6 +137,9 @@ export default function MyShiftDetail({ id }: Props) {
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [forceEndPending, setForceEndPending] = useState(false);
+  const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
+  const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
+  const [pendingClockInCount, setPendingClockInCount] = useState(0);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -162,6 +174,14 @@ export default function MyShiftDetail({ id }: Props) {
   }, [shift?.risks_acknowledged, shift?.tasks]);
 
   useEffect(() => {
+    if (!shift) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("focus") === "safety" || shiftNeedsRiskAck(shift)) {
+      setSafetyOpen(true);
+    }
+  }, [shift]);
+
+  useEffect(() => {
     if (!shift?.participant_id) return;
     const syncedAt = shift.context_synced_at || new Date().toISOString();
     if (shift.profile || shift.preferences || shift.context) {
@@ -193,6 +213,130 @@ export default function MyShiftDetail({ id }: Props) {
     }
   }, [shift?.visual_state, id]);
 
+  const refreshPendingClockIn = async () => {
+    const pending = await getPendingClockIn(id);
+    setPendingClockInCount(pending ? 1 : 0);
+  };
+
+  const applyClockInResult = async (updated: WorkerShift) => {
+    if (!shift) return;
+    setTasks(updated.tasks ?? []);
+    if (shift.participant_id && (updated.profile || updated.context)) {
+      void cacheParticipantContext({
+        participantId: shift.participant_id,
+        profile: updated.profile ?? shift.profile,
+        preferences: updated.preferences ?? shift.preferences,
+        context: updated.context ?? shift.context,
+        syncedAt: updated.context_synced_at || new Date().toISOString(),
+      });
+    }
+    invalidateShifts();
+    await refetch();
+  };
+
+  const performVerifiedClockIn = async (payload: ClockInRequest) => {
+    if (!shift) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await enqueueClockIn({
+        shiftId: shift.id,
+        method: payload.method,
+        clientTimestamp: payload.client_timestamp || new Date().toISOString(),
+        location: payload.location ?? null,
+        qrToken: payload.qr_token ?? null,
+      });
+      await refreshPendingClockIn();
+      setClockInFlowOpen(false);
+      toast({
+        title: "Offline check-in saved",
+        description: "Your check-in will sync when you are back online.",
+      });
+      return;
+    }
+    try {
+      const updated = await clockInShift(shift.id, payload);
+      await applyClockInResult(updated);
+      setClockInFlowOpen(false);
+      toast({
+        title: "Clocked in!",
+        description: `Verified arrival for ${shift.participant_name ?? "participant"}.`,
+      });
+    } catch (err) {
+      const apiErr = err as Error & { status?: number };
+      const status = apiErr.status;
+      const isRejection =
+        status === 422 ||
+        status === 403 ||
+        status === 404 ||
+        (status !== undefined && status >= 400 && status < 500);
+
+      if (isRejection) {
+        toast({
+          title: "Check-in not allowed",
+          description: apiErr.message || "This check-in could not be verified.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await enqueueClockIn({
+        shiftId: shift.id,
+        method: payload.method,
+        clientTimestamp: payload.client_timestamp || new Date().toISOString(),
+        location: payload.location ?? null,
+        qrToken: payload.qr_token ?? null,
+      });
+      await refreshPendingClockIn();
+      setClockInFlowOpen(false);
+      toast({
+        title: "Check-in saved locally",
+        description: apiErr.message || "Will retry when connection improves.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  useEffect(() => {
+    void refreshPendingClockIn();
+  }, [id]);
+
+  useEffect(() => {
+    const syncPendingClockIn = async () => {
+      if (clockInFlowOpen) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      const pending = await getPendingClockIn(id);
+      if (!pending || shift?.visual_state !== "scheduled") return;
+      try {
+        await clockInShift(id, {
+          method: pending.method,
+          location: pending.location ?? undefined,
+          qr_token: pending.qrToken ?? undefined,
+          client_timestamp: pending.clientTimestamp,
+        });
+        await removePendingAction(pending.id);
+        await refreshPendingClockIn();
+        invalidateShifts();
+        await refetch();
+        toast({ title: "Check-in synced", description: "Offline check-in uploaded." });
+      } catch (err) {
+        const apiErr = err as Error & { status?: number };
+        if (apiErr.status === 422 || (apiErr.status !== undefined && apiErr.status >= 400 && apiErr.status < 500)) {
+          await removePendingAction(pending.id);
+          await refreshPendingClockIn();
+          toast({
+            title: "Check-in not allowed",
+            description: apiErr.message || "This check-in could not be verified.",
+            variant: "destructive",
+          });
+          return;
+        }
+        await refreshPendingClockIn();
+      }
+    };
+    const onOnline = () => void syncPendingClockIn();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [id, shift?.visual_state, clockInFlowOpen, invalidate, refetch, toast]);
+
   const displayVisualState = shift
     ? resolveDisplayVisualState(shift, instantSessionActive)
     : "scheduled";
@@ -216,41 +360,14 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       await acknowledgeShiftRisks(shift.id);
       setAckChecked(true);
+      setAckConfirmOpen(false);
       invalidateShifts();
       await refetch();
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handleClockIn = async () => {
-    if (!shift) return;
-    const hasAlerts = (shift.health_alerts?.length ?? 0) > 0;
-    const risksAcked = shift.risks_acknowledged ?? false;
-    if (hasAlerts && !risksAcked && !ackChecked) return;
-    setBusy("clock");
-    try {
-      const updated = await clockInShift(shift.id);
-      setTasks(updated.tasks ?? []);
-      if (shift.participant_id && (updated.profile || updated.context)) {
-        void cacheParticipantContext({
-          participantId: shift.participant_id,
-          profile: updated.profile ?? shift.profile,
-          preferences: updated.preferences ?? shift.preferences,
-          context: updated.context ?? shift.context,
-          syncedAt: updated.context_synced_at || new Date().toISOString(),
-        });
-      }
-      invalidateShifts();
-      await refetch();
-      toast({
-        title: "Clocked in!",
-        description: `Shift with ${shift.participant_name ?? "participant"} is active.`,
-      });
     } catch (err) {
+      setAckChecked(false);
       toast({
-        title: "Failed to clock in",
-        description: (err as Error).message || "Check your connection and try again.",
+        title: "Could not acknowledge risks",
+        description: (err as Error).message || "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -258,8 +375,41 @@ export default function MyShiftDetail({ id }: Props) {
     }
   };
 
+  const handleClockIn = () => {
+    if (!shift) return;
+    if (shiftNeedsRiskAck(shift) && !ackChecked) {
+      setSafetyOpen(true);
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before clocking in.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setClockInFlowOpen(true);
+  };
+
+  const handleVerifiedClockIn = async (payload: ClockInRequest) => {
+    if (!shift) return;
+    setBusy("clock");
+    try {
+      await performVerifiedClockIn(payload);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleStartSession = async () => {
     if (!shift || busy !== null) return;
+    if (shiftNeedsRiskAck(shift)) {
+      setSafetyOpen(true);
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusy("start");
     try {
       await startSession();
@@ -297,6 +447,8 @@ export default function MyShiftDetail({ id }: Props) {
     try {
       const updated = await endShift(shift.id, { force: forceEndPending });
       setTasks(updated.tasks ?? []);
+      setNotePanelOpen(false);
+      setInstantSessionActive(false);
       setEndShiftOpen(false);
       setMandatoryAlertOpen(false);
       setForceEndPending(false);
@@ -323,6 +475,10 @@ export default function MyShiftDetail({ id }: Props) {
     if (hasIncompleteMandatoryTasks(activeTasks)) {
       setForceEndPending(false);
       setMandatoryAlertOpen(true);
+      setTasksOpen(true);
+      requestAnimationFrame(() => {
+        document.getElementById("shift-task-checklist")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
       return;
     }
     setForceEndPending(false);
@@ -411,10 +567,18 @@ export default function MyShiftDetail({ id }: Props) {
       setContextOpen={setContextOpen}
       supportOpen={supportOpen}
       setSupportOpen={setSupportOpen}
+      locationOpen={locationOpen}
+      setLocationOpen={setLocationOpen}
       ackChecked={ackChecked}
       setAckChecked={setAckChecked}
       busy={busy}
-      onAcknowledge={handleAcknowledge}
+      onRequestAcknowledge={() => setAckConfirmOpen(true)}
+      onViewSupportInstructions={() => {
+        setSupportOpen(true);
+        requestAnimationFrame(() => {
+          document.getElementById("shift-support-instructions")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }}
       onClockIn={handleClockIn}
       onStartSession={handleStartSession}
       onRequestClockOut={() => setClockOutOpen(true)}
@@ -429,6 +593,16 @@ export default function MyShiftDetail({ id }: Props) {
 
   const dialogs = (
     <>
+      {shift && (
+        <ClockInFlow
+          open={clockInFlowOpen}
+          shift={shift}
+          busy={busy === "clock"}
+          onClose={() => setClockInFlowOpen(false)}
+          onConfirm={handleVerifiedClockIn}
+        />
+      )}
+
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -465,10 +639,37 @@ export default function MyShiftDetail({ id }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-[#F03060] hover:bg-[#d92854]"
-              onClick={() => void handleEndShift()}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleEndShift();
+              }}
               disabled={busy === "end"}
             >
               {forceEndPending ? "End Anyway" : "End Shift"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={ackConfirmOpen}
+        onOpenChange={(open) => {
+          setAckConfirmOpen(open);
+          if (!open && !shift?.risks_acknowledged) setAckChecked(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acknowledge safety alerts?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirm you have read and understand all safety alerts for {shift?.participant_name ?? "this participant"}.
+              This will be logged with your name and timestamp.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
+              Acknowledge Risks
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -479,7 +680,7 @@ export default function MyShiftDetail({ id }: Props) {
   if (showLiveSession) {
     return (
       <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
-        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
         {showEvidenceBanner && (
           <EvidenceSyncBanner
             online={evidenceOnline}
@@ -509,6 +710,7 @@ export default function MyShiftDetail({ id }: Props) {
           left={workflow}
           right={
             <LiveProgressNotePanel
+              shiftId={shift.id}
               participantName={shift.participant_name}
               sessionId={shift.session_id}
               onClose={() => setNotePanelOpen(false)}
@@ -522,7 +724,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-10">
-      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner
           online={evidenceOnline}
@@ -580,10 +782,13 @@ function ShiftWorkflow({
   setContextOpen,
   supportOpen,
   setSupportOpen,
+  locationOpen,
+  setLocationOpen,
   ackChecked,
   setAckChecked,
   busy,
-  onAcknowledge,
+  onRequestAcknowledge,
+  onViewSupportInstructions,
   onClockIn,
   onStartSession,
   onRequestClockOut,
@@ -622,10 +827,13 @@ function ShiftWorkflow({
   setContextOpen: (v: boolean) => void;
   supportOpen: boolean;
   setSupportOpen: (v: boolean) => void;
+  locationOpen: boolean;
+  setLocationOpen: (v: boolean) => void;
   ackChecked: boolean;
   setAckChecked: (v: boolean) => void;
   busy: string | null;
-  onAcknowledge: () => void;
+  onRequestAcknowledge: () => void;
+  onViewSupportInstructions: () => void;
   onClockIn: () => void;
   onStartSession: () => void;
   onRequestClockOut: () => void;
@@ -639,8 +847,9 @@ function ShiftWorkflow({
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
   const durationLabel = formatDurationLabel(duration);
-  const hasAlerts = (shift.health_alerts?.length ?? 0) > 0;
+  const hasAlerts = shiftHasRiskAlerts(shift);
   const risksAcked = shift.risks_acknowledged ?? false;
+  const needsRiskAck = shiftNeedsRiskAck(shift);
   const showTasks =
     visualState === "clocked_in" ||
     visualState === "session_active";
@@ -767,11 +976,21 @@ function ShiftWorkflow({
 
       <ShiftProgressStepper visualState={visualState} />
 
+      {!isCompleted && (
+        <ShiftMapPanel
+          shiftId={shift.id}
+          address={shift.participant_address}
+          open={locationOpen}
+          onToggle={() => setLocationOpen(!locationOpen)}
+        />
+      )}
+
       {!isCompleted && visualState === "scheduled" && (
         <Button
+          type="button"
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
-          disabled={busy !== null || (hasAlerts && !risksAcked && !ackChecked)}
+          disabled={busy !== null || (needsRiskAck && !ackChecked)}
           onClick={onClockIn}
         >
           {busy === "clock" ? (
@@ -792,7 +1011,7 @@ function ShiftWorkflow({
             participantName={shift.participant_name}
             onStartSession={onStartSession}
             isLoading={busy === "start"}
-            disabled={busy !== null && busy !== "start"}
+            disabled={(busy !== null && busy !== "start") || needsRiskAck}
           />
           <button
             type="button"
@@ -862,44 +1081,32 @@ function ShiftWorkflow({
         </div>
       )}
 
-      {hasAlerts && !risksAcked && visualState === "scheduled" && (
-        <RisksAcknowledgementSection
-          shift={shift}
-          safetyOpen={safetyOpen}
-          setSafetyOpen={setSafetyOpen}
+      {needsRiskAck && !isCompleted && (
+        <ParticipantRiskAcknowledgementSection
+          alerts={shift.health_alerts ?? []}
+          open={safetyOpen}
+          onToggle={() => setSafetyOpen(!safetyOpen)}
           ackChecked={ackChecked}
-          setAckChecked={setAckChecked}
-          busy={busy}
-          onAcknowledge={onAcknowledge}
+          busy={busy === "ack"}
+          onRequestAcknowledge={onRequestAcknowledge}
+          onUncheck={() => setAckChecked(false)}
+          onViewSupportInstructions={onViewSupportInstructions}
         />
       )}
 
       {hasAlerts && risksAcked && (
-        <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4">
-          <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
-            <CheckCircle2 size={16} /> Risks acknowledged
-          </p>
-          {shift.risks_acknowledged_at && (
-            <p className="mt-1 text-xs font-semibold text-emerald-700">
-              Logged {new Date(shift.risks_acknowledged_at).toLocaleString()}
-            </p>
-          )}
-          <ul className="mt-3 space-y-2">
-            {shift.health_alerts!.map((alert, i) => (
-              <li
-                key={i}
-                className={cn(
-                  "rounded-xl px-3 py-2 text-sm font-semibold",
-                  alert.severity === "critical"
-                    ? "border border-red-200 bg-red-50 text-red-900"
-                    : "border border-orange-200 bg-orange-50 text-orange-900",
-                )}
-              >
-                {alert.title || alert.detail}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <ParticipantRiskAcknowledgementSection
+          alerts={shift.health_alerts ?? []}
+          open={safetyOpen}
+          onToggle={() => setSafetyOpen(!safetyOpen)}
+          acknowledged
+          acknowledgedAt={shift.risks_acknowledged_at}
+          acknowledgedByName={shift.risks_acknowledged_by_name}
+          ackChecked
+          busy={false}
+          onRequestAcknowledge={onRequestAcknowledge}
+          onUncheck={() => {}}
+        />
       )}
 
       <ParticipantProfileCard
@@ -927,6 +1134,7 @@ function ShiftWorkflow({
         instructions={shift.support_instructions}
         open={supportOpen}
         onToggle={() => setSupportOpen(!supportOpen)}
+        sectionId="shift-support-instructions"
       />
 
       <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
@@ -1011,6 +1219,7 @@ function ShiftWorkflow({
 
       {(isClockedIn || isSessionActive) && (
         <DuringShiftAccordion
+          shiftId={shift.id}
           participantId={shift.participant_id}
           participantName={shift.participant_name}
           sessionId={shift.session_id}
@@ -1020,69 +1229,5 @@ function ShiftWorkflow({
         />
       )}
     </div>
-  );
-}
-
-function RisksAcknowledgementSection({
-  shift,
-  safetyOpen,
-  setSafetyOpen,
-  ackChecked,
-  setAckChecked,
-  busy,
-  onAcknowledge,
-}: {
-  shift: WorkerShift;
-  safetyOpen: boolean;
-  setSafetyOpen: (v: boolean) => void;
-  ackChecked: boolean;
-  setAckChecked: (v: boolean) => void;
-  busy: string | null;
-  onAcknowledge: () => void;
-}) {
-  return (
-    <section className="rounded-2xl border-2 border-red-200 bg-red-50/60 p-4">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between text-left"
-        onClick={() => setSafetyOpen(!safetyOpen)}
-      >
-        <span className="flex items-center gap-2 text-sm font-black text-red-700">
-          <ShieldAlert size={18} /> Safety — acknowledge before clock-in
-        </span>
-        <ChevronDown size={18} className={cn("transition", safetyOpen && "rotate-180")} />
-      </button>
-      {safetyOpen && (
-        <ul className="mt-3 space-y-2">
-          {shift.health_alerts!.map((alert, i) => (
-            <li
-              key={i}
-              className={cn(
-                "rounded-xl px-3 py-2 text-sm font-semibold",
-                alert.severity === "critical"
-                  ? "border border-red-300 bg-white text-red-900"
-                  : "border border-orange-300 bg-white text-orange-900",
-              )}
-            >
-              {alert.title || alert.detail}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-white p-3">
-        <Checkbox
-          id="ack-risks"
-          checked={ackChecked}
-          disabled={busy === "ack"}
-          onCheckedChange={(v) => {
-            if (v) void onAcknowledge();
-            else setAckChecked(false);
-          }}
-        />
-        <label htmlFor="ack-risks" className="text-sm font-bold leading-snug" style={{ color: TEXT }}>
-          I acknowledge the risks and safety alerts for this participant
-        </label>
-      </div>
-    </section>
   );
 }

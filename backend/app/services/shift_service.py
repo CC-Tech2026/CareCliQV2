@@ -8,6 +8,14 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import owner_payload
+from .check_in_service import (
+    log_shift_check_in,
+    normalize_client_timestamp,
+    resolve_participant_coordinates,
+    validate_clock_in_window,
+    verify_gps_location,
+    verify_qr_token_for_shift,
+)
 from .session_service import _prepare_session_payload
 from .supabase_client import get_supabase_admin
 
@@ -115,13 +123,111 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+PARTICIPANT_RISK_TYPES = (
+    "allergy",
+    "legal_blindness",
+    "falls_risk",
+    "seizures",
+    "bsp",
+    "swallowing_risk",
+    "other",
+)
+
+RISK_TYPE_LABELS: dict[str, str] = {
+    "allergy": "Allergies",
+    "legal_blindness": "Legal Blindness",
+    "falls_risk": "Falls Risk",
+    "seizures": "Seizures",
+    "bsp": "Behaviour Support Plan (BSP)",
+    "swallowing_risk": "Swallowing Risk",
+    "other": "Safety Alert",
+}
+
+
+def _risk_type_label(risk_type: str) -> str:
+    return RISK_TYPE_LABELS.get(risk_type, RISK_TYPE_LABELS["other"])
+
+
+def _infer_risk_type(text: str) -> str:
+    lower = text.lower()
+    if any(token in lower for token in ("allerg", "anaphyl", "epipen", "nut ")):
+        return "allergy"
+    if any(token in lower for token in ("blind", "vision impair", "sight loss", "legally blind")):
+        return "legal_blindness"
+    if "fall" in lower:
+        return "falls_risk"
+    if any(token in lower for token in ("seizure", "epilep", "convuls")):
+        return "seizures"
+    if any(token in lower for token in ("behaviour support", "behavior support", " bsp", "bsp ")):
+        return "bsp"
+    if any(token in lower for token in ("swallow", "aspirat", "dysphag", "choking")):
+        return "swallowing_risk"
+    return "other"
+
+
+def _normalise_risk_alert(raw: dict[str, Any]) -> dict[str, Any]:
+    risk_type = (raw.get("type") or "other").strip().lower()
+    if risk_type not in PARTICIPANT_RISK_TYPES:
+        risk_type = _infer_risk_type(str(raw.get("title") or raw.get("description") or ""))
+    title = (raw.get("title") or _risk_type_label(risk_type)).strip()
+    description = (raw.get("description") or raw.get("detail") or title).strip()
+    instructions = (raw.get("instructions") or description).strip()
+    severity = (raw.get("severity") or "important").strip().lower()
+    if severity not in {"critical", "important"}:
+        severity = "critical" if severity in {"severe", "anaphylactic", "high"} else "important"
+    return {
+        "type": risk_type,
+        "title": title,
+        "description": description,
+        "instructions": instructions,
+        "severity": severity,
+        "detail": instructions or description,
+    }
+
+
+def _make_risk_alert(
+    risk_type: str,
+    *,
+    title: str,
+    description: str = "",
+    instructions: str = "",
+    severity: str = "important",
+) -> dict[str, Any]:
+    return _normalise_risk_alert({
+        "type": risk_type,
+        "title": title,
+        "description": description or title,
+        "instructions": instructions or description or title,
+        "severity": severity,
+    })
+
+
+def _risk_dedupe_key(alert: dict[str, Any]) -> str:
+    return f"{alert.get('type')}::{str(alert.get('title') or '').strip().lower()}"
+
+
 def _parse_health_alerts(value: Any) -> list[dict[str, str]]:
+    structured = build_structured_health_alerts(value, shift=None, organization_id=None)
+    return [
+        {
+            "type": item.get("type", "other"),
+            "title": item.get("title", ""),
+            "description": item.get("description", ""),
+            "instructions": item.get("instructions", ""),
+            "severity": item.get("severity", "important"),
+            "detail": item.get("detail") or item.get("description") or item.get("title", ""),
+        }
+        for item in structured
+    ]
+
+
+def _alerts_from_shift_text(value: Any) -> list[dict[str, Any]]:
     if not value:
         return []
     if isinstance(value, list):
-        return [item for item in value if isinstance(item, dict)]
+        return [_normalise_risk_alert(item) for item in value if isinstance(item, dict)]
     if isinstance(value, str):
-        alerts: list[dict[str, str]] = []
+        alerts: list[dict[str, Any]] = []
         for line in value.split("\n"):
             text = line.strip()
             if not text:
@@ -129,9 +235,198 @@ def _parse_health_alerts(value: Any) -> list[dict[str, str]]:
             severity = "important"
             if text.startswith("⛔") or "critical" in text.lower():
                 severity = "critical"
-            alerts.append({"title": text.lstrip("⛔⚠️ ").strip(), "severity": severity, "detail": text})
+            cleaned = text.lstrip("⛔⚠️ ").strip()
+            risk_type = _infer_risk_type(cleaned)
+            title = _risk_type_label(risk_type) if risk_type != "other" else cleaned.split("—")[0].split("-")[0].strip()
+            alerts.append(_make_risk_alert(
+                risk_type,
+                title=title[:120] or "Safety Alert",
+                description=cleaned,
+                instructions=cleaned,
+                severity=severity,
+            ))
         return alerts
     return []
+
+
+def _fetch_patient_risk_fields(participant_id: str, organization_id: str) -> dict[str, Any]:
+    if not participant_id:
+        return {}
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("patients")
+            .select("allergies, medical_alerts, current_conditions, behaviour_support_plan")
+            .eq("id", participant_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        return rows[0] if rows else {}
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return {}
+        logger.debug("patient risk fields lookup failed: %s", exc)
+        return {}
+
+
+def build_structured_health_alerts(
+    value: Any,
+    *,
+    shift: Optional[dict[str, Any]] = None,
+    organization_id: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    """Normalise shift/participant sources into structured risk alerts (CARECLIQV2-158)."""
+    alerts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(alert: dict[str, Any]) -> None:
+        key = _risk_dedupe_key(alert)
+        if key in seen:
+            return
+        seen.add(key)
+        alerts.append(alert)
+
+    for alert in _alerts_from_shift_text(value):
+        add(alert)
+
+    if shift:
+        if shift.get("allergies") and not any(a.get("type") == "allergy" for a in alerts):
+            add(_make_risk_alert(
+                "allergy",
+                title="Allergies",
+                description=str(shift.get("allergies")),
+                instructions=str(shift.get("allergies")),
+                severity="critical",
+            ))
+        if shift.get("health_flags"):
+            for line in str(shift.get("health_flags")).split("\n"):
+                text = line.strip()
+                if not text:
+                    continue
+                add(_make_risk_alert(
+                    _infer_risk_type(text),
+                    title=text.split("—")[0].split("-")[0].strip()[:120] or "Health flag",
+                    description=text,
+                    instructions=text,
+                    severity="important",
+                ))
+
+    participant_id = str((shift or {}).get("participant_id") or "")
+    org_id = str(organization_id or (shift or {}).get("organization_id") or "")
+    if participant_id and org_id:
+        for row in _fetch_participant_allergies(participant_id, org_id):
+            allergen = str(row.get("allergen") or "").strip()
+            if not allergen:
+                continue
+            notes = str(row.get("notes") or "").strip()
+            severity_raw = str(row.get("severity") or "moderate").lower()
+            severity = "critical" if severity_raw in {"severe", "anaphylactic"} else "important"
+            instructions = f"Avoid all exposure to {allergen}."
+            if notes:
+                instructions = f"{instructions} {notes}".strip()
+            add(_make_risk_alert(
+                "allergy",
+                title=f"Allergy — {allergen}",
+                description=notes or f"Allergic to {allergen} ({severity_raw}).",
+                instructions=instructions,
+                severity=severity,
+            ))
+
+        patient = _fetch_patient_risk_fields(participant_id, org_id)
+        if patient.get("behaviour_support_plan"):
+            body = str(patient["behaviour_support_plan"]).strip()
+            add(_make_risk_alert(
+                "bsp",
+                title="Behaviour Support Plan (BSP)",
+                description=body[:280],
+                instructions=body,
+                severity="important",
+            ))
+        if patient.get("current_conditions"):
+            for line in str(patient["current_conditions"]).split("\n"):
+                text = line.strip()
+                if not text:
+                    continue
+                add(_make_risk_alert(
+                    _infer_risk_type(text),
+                    title=text.split("—")[0].split("-")[0].strip()[:120] or "Medical condition",
+                    description=text,
+                    instructions=text,
+                    severity="important",
+                ))
+        if patient.get("medical_alerts"):
+            for line in str(patient["medical_alerts"]).split("\n"):
+                text = line.strip()
+                if not text:
+                    continue
+                add(_make_risk_alert(
+                    _infer_risk_type(text),
+                    title=text.split("—")[0].split("-")[0].strip()[:120] or "Medical alert",
+                    description=text,
+                    instructions=text,
+                    severity="critical" if "⛔" in text or "critical" in text.lower() else "important",
+                ))
+        if patient.get("allergies"):
+            patient_allergies = str(patient["allergies"]).strip()
+            if participant_id:
+                add(_make_risk_alert(
+                    "allergy",
+                    title="Allergies",
+                    description=patient_allergies,
+                    instructions=patient_allergies,
+                    severity="critical",
+                ))
+
+    return alerts
+
+
+def build_participant_risks(shift: dict[str, Any], organization_id: str) -> list[dict[str, Any]]:
+    return build_structured_health_alerts(
+        shift.get("health_alerts"),
+        shift=shift,
+        organization_id=organization_id,
+    )
+
+
+
+def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_id: str) -> None:
+    if shift.get("risks_acknowledged_at"):
+        return
+    if build_participant_risks(shift, organization_id):
+        raise ValueError("Acknowledge risks before continuing.")
+
+
+def _resolve_worker_display_name(worker_id: str) -> Optional[str]:
+    if not worker_id:
+        return None
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("users")
+            .select("full_name, email")
+            .eq("id", worker_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        name = (row.get("full_name") or "").strip()
+        return name or (row.get("email") or "").strip() or None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        logger.debug("worker name lookup failed: %s", exc)
+        return None
+
+
+def _attach_risk_acknowledgement_metadata(payload: dict[str, Any], shift: dict[str, Any]) -> None:
+    worker_id = str(shift.get("risks_acknowledged_by") or "")
+    if worker_id:
+        payload["risks_acknowledged_by_name"] = _resolve_worker_display_name(worker_id)
 
 
 SUPPORT_INSTRUCTION_CATEGORIES = (
@@ -311,7 +606,10 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
     else:
         visual_state = "scheduled"
 
-    return {
+    health_alerts = _parse_health_alerts(shift.get("health_alerts"))
+    has_risk_alerts = bool(health_alerts) or bool(shift.get("allergies")) or bool(shift.get("health_flags"))
+
+    payload = {
         "id": shift.get("id"),
         "participant_id": shift.get("participant_id"),
         "participant_name": shift.get("participant_name"),
@@ -327,7 +625,8 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "coordinator_notes": shift.get("coordinator_notes"),
         "entry_instructions": shift.get("entry_instructions"),
         "access_instructions": shift.get("access_instructions"),
-        "health_alerts": _parse_health_alerts(shift.get("health_alerts")),
+        "health_alerts": health_alerts,
+        "has_risk_alerts": has_risk_alerts,
         "allergies": shift.get("allergies"),
         "visit_notes": shift.get("visit_notes"),
         "health_flags": shift.get("health_flags"),
@@ -343,7 +642,12 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "service_category": shift.get("service_category") or "CORE",
         "participant_dob": shift.get("participant_dob"),
         "participant_gender": shift.get("participant_gender"),
+        "clock_in_method": shift.get("clock_in_method"),
+        "clock_in_location": shift.get("clock_in_location"),
+        "clock_in_verified": bool(shift.get("clock_in_verified")),
     }
+    _attach_risk_acknowledgement_metadata(payload, shift)
+    return payload
 
 
 def _parse_emergency_contact(raw: Any) -> dict[str, Any] | str | None:
@@ -813,6 +1117,8 @@ def get_shift_detail_for_worker(
     payload.update(ctx)
     _enrich_shift_participant_context(payload, shift)
     payload["support_instructions"] = build_support_instructions(shift, payload)
+    payload["health_alerts"] = build_participant_risks(shift, organization_id)
+    payload["has_risk_alerts"] = bool(payload["health_alerts"])
     return payload
 
 
@@ -829,6 +1135,28 @@ def _get_worker_shift_or_none(
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
     return shift
+
+
+def get_participant_risks_for_worker(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Structured participant risk alerts for a shift (CARECLIQV2-158)."""
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    risks = build_participant_risks(shift, organization_id)
+    payload: dict[str, Any] = {
+        "shift_id": shift_id,
+        "participant_id": shift.get("participant_id"),
+        "alerts": risks,
+        "risks_acknowledged": bool(shift.get("risks_acknowledged_at")),
+        "risks_acknowledged_at": shift.get("risks_acknowledged_at"),
+        "risks_acknowledged_by": shift.get("risks_acknowledged_by"),
+    }
+    _attach_risk_acknowledgement_metadata(payload, shift)
+    return payload
 
 
 def get_support_instructions_for_worker(
@@ -894,10 +1222,72 @@ def _default_tasks_copy() -> list[dict[str, Any]]:
     return copy.deepcopy(DEFAULT_SHIFT_TASKS)
 
 
+def _apply_verified_check_in(
+    shift: dict[str, Any],
+    organization_id: str,
+    *,
+    method: str,
+    location: Optional[dict[str, Any]] = None,
+    qr_token: Optional[str] = None,
+) -> dict[str, Any]:
+    method = (method or "").strip().lower()
+    if method not in {"gps", "qr"}:
+        raise ValueError("Check-in method must be gps or qr.")
+
+    verified = False
+    verification_distance: Optional[float] = None
+    qr_code_id: Optional[str] = None
+
+    if method == "gps":
+        if not location or location.get("lat") is None or location.get("lng") is None:
+            raise ValueError("GPS check-in requires your device location.")
+        worker_lat = float(location["lat"])
+        worker_lng = float(location["lng"])
+        accuracy = location.get("accuracy")
+        coords = resolve_participant_coordinates(
+            shift,
+            shift.get("participant_id"),
+            organization_id,
+        )
+        if coords:
+            ok, verification_distance = verify_gps_location(
+                worker_lat,
+                worker_lng,
+                coords[0],
+                coords[1],
+                accuracy=float(accuracy) if accuracy is not None else None,
+            )
+            if not ok:
+                dist_label = int(verification_distance or 0)
+                raise ValueError(
+                    f"You are too far from the participant location ({dist_label}m away). "
+                    "Move closer or scan the location QR code."
+                )
+            verified = True
+    elif method == "qr":
+        if not qr_token:
+            raise ValueError("QR check-in requires a scanned code.")
+        _, qr_code_id, _ = verify_qr_token_for_shift(qr_token, shift, organization_id)
+        verified = True
+
+    return {
+        "clock_in_method": method,
+        "clock_in_location": location,
+        "clock_in_verified": verified,
+        "_verification_distance_meters": verification_distance,
+        "_qr_code_id": qr_code_id,
+    }
+
+
 def clock_in_shift(
     shift_id: str,
     worker_id: str,
     organization_id: str,
+    *,
+    method: Optional[str] = None,
+    location: Optional[dict[str, Any]] = None,
+    qr_token: Optional[str] = None,
+    client_timestamp: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     shift = get_shift_by_id(shift_id)
     if not shift:
@@ -909,7 +1299,31 @@ def clock_in_shift(
     if shift.get("status") == "completed":
         raise ValueError("Shift is already completed.")
 
-    now = _now_iso()
+    _ensure_risks_acknowledged_if_required(shift, organization_id)
+
+    already_clocked = bool(shift.get("clocked_in_at"))
+    check_in_meta: dict[str, Any] = {}
+    verification_distance: Optional[float] = None
+    qr_code_id: Optional[str] = None
+
+    if not already_clocked:
+        validate_clock_in_window(str(shift.get("scheduled_start") or ""))
+        if not method:
+            raise ValueError(
+                "Verified check-in required. Choose GPS or scan the location QR code."
+            )
+        check_in_meta = _apply_verified_check_in(
+            shift,
+            organization_id,
+            method=method,
+            location=location,
+            qr_token=qr_token,
+        )
+        verification_distance = check_in_meta.pop("_verification_distance_meters", None)
+        qr_code_id = check_in_meta.pop("_qr_code_id", None)
+
+    normalized_client_ts = normalize_client_timestamp(client_timestamp)
+    now = normalized_client_ts or _now_iso()
     tasks = shift.get("tasks") or []
     if not tasks:
         tasks = _default_tasks_copy()
@@ -918,8 +1332,9 @@ def clock_in_shift(
         "status": "in_progress",
         "clocked_in_at": shift.get("clocked_in_at") or now,
         "tasks": tasks,
-        "updated_at": now,
+        "updated_at": _now_iso(),
     }
+    update_payload.update(check_in_meta)
     if not _should_keep_shift_session_link(shift):
         update_payload["session_id"] = None
 
@@ -935,9 +1350,41 @@ def clock_in_shift(
         updated = rows[0] if rows else {**shift, **update_payload}
     except Exception as exc:
         if _is_missing_schema_error(exc):
-            logger.debug("shifts table unavailable: %s", exc)
-            return None
-        raise
+            stripped = {
+                key: value
+                for key, value in update_payload.items()
+                if key not in {"clock_in_method", "clock_in_location", "clock_in_verified"}
+            }
+            try:
+                resp = (
+                    get_supabase_admin()
+                    .table("shifts")
+                    .update(stripped)
+                    .eq("id", shift_id)
+                    .execute()
+                )
+                rows = resp.data or []
+                updated = rows[0] if rows else {**shift, **stripped}
+            except Exception as retry_exc:
+                if _is_missing_schema_error(retry_exc):
+                    logger.debug("shifts table unavailable: %s", retry_exc)
+                    return None
+                raise
+        else:
+            raise
+
+    if check_in_meta and not already_clocked:
+        log_shift_check_in(
+            shift_id=shift_id,
+            worker_id=worker_id,
+            organization_id=organization_id,
+            method=str(check_in_meta.get("clock_in_method") or method or "manual"),
+            location=check_in_meta.get("clock_in_location"),
+            verified=bool(check_in_meta.get("clock_in_verified")),
+            verification_distance_meters=verification_distance,
+            qr_code_id=qr_code_id,
+            client_timestamp=normalized_client_ts,
+        )
 
     session = _get_session_for_shift(updated)
     return _shift_card_payload(updated, session)
@@ -956,6 +1403,18 @@ def update_shift_tasks(
         return None
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
+
+    for task in tasks:
+        is_mandatory = task.get("mandatory") is True or (
+            task.get("type") == "default"
+            and task.get("mandatory") is not False
+            and int(task.get("order") or 0) <= 4
+        )
+        if is_mandatory and task.get("completed") and not _mandatory_task_satisfied(task):
+            label = str(task.get("label") or "task")
+            raise ValueError(
+                f'Mandatory task "{label}" needs a photo, voice memo, or note of at least 20 characters.'
+            )
 
     now = _now_iso()
     try:
@@ -1100,6 +1559,17 @@ def acknowledge_shift_risks(
     if str(shift.get("organization_id") or "") != str(organization_id):
         return None
 
+    risks = build_participant_risks(shift, organization_id)
+    if not risks:
+        raise ValueError("No safety alerts to acknowledge for this shift.")
+
+    if shift.get("risks_acknowledged_at"):
+        session = _get_session_for_shift(shift)
+        payload = _shift_card_payload(shift, session)
+        payload["health_alerts"] = risks
+        payload["has_risk_alerts"] = True
+        return payload
+
     now = _now_iso()
     try:
         resp = (
@@ -1122,7 +1592,10 @@ def acknowledge_shift_risks(
         raise
 
     session = _get_session_for_shift(updated)
-    return _shift_card_payload(updated, session)
+    payload = _shift_card_payload(updated, session)
+    payload["health_alerts"] = build_participant_risks(updated, organization_id)
+    payload["has_risk_alerts"] = bool(payload["health_alerts"])
+    return payload
 
 
 def _participant_exists_in_org(participant_id: str, org_id: str) -> bool:
@@ -1163,8 +1636,7 @@ def start_shift_session(
         return None
     if not shift.get("clocked_in_at"):
         raise ValueError("Clock in before starting a session.")
-    if shift.get("health_alerts") and not shift.get("risks_acknowledged_at"):
-        raise ValueError("Acknowledge risks before starting a session.")
+    _ensure_risks_acknowledged_if_required(shift, organization_id)
 
     participant_id = shift.get("participant_id")
     if not participant_id:
@@ -1302,8 +1774,7 @@ def start_session_by_id(
             raise ValueError("Session not found")
         if not shift.get("clocked_in_at"):
             raise ValueError("Clock in before starting a session.")
-        if shift.get("health_alerts") and not shift.get("risks_acknowledged_at"):
-            raise ValueError("Acknowledge risks before starting a session.")
+        _ensure_risks_acknowledged_if_required(shift, organization_id)
     else:
         owner = str(session.get("worker_id") or session.get("created_by") or "")
         if owner and owner != str(worker_id):
@@ -1349,12 +1820,27 @@ def start_session_by_id(
     return _format_start_session_response(updated_session, updated_shift)
 
 
+def _mandatory_task_satisfied(task: dict[str, Any]) -> bool:
+    if not task.get("completed"):
+        return False
+    note = str(task.get("note") or task.get("context_note") or "").strip()
+    has_photo = bool(task.get("photo_evidence")) or bool(task.get("has_photo")) or bool(task.get("photo_thumbnails"))
+    has_voice = bool(task.get("voice_evidence")) or bool(task.get("has_voice")) or bool(task.get("voice_duration_seconds"))
+    if has_photo or has_voice:
+        return True
+    if len(note) >= 20:
+        return True
+    return False
+
+
 def _mandatory_tasks_complete(tasks: list[dict[str, Any]]) -> bool:
     for task in tasks:
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default" and task.get("mandatory") is not False and int(task.get("order") or 0) <= 4
         )
-        if is_mandatory and not task.get("completed"):
+        if not is_mandatory:
+            continue
+        if not _mandatory_task_satisfied(task):
             return False
     return True
 
@@ -1617,4 +2103,146 @@ def sync_session_task_evidence(
         "session_id": session_id,
         "synced_ids": synced_ids,
         "task_evidence": merged,
+    }
+
+
+def list_shift_visit_notes(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return []
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("*")
+            .eq("shift_id", shift_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def create_shift_visit_note(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+    content: str,
+    category: Optional[str] = None,
+    session_id: Optional[str] = None,
+    attachment_urls: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    text = (content or "").strip()
+    if not text:
+        raise ValueError("Note content is required.")
+    now = _now_iso()
+    payload = {
+        "organization_id": organization_id,
+        "shift_id": shift_id,
+        "worker_id": worker_id,
+        "session_id": session_id or shift.get("session_id"),
+        "content": text,
+        "category": (category or "").strip() or None,
+        "attachment_urls": attachment_urls or [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    try:
+        result = get_supabase_admin().table("shift_visit_notes").insert(payload).execute()
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+
+
+def list_shift_office_messages(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return []
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_office_messages")
+            .select("*")
+            .eq("shift_id", shift_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def create_shift_office_message(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+    message: str,
+    priority: str = "normal",
+    attachment_urls: Optional[list[str]] = None,
+) -> Optional[dict[str, Any]]:
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    text = (message or "").strip()
+    if not text:
+        raise ValueError("Message is required.")
+    priority_norm = priority if priority in ("normal", "urgent", "emergency") else "normal"
+    now = _now_iso()
+    payload = {
+        "organization_id": organization_id,
+        "shift_id": shift_id,
+        "worker_id": worker_id,
+        "message": text,
+        "priority": priority_norm,
+        "attachment_urls": attachment_urls or [],
+        "created_at": now,
+    }
+    try:
+        result = get_supabase_admin().table("shift_office_messages").insert(payload).execute()
+        rows = result.data or []
+        return rows[0] if rows else None
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+
+
+def get_shift_location_details(
+    shift_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    """Navigation payload for CARECLIQV2-214."""
+    shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
+    if not shift:
+        return None
+    return {
+        "shift_id": shift_id,
+        "participant_name": shift.get("participant_name"),
+        "address": shift.get("participant_address"),
+        "access_instructions": shift.get("access_instructions"),
+        "entry_instructions": shift.get("entry_instructions"),
+        "visit_notes": shift.get("visit_notes"),
+        "coordinator_notes": shift.get("coordinator_notes"),
     }

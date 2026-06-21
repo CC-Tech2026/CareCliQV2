@@ -65,12 +65,21 @@ export default function Team() {
   const [assignPatientId, setAssignPatientId] = useState("");
   const [shiftAssignmentOpen, setShiftAssignmentOpen] = useState(false);
 
-  const auth = useAuth();
-  const user = auth?.user;
+  const { user, isAuthenticated } = useAuth();
+
   const orgId = user?.organizationId ?? "__no_org__";
-  const stats = useOrgQuery(["coordinator", "worker-stats"], { queryFn: getCoordinatorWorkerStats });
-  const credentialAlerts = useOrgQuery(["coordinator-credential-alerts"], { queryFn: getCoordinatorCredentialAlerts });
-  const participants = useGetParticipants();
+
+  const stats = useOrgQuery(["coordinator", "worker-stats"], {
+    queryFn: getCoordinatorWorkerStats,
+  });
+
+  const credentialAlerts = useOrgQuery(["coordinator-credential-alerts"], {
+    queryFn: getCoordinatorCredentialAlerts,
+  });
+
+  const participants = useGetParticipants({
+    query: { enabled: isAuthenticated && !!user?.organizationId },
+  });
 
   const deactivateMut = useMutation({
     mutationFn: (id: string) => deactivateWorker(id),

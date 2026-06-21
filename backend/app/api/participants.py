@@ -699,3 +699,52 @@ async def update_shift_context(
 
     from ..services.shift_service import _fetch_participant_context
     return _fetch_participant_context(participant_id, org_id)
+
+
+class CheckInCodeCreate(BaseModel):
+    label: str = "Primary location"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@router.get("/{participant_id}/check-in-codes")
+async def list_check_in_codes(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List active QR check-in codes for a participant (CARECLIQV2-200)."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services.check_in_service import list_participant_check_in_codes
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    return list_participant_check_in_codes(participant_id, org_id)
+
+
+@router.post("/{participant_id}/check-in-codes", status_code=status.HTTP_201_CREATED)
+async def create_check_in_code(
+    participant_id: str,
+    body: CheckInCodeCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate a QR check-in code for a participant location (CARECLIQV2-200)."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_id, get_user_organization_id
+    from ..services.check_in_service import create_participant_check_in_code
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    try:
+        return create_participant_check_in_code(
+            participant_id,
+            org_id,
+            label=body.label,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            created_by=get_user_id(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
