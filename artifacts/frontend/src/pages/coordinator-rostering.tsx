@@ -91,7 +91,7 @@ function MonthGrid({
 
   return (
     <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
-      <div className="grid grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="py-2.5 text-center text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
             {d}
@@ -516,7 +516,7 @@ export default function CoordinatorRosteringPage() {
 
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={workerFilter} onValueChange={setWorkerFilter}>
-            <SelectTrigger className="h-8 w-[170px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
+            <SelectTrigger className="h-8 flex-1 sm:w-[170px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder="All workers" />
             </SelectTrigger>
             <SelectContent>
@@ -526,7 +526,7 @@ export default function CoordinatorRosteringPage() {
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-8 w-[145px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
+            <SelectTrigger className="h-8 flex-1 sm:w-[145px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
             <SelectContent>
@@ -563,10 +563,10 @@ export default function CoordinatorRosteringPage() {
       {viewMode === "list" && (
         <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
           <div
-            className="grid grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest"
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest"
             style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, background: SOFT }}
           >
-            <span>Participant</span><span>Worker</span><span>Date & Time</span><span>Shift Type</span><span>Status</span>
+            <span>Participant</span><span className="hidden sm:inline">Worker</span><span className="hidden md:inline">Date & Time</span><span className="hidden md:inline">Shift Type</span><span className="hidden sm:inline">Status</span>
           </div>
           <div>
             {shifts.length === 0 && !shiftsQuery.isLoading && (
@@ -583,7 +583,7 @@ export default function CoordinatorRosteringPage() {
               return (
                 <div
                   key={shift.id}
-                  className="grid grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-[#F8F6FE] transition-colors"
+                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-[#F8F6FE] transition-colors"
                   style={{ borderBottom: `1px solid ${BORDER}` }}
                 >
                   <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || "Participant"}</p>

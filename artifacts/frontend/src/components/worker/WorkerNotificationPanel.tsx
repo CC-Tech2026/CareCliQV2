@@ -1,15 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { jsonFetch } from "@/services/http";
 import {
-  Bell, X, CheckCheck, AlertTriangle, Calendar, CheckCircle2,
-  MessageSquare, Clock, Search, Filter,
+  Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
+  Search, Filter,
 } from "lucide-react";
-import {
-  getCoordinatorNotifications, markNotificationRead, markAllNotificationsRead,
-  type CoordinatorAlert,
-} from "@/services/coordinatorService";
 
 const PLUM   = "#5533CC";
 const CORAL  = "#F03060";
@@ -19,11 +16,67 @@ const BORDER = "#E2DEF2";
 const SOFT   = "#F5F3FC";
 
 const SEVERITY_LEVELS = {
-  critical: { color: "#DC2626", label: "Critical", bg: "#FEE2E2" },
+  urgent: { color: "#DC2626", label: "Urgent", bg: "#FEE2E2" },
   high: { color: "#F97316", label: "High", bg: "#FFF7ED" },
   medium: { color: "#3B82F6", label: "Medium", bg: "#EFF6FF" },
   low: { color: "#10B981", label: "Low", bg: "#F0FDF4" },
 };
+
+export interface WorkerMessage {
+  id: string;
+  alert_type: string;
+  title: string;
+  message: string;
+  severity: "urgent" | "high" | "medium" | "low";
+  is_read: boolean;
+  created_at: string;
+}
+
+async function fetchWorkerMessages(unread_only = false): Promise<{ messages: WorkerMessage[]; count: number }> {
+  const params = new URLSearchParams();
+  if (unread_only) params.append("unread_only", "true");
+
+  console.log("[WorkerNotificationPanel] Fetching messages with params:", Object.fromEntries(params));
+  
+  try {
+    const data = await jsonFetch<{ messages: any[]; count: number }>(`/api/worker/messages?${params}`);
+    
+    console.log("[WorkerNotificationPanel] API returned:", data);
+    
+    const transformed = {
+      messages: (data.messages || []).map((msg: any) => ({
+        id: msg.id,
+        alert_type: msg.alert_type,
+        title: msg.title,
+        message: msg.message,
+        severity: msg.severity || "low",
+        is_read: msg.is_read || false,
+        created_at: msg.created_at,
+      })),
+      count: data.count || 0,
+    };
+    
+    console.log("[WorkerNotificationPanel] Transformed messages:", transformed);
+    return transformed;
+  } catch (error) {
+    console.error("[WorkerNotificationPanel] Fetch error:", error);
+    throw error;
+  }
+}
+
+async function markMessageRead(messageId: string): Promise<void> {
+  console.log("[WorkerNotificationPanel] Marking message as read:", messageId);
+  
+  try {
+    await jsonFetch(`/api/worker/messages/${messageId}/read`, {
+      method: "POST",
+    });
+    console.log("[WorkerNotificationPanel] Message marked as read successfully");
+  } catch (error) {
+    console.error("[WorkerNotificationPanel] Failed to mark message as read:", error);
+    throw error;
+  }
+}
 
 function relativeTime(iso?: string) {
   if (!iso) return "";
@@ -36,65 +89,67 @@ function relativeTime(iso?: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-const ALERT_META: Record<string, { icon: React.ReactNode; color: string; bg: string; severity: string }> = {
-  emergency:          { icon: <AlertTriangle size={14} />, color: CORAL,    bg: "#FEE2E2", severity: "critical" },
-  coordinator_flag:   { icon: <AlertTriangle size={14} />, color: "#D97706", bg: "#FFFBEB", severity: "high" },
-  no_session_started: { icon: <Clock size={14} />,         color: "#D97706", bg: "#FFFBEB", severity: "high" },
-  no_notes_recorded:  { icon: <Clock size={14} />,         color: "#3B82F6", bg: "#EFF6FF", severity: "medium" },
-  shift_assigned:     { icon: <Calendar size={14} />,      color: PLUM,     bg: SOFT,      severity: "low" },
-  feedback_received:  { icon: <MessageSquare size={14} />, color: "#059669", bg: "#ECFDF5", severity: "low" },
-  session_completed:  { icon: <CheckCircle2 size={14} />,  color: "#059669", bg: "#ECFDF5", severity: "low" },
-};
-
-function alertMeta(alertType?: string) {
-  return alertType
-    ? (ALERT_META[alertType] ?? { icon: <Bell size={14} />, color: MUTED, bg: SOFT, severity: "low" })
-    : { icon: <Bell size={14} />, color: MUTED, bg: SOFT, severity: "low" };
+function getSeverityMeta(severity: string) {
+  return (
+    SEVERITY_LEVELS[severity as keyof typeof SEVERITY_LEVELS] ||
+    SEVERITY_LEVELS.low
+  );
 }
 
-function AlertRow({
-  alert,
+function MessageRow({
+  message,
   onRead,
 }: {
-  alert: CoordinatorAlert;
+  message: WorkerMessage;
   onRead: (id: string) => void;
 }) {
-  const meta = alertMeta(alert.alert_type);
+  const meta = getSeverityMeta(message.severity);
+  const icon =
+    message.severity === "urgent" ? (
+      <AlertTriangle size={14} />
+    ) : message.severity === "high" ? (
+      <AlertTriangle size={14} />
+    ) : (
+      <Info size={14} />
+    );
 
   return (
     <div
       className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer"
-      style={{ opacity: alert.is_read ? 0.6 : 1 }}
-      onClick={() => !alert.is_read && onRead(alert.id)}
+      style={{ opacity: message.is_read ? 0.6 : 1 }}
+      onClick={() => !message.is_read && onRead(message.id)}
     >
       {/* Icon */}
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
         style={{ background: meta.bg, color: meta.color }}
       >
-        {meta.icon}
+        {icon}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: alert.is_read ? 400 : 600 }}>
-          {alert.message ?? "Notification"}
+        <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: message.is_read ? 400 : 600 }}>
+          {message.title}
+        </p>
+        <p className="text-[12px] text-[#7A6A9E] mt-0.5 line-clamp-1">
+          {message.message}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           <span
             className="text-[10px] font-semibold uppercase"
             style={{ color: meta.color }}
           >
-            {(alert.alert_type ?? "alert").replace(/_/g, " ")}
+            {meta.label}
           </span>
           <span className="text-[10px]" style={{ color: MUTED }}>
-            {relativeTime(alert.created_at)}
+            {relativeTime(message.created_at)}
           </span>
         </div>
       </div>
 
       {/* Unread dot */}
-      {!alert.is_read && (
+      {!message.is_read && (
         <div className="w-2 h-2 rounded-full mt-2 shrink-0" style={{ background: PLUM }} />
       )}
     </div>
@@ -102,7 +157,7 @@ function AlertRow({
 }
 
 // ── Main panel with filters and search ──────────────────────────────────────────
-export function NotificationPanel({ onClose }: { onClose: () => void }) {
+export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -111,38 +166,63 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: alerts = [], isLoading } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80 }), refetchInterval: 15000 });
+  const { data: response, isLoading, error } = useOrgQuery(
+    ["worker-messages", orgId],
+    {
+      queryFn: () => fetchWorkerMessages(),
+      refetchInterval: 15000,
+    }
+  );
 
-  const filteredAlerts = useMemo(() => {
-    let result = alerts;
+  // Log errors
+  if (error) {
+    console.error("[WorkerNotificationPanel] Query error:", error);
+  }
+
+  const messages = response?.messages ?? [];
+
+  const filteredMessages = useMemo(() => {
+    let result = messages;
 
     // Filter by severity
     if (severityFilter) {
-      result = result.filter((a) => alertMeta(a.alert_type).severity === severityFilter);
+      result = result.filter((m) => m.severity === severityFilter);
     }
 
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((a) =>
-        (a.message?.toLowerCase() ?? "").includes(query) ||
-        (a.alert_type?.toLowerCase() ?? "").includes(query)
+      result = result.filter((m) =>
+        (m.title?.toLowerCase() ?? "").includes(query) ||
+        (m.message?.toLowerCase() ?? "").includes(query)
       );
     }
 
     return result;
-  }, [alerts, searchQuery, severityFilter]);
+  }, [messages, searchQuery, severityFilter]);
 
-  const unread = filteredAlerts.filter((a) => !a.is_read).length;
+  const unread = filteredMessages.filter((m) => !m.is_read).length;
 
   const readMut = useMutation({
-    mutationFn: markNotificationRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["coordinator-notifications", orgId] }),
+    mutationFn: markMessageRead,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
+      qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
+    },
   });
 
   const readAllMut = useMutation({
-    mutationFn: markAllNotificationsRead,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["coordinator-notifications", orgId] }),
+    mutationFn: async () => {
+      await Promise.all(
+        messages
+          .filter((m) => !m.is_read)
+          .map((m) => markMessageRead(m.id))
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
+      qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
+    },
   });
 
   return (
@@ -155,7 +235,9 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <Bell size={18} style={{ color: PLUM }} />
-            <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Notifications</h2>
+            <h2 className="text-[15px] font-black" style={{ color: TEXT }}>
+              Messages
+            </h2>
             {unread > 0 && (
               <span
                 className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center"
@@ -190,7 +272,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
             <Search size={14} className="absolute left-3 top-2.5" style={{ color: MUTED }} />
             <input
               type="text"
-              placeholder="Search notifications..."
+              placeholder="Search messages..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
@@ -251,20 +333,31 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {!isLoading && filteredAlerts.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <Bell size={32} style={{ color: BORDER }} />
-            <p className="text-[13px] font-semibold" style={{ color: MUTED }}>
-              {alerts.length === 0 ? "All caught up" : "No notifications match your filters"}
+        {!isLoading && error && (
+          <div className="m-4 p-4 rounded-lg" style={{ background: "#FEE2E2", borderLeft: `4px solid ${CORAL}` }}>
+            <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
+              Error loading messages
+            </p>
+            <p className="text-[11px] mt-1" style={{ color: MUTED }}>
+              {error instanceof Error ? error.message : String(error)}
             </p>
           </div>
         )}
 
-        {!isLoading &&
-          filteredAlerts.map((alert) => (
-            <AlertRow
-              key={alert.id}
-              alert={alert}
+        {!isLoading && !error && filteredMessages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-48 gap-3">
+            <Bell size={32} style={{ color: BORDER }} />
+            <p className="text-[13px] font-semibold" style={{ color: MUTED }}>
+              {messages.length === 0 ? "No messages yet" : "No messages match your filters"}
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !error &&
+          filteredMessages.map((message) => (
+            <MessageRow
+              key={message.id}
+              message={message}
               onRead={(id) => readMut.mutate(id)}
             />
           ))}
@@ -273,20 +366,28 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ── Bell icon with badge (used in AppLayout header) ───────────────────────────
-export function NotificationBell({ onClick }: { onClick: () => void }) {
+// ── Bell icon with badge (for header) ──────────────────────────────────────────
+export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: alerts = [] } = useOrgQuery<CoordinatorAlert[]>(["coordinator-notifications", orgId], { queryFn: () => getCoordinatorNotifications({ limit: 80, unread_only: true }), refetchInterval: 30000, enabled: !!user });
+  const { data: response } = useOrgQuery(
+    ["worker-messages-unread", orgId],
+    {
+      queryFn: () => fetchWorkerMessages(true),
+      refetchInterval: 30000,
+      enabled: !!user,
+    }
+  );
 
-  const unread = alerts.length;
+  const messages = response?.messages ?? [];
+  const unread = messages.length;
 
   return (
     <button
       className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
       onClick={onClick}
-      title="Notifications"
+      title="Messages from your coordinator"
     >
       <Bell size={20} style={{ color: MUTED }} />
       {unread > 0 && (

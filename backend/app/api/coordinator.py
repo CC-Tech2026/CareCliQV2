@@ -2616,7 +2616,7 @@ async def get_coordinator_notifications(
     try:
         q = (
             supabase.table("alerts")
-            .select("id, alert_type, message, severity, is_read, shift_id, patient_id, created_at")
+            .select("id, alert_type, message, severity, is_read, session_id, patient_id, created_at")
             .eq("organization_id", org_id)
             .order("created_at", desc=True)
             .limit(limit)

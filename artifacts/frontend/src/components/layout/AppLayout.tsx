@@ -8,6 +8,7 @@ import {
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
+import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -394,6 +395,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [workerNotifOpen, setWorkerNotifOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
   });
@@ -462,20 +464,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 />
               </div>
 
-              {/* Bell — coordinator gets NotificationBell, workers get the link */}
+              {/* Bell — coordinator gets NotificationBell, workers get WorkerNotificationBell */}
               {!isWorker ? (
                 <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
                   <NotificationBell onClick={() => setNotifOpen(true)} />
                 </div>
               ) : (
-                <Link href={topbarAlertHref} className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
-                  <Bell size={18} style={{ color: PLUM }} strokeWidth={2} />
-                  {alertCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center border-2 border-white">
-                      {alertCount}
-                    </span>
-                  )}
-                </Link>
+                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+                  <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
+                </div>
               )}
 
               {/* Quick link */}
@@ -526,7 +523,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {children}
           </main>
 
-          {/* Notification slide-over */}
+          {/* Notification slide-overs */}
           {notifOpen && (
             <>
               <div
@@ -534,6 +531,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setNotifOpen(false)}
               />
               <NotificationPanel onClose={() => setNotifOpen(false)} />
+            </>
+          )}
+
+          {workerNotifOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/20"
+                onClick={() => setWorkerNotifOpen(false)}
+              />
+              <WorkerNotificationPanel onClose={() => setWorkerNotifOpen(false)} />
             </>
           )}
         </div>

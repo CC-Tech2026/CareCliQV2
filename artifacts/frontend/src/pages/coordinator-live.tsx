@@ -614,7 +614,7 @@ export default function CoordinatorLivePage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
         {(["all", "green", "yellow", "red"] as const).map((k) => {
           const meta = k === "all"
             ? { ring: PLUM, bg: SOFT, label: "Total Active" }

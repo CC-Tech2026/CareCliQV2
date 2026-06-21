@@ -1262,6 +1262,9 @@ async def upload_session_evidence(
             organization_id=org_id,
             evidence_items=[item.model_dump() for item in body.evidence],
             files=body.files,
+            uploaded_by=worker_id,
+            ip_address=None,  # Request object not available in this context
+            user_agent=None,
         )
     except ValueError as exc:
         msg = str(exc)
