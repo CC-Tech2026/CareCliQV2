@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { persistAuthSession, getRememberDevicePreference } from "@/lib/auth-session";
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const PLUM  = "#5533CC";
@@ -84,12 +85,10 @@ export default function AcceptInvite() {
       }
       const data = await res.json();
 
-      // Store the token + user directly via login-equivalent
-      // (we call login with credentials so AuthContext does the full persist)
+      // Store the token + user respecting the "remember device" preference
       if (data.access_token) {
-        // Persist the token and user directly into AuthContext storage
-        localStorage.setItem("carescribe_token", data.access_token);
-        localStorage.setItem("carescribe_user", JSON.stringify({
+        const rememberDevice = getRememberDevicePreference();
+        const userData = {
           id: data.user.id,
           email: data.user.email,
           full_name: data.user.full_name,
@@ -98,7 +97,8 @@ export default function AcceptInvite() {
           organization_id: data.user.organization_id,
           organizationId: data.user.organization_id,
           onboarding_complete: true,
-        }));
+        };
+        persistAuthSession(data.access_token, JSON.stringify(userData), rememberDevice);
         await updateToken(data.access_token);
       }
 

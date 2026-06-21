@@ -42,6 +42,10 @@ export type CoordinatorDashboard = {
   compliant_today: number;
   notes_at_risk: number;
   rp_flags: number;
+  team_participants?: number;
+  sessions_this_week?: number;
+  incidents_this_month?: number;
+  workers_needing_support?: number;
   team_compliance_score: number;
   team_compliance_breakdown?: {
     compliant: number;

@@ -5,8 +5,9 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole,
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
 } from "lucide-react";
+import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
@@ -63,6 +64,8 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Operations",
       items: [
+        { href: "/coordinator/rostering", label: "Rostering",       icon: CalendarDays },
+        { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
         { href: "/billing",     label: "Invoices",     icon: CreditCard },
         { href: "/credentials", label: "Credentials",  icon: BadgeCheck },
         { href: "/toolkit",     label: "Toolkit",       icon: Wrench },
@@ -390,6 +393,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; } catch { return false; }
   });
@@ -458,15 +462,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 />
               </div>
 
-              {/* Bell */}
-              <Link href={topbarAlertHref} className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
-                <Bell size={18} style={{ color: PLUM }} strokeWidth={2} />
-                {alertCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center border-2 border-white">
-                    {alertCount}
-                  </span>
-                )}
-              </Link>
+              {/* Bell — coordinator gets NotificationBell, workers get the link */}
+              {!isWorker ? (
+                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+                  <NotificationBell onClick={() => setNotifOpen(true)} />
+                </div>
+              ) : (
+                <Link href={topbarAlertHref} className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+                  <Bell size={18} style={{ color: PLUM }} strokeWidth={2} />
+                  {alertCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center border-2 border-white">
+                      {alertCount}
+                    </span>
+                  )}
+                </Link>
+              )}
 
               {/* Quick link */}
               {isWorker ? (
@@ -515,6 +525,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <main className="flex-1 overflow-y-auto px-5 md:px-8 py-4 pb-24 md:pb-8">
             {children}
           </main>
+
+          {/* Notification slide-over */}
+          {notifOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-black/20"
+                onClick={() => setNotifOpen(false)}
+              />
+              <NotificationPanel onClose={() => setNotifOpen(false)} />
+            </>
+          )}
         </div>
       </div>
 
