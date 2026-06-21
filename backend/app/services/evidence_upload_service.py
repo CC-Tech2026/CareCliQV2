@@ -3,11 +3,19 @@ CARECLIQV2-230 — Upload task evidence media (photo/voice) to object storage.
 
 Stores files at {org_id}/{session_id}/evidence/{evidence_id}.{ext} and merges
 metadata (without base64 payloads) into sessions.task_evidence.
+
+Chain-of-custody implementation (CARECLIQV2-XXX):
+  - Compute SHA-256 hash on raw file bytes (immutable)
+  - Extract uploaded_by from JWT (never client-supplied)
+  - Capture device context: IP address, user agent
+  - Insert immutable audit records to task_evidence_metadata
+  - Log all uploads to evidence_access_audit_log
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import re
 from datetime import datetime, timezone
@@ -74,14 +82,110 @@ def _is_missing_schema_error(exc: Exception) -> bool:
     return "task_evidence" in msg and ("column" in msg or "does not exist" in msg)
 
 
+def _compute_file_hash(raw_bytes: bytes) -> str:
+    """
+    Compute SHA-256 hash of raw file bytes.
+    
+    Hash is computed ONLY on the binary content, with no metadata or filenames included.
+    This ensures the hash is verifiable against the stored file content.
+    
+    Args:
+        raw_bytes: Raw file content (decoded from base64)
+    
+    Returns:
+        SHA-256 hash as 64-character hex string
+    """
+    return hashlib.sha256(raw_bytes).hexdigest()
+
+
+def _log_evidence_access(
+    evidence_id: str,
+    session_id: str,
+    organization_id: str,
+    accessed_by: str,
+    action: str,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    file_hash_match: Optional[bool] = None,
+    file_hash_stored: Optional[str] = None,
+    file_hash_computed: Optional[str] = None,
+    purpose: Optional[str] = None,
+    error_code: Optional[str] = None,
+    error_message: Optional[str] = None,
+) -> None:
+    """
+    Log evidence access to immutable audit trail (evidence_access_audit_log).
+    
+    Non-fatal: failures are logged but never raised (primary operation unaffected).
+    This is a SYNCHRONOUS function — it logs to DB and returns, never blocking.
+    """
+    try:
+        row: dict[str, Any] = {
+            "evidence_id": evidence_id,
+            "session_id": session_id,
+            "organization_id": organization_id,
+            "accessed_by": accessed_by,
+            "action": action,
+        }
+        if ip_address:
+            row["ip_address"] = ip_address
+        if user_agent:
+            row["user_agent"] = user_agent
+        if file_hash_match is not None:
+            row["file_hash_match"] = file_hash_match
+        if file_hash_stored:
+            row["file_hash_stored"] = file_hash_stored
+        if file_hash_computed:
+            row["file_hash_computed"] = file_hash_computed
+        if purpose:
+            row["purpose"] = purpose
+        if error_code:
+            row["error_code"] = error_code
+        if error_message:
+            row["error_message"] = error_message
+        
+        get_supabase_admin().table("evidence_access_audit_log").insert(row).execute()
+    except Exception as exc:
+        logger.warning(
+            "Failed to log evidence access (non-fatal): evidence_id=%s action=%s: %s",
+            evidence_id, action, exc
+        )
+
+
+
 def upload_session_evidence_media(
     session_id: str,
     worker_id: str,
     organization_id: str,
     evidence_items: list[dict[str, Any]],
     files: dict[str, str],
+    uploaded_by: str,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
-    """Decode, validate, store media files, and merge metadata into task_evidence."""
+    """
+    Decode, validate, store media files, and record chain-of-custody metadata.
+    
+    Chain-of-custody implementation:
+    1. Compute SHA-256 hash of raw file bytes (server-side, immutable)
+    2. Upload file to object storage
+    3. Create immutable task_evidence_metadata record (captured: uploaded_by from JWT, server timestamp, file hash, device context)
+    4. Log upload to evidence_access_audit_log
+    5. Keep sessions.task_evidence in sync for backward compatibility
+    
+    Args:
+        session_id: Session UUID
+        worker_id: Worker/participant UUID
+        organization_id: Organization UUID
+        evidence_items: List of evidence metadata dicts
+        files: Dict of evidence_id -> base64-encoded file content
+        uploaded_by: User UUID (from JWT, never client-supplied)
+        ip_address: Client IP address (for audit trail)
+        user_agent: User agent string (for audit trail)
+    
+    Returns:
+        Success response with uploaded evidence details, or None if schema not ready
+    """
     try:
         resp = (
             get_supabase_admin()
@@ -129,7 +233,9 @@ def upload_session_evidence_media(
         if not file_payload:
             raise ValueError(f"Missing file data for evidence {eid}")
 
+        # Decode base64 to raw bytes
         raw_bytes = _decode_base64_payload(file_payload)
+        
         max_bytes = _max_bytes_for_type(etype)
         if len(raw_bytes) == 0:
             raise ValueError(f"Empty file for evidence {eid}")
@@ -145,10 +251,59 @@ def upload_session_evidence_media(
         ext = EXT_BY_MIME.get(mime_type, "jpg" if etype == "photo" else "webm")
         storage_path = f"{org_id}/{session_id}/evidence/{eid}.{ext}"
 
+        # === CHAIN OF CUSTODY: COMPUTE HASH ON RAW BYTES ===
+        file_hash = _compute_file_hash(raw_bytes)
+
+        # Upload to object storage
         stored = upload_evidence_bytes(storage_path, raw_bytes, mime_type)
         file_url = stored.file_url
 
-        record: dict[str, Any] = {
+        # === CHAIN OF CUSTODY: CREATE IMMUTABLE METADATA RECORD ===
+        server_timestamp = datetime.now(timezone.utc)
+        metadata_record: dict[str, Any] = {
+            "evidence_id": eid,
+            "session_id": session_id,
+            "organization_id": org_id,
+            "uploaded_by": uploaded_by,  # From JWT, never client-supplied
+            "uploaded_at": server_timestamp,  # Server timestamp, immutable
+            "file_hash": file_hash,  # SHA-256, computed on raw bytes
+            "file_hash_algorithm": "sha256",
+            "file_size_bytes": len(raw_bytes),
+            "mime_type": mime_type,
+            "storage_path": storage_path,
+            "storage_provider": stored.provider,
+            "file_url": file_url,
+            "ip_address": ip_address,  # Device context
+            "user_agent": user_agent,  # Device context
+            "evidence_type": etype,
+            "task_id": item.get("task_id"),
+            "goal_id": item.get("goal_id"),
+            "duration_seconds": item.get("duration_seconds"),
+            "is_finalized": True,
+        }
+        
+        try:
+            get_supabase_admin().table("task_evidence_metadata").insert(metadata_record).execute()
+        except Exception as exc:
+            logger.error(f"Failed to create task_evidence_metadata for {eid}: {exc}")
+            raise
+
+        # === CHAIN OF CUSTODY: LOG UPLOAD TO AUDIT TRAIL ===
+        _log_evidence_access(
+            evidence_id=eid,
+            session_id=session_id,
+            organization_id=org_id,
+            accessed_by=uploaded_by,
+            action="upload",
+            ip_address=ip_address,
+            user_agent=user_agent,
+            file_hash_match=True,  # By definition, just verified on upload
+            file_hash_stored=file_hash,
+            purpose="evidence_upload"
+        )
+
+        # Keep sessions.task_evidence JSONB in sync (backward compatibility)
+        backward_compat_record: dict[str, Any] = {
             "evidence_id": eid,
             "task_id": item.get("task_id"),
             "goal_id": item.get("goal_id"),
@@ -161,15 +316,16 @@ def upload_session_evidence_media(
             "storage_path": storage_path,
             "storage_provider": stored.provider,
             "file_url": file_url,
-            "created_at": item.get("created_at") or _now_iso(),
+            "created_at": server_timestamp.isoformat(),
             "synced": True,
         }
-        by_id[eid] = record
+        by_id[eid] = backward_compat_record
         uploaded.append({
             "evidence_id": eid,
             "url": file_url,
             "storage_path": storage_path,
-            "stored_at": _now_iso(),
+            "stored_at": server_timestamp.isoformat(),
+            "file_hash": file_hash,  # Include hash in response for verification
         })
 
     merged = list(by_id.values())

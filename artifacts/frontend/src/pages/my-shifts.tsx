@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, FileText } from "lucide-react";
+import { CalendarDays, FileText, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
@@ -179,15 +179,31 @@ export default function MyShifts() {
             {dateLabel}
           </p>
         </div>
-        <Link href="/sessions/new">
-          <button
-            type="button"
-            className="shrink-0 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm"
-            style={{ background: CORAL }}
-          >
-            + Quick Start
-          </button>
-        </Link>
+        <div className="shrink-0 flex gap-2">
+          <Link href="/worker/messages">
+            <button
+              type="button"
+              className="relative rounded-full p-2.5 sm:px-4 sm:py-2 text-xs font-black text-white shadow-sm hover:opacity-90 transition"
+              style={{ background: PLUM }}
+              title="View messages from coordinator"
+            >
+              <Bell size={20} className="sm:hidden" />
+              <span className="hidden sm:inline flex items-center gap-2">
+                <Bell size={16} />
+                Messages
+              </span>
+            </button>
+          </Link>
+          <Link href="/sessions/new">
+            <button
+              type="button"
+              className="shrink-0 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm"
+              style={{ background: CORAL }}
+            >
+              + Quick Start
+            </button>
+          </Link>
+        </div>
       </header>
 
       <OfflineSyncBanner pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />

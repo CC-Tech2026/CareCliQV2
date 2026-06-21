@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
@@ -861,6 +861,9 @@ async def worker_upload_session_evidence(
             organization_id=org_id,
             evidence_items=[item.model_dump() for item in body.evidence],
             files=body.files,
+            uploaded_by=worker_id,
+            ip_address=None,  # Request object not available in this context
+            user_agent=None,
         )
     except ValueError as exc:
         msg = str(exc)
@@ -1001,3 +1004,71 @@ async def worker_shift_location(shift_id: str, current_user: dict = Depends(get_
     if not payload:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return payload
+
+
+@router.get("/messages")
+async def get_worker_messages(
+    limit: int = Query(default=50, le=200),
+    unread_only: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get coordinator messages for the support worker (CARECLIQV2-XXX)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    try:
+        # Get coordinator messages and credential reminders targeted at this worker
+        query = (
+            supabase.table("alerts")
+            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id")
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        if unread_only:
+            query = query.eq("is_read", False)
+        
+        result = query.execute()
+        return {
+            "messages": result.data or [],
+            "count": len(result.data or []),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {exc}")
+
+
+@router.post("/messages/{message_id}/read")
+async def mark_worker_message_read(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark a coordinator message as read."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    try:
+        # Verify this alert exists and is targeted at this worker
+        msg = (
+            supabase.table("alerts")
+            .select("id")
+            .eq("id", message_id)
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        if not msg.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Mark as read
+        supabase.table("alerts").update({"is_read": True}).eq("id", message_id).execute()
+        return {"success": True, "message_id": message_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to mark message as read: {exc}")

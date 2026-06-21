@@ -306,8 +306,8 @@ function NotificationsSection() {
       description="Control which events trigger notifications and how you receive them."
       icon={Bell}
     >
-      {/* Events table */}
-      <div className="overflow-x-auto rounded-xl" style={{ border: "1px solid #E2DEF2" }}>
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E2DEF2" }}>
         <table className="w-full text-[13px]">
           <thead>
             <tr style={{ background: "#F5F3FC" }}>
@@ -342,6 +342,38 @@ function NotificationsSection() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card View (sm, md only) */}
+      <div className="md:hidden space-y-3">
+        {NOTIF_EVENTS.map((ev) => (
+          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: "#fff" }}>
+            {/* Event name & description */}
+            <div className="mb-3">
+              <p className="text-[13px] font-bold" style={{ color: "#1E1640" }}>{ev.label}</p>
+              <p className="text-[12px] mt-1" style={{ color: "#7A6A9E" }}>{ev.description}</p>
+            </div>
+
+            {/* Channel toggles */}
+            <div className="space-y-2.5">
+              {NOTIF_CHANNELS.map((ch) => (
+                <div key={ch} className="flex items-center justify-between gap-2">
+                  <label className="text-[12px] font-semibold" style={{ color: "#4A3D5A" }}>
+                    {CHANNEL_LABELS[ch]}
+                    {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1.5 py-0.5 bg-gray-200 text-gray-500">always on</span>}
+                  </label>
+                  <input
+                    type="checkbox"
+                    checked={prefs.events[ev.key]?.[ch] ?? false}
+                    disabled={ch === "in_app"}
+                    onChange={() => toggleEvent(ev.key, ch)}
+                    className="w-4 h-4 accent-[#5533CC] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Quiet hours */}
@@ -867,7 +899,7 @@ export default function Settings() {
       <div className="flex gap-6">
 
       {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-52 shrink-0">
+      <aside className="hidden lg:flex flex-col w-52 shrink-0">
         <div
           className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
           style={{

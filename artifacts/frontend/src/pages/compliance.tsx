@@ -195,7 +195,7 @@ export default function Compliance() {
       </div>
 
       {/* ── Analytical Gauge & Performance Cards ── */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-4 shrink-0">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 shrink-0">
 
         {/* Gauge Card Metrics */}
         <div className="bg-white rounded-2xl p-5 flex flex-col items-center justify-between min-h-[196px] text-center"
@@ -519,19 +519,21 @@ export default function Compliance() {
               <p className="text-[12px] max-w-xs -mt-1 leading-normal">Modify the filtering configuration or add an authorization record tracking script.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto w-full">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b bg-slate-50/70" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-                    {["Date", "Participant", "Session Type", "Compliance Score", "Status", "Checks Checkbox", ""].map((h, i) => (
-                      <th key={i} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>
-                        {h.split(" ")[0]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: "rgba(232,213,232,0.2)" }}>
-                  {filteredSessions.map(item => {
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto w-full">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b bg-slate-50/70" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+                      {["Date", "Participant", "Session Type", "Compliance Score", "Status", "Checks Checkbox", ""].map((h, i) => (
+                        <th key={i} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>
+                          {h.split(" ")[0]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y" style={{ borderColor: "rgba(232,213,232,0.2)" }}>
+                    {filteredSessions.map(item => {
                     const score  = Number(item.compliance_score ?? 0);
                     const status = (item.compliance_status as string) ?? "draft";
                     let dateStr = "—";
@@ -597,7 +599,97 @@ export default function Compliance() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+
+              {/* Mobile Card View (sm, md only) */}
+              <div className="md:hidden space-y-3">
+                {filteredSessions.map(item => {
+                  const score  = Number(item.compliance_score ?? 0);
+                  const status = (item.compliance_status as string) ?? "draft";
+                  let dateStr = "—";
+                  if (item.session_date) {
+                    try { dateStr = format(parseISO(String(item.session_date)), "MMM d, yyyy"); } catch {}
+                  }
+                  return (
+                    <div key={String(item.session_id)} className="rounded-xl p-4 border transition-colors hover:bg-[#F6F4FB]" style={{ borderColor: "rgba(232,213,232,0.5)", background: "#fff" }}>
+                      {/* Header: Date + Status */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Date</p>
+                          <p className="text-[13px] font-semibold mt-0.5" style={{ color: T2 }}>{dateStr}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <StatusBadge status={status} />
+                          <TierChip complianceStatus={status} sessionStatus={item.status} />
+                        </div>
+                      </div>
+
+                      {/* Participant */}
+                      <div className="mb-3">
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Participant</p>
+                        <p className="text-[13px] font-medium mt-0.5 line-clamp-2" style={{ color: T1 }}>
+                          {String(item.participant_name ?? "Unassigned Case")}
+                        </p>
+                      </div>
+
+                      {/* Session Type */}
+                      <div className="mb-3">
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Session Type</p>
+                        <p className="text-[12px] font-medium mt-0.5" style={{ color: T3 }}>
+                          {String(item.session_type ?? "—")}
+                        </p>
+                      </div>
+
+                      {/* Compliance Score */}
+                      <div className="mb-3 pb-3 border-b" style={{ borderColor: "rgba(232,213,232,0.3)" }}>
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Compliance Score</p>
+                        <div className="mt-1.5 flex items-baseline gap-3">
+                          {item.compliance_score != null ? (
+                            <>
+                              <span className="text-[24px] font-black leading-none" style={{ color: scoreColor(score) }}>
+                                {score.toFixed(0)}%
+                              </span>
+                              <div className="flex-1 h-2 rounded-full overflow-hidden bg-slate-100">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${score}%`, background: scoreColor(score) }} />
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-[13px] font-medium" style={{ color: T3 }}>—</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Checks */}
+                      <div className="mb-3">
+                        <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: T3 }}>Compliance Checks</p>
+                        <div className="flex items-center gap-3">
+                          {item.checks ? (
+                            <>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.notes_present} /><span className="text-[11px]" style={{ color: T3 }}>Notes</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.duration_recorded} /><span className="text-[11px]" style={{ color: T3 }}>Duration</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>Goals</span></div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-1"><Check pass={(item.notes_length ?? 0) > 50} /><span className="text-[11px]" style={{ color: T3 }}>Notes</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>Goals</span></div>
+                              <div className="flex items-center gap-1"><Check pass={(item.duration_minutes ?? 0) > 0} /><span className="text-[11px]" style={{ color: T3 }}>Duration</span></div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action Button */}
+                      <Link href={`/sessions/${String(item.session_id)}`}>
+                        <button className="w-full text-[13px] font-bold py-2 rounded-lg border transition-all hover:bg-purple-50" style={{ color: CORAL, borderColor: CORAL }}>
+                          Review Session &rarr;
+                        </button>
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>
