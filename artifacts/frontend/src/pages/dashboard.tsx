@@ -5,6 +5,9 @@ import { useState, type ComponentType } from "react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
 import { getWorkerComplianceDetail } from "@/services/workerService";
+import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
+import { PageHeader } from "@/components/healthcare/PageHeader";
+import { StatusCard } from "@/components/healthcare/HealthcareCards";
 import {
   AlertTriangle,
   CalendarDays,
@@ -17,6 +20,8 @@ import {
   Users,
   BadgeCheck,
   GraduationCap,
+  LayoutDashboard,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -29,12 +34,13 @@ import {
 } from "@/services/dashboardService";
 import { getCoordinatorFlaggedSessions, getCoordinatorCredentialAlerts } from "@/services/coordinatorService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+// Design system tokens (replaces hardcoded colors)
+const TEXT = DS.TEXT.primary;
+const MUTED = DS.TEXT.muted;
+const BORDER = DS.BORDER.light;
+const SOFT = DS.BACKGROUND.section;
+const PLUM = DS.BRAND.primary;
+const CORAL = DS.BRAND.secondary;
 
 function safeDate(value?: string | null, fallback = "Not recorded") {
   if (!value) return fallback;
@@ -46,10 +52,9 @@ function safeDate(value?: string | null, fallback = "Not recorded") {
 }
 
 function statusTone(status?: string) {
-  if (status === "compliant") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "non_compliant") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "draft") return "bg-slate-50 text-slate-600 border-slate-200";
-  return "bg-amber-50 text-amber-700 border-amber-200";
+  const color = getStatusColor(status);
+  const bg = DS.STATUS_BG[status === "compliant" ? "success" : status === "non_compliant" ? "critical" : status === "draft" ? "info" : "warning"];
+  return `${bg === DS.STATUS_BG.success ? "bg-emerald-50" : bg === DS.STATUS_BG.critical ? "bg-red-50" : bg === DS.STATUS_BG.info ? "bg-slate-50" : "bg-amber-50"} border`;
 }
 
 function DashboardStatCard({
@@ -68,7 +73,13 @@ function DashboardStatCard({
   captionColor?: string;
 }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-5 transition-shadow hover:shadow-md"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
@@ -78,7 +89,13 @@ function DashboardStatCard({
             {value}
           </p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
+        <div 
+          className="flex h-11 w-11 items-center justify-center rounded-lg"
+          style={{ 
+            background: DS.STATUS_BG.info,
+            color: DS.STATUS.info,
+          }}
+        >
           <Icon size={20} strokeWidth={2.5} />
         </div>
       </div>
@@ -91,10 +108,16 @@ function DashboardStatCard({
 
 function ClientListCard({ clients }: { clients: DashboardClient[] }) {
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-6"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Clients</h2>
-        <Link href="/my-clients" className="text-sm font-bold" style={{ color: CORAL }}>My Clients</Link>
+        <Link href="/my-clients" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>My Clients</Link>
       </div>
       <div className="space-y-3">
         {clients.length === 0 && (
@@ -127,7 +150,13 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
 
 function SessionListCard({ title, sessions }: { title: string; sessions: DashboardSession[] }) {
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-6"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <h2 className="mb-4 text-lg font-black" style={{ color: TEXT }}>{title}</h2>
       <div className="space-y-3">
         {sessions.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No records need attention.</p>}
@@ -187,13 +216,25 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
     score >= 85 ? "Compliant" : score >= 60 ? "At Risk" : "Non-Compliant";
 
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-6"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-black" style={{ color: TEXT }}>Team Compliance</h2>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Calculated from completed legal records.</p>
         </div>
-        <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#FFE8EE", color: CORAL }}>
+        <span 
+          className="rounded-full px-3 py-1 text-xs font-black"
+          style={{ 
+            background: DS.STATUS_BG[score >= 85 ? "success" : score >= 60 ? "warning" : "critical"],
+            color: getStatusColor(status),
+          }}
+        >
           {score}/100
         </span>
       </div>
@@ -296,26 +337,32 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
 function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard["common_issues"] }) {
   const max = Math.max(...issues.map((issue) => issue.count), 1);
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-6"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="mb-5 flex items-center justify-between gap-3">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
-        <Link href="/compliance" className="text-sm font-bold" style={{ color: PLUM }}>View full report</Link>
+        <Link href="/compliance" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>View full report</Link>
       </div>
       <div className="space-y-3">
         {issues.length === 0 && (
-          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg px-4 py-3 text-sm font-medium" style={{ background: DS.BACKGROUND.section, color: MUTED }}>
             No recurring failed compliance rules have been recorded.
           </p>
         )}
         {issues.map((issue, index) => (
           <div key={issue.issue} className="grid grid-cols-[150px_1fr_32px] items-center gap-3 text-sm">
             <p className="truncate font-bold" style={{ color: TEXT }}>{issue.issue}</p>
-            <div className="h-2 overflow-hidden rounded-full bg-[#EEEAFB]">
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: DS.STATUS_BG.info }}>
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.max(8, Math.round((issue.count / max) * 100))}%`,
-                  background: index === issues.length - 1 ? "#F8A51B" : PLUM,
+                  background: index === issues.length - 1 ? DS.STATUS.warning : PLUM,
                 }}
               />
             </div>
@@ -336,28 +383,85 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
   const complianceDetail = complianceQuery.data;
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+    <div className="mx-auto max-w-7xl space-y-8 pb-10">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Support Worker"
+        icon={LayoutDashboard}
+        description="Today's overview and key metrics"
+        action={{
+          label: "My Clients",
+          onClick: () => (window.location.href = "/my-clients"),
+          variant: "primary",
+        }}
+      />
+
+      {/* Key Metrics — Horizontal, minimal */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Sessions Today
+          </p>
+          <p className="mt-2 text-3xl font-black" style={{ color: DS.TEXT.primary }}>
+            {data.sessions_today}
+          </p>
         </div>
-        <Link href="/my-clients">
-          <button className="rounded-full px-5 py-3 text-sm font-black text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
-            Open My Clients
-          </button>
-        </Link>
+        <div
+          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Notes Due
+          </p>
+          <p className="mt-2 text-3xl font-black" style={{ color: data.notes_due > 0 ? DS.STATUS.warning : DS.TEXT.primary }}>
+            {data.notes_due}
+          </p>
+        </div>
+        <div
+          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            My Clients
+          </p>
+          <p className="mt-2 text-3xl font-black" style={{ color: DS.TEXT.primary }}>
+            {data.assigned_clients.length}
+          </p>
+        </div>
+        <div
+          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Pending Fixes
+          </p>
+          <p className="mt-2 text-3xl font-black" style={{ color: data.pending_compliance_fixes.length > 0 ? DS.STATUS.critical : DS.TEXT.primary }}>
+            {data.pending_compliance_fixes.length}
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardStatCard label="My Sessions Today" value={data.sessions_today} caption="Worker-owned sessions only" icon={CalendarDays} />
-        <DashboardStatCard label="Notes Due" value={data.notes_due} caption="Draft or compliance-risk notes" icon={FileText} />
-        <DashboardStatCard label="My Clients" value={data.assigned_clients.length} caption="Assigned participants only" icon={Users} />
-        <DashboardStatCard label="Pending Fixes" value={data.pending_compliance_fixes.length} caption="Items needing review" icon={AlertTriangle} />
-      </div>
-
+      {/* Compliance Section */}
       {complianceQuery.isLoading ? (
-        <div className="rounded-lg border bg-white p-6 text-sm font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
+        <div
+          className="rounded-lg border p-6 text-sm font-bold"
+          style={{ borderColor: DS.BORDER.light, color: DS.TEXT.muted }}
+        >
           Loading compliance details...
         </div>
       ) : complianceDetail ? (
@@ -370,12 +474,16 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           compact
         />
       ) : (
-        <div className="rounded-lg border bg-white p-6 text-sm font-bold text-red-600 shadow-sm" style={{ borderColor: BORDER }}>
+        <div
+          className="rounded-lg border p-6 text-sm font-bold"
+          style={{ borderColor: DS.BORDER.light, color: DS.STATUS.critical }}
+        >
           Could not load compliance details.
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      {/* Trend Chart + Recent Clients */}
+      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         {complianceDetail && (
           <ComplianceTrendChart
             data={complianceDetail.trend}
@@ -386,9 +494,10 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         <ClientListCard clients={todayClients} />
       </div>
 
+      {/* Sessions Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 6)} />
-        <SessionListCard title="Pending Compliance Fixes" sessions={data.pending_compliance_fixes.slice(0, 6)} />
+        <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 5)} />
+        <SessionListCard title="Pending Compliance" sessions={data.pending_compliance_fixes.slice(0, 5)} />
       </div>
     </div>
   );
@@ -413,13 +522,13 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Link href="/session-review">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Flagged Sessions</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: flaggedCount > 0 ? CORAL : "#059669" }}>{flaggedCount}</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: flaggedCount > 0 ? DS.STATUS.critical : DS.STATUS.success }}>{flaggedCount}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: flaggedCount > 0 ? "#FFF0F3" : "#F0FDF4", color: flaggedCount > 0 ? CORAL : "#059669" }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: flaggedCount > 0 ? DS.STATUS_BG.critical : DS.STATUS_BG.success, color: flaggedCount > 0 ? DS.STATUS.critical : DS.STATUS.success }}>
               <ClipboardCheck size={20} strokeWidth={2.5} />
             </div>
           </div>
@@ -428,13 +537,13 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/incidents">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Pending Incidents</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: incidentCount > 0 ? "#D97706" : TEXT }}>{incidentCount}</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: incidentCount > 0 ? DS.STATUS.warning : TEXT }}>{incidentCount}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: incidentCount > 0 ? "#FFFBEB" : "#F5F3FC", color: incidentCount > 0 ? "#D97706" : MUTED }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: incidentCount > 0 ? DS.STATUS_BG.warning : DS.BACKGROUND.section, color: incidentCount > 0 ? DS.STATUS.warning : MUTED }}>
               <AlertTriangle size={20} strokeWidth={2.5} />
             </div>
           </div>
@@ -443,13 +552,13 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/credentials">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiring Credentials</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: credentialCount > 0 ? "#DC2626" : TEXT }}>{credentialCount}</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: credentialCount > 0 ? DS.STATUS.critical : TEXT }}>{credentialCount}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: credentialCount > 0 ? "#FEF2F2" : "#F5F3FC", color: credentialCount > 0 ? "#DC2626" : MUTED }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: credentialCount > 0 ? DS.STATUS_BG.critical : DS.BACKGROUND.section, color: credentialCount > 0 ? DS.STATUS.critical : MUTED }}>
               <BadgeCheck size={20} strokeWidth={2.5} />
             </div>
           </div>
@@ -458,13 +567,13 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/toolkit">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
+        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Training Due</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: trainingCount > 0 ? "#D97706" : TEXT }}>{trainingCount}</p>
+              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: trainingCount > 0 ? DS.STATUS.warning : TEXT }}>{trainingCount}</p>
             </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: trainingCount > 0 ? "#FFFBEB" : "#F5F3FC", color: trainingCount > 0 ? "#D97706" : MUTED }}>
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: trainingCount > 0 ? DS.STATUS_BG.warning : DS.BACKGROUND.section, color: trainingCount > 0 ? DS.STATUS.warning : MUTED }}>
               <GraduationCap size={20} strokeWidth={2.5} />
             </div>
           </div>
@@ -482,35 +591,108 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
   const workersNeedingSupport = data.workers_needing_support ?? data.workers_needing_attention.length;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Coordinator</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
-          </div>
-          <Link href="/team" className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
-            <UserPlus size={16} strokeWidth={2.5} />
-            Open Team Workspace
-          </Link>
+    <div className="mx-auto max-w-7xl space-y-8 pb-10">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Support Coordinator"
+        icon={LayoutDashboard}
+        description="Team overview, compliance, and key metrics"
+        action={{
+          label: "Team Workspace",
+          icon: <UserPlus size={16} />,
+          onClick: () => (window.location.href = "/team"),
+          variant: "primary",
+        }}
+      />
+
+      {/* Key Metrics — Streamlined */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div
+          className="p-4 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Participants
+          </p>
+          <p className="mt-2 text-2xl font-black" style={{ color: DS.TEXT.primary }}>
+            {teamParticipants}
+          </p>
         </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <DashboardStatCard label="Team Participants" value={teamParticipants} caption="Participants in your care team" icon={Users} valueColor={PLUM} />
-          <DashboardStatCard label="Sessions This Week" value={sessionsThisWeek} caption="Team sessions captured this week" icon={CalendarDays} valueColor="#059669" />
-          <DashboardStatCard label="Team Compliance Avg" value={`${Math.round(data.team_compliance_score)}%`} caption="Team-wide compliance score" icon={CheckCircle2} valueColor="#059669" />
-          <DashboardStatCard label="Incidents This Month" value={incidentsThisMonth} caption="Team incidents requiring review" icon={AlertTriangle} valueColor={CORAL} />
-          <DashboardStatCard label="Workers Needing Support" value={workersNeedingSupport} caption="Workers flagged for follow-up" icon={ClipboardList} valueColor="#D97706" />
+        <div
+          className="p-4 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            This Week
+          </p>
+          <p className="mt-2 text-2xl font-black" style={{ color: DS.TEXT.primary }}>
+            {sessionsThisWeek}
+          </p>
         </div>
-
-        <CoordinatorQuickActionCards data={data} />
-
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <CoordinatorTeamComplianceCard data={data} />
-          <CoordinatorSessionsCard sessions={data.todays_sessions} />
+        <div
+          className="p-4 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Compliance
+          </p>
+          <p className="mt-2 text-2xl font-black" style={{ color: DS.TEXT.primary }}>
+            {Math.round(data.team_compliance_score)}%
+          </p>
         </div>
-
-        <CoordinatorCommonIssuesCard issues={data.common_issues} />
+        <div
+          className="p-4 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Incidents
+          </p>
+          <p className="mt-2 text-2xl font-black" style={{ color: incidentsThisMonth > 0 ? DS.STATUS.warning : DS.TEXT.primary }}>
+            {incidentsThisMonth}
+          </p>
+        </div>
+        <div
+          className="p-4 rounded-lg border transition-all hover:shadow-sm"
+          style={{
+            borderColor: DS.BORDER.light,
+            background: DS.BACKGROUND.section,
+          }}
+        >
+          <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
+            Need Support
+          </p>
+          <p className="mt-2 text-2xl font-black" style={{ color: workersNeedingSupport > 0 ? DS.STATUS.critical : DS.TEXT.primary }}>
+            {workersNeedingSupport}
+          </p>
+        </div>
       </div>
+
+      {/* Action Cards */}
+      <CoordinatorQuickActionCards data={data} />
+
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <CoordinatorTeamComplianceCard data={data} />
+        </div>
+        <CoordinatorSessionsCard sessions={data.todays_sessions} />
+      </div>
+
+      {/* Issues */}
+      <CoordinatorCommonIssuesCard issues={data.common_issues} />
+    </div>
   );
 }
 
