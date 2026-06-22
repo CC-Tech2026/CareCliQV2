@@ -9,11 +9,13 @@ import {
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
+import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
+import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#5533CC";
@@ -503,17 +505,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               )}
 
               {/* User chip */}
-              <div className="flex items-center gap-3 pl-1 shrink-0">
-                <span className="text-[13px] font-bold text-[#1E1640] whitespace-nowrap">
-                  {displayName.split(" ")[0]}
-                </span>
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0 border border-[#5533CC]/10 shadow-sm"
-                  style={{ background: ACTIVE, color: PLUM }}
-                >
-                  {initials}
-                </div>
-              </div>
+              <ProfileDropdown
+                displayName={displayName}
+                displayRole={displayRole}
+                initials={initials}
+                userRole={userRole}
+                onLogout={logout}
+              />
 
             </div>
           </header>
