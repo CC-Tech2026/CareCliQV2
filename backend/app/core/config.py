@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Google Cloud Translation
     google_cloud_translation_api_key: str = os.environ.get("GOOGLE_CLOUD_TRANSLATION_API_KEY", "")
     google_translate_url: str = os.environ.get("GOOGLE_TRANSLATE_URL", "https://translation.googleapis.com/language/translate/v2")
+    google_maps_api_key: str = os.environ.get("GOOGLE_MAPS_API_KEY", "")
     # AES-256 GCM PII encryption (Privacy Act 2026)
     # Set PII_ENCRYPTION_ENABLED=true and PII_ENCRYPTION_KEY=<32-byte base64> to activate.
     # Generate a key: python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"

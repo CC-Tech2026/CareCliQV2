@@ -16,6 +16,9 @@ from ..core.access import (
 )
 from ..core.security import get_current_user
 from ..services import billing_service, incident_service, participant_service, session_service
+from ..services.dashboard_landing_service import build_worker_landing_dashboard
+from ..services.travel_time_service import estimate_travel_time
+from ..services import shift_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -241,6 +244,47 @@ async def worker_dashboard(current_user: dict = Depends(get_current_user)):
         "credential_alerts": [],
         "pending_compliance_fixes": pending_fixes[:12],
         "incomplete_sessions": incomplete_sessions[:12],
+    }
+
+
+@router.get("/worker-landing")
+async def worker_landing_dashboard(current_user: dict = Depends(get_current_user)):
+    """Aggregated support worker landing page payload (CARECLIQV2-104)."""
+    if not is_support_worker(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker dashboard access required.")
+    return await build_worker_landing_dashboard(current_user)
+
+
+@router.get("/worker-landing/travel-time")
+async def worker_landing_travel_time(
+    shift_id: str,
+    origin_lat: float | None = None,
+    origin_lng: float | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Travel time estimate for the worker's next shift destination (CARECLIQV2-114)."""
+    if not is_support_worker(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker dashboard access required.")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not worker_id or not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+
+    shift = shift_service.get_shift_detail_for_worker(shift_id, worker_id, org_id)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+
+    address = (shift.get("participant_address") or "").strip()
+    travel = await estimate_travel_time(
+        address,
+        origin_lat=origin_lat,
+        origin_lng=origin_lng,
+    )
+    return {
+        "shift_id": shift_id,
+        "destination_address": address or None,
+        **travel,
     }
 
 

@@ -78,6 +78,7 @@ def test_upload_photo_stores_file_and_metadata(mock_admin, mock_upload):
             }
         ],
         files={evidence_id: _tiny_jpeg_b64()},
+        uploaded_by="worker-1",
     )
 
     assert result is not None
@@ -123,6 +124,7 @@ def test_upload_rejects_oversized_file(mock_admin):
                 }
             ],
             files={evidence_id: huge},
+            uploaded_by="worker-1",
         )
 
 
@@ -144,5 +146,6 @@ def test_upload_denies_unauthorized_worker(mock_admin):
         organization_id="org-1",
         evidence_items=[],
         files={},
+        uploaded_by="other-worker",
     )
     assert result is None

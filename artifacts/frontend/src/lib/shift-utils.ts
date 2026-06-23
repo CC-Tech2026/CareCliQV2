@@ -8,6 +8,9 @@ export const MUTED = "#7A6A9E";
 export const BORDER = "#E2DEF2";
 export const SOFT = "#F5F3FC";
 
+/** Scrollable body for dashboard widgets with long lists */
+export const WIDGET_SCROLL = "max-h-72 overflow-y-auto overscroll-y-contain pr-1";
+
 export const STATE_STYLES: Record<
   ShiftVisualState,
   { border: string; badge: string; label: string; avatar: string }
