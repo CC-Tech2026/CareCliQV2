@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
@@ -183,6 +183,7 @@ app.include_router(toolkit.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(hub.router, prefix="/api")
 app.include_router(md_onboarding.router, prefix="/api")
+app.include_router(ndis_pricing.router, prefix="/api")
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 

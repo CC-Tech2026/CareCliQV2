@@ -1,0 +1,53 @@
+{
+  "metadata": {
+    "financial_year": "2025-26",
+    "effective_date": "2025-11-24T00:00:00",
+    "source": "NDIS Support Catalogue",
+    "version": "2025-26"
+  },
+  "support_categories": [
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Self-Care Activities",
+      "support_purpose": "Core Supports",
+      "registration_group": "1",
+      "items": [
+        {
+          "item_code": "01_011_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Weekday Daytime",
+          "description": "Help with personal care activities during standard weekday daytime hours",
+          "unit": "H",
+          "price_national": 70.23,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        },
+        {
+          "item_code": "01_011_0107_1_2",
+          "name": "Assistance with Self-Care Activities - Standard - Weekend Daytime",
+          "description": "Help with personal care activities during standard weekend daytime hours",
+          "unit": "H",
+          "price_national": 82.77,
+          "day_type": "Weekend",
+          "time_type": "Daytime"
+        }
+      ]
+    },
+    {
+      "category_number": "02",
+      "category_name": "Mobility Assistance",
+      "support_purpose": "Core Supports",
+      "registration_group": "1",
+      "items": [
+        {
+          "item_code": "02_011_0107_1_1",
+          "name": "Assistance with Mobility - Standard - Weekday Daytime",
+          "description": "Help with mobility activities during standard weekday daytime hours",
+          "unit": "H",
+          "price_national": 65.50,
+          "day_type": "Weekday",
+          "time_type": "Daytime"
+        }
+      ]
+    }
+  ]
+}

@@ -34,6 +34,7 @@ class InvoiceLineItem(BaseModel):
     quantity: float = Field(default=1, gt=0)
     unit_amount: Optional[float] = Field(default=None, ge=0)
     unit_amount_cents: Optional[int] = Field(default=None, ge=0)
+    item_code: Optional[str] = None  # Optional NDIS item code — if provided, locks price version
 
 
 class InvoiceCreate(BaseModel):
