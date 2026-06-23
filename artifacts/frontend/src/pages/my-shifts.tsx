@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, FileText, Bell } from "lucide-react";
@@ -7,6 +8,7 @@ import { Link } from "wouter";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { listPendingActions } from "@/lib/shift-offline-queue";
+import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import {
   getWorkerShiftCounts,
   getWorkerShifts,
@@ -98,18 +100,40 @@ function ShiftSkeleton() {
 
 export default function MyShifts() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ShiftFilter>("today");
   const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
   const firstName = (user?.full_name || "there").split(" ")[0];
 
+  const refreshPendingCount = useCallback(async () => {
+    const actions = await listPendingActions();
+    setPendingCount(actions.length);
+  }, []);
+
+  const runPendingSync = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      await refreshPendingCount();
+      return;
+    }
+    setSyncing(true);
+    try {
+      const result = await syncAllQueuedShiftActions();
+      if (result.synced > 0) {
+        void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
+      }
+    } finally {
+      setSyncing(false);
+      await refreshPendingCount();
+    }
+  }, [queryClient, refreshPendingCount]);
+
   useEffect(() => {
-    void listPendingActions().then((actions) => setPendingCount(actions.length));
-    const onOnline = () => {
-      void listPendingActions().then((actions) => setPendingCount(actions.length));
-    };
+    void runPendingSync();
+    const onOnline = () => void runPendingSync();
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, []);
+  }, [runPendingSync]);
 
   const { data, isLoading, error } = useOrgQuery(["worker", "shifts", filter], {
     queryFn: () => getWorkerShifts(filter),
@@ -206,7 +230,7 @@ export default function MyShifts() {
         </div>
       </header>
 
-      <OfflineSyncBanner pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
 
       <div className="grid grid-cols-3 gap-2">
         <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label="Shifts today" />

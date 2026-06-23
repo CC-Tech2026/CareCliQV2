@@ -43,8 +43,9 @@ import { ClockInFlow } from "@/components/shifts/ClockInFlow";
 import {
   enqueueClockIn,
   getPendingClockIn,
-  removePendingAction,
+  listPendingActions,
 } from "@/lib/shift-offline-queue";
+import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
@@ -140,6 +141,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
   const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
   const [pendingClockInCount, setPendingClockInCount] = useState(0);
+  const [offlineSyncing, setOfflineSyncing] = useState(false);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -216,6 +218,12 @@ export default function MyShiftDetail({ id }: Props) {
   const refreshPendingClockIn = async () => {
     const pending = await getPendingClockIn(id);
     setPendingClockInCount(pending ? 1 : 0);
+  };
+
+  const refreshOfflinePendingCount = async () => {
+    const actions = await listPendingActions();
+    const forShift = actions.filter((action) => action.shiftId === id);
+    setPendingClockInCount(forShift.some((action) => action.type === "clock_in") ? 1 : 0);
   };
 
   const applyClockInResult = async (updated: WorkerShift) => {
@@ -300,42 +308,39 @@ export default function MyShiftDetail({ id }: Props) {
   }, [id]);
 
   useEffect(() => {
-    const syncPendingClockIn = async () => {
-      if (clockInFlowOpen) return;
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      const pending = await getPendingClockIn(id);
-      if (!pending || shift?.visual_state !== "scheduled") return;
+    if (clockInFlowOpen) return;
+
+    const runOfflineSync = async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        await refreshOfflinePendingCount();
+        return;
+      }
+      setOfflineSyncing(true);
       try {
-        await clockInShift(id, {
-          method: pending.method,
-          location: pending.location ?? undefined,
-          qr_token: pending.qrToken ?? undefined,
-          client_timestamp: pending.clientTimestamp,
-        });
-        await removePendingAction(pending.id);
-        await refreshPendingClockIn();
-        invalidateShifts();
-        await refetch();
-        toast({ title: "Check-in synced", description: "Offline check-in uploaded." });
-      } catch (err) {
-        const apiErr = err as Error & { status?: number };
-        if (apiErr.status === 422 || (apiErr.status !== undefined && apiErr.status >= 400 && apiErr.status < 500)) {
-          await removePendingAction(pending.id);
-          await refreshPendingClockIn();
+        const result = await syncAllQueuedShiftActions();
+        if (result.synced > 0) {
+          invalidate();
+          await refetch();
           toast({
-            title: "Check-in not allowed",
-            description: apiErr.message || "This check-in could not be verified.",
-            variant: "destructive",
+            title: "Pending actions synced",
+            description:
+              result.synced === 1
+                ? "1 queued action uploaded."
+                : `${result.synced} queued actions uploaded.`,
           });
-          return;
         }
+      } finally {
+        setOfflineSyncing(false);
         await refreshPendingClockIn();
+        await refreshOfflinePendingCount();
       }
     };
-    const onOnline = () => void syncPendingClockIn();
+
+    void runOfflineSync();
+    const onOnline = () => void runOfflineSync();
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
-  }, [id, shift?.visual_state, clockInFlowOpen, invalidate, refetch, toast]);
+  }, [id, clockInFlowOpen, invalidate, refetch, toast]);
 
   const displayVisualState = shift
     ? resolveDisplayVisualState(shift, instantSessionActive)
@@ -680,7 +685,7 @@ export default function MyShiftDetail({ id }: Props) {
   if (showLiveSession) {
     return (
       <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
-        <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+        <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
         {showEvidenceBanner && (
           <EvidenceSyncBanner
             online={evidenceOnline}
@@ -724,7 +729,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-10">
-      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner
           online={evidenceOnline}
