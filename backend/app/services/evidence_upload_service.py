@@ -18,6 +18,7 @@ import base64
 import hashlib
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -80,6 +81,26 @@ def _allowed_mime_for_type(evidence_type: str, mime_type: str) -> bool:
 def _is_missing_schema_error(exc: Exception) -> bool:
     msg = str(exc).lower()
     return "task_evidence" in msg and ("column" in msg or "does not exist" in msg)
+
+
+def _is_missing_metadata_table_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "task_evidence_metadata" in msg and (
+        "does not exist" in msg or "relation" in msg or "schema cache" in msg
+    )
+
+
+def _coerce_uuid(value: Any) -> Optional[str]:
+    """task_evidence_metadata.goal_id is uuid — shift tasks use string slugs."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return str(uuid.UUID(text))
+    except ValueError:
+        return None
 
 
 def _compute_file_hash(raw_bytes: bytes) -> str:
@@ -277,7 +298,7 @@ def upload_session_evidence_media(
             "user_agent": user_agent,  # Device context
             "evidence_type": etype,
             "task_id": item.get("task_id"),
-            "goal_id": item.get("goal_id"),
+            "goal_id": _coerce_uuid(item.get("goal_id")),
             "duration_seconds": item.get("duration_seconds"),
             "is_finalized": True,
         }
@@ -285,8 +306,14 @@ def upload_session_evidence_media(
         try:
             get_supabase_admin().table("task_evidence_metadata").insert(metadata_record).execute()
         except Exception as exc:
-            logger.error(f"Failed to create task_evidence_metadata for {eid}: {exc}")
-            raise
+            if _is_missing_metadata_table_error(exc):
+                logger.warning(
+                    "task_evidence_metadata unavailable; stored file without chain-of-custody row: %s",
+                    exc,
+                )
+            else:
+                logger.error("Failed to create task_evidence_metadata for %s: %s", eid, exc)
+                raise
 
         # === CHAIN OF CUSTODY: LOG UPLOAD TO AUDIT TRAIL ===
         _log_evidence_access(
@@ -306,7 +333,7 @@ def upload_session_evidence_media(
         backward_compat_record: dict[str, Any] = {
             "evidence_id": eid,
             "task_id": item.get("task_id"),
-            "goal_id": item.get("goal_id"),
+            "goal_id": _coerce_uuid(item.get("goal_id")),
             "session_id": session_id,
             "type": etype,
             "content": "",

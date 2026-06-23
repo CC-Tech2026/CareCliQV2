@@ -3,6 +3,8 @@ import {
   applyEvidencePatch,
   applyTaskCompletion,
   computeEvidenceStatus,
+  hasTaskEvidence,
+  MIN_EVIDENCE_NOTE_CHARS,
 } from "@/lib/task-evidence-status";
 import type { ShiftTask } from "@/services/shiftService";
 
@@ -15,11 +17,25 @@ const baseTask = (): ShiftTask => ({
 });
 
 describe("CARECLIQV2-229 task evidence status", () => {
-  it("marks completed task without photo/voice as without_evidence", () => {
+  it("marks completed task without photo/voice/note as without_evidence", () => {
     const now = "2026-01-15T14:45:00Z";
     const result = applyTaskCompletion(baseTask(), true, now);
     expect(result.completed).toBe(true);
     expect(result.checked_at).toBe(now);
+    expect(result.evidence_status).toBe("without_evidence");
+  });
+
+  it("marks completed task with qualifying written note as with_evidence", () => {
+    const task = { ...baseTask(), note: "a".repeat(MIN_EVIDENCE_NOTE_CHARS) };
+    const result = applyTaskCompletion(task, true, "2026-01-15T14:45:00Z");
+    expect(result.evidence_status).toBe("with_evidence");
+    expect(result.has_text_notes).toBe(true);
+    expect(hasTaskEvidence(result)).toBe(true);
+  });
+
+  it("short notes do not count as evidence", () => {
+    const task = { ...baseTask(), note: "too short" };
+    const result = applyTaskCompletion(task, true, "2026-01-15T14:45:00Z");
     expect(result.evidence_status).toBe("without_evidence");
   });
 

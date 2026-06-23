@@ -312,7 +312,7 @@ export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
 export function mandatoryTaskSatisfied(task: ShiftTask) {
   if (!task.completed) return false;
   if (hasStrongTaskEvidence(task)) return true;
-  const note = (task.note || task.context_note || "").trim();
+  const note = (task.note || "").trim();
   return note.length >= 20;
 }
 
@@ -356,7 +356,7 @@ export function resolveEffectiveTaskNote(
 export function mandatoryTaskState(task: ShiftTask) {
   if (!isMandatoryTask(task)) return "optional" as const;
   if (mandatoryTaskSatisfied(task)) return "satisfied" as const;
-  const hasDraft = Boolean(task.note?.trim() || task.context_note?.trim() || hasStrongTaskEvidence(task));
+  const hasDraft = Boolean(task.note?.trim() || hasStrongTaskEvidence(task));
   if (hasDraft) return "draft" as const;
   return "missing" as const;
 }

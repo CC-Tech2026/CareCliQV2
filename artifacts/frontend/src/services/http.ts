@@ -13,5 +13,12 @@ export async function jsonFetch<T>(input: RequestInfo | URL, init: RequestInit =
     error.status = response.status;
     throw error;
   }
-  return response.json() as Promise<T>;
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  const text = await response.text();
+  if (!text.trim()) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }

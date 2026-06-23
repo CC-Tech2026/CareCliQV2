@@ -375,9 +375,12 @@ export type ShiftVisitNote = {
   id: string;
   shift_id: string;
   session_id?: string | null;
+  task_id?: string | null;
+  goal_id?: string | null;
   content: string;
   category?: string | null;
   created_at: string;
+  auto_saved_at?: string | null;
 };
 
 export type ShiftOfficeMessage = {

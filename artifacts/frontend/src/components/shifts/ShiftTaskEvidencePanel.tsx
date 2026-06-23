@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
+  buildRecordsFromShiftTask,
   compressImageFile,
   deleteTaskEvidence,
   listTaskEvidence,
@@ -143,7 +144,16 @@ export function ShiftTaskEvidencePanel({
 
   const loadRecords = useCallback(async () => {
     try {
-      const rows = await listTaskEvidence(sessionId, task.task_id);
+      let rows = await listTaskEvidence(sessionId, task.task_id);
+      if (!rows.length) {
+        const seeded = buildRecordsFromShiftTask(task, sessionId);
+        if (seeded.length) {
+          for (const row of seeded) {
+            await saveTaskEvidence(row);
+          }
+          rows = seeded;
+        }
+      }
       setRecords(rows);
       const voice = rows.find((r) => r.type === "voice");
       if (voice?.content?.startsWith("data:audio")) {
@@ -154,7 +164,7 @@ export function ShiftTaskEvidencePanel({
     } catch {
       setRecords([]);
     }
-  }, [sessionId, task.task_id]);
+  }, [sessionId, task]);
 
   const queueSync = useCallback(
     async (batch: TaskEvidenceRecord[]) => {

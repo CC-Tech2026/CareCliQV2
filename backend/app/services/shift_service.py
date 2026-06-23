@@ -2168,6 +2168,226 @@ def create_shift_visit_note(
         raise
 
 
+TASK_CONTEXT_NOTE_MAX = 150
+SESSION_PROGRESS_NOTE_MAX = 500
+
+
+def _goal_id_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Optional[str]:
+    if not task_id:
+        return None
+    tasks = shift.get("tasks") or []
+    if not isinstance(tasks, list):
+        return None
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        if str(task.get("task_id") or "") == str(task_id):
+            goal = task.get("goal_id")
+            return str(goal) if goal else None
+    return None
+
+
+def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "note_id": str(row.get("client_note_id") or row.get("id") or ""),
+        "id": row.get("id"),
+        "session_id": row.get("session_id"),
+        "task_id": row.get("task_id"),
+        "goal_id": row.get("goal_id"),
+        "content": row.get("content") or "",
+        "created_at": row.get("created_at"),
+        "auto_saved_at": row.get("auto_saved_at") or row.get("updated_at"),
+        "synced": True,
+    }
+
+
+def _get_worker_session_or_none(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, shift_id, worker_id, support_worker_id, owner_user_id, created_by, organization_id")
+            .eq("id", session_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    rows = resp.data or []
+    if not rows:
+        return None
+    session = rows[0]
+    if not _session_owned_by_worker(session, worker_id, organization_id):
+        return None
+    return session
+
+
+def list_session_notes(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[list[dict[str, Any]]]:
+    """List notes for an active session (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return None
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = result.data or []
+        return [_note_payload_from_row(row) for row in rows]
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def sync_session_notes(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+    note_items: list[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    """Upsert session/task-linked notes from the worker client (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return None
+
+    shift = get_shift_for_session(session)
+    if not shift:
+        return None
+    if str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+
+    shift_id = str(shift.get("id") or "")
+    now = _now_iso()
+    confirmed: list[dict[str, Any]] = []
+
+    for item in note_items:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+
+        task_id = str(item.get("task_id") or "").strip() or None
+        max_len = TASK_CONTEXT_NOTE_MAX if task_id else SESSION_PROGRESS_NOTE_MAX
+        if len(content) > max_len:
+            content = content[:max_len]
+
+        goal_id = str(item.get("goal_id") or "").strip() or None
+        if task_id and not goal_id:
+            goal_id = _goal_id_for_shift_task(shift, task_id)
+
+        client_note_id = str(item.get("note_id") or item.get("client_note_id") or "").strip() or None
+        auto_saved_at = item.get("auto_saved_at") or now
+        created_at = item.get("created_at") or now
+
+        payload = {
+            "organization_id": organization_id,
+            "shift_id": shift_id,
+            "worker_id": worker_id,
+            "session_id": session_id,
+            "content": content,
+            "task_id": task_id,
+            "goal_id": goal_id,
+            "auto_saved_at": auto_saved_at,
+            "updated_at": now,
+            "category": "task_context" if task_id else "session_progress",
+        }
+        if client_note_id:
+            payload["client_note_id"] = client_note_id
+
+        try:
+            if client_note_id:
+                existing = (
+                    get_supabase_admin()
+                    .table("shift_visit_notes")
+                    .select("id")
+                    .eq("session_id", session_id)
+                    .eq("client_note_id", client_note_id)
+                    .limit(1)
+                    .execute()
+                )
+                rows = existing.data or []
+                if rows:
+                    row_id = rows[0]["id"]
+                    get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
+                    payload["id"] = row_id
+                    payload["created_at"] = created_at
+                    confirmed.append(_note_payload_from_row({**payload, "id": row_id}))
+                    continue
+
+            insert_payload = {
+                **payload,
+                "attachment_urls": [],
+                "created_at": created_at,
+            }
+            result = get_supabase_admin().table("shift_visit_notes").insert(insert_payload).execute()
+            rows = result.data or []
+            if rows:
+                confirmed.append(_note_payload_from_row(rows[0]))
+        except Exception as exc:
+            if _is_missing_schema_error(exc):
+                return None
+            raise
+
+    return {
+        "session_id": session_id,
+        "notes": confirmed,
+    }
+
+
+def delete_session_note(
+    session_id: str,
+    note_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> bool:
+    """Delete a session note by server id or client note id (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return False
+
+    try:
+        for column in ("id", "client_note_id"):
+            check = (
+                get_supabase_admin()
+                .table("shift_visit_notes")
+                .select("id")
+                .eq("session_id", session_id)
+                .eq(column, note_id)
+                .limit(1)
+                .execute()
+            )
+            rows = check.data or []
+            if not rows:
+                continue
+            row_id = rows[0].get("id")
+            if not row_id:
+                continue
+            get_supabase_admin().table("shift_visit_notes").delete().eq("id", row_id).execute()
+            return True
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return False
+        raise
+    return False
+
+
 def list_shift_office_messages(
     shift_id: str,
     worker_id: str,
