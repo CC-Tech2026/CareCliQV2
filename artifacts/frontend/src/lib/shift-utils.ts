@@ -306,7 +306,7 @@ export function resolveActiveShiftTasks(shiftTasks: ShiftTask[] | undefined, loc
 }
 
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
-  return tasks.some((t) => isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
+  return tasks.some((t) => !t.marked_na && isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
 }
 
 export function mandatoryTaskSatisfied(task: ShiftTask) {

@@ -61,6 +61,9 @@ export type ShiftTask = {
   voice_evidence?: string | null;
   photo_thumbnails?: string[];
   voice_duration_seconds?: number | null;
+  marked_na?: boolean;
+  na_reason?: string | null;
+  na_marked_at?: string | null;
 };
 
 export type ShiftSupportInstruction = {
@@ -77,6 +80,7 @@ export type ShiftCompletionSummary = {
   mandatory_total: number;
   session_id?: string | null;
   notes_submitted?: boolean;
+  validation?: import("@/lib/shift-validation").ShiftValidationResult & { force_ended?: boolean };
 };
 
 export type ParticipantProfile = {
@@ -177,6 +181,7 @@ export type WorkerShift = {
   session_status?: string | null;
   session_started_at?: string | null;
   service_category?: string;
+  office_contact_number?: string | null;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -421,7 +426,11 @@ export function listShiftMessages(shiftId: string) {
 
 export function sendShiftOfficeMessage(
   shiftId: string,
-  body: { message: string; priority?: "normal" | "urgent" | "emergency" },
+  body: {
+    message: string;
+    priority?: "normal" | "urgent" | "emergency";
+    attachment_data?: string[];
+  },
 ) {
   return jsonFetch<ShiftOfficeMessage>(`/api/worker/shifts/${shiftId}/messages`, {
     method: "POST",

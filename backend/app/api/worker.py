@@ -75,6 +75,9 @@ class ShiftTaskItem(BaseModel):
     voice_evidence: Optional[str] = None
     photo_thumbnails: Optional[list[str]] = None
     voice_duration_seconds: Optional[int] = None
+    marked_na: Optional[bool] = None
+    na_reason: Optional[str] = None
+    na_marked_at: Optional[str] = None
 
 
 class ShiftTasksUpdate(BaseModel):
@@ -143,6 +146,7 @@ class SessionNotesSyncBody(BaseModel):
 class ShiftOfficeMessageCreate(BaseModel):
     message: str = Field(min_length=1)
     priority: Literal["normal", "urgent", "emergency"] = "normal"
+    attachment_data: Optional[list[str]] = None
 
 
 class MessageReplyCreate(BaseModel):
@@ -1073,6 +1077,7 @@ async def worker_create_shift_message(
             org_id,
             message=body.message,
             priority=body.priority,
+            attachment_data=body.attachment_data,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

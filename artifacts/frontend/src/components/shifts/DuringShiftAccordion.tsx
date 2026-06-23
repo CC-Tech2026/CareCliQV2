@@ -32,12 +32,19 @@ const INCIDENT_TYPES = [
   { value: "other", label: "Other" },
 ] as const;
 
+type IncidentPhotoDraft = {
+  dataUrl: string;
+  description: string;
+  capturedAt: string;
+};
+
 type IncidentListItem = {
   id: string;
   title?: string;
   incident_type?: string;
   incident_date?: string;
   severity?: string;
+  shift_id?: string;
 };
 
 type Props = {
@@ -51,6 +58,8 @@ type Props = {
   officePhone?: string;
 };
 
+const DEFAULT_OFFICE_PHONE = "1300 000 000";
+
 export function DuringShiftAccordion({
   shiftId,
   participantId,
@@ -59,8 +68,9 @@ export function DuringShiftAccordion({
   shiftAddress,
   open = false,
   onToggle,
-  officePhone = "1300 000 000",
+  officePhone,
 }: Props) {
+  const resolvedOfficePhone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
   const { toast } = useToast();
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -73,7 +83,7 @@ export function DuringShiftAccordion({
   const [injuries, setInjuries] = useState("");
   const [actionsTaken, setActionsTaken] = useState("");
   const [escalate, setEscalate] = useState(false);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<IncidentPhotoDraft[]>([]);
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [incidentHistory, setIncidentHistory] = useState<IncidentListItem[]>([]);
@@ -82,24 +92,20 @@ export function DuringShiftAccordion({
   const [messagePriority, setMessagePriority] = useState<"normal" | "urgent" | "emergency">("normal");
   const [messageHistory, setMessageHistory] = useState<ShiftOfficeMessage[]>([]);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [messagePhotoPreviews, setMessagePhotoPreviews] = useState<string[]>([]);
+  const messagePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const loadHistory = useCallback(async () => {
     try {
-      if (participantId) {
-        const incidents = await listIncidents<IncidentListItem[]>();
-        const rows = Array.isArray(incidents) ? incidents : [];
-        setIncidentHistory(
-          rows
-            .filter((row) => !sessionId || row.incident_date)
-            .slice(0, 8),
-        );
-      }
+      const incidents = await listIncidents<IncidentListItem[]>({ shift_id: shiftId });
+      const rows = Array.isArray(incidents) ? incidents : [];
+      setIncidentHistory(rows.slice(0, 8));
       const messages = await listShiftMessages(shiftId);
       setMessageHistory(messages || []);
     } catch {
       /* optional history */
     }
-  }, [participantId, sessionId, shiftId]);
+  }, [shiftId]);
 
   useEffect(() => {
     if (open) void loadHistory();
@@ -109,7 +115,19 @@ export function DuringShiftAccordion({
     if (!file) return;
     try {
       const { dataUrl } = await compressImageFile(file);
-      setPhotoPreviews((prev) => [...prev, dataUrl].slice(0, 4));
+      setPhotoPreviews((prev) =>
+        [...prev, { dataUrl, description: "", capturedAt: new Date().toISOString() }].slice(0, 4),
+      );
+    } catch {
+      toast({ title: "Could not add photo", variant: "destructive" });
+    }
+  };
+
+  const handleMessagePhotoPick = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const { dataUrl } = await compressImageFile(file);
+      setMessagePhotoPreviews((prev) => [...prev, dataUrl].slice(0, 2));
     } catch {
       toast({ title: "Could not add photo", variant: "destructive" });
     }
@@ -137,7 +155,13 @@ export function DuringShiftAccordion({
         worker_actions: actionsTaken.trim() || undefined,
         incident_date: new Date(incidentTime).toISOString(),
         escalate,
-        photo_data: photoPreviews.length ? photoPreviews : undefined,
+        photo_items: photoPreviews.length
+          ? photoPreviews.map((photo) => ({
+              data: photo.dataUrl,
+              description: photo.description.trim() || undefined,
+              captured_at: photo.capturedAt,
+            }))
+          : undefined,
       };
       await createIncident(payload);
       toast({ title: "Incident reported", description: "Your report has been submitted to the office." });
@@ -165,9 +189,14 @@ export function DuringShiftAccordion({
     if (!text) return;
     setSendingMessage(true);
     try {
-      await sendShiftOfficeMessage(shiftId, { message: text, priority: messagePriority });
+      await sendShiftOfficeMessage(shiftId, {
+        message: text,
+        priority: messagePriority,
+        attachment_data: messagePhotoPreviews.length ? messagePhotoPreviews : undefined,
+      });
       toast({ title: "Message sent", description: "Office has been notified." });
       setOfficeMessage("");
+      setMessagePhotoPreviews([]);
       setShowMessageForm(false);
       void loadHistory();
     } catch (err) {
@@ -231,7 +260,7 @@ export function DuringShiftAccordion({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <a href={`tel:${officePhone}`}>
+            <a href={`tel:${resolvedOfficePhone}`}>
               <Button type="button" variant="outline" className="h-11 w-full rounded-xl text-xs font-bold">
                 <Phone size={14} className="mr-1.5" />
                 Call office
@@ -303,16 +332,16 @@ export function DuringShiftAccordion({
                 Escalate to coordinator immediately
               </label>
               <div className="flex flex-wrap gap-2">
-                {photoPreviews.map((src, i) => (
-                  <div key={`${i}-${src.slice(0, 32)}`} className="relative h-16 w-16 shrink-0">
+                {photoPreviews.map((photo, i) => (
+                  <div key={`${i}-${photo.dataUrl.slice(0, 32)}`} className="relative w-[88px] shrink-0">
                     <button
                       type="button"
-                      className="h-full w-full overflow-hidden rounded-lg border bg-white shadow-sm ring-offset-1 transition hover:ring-2 hover:ring-violet-300"
-                      onClick={() => setPreviewPhoto(src)}
+                      className="h-16 w-full overflow-hidden rounded-lg border bg-white shadow-sm ring-offset-1 transition hover:ring-2 hover:ring-violet-300"
+                      onClick={() => setPreviewPhoto(photo.dataUrl)}
                       aria-label={`View incident photo ${i + 1}`}
                     >
                       <img
-                        src={src}
+                        src={photo.dataUrl}
                         alt={`Incident photo ${i + 1}`}
                         className="h-full w-full object-cover"
                       />
@@ -323,12 +352,24 @@ export function DuringShiftAccordion({
                       onClick={(e) => {
                         e.stopPropagation();
                         setPhotoPreviews((prev) => prev.filter((_, idx) => idx !== i));
-                        if (previewPhoto === src) setPreviewPhoto(null);
+                        if (previewPhoto === photo.dataUrl) setPreviewPhoto(null);
                       }}
                       aria-label={`Remove photo ${i + 1}`}
                     >
                       <X size={12} />
                     </button>
+                    <Input
+                      value={photo.description}
+                      onChange={(e) =>
+                        setPhotoPreviews((prev) =>
+                          prev.map((item, idx) =>
+                            idx === i ? { ...item, description: e.target.value } : item,
+                          ),
+                        )
+                      }
+                      placeholder="Photo note"
+                      className="mt-1 h-7 bg-white text-[10px]"
+                    />
                   </div>
                 ))}
                 <button
@@ -382,6 +423,34 @@ export function DuringShiftAccordion({
                 placeholder="Write your message to the office…"
                 className="min-h-[80px] bg-white"
               />
+              <div className="flex flex-wrap gap-2">
+                {messagePhotoPreviews.map((src, i) => (
+                  <div key={`${i}-${src.slice(0, 24)}`} className="relative h-14 w-14 shrink-0">
+                    <img src={src} alt="" className="h-full w-full rounded-lg border object-cover" />
+                    <button
+                      type="button"
+                      className="absolute -right-1 -top-1 rounded-full bg-black/70 p-0.5 text-white"
+                      onClick={() => setMessagePhotoPreviews((prev) => prev.filter((_, idx) => idx !== i))}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="grid h-14 w-14 place-items-center rounded-lg border border-dashed bg-white"
+                  onClick={() => messagePhotoInputRef.current?.click()}
+                >
+                  <Camera size={16} style={{ color: PLUM }} />
+                </button>
+                <input
+                  ref={messagePhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => void handleMessagePhotoPick(e.target.files?.[0] ?? null)}
+                />
+              </div>
               <Button
                 type="button"
                 className="w-full rounded-xl font-bold text-white"
@@ -414,7 +483,7 @@ export function DuringShiftAccordion({
 
           {incidentHistory.length > 0 && (
             <div className="rounded-xl border bg-[#FFF7ED] p-3" style={{ borderColor: "#FED7AA" }}>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">Recent incidents</p>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">This shift</p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
                   <li key={item.id} className="rounded-lg bg-white px-2 py-1.5">
