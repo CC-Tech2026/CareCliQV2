@@ -21,8 +21,11 @@ import {
   applyEvidencePatch,
   applyTaskCompletion,
   countTasksWithoutEvidence,
+  hasTaskEvidence,
   QUICK_NOTE_MAX,
+  QUICK_NOTE_PREVIEW,
 } from "@/lib/task-evidence-status";
+import { handleNoteTextareaKeyDown } from "@/lib/note-textarea-keyboard";
 import {
   groupShiftTasksByGoal,
   canMarkTaskComplete,
@@ -71,7 +74,7 @@ function TaskStatusCheckbox({
     );
   }
 
-  if (task.evidence_status === "with_evidence") {
+  if (task.completed && hasTaskEvidence(task)) {
     return (
       <button
         type="button"
@@ -121,17 +124,21 @@ export function ShiftTaskChecklist({
   const hydratedRef = useRef(false);
 
   useEffect(() => {
+    hydratedRef.current = false;
+  }, [shiftId]);
+
+  useEffect(() => {
+    if (hydratedRef.current) return;
     const cached = loadTasksLocally(shiftId);
-    if (cached?.length) {
-      setLocalTasks(cached);
-      if (!hydratedRef.current) {
-        hydratedRef.current = true;
-        onTasksChange(cached);
-      }
-    } else {
-      setLocalTasks(tasks);
-      hydratedRef.current = true;
-    }
+    const initial =
+      typeof navigator !== "undefined" && navigator.onLine && tasks.length > 0
+        ? tasks
+        : cached?.length
+          ? cached
+          : tasks;
+    setLocalTasks(initial);
+    hydratedRef.current = true;
+    onTasksChange(initial);
   }, [shiftId, tasks, onTasksChange]);
 
   const blockMandatoryComplete = useCallback(
@@ -386,6 +393,12 @@ function PreviewTaskRow({ task }: { task: ShiftTask }) {
   );
 }
 
+function notePreview(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.length <= QUICK_NOTE_PREVIEW) return trimmed;
+  return `${trimmed.slice(0, QUICK_NOTE_PREVIEW)}…`;
+}
+
 function QuickNoteField({
   task,
   disabled,
@@ -402,7 +415,9 @@ function QuickNoteField({
     setDraft(task.context_note ?? "");
   }, [task.context_note, task.task_id]);
 
-  if (!open && !task.context_note) {
+  const saved = (task.context_note ?? "").trim();
+
+  if (!open && !saved) {
     return (
       <button
         type="button"
@@ -410,31 +425,55 @@ function QuickNoteField({
         className="text-[11px] font-bold text-[#6D4BDA] underline-offset-2 hover:underline"
         onClick={() => setOpen(true)}
       >
-        Add note
+        [Add Note]
+      </button>
+    );
+  }
+
+  if (!open && saved) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className="mt-2 w-full rounded-lg border border-[#E2DEF2] bg-[#F8F6FE] px-2.5 py-1.5 text-left text-[11px] font-medium italic"
+        style={{ color: MUTED }}
+        onClick={() => {
+          setDraft(task.context_note ?? "");
+          setOpen(true);
+        }}
+      >
+        {notePreview(saved)}
       </button>
     );
   }
 
   return (
     <div className="mt-2 space-y-1">
-      <input
-        type="text"
+      <textarea
         disabled={disabled}
         maxLength={QUICK_NOTE_MAX}
+        rows={2}
         value={draft}
-        placeholder="Quick context note (not counted as evidence)"
-        className="w-full rounded-lg border border-[#E2DEF2] bg-white px-2.5 py-1.5 text-xs"
+        placeholder="What was done? Any observations?"
+        className="w-full resize-none rounded-lg border border-[#E2DEF2] bg-white px-2.5 py-1.5 text-xs"
         onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
-        onBlur={() => onSave(draft.trim())}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSave(draft.trim());
-          }
+        onBlur={() => {
+          onSave(draft.trim());
+          if (!draft.trim()) setOpen(false);
         }}
+        onKeyDown={(e) =>
+          handleNoteTextareaKeyDown(e, {
+            maxLength: QUICK_NOTE_MAX,
+            setValue: setDraft,
+            onSave: (value) => {
+              onSave(value);
+              setOpen(false);
+            },
+          })
+        }
       />
       <p className="text-[10px] font-semibold" style={{ color: MUTED }}>
-        {draft.length}/{QUICK_NOTE_MAX} · Note only, not evidence
+        {draft.length}/{QUICK_NOTE_MAX} · Enter to save · Ctrl+Enter for new line · Context only, not evidence
       </p>
     </div>
   );
@@ -474,8 +513,8 @@ function SessionTaskGroup({
         const expanded = expandedNote === task.task_id;
         const panelOpen = expanded || (required && !task.completed);
         const updates = taskUpdateCount(task);
-        const withEvidence = task.evidence_status === "with_evidence";
-        const withoutEvidence = task.completed && task.evidence_status === "without_evidence";
+        const withEvidence = task.completed && hasTaskEvidence(task);
+        const withoutEvidence = task.completed && !hasTaskEvidence(task);
         const readyToComplete =
           !task.completed &&
           (canMarkTaskComplete(task) || evidenceReady[task.task_id] === true);
@@ -513,8 +552,8 @@ function SessionTaskGroup({
                       : "No evidence · Tap to add photo or voice"}
                   </p>
                   {task.context_note && (
-                    <p className="mt-1 line-clamp-2 text-[11px] font-medium italic" style={{ color: MUTED }}>
-                      {task.context_note}
+                    <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
+                      {notePreview(task.context_note)}
                     </p>
                   )}
                 </button>
@@ -571,8 +610,8 @@ function SessionTaskGroup({
                     {!task.completed && readyToComplete && " · Ready to complete"}
                   </p>
                   {task.context_note && !panelOpen && (
-                    <p className="mt-1 line-clamp-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
-                      {task.context_note}
+                    <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
+                      {notePreview(task.context_note)}
                     </p>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from typing import Any, Literal, Optional
@@ -19,6 +20,7 @@ from ..services.supabase_client import get_supabase_admin
 
 
 router = APIRouter(prefix="/worker", tags=["worker"])
+logger = logging.getLogger(__name__)
 
 
 class WorkerSessionCreate(BaseModel):
@@ -121,6 +123,21 @@ class ShiftVisitNoteCreate(BaseModel):
     content: str = Field(min_length=1)
     category: Optional[str] = None
     session_id: Optional[str] = None
+
+
+class SessionNoteItem(BaseModel):
+    note_id: str = Field(min_length=1)
+    session_id: Optional[str] = None
+    task_id: Optional[str] = None
+    goal_id: Optional[str] = None
+    content: str = Field(min_length=1)
+    created_at: Optional[str] = None
+    auto_saved_at: Optional[str] = None
+    synced: bool = False
+
+
+class SessionNotesSyncBody(BaseModel):
+    notes: list[SessionNoteItem]
 
 
 class ShiftOfficeMessageCreate(BaseModel):
@@ -875,6 +892,12 @@ async def worker_upload_session_evidence(
         if "exceeds" in msg.lower() or "mb limit" in msg.lower():
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=msg) from exc
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from exc
+    except Exception as exc:
+        logger.exception("upload-evidence failed for session %s", session_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc) or "Evidence upload failed",
+        ) from exc
 
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
@@ -888,6 +911,73 @@ async def worker_upload_session_evidence(
         after_state={"uploaded_count": len(result.get("uploaded_evidence") or [])},
     )
     return result
+
+
+@router.get("/sessions/{session_id}/notes")
+async def worker_list_session_notes(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List session progress notes (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    notes = shift_service.list_session_notes(session_id, worker_id, org_id)
+    if notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return notes
+
+
+@router.post("/sessions/{session_id}/notes")
+async def worker_sync_session_notes(
+    session_id: str,
+    body: SessionNotesSyncBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Sync session/task-linked notes from the worker client (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    items = [item.model_dump() for item in body.notes]
+    for item in items:
+        if item.get("session_id") and item["session_id"] != session_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id mismatch")
+    result = shift_service.sync_session_notes(session_id, worker_id, org_id, items)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    await audit_service.log_action(
+        action_type="worker.session.notes_synced",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"synced_count": len(result.get("notes") or [])},
+    )
+    return result
+
+
+@router.delete("/sessions/{session_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def worker_delete_session_note(
+    session_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a session note (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    deleted = shift_service.delete_session_note(session_id, note_id, worker_id, org_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    await audit_service.log_action(
+        action_type="worker.session.note_deleted",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"note_id": note_id},
+    )
+    return None
 
 
 @router.post("/sessions/{session_id}/evidence")

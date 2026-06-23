@@ -7,18 +7,31 @@ import type { ShiftTask } from "@/services/shiftService";
 export type EvidenceStatus = "with_evidence" | "without_evidence";
 
 export const QUICK_NOTE_MAX = 150;
+export const QUICK_NOTE_PREVIEW = 50;
+export const SESSION_NOTE_MAX = 500;
+export const MIN_EVIDENCE_NOTE_CHARS = 20;
 
 export function deriveEvidenceFlags(task: Partial<ShiftTask>) {
   const has_photo =
     Boolean(task.photo_evidence) || (task.photo_thumbnails?.length ?? 0) > 0;
   const has_voice = Boolean(task.voice_evidence) || Boolean(task.voice_duration_seconds);
-  const has_text_notes = Boolean(task.context_note?.trim()) || Boolean(task.note?.trim());
+  // Context notes (CARECLIQV2-231) are not evidence — only evidence-panel text counts.
+  const has_text_notes = Boolean(task.note?.trim());
   return { has_photo, has_voice, has_text_notes };
 }
 
 export function hasStrongTaskEvidence(task: Partial<ShiftTask>) {
   const flags = deriveEvidenceFlags(task);
   return flags.has_photo || flags.has_voice;
+}
+
+/** Written note in the evidence thread (≥20 chars) satisfies mandatory tasks. */
+export function hasQualifyingNoteEvidence(task: Partial<ShiftTask>) {
+  return (task.note || "").trim().length >= MIN_EVIDENCE_NOTE_CHARS;
+}
+
+export function hasTaskEvidence(task: Partial<ShiftTask>) {
+  return hasStrongTaskEvidence(task) || hasQualifyingNoteEvidence(task);
 }
 
 export function buildEvidenceIds(task: Partial<ShiftTask>) {
@@ -33,7 +46,7 @@ export function computeEvidenceStatus(
   completed: boolean,
 ): EvidenceStatus | null {
   if (!completed) return null;
-  return hasStrongTaskEvidence(task) ? "with_evidence" : "without_evidence";
+  return hasTaskEvidence(task) ? "with_evidence" : "without_evidence";
 }
 
 export function applyTaskCompletion(task: ShiftTask, completed: boolean, now: string): ShiftTask {
@@ -55,9 +68,7 @@ export function applyTaskCompletion(task: ShiftTask, completed: boolean, now: st
     completed_at: task.completed_at ?? now,
     ...flags,
     evidence_ids: buildEvidenceIds(task),
-    evidence_status: hasStrongTaskEvidence({ ...task, ...flags })
-      ? "with_evidence"
-      : "without_evidence",
+    evidence_status: computeEvidenceStatus({ ...task, ...flags }, true),
   };
 }
 
@@ -89,5 +100,5 @@ export function taskComplianceEvidenceScore(tasks: ShiftTask[]) {
 }
 
 export function countTasksWithoutEvidence(tasks: ShiftTask[]) {
-  return tasks.filter((t) => t.completed && t.evidence_status === "without_evidence").length;
+  return tasks.filter((t) => t.completed && !hasTaskEvidence(t)).length;
 }

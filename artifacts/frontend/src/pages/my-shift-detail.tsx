@@ -1041,7 +1041,7 @@ function ShiftWorkflow({
                 disabled={busy !== null}
                 onClick={onOpenLiveNote}
               >
-                <Mic size={18} className="mr-2 inline" /> Live Note
+                <Mic size={18} className="mr-2 inline" /> Notes
               </Button>
               <Button
                 className="h-14 rounded-2xl border-0 text-base font-black text-white"
