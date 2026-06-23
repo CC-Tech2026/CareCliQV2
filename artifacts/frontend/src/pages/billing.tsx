@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Plus, TrendingUp } from "lucide-react";
+import { Check, Loader2, Plus, TrendingUp, Zap, Settings } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getRevenueReport } from "@/services/coordinatorService";
+import { resolveNdisPrice, type NdisPriceResolution } from "@/services/ndisService";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +10,8 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NdisPriceEditor } from "@/components/NdisPriceEditor";
+import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
 const PLUM   = "#5533CC";
@@ -73,9 +76,13 @@ export default function Billing() {
   const [creatingInvoice,    setCreatingInvoice   ] = useState(false);
   const [subscription,       setSubscription      ] = useState<Subscription | null>(null);
   const [invoices,           setInvoices          ] = useState<Invoice[]>([]);
+  const [resolvingPrice,     setResolvingPrice    ] = useState(false);
+  const [resolvedPrice,      setResolvedPrice     ] = useState<NdisPriceResolution | null>(null);
+  const [showPriceEditor,    setShowPriceEditor   ] = useState(false);
+  const [showScheduleLoader, setShowScheduleLoader] = useState(false);
 
   const [form, setForm] = useState({
-    recipient_name: "", recipient_email: "",
+    item_code: "", recipient_name: "", recipient_email: "",
     description: "NDIS support service", quantity: "1",
     unit_amount: "120", due_date: "",
   });
@@ -107,6 +114,30 @@ export default function Billing() {
     }
   }
 
+  async function resolveItemPrice(itemCode: string) {
+    if (!itemCode.trim()) {
+      setResolvedPrice(null);
+      return;
+    }
+    setResolvingPrice(true);
+    try {
+      const resolved = await resolveNdisPrice(itemCode, new Date().toISOString().split("T")[0], "national");
+      setResolvedPrice(resolved);
+      // Auto-populate unit_amount with resolved price in dollars
+      setForm(prev => ({
+        ...prev,
+        unit_amount: (resolved.effective_price / 100).toFixed(2),
+      }));
+    } catch (err) {
+      // If resolution fails, just clear the resolved price. Allow user to continue with manual entry.
+      toast({ title: "Price lookup", description: `Item code not found: ${(err as Error).message}`, variant: "destructive" });
+      setResolvedPrice(null);
+      setForm(prev => ({ ...prev, unit_amount: "120" })); // Reset to default
+    } finally {
+      setResolvingPrice(false);
+    }
+  }
+
   useEffect(() => { if (canInvoice) void loadBilling(); }, [canInvoice, isCoordinator]);
 
   async function saveSubscription() {
@@ -135,13 +166,19 @@ export default function Billing() {
           recipient_email: form.recipient_email || null,
           due_date: form.due_date || null,
           status: "draft",
-          line_items: [{ description: form.description, quantity: Number(form.quantity || 1), unit_amount: Number(form.unit_amount || 0) }],
+          line_items: [{ 
+            description: form.description, 
+            quantity: Number(form.quantity || 1), 
+            unit_amount: Number(form.unit_amount || 0),
+            item_code: isCoordinator && form.item_code?.trim() ? form.item_code : null,
+          }],
         }),
       });
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Could not create invoice."); }
       const inv = await res.json();
       setInvoices(prev => [inv, ...prev]);
-      setForm(prev => ({ ...prev, recipient_name: "", recipient_email: "" }));
+      setForm(prev => ({ ...prev, recipient_name: "", recipient_email: "", item_code: "" }));
+      setResolvedPrice(null);
       toast({ title: "Draft invoice created", description: inv.invoice_number });
     } catch (err) {
       toast({ title: "Invoice failed", description: (err as Error).message, variant: "destructive" });
@@ -297,6 +334,36 @@ export default function Billing() {
           </Card>
         )}
 
+        {/* NDIS Pricing Administration — Coordinator Only */}
+        {isCoordinator && (
+          <Card 
+            title="NDIS Pricing"
+            action={<Settings size={18} style={{ color: MUTED }} />}
+          >
+            <div className="space-y-3">
+              <p className="text-xs font-medium" style={{ color: MUTED }}>
+                Manage pricing schedules and individual item prices for NDIS invoicing.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  onClick={() => setShowScheduleLoader(true)}
+                  className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                  style={{ background: PLUM }}
+                >
+                  📋 Load Annual Schedule
+                </button>
+                <button
+                  onClick={() => setShowPriceEditor(true)}
+                  className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+                  style={{ background: CORAL }}
+                >
+                  ✏️ Edit Item Price
+                </button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {/* ── Main grid: form + register ─────────────────────────────────────── */}
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-6">
 
@@ -315,13 +382,45 @@ export default function Billing() {
                 <Label className="text-xs font-bold" style={{ color: MUTED }}>Description</Label>
                 <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* NDIS Item Code Picker — Coordinator Only */}
+              {isCoordinator && (
+                <div>
+                  <Label className="text-xs font-bold flex items-center gap-1.5" style={{ color: MUTED }}>
+                    NDIS Item Code <span className="font-normal">(optional)</span>
+                  </Label>
+                  <div className="flex gap-2 mt-1.5">
+                    <Input 
+                      value={form.item_code} 
+                      onChange={e => setForm({ ...form, item_code: e.target.value })}
+                      onBlur={e => resolveItemPrice(e.target.value)}
+                      className="mt-0 rounded-lg flex-1" 
+                      placeholder="e.g. 01_011_0107_1_1"
+                      style={{ borderColor: BORDER }} 
+                    />
+                    {resolvingPrice && <Loader2 className="w-5 h-5 animate-spin mt-1.5" style={{ color: PLUM }} />}
+                  </div>
+                  {resolvedPrice && (
+                    <div className="mt-2 rounded-lg px-3 py-2 text-xs bg-emerald-50 border border-emerald-200 flex items-center gap-1.5" style={{ color: "#059669" }}>
+                      <Zap className="w-3.5 h-3.5" />
+                      <span className="font-medium">
+                        {resolvedPrice.name} · ${(resolvedPrice.effective_price / 100).toFixed(2)}/h ({resolvedPrice.effective_price_source === "calculated_multiplier" ? "national + multiplier" : "explicit"})
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
                 <div>
                   <Label className="text-xs font-bold" style={{ color: MUTED }}>Quantity</Label>
                   <Input type="number" min={0.1} step={0.1} value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
                 </div>
                 <div>
-                  <Label className="text-xs font-bold" style={{ color: MUTED }}>Unit amount ($)</Label>
+                  <Label className="text-xs font-bold flex items-center justify-between" style={{ color: MUTED }}>
+                    Unit amount ($) 
+                    {resolvedPrice && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">Resolved</span>}
+                  </Label>
                   <Input type="number" min={0} step={0.01} value={form.unit_amount} onChange={e => setForm({ ...form, unit_amount: e.target.value })} className="mt-1.5 rounded-lg" style={{ borderColor: BORDER }} />
                 </div>
               </div>
@@ -415,6 +514,10 @@ export default function Billing() {
             {isCoordinator && <RevenueReportPanel />}
           </div>
         </div>
+
+        {/* Modals — Coordinator Only */}
+        {showPriceEditor && <NdisPriceEditor onClose={() => setShowPriceEditor(false)} />}
+        {showScheduleLoader && <NdisScheduleLoader onClose={() => setShowScheduleLoader(false)} onSuccess={() => loadBilling()} />}
       </div>
     </>
   );

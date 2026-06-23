@@ -1,0 +1,488 @@
+{
+  "metadata": {
+    "source": "NDIS Pricing Arrangements and Price Limits 2025-26 v1.1",
+    "effective_date": "2025-11-24",
+    "financial_year": "2025-26",
+    "generated_for": "CareCliQ by CC Tech Australia Pty Ltd",
+    "notes": "Prices are maximum price limits in AUD per hour unless stated. Remote = +25% loading (MMM6), Very Remote = +40% loading (MMM7). Update annually each July 1.",
+    "categories_included": ["Core Supports", "Capacity Building"]
+  },
+  "support_categories": [
+    {
+      "category_number": "01",
+      "category_name": "Assistance with Daily Life",
+      "support_purpose": "Core Supports",
+      "registration_group": "0107",
+      "items": [
+        {
+          "item_code": "01_011_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Weekday Daytime",
+          "description": "Personal care and self-care support during standard weekday daytime hours",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_015_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Weekday Evening",
+          "description": "Personal care and self-care support during weekday evening hours",
+          "unit": "H",
+          "price_national": 77.38,
+          "price_remote": 108.33,
+          "price_very_remote": 116.07,
+          "day_type": "Weekday",
+          "time_type": "Evening",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_002_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Weekday Night",
+          "description": "Active overnight personal care and self-care support on weekday nights",
+          "unit": "H",
+          "price_national": 78.81,
+          "price_remote": 110.33,
+          "price_very_remote": 118.22,
+          "day_type": "Weekday",
+          "time_type": "Night",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_013_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Saturday",
+          "description": "Personal care and self-care support on Saturdays",
+          "unit": "H",
+          "price_national": 98.83,
+          "price_remote": 138.36,
+          "price_very_remote": 148.25,
+          "day_type": "Saturday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_014_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Sunday",
+          "description": "Personal care and self-care support on Sundays",
+          "unit": "H",
+          "price_national": 127.43,
+          "price_remote": 178.40,
+          "price_very_remote": 191.15,
+          "day_type": "Sunday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_012_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Standard - Public Holiday",
+          "description": "Personal care and self-care support on public holidays",
+          "unit": "H",
+          "price_national": 156.03,
+          "price_remote": 218.44,
+          "price_very_remote": 234.05,
+          "day_type": "Public Holiday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "01_010_0107_1_1",
+          "name": "Assistance with Self-Care Activities - Night-Time Sleepover",
+          "description": "Overnight sleepover support. Flat per-shift rate includes up to 2 hours active support. Additional active hours claimed at applicable rate.",
+          "unit": "E",
+          "price_national": 297.60,
+          "price_remote": 416.64,
+          "price_very_remote": 446.40,
+          "day_type": "Overnight",
+          "time_type": "Sleepover",
+          "support_intensity": "Standard",
+          "notes": "Per shift (not hourly). Additional active hours beyond 2hrs claimed separately."
+        },
+        {
+          "item_code": "01_450_0107_1_1",
+          "name": "Intensive and Complex Behaviour Support - Weekday Daytime",
+          "description": "Support for participants with complex and challenging behaviours - weekday daytime",
+          "unit": "H",
+          "price_national": 75.98,
+          "price_remote": 94.98,
+          "price_very_remote": 106.37,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "High Intensity"
+        }
+      ]
+    },
+    {
+      "category_number": "02",
+      "category_name": "Assistance with Social, Economic and Community Participation",
+      "support_purpose": "Core Supports",
+      "registration_group": "0125",
+      "items": [
+        {
+          "item_code": "04_104_0125_6_1",
+          "name": "Access Community Social and Recreational Activities - Weekday Daytime",
+          "description": "Support to access community, social and recreational activities during weekday daytime",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "04_103_0125_6_1",
+          "name": "Access Community Social and Recreational Activities - Saturday",
+          "description": "Support to access community, social and recreational activities on Saturdays",
+          "unit": "H",
+          "price_national": 98.83,
+          "price_remote": 138.36,
+          "price_very_remote": 148.25,
+          "day_type": "Saturday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "04_105_0125_6_1",
+          "name": "Access Community Social and Recreational Activities - Sunday",
+          "description": "Support to access community, social and recreational activities on Sundays",
+          "unit": "H",
+          "price_national": 127.43,
+          "price_remote": 178.40,
+          "price_very_remote": 191.15,
+          "day_type": "Sunday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "04_106_0125_6_1",
+          "name": "Access Community Social and Recreational Activities - Public Holiday",
+          "description": "Support to access community, social and recreational activities on public holidays",
+          "unit": "H",
+          "price_national": 156.03,
+          "price_remote": 218.44,
+          "price_very_remote": 234.05,
+          "day_type": "Public Holiday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "03",
+      "category_name": "Consumables",
+      "support_purpose": "Core Supports",
+      "registration_group": "Various",
+      "items": [
+        {
+          "item_code": "03_220000000_0103_1_1",
+          "name": "Low Cost AT - Consumables",
+          "description": "Low-cost assistive technology items and consumables",
+          "unit": "E",
+          "price_national": null,
+          "price_remote": null,
+          "price_very_remote": null,
+          "notes": "Quote required. No price limit — reasonable and necessary test applies."
+        }
+      ]
+    },
+    {
+      "category_number": "04",
+      "category_name": "Assistance with Social, Economic and Community Participation (Group)",
+      "support_purpose": "Core Supports",
+      "registration_group": "0136",
+      "items": [
+        {
+          "item_code": "04_210_0125_6_1",
+          "name": "Group Based Community, Social and Recreational Activities - Weekday Daytime",
+          "description": "Group support for community, social and recreational activities on weekdays",
+          "unit": "H",
+          "price_national": 25.97,
+          "price_remote": 36.36,
+          "price_very_remote": 38.96,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard",
+          "notes": "Per participant rate for group support (approx 1:3 ratio)"
+        }
+      ]
+    },
+    {
+      "category_number": "07",
+      "category_name": "Support Coordination",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0132",
+      "items": [
+        {
+          "item_code": "07_002_0106_8_3",
+          "name": "Support Coordination",
+          "description": "Assistance to strengthen participant's ability to coordinate and implement supports",
+          "unit": "H",
+          "price_national": 100.14,
+          "price_remote": 125.18,
+          "price_very_remote": 140.20,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "07_004_0132_8_3",
+          "name": "Specialist Support Coordination",
+          "description": "Specialist support coordination for participants with complex needs",
+          "unit": "H",
+          "price_national": 193.99,
+          "price_remote": 242.49,
+          "price_very_remote": 271.59,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        }
+      ]
+    },
+    {
+      "category_number": "08",
+      "category_name": "Improved Living Arrangements",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0102",
+      "items": [
+        {
+          "item_code": "08_001_0102_4_3",
+          "name": "Assistance with Decision Making, Daily Planning and Budgeting",
+          "description": "Support to develop skills for independent decision making, planning and budgeting",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "09",
+      "category_name": "Increased Social and Community Participation",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0116",
+      "items": [
+        {
+          "item_code": "09_008_0116_6_3",
+          "name": "Life Transition Planning incl. Mentoring, Peer Support and Individual Skill Development",
+          "description": "Planning and skill building support for life transitions",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "15",
+      "category_name": "Improved Daily Living Skills",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0128",
+      "items": [
+        {
+          "item_code": "15_056_0128_1_3",
+          "name": "Therapeutic Supports - Psychologist",
+          "description": "Assessment, therapy and training by a registered psychologist",
+          "unit": "H",
+          "price_national": 232.99,
+          "price_remote": 326.19,
+          "price_very_remote": 349.49,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_054_0128_1_3",
+          "name": "Therapeutic Supports - Occupational Therapist",
+          "description": "Assessment, therapy and training by a registered occupational therapist",
+          "unit": "H",
+          "price_national": 193.99,
+          "price_remote": 271.59,
+          "price_very_remote": 290.99,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_053_0128_1_3",
+          "name": "Therapeutic Supports - Speech Pathologist",
+          "description": "Assessment, therapy and training by a registered speech pathologist",
+          "unit": "H",
+          "price_national": 193.99,
+          "price_remote": 271.59,
+          "price_very_remote": 290.99,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_055_0128_1_3",
+          "name": "Therapeutic Supports - Physiotherapist",
+          "description": "Assessment, therapy and training by a registered physiotherapist",
+          "unit": "H",
+          "price_national": 183.99,
+          "price_remote": 257.59,
+          "price_very_remote": 275.99,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_057_0128_1_3",
+          "name": "Therapeutic Supports - Exercise Physiologist",
+          "description": "Assessment, therapy and training by a registered exercise physiologist",
+          "unit": "H",
+          "price_national": 166.99,
+          "price_remote": 233.79,
+          "price_very_remote": 250.49,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_058_0128_1_3",
+          "name": "Therapeutic Supports - Dietitian",
+          "description": "Assessment, therapy and nutritional guidance by a registered dietitian",
+          "unit": "H",
+          "price_national": 188.99,
+          "price_remote": 264.59,
+          "price_very_remote": 283.49,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        },
+        {
+          "item_code": "15_059_0128_1_3",
+          "name": "Therapeutic Supports - Therapy Assistant Level 1",
+          "description": "Therapy support delivered by a therapy assistant under clinical supervision - Level 1",
+          "unit": "H",
+          "price_national": 56.16,
+          "price_remote": 78.62,
+          "price_very_remote": 84.24,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Standard"
+        },
+        {
+          "item_code": "15_060_0128_1_3",
+          "name": "Therapeutic Supports - Therapy Assistant Level 2",
+          "description": "Therapy support delivered by a therapy assistant under clinical supervision - Level 2",
+          "unit": "H",
+          "price_national": 86.79,
+          "price_remote": 121.51,
+          "price_very_remote": 130.19,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "12",
+      "category_name": "Improved Health and Wellbeing",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0113",
+      "items": [
+        {
+          "item_code": "12_044_0113_1_3",
+          "name": "Individual Counselling",
+          "description": "Counselling support for mental health and emotional wellbeing",
+          "unit": "H",
+          "price_national": 156.16,
+          "price_remote": 218.62,
+          "price_very_remote": 234.24,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "10",
+      "category_name": "Finding and Keeping a Job",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0102",
+      "items": [
+        {
+          "item_code": "10_022_0102_5_3",
+          "name": "Employment Related Assessment and Counselling",
+          "description": "Support to find, prepare for and maintain employment",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "11",
+      "category_name": "Improved Learning",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0117",
+      "items": [
+        {
+          "item_code": "11_025_0117_5_3",
+          "name": "Training for Carers/Parents",
+          "description": "Training and development for carers and parents of NDIS participants",
+          "unit": "H",
+          "price_national": 70.23,
+          "price_remote": 98.83,
+          "price_very_remote": 105.35,
+          "day_type": "Weekday",
+          "time_type": "Daytime",
+          "support_intensity": "Standard"
+        }
+      ]
+    },
+    {
+      "category_number": "06",
+      "category_name": "Assistance with Social, Economic and Community Participation (Behaviour Support)",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0110",
+      "items": [
+        {
+          "item_code": "06_002_0110_1_3",
+          "name": "Specialist Behaviour Support",
+          "description": "Specialist behaviour support assessment and intervention by a qualified behaviour support practitioner",
+          "unit": "H",
+          "price_national": 232.99,
+          "price_remote": 291.24,
+          "price_very_remote": 326.19,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Specialist"
+        }
+      ]
+    },
+    {
+      "category_number": "14",
+      "category_name": "Improved Life Choices (Plan Management)",
+      "support_purpose": "Capacity Building",
+      "registration_group": "0124",
+      "items": [
+        {
+          "item_code": "14_033_0127_8_3",
+          "name": "Plan Management - Financial Administration",
+          "description": "Financial administration and plan management services",
+          "unit": "H",
+          "price_national": 100.14,
+          "price_remote": 125.18,
+          "price_very_remote": 140.20,
+          "day_type": "Weekday",
+          "time_type": "Standard",
+          "support_intensity": "Standard"
+        }
+      ]
+    }
+  ]
+}
