@@ -1,13 +1,17 @@
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
 import { useState, type ComponentType } from "react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
-import { getWorkerComplianceDetail } from "@/services/workerService";
+import { DashboardActionItems } from "@/components/dashboard/DashboardActionItems";
+import { DashboardComplianceAlerts } from "@/components/dashboard/DashboardComplianceAlerts";
+import { DashboardShiftsWidget } from "@/components/dashboard/DashboardShiftsWidget";
+import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
+import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
 import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
 import { PageHeader } from "@/components/healthcare/PageHeader";
-import { StatusCard } from "@/components/healthcare/HealthcareCards";
 import {
   AlertTriangle,
   CalendarDays,
@@ -27,11 +31,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getCoordinatorDashboard,
   getWorkerDashboard,
+  getWorkerLandingDashboard,
   type CoordinatorDashboard,
   type DashboardClient,
   type DashboardSession,
   type WorkerDashboard,
+  type WorkerLandingDashboard,
 } from "@/services/dashboardService";
+import { getWorkerComplianceDetail } from "@/services/workerService";
 import { getCoordinatorFlaggedSessions, getCoordinatorCredentialAlerts } from "@/services/coordinatorService";
 
 // Design system tokens (replaces hardcoded colors)
@@ -108,9 +115,9 @@ function DashboardStatCard({
 
 function ClientListCard({ clients }: { clients: DashboardClient[] }) {
   return (
-    <section 
+    <section
       className="rounded-lg border bg-white p-6"
-      style={{ 
+      style={{
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
       }}
@@ -119,7 +126,7 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Clients</h2>
         <Link href="/my-clients" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>My Clients</Link>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
           <p className="rounded-lg bg-[#F5F3FC] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             No assigned sessions are scheduled for today.
@@ -150,15 +157,15 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
 
 function SessionListCard({ title, sessions }: { title: string; sessions: DashboardSession[] }) {
   return (
-    <section 
+    <section
       className="rounded-lg border bg-white p-6"
-      style={{ 
+      style={{
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
       }}
     >
       <h2 className="mb-4 text-lg font-black" style={{ color: TEXT }}>{title}</h2>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {sessions.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No records need attention.</p>}
         {sessions.map((session) => (
           <div key={session.id} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
@@ -272,7 +279,7 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
         <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
           Workers Needing Attention
         </p>
-        <div className="space-y-3">
+        <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
           {data.workers_needing_attention.length === 0 && (
             <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
               No worker compliance issues are currently open.
@@ -307,7 +314,7 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
           {sessions.length} total
         </span>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {sessions.length === 0 && (
           <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             No sessions are scheduled for today.
@@ -348,7 +355,7 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
         <Link href="/compliance" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>View full report</Link>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {issues.length === 0 && (
           <p className="rounded-lg px-4 py-3 text-sm font-medium" style={{ background: DS.BACKGROUND.section, color: MUTED }}>
             No recurring failed compliance rules have been recorded.
@@ -374,14 +381,23 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
   );
 }
 
-function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
+function WorkerDashboardView({
+  data,
+  landing,
+}: {
+  data: WorkerDashboard;
+  landing: WorkerLandingDashboard | null;
+}) {
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
   const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
     staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
   const complianceDetail = complianceQuery.data;
+
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-10">
       <PageHeader
@@ -396,10 +412,9 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         }}
       />
 
-      {/* Key Metrics — Horizontal, minimal */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div
-          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          className="rounded-lg border p-5 transition-all hover:shadow-sm"
           style={{
             borderColor: DS.BORDER.light,
             background: DS.BACKGROUND.section,
@@ -413,7 +428,7 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           </p>
         </div>
         <div
-          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          className="rounded-lg border p-5 transition-all hover:shadow-sm"
           style={{
             borderColor: DS.BORDER.light,
             background: DS.BACKGROUND.section,
@@ -427,7 +442,7 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           </p>
         </div>
         <div
-          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          className="rounded-lg border p-5 transition-all hover:shadow-sm"
           style={{
             borderColor: DS.BORDER.light,
             background: DS.BACKGROUND.section,
@@ -441,7 +456,7 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           </p>
         </div>
         <div
-          className="p-5 rounded-lg border transition-all hover:shadow-sm"
+          className="rounded-lg border p-5 transition-all hover:shadow-sm"
           style={{
             borderColor: DS.BORDER.light,
             background: DS.BACKGROUND.section,
@@ -455,8 +470,22 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           </p>
         </div>
       </div>
+      {landing && (
+        <>
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <NextShiftCard shift={landing.next_shift} />
+            <DayShiftTimeline shifts={landing.today_shifts} nextShiftId={landing.next_shift?.id} />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+            <DashboardShiftsWidget shifts={landing.today_shifts} />
+            <DashboardActionItems items={landing.action_items} />
+            <DashboardComplianceAlerts alerts={landing.compliance_alerts} />
+          </div>
+        </>
+      )}
 
-      {/* Compliance Section */}
+  
+
       {complianceQuery.isLoading ? (
         <div
           className="rounded-lg border p-6 text-sm font-bold"
@@ -482,7 +511,6 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         </div>
       )}
 
-      {/* Trend Chart + Recent Clients */}
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         {complianceDetail && (
           <ComplianceTrendChart
@@ -494,7 +522,6 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         <ClientListCard clients={todayClients} />
       </div>
 
-      {/* Sessions Grid */}
       <div className="grid gap-6 lg:grid-cols-2">
         <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 5)} />
         <SessionListCard title="Pending Compliance" sessions={data.pending_compliance_fixes.slice(0, 5)} />
@@ -714,19 +741,37 @@ function AlliedFallbackDashboard() {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isWorker = user?.role === "support_worker";
+  useDashboardRealtime(isWorker);
+
   const workerQuery = useOrgQuery(["dashboard", "worker"], {
     queryFn: getWorkerDashboard,
-    enabled: user?.role === "support_worker",
+    enabled: isWorker,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const workerLandingQuery = useOrgQuery(["dashboard", "worker-landing"], {
+    queryFn: getWorkerLandingDashboard,
+    enabled: isWorker,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const coordinatorQuery = useOrgQuery(["dashboard", "coordinator"], {
     queryFn: getCoordinatorDashboard,
     enabled: user?.role === "support_coordinator",
   });
 
-  if (user?.role === "support_worker") {
+  if (isWorker) {
     if (workerQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
     if (workerQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(workerQuery.error as Error).message}</div>;
-    return <WorkerDashboardView data={workerQuery.data as WorkerDashboard} />;
+    return (
+      <WorkerDashboardView
+        data={workerQuery.data as WorkerDashboard}
+        landing={workerLandingQuery.data ?? null}
+      />
+    );
   }
 
   if (user?.role === "support_coordinator") {
