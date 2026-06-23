@@ -1,5 +1,11 @@
 import { jsonFetch } from "@/services/http";
 
+export interface IncidentPhotoItem {
+  data: string;
+  description?: string;
+  captured_at?: string;
+}
+
 export interface IncidentPayload {
   participant_id?: string;
   session_id?: string;
@@ -16,10 +22,15 @@ export interface IncidentPayload {
   follow_up_required?: boolean;
   escalate?: boolean;
   photo_data?: string[];
+  photo_items?: IncidentPhotoItem[];
 }
 
-export function listIncidents<T = unknown>() {
-  return jsonFetch<T>("/api/incidents");
+export function listIncidents<T = unknown>(params?: { shift_id?: string; participant_id?: string }) {
+  const search = new URLSearchParams();
+  if (params?.shift_id) search.set("shift_id", params.shift_id);
+  if (params?.participant_id) search.set("participant_id", params.participant_id);
+  const qs = search.toString();
+  return jsonFetch<T>(`/api/incidents${qs ? `?${qs}` : ""}`);
 }
 
 export function getIncidentStats<T = unknown>() {

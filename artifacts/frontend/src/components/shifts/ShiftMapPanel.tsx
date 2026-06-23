@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ExternalLink, Eye, EyeOff, MapPin, Navigation } from "lucide-react";
+import { ChevronDown, Copy, ExternalLink, Eye, EyeOff, MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { BORDER, MUTED, PLUM, TEXT, extractGateCode } from "@/lib/shift-utils";
 import { getShiftLocation, type ShiftLocationDetails } from "@/services/shiftService";
 
 type Props = {
@@ -38,6 +39,7 @@ export function ShiftMapPanel({
   onToggle,
   className,
 }: Props) {
+  const { toast } = useToast();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoDenied, setGeoDenied] = useState(false);
   const [gateVisible, setGateVisible] = useState(false);
@@ -58,6 +60,17 @@ export function ShiftMapPanel({
   const access = (location?.access_instructions || "").trim();
   const entry = (location?.entry_instructions || "").trim();
   const parking = (location?.visit_notes || "").trim();
+  const gateCode = extractGateCode(access);
+
+  const copyGateCode = async () => {
+    if (!gateCode) return;
+    try {
+      await navigator.clipboard.writeText(gateCode);
+      toast({ title: "Gate code copied" });
+    } catch {
+      toast({ title: "Could not copy code", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     if (!open || !resolvedAddress || !navigator.geolocation) return;
@@ -157,14 +170,26 @@ export function ShiftMapPanel({
                   <div className="rounded-xl border bg-[#FFFBEB] p-3" style={{ borderColor: "#FDE68A" }}>
                     <div className="mb-1 flex items-center justify-between gap-2">
                       <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Access / gate</p>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs font-bold text-amber-900"
-                        onClick={() => setGateVisible((v) => !v)}
-                      >
-                        {gateVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                        {gateVisible ? "Hide" : "Reveal"}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {gateVisible && gateCode && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-xs font-bold text-amber-900"
+                            onClick={() => void copyGateCode()}
+                          >
+                            <Copy size={14} />
+                            Copy code
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-900"
+                          onClick={() => setGateVisible((v) => !v)}
+                        >
+                          {gateVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                          {gateVisible ? "Hide" : "Reveal"}
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-amber-950">
                       {gateVisible ? access : "•••••••• (tap Reveal)"}

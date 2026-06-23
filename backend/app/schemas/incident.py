@@ -49,6 +49,12 @@ def is_ndis_reportable(incident_type: str, severity: str) -> bool:
     return incident_type in NDIS_REPORTABLE_TYPES or severity in NDIS_REPORTABLE_SEVERITIES
 
 
+class IncidentPhotoItem(BaseModel):
+    data: str
+    description: Optional[str] = None
+    captured_at: Optional[str] = None
+
+
 class IncidentCreate(BaseModel):
     participant_id: Optional[str] = None
     session_id: Optional[str] = None
@@ -67,6 +73,7 @@ class IncidentCreate(BaseModel):
     escalate: bool = False
     photo_urls: Optional[list[str]] = None
     photo_data: Optional[list[str]] = None
+    photo_items: Optional[list[IncidentPhotoItem]] = None
     created_by: Optional[str] = None
 
 

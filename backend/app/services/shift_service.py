@@ -17,6 +17,7 @@ from .check_in_service import (
     verify_qr_token_for_shift,
 )
 from .session_service import _prepare_session_payload
+from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -589,6 +590,28 @@ def _should_keep_shift_session_link(shift: dict) -> bool:
     return _session_counts_as_active(_get_session_for_shift(shift))
 
 
+def _org_contact_number(organization_id: str) -> Optional[str]:
+    if not organization_id:
+        return None
+    try:
+        result = (
+            get_supabase_admin()
+            .table("organizations")
+            .select("contact_number")
+            .eq("organization_id", organization_id)
+            .maybe_single()
+            .execute()
+        )
+        row = result.data if result else None
+        if isinstance(row, dict):
+            value = str(row.get("contact_number") or "").strip()
+            return value or None
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            logger.debug("org contact lookup failed: %s", exc)
+    return None
+
+
 def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str, Any]:
     scheduled_start = shift.get("scheduled_start")
     scheduled_end = shift.get("scheduled_end")
@@ -645,6 +668,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "clock_in_method": shift.get("clock_in_method"),
         "clock_in_location": shift.get("clock_in_location"),
         "clock_in_verified": bool(shift.get("clock_in_verified")),
+        "office_contact_number": _org_contact_number(str(shift.get("organization_id") or "")),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
     return payload
@@ -1405,6 +1429,8 @@ def update_shift_tasks(
         return None
 
     for task in tasks:
+        if task.get("marked_na"):
+            continue
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default"
             and task.get("mandatory") is not False
@@ -1835,6 +1861,8 @@ def _mandatory_task_satisfied(task: dict[str, Any]) -> bool:
 
 def _mandatory_tasks_complete(tasks: list[dict[str, Any]]) -> bool:
     for task in tasks:
+        if task.get("marked_na"):
+            continue
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default" and task.get("mandatory") is not False and int(task.get("order") or 0) <= 4
         )
@@ -1908,6 +1936,10 @@ def end_shift(
         raise ValueError("Clock in before ending the shift.")
 
     tasks = shift.get("tasks") or []
+    validation = compute_shift_validation(tasks)
+    if force:
+        validation["force_ended"] = True
+
     if tasks and not _mandatory_tasks_complete(tasks) and not force:
         raise ValueError("Complete all mandatory tasks before ending the shift.")
 
@@ -1915,13 +1947,23 @@ def end_shift(
     session_id = shift.get("session_id")
     if session_id:
         try:
-            get_supabase_admin().table("sessions").update({
+            session_update: dict[str, Any] = {
                 "status": "completed",
                 "updated_at": now,
-            }).eq("id", str(session_id)).execute()
+                "end_validation": validation,
+            }
+            get_supabase_admin().table("sessions").update(session_update).eq("id", str(session_id)).execute()
         except Exception as exc:
             if not _is_missing_schema_error(exc):
                 raise
+            try:
+                get_supabase_admin().table("sessions").update({
+                    "status": "completed",
+                    "updated_at": now,
+                }).eq("id", str(session_id)).execute()
+            except Exception as inner_exc:
+                if not _is_missing_schema_error(inner_exc):
+                    raise
 
     update_payload = {
         "status": "completed",
@@ -1953,6 +1995,7 @@ def end_shift(
         "mandatory_total": len(mandatory),
         "session_id": session_id,
         "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+        "validation": validation,
     }
     return payload
 
@@ -2420,6 +2463,7 @@ def create_shift_office_message(
     message: str,
     priority: str = "normal",
     attachment_urls: Optional[list[str]] = None,
+    attachment_data: Optional[list[str]] = None,
 ) -> Optional[dict[str, Any]]:
     shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
     if not shift:
@@ -2429,13 +2473,23 @@ def create_shift_office_message(
         raise ValueError("Message is required.")
     priority_norm = priority if priority in ("normal", "urgent", "emergency") else "normal"
     now = _now_iso()
+    urls = list(attachment_urls or [])
+    if attachment_data:
+        from .incident_service import _upload_incident_photos
+
+        uploaded = _upload_incident_photos(
+            attachment_data,
+            str(organization_id),
+            f"office_{shift_id}_{uuid.uuid4().hex[:8]}",
+        )
+        urls.extend(uploaded)
     payload = {
         "organization_id": organization_id,
         "shift_id": shift_id,
         "worker_id": worker_id,
         "message": text,
         "priority": priority_norm,
-        "attachment_urls": attachment_urls or [],
+        "attachment_urls": urls,
         "created_at": now,
     }
     try:

@@ -44,6 +44,7 @@ type Props = {
   onTasksChange: (tasks: ShiftTask[]) => void;
   disabled?: boolean;
   sessionStyle?: boolean;
+  focusTaskId?: string | null;
 };
 
 function isMandatory(task: ShiftTask) {
@@ -115,6 +116,7 @@ export function ShiftTaskChecklist({
   onTasksChange,
   disabled,
   sessionStyle,
+  focusTaskId,
 }: Props) {
   const { toast } = useToast();
   const [localTasks, setLocalTasks] = useState<ShiftTask[]>(tasks);
@@ -122,6 +124,10 @@ export function ShiftTaskChecklist({
   const [busy, setBusy] = useState(false);
   const [openGoals, setOpenGoals] = useState<Record<string, boolean>>({});
   const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (focusTaskId) setExpandedNote(focusTaskId);
+  }, [focusTaskId]);
 
   useEffect(() => {
     hydratedRef.current = false;

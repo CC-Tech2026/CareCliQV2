@@ -88,7 +88,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
             {entryActionLabel(entry)}
           </p>
         ) : (
-          <p className="mt-1.5 text-sm font-black leading-snug" style={{ color: TEXT }}>
+          <p className="mt-1.5 text-sm leading-snug" style={{ color: TEXT }}>
             {entryActionLabel(entry)}
           </p>
         )}

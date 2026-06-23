@@ -20,6 +20,7 @@ async def list_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
     org_id = user.get("organization_id")
@@ -37,7 +38,7 @@ async def list_incidents(
     reporter_id = user.get("sub") if is_support_worker(user) else None
 
     return await incident_service.get_all_incidents(
-        limit, status, severity, participant_id,
+        limit, status, severity, participant_id, shift_id,
         org_id=org_id,
         reporter_id=reporter_id,
         current_user=user,
