@@ -102,3 +102,52 @@ export function taskComplianceEvidenceScore(tasks: ShiftTask[]) {
 export function countTasksWithoutEvidence(tasks: ShiftTask[]) {
   return tasks.filter((t) => t.completed && !hasTaskEvidence(t)).length;
 }
+
+/** CARECLIQV2-217 — mandatory/optional task visual state machine */
+export type TaskVisualState = "not_started" | "in_progress" | "evidence_required" | "complete";
+
+export const TASK_STATE_STYLES: Record<
+  TaskVisualState,
+  { border: string; bg: string; text: string; label: string }
+> = {
+  not_started: {
+    border: "#E2DEF2",
+    bg: "#FFFFFF",
+    text: "#7A6A9E",
+    label: "Not started",
+  },
+  in_progress: {
+    border: "#FCD34D",
+    bg: "#FFFBEB",
+    text: "#92400E",
+    label: "In progress",
+  },
+  evidence_required: {
+    border: "#FB923C",
+    bg: "#FFF7ED",
+    text: "#C2410C",
+    label: "Evidence required",
+  },
+  complete: {
+    border: "#34D399",
+    bg: "#ECFDF5",
+    text: "#047857",
+    label: "Complete",
+  },
+};
+
+export function getTaskVisualState(
+  task: ShiftTask,
+  options: { panelOpen?: boolean; isMandatory?: boolean; canComplete?: boolean } = {},
+): TaskVisualState {
+  const mandatory = options.isMandatory ?? Boolean(task.mandatory);
+  const panelOpen = options.panelOpen ?? false;
+  const canComplete = options.canComplete ?? hasTaskEvidence(task);
+
+  if (task.completed && hasTaskEvidence(task)) return "complete";
+  if (task.completed && !hasTaskEvidence(task)) return "evidence_required";
+  if (mandatory && !canComplete && panelOpen) return "in_progress";
+  if (mandatory && !canComplete) return "evidence_required";
+  if (panelOpen) return "in_progress";
+  return "not_started";
+}

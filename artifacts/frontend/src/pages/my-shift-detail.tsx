@@ -48,6 +48,7 @@ import {
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
+import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
   AlertDialog,
@@ -88,6 +89,8 @@ import {
   formatDurationLabel,
   formatShiftTimeRange,
   resolveActiveShiftTasks,
+  hasIncompleteMandatoryTasks,
+  incompleteMandatoryTasks,
   shiftDurationMinutes,
   shiftHasRiskAlerts,
   shiftInitials,
@@ -136,6 +139,7 @@ export default function MyShiftDetail({ id }: Props) {
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [validationOpen, setValidationOpen] = useState(false);
+  const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [forceEndPending, setForceEndPending] = useState(false);
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
@@ -214,6 +218,14 @@ export default function MyShiftDetail({ id }: Props) {
       setNotePanelOpen(true);
     }
   }, [shift?.visual_state, id]);
+
+  useEffect(() => {
+    if (!mandatoryAlertOpen || !shift) return;
+    const active = resolveActiveShiftTasks(shift.tasks, tasks);
+    if (!hasIncompleteMandatoryTasks(active)) {
+      setMandatoryAlertOpen(false);
+    }
+  }, [tasks, shift, mandatoryAlertOpen]);
 
   const refreshPendingClockIn = async () => {
     const pending = await getPendingClockIn(id);
@@ -456,6 +468,7 @@ export default function MyShiftDetail({ id }: Props) {
       setInstantSessionActive(false);
       setEndShiftOpen(false);
       setValidationOpen(false);
+      setMandatoryAlertOpen(false);
       setForceEndPending(false);
       invalidateShifts();
       await refetch();
@@ -477,6 +490,13 @@ export default function MyShiftDetail({ id }: Props) {
   const handleAttemptEndShift = () => {
     if (!shift) return;
     setForceEndPending(false);
+    const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
+    if (hasIncompleteMandatoryTasks(activeTasks)) {
+      setValidationOpen(false);
+      setMandatoryAlertOpen(true);
+      return;
+    }
+    setMandatoryAlertOpen(false);
     setValidationOpen(true);
   };
 
@@ -519,6 +539,24 @@ export default function MyShiftDetail({ id }: Props) {
     setValidationOpen(false);
     setForceEndPending(false);
     setEndShiftOpen(true);
+  };
+
+  const handleBackToMandatoryTasks = () => {
+    if (!shift) return;
+    const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
+    const incomplete = incompleteMandatoryTasks(activeTasks);
+    setMandatoryAlertOpen(false);
+    setTasksOpen(true);
+    if (incomplete[0]?.task_id) setFocusTaskId(incomplete[0].task_id);
+    requestAnimationFrame(() => {
+      document.getElementById("shift-task-checklist")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const handleEndAnywayFromMandatory = () => {
+    setMandatoryAlertOpen(false);
+    setForceEndPending(true);
+    void handleEndShift();
   };
 
   if (isLoading) {
@@ -566,6 +604,8 @@ export default function MyShiftDetail({ id }: Props) {
   };
   const contextSyncedAt = shift.context_synced_at ?? offlineContext?.syncedAt ?? null;
   const participantFirstName = (displayProfile?.preferred_name || shift.participant_name || "").split(" ")[0];
+  const activeTasksForValidation = resolveActiveShiftTasks(shift.tasks, tasks);
+  const incompleteMandatory = incompleteMandatoryTasks(activeTasksForValidation);
   const workflow = (
     <ShiftWorkflow
       shift={shift}
@@ -615,10 +655,12 @@ export default function MyShiftDetail({ id }: Props) {
       liveNoteOpen={notePanelOpen}
       onOpenLiveNote={() => setNotePanelOpen(true)}
       focusTaskId={focusTaskId}
+      mandatoryAlertOpen={mandatoryAlertOpen}
+      incompleteMandatory={incompleteMandatory}
+      onBackToMandatoryTasks={handleBackToMandatoryTasks}
+      onEndAnywayFromMandatory={handleEndAnywayFromMandatory}
     />
   );
-
-  const activeTasksForValidation = shift ? resolveActiveShiftTasks(shift.tasks, tasks) : [];
 
   const dialogs = (
     <>
@@ -839,6 +881,10 @@ function ShiftWorkflow({
   liveNoteOpen,
   onOpenLiveNote,
   focusTaskId,
+  mandatoryAlertOpen,
+  incompleteMandatory,
+  onBackToMandatoryTasks,
+  onEndAnywayFromMandatory,
 }: {
   shift: WorkerShift;
   displayProfile?: ParticipantProfile;
@@ -882,6 +928,10 @@ function ShiftWorkflow({
   liveNoteOpen: boolean;
   onOpenLiveNote: () => void;
   focusTaskId?: string | null;
+  mandatoryAlertOpen: boolean;
+  incompleteMandatory: ShiftTask[];
+  onBackToMandatoryTasks: () => void;
+  onEndAnywayFromMandatory: () => void;
 }) {
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
@@ -1099,6 +1149,14 @@ function ShiftWorkflow({
             </Button>
           )}
 
+          {mandatoryAlertOpen && incompleteMandatory.length > 0 && (
+            <MandatoryTasksAlert
+              tasks={incompleteMandatory}
+              busy={busy === "end"}
+              onBackToTasks={onBackToMandatoryTasks}
+              onEndAnyway={onEndAnywayFromMandatory}
+            />
+          )}
         </div>
       )}
 

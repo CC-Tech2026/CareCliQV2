@@ -923,3 +923,30 @@ def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_for_sess
     assert result["notes"][0]["content"] == "Benjamin showered independently"
     notes_table.insert.assert_called_once()
 
+
+def test_get_shift_detail_denies_wrong_worker():
+    shift = _sample_shift(worker_id="worker-1")
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAccessDenied):
+            shift_service.get_shift_detail_for_worker("shift-1", "other-worker", "org-1")
+
+
+def test_get_shift_detail_denies_wrong_org():
+    shift = _sample_shift(organization_id="org-1")
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAccessDenied):
+            shift_service.get_shift_detail_for_worker("shift-1", "worker-1", "org-2")
+
+
+def test_validate_shift_scheduled_today_rejects_wrong_day():
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    with pytest.raises(shift_service.ShiftNotScheduledToday):
+        shift_service.validate_shift_scheduled_today(past)
+
+
+def test_clock_in_raises_when_already_clocked():
+    shift = _sample_shift(clocked_in_at=datetime.now(timezone.utc).isoformat())
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAlreadyClockedIn):
+            shift_service.clock_in_shift("shift-1", "worker-1", "org-1", method="gps")
+

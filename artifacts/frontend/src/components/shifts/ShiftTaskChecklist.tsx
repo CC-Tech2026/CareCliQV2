@@ -21,7 +21,9 @@ import {
   applyEvidencePatch,
   applyTaskCompletion,
   countTasksWithoutEvidence,
+  getTaskVisualState,
   hasTaskEvidence,
+  TASK_STATE_STYLES,
   QUICK_NOTE_MAX,
   QUICK_NOTE_PREVIEW,
 } from "@/lib/task-evidence-status";
@@ -525,6 +527,12 @@ function SessionTaskGroup({
           !task.completed &&
           (canMarkTaskComplete(task) || evidenceReady[task.task_id] === true);
         const needsEvidence = required && !task.completed && !readyToComplete;
+        const visualState = getTaskVisualState(task, {
+          panelOpen,
+          isMandatory: required,
+          canComplete: readyToComplete || hasTaskEvidence(task),
+        });
+        const stateStyle = TASK_STATE_STYLES[visualState];
 
         if (task.completed && !expanded) {
           return (
@@ -532,8 +540,8 @@ function SessionTaskGroup({
               key={task.task_id}
               className={cn(
                 "overflow-hidden rounded-xl border-2 p-3",
-                withEvidence ? "border-emerald-400 bg-emerald-50/60" : "border-amber-300 bg-amber-50/70",
               )}
+              style={{ borderColor: stateStyle.border, background: stateStyle.bg }}
             >
               <div className="flex items-center gap-3">
                 <TaskStatusCheckbox
@@ -547,15 +555,11 @@ function SessionTaskGroup({
                   onClick={() => setExpandedNote(task.task_id)}
                 >
                   <p className="text-sm font-black" style={{ color: TEXT }}>{task.label}</p>
-                  <p
-                    className={cn(
-                      "mt-0.5 text-[11px] font-semibold",
-                      withEvidence ? "text-emerald-700" : "text-amber-800",
-                    )}
-                  >
+                  <p className="mt-0.5 text-[11px] font-semibold" style={{ color: stateStyle.text }}>
+                    {stateStyle.label}
                     {withEvidence
-                      ? `${updates || 1} update${updates === 1 ? "" : "s"} · With evidence ✓`
-                      : "No evidence · Tap to add photo or voice"}
+                      ? ` · ${updates || 1} update${updates === 1 ? "" : "s"} · With evidence ✓`
+                      : " · No evidence · Tap to add photo or voice"}
                   </p>
                   {task.context_note && (
                     <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
@@ -587,12 +591,19 @@ function SessionTaskGroup({
           <div
             key={task.task_id}
             className={cn(
-              "overflow-hidden rounded-xl border transition-colors",
-              panelOpen ? "border-[#C4B5FD] shadow-sm" : "border-[#E2DEF2]",
-              task.completed ? "bg-slate-50" : needsEvidence ? "bg-white" : readyToComplete ? "bg-emerald-50/30" : "bg-white",
+              "overflow-hidden rounded-xl border-2 transition-colors",
+              panelOpen && "shadow-sm",
+              !required && "opacity-95",
             )}
+            style={{
+              borderColor: stateStyle.border,
+              background: task.completed ? "#F8FAFC" : stateStyle.bg,
+            }}
           >
             <div className="flex w-full items-center gap-1 p-3">
+              {required && (
+                <AlertTriangle size={14} className="shrink-0 text-red-500" aria-hidden />
+              )}
               <TaskStatusCheckbox
                 task={task}
                 disabled={disabled}
@@ -605,11 +616,12 @@ function SessionTaskGroup({
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
                 <div className="min-w-0 flex-1">
-                  <p className={cn("text-sm font-bold", task.completed && "text-slate-500")} style={{ color: task.completed ? undefined : TEXT }}>
+                  <p className={cn("text-sm font-bold", task.completed && "line-through text-slate-500")} style={{ color: task.completed ? undefined : TEXT }}>
                     {task.label}
                   </p>
-                  <p className="mt-0.5 text-[11px] font-semibold" style={{ color: MUTED }}>
-                    {required ? "Mandatory · evidence required" : "Optional"}
+                  <p className="mt-0.5 text-[11px] font-semibold" style={{ color: stateStyle.text }}>
+                    {required ? "Mandatory · " : "Optional · "}
+                    {stateStyle.label}
                     {task.completed && withoutEvidence && " · ⚠️ No evidence"}
                     {task.completed && withEvidence && " · With evidence"}
                     {!task.completed && needsEvidence && " · Add photo, voice, or note (20+ chars)"}
