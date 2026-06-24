@@ -581,6 +581,22 @@ async def register(body: RegisterRequest):
     }
 
 
+def _serialize_supabase_session(session) -> dict | None:
+    """Expose Supabase Auth tokens for client-side Realtime (RLS uses auth.uid())."""
+    if not session:
+        return None
+    access = getattr(session, "access_token", None) or (session.get("access_token") if isinstance(session, dict) else None)
+    refresh = getattr(session, "refresh_token", None) or (session.get("refresh_token") if isinstance(session, dict) else None)
+    if not access or not refresh:
+        return None
+    expires_at = getattr(session, "expires_at", None) or (session.get("expires_at") if isinstance(session, dict) else None)
+    return {
+        "access_token": str(access),
+        "refresh_token": str(refresh),
+        "expires_at": int(expires_at) if expires_at is not None else None,
+    }
+
+
 async def _finalize_login_response(
     *,
     auth_user,
@@ -592,6 +608,7 @@ async def _finalize_login_response(
     request: Request,
     device_id: str | None,
     background_tasks: BackgroundTasks,
+    supabase_session=None,
 ) -> dict:
     onboarding_complete = profile.get("onboarding_complete")
     if onboarding_complete is None:
@@ -665,7 +682,7 @@ async def _finalize_login_response(
         except Exception as e:
             logger.debug("Could not persist email_verified for %s: %s", auth_user.id, e)
 
-    return {
+    response: dict = {
         "access_token": token,
         "token_type": "bearer",
         "user": {
@@ -687,6 +704,10 @@ async def _finalize_login_response(
             "profile_photo_url": profile.get("profile_photo_url"),
         },
     }
+    supabase_payload = _serialize_supabase_session(supabase_session)
+    if supabase_payload:
+        response["supabase_session"] = supabase_payload
+    return response
 
 
 @router.post("/login")
@@ -783,17 +804,21 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
     device_id = (body.device_id or request.headers.get("x-device-id") or "").strip() or None
     mfa_settings = dss.get_mfa_settings(str(auth_user.id))
     if mfa_settings.get("mfa_enabled") and not dss.is_device_trusted(str(auth_user.id), device_id):
+        challenge_payload: dict = {
+            "sub": str(auth_user.id),
+            "email": str(auth_user.email),
+            "type": "mfa_challenge",
+            "role": role,
+            "account_type": account_type,
+            "organization_id": organization_id,
+            "remember_device": body.remember_device,
+            "device_id": device_id,
+        }
+        supabase_for_mfa = _serialize_supabase_session(result.session)
+        if supabase_for_mfa:
+            challenge_payload["supabase_refresh"] = supabase_for_mfa["refresh_token"]
         challenge = create_access_token(
-            {
-                "sub": str(auth_user.id),
-                "email": str(auth_user.email),
-                "type": "mfa_challenge",
-                "role": role,
-                "account_type": account_type,
-                "organization_id": organization_id,
-                "remember_device": body.remember_device,
-                "device_id": device_id,
-            },
+            challenge_payload,
             expires_delta=timedelta(minutes=5),
         )
         return {
@@ -812,6 +837,7 @@ async def login(body: LoginRequest, request: Request, background_tasks: Backgrou
         request=request,
         device_id=device_id,
         background_tasks=background_tasks,
+        supabase_session=result.session,
     )
 
 
@@ -838,6 +864,18 @@ async def login_mfa(body: MfaLoginRequest, request: Request, background_tasks: B
         user_metadata = {"full_name": profile.get("full_name") or ""}
         email_confirmed_at = None
 
+    supabase_session = None
+    refresh_token = payload.get("supabase_refresh")
+    if refresh_token:
+        try:
+            refreshed = await asyncio.to_thread(
+                get_supabase().auth.refresh_session,
+                str(refresh_token),
+            )
+            supabase_session = refreshed.session
+        except Exception as exc:
+            logger.debug("Could not refresh Supabase session after MFA: %s", exc)
+
     response = await _finalize_login_response(
         auth_user=_AuthUserShim(),
         profile=profile,
@@ -848,6 +886,7 @@ async def login_mfa(body: MfaLoginRequest, request: Request, background_tasks: B
         request=request,
         device_id=device_id,
         background_tasks=background_tasks,
+        supabase_session=supabase_session,
     )
     if body.trust_device and device_id:
         device_name, os_name = dss.parse_user_agent(request.headers.get("user-agent"))
@@ -996,6 +1035,31 @@ async def resend_verification(body: ResendVerificationRequest):
         # Do not leak whether an account exists.
         pass
     return {"message": "If the account exists, a verification email has been sent."}
+
+
+class SupabaseRefreshBody(BaseModel):
+    refresh_token: str = Field(min_length=10)
+
+
+@router.post("/supabase-refresh")
+async def refresh_supabase_session(
+    body: SupabaseRefreshBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Refresh Supabase Auth session for client-side Realtime subscriptions."""
+    try:
+        result = await asyncio.to_thread(
+            get_supabase().auth.refresh_session,
+            body.refresh_token,
+        )
+    except Exception as exc:
+        logger.debug("Supabase refresh failed for %s: %s", current_user.get("sub"), exc)
+        raise HTTPException(status_code=401, detail="Supabase session expired. Sign in again.")
+
+    session_payload = _serialize_supabase_session(result.session)
+    if not session_payload:
+        raise HTTPException(status_code=401, detail="Supabase session unavailable.")
+    return {"supabase_session": session_payload}
 
 
 @router.post("/logout")

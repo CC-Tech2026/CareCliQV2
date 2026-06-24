@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { useEffect, useState } from "react";
+import { recordShiftViewed } from "@/services/notificationService";
+import { Link, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
@@ -117,7 +118,9 @@ function resolveDisplayVisualState(
   return shift.visual_state;
 }
 
-export default function MyShiftDetail({ id }: Props) {
+export default function MyShiftDetail({ id: idProp }: Props) {
+  const params = useParams<{ id: string }>();
+  const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
   const { toast } = useToast();
   const orgId = user?.organizationId ?? "__no_org__";
@@ -149,7 +152,7 @@ export default function MyShiftDetail({ id }: Props) {
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
-    { queryFn: () => getWorkerShift(id) },
+    { queryFn: () => getWorkerShift(id), enabled: Boolean(id) },
   );
 
   const {
@@ -178,6 +181,10 @@ export default function MyShiftDetail({ id }: Props) {
     if (shift?.risks_acknowledged) setAckChecked(true);
     if (shift?.tasks?.length) setTasks(shift.tasks);
   }, [shift?.risks_acknowledged, shift?.tasks]);
+
+  useEffect(() => {
+    if (id) void recordShiftViewed(id).catch(() => undefined);
+  }, [id]);
 
   useEffect(() => {
     if (!shift) return;
@@ -558,6 +565,17 @@ export default function MyShiftDetail({ id }: Props) {
     setForceEndPending(true);
     void handleEndShift();
   };
+
+  if (!id) {
+    return (
+      <div className="space-y-4 py-8">
+        <p className="text-sm font-bold text-red-600">Invalid shift link.</p>
+        <Link href="/my-shifts">
+          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
+        </Link>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

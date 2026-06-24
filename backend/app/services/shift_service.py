@@ -2121,6 +2121,12 @@ def end_shift(
         "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
         "validation": validation,
     }
+    try:
+        from .conversation_service import set_conversation_read_only_for_shift
+
+        set_conversation_read_only_for_shift(shift_id)
+    except Exception:
+        pass
     return payload
 
 

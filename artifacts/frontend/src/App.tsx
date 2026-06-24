@@ -54,6 +54,8 @@ import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
+import WorkerMessages from "@/pages/worker-messages";
+import WorkerNotificationsPage from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
@@ -175,12 +177,6 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/my-shifts">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
-          <AppLayout><MyShifts /></AppLayout>
-        </ProtectedRoute>
-      </Route>
-
       <Route path="/my-shifts/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -189,9 +185,27 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/my-shifts">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><MyShifts /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/tasks">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/messages">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerMessages /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/notifications">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerNotificationsPage /></AppLayout>
         </ProtectedRoute>
       </Route>
 

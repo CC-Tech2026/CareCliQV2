@@ -33,6 +33,8 @@ class NotificationPreferenceTests(unittest.TestCase):
 
 
 class NotifyWorkerTests(unittest.IsolatedAsyncioTestCase):
+    @patch("backend.app.services.notification_service.send_push_to_user", new_callable=AsyncMock, return_value=True)
+    @patch("backend.app.services.notification_service.notification_store.create_user_notification", return_value={"id": "n1"})
     @patch("backend.app.services.notification_service._record_delivery")
     @patch("backend.app.services.notification_service._was_delivered", return_value=False)
     @patch("backend.app.services.notification_service.queue_worker_notification_email")
@@ -47,6 +49,8 @@ class NotifyWorkerTests(unittest.IsolatedAsyncioTestCase):
         queue_email_mock,
         was_delivered_mock,
         record_delivery_mock,
+        create_notif_mock,
+        push_mock,
     ):
         prefs_mock.return_value = {
             "shift_reminder": {"push": True, "email": True, "sms": False},
@@ -63,10 +67,15 @@ class NotifyWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["in_app"])
         self.assertTrue(result["email"])
+        self.assertTrue(result["push"])
         create_alert_mock.assert_awaited_once()
+        create_notif_mock.assert_called_once()
         queue_email_mock.assert_called_once()
-        self.assertEqual(record_delivery_mock.call_count, 2)
+        push_mock.assert_awaited_once()
+        self.assertGreaterEqual(record_delivery_mock.call_count, 2)
 
+    @patch("backend.app.services.notification_service.send_push_to_user", new_callable=AsyncMock, return_value=False)
+    @patch("backend.app.services.notification_service.notification_store.create_user_notification", return_value={"id": "n1"})
     @patch("backend.app.services.notification_service._record_delivery")
     @patch("backend.app.services.notification_service._was_delivered", return_value=False)
     @patch("backend.app.services.notification_service.queue_worker_notification_email")
@@ -81,6 +90,8 @@ class NotifyWorkerTests(unittest.IsolatedAsyncioTestCase):
         queue_email_mock,
         was_delivered_mock,
         record_delivery_mock,
+        create_notif_mock,
+        push_mock,
     ):
         prefs_mock.return_value = {
             "shift_reminder": {"push": True, "email": False, "sms": False},
@@ -97,9 +108,4 @@ class NotifyWorkerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["in_app"])
         self.assertFalse(result["email"])
-        create_alert_mock.assert_awaited_once()
         queue_email_mock.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

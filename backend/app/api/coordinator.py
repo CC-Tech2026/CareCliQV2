@@ -27,9 +27,12 @@ from ..services.credential_verification_service import (
 from ..services.notification_service import (
     notify_certification_expiry,
     notify_coordinator_message,
+    notify_conversation_message,
     notify_feedback_received,
+    notify_shift_cancelled,
     notify_shift_change,
 )
+from ..services import conversation_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -841,11 +844,17 @@ async def update_shift_schedule(
 
     update_payload: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
     changes: list[str] = []
+    old_values: dict[str, Any] = {}
+    new_values: dict[str, Any] = {}
     if body.scheduled_start:
+        old_values["scheduled_start"] = shift.get("scheduled_start")
         update_payload["scheduled_start"] = body.scheduled_start
+        new_values["scheduled_start"] = body.scheduled_start
         changes.append("start time updated")
     if body.scheduled_end:
+        old_values["scheduled_end"] = shift.get("scheduled_end")
         update_payload["scheduled_end"] = body.scheduled_end
+        new_values["scheduled_end"] = body.scheduled_end
         changes.append("end time updated")
 
     try:
@@ -861,7 +870,43 @@ async def update_shift_schedule(
         raise HTTPException(status_code=500, detail=f"Shift update failed: {exc}")
 
     summary = " and ".join(changes) if changes else "Schedule updated"
-    await notify_shift_change(shift=updated, change_summary=summary.capitalize() + ".")
+    await notify_shift_change(
+        shift=updated,
+        change_summary=summary.capitalize() + ".",
+        old_values=old_values,
+        new_values=new_values,
+    )
+    return {"shift_id": shift_id, "shift": updated}
+
+
+@router.patch("/shifts/{shift_id}/cancel")
+async def cancel_shift(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Cancel a shift and notify the assigned worker (CARECLIQV2-261)."""
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found.")
+    if shift.get("status") == "cancelled":
+        return {"shift_id": shift_id, "shift": shift}
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shifts")
+            .update({"status": "cancelled", "updated_at": now})
+            .eq("id", shift_id)
+            .execute()
+        )
+        updated = (result.data or [None])[0] or {**shift, "status": "cancelled", "updated_at": now}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Shift cancel failed: {exc}") from exc
+
+    await notify_shift_cancelled(shift=updated)
+    conversation_service.set_conversation_read_only_for_shift(shift_id)
     return {"shift_id": shift_id, "shift": updated}
 
 
@@ -2468,31 +2513,47 @@ async def send_shift_message(
     body: ShiftMessageBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Send an in-app message from coordinator to worker."""
+    """Send an in-app message from coordinator to worker (CARECLIQV2-262)."""
     org_id = _require_coordinator(current_user)
-    supabase = get_supabase_admin()
     sender_id = get_user_id(current_user)
-    now = datetime.now(timezone.utc).isoformat()
+
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id") or "") != org_id:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    conv = conversation_service.get_or_create_shift_conversation(
+        organization_id=org_id,
+        worker_id=body.recipient_id,
+        shift_id=shift_id,
+        coordinator_id=sender_id,
+        participant_id=str(shift.get("participant_id") or "") or None,
+        participant_name=shift.get("participant_name"),
+    )
+    if not conv:
+        raise HTTPException(status_code=500, detail="Could not open conversation")
+
+    requires_action = body.message_type == "action_required"
     try:
-        resp = supabase.table("shift_messages").insert({
-            "shift_id": shift_id,
-            "sender_id": sender_id,
-            "recipient_id": body.recipient_id,
-            "organization_id": org_id,
-            "message": body.message,
-            "message_type": body.message_type,
-        }).execute()
-        msg = (resp.data or [{}])[0]
-        # Also send a worker notification
-        await _send_worker_notification(
-            supabase, body.recipient_id, org_id,
-            "shift_assigned", shift_id,
-            "Message from Coordinator",
-            body.message[:200],
+        msg = conversation_service.send_conversation_message(
+            conversation_id=str(conv["id"]),
+            sender_id=sender_id,
+            body=body.message,
+            message_type=body.message_type if body.message_type in ("text", "image", "action_required") else "text",
+            requires_action=requires_action,
         )
-        return msg
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Message send failed: {exc}")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not msg:
+        raise HTTPException(status_code=500, detail="Message send failed")
+
+    await notify_conversation_message(
+        recipient_id=body.recipient_id,
+        org_id=org_id,
+        conversation_id=str(conv["id"]),
+        shift_id=shift_id,
+        message_preview=body.message,
+    )
+    return msg
 
 
 @router.get("/shifts/{shift_id}/messages")
@@ -2500,20 +2561,25 @@ async def get_shift_messages(
     shift_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get messages for a shift."""
-    _require_coordinator(current_user)
-    supabase = get_supabase_admin()
+    """Get messages for a shift conversation."""
+    org_id = _require_coordinator(current_user)
+    user_id = get_user_id(current_user)
     try:
-        resp = (
-            supabase.table("shift_messages")
-            .select("*")
+        conv = (
+            get_supabase_admin()
+            .table("conversations")
+            .select("id")
             .eq("shift_id", shift_id)
-            .order("created_at")
+            .eq("organization_id", org_id)
+            .limit(1)
             .execute()
         )
-        return resp.data or []
+        if not conv.data:
+            return []
+        conv_id = conv.data[0]["id"]
+        return conversation_service.get_conversation_messages(str(conv_id), user_id)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Messages fetch failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Messages fetch failed: {exc}") from exc
 
 
 # ── POST /shifts/{id}/flag ────────────────────────────────────────────────────

@@ -6,7 +6,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { setBaseUrl } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
@@ -16,10 +16,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OfflineProvider } from "@/context/OfflineContext";
+import { useExpoPushRegistration, usePushNotificationNavigation } from "@/hooks/useExpoPush";
+import { readMobileAuthToken } from "@/lib/session";
 
 if (process.env.EXPO_PUBLIC_DOMAIN) {
   setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
 }
+
+setAuthTokenGetter(readMobileAuthToken);
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,6 +37,9 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  useExpoPushRegistration();
+  usePushNotificationNavigation();
+
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
