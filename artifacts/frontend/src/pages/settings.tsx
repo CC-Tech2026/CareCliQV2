@@ -39,16 +39,11 @@ import {
 import { AvatarPicker, AvatarDisplay } from "@/components/AvatarPicker";
 
 // ---------------------------------------------------------------------------
-// ABN validation
+// ABN validation — 11 digits only (optional field)
 // ---------------------------------------------------------------------------
-function isValidABN(abn: string): boolean {
+function isValidABNFormat(abn: string): boolean {
   const digits = abn.replace(/\s/g, "");
-  if (!/^\d{11}$/.test(digits)) return false;
-  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
-  const d = digits.split("").map(Number);
-  d[0] -= 1;
-  const sum = d.reduce((acc, v, i) => acc + v * weights[i], 0);
-  return sum % 89 === 0;
+  return digits === "" || /^\d{11}$/.test(digits);
 }
 
 // ---------------------------------------------------------------------------
@@ -767,14 +762,14 @@ export default function Settings() {
   };
 
   const abnDigits = abn.replace(/\s/g, "");
-  const abnValid = abnDigits === "" || isValidABN(abn);
-  const abnHas11Digits = abnDigits.length === 11;
-  const abnError = abnHas11Digits && !isValidABN(abn);
-  const abnShowValid = abnHas11Digits && isValidABN(abn);
+  const abnHas11Digits = /^\d{11}$/.test(abnDigits);
+  const abnValid = isValidABNFormat(abn);
+  const abnError = abnDigits.length > 0 && abnDigits.length >= 11 && !abnHas11Digits;
+  const abnShowValid = abnHas11Digits;
 
   const handleSaveProvider = async () => {
     if (!abnValid) {
-      toast({ title: "Invalid ABN", description: "Please enter a valid 11-digit Australian Business Number.", variant: "destructive" });
+      toast({ title: "Invalid ABN", description: "Please enter exactly 11 digits or leave the field blank.", variant: "destructive" });
       return;
     }
     setIsSavingProvider(true);

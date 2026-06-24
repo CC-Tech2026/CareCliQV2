@@ -6,6 +6,10 @@ class Settings(BaseSettings):
     supabase_url: str = os.environ.get("SUPABASE_URL", "")
     supabase_anon_key: str = os.environ.get("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    # Australian data residency: hosted projects must be in ap-southeast-2 (Sydney).
+    supabase_region: str = os.environ.get("SUPABASE_REGION", "")
+    supabase_access_token: str = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    supabase_region_check: str = os.environ.get("SUPABASE_REGION_CHECK", "enabled")
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
     frontend_base_url: str = os.environ.get(
@@ -42,6 +46,10 @@ class Settings(BaseSettings):
         os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15
     )
     shift_reminder_hours_ahead: int = int(os.environ.get("SHIFT_REMINDER_HOURS_AHEAD", "24") or 24)
+    shift_reminder_minutes_first: int = int(os.environ.get("SHIFT_REMINDER_MINUTES_FIRST", "60") or 60)
+    shift_reminder_minutes_second: int = int(os.environ.get("SHIFT_REMINDER_MINUTES_SECOND", "30") or 30)
+    expo_push_enabled: bool = os.environ.get("EXPO_PUSH_ENABLED", "false").lower() == "true"
+    expo_access_token: str = os.environ.get("EXPO_ACCESS_TOKEN", "")
 
     # Task evidence object storage (CARECLIQV2-230)
     # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below

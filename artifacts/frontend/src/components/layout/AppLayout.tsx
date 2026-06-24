@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
+import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
+import { NotificationRealtimeBridge } from "@/components/worker/NotificationRealtimeBridge";
 import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
@@ -87,6 +89,8 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/my-shifts",    label: "My Shifts",       icon: CalendarDays },
         { href: "/my-clients",   label: "My Clients",      icon: UserRound },
         { href: "/tasks",        label: "Tasks",           icon: ClipboardList },
+        { href: "/worker/messages", label: "Messages",     icon: Bell },
+        { href: "/worker/notifications", label: "Notifications", icon: Bell },
       ],
     },
     {
@@ -516,8 +520,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
+          {isWorker && <NotificationRealtimeBridge />}
+          {isWorker && <NotificationBannerStack />}
+
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto px-5 md:px-8 py-4 pb-24 md:pb-8">
+          <main className="flex-1 overflow-y-auto px-5 md:px-8 py-6 pb-24 md:pb-8">
             {children}
           </main>
 

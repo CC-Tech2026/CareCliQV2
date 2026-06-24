@@ -1,8 +1,7 @@
-"""Worker notification dispatcher — respects user_notification_preferences (CARECLIQV2-259)."""
+"""Worker notification dispatcher — respects user_notification_preferences (CARECLIQV2-259/261)."""
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -11,25 +10,34 @@ from ..core.config import settings
 from ..schemas.alert import AlertCreate
 from . import alert_service
 from .email_service import queue_worker_notification_email
+from .push_service import send_push_to_user
 from .supabase_client import get_supabase_admin
+from . import user_notification_store as notification_store
 
 logger = logging.getLogger(__name__)
 
 NOTIFICATION_EVENTS = (
     "shift_reminder",
     "shift_change",
+    "shift_cancel",
     "coordinator_message",
     "feedback_received",
     "certification_expiry",
+    "task_reminder",
+    "safety_alert",
 )
 NOTIFICATION_CHANNELS = ("push", "email", "sms")
+SAFETY_EVENTS = frozenset({"safety_alert"})
 
 EVENT_ALERT_TYPES = {
     "shift_reminder": "shift_reminder",
     "shift_change": "shift_change",
+    "shift_cancel": "shift_cancel",
     "coordinator_message": "coordinator_message",
     "feedback_received": "feedback",
     "certification_expiry": "credential_expiry",
+    "task_reminder": "task_reminder",
+    "safety_alert": "safety_alert",
 }
 
 
@@ -82,7 +90,32 @@ def get_effective_preferences(user_id: str) -> dict[str, dict[str, bool]]:
     return merged
 
 
+def get_reminder_offsets_minutes(user_id: str) -> tuple[int, int]:
+    """Return (first_reminder_minutes, second_reminder_minutes) from prefs or defaults."""
+    first = settings.shift_reminder_minutes_first
+    second = settings.shift_reminder_minutes_second
+    try:
+        result = (
+            get_supabase_admin()
+            .table("user_notification_preferences")
+            .select("preferences")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = result.data or []
+        if rows:
+            timing = (rows[0].get("preferences") or {}).get("shift_reminder_timing") or {}
+            first = int(timing.get("first_minutes") or first)
+            second = int(timing.get("second_minutes") or second)
+    except Exception:
+        pass
+    return max(1, first), max(1, second)
+
+
 def _channel_enabled(prefs: dict, event: str, channel: str) -> bool:
+    if event in SAFETY_EVENTS and channel == "push":
+        return True
     return bool((prefs.get(event) or {}).get(channel, True))
 
 
@@ -145,6 +178,13 @@ def _record_delivery(user_id: str, event: str, reference_key: str, channel: str)
         logger.debug("Delivery record failed: %s", exc)
 
 
+def _participant_first_name(shift: dict[str, Any]) -> str:
+    name = (shift.get("participant_name") or "").strip()
+    if not name:
+        return "your participant"
+    return name.split()[0]
+
+
 async def notify_worker(
     *,
     user_id: str,
@@ -158,9 +198,15 @@ async def notify_worker(
     action_url: Optional[str] = None,
     participant_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
+    conversation_id: Optional[str] = None,
     alert_type: Optional[str] = None,
+    banner_style: Optional[str] = None,
+    requires_ack: bool = False,
+    payload: Optional[dict[str, Any]] = None,
+    push_priority: str = "default",
 ) -> dict[str, Any]:
-    """Deliver a worker notification via in-app alert and/or email based on saved prefs."""
+    """Deliver via in-app inbox, push, and/or email based on saved prefs."""
     if event not in NOTIFICATION_EVENTS:
         raise ValueError(f"Unsupported notification event: {event}")
 
@@ -177,7 +223,23 @@ async def notify_worker(
         "push": False,
     }
 
-    if _channel_enabled(prefs, event, "push") and not _was_delivered(user_id, event, reference_key, "in_app"):
+    in_app_key = f"{reference_key}:in_app"
+    if not _was_delivered(user_id, event, in_app_key, "in_app"):
+        notification_store.create_user_notification(
+            user_id=user_id,
+            organization_id=org_id,
+            event_type=event,
+            title=title,
+            body=message,
+            severity=severity,
+            shift_id=shift_id,
+            conversation_id=conversation_id,
+            action_url=action_url,
+            payload=payload or {},
+            banner_style=banner_style,
+            requires_ack=requires_ack,
+            reference_key=in_app_key,
+        )
         await alert_service.create_alert(
             AlertCreate(
                 participant_id=participant_id,
@@ -190,8 +252,25 @@ async def notify_worker(
             ),
             org_id=org_id,
         )
-        _record_delivery(user_id, event, reference_key, "in_app")
+        _record_delivery(user_id, event, in_app_key, "in_app")
         results["in_app"] = True
+
+    if _channel_enabled(prefs, event, "push") and not _was_delivered(user_id, event, reference_key, "push"):
+        pushed = await send_push_to_user(
+            user_id,
+            title=title,
+            body=message,
+            data={
+                "event": event,
+                "action_url": action_url,
+                "shift_id": shift_id,
+                "conversation_id": conversation_id,
+            },
+            priority=push_priority if event in SAFETY_EVENTS else "default",
+        )
+        if pushed:
+            _record_delivery(user_id, event, reference_key, "push")
+            results["push"] = True
 
     if _channel_enabled(prefs, event, "email") and not _was_delivered(user_id, event, reference_key, "email"):
         to_email = _lookup_user_email(user_id)
@@ -222,45 +301,168 @@ async def notify_shift_change(
     *,
     shift: dict[str, Any],
     change_summary: str,
+    old_values: Optional[dict[str, Any]] = None,
+    new_values: Optional[dict[str, Any]] = None,
 ) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
     if not worker_id:
         return None
-    participant = shift.get("participant_name") or "your participant"
+    participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
+    shift_id = str(shift.get("id") or "")
+
+    old_str = ""
+    new_str = ""
+    if old_values or new_values:
+        parts = []
+        for key, label in (("scheduled_start", "Start"), ("scheduled_end", "End"), ("location", "Location")):
+            if old_values and key in old_values:
+                parts.append(f"{label}: {_format_shift_time(old_values[key]) if 'start' in key or 'end' in key else old_values[key]}")
+        old_str = " · ".join(parts) if parts else ""
+        parts_new = []
+        for key, label in (("scheduled_start", "Start"), ("scheduled_end", "End"), ("location", "Location")):
+            if new_values and key in new_values:
+                parts_new.append(f"{label}: {_format_shift_time(new_values[key]) if 'start' in key or 'end' in key else new_values[key]}")
+        new_str = " · ".join(parts_new) if parts_new else start_label
+
+    message = (
+        f"{change_summary} with {participant}. "
+        + (f"Was: {old_str}. Now: {new_str}." if old_str else f"New start: {start_label}.")
+    )
     return await notify_worker(
         user_id=worker_id,
         org_id=str(shift.get("organization_id") or "") or None,
         event="shift_change",
         title="Shift schedule updated",
-        message=f"{change_summary} Participant: {participant}. New start: {start_label}.",
-        reference_key=f"shift:{shift.get('id')}:change:{shift.get('updated_at') or start_label}",
+        message=message,
+        reference_key=f"shift:{shift_id}:change:{shift.get('updated_at') or start_label}",
         severity="high",
-        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shift/{shift.get('id')}",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
         participant_id=str(shift.get("participant_id") or "") or None,
-        email_subject=f"Shift updated — {participant}",
+        shift_id=shift_id,
+        banner_style="orange",
+        requires_ack=True,
+        payload={"old": old_values or {}, "new": new_values or {}},
     )
 
 
-async def notify_shift_reminder(*, shift: dict[str, Any]) -> Optional[dict[str, Any]]:
+async def notify_shift_cancelled(*, shift: dict[str, Any]) -> Optional[dict[str, Any]]:
     worker_id = str(shift.get("worker_id") or "")
     if not worker_id:
         return None
-    participant = shift.get("participant_name") or "your participant"
+    participant = _participant_first_name(shift)
     start_label = _format_shift_time(shift.get("scheduled_start"))
     shift_id = str(shift.get("id") or "")
     return await notify_worker(
         user_id=worker_id,
         org_id=str(shift.get("organization_id") or "") or None,
+        event="shift_cancel",
+        title="Shift cancelled",
+        message=f"Shift cancelled: {start_label} with {participant}. Tap for details.",
+        reference_key=f"shift:{shift_id}:cancelled",
+        severity="high",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
+        participant_id=str(shift.get("participant_id") or "") or None,
+        shift_id=shift_id,
+        banner_style="red",
+    )
+
+
+async def notify_shift_reminder(
+    *,
+    shift: dict[str, Any],
+    minutes_before: int = 60,
+) -> Optional[dict[str, Any]]:
+    worker_id = str(shift.get("worker_id") or "")
+    if not worker_id:
+        return None
+
+    if minutes_before <= 35 and shift.get("clocked_in_at"):
+        return None
+
+    shift_id = str(shift.get("id") or "")
+    if minutes_before <= 35 and notification_store.shift_was_viewed(shift_id, worker_id):
+        return None
+
+    participant = _participant_first_name(shift)
+    start_label = _format_shift_time(shift.get("scheduled_start"))
+    return await notify_worker(
+        user_id=worker_id,
+        org_id=str(shift.get("organization_id") or "") or None,
         event="shift_reminder",
         title="Upcoming shift reminder",
-        message=f"You have a shift with {participant} starting at {start_label}.",
-        reference_key=f"shift:{shift_id}:reminder",
+        message=f"Your shift with {participant} starts at {start_label}. Tap to view details.",
+        reference_key=f"shift:{shift_id}:reminder:{minutes_before}m",
         severity="medium",
-        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shift/{shift_id}",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
         participant_id=str(shift.get("participant_id") or "") or None,
+        shift_id=shift_id,
         email_subject=f"Shift reminder — {participant}",
     )
+
+
+async def notify_conversation_message(
+    *,
+    recipient_id: str,
+    org_id: str,
+    conversation_id: str,
+    shift_id: Optional[str],
+    message_preview: str,
+    sender_name: str = "Coordinator",
+) -> dict[str, Any]:
+    preview = message_preview[:60]
+    return await notify_worker(
+        user_id=recipient_id,
+        org_id=org_id,
+        event="coordinator_message",
+        title=f"Message from {sender_name}",
+        message=preview,
+        reference_key=f"conversation:{conversation_id}:{int(datetime.now(timezone.utc).timestamp())}",
+        severity="medium",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/worker/messages?conversation={conversation_id}",
+        conversation_id=conversation_id,
+        shift_id=shift_id,
+    )
+
+
+async def notify_task_alert(
+    *,
+    user_id: str,
+    org_id: str,
+    shift_id: str,
+    title: str,
+    message: str,
+    reference_key: str,
+    banner_style: Optional[str] = None,
+    task_id: Optional[str] = None,
+    notify_coordinator: bool = False,
+) -> dict[str, Any]:
+    result = await notify_worker(
+        user_id=user_id,
+        org_id=org_id,
+        event="task_reminder",
+        title=title,
+        message=message,
+        reference_key=reference_key,
+        severity="high" if banner_style == "red" else "medium",
+        shift_id=shift_id,
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/my-shifts/{shift_id}",
+        banner_style=banner_style,
+        payload={"task_id": task_id} if task_id else {},
+    )
+    if notify_coordinator:
+        for coord_id in _org_coordinator_user_ids(org_id):
+            await notify_worker(
+                user_id=coord_id,
+                org_id=org_id,
+                event="coordinator_message",
+                title=title,
+                message=message,
+                reference_key=f"{reference_key}:coord:{coord_id}",
+                severity="high",
+                shift_id=shift_id,
+            )
+    return result
 
 
 async def notify_feedback_received(

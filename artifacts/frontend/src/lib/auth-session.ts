@@ -1,5 +1,6 @@
 const TOKEN_KEY = "carescribe_token";
 const USER_KEY = "carescribe_user";
+const SUPABASE_SESSION_KEY = "carescribe_supabase_session";
 const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 const REMEMBER_DEVICE_KEY = "carescribe_remember_device";
 const RESTORE_CONTEXT_KEY = "ccq_auth_restore_context";
@@ -9,6 +10,53 @@ export type AuthRestoreContext = {
   userId?: string;
   savedAt: number;
 };
+
+export type StoredSupabaseSession = {
+  access_token: string;
+  refresh_token: string;
+  expires_at: number | null;
+};
+
+export function readStoredSupabaseSession(): StoredSupabaseSession | null {
+  try {
+    const raw =
+      localStorage.getItem(SUPABASE_SESSION_KEY) ??
+      sessionStorage.getItem(SUPABASE_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredSupabaseSession;
+    if (!parsed?.access_token || !parsed?.refresh_token) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function persistSupabaseSession(
+  session: StoredSupabaseSession,
+  rememberDevice: boolean,
+): void {
+  try {
+    const raw = JSON.stringify(session);
+    if (rememberDevice) {
+      localStorage.setItem(SUPABASE_SESSION_KEY, raw);
+      sessionStorage.removeItem(SUPABASE_SESSION_KEY);
+    } else {
+      sessionStorage.setItem(SUPABASE_SESSION_KEY, raw);
+      localStorage.removeItem(SUPABASE_SESSION_KEY);
+    }
+  } catch {
+    /* noop */
+  }
+}
+
+export function clearSupabaseSessionStorage(): void {
+  try {
+    localStorage.removeItem(SUPABASE_SESSION_KEY);
+    sessionStorage.removeItem(SUPABASE_SESSION_KEY);
+  } catch {
+    /* noop */
+  }
+}
 
 export function getRememberDevicePreference(): boolean {
   try {
@@ -73,6 +121,7 @@ export function clearAuthSessionStorage(): void {
     localStorage.removeItem(REAUTH_TOKEN_KEY);
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
+    clearSupabaseSessionStorage();
   } catch {
     /* noop */
   }

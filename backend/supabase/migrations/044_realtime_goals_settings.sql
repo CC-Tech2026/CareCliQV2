@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.shift_messages (
     shift_id        UUID        NOT NULL REFERENCES public.shifts(id) ON DELETE CASCADE,
     sender_id       UUID        NOT NULL REFERENCES public.users(id),
     recipient_id    UUID        NOT NULL REFERENCES public.users(id),
-    organization_id UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     message         TEXT        NOT NULL,
     message_type    TEXT        NOT NULL DEFAULT 'text'
                     CHECK (message_type IN ('text','request_photo','task_suggestion','flag_issue','emergency')),
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.shift_messages (
 CREATE TABLE IF NOT EXISTS public.ndis_goals (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     participant_id   UUID        NOT NULL REFERENCES public.patients(id)      ON DELETE CASCADE,
-    organization_id  UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id  UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     created_by       UUID        REFERENCES public.users(id)                  ON DELETE SET NULL,
     name             TEXT        NOT NULL,
     goal_area        TEXT        NOT NULL DEFAULT 'daily_living'
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.ndis_goals (
 CREATE TABLE IF NOT EXISTS public.participant_task_templates (
     id                         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     participant_id             UUID        NOT NULL REFERENCES public.patients(id)      ON DELETE CASCADE,
-    organization_id            UUID        NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    organization_id            UUID        NOT NULL REFERENCES public.organizations(organization_id) ON DELETE CASCADE,
     created_by                 UUID        REFERENCES public.users(id) ON DELETE SET NULL,
     name                       TEXT        NOT NULL,
     description                TEXT,
