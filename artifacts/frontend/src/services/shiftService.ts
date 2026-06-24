@@ -69,7 +69,7 @@ export type ShiftTask = {
 export type ShiftSupportInstruction = {
   category: string;
   body: string;
-  critical?: string;
+  critical?: string | boolean;
   image_url?: string;
 };
 
@@ -139,6 +139,23 @@ export type ParticipantContext = {
   communication_guidance?: string | null;
 };
 
+/** Legacy string labels or structured goals from NDIS plan (CARECLIQV2-90). */
+export type ActiveGoal =
+  | string
+  | {
+      id?: string;
+      title?: string;
+      description?: string;
+      category?: string;
+      priority?: number;
+      worker_focus?: string[];
+    };
+
+export function formatActiveGoalLabel(goal: ActiveGoal): string {
+  if (typeof goal === "string") return goal;
+  return goal.title?.trim() || goal.description?.trim() || "Goal";
+}
+
 export type WorkerShift = {
   id: string;
   participant_id?: string;
@@ -175,7 +192,7 @@ export type WorkerShift = {
   completion_summary?: ShiftCompletionSummary;
   participant_dob?: string;
   participant_gender?: string;
-  active_goals?: string[];
+  active_goals?: ActiveGoal[];
   tasks?: ShiftTask[];
   session_id?: string | null;
   session_status?: string | null;

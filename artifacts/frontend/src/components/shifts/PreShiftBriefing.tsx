@@ -1,6 +1,7 @@
 import { ChevronDown, ClipboardList, Pill, ShieldAlert, Target, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkerShift } from "@/services/shiftService";
+import { formatActiveGoalLabel } from "@/services/shiftService";
 import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
 type Props = {
@@ -58,7 +59,7 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
                 {shift.active_goals.map((goal, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm font-semibold" style={{ color: TEXT }}>
                     <Target size={14} className="mt-0.5 shrink-0" style={{ color: PLUM }} />
-                    {goal}
+                    {formatActiveGoalLabel(goal)}
                   </li>
                 ))}
               </ul>

@@ -137,6 +137,9 @@ class SessionNoteItem(BaseModel):
     created_at: Optional[str] = None
     auto_saved_at: Optional[str] = None
     synced: bool = False
+    note_type: Optional[str] = None
+    file_name: Optional[str] = None
+    attachment_urls: Optional[list[str]] = None
 
 
 class SessionNotesSyncBody(BaseModel):
@@ -600,7 +603,10 @@ async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_cu
     _require_worker(current_user)
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
-    shift = shift_service.get_shift_detail_for_worker(shift_id, worker_id, org_id)
+    try:
+        shift = shift_service.get_shift_detail_for_worker(shift_id, worker_id, org_id)
+    except shift_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     if not shift:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
     return shift
@@ -675,6 +681,13 @@ async def worker_clock_in(
             qr_token=body.qr_token,
             client_timestamp=body.client_timestamp,
         )
+    except shift_service.ShiftAlreadyClockedIn as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except shift_service.ShiftNotScheduledToday as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         message = str(exc)
         status_code = (

@@ -4,8 +4,10 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
+import type { ShiftTask } from "@/services/shiftService";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { apiFetch } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,7 +54,10 @@ type TicketId =
   | "CARECLIQV2-36"
   | "CARECLIQV2-87"
   | "CARECLIQV2-35"
-  | "CARECLIQV2-34";
+  | "CARECLIQV2-34"
+  | "CARECLIQV2-90"
+  | "CARECLIQV2-75"
+  | "CARECLIQV2-217";
 
 type TicketDef = {
   id: TicketId;
@@ -126,7 +131,70 @@ const TICKETS: TicketDef[] = [
       "Weekly org pattern job: low compliance pairs, incident escalation, refused activity without de-escalation; coordinator Compliance Centre UI.",
     keywords: "pattern detection ai coordinator compliance dashboard weekly dismiss",
   },
+  {
+    id: "CARECLIQV2-90",
+    title: "Shift briefing GET + clock-in API",
+    description:
+      "GET /api/worker/shifts/:id hydrates safety, active goals, coordinator notes. Clock-in returns 403/409/422.",
+    keywords: "shift briefing clock-in active goals health alerts",
+  },
+  {
+    id: "CARECLIQV2-75",
+    title: "Progress Evidence 5th criterion",
+    description:
+      "POST /api/ai/assess-note adds 20pt Progress Evidence from progress_delta; score capped at 80% without it.",
+    keywords: "assess-note compliance progress_delta billing 80 cap",
+  },
+  {
+    id: "CARECLIQV2-217",
+    title: "Mandatory vs optional task visuals",
+    description:
+      "Task states: not started → in progress → evidence required → complete (gray/amber/orange/green).",
+    keywords: "task checklist mandatory optional evidence visual",
+  },
 ];
+
+const DEMO_TASKS: ShiftTask[] = [
+  {
+    task_id: "demo_mandatory_hygiene",
+    type: "default",
+    label: "Personal Hygiene",
+    description: "Showering, grooming",
+    completed: false,
+    order: 1,
+    mandatory: true,
+    goal_title: "Develop Daily Living Skills",
+  },
+  {
+    task_id: "demo_optional_community",
+    type: "default",
+    label: "Community Access",
+    description: "Outing or social activity",
+    completed: true,
+    completed_at: new Date().toISOString(),
+    order: 2,
+    mandatory: false,
+    goal_title: "Community Participation",
+    note: "Visited local café — participant ordered independently.",
+    has_photo: true,
+    photo_evidence: "demo-photo",
+  },
+];
+
+function TaskVisualDemo() {
+  const [tasks, setTasks] = useState(DEMO_TASKS);
+  return (
+    <div className="rounded-xl border p-4" style={{ borderColor: BORDER }}>
+      <ShiftTaskChecklist
+        shiftId="demo-shift"
+        sessionId="demo-session"
+        participantName="Demo Participant"
+        tasks={tasks}
+        onTasksChange={setTasks}
+      />
+    </div>
+  );
+}
 
 type ApiResult = {
   ok: boolean;
@@ -169,6 +237,16 @@ type TestContext = {
   setPatternRunResult: (r: ApiResult | null) => void;
   patternListResult: ApiResult | null;
   setPatternListResult: (r: ApiResult | null) => void;
+  shiftId: string;
+  setShiftId: (v: string) => void;
+  shiftBriefResult: ApiResult | null;
+  setShiftBriefResult: (r: ApiResult | null) => void;
+  clockInResult: ApiResult | null;
+  setClockInResult: (r: ApiResult | null) => void;
+  assessNoteResult: ApiResult | null;
+  setAssessNoteResult: (r: ApiResult | null) => void;
+  withProgressDelta: boolean;
+  setWithProgressDelta: (v: boolean) => void;
 };
 
 function readUnlocked(): boolean {
@@ -1082,6 +1160,161 @@ function TicketTestPanel({ ticketId, ctx }: { ticketId: TicketId; ctx: TestConte
         </div>
       );
 
+    case "CARECLIQV2-90":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <div>
+            <Label className="text-xs text-muted-foreground">Shift UUID</Label>
+            <Input
+              value={ctx.shiftId}
+              onChange={(e) => ctx.setShiftId(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => ctx.setShiftId(DEMO_JAMES_SHIFT)}
+          >
+            Use James Chen demo shift
+          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.shiftId || ctx.busy === "brief90"}
+              onClick={() =>
+                ctx.run("brief90", async () => {
+                  const r = await callApi(`/api/worker/shifts/${ctx.shiftId}`);
+                  ctx.setShiftBriefResult(r);
+                })
+              }
+            >
+              {ctx.busy === "brief90" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              GET shift briefing
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!ctx.shiftId || ctx.busy === "clock90"}
+              onClick={() =>
+                ctx.run("clock90", async () => {
+                  const r = await callApi(`/api/worker/shifts/${ctx.shiftId}/clock-in`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ method: "gps", location: { lat: -34.92, lng: 138.6 } }),
+                  });
+                  ctx.setClockInResult(r);
+                })
+              }
+            >
+              {ctx.busy === "clock90" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              POST clock-in (expect 409 if already clocked)
+            </Button>
+            {ctx.shiftId && (
+              <Link href={`/my-shifts/${ctx.shiftId}`}>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Open My Shift <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            )}
+          </div>
+          <ResultBox title="Shift briefing" result={ctx.shiftBriefResult} />
+          <ResultBox title="Clock-in" result={ctx.clockInResult} />
+          <p className="text-xs" style={{ color: MUTED }}>
+            Expect <code className="text-xs">active_goals</code>,{" "}
+            <code className="text-xs">health_alerts</code>,{" "}
+            <code className="text-xs">coordinator_notes</code>,{" "}
+            <code className="text-xs">primary_contact</code> in briefing. Wrong worker → 403. Already clocked → 409.
+            Wrong day → 422 &quot;Shift not scheduled for today&quot;.
+          </p>
+        </div>
+      );
+
+    case "CARECLIQV2-75":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <SessionField ctx={ctx} />
+          <div>
+            <Label className="text-xs text-muted-foreground">Note text for assess-note</Label>
+            <textarea
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm min-h-[100px]"
+              value={ctx.noteText}
+              onChange={(e) => ctx.setNoteText(e.target.value)}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ctx.withProgressDelta}
+              onChange={(e) => ctx.setWithProgressDelta(e.target.checked)}
+            />
+            Include sample progress_delta (20pt Progress Evidence)
+          </label>
+          <Button
+            size="sm"
+            disabled={ctx.busy === "assess75"}
+            onClick={() =>
+              ctx.run("assess75", async () => {
+                const progress_delta = ctx.withProgressDelta
+                  ? [{
+                      goal_id: "demo-goal",
+                      prompt_level: "partial",
+                      independence_rating: 3,
+                      skill_step: "meal prep",
+                      delta_summary: "Improved from full to partial prompting during lunch.",
+                    }]
+                  : [];
+                const r = await callApi("/api/ai/assess-note", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    note_text: ctx.noteText,
+                    session_started: true,
+                    session_id: ctx.sessionId || undefined,
+                    progress_delta,
+                    goals: [{ title: "Develop daily living skills", description: "Meal preparation" }],
+                  }),
+                });
+                ctx.setAssessNoteResult(r);
+              })
+            }
+            style={{ background: PLUM }}
+            className="text-white"
+          >
+            {ctx.busy === "assess75" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            POST /api/ai/assess-note
+          </Button>
+          <ResultBox title="Assess note" result={ctx.assessNoteResult} />
+          <p className="text-xs" style={{ color: MUTED }}>
+            Without progress_delta: score capped at 80. With delta: up to 100. Billing threshold remains 75.
+            Check <code className="text-xs">breakdown.progress_evidence</code>.
+          </p>
+        </div>
+      );
+
+    case "CARECLIQV2-217":
+      return (
+        <div className="space-y-4">
+          <TicketHeader ticket={ticket} />
+          <p className="text-sm" style={{ color: MUTED }}>
+            Interactive demo — mandatory tasks show red warning icon and orange &quot;evidence required&quot; state.
+            Optional tasks use lighter styling. Complete with evidence turns green.
+          </p>
+          <TaskVisualDemo />
+          {ctx.shiftId && (
+            <Link href={`/my-shifts/${ctx.shiftId}`}>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                Open live shift checklist <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+        </div>
+      );
+
     default:
       return null;
   }
@@ -1194,6 +1427,11 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
   const [complianceOverviewResult, setComplianceOverviewResult] = useState<ApiResult | null>(null);
   const [patternRunResult, setPatternRunResult] = useState<ApiResult | null>(null);
   const [patternListResult, setPatternListResult] = useState<ApiResult | null>(null);
+  const [shiftId, setShiftId] = useState(DEMO_JAMES_SHIFT);
+  const [shiftBriefResult, setShiftBriefResult] = useState<ApiResult | null>(null);
+  const [clockInResult, setClockInResult] = useState<ApiResult | null>(null);
+  const [assessNoteResult, setAssessNoteResult] = useState<ApiResult | null>(null);
+  const [withProgressDelta, setWithProgressDelta] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -1266,6 +1504,16 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
     setPatternRunResult,
     patternListResult,
     setPatternListResult,
+    shiftId,
+    setShiftId,
+    shiftBriefResult,
+    setShiftBriefResult,
+    clockInResult,
+    setClockInResult,
+    assessNoteResult,
+    setAssessNoteResult,
+    withProgressDelta,
+    setWithProgressDelta,
   };
 
   return (

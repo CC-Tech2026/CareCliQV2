@@ -309,6 +309,10 @@ export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
   return tasks.some((t) => !t.marked_na && isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
 }
 
+export function incompleteMandatoryTasks(tasks: ShiftTask[]) {
+  return tasks.filter((t) => !t.marked_na && isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
+}
+
 export function mandatoryTaskSatisfied(task: ShiftTask) {
   if (!task.completed) return false;
   if (hasStrongTaskEvidence(task)) return true;

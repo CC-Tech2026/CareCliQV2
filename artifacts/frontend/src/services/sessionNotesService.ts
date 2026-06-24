@@ -1,5 +1,7 @@
 import { jsonFetch } from "@/services/http";
 
+export type SessionNoteType = "text" | "voice" | "photo" | "file";
+
 export type SessionNoteRecord = {
   note_id: string;
   id?: string;
@@ -10,6 +12,9 @@ export type SessionNoteRecord = {
   created_at?: string;
   auto_saved_at?: string;
   synced?: boolean;
+  note_type?: SessionNoteType;
+  file_name?: string | null;
+  attachment_urls?: string[];
 };
 
 export type SyncSessionNotesResponse = {

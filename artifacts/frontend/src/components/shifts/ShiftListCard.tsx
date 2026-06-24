@@ -20,7 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
-import { startShiftSession, type WorkerShift } from "@/services/shiftService";
+import { startShiftSession, formatActiveGoalLabel, type WorkerShift } from "@/services/shiftService";
 import {
   shiftInitials,
   shiftDurationMinutes,
@@ -301,7 +301,7 @@ export function ShiftListCard({ shift }: Props) {
                 style={{ color: PLUM }}
               >
                 <Star size={12} className="text-amber-500" fill="currentColor" />
-                {goal}
+                {formatActiveGoalLabel(goal)}
               </span>
             ))}
           </div>
