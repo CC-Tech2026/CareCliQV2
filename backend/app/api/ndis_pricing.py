@@ -38,7 +38,7 @@ class PriceResolutionResponse(BaseModel):
     day_type: Optional[str] = None
     time_type: Optional[str] = None
     support_intensity: Optional[str] = None
-    support_purpose: str
+    support_purpose: Optional[str] = None
 
 
 class LoadScheduleRequest(BaseModel):
