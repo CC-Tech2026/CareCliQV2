@@ -1,4 +1,5 @@
 import os
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -7,6 +8,13 @@ class Settings(BaseSettings):
     supabase_anon_key: str = os.environ.get("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
+    
+    @field_validator("supabase_url", "supabase_anon_key", "supabase_service_role_key", "openai_api_key", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
     frontend_base_url: str = os.environ.get(
         "FRONTEND_BASE_URL",

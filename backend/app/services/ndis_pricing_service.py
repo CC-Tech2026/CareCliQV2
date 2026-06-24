@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
@@ -12,6 +14,8 @@ from fastapi import HTTPException, status
 from .supabase_client import get_supabase_admin
 from ..core.access import get_user_id, get_user_organization_id, get_user_role
 from . import audit_service
+
+logger = logging.getLogger(__name__)
 
 
 # ── Price Resolution ───────────────────────────────────────────────────────
@@ -49,6 +53,7 @@ async def resolve_price(
     def _query_db():
         url = f"{settings.supabase_url}/rest/v1/ndis_price_items"
         headers = {
+            "apikey": settings.supabase_service_role_key,  # PostgREST requires apikey header
             "Authorization": f"Bearer {settings.supabase_service_role_key}",
             "Content-Type": "application/json",
         }
@@ -62,15 +67,30 @@ async def resolve_price(
             "limit": "1",
         }
         
+        logger.info(f"[resolve_price] Querying PostgREST: item_code={item_code}, org_id={org_id}, date={as_of_date}")
+        
         try:
             response = requests.get(url, params=query_params, headers=headers, timeout=10)
-            response.raise_for_status()
+            logger.info(f"[resolve_price] Status: {response.status_code}")
+            
+            if response.status_code != 200:
+                logger.warning(f"[resolve_price] Non-200 response: {response.text}")
+                return None
+            
             data = response.json()
-            return data[0] if data else None
+            logger.info(f"[resolve_price] Got {len(data)} items from PostgREST")
+            
+            if not data:
+                logger.warning(f"[resolve_price] No items found")
+                return None
+            
+            logger.info(f"[resolve_price] Returning item: {data[0].get('item_code')}")
+            return data[0]
         except requests.exceptions.RequestException as e:
-            print(f"DEBUG: Request error: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"[resolve_price] Request error: {e}", exc_info=True)
+            return None
+        except Exception as e:
+            logger.error(f"[resolve_price] Unexpected error: {e}", exc_info=True)
             return None
     
     item = await asyncio.to_thread(_query_db)
