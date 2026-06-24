@@ -61,12 +61,15 @@ export type ShiftTask = {
   voice_evidence?: string | null;
   photo_thumbnails?: string[];
   voice_duration_seconds?: number | null;
+  marked_na?: boolean;
+  na_reason?: string | null;
+  na_marked_at?: string | null;
 };
 
 export type ShiftSupportInstruction = {
   category: string;
   body: string;
-  critical?: string;
+  critical?: string | boolean;
   image_url?: string;
 };
 
@@ -77,6 +80,7 @@ export type ShiftCompletionSummary = {
   mandatory_total: number;
   session_id?: string | null;
   notes_submitted?: boolean;
+  validation?: import("@/lib/shift-validation").ShiftValidationResult & { force_ended?: boolean };
 };
 
 export type ParticipantProfile = {
@@ -135,6 +139,23 @@ export type ParticipantContext = {
   communication_guidance?: string | null;
 };
 
+/** Legacy string labels or structured goals from NDIS plan (CARECLIQV2-90). */
+export type ActiveGoal =
+  | string
+  | {
+      id?: string;
+      title?: string;
+      description?: string;
+      category?: string;
+      priority?: number;
+      worker_focus?: string[];
+    };
+
+export function formatActiveGoalLabel(goal: ActiveGoal): string {
+  if (typeof goal === "string") return goal;
+  return goal.title?.trim() || goal.description?.trim() || "Goal";
+}
+
 export type WorkerShift = {
   id: string;
   participant_id?: string;
@@ -171,12 +192,13 @@ export type WorkerShift = {
   completion_summary?: ShiftCompletionSummary;
   participant_dob?: string;
   participant_gender?: string;
-  active_goals?: string[];
+  active_goals?: ActiveGoal[];
   tasks?: ShiftTask[];
   session_id?: string | null;
   session_status?: string | null;
   session_started_at?: string | null;
   service_category?: string;
+  office_contact_number?: string | null;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -375,9 +397,12 @@ export type ShiftVisitNote = {
   id: string;
   shift_id: string;
   session_id?: string | null;
+  task_id?: string | null;
+  goal_id?: string | null;
   content: string;
   category?: string | null;
   created_at: string;
+  auto_saved_at?: string | null;
 };
 
 export type ShiftOfficeMessage = {
@@ -418,7 +443,11 @@ export function listShiftMessages(shiftId: string) {
 
 export function sendShiftOfficeMessage(
   shiftId: string,
-  body: { message: string; priority?: "normal" | "urgent" | "emergency" },
+  body: {
+    message: string;
+    priority?: "normal" | "urgent" | "emergency";
+    attachment_data?: string[];
+  },
 ) {
   return jsonFetch<ShiftOfficeMessage>(`/api/worker/shifts/${shiftId}/messages`, {
     method: "POST",

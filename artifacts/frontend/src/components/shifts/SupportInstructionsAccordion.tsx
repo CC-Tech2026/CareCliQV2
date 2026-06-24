@@ -45,7 +45,7 @@ function InstructionBody({ body, sectionCritical }: { body: string; sectionCriti
 
 function InstructionSection({ section, defaultOpen }: { section: ShiftSupportInstruction; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
-  const critical = section.critical === "true";
+  const critical = section.critical === "true" || section.critical === true;
 
   return (
     <div
@@ -118,7 +118,7 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
               <InstructionSection
                 key={`${section.category}-${i}`}
                 section={section}
-                defaultOpen={i === 0 || section.critical === "true"}
+                defaultOpen={i === 0 || section.critical === "true" || section.critical === true}
               />
             ))}
           </div>

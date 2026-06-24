@@ -8,6 +8,9 @@ export const MUTED = "#7A6A9E";
 export const BORDER = "#E2DEF2";
 export const SOFT = "#F5F3FC";
 
+/** Scrollable body for dashboard widgets with long lists */
+export const WIDGET_SCROLL = "max-h-72 overflow-y-auto overscroll-y-contain pr-1";
+
 export const STATE_STYLES: Record<
   ShiftVisualState,
   { border: string; badge: string; label: string; avatar: string }
@@ -303,13 +306,17 @@ export function resolveActiveShiftTasks(shiftTasks: ShiftTask[] | undefined, loc
 }
 
 export function hasIncompleteMandatoryTasks(tasks: ShiftTask[]) {
-  return tasks.some((t) => isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
+  return tasks.some((t) => !t.marked_na && isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
+}
+
+export function incompleteMandatoryTasks(tasks: ShiftTask[]) {
+  return tasks.filter((t) => !t.marked_na && isMandatoryTask(t) && !mandatoryTaskSatisfied(t));
 }
 
 export function mandatoryTaskSatisfied(task: ShiftTask) {
   if (!task.completed) return false;
   if (hasStrongTaskEvidence(task)) return true;
-  const note = (task.note || task.context_note || "").trim();
+  const note = (task.note || "").trim();
   return note.length >= 20;
 }
 
@@ -353,7 +360,7 @@ export function resolveEffectiveTaskNote(
 export function mandatoryTaskState(task: ShiftTask) {
   if (!isMandatoryTask(task)) return "optional" as const;
   if (mandatoryTaskSatisfied(task)) return "satisfied" as const;
-  const hasDraft = Boolean(task.note?.trim() || task.context_note?.trim() || hasStrongTaskEvidence(task));
+  const hasDraft = Boolean(task.note?.trim() || hasStrongTaskEvidence(task));
   if (hasDraft) return "draft" as const;
   return "missing" as const;
 }

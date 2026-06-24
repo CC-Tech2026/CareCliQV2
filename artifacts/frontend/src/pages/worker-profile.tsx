@@ -7,6 +7,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getDesktopNotificationPermission,
+  getDesktopNotificationSupport,
+  isDesktopNotificationsEnabled,
+  requestDesktopNotificationPermission,
+  setDesktopNotificationsEnabled,
+} from "@/lib/desktop-notifications";
 import { useAuth } from "@/contexts/AuthContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import { getDeviceId } from "@/lib/device-id";
@@ -74,6 +81,29 @@ export default function WorkerProfile() {
 
   const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences | null>(null);
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [desktopPermission, setDesktopPermission] = useState(() => getDesktopNotificationPermission());
+  const [desktopEnabled, setDesktopEnabled] = useState(() => isDesktopNotificationsEnabled());
+
+  async function handleEnableDesktopNotifications() {
+    const result = await requestDesktopNotificationPermission();
+    setDesktopPermission(result);
+    setDesktopEnabled(result === "granted");
+    if (result === "granted") {
+      toast({ title: "Desktop notifications enabled" });
+    } else if (result === "denied") {
+      toast({
+        title: "Desktop notifications blocked",
+        description: "Allow notifications in your browser site settings.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function handleDisableDesktopNotifications() {
+    setDesktopNotificationsEnabled(false);
+    setDesktopEnabled(false);
+    toast({ title: "Desktop notifications disabled on this device" });
+  }
 
   useEffect(() => {
     let active = true;
@@ -412,6 +442,47 @@ export default function WorkerProfile() {
             </Button>
           </div>
         </form>
+      </section>
+
+      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="mb-5">
+          <h2 className="text-lg font-bold text-[#1E1640]">Desktop notifications</h2>
+          <p className="text-sm text-[#7A6A9E]">
+            Show system alerts (like Slack) when the tab is in the background or for urgent updates.
+          </p>
+        </div>
+        {!getDesktopNotificationSupport() ? (
+          <p className="text-sm text-[#7A6A9E]">Not supported in this browser.</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm font-semibold text-[#1E1640]">
+              {desktopPermission === "granted" && desktopEnabled
+                ? "Enabled"
+                : desktopPermission === "denied"
+                  ? "Blocked by browser"
+                  : "Not enabled"}
+            </p>
+            {desktopPermission !== "granted" || !desktopEnabled ? (
+              <Button
+                type="button"
+                className="rounded-xl"
+                style={{ background: PLUM }}
+                onClick={() => void handleEnableDesktopNotifications()}
+              >
+                Enable desktop notifications
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={handleDisableDesktopNotifications}
+              >
+                Disable on this device
+              </Button>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>

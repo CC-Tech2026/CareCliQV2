@@ -75,7 +75,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
             {format(parseISO(entry.time), "hh:mm a")}
           </span>
           <span
-            className="rounded-full bg-[#F1EAFF] px-2 py-0.5 text-[10px] font-black"
+            className="rounded-full bg-[#F1EAFF] px-2 py-0.5 text-[10px]"
             style={{ color: PLUM }}
           >
             {entry.taskLabel}
@@ -88,7 +88,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
             {entryActionLabel(entry)}
           </p>
         ) : (
-          <p className="mt-1.5 text-sm font-black leading-snug" style={{ color: TEXT }}>
+          <p className="mt-1.5 text-sm leading-snug" style={{ color: TEXT }}>
             {entryActionLabel(entry)}
           </p>
         )}

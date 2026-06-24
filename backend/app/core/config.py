@@ -7,6 +7,10 @@ class Settings(BaseSettings):
     supabase_url: str = os.environ.get("SUPABASE_URL", "")
     supabase_anon_key: str = os.environ.get("SUPABASE_ANON_KEY", "")
     supabase_service_role_key: str = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    # Australian data residency: hosted projects must be in ap-southeast-2 (Sydney).
+    supabase_region: str = os.environ.get("SUPABASE_REGION", "")
+    supabase_access_token: str = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
+    supabase_region_check: str = os.environ.get("SUPABASE_REGION_CHECK", "enabled")
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     
     @field_validator("supabase_url", "supabase_anon_key", "supabase_service_role_key", "openai_api_key", mode="before")
@@ -28,6 +32,7 @@ class Settings(BaseSettings):
     # Google Cloud Translation
     google_cloud_translation_api_key: str = os.environ.get("GOOGLE_CLOUD_TRANSLATION_API_KEY", "")
     google_translate_url: str = os.environ.get("GOOGLE_TRANSLATE_URL", "https://translation.googleapis.com/language/translate/v2")
+    google_maps_api_key: str = os.environ.get("GOOGLE_MAPS_API_KEY", "")
     # AES-256 GCM PII encryption (Privacy Act 2026)
     # Set PII_ENCRYPTION_ENABLED=true and PII_ENCRYPTION_KEY=<32-byte base64> to activate.
     # Generate a key: python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
@@ -49,6 +54,10 @@ class Settings(BaseSettings):
         os.environ.get("NOTIFICATION_SCHEDULER_INTERVAL_MINUTES", "15") or 15
     )
     shift_reminder_hours_ahead: int = int(os.environ.get("SHIFT_REMINDER_HOURS_AHEAD", "24") or 24)
+    shift_reminder_minutes_first: int = int(os.environ.get("SHIFT_REMINDER_MINUTES_FIRST", "60") or 60)
+    shift_reminder_minutes_second: int = int(os.environ.get("SHIFT_REMINDER_MINUTES_SECOND", "30") or 30)
+    expo_push_enabled: bool = os.environ.get("EXPO_PUSH_ENABLED", "false").lower() == "true"
+    expo_access_token: str = os.environ.get("EXPO_ACCESS_TOKEN", "")
 
     # Task evidence object storage (CARECLIQV2-230)
     # Provider: supabase (default) | s3 | azure — or set *_ENABLED flags below

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
@@ -17,9 +18,23 @@ from .check_in_service import (
     verify_qr_token_for_shift,
 )
 from .session_service import _prepare_session_payload
+from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
+
+
+class ShiftAccessDenied(Exception):
+    """Worker or organisation does not match the shift row (CARECLIQV2-90)."""
+
+
+class ShiftAlreadyClockedIn(Exception):
+    """Shift already has clocked_in_at set (CARECLIQV2-90)."""
+
+
+class ShiftNotScheduledToday(Exception):
+    """Shift scheduled_start is not on the current calendar day (CARECLIQV2-90)."""
+
 
 DEFAULT_SHIFT_TASKS: list[dict[str, Any]] = [
     {
@@ -249,6 +264,25 @@ def _alerts_from_shift_text(value: Any) -> list[dict[str, Any]]:
     return []
 
 
+def validate_shift_scheduled_today(
+    scheduled_start: str,
+    *,
+    today: Optional[date] = None,
+) -> None:
+    """Reject clock-in when the shift is not scheduled for today (CARECLIQV2-90)."""
+    if not scheduled_start:
+        return
+    try:
+        start = datetime.fromisoformat(str(scheduled_start).replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        shift_day = start.date()
+    except ValueError:
+        return
+    if shift_day != (today or date.today()):
+        raise ShiftNotScheduledToday("Shift not scheduled for today")
+
+
 def _fetch_patient_risk_fields(participant_id: str, organization_id: str) -> dict[str, Any]:
     if not participant_id:
         return {}
@@ -256,7 +290,10 @@ def _fetch_patient_risk_fields(participant_id: str, organization_id: str) -> dic
         resp = (
             get_supabase_admin()
             .table("patients")
-            .select("allergies, medical_alerts, current_conditions, behaviour_support_plan")
+            .select(
+                "allergies, medical_alerts, current_conditions, behaviour_support_plan, "
+                "risk_triggers, risk_management_plan"
+            )
             .eq("id", participant_id)
             .eq("organization_id", organization_id)
             .limit(1)
@@ -378,8 +415,87 @@ def build_structured_health_alerts(
                     instructions=patient_allergies,
                     severity="critical",
                 ))
+        for trigger in _normalise_risk_text_list(patient.get("risk_triggers")):
+            add(_make_risk_alert(
+                _infer_risk_type(trigger),
+                title="Risk trigger",
+                description=trigger,
+                instructions=trigger,
+                severity="important",
+            ))
+        plan_text = str(patient.get("risk_management_plan") or "").strip()
+        if plan_text:
+            add(_make_risk_alert(
+                "other",
+                title="Risk management plan",
+                description=plan_text[:280],
+                instructions=plan_text,
+                severity="important",
+            ))
 
     return alerts
+
+
+def _normalise_risk_text_list(raw: Any) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(item).strip() for item in raw if str(item).strip()]
+    if isinstance(raw, str):
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+    return []
+
+
+def _fetch_active_goals_for_participant(
+    participant_id: str,
+    organization_id: str,
+) -> list[dict[str, Any]]:
+    """Active NDIS goals for shift briefing (CARECLIQV2-90)."""
+    if not participant_id:
+        return []
+    try:
+        plan_resp = (
+            get_supabase_admin()
+            .table("ndis_plans")
+            .select("id")
+            .eq("patient_id", participant_id)
+            .eq("status", "active")
+            .order("plan_start", desc=True)
+            .limit(1)
+            .execute()
+        )
+        plan_rows = plan_resp.data or []
+        if not plan_rows:
+            return []
+        plan_id = plan_rows[0].get("id")
+        if not plan_id:
+            return []
+        goals_resp = (
+            get_supabase_admin()
+            .table("patient_goals")
+            .select("id, title, description, category, status, priority, worker_focus")
+            .eq("plan_id", plan_id)
+            .eq("status", "active")
+            .order("priority", desc=False)
+            .order("created_at")
+            .execute()
+        )
+        goals: list[dict[str, Any]] = []
+        for row in goals_resp.data or []:
+            goals.append({
+                "id": row.get("id"),
+                "title": row.get("title") or row.get("description") or "",
+                "description": row.get("description") or row.get("title") or "",
+                "category": row.get("category") or "general",
+                "priority": row.get("priority"),
+                "worker_focus": row.get("worker_focus") or [],
+            })
+        return goals
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        logger.debug("active goals lookup failed: %s", exc)
+        return []
 
 
 def build_participant_risks(shift: dict[str, Any], organization_id: str) -> list[dict[str, Any]]:
@@ -589,6 +705,28 @@ def _should_keep_shift_session_link(shift: dict) -> bool:
     return _session_counts_as_active(_get_session_for_shift(shift))
 
 
+def _org_contact_number(organization_id: str) -> Optional[str]:
+    if not organization_id:
+        return None
+    try:
+        result = (
+            get_supabase_admin()
+            .table("organizations")
+            .select("contact_number")
+            .eq("organization_id", organization_id)
+            .maybe_single()
+            .execute()
+        )
+        row = result.data if result else None
+        if isinstance(row, dict):
+            value = str(row.get("contact_number") or "").strip()
+            return value or None
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            logger.debug("org contact lookup failed: %s", exc)
+    return None
+
+
 def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str, Any]:
     scheduled_start = shift.get("scheduled_start")
     scheduled_end = shift.get("scheduled_end")
@@ -645,6 +783,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "clock_in_method": shift.get("clock_in_method"),
         "clock_in_location": shift.get("clock_in_location"),
         "clock_in_verified": bool(shift.get("clock_in_verified")),
+        "office_contact_number": _org_contact_number(str(shift.get("organization_id") or "")),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
     return payload
@@ -1108,17 +1247,24 @@ def get_shift_detail_for_worker(
     if not shift:
         return None
     if str(shift.get("worker_id") or "") != str(worker_id):
-        return None
+        raise ShiftAccessDenied("You do not have access to this shift.")
     if str(shift.get("organization_id") or "") != str(organization_id):
-        return None
+        raise ShiftAccessDenied("Shift does not belong to your organisation.")
     session = _get_session_for_shift(shift)
     payload = _shift_card_payload(shift, session)
-    ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
+    participant_id = str(shift.get("participant_id") or "")
+    ctx = _fetch_participant_context(participant_id, organization_id)
     payload.update(ctx)
     _enrich_shift_participant_context(payload, shift)
     payload["support_instructions"] = build_support_instructions(shift, payload)
     payload["health_alerts"] = build_participant_risks(shift, organization_id)
     payload["has_risk_alerts"] = bool(payload["health_alerts"])
+    active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
+    if active_goals:
+        payload["active_goals"] = active_goals
+    primary_contact = (payload.get("profile") or {}).get("emergency_contact")
+    if primary_contact:
+        payload["primary_contact"] = primary_contact
     return payload
 
 
@@ -1299,28 +1445,30 @@ def clock_in_shift(
     if shift.get("status") == "completed":
         raise ValueError("Shift is already completed.")
 
+    if shift.get("clocked_in_at"):
+        raise ShiftAlreadyClockedIn("Shift is already clocked in.")
+
     _ensure_risks_acknowledged_if_required(shift, organization_id)
 
-    already_clocked = bool(shift.get("clocked_in_at"))
+    validate_shift_scheduled_today(str(shift.get("scheduled_start") or ""))
     check_in_meta: dict[str, Any] = {}
     verification_distance: Optional[float] = None
     qr_code_id: Optional[str] = None
 
-    if not already_clocked:
-        validate_clock_in_window(str(shift.get("scheduled_start") or ""))
-        if not method:
-            raise ValueError(
-                "Verified check-in required. Choose GPS or scan the location QR code."
-            )
-        check_in_meta = _apply_verified_check_in(
-            shift,
-            organization_id,
-            method=method,
-            location=location,
-            qr_token=qr_token,
+    validate_clock_in_window(str(shift.get("scheduled_start") or ""))
+    if not method:
+        raise ValueError(
+            "Verified check-in required. Choose GPS or scan the location QR code."
         )
-        verification_distance = check_in_meta.pop("_verification_distance_meters", None)
-        qr_code_id = check_in_meta.pop("_qr_code_id", None)
+    check_in_meta = _apply_verified_check_in(
+        shift,
+        organization_id,
+        method=method,
+        location=location,
+        qr_token=qr_token,
+    )
+    verification_distance = check_in_meta.pop("_verification_distance_meters", None)
+    qr_code_id = check_in_meta.pop("_qr_code_id", None)
 
     normalized_client_ts = normalize_client_timestamp(client_timestamp)
     now = normalized_client_ts or _now_iso()
@@ -1373,7 +1521,7 @@ def clock_in_shift(
         else:
             raise
 
-    if check_in_meta and not already_clocked:
+    if check_in_meta:
         log_shift_check_in(
             shift_id=shift_id,
             worker_id=worker_id,
@@ -1405,6 +1553,8 @@ def update_shift_tasks(
         return None
 
     for task in tasks:
+        if task.get("marked_na"):
+            continue
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default"
             and task.get("mandatory") is not False
@@ -1835,6 +1985,8 @@ def _mandatory_task_satisfied(task: dict[str, Any]) -> bool:
 
 def _mandatory_tasks_complete(tasks: list[dict[str, Any]]) -> bool:
     for task in tasks:
+        if task.get("marked_na"):
+            continue
         is_mandatory = task.get("mandatory") is True or (
             task.get("type") == "default" and task.get("mandatory") is not False and int(task.get("order") or 0) <= 4
         )
@@ -1908,6 +2060,10 @@ def end_shift(
         raise ValueError("Clock in before ending the shift.")
 
     tasks = shift.get("tasks") or []
+    validation = compute_shift_validation(tasks)
+    if force:
+        validation["force_ended"] = True
+
     if tasks and not _mandatory_tasks_complete(tasks) and not force:
         raise ValueError("Complete all mandatory tasks before ending the shift.")
 
@@ -1915,13 +2071,23 @@ def end_shift(
     session_id = shift.get("session_id")
     if session_id:
         try:
-            get_supabase_admin().table("sessions").update({
+            session_update: dict[str, Any] = {
                 "status": "completed",
                 "updated_at": now,
-            }).eq("id", str(session_id)).execute()
+                "end_validation": validation,
+            }
+            get_supabase_admin().table("sessions").update(session_update).eq("id", str(session_id)).execute()
         except Exception as exc:
             if not _is_missing_schema_error(exc):
                 raise
+            try:
+                get_supabase_admin().table("sessions").update({
+                    "status": "completed",
+                    "updated_at": now,
+                }).eq("id", str(session_id)).execute()
+            except Exception as inner_exc:
+                if not _is_missing_schema_error(inner_exc):
+                    raise
 
     update_payload = {
         "status": "completed",
@@ -1953,7 +2119,14 @@ def end_shift(
         "mandatory_total": len(mandatory),
         "session_id": session_id,
         "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+        "validation": validation,
     }
+    try:
+        from .conversation_service import set_conversation_read_only_for_shift
+
+        set_conversation_read_only_for_shift(shift_id)
+    except Exception:
+        pass
     return payload
 
 
@@ -2168,6 +2341,267 @@ def create_shift_visit_note(
         raise
 
 
+TASK_CONTEXT_NOTE_MAX = 150
+SESSION_PROGRESS_NOTE_MAX = 500
+
+
+def _goal_id_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Optional[str]:
+    if not task_id:
+        return None
+    tasks = shift.get("tasks") or []
+    if not isinstance(tasks, list):
+        return None
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        if str(task.get("task_id") or "") == str(task_id):
+            goal = task.get("goal_id")
+            return str(goal) if goal else None
+    return None
+
+
+def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    category = str(row.get("category") or "")
+    note_type = "text"
+    if category.endswith("_voice"):
+        note_type = "voice"
+    elif category.endswith("_photo"):
+        note_type = "photo"
+    elif category.endswith("_file"):
+        note_type = "file"
+    attachments = row.get("attachment_urls") or []
+    file_name = None
+    if attachments and isinstance(attachments, list) and attachments[0]:
+        first = str(attachments[0])
+        if first.startswith("name:"):
+            file_name = first.split(":", 1)[1] if ":" in first else None
+    content = row.get("content") or ""
+    if not file_name and content.startswith("[Attachment"):
+        match = re.search(r"\[Attachment(?:\s+selected)?:\s*([^\]]+)\]", content)
+        if match:
+            file_name = match.group(1).strip()
+    return {
+        "note_id": str(row.get("client_note_id") or row.get("id") or ""),
+        "id": row.get("id"),
+        "session_id": row.get("session_id"),
+        "task_id": row.get("task_id"),
+        "goal_id": row.get("goal_id"),
+        "content": content,
+        "created_at": row.get("created_at"),
+        "auto_saved_at": row.get("auto_saved_at") or row.get("updated_at"),
+        "synced": True,
+        "note_type": note_type,
+        "file_name": file_name,
+        "attachment_urls": [u for u in attachments if isinstance(u, str) and not u.startswith("name:")],
+    }
+
+
+def _get_worker_session_or_none(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, shift_id, worker_id, support_worker_id, owner_user_id, created_by, organization_id")
+            .eq("id", session_id)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return None
+        raise
+    rows = resp.data or []
+    if not rows:
+        return None
+    session = rows[0]
+    if not _session_owned_by_worker(session, worker_id, organization_id):
+        return None
+    return session
+
+
+def list_session_notes(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> Optional[list[dict[str, Any]]]:
+    """List notes for an active session (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return None
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shift_visit_notes")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        rows = result.data or []
+        return [_note_payload_from_row(row) for row in rows]
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def sync_session_notes(
+    session_id: str,
+    worker_id: str,
+    organization_id: str,
+    note_items: list[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    """Upsert session/task-linked notes from the worker client (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return None
+
+    shift = get_shift_for_session(session)
+    if not shift:
+        return None
+    if str(shift.get("worker_id") or "") != str(worker_id):
+        return None
+
+    shift_id = str(shift.get("id") or "")
+    now = _now_iso()
+    confirmed: list[dict[str, Any]] = []
+
+    for item in note_items:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+
+        task_id = str(item.get("task_id") or "").strip() or None
+        max_len = TASK_CONTEXT_NOTE_MAX if task_id else SESSION_PROGRESS_NOTE_MAX
+        if len(content) > max_len:
+            content = content[:max_len]
+
+        goal_id = str(item.get("goal_id") or "").strip() or None
+        if task_id and not goal_id:
+            goal_id = _goal_id_for_shift_task(shift, task_id)
+
+        client_note_id = str(item.get("note_id") or item.get("client_note_id") or "").strip() or None
+        auto_saved_at = item.get("auto_saved_at") or now
+        created_at = item.get("created_at") or now
+        note_type = str(item.get("note_type") or "text").strip().lower()
+        if task_id:
+            category = "task_context"
+        elif note_type == "voice":
+            category = "session_progress_voice"
+        elif note_type == "photo":
+            category = "session_progress_photo"
+        elif note_type == "file":
+            category = "session_progress_file"
+        else:
+            category = "session_progress"
+
+        attachment_urls: list[str] = []
+        raw_attachments = item.get("attachment_urls")
+        if isinstance(raw_attachments, list):
+            attachment_urls = [str(u) for u in raw_attachments if u]
+        file_name = str(item.get("file_name") or "").strip()
+        if file_name and not any(u.startswith("name:") for u in attachment_urls):
+            attachment_urls = [f"name:{file_name}", *attachment_urls]
+
+        payload = {
+            "organization_id": organization_id,
+            "shift_id": shift_id,
+            "worker_id": worker_id,
+            "session_id": session_id,
+            "content": content,
+            "task_id": task_id,
+            "goal_id": goal_id,
+            "auto_saved_at": auto_saved_at,
+            "updated_at": now,
+            "category": category,
+        }
+        if client_note_id:
+            payload["client_note_id"] = client_note_id
+
+        try:
+            if client_note_id:
+                existing = (
+                    get_supabase_admin()
+                    .table("shift_visit_notes")
+                    .select("id")
+                    .eq("session_id", session_id)
+                    .eq("client_note_id", client_note_id)
+                    .limit(1)
+                    .execute()
+                )
+                rows = existing.data or []
+                if rows:
+                    row_id = rows[0]["id"]
+                    get_supabase_admin().table("shift_visit_notes").update(payload).eq("id", row_id).execute()
+                    payload["id"] = row_id
+                    payload["created_at"] = created_at
+                    confirmed.append(_note_payload_from_row({**payload, "id": row_id}))
+                    continue
+
+            insert_payload = {
+                **payload,
+                "attachment_urls": attachment_urls,
+                "created_at": created_at,
+            }
+            result = get_supabase_admin().table("shift_visit_notes").insert(insert_payload).execute()
+            rows = result.data or []
+            if rows:
+                confirmed.append(_note_payload_from_row(rows[0]))
+        except Exception as exc:
+            if _is_missing_schema_error(exc):
+                return None
+            raise
+
+    return {
+        "session_id": session_id,
+        "notes": confirmed,
+    }
+
+
+def delete_session_note(
+    session_id: str,
+    note_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> bool:
+    """Delete a session note by server id or client note id (CARECLIQV2-231)."""
+    session = _get_worker_session_or_none(session_id, worker_id, organization_id)
+    if not session:
+        return False
+
+    try:
+        for column in ("id", "client_note_id"):
+            check = (
+                get_supabase_admin()
+                .table("shift_visit_notes")
+                .select("id")
+                .eq("session_id", session_id)
+                .eq(column, note_id)
+                .limit(1)
+                .execute()
+            )
+            rows = check.data or []
+            if not rows:
+                continue
+            row_id = rows[0].get("id")
+            if not row_id:
+                continue
+            get_supabase_admin().table("shift_visit_notes").delete().eq("id", row_id).execute()
+            return True
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return False
+        raise
+    return False
+
+
 def list_shift_office_messages(
     shift_id: str,
     worker_id: str,
@@ -2200,6 +2634,7 @@ def create_shift_office_message(
     message: str,
     priority: str = "normal",
     attachment_urls: Optional[list[str]] = None,
+    attachment_data: Optional[list[str]] = None,
 ) -> Optional[dict[str, Any]]:
     shift = _get_worker_shift_or_none(shift_id, worker_id, organization_id)
     if not shift:
@@ -2209,13 +2644,23 @@ def create_shift_office_message(
         raise ValueError("Message is required.")
     priority_norm = priority if priority in ("normal", "urgent", "emergency") else "normal"
     now = _now_iso()
+    urls = list(attachment_urls or [])
+    if attachment_data:
+        from .incident_service import _upload_incident_photos
+
+        uploaded = _upload_incident_photos(
+            attachment_data,
+            str(organization_id),
+            f"office_{shift_id}_{uuid.uuid4().hex[:8]}",
+        )
+        urls.extend(uploaded)
     payload = {
         "organization_id": organization_id,
         "shift_id": shift_id,
         "worker_id": worker_id,
         "message": text,
         "priority": priority_norm,
-        "attachment_urls": attachment_urls or [],
+        "attachment_urls": urls,
         "created_at": now,
     }
     try:

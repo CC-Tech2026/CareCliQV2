@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ClockInQrScanner } from "@/components/shifts/ClockInQrScanner";
 import type { ClockInRequest, WorkerShift } from "@/services/shiftService";
+import { reverseGeocode } from "@/lib/reverse-geocode";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -45,12 +46,16 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [manualQrOpen, setManualQrOpen] = useState(false);
   const [manualQrValue, setManualQrValue] = useState("");
+  const [locationAddress, setLocationAddress] = useState<string | null>(null);
+  const [resolvingAddress, setResolvingAddress] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setStep("choose");
       setMethod(null);
       setLocation(null);
+      setLocationAddress(null);
+      setResolvingAddress(false);
       setQrToken(null);
       setCaptureError(null);
       setScannerOpen(false);
@@ -61,15 +66,15 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
 
   const nowLabel = useMemo(() => new Date().toLocaleString(), [step, open]);
 
-  const locationLabel = useMemo(() => {
+  const yourLocationLabel = useMemo(() => {
     if (method === "qr") return "Verified via location QR code";
     if (location) {
       return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}${
         location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ""
       }`;
     }
-    return shift.participant_address || "Location captured";
-  }, [location, method, shift.participant_address]);
+    return null;
+  }, [location, method]);
 
   const startGps = async () => {
     setMethod("gps");
@@ -105,7 +110,13 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
       return;
     }
     setLocation(coords);
+    setLocationAddress(null);
+    setResolvingAddress(true);
     setStep("confirm");
+    void reverseGeocode(coords.lat, coords.lng).then((address) => {
+      setLocationAddress(address);
+      setResolvingAddress(false);
+    });
   };
 
   const startQr = async () => {
@@ -258,12 +269,27 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                       <span className="font-bold text-[#1E1640]">Method: </span>
                       {method === "gps" ? "GPS location" : "QR code"}
                     </p>
-                    <p>
-                      <span className="font-bold text-[#1E1640]">Location: </span>
-                      {locationLabel}
-                    </p>
+                    {(yourLocationLabel || resolvingAddress) && (
+                      <div>
+                        <p>
+                          <span className="font-bold text-[#1E1640]">Your location: </span>
+                          {method === "gps" && locationAddress
+                            ? locationAddress
+                            : yourLocationLabel ?? "Looking up address…"}
+                        </p>
+                        {method === "gps" && locationAddress && yourLocationLabel && (
+                          <p className="text-xs text-muted-foreground">{yourLocationLabel}</p>
+                        )}
+                        {method === "gps" && resolvingAddress && !locationAddress && (
+                          <p className="text-xs text-muted-foreground">Looking up address…</p>
+                        )}
+                      </div>
+                    )}
                     {shift.participant_address && (
-                      <p className="text-muted-foreground">{shift.participant_address}</p>
+                      <p>
+                        <span className="font-bold text-[#1E1640]">Shift address: </span>
+                        {shift.participant_address}
+                      </p>
                     )}
                   </div>
                 </div>

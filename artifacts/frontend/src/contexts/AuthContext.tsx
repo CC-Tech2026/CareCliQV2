@@ -9,8 +9,11 @@ import {
   getRememberDevicePreference,
   persistAuthSession,
   readStoredSession,
+  type StoredSupabaseSession,
   updateStoredUserJson,
 } from "@/lib/auth-session";
+import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
+import { storeAndApplySupabaseSession } from "@/lib/supabase";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -130,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     _currentToken = null;
     _currentOrgId = null;
     setQueryOrgId(null);
+    clearPresentedNotifications();
     clearAuthSessionStorage();
     queryClient.clear();
     setToken(null);
@@ -137,7 +141,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const finalizeLogin = useCallback((
-    data: { access_token: string; user: Record<string, unknown> },
+    data: {
+      access_token: string;
+      user: Record<string, unknown>;
+      supabase_session?: StoredSupabaseSession;
+    },
     rememberDevice: boolean,
   ): AuthUser => {
     const authUser = mapAuthUser(data);
@@ -145,6 +153,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Organisation not found. Contact your administrator.");
     }
     persistSession(data.access_token, authUser, rememberDevice);
+    if (data.supabase_session) {
+      void storeAndApplySupabaseSession(data.supabase_session, rememberDevice);
+    }
     return authUser;
   }, [persistSession]);
 
@@ -162,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mfa_method?: string;
         access_token?: string;
         user?: Record<string, unknown>;
+        supabase_session?: StoredSupabaseSession;
       }>("/api/auth/login", {
         method: "POST",
         headers: authRequestHeaders(),
@@ -186,7 +198,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const authUser = finalizeLogin(
-        { access_token: data.access_token, user: data.user },
+        {
+          access_token: data.access_token,
+          user: data.user,
+          supabase_session: data.supabase_session,
+        },
         rememberDevice,
       );
       return { status: "authenticated", user: authUser };
@@ -204,7 +220,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const rememberDevice = getRememberDevicePreference();
       const deviceId = getDeviceId();
-      const data = await customFetch<{ access_token: string; user: Record<string, unknown> }>(
+      const data = await customFetch<{
+        access_token: string;
+        user: Record<string, unknown>;
+        supabase_session?: StoredSupabaseSession;
+      }>(
         "/api/auth/login/mfa",
         {
           method: "POST",

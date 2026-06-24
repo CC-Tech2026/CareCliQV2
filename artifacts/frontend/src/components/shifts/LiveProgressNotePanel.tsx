@@ -1,8 +1,41 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Camera, Languages, Mic, MicOff, Paperclip, StopCircle, X } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  SessionNoteHistoryCard,
+  isImageName,
+  sortNotesLatestFirst,
+} from "@/components/shifts/SessionNoteHistoryCard";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
-import { createShiftNote, listShiftNotes, type ShiftVisitNote } from "@/services/shiftService";
+import {
+  enqueuePendingSessionNote,
+  loadPendingSessionNotes,
+  newClientNoteId,
+  removePendingSessionNote,
+} from "@/lib/session-notes-storage";
+import { SESSION_NOTE_MAX } from "@/lib/task-evidence-status";
+import {
+  deleteSessionNote,
+  listSessionNotes,
+  syncSessionNotes,
+  type SessionNoteRecord,
+  type SessionNoteType,
+} from "@/services/sessionNotesService";
 
 type LiveSpeechRecognitionEvent = {
   resultIndex: number;
@@ -52,6 +85,10 @@ const SPEECH_LANGUAGE_CODES: Record<string, string> = {
   hi: "hi-IN",
 };
 
+const MAX_IMAGE_DATA_URL_BYTES = 900_000;
+
+type SaveStatus = "idle" | "saving" | "saved" | "offline" | "error";
+
 type Props = {
   shiftId: string;
   participantName?: string;
@@ -59,105 +96,199 @@ type Props = {
   onClose?: () => void;
 };
 
-export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onClose }: Props) {
-  const [, navigate] = useLocation();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
-  const dictationBaseRef = useRef("");
-  const dictationFinalRef = useRef("");
+function readImageDataUrl(file: File): Promise<string | null> {
+  if (!file.type.startsWith("image/") && !isImageName(file.name)) {
+    return Promise.resolve(null);
+  }
+  if (file.size > MAX_IMAGE_DATA_URL_BYTES) {
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(typeof reader.result === "string" ? reader.result : null);
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
 
-  const [message, setMessage] = useState("");
-  const [draft, setDraft] = useState("");
+export function LiveProgressNotePanel({ participantName, sessionId, onClose }: Props) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
+  const dictationFinalRef = useRef("");
+  const dictationInterimRef = useRef("");
+  const voiceSaveOnEndRef = useRef(false);
+
+  const [notes, setNotes] = useState<SessionNoteRecord[]>([]);
+  const [inputValue, setInputValue] = useState("");
   const [language, setLanguage] = useState("auto");
   const [isListening, setIsListening] = useState(false);
+  const [liveDictation, setLiveDictation] = useState("");
   const [ended, setEnded] = useState(false);
-  const [attachmentName, setAttachmentName] = useState("");
-  const [savedNotes, setSavedNotes] = useState<ShiftVisitNote[]>([]);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const autosaveTimerRef = useRef<number | null>(null);
-  const lastSavedRef = useRef("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [online, setOnline] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<SessionNoteRecord | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    void listShiftNotes(shiftId)
-      .then((rows) => {
-        const list = rows || [];
-        setSavedNotes(list);
-        const latest = list[0]?.content?.trim();
-        if (latest) {
-          setDraft(latest);
-          lastSavedRef.current = latest;
-        }
-      })
-      .catch(() => undefined);
-  }, [shiftId]);
+  const refreshNotes = useCallback(async () => {
+    if (!sessionId) return;
+    try {
+      const rows = await listSessionNotes(sessionId);
+      const sessionNotes = sortNotesLatestFirst((rows ?? []).filter((n) => !n.task_id));
+      setNotes(sessionNotes);
+    } catch {
+      /* keep optimistic list */
+    }
+  }, [sessionId]);
 
-  const persistDraft = useCallback(
-    async (text: string) => {
-      const clean = text.trim();
-      if (!clean || clean === lastSavedRef.current) return;
+  const appendNote = useCallback(
+    async (params: {
+      content: string;
+      note_type: SessionNoteType;
+      file_name?: string;
+      attachment_urls?: string[];
+    }) => {
+      const clean = params.content.trim().slice(0, SESSION_NOTE_MAX);
+      if (!clean || !sessionId || ended) return;
+
+      const noteId = newClientNoteId();
+      const now = new Date().toISOString();
+      const payload: SessionNoteRecord = {
+        note_id: noteId,
+        session_id: sessionId,
+        content: clean,
+        created_at: now,
+        auto_saved_at: now,
+        note_type: params.note_type,
+        file_name: params.file_name,
+        attachment_urls: params.attachment_urls,
+        synced: false,
+      };
+
+      setNotes((prev) => sortNotesLatestFirst([payload, ...prev]));
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        enqueuePendingSessionNote(sessionId, payload);
+        setSaveStatus("offline");
+        return;
+      }
+
       setSaveStatus("saving");
       try {
-        const note = await createShiftNote(shiftId, {
-          content: clean,
-          session_id: sessionId ?? undefined,
-          category: "general",
-        });
-        lastSavedRef.current = clean;
-        setSavedNotes((prev) => [note, ...prev]);
+        const result = await syncSessionNotes(sessionId, [payload]);
+        const synced = result.notes?.[0];
+        if (synced) {
+          setNotes((prev) =>
+            sortNotesLatestFirst(
+              prev.map((row) => (row.note_id === noteId ? { ...synced, synced: true } : row)),
+            ),
+          );
+          removePendingSessionNote(sessionId, noteId);
+        }
         setSaveStatus("saved");
         window.setTimeout(() => setSaveStatus("idle"), 2000);
       } catch {
+        enqueuePendingSessionNote(sessionId, payload);
         setSaveStatus("error");
       }
     },
-    [shiftId, sessionId],
+    [ended, sessionId],
   );
 
+  const flushPendingQueue = useCallback(async () => {
+    if (!sessionId || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+    const pending = loadPendingSessionNotes(sessionId);
+    if (!pending.length) return;
+    try {
+      const result = await syncSessionNotes(sessionId, pending);
+      for (const row of result.notes ?? []) {
+        removePendingSessionNote(sessionId, row.note_id);
+      }
+      await refreshNotes();
+    } catch {
+      /* retry on next online tick */
+    }
+  }, [refreshNotes, sessionId]);
+
   useEffect(() => {
-    if (!draft.trim()) return;
-    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = window.setTimeout(() => {
-      void persistDraft(draft);
-    }, 30_000);
-    return () => {
-      if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    if (!sessionId) return;
+    void refreshNotes();
+    void flushPendingQueue();
+  }, [sessionId, refreshNotes, flushPendingQueue]);
+
+  useEffect(() => {
+    const onOnline = () => {
+      setOnline(true);
+      void flushPendingQueue();
     };
-  }, [draft, persistDraft]);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [flushPendingQueue]);
 
-  useEffect(() => () => stopDictation(), []);
+  useEffect(() => () => stopDictation(false), []);
 
-  function stopDictation() {
+  const saveVoiceNote = useCallback(
+    (transcript: string) => {
+      const clean = transcript.trim();
+      if (!clean) return;
+      void appendNote({ content: clean, note_type: "voice" });
+    },
+    [appendNote],
+  );
+
+  function stopDictation(saveVoice: boolean) {
+    const transcript = [dictationFinalRef.current, dictationInterimRef.current]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
     recognitionRef.current?.stop();
     recognitionRef.current = null;
-    dictationBaseRef.current = "";
     dictationFinalRef.current = "";
+    dictationInterimRef.current = "";
+    setLiveDictation("");
     setIsListening(false);
+    if (saveVoice && voiceSaveOnEndRef.current && transcript) {
+      saveVoiceNote(transcript);
+    }
+    voiceSaveOnEndRef.current = false;
   }
 
-  function appendDraft(text: string) {
-    const clean = text.trim();
+  function commitInput() {
+    const clean = inputValue.trim();
     if (!clean) return;
-    setDraft((current) => [current.trim(), clean].filter(Boolean).join("\n\n"));
+    setInputValue("");
+    void appendNote({ content: clean, note_type: "text" });
   }
 
-  function commitMessage() {
-    const clean = message.trim();
-    if (!clean) return;
-    appendDraft(clean);
-    setMessage("");
-    void persistDraft([draft.trim(), clean].filter(Boolean).join("\n\n"));
-  }
-
-  function attachFile(file: File | null) {
+  async function attachFile(file: File | null, source: "file" | "camera") {
     if (!file) return;
-    setAttachmentName(file.name);
-    appendDraft(`[Attachment selected: ${file.name}]`);
+    const dataUrl = await readImageDataUrl(file);
+    const note_type: SessionNoteType = source === "camera" ? "photo" : "file";
+    const content = `[Attachment${source === "file" ? " selected" : ""}: ${file.name}]`;
+    void appendNote({
+      content,
+      note_type,
+      file_name: file.name,
+      attachment_urls: dataUrl ? [dataUrl] : undefined,
+    });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   }
 
   function toggleDictation() {
     if (ended) return;
     if (recognitionRef.current) {
-      stopDictation();
+      stopDictation(true);
       return;
     }
 
@@ -170,8 +301,9 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = language === "auto" ? "en-AU" : SPEECH_LANGUAGE_CODES[language] || "en-AU";
-    dictationBaseRef.current = draft.trim();
     dictationFinalRef.current = "";
+    setLiveDictation("");
+    voiceSaveOnEndRef.current = true;
 
     recognition.onresult = (event) => {
       let finalPart = "";
@@ -188,22 +320,35 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
       if (finalPart) {
         dictationFinalRef.current = `${dictationFinalRef.current} ${finalPart}`.trim();
       }
-      const liveText = [dictationFinalRef.current, interimPart].filter(Boolean).join(" ").trim();
-      setDraft([dictationBaseRef.current, liveText].filter(Boolean).join("\n\n"));
+      dictationInterimRef.current = interimPart;
+      setLiveDictation(
+        [dictationFinalRef.current, interimPart].filter(Boolean).join(" ").trim(),
+      );
     };
 
     recognition.onend = () => {
+      const transcript = [dictationFinalRef.current, dictationInterimRef.current]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
       recognitionRef.current = null;
-      dictationBaseRef.current = "";
       dictationFinalRef.current = "";
+      dictationInterimRef.current = "";
+      setLiveDictation("");
       setIsListening(false);
+      if (voiceSaveOnEndRef.current && transcript) {
+        saveVoiceNote(transcript);
+      }
+      voiceSaveOnEndRef.current = false;
     };
 
     recognition.onerror = () => {
       recognitionRef.current = null;
-      dictationBaseRef.current = "";
       dictationFinalRef.current = "";
+      dictationInterimRef.current = "";
+      setLiveDictation("");
       setIsListening(false);
+      voiceSaveOnEndRef.current = false;
     };
 
     recognition.start();
@@ -211,24 +356,57 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
     setIsListening(true);
   }
 
-  function handleEndSession() {
-    stopDictation();
-    setEnded(true);
-    if (sessionId) {
-      // navigate(`/sessions/${sessionId}/live`);
+  function handleInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitInput();
     }
   }
 
-  const statusLabel = ended
-    ? "Ended"
-    : isListening
-      ? "Listening..."
-      : "Ready to listen";
+  async function confirmDelete() {
+    if (!sessionId || !noteToDelete) return;
+    const note = noteToDelete;
+    setDeleting(true);
+    setNotes((prev) => prev.filter((row) => row.note_id !== note.note_id));
+    try {
+      await deleteSessionNote(sessionId, note.note_id);
+      removePendingSessionNote(sessionId, note.note_id);
+      setNoteToDelete(null);
+    } catch {
+      await refreshNotes();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  function handleEndSession() {
+    stopDictation(true);
+    if (inputValue.trim()) {
+      const clean = inputValue.trim();
+      setInputValue("");
+      void appendNote({ content: clean, note_type: "text" });
+    }
+    setEnded(true);
+  }
+
+  const listeningLabel = (() => {
+    if (isListening) return "Listening...";
+    if (ended) return "Session ended — review before saving";
+    if (saveStatus === "saving") return "Saving...";
+    if (saveStatus === "saved") return "Saved";
+    if (saveStatus === "offline" || !online) return "Offline — notes saved locally";
+    if (saveStatus === "error") return "Could not sync — will retry";
+    return "Ready to listen";
+  })();
+
+  const livePreview = liveDictation;
 
   return (
-    <aside className="flex h-full flex-col overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      {/* Header */}
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
+    <aside
+      className="flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
+      style={{ borderColor: BORDER }}
+    >
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
@@ -237,12 +415,12 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? BORDER : "#A7F3D0",
+                borderColor: ended ? "#E2DEF2" : "#A7F3D0",
                 background: ended ? "#F5F3FC" : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
-              {ended ? "Ended" : saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "In progress"}
+              {ended ? "Ended" : "In progress"}
             </span>
           </div>
           <h2 className="mt-1 truncate text-lg font-black" style={{ color: TEXT }}>
@@ -267,15 +445,14 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
               onClick={onClose}
               className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
               style={{ color: MUTED }}
-              aria-label="Close live note panel"
+              aria-label="Close session composer"
             >
               <X size={18} />
             </button>
           )}
         </div>
-      </header>
+      </div>
 
-      {/* Input language */}
       <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EEEAFB" }}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
@@ -298,9 +475,8 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
         </div>
       </div>
 
-      {/* Note area */}
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
-        <div className="mx-auto flex h-full max-w-3xl flex-col space-y-3">
+        <div className="mx-auto max-w-3xl space-y-3">
           <div
             className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm"
             style={{ borderColor: BORDER, color: MUTED }}
@@ -313,47 +489,48 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
                 <span className="h-2.5 w-1 animate-pulse rounded-full [animation-delay:360ms]" style={{ background: PLUM }} />
               </span>
             )}
-            <span>{statusLabel}</span>
+            <span>{listeningLabel}</span>
           </div>
 
-          <div
-            className="min-h-[180px] flex-1 overflow-y-auto rounded-2xl border border-dashed bg-transparent p-4 text-base font-medium italic leading-7"
-            style={{ borderColor: "#DCD6F1", color: TEXT }}
-            aria-live="polite"
-          >
-            {draft.trim() ? (
-              <p className="whitespace-pre-wrap not-italic">{draft}</p>
-            ) : (
-              <p style={{ color: MUTED }}>
-                {isListening ? "Listening..." : "Spoken or sent notes will appear here."}
-              </p>
-            )}
-          </div>
-
-          {savedNotes.length > 0 && (
-            <div className="rounded-xl border bg-white p-3" style={{ borderColor: BORDER }}>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                Note history
-              </p>
-              <ul className="max-h-32 space-y-2 overflow-y-auto text-xs" style={{ color: TEXT }}>
-                {savedNotes.slice(0, 8).map((note) => (
-                  <li key={note.id} className="rounded-lg bg-[#F8F6FE] px-2 py-1.5">
-                    <span className="font-bold">{new Date(note.created_at).toLocaleString()}</span>
-                    <p className="mt-0.5 whitespace-pre-wrap">{note.content}</p>
-                  </li>
-                ))}
-              </ul>
+          {isListening && livePreview && (
+            <div
+              className="rounded-lg border bg-white px-3 py-2 text-sm italic"
+              style={{ borderColor: "#DCD6F1", color: MUTED }}
+              aria-live="polite"
+            >
+              {livePreview}
             </div>
           )}
+
+          <div>
+            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+              Last saved
+            </p>
+            {notes.length === 0 ? (
+              <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm font-medium italic" style={{ borderColor: "#DCD6F1", color: MUTED }}>
+                Notes you send will appear here, newest first.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {notes.map((note) => (
+                  <SessionNoteHistoryCard
+                    key={note.note_id}
+                    note={note}
+                    onDelete={() => setNoteToDelete(note)}
+                    onViewImage={(url, title) => setPreviewImage({ url, title })}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Composer footer */}
       {!ended && (
-        <footer className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
+        <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
           <div className="flex items-center gap-3">
             <div
-              className="flex min-w-0 flex-1 items-center gap-1 rounded-full border bg-white px-3 py-2 shadow-sm"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm"
               style={{ borderColor: BORDER }}
             >
               <input
@@ -361,20 +538,25 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
                 type="file"
                 accept="image/*,.pdf,.doc,.docx"
                 className="hidden"
-                onChange={(e) => attachFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => void attachFile(e.target.files?.[0] ?? null, "file")}
               />
               <input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitMessage();
-                  }
-                }}
-                placeholder={`What progress did ${participantName || "the participant"} make today?`}
-                className="min-h-11 min-w-0 flex-1 bg-transparent px-2 text-base font-medium outline-none placeholder:text-[#9A8BC4]"
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => void attachFile(e.target.files?.[0] ?? null, "camera")}
+              />
+              <input
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                disabled={ended}
+                maxLength={SESSION_NOTE_MAX}
+                className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                 style={{ color: TEXT }}
+                placeholder="Voice or type in the note area above"
               />
               <button
                 type="button"
@@ -387,10 +569,10 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
               </button>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => cameraInputRef.current?.click()}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
                 style={{ color: PLUM }}
-                aria-label="Add photo"
+                aria-label="Capture photo"
               >
                 <Camera size={22} />
               </button>
@@ -405,14 +587,47 @@ export function LiveProgressNotePanel({ shiftId, participantName, sessionId, onC
               {isListening ? <MicOff size={28} /> : <Mic size={30} />}
             </button>
           </div>
-          {attachmentName && (
-            <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F5F3FC] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
-              <Paperclip size={12} className="mr-1 shrink-0" />
-              <span className="truncate">{attachmentName}</span>
-            </p>
-          )}
-        </footer>
+        </div>
       )}
+
+      <AlertDialog open={Boolean(noteToDelete)} onOpenChange={(open) => !open && !deleting && setNoteToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This entry will be permanently removed from the session notes. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{previewImage?.title || "Image preview"}</DialogTitle>
+          </DialogHeader>
+          {previewImage && (
+            <img
+              src={previewImage.url}
+              alt={previewImage.title}
+              className="max-h-[70vh] w-full rounded-lg object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </aside>
   );
 }

@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, budget_ledger
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, notifications, budget_ledger
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
@@ -54,6 +54,25 @@ def _sync_check_column(supabase, table: str, columns: str) -> bool:
         if "does not exist" in err or "42703" in err or "PGRST" in err:
             return False
         return True  # assume OK on unknown errors
+
+
+async def _validate_supabase_region_startup():
+    """Block startup when hosted Supabase is not in ap-southeast-2 (Sydney)."""
+    import asyncio
+    from .core.config import settings
+    from .core.supabase_region import SupabaseRegionError, validate_supabase_region
+
+    try:
+        await asyncio.to_thread(
+            validate_supabase_region,
+            supabase_url=settings.supabase_url,
+            declared_region=settings.supabase_region or None,
+            access_token=settings.supabase_access_token or None,
+            region_check_mode=settings.supabase_region_check,
+        )
+    except SupabaseRegionError as exc:
+        logger.critical("%s", exc)
+        raise RuntimeError(str(exc)) from exc
 
 
 async def _apply_startup_migrations():
@@ -134,6 +153,7 @@ async def _apply_startup_migrations():
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    await _validate_supabase_region_startup()
     start_email_queue()
     await _apply_startup_migrations()
     start_notification_scheduler()
@@ -174,6 +194,7 @@ app.include_router(assignments.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
 app.include_router(worker.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(coordinator.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 app.include_router(users.router, prefix="/api")

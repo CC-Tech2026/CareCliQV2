@@ -33,6 +33,52 @@ LEGAL_TEXT_FIELDS = (
     "corrective_actions",
 )
 
+OPTIONAL_INCIDENT_COLUMNS = frozenset({
+    "original_language_input",
+    "detected_language",
+    "translated_english_report",
+    "compliance_input_text",
+    "translation_metadata",
+    "translation_status",
+    "translation_provider",
+    "translation_confidence",
+    "translation_error",
+    "translation_completed_at",
+})
+
+
+def _strip_unsupported_incident_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop legal-record / optional fields so insert works on lean schemas."""
+    return {k: v for k, v in payload.items() if k not in OPTIONAL_INCIDENT_COLUMNS}
+
+
+def _insert_incident_payload(supabase: Any, payload: dict[str, Any]) -> Any:
+    lean = _strip_unsupported_incident_fields(payload)
+    try:
+        return supabase.table(TABLE).insert(lean).execute()
+    except Exception as exc:
+        if not _is_missing_column_error(exc):
+            raise
+        # Last resort: drop shift photos/link columns if migration 041 not applied
+        fallback = {
+            k: v
+            for k, v in lean.items()
+            if k not in {"photo_urls", "photo_metadata", "shift_id", "escalate"}
+        }
+        logger.warning("Incident insert retry without shift/photo columns: %s", exc)
+        return supabase.table(TABLE).insert(fallback).execute()
+
+
+def _is_missing_column_error(exc: Exception) -> bool:
+    err = str(exc).lower()
+    return (
+        "pgrst" in err
+        or "does not exist" in err
+        or "42703" in err
+        or "could not find" in err
+        or "column of" in err
+    )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -207,6 +253,7 @@ async def get_all_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
     org_id: Optional[str] = None,
     reporter_id: Optional[str] = None,
     current_user: Optional[dict] = None,
@@ -229,6 +276,9 @@ async def get_all_incidents(
 
     if participant_id:
         query = query.eq("participant_id", participant_id)
+
+    if shift_id:
+        query = query.eq("shift_id", shift_id)
 
     if org_id:
         query = query.eq("organization_id", org_id)
@@ -458,25 +508,15 @@ async def create_incident(
 
     payload: dict[str, Any] = data.model_dump(
         exclude_none=True,
-        exclude={"photo_data"},
+        exclude={"photo_data", "photo_items"},
     )
     photo_data = list(data.photo_data or [])
+    photo_items = list(data.photo_items or [])
+    if photo_items and not photo_data:
+        photo_data = [item.data for item in photo_items if item.data]
 
-    try:
-        await _apply_legal_record_normalization(
-            payload,
-            payload,
-            current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
-        )
-    except ValueError:
-        # Translation blocking is non-fatal for new incident creation.
-        # The incident is logged immediately so the safety record is preserved;
-        # translation can be applied later via an update.
-        logger.warning(
-            "Legal record normalization failed during incident creation — "
-            "proceeding without translation enrichment."
-        )
-
+    # Shift incident reports: save core fields only. Legal-record / translation
+    # columns are applied later on coordinator review (when present in DB).
     if org_id:
         payload["organization_id"] = org_id
     if user_id:
@@ -525,13 +565,20 @@ async def create_incident(
         uploaded = _upload_incident_photos(photo_data, str(org_id), incident_id)
         if uploaded:
             payload["photo_urls"] = uploaded
+            metadata: list[dict[str, Any]] = []
+            for index, url in enumerate(uploaded):
+                item = photo_items[index] if index < len(photo_items) else None
+                metadata.append({
+                    "url": url,
+                    "description": ((item.description if item else "") or "").strip() or None,
+                    "captured_at": (
+                        item.captured_at if item and item.captured_at
+                        else datetime.now(timezone.utc).isoformat()
+                    ),
+                })
+            payload["photo_metadata"] = metadata
 
-    result = (
-        supabase
-        .table(TABLE)
-        .insert(payload)
-        .execute()
-    )
+    result = _insert_incident_payload(supabase, payload)
 
     rows = _safe_rows(result.data)
 

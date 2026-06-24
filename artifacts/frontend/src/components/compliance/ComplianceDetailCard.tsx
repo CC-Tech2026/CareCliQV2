@@ -118,7 +118,8 @@ export function ComplianceDetailCard({
           <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
             12-Rule Engine
           </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className=" pr-1">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {rules.map((rule) => (
               <div
                 key={rule.rule}
@@ -149,6 +150,7 @@ export function ComplianceDetailCard({
                 </div>
               </div>
             ))}
+            </div>
           </div>
         </div>
       </section>

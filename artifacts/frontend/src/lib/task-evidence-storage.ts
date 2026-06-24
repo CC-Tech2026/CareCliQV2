@@ -149,6 +149,77 @@ export function newEvidenceId() {
   return `evid_${crypto.randomUUID().slice(0, 12)}`;
 }
 
+/** Seed IndexedDB thread from persisted shift task fields when local records are empty. */
+export function buildRecordsFromShiftTask(
+  task: {
+    task_id: string;
+    goal_id?: string | null;
+    note?: string;
+    completed_at?: string | null;
+    checked_at?: string | null;
+    evidence_added_at?: string | null;
+    photo_evidence?: string | null;
+    photo_thumbnails?: string[];
+    voice_evidence?: string | null;
+    voice_duration_seconds?: number | null;
+  },
+  sessionId: string,
+): TaskEvidenceRecord[] {
+  const ts =
+    task.evidence_added_at ??
+    task.completed_at ??
+    task.checked_at ??
+    new Date().toISOString();
+  const rows: TaskEvidenceRecord[] = [];
+
+  if (task.note?.trim()) {
+    rows.push({
+      evidence_id: `shift_${task.task_id}_note`,
+      task_id: task.task_id,
+      goal_id: task.goal_id ?? null,
+      session_id: sessionId,
+      type: "text",
+      content: task.note.trim(),
+      created_at: ts,
+      synced: true,
+      upload_status: "uploaded",
+    });
+  }
+
+  for (const [index, url] of (task.photo_thumbnails ?? []).entries()) {
+    if (!url) continue;
+    rows.push({
+      evidence_id: task.photo_evidence ?? `shift_${task.task_id}_photo_${index}`,
+      task_id: task.task_id,
+      goal_id: task.goal_id ?? null,
+      session_id: sessionId,
+      type: "photo",
+      content: url,
+      file_url: url,
+      created_at: ts,
+      synced: true,
+      upload_status: "uploaded",
+    });
+  }
+
+  if (task.voice_evidence || task.voice_duration_seconds) {
+    rows.push({
+      evidence_id: task.voice_evidence ?? `shift_${task.task_id}_voice`,
+      task_id: task.task_id,
+      goal_id: task.goal_id ?? null,
+      session_id: sessionId,
+      type: "voice",
+      content: task.voice_evidence ?? "",
+      duration_seconds: task.voice_duration_seconds ?? null,
+      created_at: ts,
+      synced: true,
+      upload_status: "uploaded",
+    });
+  }
+
+  return rows;
+}
+
 export async function compressImageFile(file: File, maxBytes = 2 * 1024 * 1024): Promise<{ dataUrl: string; bytes: number }> {
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement("canvas");

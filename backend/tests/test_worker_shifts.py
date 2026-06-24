@@ -847,3 +847,106 @@ def test_clock_in_rejects_outside_time_window(mock_get, _mock_ack):
     mock_get.return_value = _sample_shift(scheduled_start=_shift_window_start(60))
     with pytest.raises(ValueError, match="Too early"):
         shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
+
+
+def test_goal_id_for_shift_task_resolves_from_tasks_json():
+    shift = _sample_shift(
+        tasks=[
+            {
+                "task_id": "default_personal_hygiene",
+                "goal_id": "daily_living_skills",
+            }
+        ]
+    )
+    assert shift_service._goal_id_for_shift_task(shift, "default_personal_hygiene") == "daily_living_skills"
+    assert shift_service._goal_id_for_shift_task(shift, "missing") is None
+
+
+@patch("backend.app.services.shift_service.get_shift_for_session")
+@patch("backend.app.services.shift_service.get_supabase_admin")
+def test_sync_session_notes_upserts_by_client_id(mock_admin, mock_shift_for_session):
+    session = {
+        "id": "sess-1",
+        "shift_id": "shift-1",
+        "worker_id": "worker-1",
+        "organization_id": "org-1",
+    }
+    shift = _sample_shift(
+        id="shift-1",
+        session_id="sess-1",
+        tasks=[{"task_id": "default_meal_prep", "goal_id": "daily_living_skills"}],
+    )
+    mock_shift_for_session.return_value = shift
+
+    sessions_table = MagicMock()
+    notes_table = MagicMock()
+    mock_admin.return_value.table.side_effect = lambda name: sessions_table if name == "sessions" else notes_table
+
+    sessions_table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[session]
+    )
+    notes_table.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[]
+    )
+    notes_table.insert.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "note-db-1",
+                "client_note_id": "client-1",
+                "session_id": "sess-1",
+                "content": "Benjamin showered independently",
+                "task_id": None,
+                "goal_id": None,
+                "created_at": "2026-01-15T14:45:00Z",
+                "auto_saved_at": "2026-01-15T14:45:30Z",
+            }
+        ]
+    )
+
+    result = shift_service.sync_session_notes(
+        "sess-1",
+        "worker-1",
+        "org-1",
+        [
+            {
+                "note_id": "client-1",
+                "content": "Benjamin showered independently",
+                "created_at": "2026-01-15T14:45:00Z",
+                "auto_saved_at": "2026-01-15T14:45:30Z",
+            }
+        ],
+    )
+
+    assert result is not None
+    assert result["session_id"] == "sess-1"
+    assert len(result["notes"]) == 1
+    assert result["notes"][0]["content"] == "Benjamin showered independently"
+    notes_table.insert.assert_called_once()
+
+
+def test_get_shift_detail_denies_wrong_worker():
+    shift = _sample_shift(worker_id="worker-1")
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAccessDenied):
+            shift_service.get_shift_detail_for_worker("shift-1", "other-worker", "org-1")
+
+
+def test_get_shift_detail_denies_wrong_org():
+    shift = _sample_shift(organization_id="org-1")
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAccessDenied):
+            shift_service.get_shift_detail_for_worker("shift-1", "worker-1", "org-2")
+
+
+def test_validate_shift_scheduled_today_rejects_wrong_day():
+    past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    with pytest.raises(shift_service.ShiftNotScheduledToday):
+        shift_service.validate_shift_scheduled_today(past)
+
+
+def test_clock_in_raises_when_already_clocked():
+    shift = _sample_shift(clocked_in_at=datetime.now(timezone.utc).isoformat())
+    with patch("backend.app.services.shift_service.get_shift_by_id", return_value=shift):
+        with pytest.raises(shift_service.ShiftAlreadyClockedIn):
+            shift_service.clock_in_shift("shift-1", "worker-1", "org-1", method="gps")
+

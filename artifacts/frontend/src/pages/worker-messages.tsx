@@ -1,296 +1,259 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bell, Check, CheckCircle2, AlertCircle, Info, CheckCheck, MessageCircle, Loader2 } from "lucide-react";
-import { Link } from "wouter";
+import { Bell, CheckCheck, Loader2, MessageCircle, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import {
-  BORDER,
-  CORAL,
-  MUTED,
-  PLUM,
-  TEXT,
-} from "@/lib/shift-utils";
+  fetchConversationMessages,
+  fetchConversations,
+  sendConversationMessage,
+  type Conversation,
+  type ConversationMessage,
+} from "@/services/notificationService";
+import { useConversationRealtime } from "@/hooks/useNotificationRealtime";
 
-const SEVERITY_CONFIG = {
-  urgent: { icon: AlertCircle, color: "#EF4444", bg: "#FEE2E2" },
-  high: { icon: AlertCircle, color: "#F97316", bg: "#FFF7ED" },
-  medium: { icon: Info, color: "#3B82F6", bg: "#EFF6FF" },
-  low: { icon: Info, color: "#10B981", bg: "#F0FDF4" },
-};
-
-interface WorkerMessage {
-  id: string;
-  alert_type: string;
-  title: string;
-  message: string;
-  severity: "urgent" | "high" | "medium" | "low";
-  is_read: boolean;
-  created_at: string;
-  patient_id?: string;
+function formatRelative(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
-interface MessagesResponse {
-  messages: WorkerMessage[];
-  count: number;
-}
-
-async function fetchWorkerMessages(unread_only = false): Promise<MessagesResponse> {
-  const params = new URLSearchParams();
-  if (unread_only) params.append("unread_only", "true");
-  
-  const response = await fetch(`/api/worker/messages?${params}`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!response.ok) throw new Error(`Failed to fetch messages: ${response.statusText}`);
-  return response.json();
-}
-
-async function markMessageRead(messageId: string): Promise<void> {
-  const response = await fetch(`/api/worker/messages/${messageId}/read`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!response.ok) throw new Error(`Failed to mark message as read`);
-}
-
-function formatDate(isoDate: string) {
-  const date = new Date(isoDate);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  
-  return date.toLocaleDateString();
-}
-
-function MessageCard({ message, onMarkRead }: { message: WorkerMessage; onMarkRead: (id: string) => void }) {
-  const severityConfig = SEVERITY_CONFIG[message.severity] || SEVERITY_CONFIG.medium;
-  const IconComponent = severityConfig.icon;
+function ConversationList({
+  conversations,
+  selectedId,
+  onSelect,
+}: {
+  conversations: Conversation[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (!conversations.length) {
+    return (
+      <div className="rounded-2xl border bg-white px-6 py-10 text-center" style={{ borderColor: BORDER }}>
+        <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
+        <p className="text-sm font-bold" style={{ color: TEXT }}>No conversations yet</p>
+      </div>
+    );
+  }
 
   return (
-    <button
-      type="button"
-      onClick={() => !message.is_read && onMarkRead(message.id)}
-      className={cn(
-        "w-full text-left rounded-2xl border transition-all p-4 sm:p-5",
-        message.is_read ? "bg-white opacity-75" : "bg-white border-l-4 hover:shadow-md",
-      )}
-      style={{
-        borderColor: message.is_read ? BORDER : severityConfig.color,
-        borderLeftColor: message.is_read ? undefined : severityConfig.color,
-      }}
-    >
-      <div className="flex gap-3 sm:gap-4">
-        <div
-          className="shrink-0 p-2.5 sm:p-3 rounded-2xl flex items-center justify-center"
-          style={{ background: severityConfig.bg }}
+    <div className="space-y-2">
+      {conversations.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          onClick={() => onSelect(c.id)}
+          className={cn(
+            "w-full rounded-2xl border bg-white p-4 text-left transition",
+            selectedId === c.id && "ring-2",
+          )}
+          style={{
+            borderColor: BORDER,
+            ...(selectedId === c.id ? { ringColor: PLUM } : {}),
+          }}
         >
-          <IconComponent size={18} className="sm:h-5 sm:w-5" style={{ color: severityConfig.color }} />
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-sm sm:text-base font-bold text-[#1E1640] line-clamp-1">
-              {message.title}
-            </h3>
-            {!message.is_read && (
-              <div className="shrink-0 h-2.5 w-2.5 rounded-full mt-1.5" style={{ background: PLUM }} />
-            )}
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate" style={{ color: TEXT }}>
+                {c.participant_name ?? "Coordinator"}
+              </p>
+              <p className="mt-0.5 text-xs truncate" style={{ color: MUTED }}>
+                {c.last_message_preview || "No messages yet"}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              {c.last_message_at && (
+                <p className="text-[10px]" style={{ color: MUTED }}>
+                  {formatRelative(c.last_message_at)}
+                </p>
+              )}
+              {(c.unread_count ?? 0) > 0 && (
+                <span
+                  className="mt-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-black text-white"
+                  style={{ background: CORAL }}
+                >
+                  {c.unread_count}
+                </span>
+              )}
+            </div>
           </div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
-          <p className="text-xs sm:text-sm text-[#7A6A9E] mb-2 line-clamp-2">
-            {message.message}
+function ThreadView({
+  conversation,
+  messages,
+  onSend,
+  sending,
+}: {
+  conversation: Conversation;
+  messages: ConversationMessage[];
+  onSend: (text: string) => void;
+  sending: boolean;
+}) {
+  const { user } = useAuth();
+  const [draft, setDraft] = useState("");
+  const readOnly = conversation.status === "read_only";
+
+  return (
+    <div className="flex h-[min(70vh,640px)] flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
+      <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
+        <p className="text-sm font-black" style={{ color: TEXT }}>
+          {conversation.participant_name ?? "Shift conversation"}
+        </p>
+        {readOnly && (
+          <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+            Read-only — shift ended
           </p>
-
-          <p className="text-xs text-[#A39AAE]">{formatDate(message.created_at)}</p>
-        </div>
-
-        {message.is_read && (
-          <div className="shrink-0 pt-1">
-            <Check size={16} className="text-[#10B981]" />
-          </div>
         )}
       </div>
-    </button>
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+        {messages.map((m) => {
+          const mine = m.sender_id === user?.id;
+          return (
+            <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
+              <div
+                className="max-w-[85%] rounded-2xl px-3 py-2 text-sm"
+                style={{
+                  background: mine ? PLUM : "#F5F3FC",
+                  color: mine ? "#fff" : TEXT,
+                }}
+              >
+                {m.body}
+                {m.attachment_url && (
+                  <img src={m.attachment_url} alt="" className="mt-2 max-h-40 rounded-lg" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!readOnly && (
+        <div className="flex gap-2 border-t p-3" style={{ borderColor: BORDER }}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Type a message…"
+            maxLength={1000}
+            className="flex-1 rounded-xl border px-3 py-2 text-sm"
+            style={{ borderColor: BORDER }}
+          />
+          <button
+            type="button"
+            disabled={!draft.trim() || sending}
+            className="rounded-xl px-3 py-2 text-white disabled:opacity-50"
+            style={{ background: PLUM }}
+            onClick={() => {
+              onSend(draft.trim());
+              setDraft("");
+            }}
+          >
+            <Send size={16} />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function WorkerMessages() {
-  const { user } = useAuth();
-  const [filter, setFilter] = useState<"all" | "unread">("unread");
-  
-  const { data, isLoading, error, refetch } = useOrgQuery(
-    ["worker", "messages", filter],
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const params = new URLSearchParams(window.location.search);
+  const queryConvId = params.get("conversation");
+
+  const { data, isLoading, refetch } = useOrgQuery(["worker-conversations"], {
+    queryFn: () => fetchConversations(),
+  });
+
+  const conversations = data?.conversations ?? [];
+  const activeId = selectedId ?? queryConvId ?? conversations[0]?.id ?? null;
+  const activeConv = conversations.find((c) => c.id === activeId);
+
+  const { data: threadData, refetch: refetchThread } = useOrgQuery(
+    ["conversation-thread", activeId ?? ""],
     {
-      queryFn: () => fetchWorkerMessages(filter === "unread"),
-      refetchInterval: 15000, // Refetch every 15 seconds
-    }
+      queryFn: () => fetchConversationMessages(activeId!),
+      enabled: !!activeId,
+    },
   );
 
-  const messages = data?.messages ?? [];
-  const unreadCount = messages.filter((m) => !m.is_read).length;
+  useConversationRealtime(activeId);
 
-  async function handleMarkRead(messageId: string) {
+  async function handleSend(text: string) {
+    if (!activeId) return;
+    setSending(true);
     try {
-      await markMessageRead(messageId);
+      await sendConversationMessage(activeId, text);
+      await refetchThread();
       await refetch();
-    } catch (error) {
-      console.error("Failed to mark message as read:", error);
-    }
-  }
-
-  async function handleMarkAllRead() {
-    try {
-      await Promise.all(
-        messages
-          .filter((m) => !m.is_read)
-          .map((m) => markMessageRead(m.id))
-      );
-      await refetch();
-    } catch (error) {
-      console.error("Failed to mark messages as read:", error);
+    } finally {
+      setSending(false);
     }
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 pb-10">
-      {/* Header */}
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
-            Communications
-          </p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-black tracking-tight" style={{ color: TEXT }}>
-            Messages
-          </h1>
-          <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
-            {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
-          </p>
-        </div>
-        <div className="shrink-0 relative">
-          <div
-            className="h-12 sm:h-14 w-12 sm:w-14 rounded-2xl flex items-center justify-center"
-            style={{ background: "#F5F3FC" }}
-          >
-            <MessageCircle className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: PLUM }} />
-          </div>
-          {unreadCount > 0 && (
-            <div
-              className="absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black text-white"
-              style={{ background: CORAL }}
-            >
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </div>
-          )}
-        </div>
+    <div className="mx-auto grid w-full max-w-5xl gap-5 pb-10 lg:grid-cols-[320px_1fr]">
+      <header className="lg:col-span-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
+          Communications
+        </p>
+        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+          Messages
+        </h1>
+        <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
+          {data?.unread_count ? `${data.unread_count} unread` : "Coordinator conversations"}
+        </p>
       </header>
 
-      {/* Filter Tabs */}
-      <div className="rounded-full bg-[#F0EDF8] p-1 flex gap-1">
-        {["all", "unread"].map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilter(f as "all" | "unread")}
-            className={cn(
-              "flex-1 rounded-full px-3 py-2.5 text-xs sm:text-sm font-black transition capitalize",
-              filter === f
-                ? "bg-white text-[#1E1640] shadow-sm"
-                : "text-[#7A6A9E]"
-            )}
+      <section>
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin" style={{ color: PLUM }} />
+          </div>
+        ) : (
+          <ConversationList
+            conversations={conversations}
+            selectedId={activeId}
+            onSelect={setSelectedId}
+          />
+        )}
+      </section>
+
+      <section>
+        {activeConv && threadData ? (
+          <ThreadView
+            conversation={activeConv}
+            messages={threadData.messages}
+            onSend={handleSend}
+            sending={sending}
+          />
+        ) : (
+          <div
+            className="flex h-64 items-center justify-center rounded-2xl border bg-white"
+            style={{ borderColor: BORDER }}
           >
-            {f}
-            {f === "unread" && ` (${unreadCount})`}
-          </button>
-        ))}
-      </div>
+            <MessageCircle size={28} style={{ color: MUTED }} />
+          </div>
+        )}
+      </section>
 
-      {/* Mark All Read Button */}
-      {unreadCount > 0 && (
-        <button
-          type="button"
-          onClick={handleMarkAllRead}
-          className="w-full sm:w-auto rounded-full px-4 py-2 text-xs font-black text-white transition hover:opacity-90"
-          style={{ background: PLUM }}
-        >
-          <CheckCheck className="inline h-4 w-4 mr-2" />
-          Mark all as read
-        </button>
-      )}
-
-      {/* Loading State */}
-      {isLoading && (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-2xl border bg-white p-4 animate-pulse" style={{ borderColor: BORDER }}>
-              <div className="flex gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-slate-200" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-2/3 rounded bg-slate-200" />
-                  <div className="h-3 w-1/2 rounded bg-slate-100" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="rounded-2xl border-l-4 border-red-500 bg-red-50 p-4">
-          <p className="text-sm font-bold text-red-900">Failed to load messages</p>
-          <p className="text-xs text-red-700 mt-1">{(error as Error).message}</p>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="mt-3 rounded-full bg-red-500 px-4 py-2 text-xs font-black text-white"
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!isLoading && !error && messages.length === 0 && (
-        <div
-          className="rounded-2xl border bg-white px-6 py-10 text-center shadow-sm"
-          style={{ borderColor: BORDER }}
-        >
-          <Bell size={36} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
-          <p className="text-base font-black" style={{ color: TEXT }}>
-            {filter === "unread" ? "No new messages" : "No messages"}
-          </p>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-            {filter === "unread"
-              ? "Check back later for updates from your coordinator."
-              : "You haven't received any messages yet."}
-          </p>
-        </div>
-      )}
-
-      {/* Messages List */}
-      {!isLoading && !error && messages.length > 0 && (
-        <div className="space-y-3">
-          {messages.map((message) => (
-            <MessageCard
-              key={message.id}
-              message={message}
-              onMarkRead={handleMarkRead}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Back Link */}
-      <div className="flex justify-center pt-4">
+      <div className="lg:col-span-2 flex justify-center gap-4 pt-2">
+        <Link href="/worker/notifications">
+          <a className="text-sm font-semibold" style={{ color: PLUM }}>
+            Notification history
+          </a>
+        </Link>
         <Link href="/my-shifts">
           <a className="text-sm font-semibold" style={{ color: PLUM }}>
             ← Back to shifts

@@ -5,6 +5,7 @@ system role on every compliance-related call so every AI output is guaranteed
 to be NDIS-compliant, person-centred, and audit-ready.
 """
 from openai import OpenAI
+from typing import Any
 from ..core.config import settings
 import json
 import os
@@ -1086,36 +1087,65 @@ Respond with a JSON object:
 # Real-time Note Assessment (4-criteria scoring matrix)
 # ---------------------------------------------------------------------------
 
+def has_measurable_progress_delta(raw: Any) -> bool:
+    """True when progress_delta contains at least one measurable entry (CARECLIQV2-75)."""
+    entries = parse_progress_delta(raw)
+    if not entries:
+        return False
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("delta_summary") or "").strip():
+            return True
+        if entry.get("prompt_level"):
+            return True
+        if entry.get("independence_rating") is not None:
+            return True
+        if (entry.get("skill_step") or "").strip():
+            return True
+    return False
+
+
 async def assess_note(
     note_text: str,
     session_started: bool,
     goals: list[dict],
+    progress_delta: Any = None,
 ) -> dict:
     """Score a clinical note entry against the NDIS compliance matrix.
 
-    Criteria and weights (spec §4):
-      • Timestamp/session check-in  +25%  (heuristic — session started flag)
-      • Semantic NDIS goal connection +35% (AI)
-      • Documented support outcome   +25% (AI)
-      • Next-step/routine action     +15% (AI)
+    Criteria and weights (CARECLIQV2-75):
+      • Timestamp/session check-in       +20
+      • Semantic NDIS goal connection    +28
+      • Documented support outcome       +20
+      • Next-step/routine action         +12
+      • Progress Evidence (progress_delta) +20
 
-    Returns:
-      score (0-100), is_ready_for_billing (score >= 75),
-      breakdown dict with per-criteria scores and labels.
+    Without measurable progress_delta the score is hard-capped at 80.
+    is_ready_for_billing remains at score >= 75.
     """
-    # Criterion A — Timestamp / session check-in (heuristic, no AI needed)
-    score_a = 25 if session_started else 0
+    score_a = 20 if session_started else 0
+    progress_pass = has_measurable_progress_delta(progress_delta)
+    score_e = 20 if progress_pass else 0
 
-    # Short-circuit: nothing useful to assess if the note is too short
     if len(note_text.strip()) < 15:
+        total = min(score_a + score_e, 80) if not progress_pass else score_a + score_e
         return {
-            "score": score_a,
-            "is_ready_for_billing": False,
+            "score": total,
+            "is_ready_for_billing": total >= 75,
+            "progress_capped": not progress_pass and total >= 80,
             "breakdown": {
-                "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in"},
-                "goal":     {"score": 0, "max": 35, "label": "Semantic NDIS goal connection"},
-                "outcome":  {"score": 0, "max": 25, "label": "Documented support outcome"},
-                "nextstep": {"score": 0, "max": 15, "label": "Next-step / routine action"},
+                "checkin": {"score": score_a, "max": 20, "label": "Session active check-in", "pass": session_started},
+                "goal": {"score": 0, "max": 28, "label": "Semantic NDIS goal connection", "pass": False},
+                "outcome": {"score": 0, "max": 20, "label": "Documented support outcome", "pass": False},
+                "nextstep": {"score": 0, "max": 12, "label": "Next-step / routine action", "pass": False},
+                "progress_evidence": {
+                    "score": score_e,
+                    "max": 20,
+                    "label": "Progress Evidence",
+                    "pass": progress_pass,
+                    "feedback": "Measurable progress evidence present." if progress_pass else "No measurable progress evidence in progress_delta.",
+                },
             },
             "feedback": "Note is too short to assess — add more detail.",
         }
@@ -1134,19 +1164,19 @@ CLINICAL NOTE:
 \"\"\"{note_text}\"\"\"
 
 SCORING CRITERIA:
-1. "goal_score" (0-35): Does the note semantically reference or address any of the participant's NDIS goals? Award up to 35 based on specificity and clarity.
-2. "outcome_score" (0-25): Does the note document a measurable or observable support outcome (e.g. what was achieved, participant's response)? Award up to 25.
-3. "nextstep_score" (0-15): Does the note mention a follow-up action, next routine step, or plan for the next session? Award up to 15.
+1. "goal_score" (0-28): Does the note semantically reference or address any of the participant's NDIS goals? Award up to 28 based on specificity and clarity.
+2. "outcome_score" (0-20): Does the note document a measurable or observable support outcome (e.g. what was achieved, participant's response)? Award up to 20.
+3. "nextstep_score" (0-12): Does the note mention a follow-up action, next routine step, or plan for the next session? Award up to 12.
 
 For each criterion also provide a one-sentence "feedback" explaining the score.
 
 Respond with exactly:
 {{
-  "goal_score": <int 0-35>,
+  "goal_score": <int 0-28>,
   "goal_feedback": "<sentence>",
-  "outcome_score": <int 0-25>,
+  "outcome_score": <int 0-20>,
   "outcome_feedback": "<sentence>",
-  "nextstep_score": <int 0-15>,
+  "nextstep_score": <int 0-12>,
   "nextstep_feedback": "<sentence>"
 }}"""
 
@@ -1166,21 +1196,59 @@ Respond with exactly:
         logger.warning("assess_note AI call failed: %s", exc)
         r = {"goal_score": 0, "goal_feedback": "", "outcome_score": 0, "outcome_feedback": "", "nextstep_score": 0, "nextstep_feedback": ""}
 
-    score_b = max(0, min(35, int(r.get("goal_score", 0))))
-    score_c = max(0, min(25, int(r.get("outcome_score", 0))))
-    score_d = max(0, min(15, int(r.get("nextstep_score", 0))))
-    total   = score_a + score_b + score_c + score_d
+    score_b = max(0, min(28, int(r.get("goal_score", 0))))
+    score_c = max(0, min(20, int(r.get("outcome_score", 0))))
+    score_d = max(0, min(12, int(r.get("nextstep_score", 0))))
+    total = score_a + score_b + score_c + score_d + score_e
+    if not progress_pass:
+        total = min(total, 80)
 
     return {
         "score": total,
         "is_ready_for_billing": total >= 75,
+        "progress_capped": not progress_pass and (score_a + score_b + score_c + score_d) > 80,
         "breakdown": {
-            "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in",       "feedback": "Session is active — timestamp check passed." if session_started else "Session not yet started."},
-            "goal":     {"score": score_b, "max": 35, "label": "Semantic NDIS goal connection",  "feedback": r.get("goal_feedback", "")},
-            "outcome":  {"score": score_c, "max": 25, "label": "Documented support outcome",    "feedback": r.get("outcome_feedback", "")},
-            "nextstep": {"score": score_d, "max": 15, "label": "Next-step / routine action",    "feedback": r.get("nextstep_feedback", "")},
+            "checkin": {
+                "score": score_a,
+                "max": 20,
+                "label": "Session active check-in",
+                "pass": session_started,
+                "feedback": "Session is active — timestamp check passed." if session_started else "Session not yet started.",
+            },
+            "goal": {
+                "score": score_b,
+                "max": 28,
+                "label": "Semantic NDIS goal connection",
+                "pass": score_b >= 14,
+                "feedback": r.get("goal_feedback", ""),
+            },
+            "outcome": {
+                "score": score_c,
+                "max": 20,
+                "label": "Documented support outcome",
+                "pass": score_c >= 10,
+                "feedback": r.get("outcome_feedback", ""),
+            },
+            "nextstep": {
+                "score": score_d,
+                "max": 12,
+                "label": "Next-step / routine action",
+                "pass": score_d >= 6,
+                "feedback": r.get("nextstep_feedback", ""),
+            },
+            "progress_evidence": {
+                "score": score_e,
+                "max": 20,
+                "label": "Progress Evidence",
+                "pass": progress_pass,
+                "feedback": (
+                    "Measurable progress evidence present in progress_delta."
+                    if progress_pass
+                    else "No measurable progress evidence — score capped at 80%."
+                ),
+            },
         },
-        "feedback": "Ready for billing." if total >= 75 else f"Score {total}/100 — add goal references, outcomes, and next steps to reach billing threshold.",
+        "feedback": "Ready for billing." if total >= 75 else f"Score {total}/100 — add goal references, outcomes, next steps, and progress evidence to reach billing threshold.",
     }
 
 

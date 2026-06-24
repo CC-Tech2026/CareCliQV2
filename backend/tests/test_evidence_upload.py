@@ -40,6 +40,64 @@ def _session_row():
 
 @patch("backend.app.services.evidence_upload_service.upload_evidence_bytes")
 @patch("backend.app.services.evidence_upload_service.get_supabase_admin")
+def test_upload_photo_ignores_non_uuid_goal_id(mock_admin, mock_upload):
+    mock_upload.return_value = StoredObject(
+        storage_path="org-1/sess-1/evidence/evid-abc.jpg",
+        file_url="https://example.com/evid.jpg",
+        provider="supabase",
+    )
+
+    supabase = MagicMock()
+    mock_admin.return_value = supabase
+
+    table = MagicMock()
+    supabase.table.return_value = table
+    select_chain = MagicMock()
+    table.select.return_value = select_chain
+    select_chain.eq.return_value = select_chain
+    select_chain.limit.return_value = select_chain
+    select_chain.execute.return_value = MagicMock(data=[_session_row()])
+
+    insert_chain = MagicMock()
+    table.insert.return_value = insert_chain
+    insert_chain.execute.return_value = MagicMock(data=[{}])
+
+    update_chain = MagicMock()
+    table.update.return_value = update_chain
+    update_chain.eq.return_value = update_chain
+    update_chain.execute.return_value = MagicMock(data=[{}])
+
+    evidence_id = "evid-abc"
+    result = evidence_upload_service.upload_session_evidence_media(
+        session_id="sess-1",
+        worker_id="worker-1",
+        organization_id="org-1",
+        evidence_items=[
+            {
+                "evidence_id": evidence_id,
+                "task_id": "task-1",
+                "goal_id": "daily_living_skills",
+                "type": "photo",
+                "mime_type": "image/jpeg",
+                "created_at": "2026-01-15T14:45:00Z",
+            }
+        ],
+        files={evidence_id: _tiny_jpeg_b64()},
+        uploaded_by="worker-1",
+    )
+
+    assert result is not None
+    metadata_inserts = [
+        call.args[0]
+        for call in table.insert.call_args_list
+        if isinstance(call.args[0], dict) and "file_hash" in call.args[0]
+    ]
+    assert len(metadata_inserts) == 1
+    assert metadata_inserts[0]["goal_id"] is None
+
+
+@patch("backend.app.services.evidence_upload_service.upload_evidence_bytes")
+@patch("backend.app.services.evidence_upload_service.get_supabase_admin")
 def test_upload_photo_stores_file_and_metadata(mock_admin, mock_upload):
     mock_upload.return_value = StoredObject(
         storage_path="org-1/sess-1/evidence/evid-abc.jpg",
@@ -78,6 +136,7 @@ def test_upload_photo_stores_file_and_metadata(mock_admin, mock_upload):
             }
         ],
         files={evidence_id: _tiny_jpeg_b64()},
+        uploaded_by="worker-1",
     )
 
     assert result is not None
@@ -123,6 +182,7 @@ def test_upload_rejects_oversized_file(mock_admin):
                 }
             ],
             files={evidence_id: huge},
+            uploaded_by="worker-1",
         )
 
 
@@ -144,5 +204,6 @@ def test_upload_denies_unauthorized_worker(mock_admin):
         organization_id="org-1",
         evidence_items=[],
         files={},
+        uploaded_by="other-worker",
     )
     assert result is None

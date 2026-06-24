@@ -48,14 +48,10 @@ export interface WorkerMessage {
 async function fetchWorkerMessages(unread_only = false): Promise<{ messages: WorkerMessage[]; count: number }> {
   const params = new URLSearchParams();
   if (unread_only) params.append("unread_only", "true");
-
-  console.log("[WorkerNotificationPanel] Fetching messages with params:", Object.fromEntries(params));
   
   try {
     const data = await jsonFetch<{ messages: any[]; count: number }>(`/api/worker/messages?${params}`);
-    
-    console.log("[WorkerNotificationPanel] API returned:", data);
-    
+        
     const transformed = {
       messages: (data.messages || []).map((msg: any) => ({
         id: msg.id,
@@ -71,39 +67,29 @@ async function fetchWorkerMessages(unread_only = false): Promise<{ messages: Wor
       count: data.count || 0,
     };
     
-    console.log("[WorkerNotificationPanel] Transformed messages:", transformed);
     return transformed;
   } catch (error) {
-    console.error("[WorkerNotificationPanel] Fetch error:", error);
     throw error;
   }
 }
 
-async function markMessageRead(messageId: string): Promise<void> {
-  console.log("[WorkerNotificationPanel] Marking message as read:", messageId);
-  
+async function markMessageRead(messageId: string): Promise<void> {  
   try {
     await jsonFetch(`/api/worker/messages/${messageId}/read`, {
       method: "POST",
     });
-    console.log("[WorkerNotificationPanel] Message marked as read successfully");
   } catch (error) {
-    console.error("[WorkerNotificationPanel] Failed to mark message as read:", error);
     throw error;
   }
 }
 
-async function replyToMessage(messageId: string, replyText: string): Promise<void> {
-  console.log("[WorkerNotificationPanel] Replying to message:", messageId);
-  
+async function replyToMessage(messageId: string, replyText: string): Promise<void> {  
   try {
     await jsonFetch(`/api/worker/messages/${messageId}/reply`, {
       method: "POST",
       body: JSON.stringify({ message: replyText }),
     });
-    console.log("[WorkerNotificationPanel] Reply sent successfully");
   } catch (error) {
-    console.error("[WorkerNotificationPanel] Failed to send reply:", error);
     throw error;
   }
 }
