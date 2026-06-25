@@ -565,12 +565,14 @@ async def _notify_office_staff(
     severity: str = "medium",
     participant_id: Optional[str] = None,
     session_id: Optional[str] = None,
+    event: str = "coordinator_message",
+    push_priority: str = "default",
 ) -> None:
     for coordinator_id in _org_coordinator_user_ids(org_id):
         await notify_worker(
             user_id=coordinator_id,
             org_id=org_id,
-            event="coordinator_message",
+            event=event if event in NOTIFICATION_EVENTS else "coordinator_message",
             title=title,
             message=message,
             reference_key=reference_key,
@@ -579,6 +581,7 @@ async def _notify_office_staff(
             session_id=session_id,
             action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents",
             email_subject=title,
+            push_priority=push_priority,
         )
 
 
@@ -592,15 +595,58 @@ async def notify_incident_reported(
     participant_id: Optional[str] = None,
     session_id: Optional[str] = None,
     escalate: bool = False,
+    reference_number: Optional[str] = None,
+    is_emergency: bool = False,
 ) -> None:
+    ref_line = f" Reference: {reference_number}." if reference_number else ""
+    body = f"{message}{ref_line}"
+    is_critical = is_emergency or escalate or severity in ("high", "critical", "emergency")
+    event = "safety_alert" if is_emergency else "coordinator_message"
+    push_priority = "high" if is_emergency else "default"
+
     await _notify_office_staff(
         org_id=org_id,
         title=title,
-        message=message,
+        message=body,
         reference_key=f"incident:{incident_id}",
-        severity="critical" if escalate or severity in ("high", "critical") else severity,
+        severity="critical" if is_critical else severity,
         participant_id=participant_id,
         session_id=session_id,
+        event=event,
+        push_priority=push_priority,
+    )
+
+    if is_emergency and participant_id:
+        from .safety_protocol_service import get_on_call_phones
+
+        phones = get_on_call_phones(participant_id, org_id)
+        if phones:
+            logger.info(
+                "Emergency incident %s — on-call contacts: %s",
+                incident_id,
+                ", ".join(phones),
+            )
+
+
+async def notify_incident_status_changed(
+    *,
+    worker_id: str,
+    org_id: str,
+    incident_id: str,
+    reference_number: Optional[str],
+    status_label: str,
+) -> None:
+    ref = reference_number or incident_id[:8]
+    await notify_worker(
+        user_id=worker_id,
+        org_id=org_id,
+        event="coordinator_message",
+        title=f"Incident update — {ref}",
+        message=f"Your incident report is now: {status_label}.",
+        reference_key=f"incident-status:{incident_id}:{status_label}",
+        severity="medium",
+        action_url=f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}",
+        email_subject=f"Incident {ref} — status update",
     )
 
 

@@ -41,6 +41,13 @@ import {
   type CachedParticipantContext,
 } from "@/lib/participant-context-cache";
 import { ClockInFlow } from "@/components/shifts/ClockInFlow";
+import { ParticipantSafetyPage } from "@/components/shifts/ParticipantSafetyPage";
+import {
+  cacheSafetyProtocol,
+  loadCachedSafetyProtocol,
+} from "@/lib/participant-safety-cache";
+import type { SafetyProtocol } from "@/services/safetyProtocolService";
+import { getWorkerSafetyProtocol } from "@/services/safetyProtocolService";
 import {
   enqueueClockIn,
   getPendingClockIn,
@@ -147,6 +154,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [forceEndPending, setForceEndPending] = useState(false);
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
   const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
+  const [safetyProtocolOpen, setSafetyProtocolOpen] = useState(false);
+  const [safetyProtocolMandatory, setSafetyProtocolMandatory] = useState(false);
+  const [safetyProtocolView, setSafetyProtocolView] = useState<SafetyProtocol | null>(null);
   const [pendingClockInCount, setPendingClockInCount] = useState(0);
   const [offlineSyncing, setOfflineSyncing] = useState(false);
 
@@ -206,7 +216,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         syncedAt,
       });
     }
-  }, [shift?.participant_id, shift?.profile, shift?.preferences, shift?.context, shift?.context_synced_at]);
+    if (shift.safety_protocol && shift.has_safety_content) {
+      void cacheSafetyProtocol(shift.participant_id, shift.safety_protocol);
+    }
+  }, [
+    shift?.participant_id,
+    shift?.profile,
+    shift?.preferences,
+    shift?.context,
+    shift?.context_synced_at,
+    shift?.safety_protocol,
+    shift?.has_safety_content,
+  ]);
 
   useEffect(() => {
     if (!shift?.participant_id) return;
@@ -248,7 +269,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const applyClockInResult = async (updated: WorkerShift) => {
     if (!shift) return;
     setTasks(updated.tasks ?? []);
-    if (shift.participant_id && (updated.profile || updated.context)) {
+    if (shift.participant_id && (updated.profile || updated.context || updated.safety_protocol)) {
       void cacheParticipantContext({
         participantId: shift.participant_id,
         profile: updated.profile ?? shift.profile,
@@ -256,6 +277,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         context: updated.context ?? shift.context,
         syncedAt: updated.context_synced_at || new Date().toISOString(),
       });
+      if (updated.safety_protocol) {
+        void cacheSafetyProtocol(shift.participant_id, updated.safety_protocol);
+      }
     }
     invalidateShifts();
     await refetch();
@@ -399,8 +423,39 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
+  const openSafetyPage = async (mandatory = false) => {
+    if (!shift?.participant_id) return;
+    setSafetyProtocolMandatory(mandatory);
+    setSafetyProtocolOpen(true);
+    try {
+      const fresh = await getWorkerSafetyProtocol(shift.participant_id);
+      setSafetyProtocolView(fresh);
+      if (fresh.has_safety_content) {
+        void cacheSafetyProtocol(shift.participant_id, fresh);
+      }
+      return;
+    } catch {
+      // Fall back to shift payload or offline cache.
+    }
+    if (shift.safety_protocol) {
+      setSafetyProtocolView(shift.safety_protocol);
+      return;
+    }
+    const cached = await loadCachedSafetyProtocol(shift.participant_id);
+    if (cached) setSafetyProtocolView(cached);
+  };
+
   const handleClockIn = () => {
     if (!shift) return;
+    if (shift.requires_safety_ack) {
+      void openSafetyPage(true);
+      toast({
+        title: "Safety card required",
+        description: "Read and acknowledge the participant safety card before clocking in.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
       setSafetyOpen(true);
       toast({
@@ -666,6 +721,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           document.getElementById("shift-support-instructions")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }}
+      onOpenSafetyPage={() => void openSafetyPage(false)}
       onClockIn={handleClockIn}
       onStartSession={handleStartSession}
       onRequestClockOut={() => setClockOutOpen(true)}
@@ -693,6 +749,22 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           onMarkNa={(taskId, reason) => void handleMarkTaskNa(taskId, reason)}
           onEndAnyway={handleValidationEndAnyway}
           onEndShift={handleValidationEndShift}
+        />
+      )}
+
+      {shift && (
+        <ParticipantSafetyPage
+          open={safetyProtocolOpen}
+          protocol={safetyProtocolView}
+          participantName={shift.participant_name}
+          mandatory={safetyProtocolMandatory}
+          onClose={() => {
+            setSafetyProtocolOpen(false);
+            setSafetyProtocolMandatory(false);
+          }}
+          onAcknowledged={() => {
+            void refetch();
+          }}
         />
       )}
 
@@ -826,7 +898,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-10">
+    <div className="mx-auto max-w-xl space-y-4 pb-10">
       <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner
@@ -892,6 +964,7 @@ function ShiftWorkflow({
   busy,
   onRequestAcknowledge,
   onViewSupportInstructions,
+  onOpenSafetyPage,
   onClockIn,
   onStartSession,
   onRequestClockOut,
@@ -939,6 +1012,7 @@ function ShiftWorkflow({
   busy: string | null;
   onRequestAcknowledge: () => void;
   onViewSupportInstructions: () => void;
+  onOpenSafetyPage: () => void;
   onClockIn: () => void;
   onStartSession: () => void;
   onRequestClockOut: () => void;
@@ -1233,6 +1307,29 @@ function ShiftWorkflow({
         onToggle={() => setSupportOpen(!supportOpen)}
         sectionId="shift-support-instructions"
       />
+
+      {(shift.has_safety_content || shift.safety_protocol) && (
+        <section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-violet-900">Safety protocols</p>
+              <p className="text-xs text-violet-700">
+                {shift.requires_safety_ack
+                  ? "Acknowledgement required before clock-in"
+                  : "Available offline during your shift"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="font-bold"
+              onClick={onOpenSafetyPage}
+            >
+              View safety page
+            </Button>
+          </div>
+        </section>
+      )}
 
       <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
 

@@ -4,6 +4,45 @@ export interface IncidentPhotoItem {
   data: string;
   description?: string;
   captured_at?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const WORKER_REPORT_TYPES = [
+  { value: "safety_hazard", label: "Safety hazard" },
+  { value: "participant_behaviour", label: "Participant behaviour" },
+  { value: "equipment_damage", label: "Equipment damage" },
+  { value: "travel_accident", label: "Travel accident" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const BEHAVIOUR_SUBTYPES = [
+  { value: "verbal", label: "Verbal" },
+  { value: "physical", label: "Physical" },
+  { value: "property", label: "Property" },
+] as const;
+
+export const WORKER_SEVERITIES = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "emergency", label: "Emergency" },
+] as const;
+
+export interface WorkerIncidentPayload {
+  participant_id?: string;
+  session_id?: string;
+  shift_id?: string;
+  worker_report_type: string;
+  behaviour_subtype?: string;
+  severity: string;
+  description: string;
+  incident_date: string;
+  location?: string;
+  participant_present?: boolean;
+  participant_harmed?: "yes" | "no" | "unknown";
+  worker_actions?: string;
+  photo_items?: IncidentPhotoItem[];
 }
 
 export interface IncidentPayload {
@@ -39,6 +78,24 @@ export function getIncidentStats<T = unknown>() {
 
 export function getIncident<T = unknown>(id: string) {
   return jsonFetch<T>(`/api/incidents/${id}`);
+}
+
+export function createWorkerIncident<T = unknown>(payload: WorkerIncidentPayload) {
+  return jsonFetch<T>("/api/incidents/worker-report", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addIncidentCorrection<T = unknown>(incidentId: string, note: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/corrections`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function listIncidentCorrections<T = unknown>(incidentId: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/corrections`);
 }
 
 export function createIncident<T = unknown>(payload: IncidentPayload) {

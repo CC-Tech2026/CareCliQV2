@@ -47,6 +47,15 @@ export function ParticipantRiskAlertCard({
   const riskType = (alert.type ?? "other") as ParticipantRiskType;
   const Icon = RISK_ICONS[riskType] ?? ShieldAlert;
   const isCritical = alert.severity === "critical";
+  const bodyText = (alert.instructions || alert.description || "").trim();
+  const showDescription =
+    Boolean(alert.description)
+    && alert.description !== alert.title
+    && alert.description !== alert.instructions;
+  const showInstructions =
+    Boolean(alert.instructions)
+    && alert.instructions !== alert.description;
+  const showSingleBody = riskType === "bsp" || (!showDescription && !showInstructions && Boolean(bodyText));
 
   return (
     <li
@@ -69,15 +78,39 @@ export function ParticipantRiskAlertCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className={cn("font-black leading-snug", compact ? "text-xs" : "text-sm")}>{alert.title}</p>
-          {alert.description && alert.description !== alert.title && (
-            <p className={cn("mt-1 font-semibold leading-relaxed", compact ? "text-[11px]" : "text-xs")} style={{ color: MUTED }}>
-              {alert.description}
+          {showSingleBody ? (
+            <p
+              className={cn(
+                "mt-1.5 font-medium leading-relaxed whitespace-pre-wrap",
+                compact ? "text-[11px]" : "text-xs",
+              )}
+            >
+              {bodyText}
             </p>
-          )}
-          {alert.instructions && alert.instructions !== alert.description && (
-            <p className={cn("mt-1.5 font-medium leading-relaxed", compact ? "text-[11px]" : "text-xs")}>
-              {alert.instructions}
-            </p>
+          ) : (
+            <>
+              {showDescription && (
+                <p
+                  className={cn(
+                    "mt-1 font-semibold leading-relaxed whitespace-pre-wrap",
+                    compact ? "text-[11px]" : "text-xs",
+                  )}
+                  style={{ color: MUTED }}
+                >
+                  {alert.description}
+                </p>
+              )}
+              {showInstructions && (
+                <p
+                  className={cn(
+                    "mt-1.5 font-medium leading-relaxed whitespace-pre-wrap",
+                    compact ? "text-[11px]" : "text-xs",
+                  )}
+                >
+                  {alert.instructions}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

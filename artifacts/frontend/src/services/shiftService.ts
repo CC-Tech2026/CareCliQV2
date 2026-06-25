@@ -185,6 +185,11 @@ export type WorkerShift = {
   risks_acknowledged_at?: string | null;
   risks_acknowledged_by?: string | null;
   risks_acknowledged_by_name?: string | null;
+  requires_safety_ack?: boolean;
+  acknowledged_version?: number | null;
+  has_safety_content?: boolean;
+  content_version?: number;
+  safety_protocol?: import("@/services/safetyProtocolService").SafetyProtocol;
   profile?: ParticipantProfile;
   preferences?: ParticipantPreferences;
   context?: ParticipantContext;

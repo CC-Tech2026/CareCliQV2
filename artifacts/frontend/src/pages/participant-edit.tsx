@@ -265,6 +265,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="review">Review</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                     <SelectItem value="expired">Expired</SelectItem>

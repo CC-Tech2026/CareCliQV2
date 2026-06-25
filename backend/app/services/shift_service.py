@@ -377,7 +377,7 @@ def build_structured_health_alerts(
             add(_make_risk_alert(
                 "bsp",
                 title="Behaviour Support Plan (BSP)",
-                description=body[:280],
+                description=body,
                 instructions=body,
                 severity="important",
             ))
@@ -509,9 +509,24 @@ def build_participant_risks(shift: dict[str, Any], organization_id: str) -> list
 
 def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_id: str) -> None:
     if shift.get("risks_acknowledged_at"):
-        return
-    if build_participant_risks(shift, organization_id):
+        pass
+    elif build_participant_risks(shift, organization_id):
         raise ValueError("Acknowledge risks before continuing.")
+
+    participant_id = str(shift.get("participant_id") or "")
+    worker_id = str(shift.get("worker_id") or "")
+    if participant_id and worker_id:
+        from .safety_protocol_service import build_worker_safety_status
+
+        status = build_worker_safety_status(
+            participant_id=participant_id,
+            organization_id=organization_id,
+            worker_id=worker_id,
+        )
+        if status.get("requires_safety_ack"):
+            raise ValueError(
+                "Read and acknowledge the participant safety card before clocking in."
+            )
 
 
 def _resolve_worker_display_name(worker_id: str) -> Optional[str]:
@@ -1259,6 +1274,19 @@ def get_shift_detail_for_worker(
     payload["support_instructions"] = build_support_instructions(shift, payload)
     payload["health_alerts"] = build_participant_risks(shift, organization_id)
     payload["has_risk_alerts"] = bool(payload["health_alerts"])
+    if participant_id and worker_id:
+        from .safety_protocol_service import build_worker_safety_status, get_protocol
+
+        safety_status = build_worker_safety_status(
+            participant_id=participant_id,
+            organization_id=organization_id,
+            worker_id=worker_id,
+        )
+        payload.update(safety_status)
+        if safety_status.get("has_safety_content"):
+            protocol = get_protocol(participant_id, organization_id)
+            protocol = {**protocol, **safety_status}
+            payload["safety_protocol"] = protocol
     active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
     if active_goals:
         payload["active_goals"] = active_goals
@@ -1764,6 +1792,35 @@ def _participant_exists_in_org(participant_id: str, org_id: str) -> bool:
         if _is_missing_schema_error(exc):
             return False
         raise
+
+
+def worker_has_shift_for_participant(
+    participant_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> bool:
+    """True when the worker has at least one shift for this participant in-org."""
+    if not participant_id or not worker_id or not organization_id:
+        return False
+    if not _participant_exists_in_org(participant_id, organization_id):
+        return False
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shifts")
+            .select("id")
+            .eq("participant_id", participant_id)
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        return bool(resp.data)
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return False
+        logger.debug("worker_has_shift_for_participant failed: %s", exc)
+        return False
 
 
 def start_shift_session(
