@@ -1082,6 +1082,7 @@ async def worker_delete_session_note(
 async def worker_sync_task_evidence(
     session_id: str,
     body: TaskEvidenceSyncBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Sync task-specific evidence captured during a shift session (CARECLIQV2-228)."""
@@ -1089,7 +1090,14 @@ async def worker_sync_task_evidence(
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     evidence = [item.model_dump() for item in body.evidence]
-    result = shift_service.sync_session_task_evidence(session_id, worker_id, org_id, evidence)
+    result = shift_service.sync_session_task_evidence(
+        session_id,
+        worker_id,
+        org_id,
+        evidence,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     await audit_service.log_action(

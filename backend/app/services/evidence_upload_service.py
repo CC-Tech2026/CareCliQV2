@@ -302,7 +302,7 @@ def upload_session_evidence_media(
             "session_id": session_id,
             "organization_id": org_id,
             "uploaded_by": uploaded_by,  # From JWT, never client-supplied
-            "uploaded_at": server_timestamp,  # Server timestamp, immutable
+            "uploaded_at": server_timestamp.isoformat(),  # Server timestamp, immutable
             "file_hash": file_hash,  # SHA-256, computed on raw bytes
             "file_hash_algorithm": "sha256",
             "file_size_bytes": len(raw_bytes),
