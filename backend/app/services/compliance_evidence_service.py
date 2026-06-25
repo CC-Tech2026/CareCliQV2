@@ -6,6 +6,7 @@ import csv
 import hashlib
 import io
 import logging
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -194,6 +195,101 @@ def get_evidence_metadata(evidence_id: str) -> Optional[dict[str, Any]]:
             return None
         raise
     return None
+
+
+def _coerce_uuid(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return str(uuid.UUID(text))
+    except ValueError:
+        return None
+
+
+def record_text_evidence_metadata(
+    *,
+    evidence_id: str,
+    session_id: str,
+    organization_id: str,
+    uploaded_by: str,
+    content: str,
+    task_id: Optional[str] = None,
+    goal_id: Any = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> bool:
+    """Create chain-of-custody metadata for synced text thread evidence."""
+    text = (content or "").strip()
+    if not text or not evidence_id:
+        return False
+    if get_evidence_metadata(evidence_id):
+        return False
+
+    shift_id = resolve_shift_id_for_session(session_id)
+    shift_date = resolve_shift_date(shift_id)
+    retention_until = compute_retention_until(shift_date, organization_id)
+    device_type = parse_device_type(user_agent)
+    raw_bytes = text.encode("utf-8")
+    file_hash = hashlib.sha256(raw_bytes).hexdigest()
+    server_timestamp = datetime.now(timezone.utc)
+    storage_path = f"{organization_id}/{session_id}/evidence/{evidence_id}.txt"
+
+    metadata_record: dict[str, Any] = {
+        "evidence_id": evidence_id,
+        "session_id": session_id,
+        "organization_id": organization_id,
+        "uploaded_by": uploaded_by,
+        "uploaded_at": server_timestamp.isoformat(),
+        "file_hash": file_hash,
+        "file_hash_algorithm": "sha256",
+        "file_size_bytes": len(raw_bytes),
+        "mime_type": "text/plain",
+        "storage_path": storage_path,
+        "storage_provider": "inline",
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+        "evidence_type": "text",
+        "task_id": task_id,
+        "goal_id": _coerce_uuid(goal_id),
+        "is_finalized": True,
+        "device_type": device_type,
+        "retention_until": retention_until.isoformat(),
+        "shift_id": shift_id,
+    }
+
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("task_evidence_metadata").insert(metadata_record).execute()
+    except Exception as exc:
+        if _is_missing_table(exc):
+            logger.warning("task_evidence_metadata unavailable for text evidence %s: %s", evidence_id, exc)
+            return False
+        msg = str(exc).lower()
+        if "duplicate" in msg or "unique" in msg:
+            return False
+        raise
+
+    try:
+        supabase.table("evidence_access_audit_log").insert({
+            "evidence_id": evidence_id,
+            "session_id": session_id,
+            "organization_id": organization_id,
+            "accessed_by": uploaded_by,
+            "action": "upload",
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "file_hash_match": True,
+            "file_hash_stored": file_hash,
+            "purpose": "text_evidence_sync",
+            "shift_id": shift_id,
+        }).execute()
+    except Exception as exc:
+        logger.debug("evidence_access_audit_log insert skipped for %s: %s", evidence_id, exc)
+
+    return True
 
 
 def coordinator_delete_evidence(

@@ -2346,8 +2346,13 @@ def sync_session_task_evidence(
     worker_id: str,
     organization_id: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Merge task evidence into sessions.task_evidence (CARECLIQV2-228)."""
+    from .compliance_evidence_service import record_text_evidence_metadata
+
     try:
         resp = (
             get_supabase_admin()
@@ -2390,6 +2395,18 @@ def sync_session_task_evidence(
                 stored["content"] = ""
         by_id[eid] = stored
         synced_ids.append(eid)
+        if etype == "text":
+            record_text_evidence_metadata(
+                evidence_id=eid,
+                session_id=session_id,
+                organization_id=organization_id,
+                uploaded_by=worker_id,
+                content=str(item.get("content") or ""),
+                task_id=str(item.get("task_id") or "") or None,
+                goal_id=item.get("goal_id"),
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
     merged = list(by_id.values())
     now = _now_iso()
