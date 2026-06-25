@@ -962,7 +962,7 @@ export function ShiftTaskEvidencePanel({
           </p>
         )}
 
-        <section>
+        <section data-tutorial="task-evidence-actions">
           <p className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: PLUM }}>
             <Camera size={13} /> Photo <span className="text-emerald-600">Strong ✓</span>
           </p>

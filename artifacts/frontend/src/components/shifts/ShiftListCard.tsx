@@ -42,8 +42,7 @@ const SERVICE_TAG_STYLES: Record<string, string> = {
   "CAPACITY BUILDING": "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-type Props = { shift: WorkerShift };
-
+type Props = { shift: WorkerShift; highlightOpen?: boolean };
 function formatServiceLabel(category?: string) {
   const raw = (category || "CORE").toUpperCase();
   if (raw === "CAPACITY BUILDING" || raw === "CAPACITY") return "Capacity Building";
@@ -144,7 +143,7 @@ function SafetyBox({
   );
 }
 
-export function ShiftListCard({ shift }: Props) {
+export function ShiftListCard({ shift, highlightOpen }: Props) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
@@ -390,7 +389,11 @@ export function ShiftListCard({ shift }: Props) {
   );
 
   return (
-    <article className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <article
+      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+      style={{ borderColor: BORDER }}
+      {...(highlightOpen ? { "data-tutorial": "shift-card-open" } : {})}
+    >
       <div className="p-4">
         <button
           type="button"

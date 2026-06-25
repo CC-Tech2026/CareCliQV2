@@ -19,6 +19,7 @@ type Props = {
   open: boolean;
   shift: WorkerShift;
   busy?: boolean;
+  tutorialDemo?: boolean;
   onClose: () => void;
   onConfirm: (payload: ClockInRequest) => Promise<void>;
 };
@@ -37,7 +38,7 @@ async function cameraPermissionState(): Promise<PermissionState | "unsupported">
   }
 }
 
-export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
+export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfirm }: Props) {
   const [step, setStep] = useState<Step>("choose");
   const [method, setMethod] = useState<"gps" | "qr" | null>(null);
   const [location, setLocation] = useState<ClockInRequest["location"]>(null);
@@ -182,11 +183,13 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
   return (
     <>
       <Dialog open={open && !scannerOpen} onOpenChange={(next) => !next && onClose()}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md rounded-2xl" data-tutorial="clock-in-modal">
           <DialogHeader>
             <DialogTitle className="text-[#1E1640]">Check in to shift</DialogTitle>
             <DialogDescription>
-              Verify your arrival for {shift.participant_name ?? "this participant"} using GPS or the location QR code.
+              {tutorialDemo
+                ? "Tutorial preview — choose GPS or QR to verify arrival. Nothing is submitted during the walkthrough."
+                : `Verify your arrival for ${shift.participant_name ?? "this participant"} using GPS or the location QR code.`}
             </DialogDescription>
           </DialogHeader>
 

@@ -1,0 +1,83 @@
+@import "driver.js/dist/driver.css";
+
+.ccq-driver-popover.driver-popover {
+  --driver-popover-bg: #ffffff;
+  --driver-popover-color: #1e1640;
+  --driver-popover-title-color: #1e1640;
+  --driver-popover-description-color: #7a6a9e;
+  --driver-popover-border: #e2def2;
+  --driver-popover-shadow: 0 16px 40px rgba(30, 22, 64, 0.18);
+  max-width: min(420px, calc(100vw - 2rem));
+  border-radius: 1rem;
+}
+
+.ccq-driver-popover .driver-popover-title {
+  font-weight: 900;
+  font-size: 1.05rem;
+}
+
+.ccq-driver-popover .driver-popover-description {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.ccq-driver-popover .driver-popover-progress-text {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a6a9e;
+}
+
+.ccq-driver-popover .driver-popover-next-btn,
+.ccq-driver-popover .driver-popover-done-btn {
+  background: #5533cc !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 0.75rem !important;
+  font-weight: 800 !important;
+  text-shadow: none !important;
+}
+
+.ccq-driver-popover .driver-popover-close-btn,
+.ccq-driver-popover .driver-popover-skip-btn {
+  border-radius: 0.75rem !important;
+  font-weight: 700 !important;
+}
+
+.ccq-driver-popover .driver-popover-skip-btn {
+  margin-right: auto;
+  background: transparent;
+  border: 1px solid #e2def2;
+  color: #7a6a9e;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.ccq-driver-popover .driver-popover-skip-btn:hover {
+  background: #f5f3fc;
+}
+
+.ccq-driver-popover .driver-popover-footer {
+  gap: 0.5rem;
+}
+
+.driver-active-element,
+.driver-active-element * {
+  pointer-events: none;
+}
+
+body.ccq-tutorial-active .driver-overlay {
+  z-index: 10000;
+}
+
+body.ccq-tutorial-active .driver-popover {
+  z-index: 10001;
+}
+
+.ccq-driver-popover .driver-popover-next-btn.ccq-driver-next-disabled,
+.ccq-driver-popover .driver-popover-done-btn.ccq-driver-next-disabled {
+  cursor: not-allowed;
+}

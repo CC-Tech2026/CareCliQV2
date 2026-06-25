@@ -32,6 +32,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   tasks: ShiftTask[];
   busy?: boolean;
+  tutorialDemo?: boolean;
   onCancel: () => void;
   onAddEvidence: (taskId: string) => void;
   onMarkNa: (taskId: string, reason: NaReason) => void;
@@ -85,6 +86,7 @@ export function EndShiftValidationModal({
   onOpenChange,
   tasks,
   busy,
+  tutorialDemo,
   onCancel,
   onAddEvidence,
   onMarkNa,
@@ -102,11 +104,13 @@ export function EndShiftValidationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto gap-4">
+      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto gap-4" data-tutorial="end-shift-review">
         <DialogHeader>
           <DialogTitle>End shift validation</DialogTitle>
           <DialogDescription>
-            Review task completion and evidence before ending your shift.
+            {tutorialDemo
+              ? "Tutorial preview — review task completion and evidence before signing off a real shift."
+              : "Review task completion and evidence before ending your shift."}
           </DialogDescription>
         </DialogHeader>
 

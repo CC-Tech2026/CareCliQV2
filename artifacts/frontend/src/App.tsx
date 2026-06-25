@@ -60,7 +60,11 @@ import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
 import WorkerPrivacy from "@/pages/worker-privacy";
+import WorkerSyncStatus from "@/pages/worker-sync-status";
+import WorkerHelp from "@/pages/worker-help";
 import AccountSecure from "@/pages/account-secure";
+import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
+import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -203,6 +207,18 @@ function Router() {
           <AppLayout><WorkerMessages /></AppLayout>
         </ProtectedRoute>
       </Route> */}
+
+      <Route path="/worker/help">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerHelp /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/sync-status">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerSyncStatus /></AppLayout>
+        </ProtectedRoute>
+      </Route>
 
       <Route path="/worker/notifications">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -404,10 +420,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AuthSessionGuards />
-            <Router />
-          </WouterRouter>
+          <OfflineSyncProvider>
+            <WorkerTutorialProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <AuthSessionGuards />
+                <Router />
+              </WouterRouter>
+            </WorkerTutorialProvider>
+          </OfflineSyncProvider>
           <Toaster />
         </AuthProvider>
       </TooltipProvider>

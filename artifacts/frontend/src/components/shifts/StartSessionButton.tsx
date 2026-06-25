@@ -42,6 +42,7 @@ export function StartSessionButton({
       aria-label={`Start session for ${name}`}
       aria-busy={isLoading}
       data-shift-id={shiftId}
+      data-tutorial="start-session"
       className={cn(
         "flex h-14 min-h-[50px] w-full items-center justify-center rounded-2xl border-0 text-base font-semibold text-white",
         "transition-[filter,transform] duration-200 ease-in-out",

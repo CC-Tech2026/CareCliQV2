@@ -7,6 +7,12 @@ import {
 } from "@/lib/shift-offline-queue";
 import { clockInShift, startSessionById, startShiftSession } from "@/services/shiftService";
 
+export type SyncItemResult = {
+  id: string;
+  ok: boolean;
+  error?: string;
+};
+
 function isClientRejection(err: unknown): boolean {
   const apiErr = err as Error & { status?: number };
   return (
@@ -37,37 +43,51 @@ export type SyncQueuedShiftActionsResult = {
   synced: number;
   failed: number;
   cleared: number;
+  results: SyncItemResult[];
 };
 
 /** Flush IndexedDB pending clock-in / start-session actions when online. */
 export async function syncAllQueuedShiftActions(): Promise<SyncQueuedShiftActionsResult> {
   if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return { synced: 0, failed: 0, cleared: 0 };
+    return { synced: 0, failed: 0, cleared: 0, results: [] };
   }
 
   const actions = await listPendingActions();
   let synced = 0;
   let failed = 0;
   let cleared = 0;
+  const results: SyncItemResult[] = [];
 
   for (const action of actions) {
     if (action.retryCount > 0) {
       await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(action.retryCount)));
     }
+    const itemId = `shift:${action.id}`;
     try {
       await processPendingAction(action);
       await removePendingAction(action.id);
       synced += 1;
+      results.push({ id: itemId, ok: true });
     } catch (err) {
       if (isClientRejection(err)) {
         await removePendingAction(action.id);
         cleared += 1;
+        results.push({
+          id: itemId,
+          ok: false,
+          error: (err as Error).message || "Rejected by server",
+        });
       } else {
         await incrementRetryCount(action.id);
         failed += 1;
+        results.push({
+          id: itemId,
+          ok: false,
+          error: (err as Error).message || "Sync failed",
+        });
       }
     }
   }
 
-  return { synced, failed, cleared };
+  return { synced, failed, cleared, results };
 }

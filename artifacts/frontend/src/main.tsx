@@ -4,6 +4,7 @@ import { readStoredSession } from "@/lib/auth-session";
 
 import App from "./App";
 import "./index.css";
+import "./styles/worker-tutorial-driver.css";
 
 const apiUrl = import.meta.env.VITE_API_URL;
 if (apiUrl) setBaseUrl(apiUrl);

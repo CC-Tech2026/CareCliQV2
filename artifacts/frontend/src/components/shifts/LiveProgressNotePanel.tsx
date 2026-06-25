@@ -174,6 +174,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
 
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         enqueuePendingSessionNote(sessionId, payload);
+        window.dispatchEvent(new CustomEvent("offline-sync-updated"));
         setSaveStatus("offline");
         return;
       }
@@ -194,6 +195,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
         window.setTimeout(() => setSaveStatus("idle"), 2000);
       } catch {
         enqueuePendingSessionNote(sessionId, payload);
+        window.dispatchEvent(new CustomEvent("offline-sync-updated"));
         setSaveStatus("error");
       }
     },
@@ -405,6 +407,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
     <aside
       className="flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
       style={{ borderColor: BORDER }}
+      data-tutorial="live-progress-note"
     >
       <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
         <div className="min-w-0">
