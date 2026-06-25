@@ -804,6 +804,65 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
     return payload
 
 
+def _build_completion_summary(shift: dict[str, Any], session: Optional[dict[str, Any]]) -> dict[str, Any]:
+    tasks = shift.get("tasks") or []
+    mandatory = [
+        t
+        for t in tasks
+        if t.get("mandatory") or (t.get("type") == "default" and int(t.get("order") or 0) <= 4)
+    ]
+    session_id = shift.get("session_id") or (session or {}).get("id")
+    return {
+        "tasks_completed": sum(1 for t in tasks if t.get("completed")),
+        "tasks_total": len(tasks),
+        "mandatory_completed": sum(1 for t in mandatory if t.get("completed")),
+        "mandatory_total": len(mandatory),
+        "session_id": session_id,
+        "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+    }
+
+
+def _enrich_worker_shift_card(
+    payload: dict[str, Any],
+    shift: dict[str, Any],
+    organization_id: str,
+    session: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Hydrate list/detail cards with participant risks, goals, and completion metadata."""
+    participant_id = str(shift.get("participant_id") or "")
+    risks = build_participant_risks(shift, organization_id)
+    payload["health_alerts"] = risks
+    payload["has_risk_alerts"] = bool(risks) or bool(shift.get("allergies")) or bool(shift.get("health_flags"))
+
+    if not (payload.get("allergies") or "").strip():
+        allergy_lines = [
+            str(alert.get("description") or alert.get("title") or "").strip()
+            for alert in risks
+            if str(alert.get("type") or "").lower() == "allergy"
+        ]
+        allergy_lines = [line for line in allergy_lines if line]
+        if allergy_lines:
+            payload["allergies"] = "; ".join(dict.fromkeys(allergy_lines))
+
+    if participant_id:
+        active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
+        if active_goals:
+            payload["active_goals"] = active_goals
+
+    if payload.get("status") == "completed" or payload.get("visual_state") == "completed":
+        payload["completion_summary"] = _build_completion_summary(shift, session)
+        try:
+            from .shift_signature_service import get_shift_signature
+
+            signature = get_shift_signature(str(shift.get("id") or ""))
+            if signature:
+                payload["shift_signature"] = signature
+        except Exception:
+            pass
+
+    return payload
+
+
 def _parse_emergency_contact(raw: Any) -> dict[str, Any] | str | None:
     """Normalise emergency contact for worker profile display."""
     if raw is None:
@@ -1089,7 +1148,7 @@ def _get_session_for_shift(shift: dict) -> Optional[dict[str, Any]]:
         resp = (
             get_supabase_admin()
             .table("sessions")
-            .select("id, status, session_date, duration_minutes, start_time")
+            .select("id, status, session_date, duration_minutes, start_time, notes, compliance_input_text")
             .eq("id", str(session_id))
             .limit(1)
             .execute()
@@ -1249,7 +1308,8 @@ def list_shifts_for_worker(
     cards: list[dict[str, Any]] = []
     for shift in filtered:
         session = _get_session_for_shift(shift)
-        cards.append(_shift_card_payload(shift, session))
+        card = _shift_card_payload(shift, session)
+        cards.append(_enrich_worker_shift_card(card, shift, organization_id, session))
     return cards
 
 
@@ -2180,14 +2240,8 @@ def end_shift(
 
     session = _get_session_for_shift(updated)
     payload = _shift_card_payload(updated, session)
-    mandatory = [t for t in tasks if t.get("mandatory") or (t.get("type") == "default" and int(t.get("order") or 0) <= 4)]
     payload["completion_summary"] = {
-        "tasks_completed": sum(1 for t in tasks if t.get("completed")),
-        "tasks_total": len(tasks),
-        "mandatory_completed": sum(1 for t in mandatory if t.get("completed")),
-        "mandatory_total": len(mandatory),
-        "session_id": session_id,
-        "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+        **_build_completion_summary(updated, session),
         "validation": validation,
     }
     try:
