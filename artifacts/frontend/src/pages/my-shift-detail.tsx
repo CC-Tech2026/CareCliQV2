@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { recordShiftViewed } from "@/services/notificationService";
-import { Link, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
@@ -54,6 +54,9 @@ import {
   listPendingActions,
 } from "@/lib/shift-offline-queue";
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
+import { useOfflineSync } from "@/contexts/OfflineSyncContext";
+import { setSyncTaskLabel } from "@/lib/offline-sync-registry";
+import { resetShiftDataUsage } from "@/lib/shift-data-usage";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
 import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
@@ -108,8 +111,27 @@ import {
   timerAnchorIso,
 } from "@/lib/shift-utils";
 import { markTaskNa, type NaReason } from "@/lib/shift-validation";
+import {
+  getTutorialScene,
+  isTutorialActive,
+  parseTutorialStepKey,
+} from "@/lib/worker-tutorial-scene";
 
 type Props = { id: string };
+
+const TUTORIAL_VALIDATION_TASKS: ShiftTask[] = [
+  {
+    task_id: "tutorial-task-1",
+    type: "default",
+    label: "Personal hygiene / showering",
+    completed: true,
+    mandatory: true,
+    order: 1,
+    goal_title: "Develop daily living skills",
+    has_photo: true,
+    evidence_status: "with_evidence",
+  },
+];
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
   CORE: "bg-blue-50 text-blue-700 border-blue-200",
@@ -128,6 +150,11 @@ function resolveDisplayVisualState(
 
 export default function MyShiftDetail({ id: idProp }: Props) {
   const params = useParams<{ id: string }>();
+  const [location] = useLocation();
+  const isTutorialPreview = isTutorialActive(location);
+  const tutorialStepKey = parseTutorialStepKey(location);
+  const tutorialScene = getTutorialScene(tutorialStepKey);
+  const isTutorialDemo = isTutorialPreview && tutorialStepKey !== null;
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -161,6 +188,33 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [safetyProtocolView, setSafetyProtocolView] = useState<SafetyProtocol | null>(null);
   const [pendingClockInCount, setPendingClockInCount] = useState(0);
   const [offlineSyncing, setOfflineSyncing] = useState(false);
+  const { setActiveShiftId } = useOfflineSync();
+
+  useEffect(() => {
+    setActiveShiftId(id || null);
+    try {
+      if (id) sessionStorage.setItem("ccq_active_shift_id", id);
+      else sessionStorage.removeItem("ccq_active_shift_id");
+    } catch {
+      /* noop */
+    }
+    return () => setActiveShiftId(null);
+  }, [id, setActiveShiftId]);
+
+  useEffect(() => {
+    if (!isTutorialPreview) return;
+    if (tutorialStepKey === "risk_acknowledgement") {
+      setSafetyOpen(true);
+    }
+    setValidationOpen(Boolean(tutorialScene?.openValidationModal));
+    setSignatureOpen(Boolean(tutorialScene?.openSignatureModal));
+  }, [isTutorialPreview, tutorialStepKey, tutorialScene]);
+
+  useEffect(() => {
+    for (const task of tasks) {
+      setSyncTaskLabel(task.task_id, task.label);
+    }
+  }, [tasks]);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -298,6 +352,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         qrToken: payload.qr_token ?? null,
       });
       await refreshPendingClockIn();
+      window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
         title: "Offline check-in saved",
@@ -339,6 +394,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         qrToken: payload.qr_token ?? null,
       });
       await refreshPendingClockIn();
+      window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
         title: "Check-in saved locally",
@@ -534,6 +590,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       setValidationOpen(false);
       setMandatoryAlertOpen(false);
       setForceEndPending(false);
+      resetShiftDataUsage(shift.id);
       invalidateShifts();
       await refetch();
       toast({
@@ -684,6 +741,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const contextSyncedAt = shift.context_synced_at ?? offlineContext?.syncedAt ?? null;
   const participantFirstName = (displayProfile?.preferred_name || shift.participant_name || "").split(" ")[0];
   const activeTasksForValidation = resolveActiveShiftTasks(shift.tasks, tasks);
+  const validationTasks =
+    validationOpen && isTutorialDemo && activeTasksForValidation.length === 0
+      ? TUTORIAL_VALIDATION_TASKS
+      : activeTasksForValidation;
   const incompleteMandatory = incompleteMandatoryTasks(activeTasksForValidation);
   const workflow = (
     <ShiftWorkflow
@@ -750,6 +811,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           onOpenChange={setSignatureOpen}
           shiftId={shift.id}
           busy={busy === "end"}
+          tutorialDemo={isTutorialDemo}
           onSigned={handleSignatureComplete}
         />
       )}
@@ -758,8 +820,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         <EndShiftValidationModal
           open={validationOpen}
           onOpenChange={setValidationOpen}
-          tasks={activeTasksForValidation}
+          tasks={validationTasks}
           busy={busy === "end"}
+          tutorialDemo={isTutorialDemo}
           onCancel={() => setValidationOpen(false)}
           onAddEvidence={handleValidationAddEvidence}
           onMarkNa={(taskId, reason) => void handleMarkTaskNa(taskId, reason)}
@@ -789,6 +852,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           open={clockInFlowOpen}
           shift={shift}
           busy={busy === "clock"}
+          tutorialDemo={isTutorialDemo}
           onClose={() => setClockInFlowOpen(false)}
           onConfirm={handleVerifiedClockIn}
         />
@@ -1074,7 +1138,7 @@ function ShiftWorkflow({
   const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
 
   return (
-    <div className="space-y-4 pb-4">
+    <div className="space-y-4 pb-4" data-tutorial="shift-workspace">
       {isCompleted && (
         <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
       )}
@@ -1082,6 +1146,7 @@ function ShiftWorkflow({
       <section
         className="overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
+        data-tutorial="shift-header"
       >
         <div className="h-1 transition-[background-color] duration-300 ease-in-out" style={{ background: state.border }} />
         <div className="p-5">
@@ -1175,6 +1240,7 @@ function ShiftWorkflow({
       {!isCompleted && visualState === "scheduled" && (
         <Button
           type="button"
+          data-tutorial="clock-in"
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
           disabled={busy !== null || (needsRiskAck && !ackChecked)}
@@ -1218,6 +1284,7 @@ function ShiftWorkflow({
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
+                data-tutorial="session-notes"
                 className="h-14 rounded-2xl border-2 bg-white text-base font-black shadow-sm"
                 style={{ borderColor: PLUM, color: PLUM }}
                 disabled={busy !== null}
@@ -1227,6 +1294,7 @@ function ShiftWorkflow({
               </Button>
               <Button
                 className="h-14 rounded-2xl border-0 text-base font-black text-white"
+                data-tutorial="end-shift"
                 style={{ background: CORAL }}
                 disabled={busy !== null}
                 onClick={onAttemptEndShift}
@@ -1243,6 +1311,7 @@ function ShiftWorkflow({
           ) : (
             <Button
               className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"
+              data-tutorial="end-shift"
               style={{ background: CORAL }}
               disabled={busy !== null}
               onClick={onAttemptEndShift}
@@ -1352,6 +1421,7 @@ function ShiftWorkflow({
       {showTasks && activeTasks.length > 0 && (
         <section
           id="shift-task-checklist"
+          data-tutorial="shift-task-checklist"
           className="overflow-hidden rounded-2xl border bg-white shadow-sm"
           style={{ borderColor: BORDER }}
         >
@@ -1402,6 +1472,7 @@ function ShiftWorkflow({
                   </p>
                 </div>
               )}
+              <div data-tutorial="task-evidence">
               <ShiftTaskChecklist
                 shiftId={shift.id}
                 sessionId={shift.session_id}
@@ -1412,6 +1483,7 @@ function ShiftWorkflow({
                 sessionStyle={isSessionActive}
                 focusTaskId={focusTaskId}
               />
+              </div>
 
               {isSessionActive && shift.session_id && activeTasks.length > 0 && (
                 <div className="mt-4">

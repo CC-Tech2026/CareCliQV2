@@ -26,10 +26,11 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   shiftId: string;
   busy?: boolean;
+  tutorialDemo?: boolean;
   onSigned: () => void;
 };
 
-export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, onSigned }: Props) {
+export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, tutorialDemo, onSigned }: Props) {
   const { toast } = useToast();
   const [checks, setChecks] = useState({ tasks: false, safety: false, incidents: false });
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +41,10 @@ export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, onSigne
 
   async function handleConfirm() {
     if (!canSign) return;
+    if (tutorialDemo) {
+      onOpenChange(false);
+      return;
+    }
     setSubmitting(true);
     try {
       await submitShiftSignature(shiftId, {
@@ -64,11 +69,13 @@ export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, onSigne
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto gap-4">
+      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto gap-4" data-tutorial="shift-signature">
         <DialogHeader>
           <DialogTitle>Sign off shift</DialogTitle>
           <DialogDescription>
-            Confirm the statements below and sign to complete your shift certification.
+            {tutorialDemo
+              ? "Tutorial preview — confirm each statement and sign to complete a shift in the real app."
+              : "Confirm the statements below and sign to complete your shift certification."}
           </DialogDescription>
         </DialogHeader>
 

@@ -80,3 +80,27 @@ export function removePendingSessionNote(sessionId: string, noteId: string) {
   const pending = loadPendingSessionNotes(sessionId).filter((row) => row.note_id !== noteId);
   savePendingSessionNotes(sessionId, pending);
 }
+
+export function listAllPendingSessionNotes(): Array<{ sessionId: string; note: SessionNoteRecord }> {
+  if (typeof localStorage === "undefined") return [];
+  const rows: Array<{ sessionId: string; note: SessionNoteRecord }> = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const storageKey = localStorage.key(i);
+    if (!storageKey?.startsWith(PENDING_PREFIX)) continue;
+    const sessionId = storageKey.slice(PENDING_PREFIX.length);
+    for (const note of loadPendingSessionNotes(sessionId)) {
+      rows.push({ sessionId, note });
+    }
+  }
+  return rows;
+}
+
+export function estimateNoteBytes(note: SessionNoteRecord): number {
+  let bytes = new Blob([note.content ?? ""]).size;
+  for (const url of note.attachment_urls ?? []) {
+    if (url.startsWith("data:")) {
+      bytes += Math.round((url.length * 3) / 4);
+    }
+  }
+  return bytes;
+}

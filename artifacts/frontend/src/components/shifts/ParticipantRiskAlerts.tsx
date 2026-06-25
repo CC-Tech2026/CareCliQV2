@@ -147,7 +147,10 @@ export function ParticipantRiskAcknowledgementSection({
 }: SectionProps) {
   if (acknowledged) {
     return (
-      <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4">
+      <section
+        className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4"
+        data-tutorial="risk-ack-complete"
+      >
         <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
           <ShieldAlert size={16} /> Risks acknowledged
         </p>
@@ -192,11 +195,16 @@ export function ParticipantRiskAcknowledgementSection({
         </div>
       )}
 
-      <div className="mt-4 flex items-start gap-3 rounded-xl border border-red-200 bg-white p-3">
+      <label
+        htmlFor="ack-risks"
+        id="tutorial-risk-ack-checkbox"
+        data-tutorial="risk-ack-checkbox"
+        className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 border-red-300 bg-white p-3 shadow-sm"
+      >
         <input
           id="ack-risks"
           type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+          className="mt-1 h-4 w-4 shrink-0 rounded border-red-300 text-red-600 focus:ring-red-500"
           checked={ackChecked}
           disabled={busy}
           onChange={(event) => {
@@ -204,10 +212,10 @@ export function ParticipantRiskAcknowledgementSection({
             else onUncheck();
           }}
         />
-        <label htmlFor="ack-risks" className="text-sm font-bold leading-snug" style={{ color: TEXT }}>
+        <span className="text-sm font-bold leading-snug" style={{ color: TEXT }}>
           I acknowledge the risks and safety alerts for this participant
-        </label>
-      </div>
+        </span>
+      </label>
     </section>
   );
 }

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle, CircleHelp
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
@@ -18,6 +18,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
+import { OfflineConnectivityBanner } from "@/components/offline/OfflineConnectivityBanner";
+import { SyncStatusIndicator } from "@/components/offline/SyncStatusIndicator";
+import { useOfflineSyncOptional } from "@/contexts/OfflineSyncContext";
+import { WorkerTutorialLauncher } from "@/components/help/WorkerTutorialLauncher";
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "#5533CC";
@@ -103,6 +107,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Resources",
       items: [
+        { href: "/worker/help",  label: "Help",            icon: CircleHelp },
         { href: "/credentials",  label: "Credentials",     icon: BadgeCheck },
         { href: "/toolkit",      label: "Toolkit",          icon: Wrench },
       ],
@@ -417,6 +422,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const userRole    = user?.role as NavRole | undefined;
   const isWorker    = userRole === "support_worker";
   const topbarAlertHref = isWorker ? "/my-compliance" : "/compliance";
+  const offlineSync = useOfflineSyncOptional();
+  const showOfflineBanner = isWorker && offlineSync && !offlineSync.online;
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -449,9 +456,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Link href="/dashboard" className="flex items-center focus:outline-none py-1 active:opacity-75 transition-opacity">
               <CareCliQLogoSm />
             </Link>
-            <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
-              <Menu size={22} />
-            </button>
+            <div className="flex items-center gap-2">
+              {isWorker && offlineSync && <SyncStatusIndicator />}
+              <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
+                <Menu size={22} />
+              </button>
+            </div>
           </header>
 
           {/* Desktop topbar capsule */}
@@ -470,13 +480,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 />
               </div>
 
+              {/* Sync status — workers only */}
+              {isWorker && offlineSync && <SyncStatusIndicator className="shrink-0" />}
+
               {/* Bell — coordinator gets NotificationBell, workers get WorkerNotificationBell */}
               {!isWorker ? (
                 <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
                   <NotificationBell onClick={() => setNotifOpen(true)} />
                 </div>
               ) : (
-                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0" data-tutorial="worker-notifications">
                   <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
                 </div>
               )}
@@ -522,6 +535,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           {isWorker && <NotificationRealtimeBridge />}
           {isWorker && <NotificationBannerStack />}
+          {showOfflineBanner && <OfflineConnectivityBanner className="shrink-0" />}
+          {isWorker && <WorkerTutorialLauncher />}
 
           {/* Page content */}
           <main className="flex-1 overflow-y-auto px-5 md:px-8 py-6 pb-24 md:pb-8">

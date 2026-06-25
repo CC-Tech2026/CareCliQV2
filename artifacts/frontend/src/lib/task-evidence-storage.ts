@@ -101,6 +101,28 @@ export async function listSessionEvidence(sessionId: string): Promise<TaskEviden
   });
 }
 
+export async function listAllUnsyncedEvidence(): Promise<TaskEvidenceRecord[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readonly");
+    const store = tx.objectStore(STORE);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      resolve(
+        (request.result as TaskEvidenceRecord[]).filter(
+          (r) =>
+            !r.synced ||
+            r.upload_status === "pending" ||
+            r.upload_status === "uploading" ||
+            r.upload_status === "failed",
+        ),
+      );
+    };
+    request.onerror = () => reject(request.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
 export async function listUnsyncedEvidence(sessionId: string): Promise<TaskEvidenceRecord[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {

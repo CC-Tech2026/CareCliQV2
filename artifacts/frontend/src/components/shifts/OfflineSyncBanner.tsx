@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { CloudOff, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+import { useOfflineSyncOptional } from "@/contexts/OfflineSyncContext";
 
 type Props = {
   syncing?: boolean;
@@ -8,51 +9,32 @@ type Props = {
   className?: string;
 };
 
+/** Page-level sync strip — defers to global offline banner when disconnected. */
 export function OfflineSyncBanner({ syncing = false, pendingCount = 0, className }: Props) {
-  const [online, setOnline] = useState(
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  const globalSync = useOfflineSyncOptional();
+  const online = globalSync?.online ?? (typeof navigator === "undefined" ? true : navigator.onLine);
+  const pending = globalSync?.pendingCount ?? pendingCount;
+  const isSyncing = globalSync?.syncing ?? syncing;
 
-  useEffect(() => {
-    const onOnline = () => setOnline(true);
-    const onOffline = () => setOnline(false);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, []);
-
-  if (online && !syncing && pendingCount === 0) return null;
-
-  const offline = !online;
+  if (!online) return null;
+  if (!isSyncing && pending === 0) return null;
 
   return (
     <div
       className={cn(
         "flex min-h-[40px] items-center justify-center gap-2 px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-white transition-colors duration-300",
-        offline ? "bg-slate-600" : "bg-blue-600",
+        "bg-blue-600",
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      {offline ? (
-        <>
-          <CloudOff size={14} aria-hidden />
-          <span>Offline — changes will sync when reconnected</span>
-        </>
-      ) : (
-        <>
-          <RefreshCw size={14} className={cn(syncing && "animate-spin")} aria-hidden />
-          <span>
-            {syncing
-              ? "Syncing pending actions…"
-              : `${pendingCount} pending action${pendingCount === 1 ? "" : "s"} queued`}
-          </span>
-        </>
-      )}
+      <RefreshCw size={14} className={cn(isSyncing && "animate-spin")} aria-hidden />
+      <span>
+        {isSyncing
+          ? "Syncing pending actions…"
+          : `${pending} pending action${pending === 1 ? "" : "s"} queued`}
+      </span>
     </div>
   );
 }

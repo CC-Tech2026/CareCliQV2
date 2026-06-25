@@ -17,7 +17,11 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
   const current = stepIndex(visualState);
 
   return (
-    <section className="rounded-2xl border bg-white px-4 py-4 shadow-sm" style={{ borderColor: "#E2DEF2" }}>
+    <section
+      className="rounded-2xl border bg-white px-4 py-4 shadow-sm"
+      style={{ borderColor: "#E2DEF2" }}
+      data-tutorial="shift-progress"
+    >
       <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
         Shift Progress
       </p>

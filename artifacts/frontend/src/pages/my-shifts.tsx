@@ -144,6 +144,7 @@ export default function MyShifts() {
   });
 
   const list = data?.shifts ?? [];
+  const tutorialOpenShiftId = list[0]?.id;
   const filterCounts = countsData?.counts;
 
   const { data: todayData } = useOrgQuery(["worker", "shifts", "today"], {
@@ -266,7 +267,7 @@ export default function MyShifts() {
         </section>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4" data-tutorial="shift-list">
         {groupedList.map((group) => (
           <div key={group.label ?? "default"} className="space-y-3">
             {group.label && (
@@ -275,7 +276,11 @@ export default function MyShifts() {
               </p>
             )}
             {group.shifts.map((shift: WorkerShift) => (
-              <ShiftListCard key={shift.id} shift={shift} />
+              <ShiftListCard
+                key={shift.id}
+                shift={shift}
+                highlightOpen={shift.id === tutorialOpenShiftId}
+              />
             ))}
           </div>
         ))}
