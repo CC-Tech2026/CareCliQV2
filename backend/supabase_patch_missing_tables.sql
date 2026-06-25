@@ -375,4 +375,9 @@ END $$;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role       TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT TRUE;
 
+-- ── 14. Run full migration for compliance tables ────
+-- See: backend/supabase/migrations/058_compliance_privacy_signature.sql
+-- Apply that file in Supabase SQL editor for shift_signatures, privacy tables,
+-- and evidence metadata extensions.
+
 -- Done! Re-run your backend after applying this patch.

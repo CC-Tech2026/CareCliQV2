@@ -20,7 +20,9 @@ import { cn } from "@/lib/utils";
 import {
   buildRecordsFromShiftTask,
   compressImageFile,
+  dedupeTaskEvidenceRecords,
   deleteTaskEvidence,
+  isSyntheticEvidenceId,
   listTaskEvidence,
   newEvidenceId,
   saveTaskEvidence,
@@ -29,6 +31,8 @@ import {
 import { syncSessionEvidence } from "@/services/taskEvidenceService";
 import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
 import type { ShiftTask } from "@/services/shiftService";
+import { getSessionEvidenceMetadata, type EvidenceMetadata } from "@/services/complianceService";
+import { EvidenceDetailsPanel } from "@/components/shifts/EvidenceDetailsPanel";
 import {
   MUTED,
   PLUM,
@@ -99,6 +103,7 @@ export function ShiftTaskEvidencePanel({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [playingVoice, setPlayingVoice] = useState(false);
+  const [evidenceMetadata, setEvidenceMetadata] = useState<Record<string, EvidenceMetadata>>({});
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -154,6 +159,18 @@ export function ShiftTaskEvidencePanel({
           rows = seeded;
         }
       }
+
+      const deduped = dedupeTaskEvidenceRecords(rows);
+      if (deduped.length !== rows.length) {
+        const keptIds = new Set(deduped.map((row) => row.evidence_id));
+        for (const row of rows) {
+          if (!keptIds.has(row.evidence_id)) {
+            await deleteTaskEvidence(row.evidence_id);
+          }
+        }
+      }
+      rows = deduped;
+
       setRecords(rows);
       const voice = rows.find((r) => r.type === "voice");
       if (voice?.content?.startsWith("data:audio")) {
@@ -214,6 +231,19 @@ export function ShiftTaskEvidencePanel({
     clearSavedStatusTimer();
     void loadRecords();
   }, [task.task_id, task.note, loadRecords, variant]);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    getSessionEvidenceMetadata(sessionId)
+      .then((res) => {
+        const map: Record<string, EvidenceMetadata> = {};
+        for (const item of res.evidence ?? []) {
+          map[item.evidence_id] = item;
+        }
+        setEvidenceMetadata(map);
+      })
+      .catch(() => setEvidenceMetadata({}));
+  }, [sessionId, records]);
 
   useEffect(() => {
     onReadyChange?.(readyToMarkComplete);
@@ -291,14 +321,25 @@ export function ShiftTaskEvidencePanel({
     const trimmed = note.trim();
     if (!trimmed || disabled) return;
 
+    const content = trimmed.slice(0, NOTE_MAX);
+    const duplicate = records.find((row) => row.type === "text" && (row.content ?? "").trim() === content);
+    if (duplicate) {
+      setNote("");
+      return;
+    }
+
+    const textRows = records.filter((row) => row.type === "text");
+    const seededOnly =
+      textRows.length === 1 && isSyntheticEvidenceId(textRows[0].evidence_id);
+
     const record: TaskEvidenceRecord = {
-      evidence_id: newEvidenceId(),
+      evidence_id: seededOnly ? textRows[0].evidence_id : newEvidenceId(),
       task_id: task.task_id,
       goal_id: task.goal_id ?? null,
       session_id: sessionId,
       type: "text",
-      content: trimmed.slice(0, NOTE_MAX),
-      created_at: new Date().toISOString(),
+      content,
+      created_at: seededOnly ? textRows[0].created_at : new Date().toISOString(),
       synced: false,
     };
 
@@ -315,6 +356,7 @@ export function ShiftTaskEvidencePanel({
     note,
     onMarkComplete,
     onTaskPatch,
+    records,
     sessionId,
     task,
     task.goal_id,
@@ -601,17 +643,26 @@ export function ShiftTaskEvidencePanel({
       if (trimmed) {
         await onTaskPatch({ note: trimmed });
         if (variant === "thread" && inputDraft) {
-          const record: TaskEvidenceRecord = {
-            evidence_id: newEvidenceId(),
-            task_id: task.task_id,
-            goal_id: task.goal_id ?? null,
-            session_id: sessionId,
-            type: "text",
-            content: trimmed.slice(0, NOTE_MAX),
-            created_at: new Date().toISOString(),
-            synced: false,
-          };
-          await appendThreadEvidence(record);
+          const content = trimmed.slice(0, NOTE_MAX);
+          const duplicate = records.find(
+            (row) => row.type === "text" && (row.content ?? "").trim() === content,
+          );
+          if (!duplicate) {
+            const textRows = records.filter((row) => row.type === "text");
+            const seededOnly =
+              textRows.length === 1 && isSyntheticEvidenceId(textRows[0].evidence_id);
+            const record: TaskEvidenceRecord = {
+              evidence_id: seededOnly ? textRows[0].evidence_id : newEvidenceId(),
+              task_id: task.task_id,
+              goal_id: task.goal_id ?? null,
+              session_id: sessionId,
+              type: "text",
+              content,
+              created_at: seededOnly ? textRows[0].created_at : new Date().toISOString(),
+              synced: false,
+            };
+            await appendThreadEvidence(record);
+          }
           setNote("");
         } else if (variant === "full" && inputDraft) {
           await persistText(trimmed);
@@ -634,6 +685,7 @@ export function ShiftTaskEvidencePanel({
     onMarkComplete,
     onTaskPatch,
     persistText,
+    records,
     scheduleSavedStatusClear,
     sessionId,
     task,
@@ -944,20 +996,15 @@ export function ShiftTaskEvidencePanel({
           {photos.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {photos.map((photo) => (
-                <div key={photo.evidence_id} className="relative">
+                <div key={photo.evidence_id} className="relative space-y-2">
                   <img
                     src={photo.file_url || photo.content}
                     alt="Task evidence"
                     className="h-[150px] w-[150px] rounded-xl border object-cover"
                   />
-                  <button
-                    type="button"
-                    className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow"
-                    onClick={() => void removePhoto(photo.evidence_id)}
-                    aria-label="Remove photo"
-                  >
-                    <Trash2 size={14} className="text-red-600" />
-                  </button>
+                  {evidenceMetadata[photo.evidence_id] && (
+                    <EvidenceDetailsPanel metadata={evidenceMetadata[photo.evidence_id]} />
+                  )}
                 </div>
               ))}
             </div>
@@ -987,9 +1034,6 @@ export function ShiftTaskEvidencePanel({
                 <Button variant="outline" size="sm" className="rounded-lg" onClick={togglePlayVoice}>
                   {playingVoice ? <Pause size={14} /> : <Play size={14} />}
                   {playingVoice ? "Pause" : "Play"}
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-lg text-red-600" onClick={() => void removeVoice()}>
-                  <Trash2 size={14} className="mr-1" /> Re-record
                 </Button>
               </div>
             </div>

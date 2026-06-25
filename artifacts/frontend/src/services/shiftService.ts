@@ -204,6 +204,7 @@ export type WorkerShift = {
   session_started_at?: string | null;
   service_category?: string;
   office_contact_number?: string | null;
+  shift_signature?: import("@/services/complianceService").ShiftSignature;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";

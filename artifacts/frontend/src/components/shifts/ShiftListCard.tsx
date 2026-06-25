@@ -56,6 +56,34 @@ function serviceTagKey(category?: string) {
   return raw === "CAPACITY" ? "CAPACITY BUILDING" : raw;
 }
 
+function formatAllergiesText(shift: WorkerShift) {
+  if (shift.allergies?.trim()) return shift.allergies.trim();
+  const fromAlerts = (shift.health_alerts ?? [])
+    .filter((alert) => (alert.type || "").toLowerCase() === "allergy")
+    .map((alert) => alert.description || alert.instructions || alert.title)
+    .filter(Boolean);
+  if (fromAlerts.length) return fromAlerts.join("; ");
+  const structured = shift.context?.medical?.allergies ?? [];
+  if (structured.length) {
+    return structured.map((row) => row.allergen).filter(Boolean).join(", ");
+  }
+  return "No known allergies";
+}
+
+function formatHealthAlertsText(shift: WorkerShift) {
+  const nonAllergy = (shift.health_alerts ?? []).filter(
+    (alert) => (alert.type || "").toLowerCase() !== "allergy",
+  );
+  if (nonAllergy.length) {
+    return nonAllergy
+      .map((alert) => alert.title || alert.description || alert.detail)
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (shift.health_flags?.trim()) return shift.health_flags.trim();
+  return "No active health alerts";
+}
+
 function formatRecordedDuration(shift: WorkerShift) {
   if (shift.duration_minutes && shift.duration_minutes > 0) {
     return formatDurationLabel(shift.duration_minutes);
@@ -148,11 +176,17 @@ export function ShiftListCard({ shift }: Props) {
     : (STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled);
   const pulse = avatarShouldPulse(shift.visual_state);
 
-  const allergiesText = shift.allergies?.trim() || "No known allergies";
-  const healthAlertText =
-    shift.health_alerts?.map((a) => a.title || a.detail).filter(Boolean).join(" ") ||
-    shift.health_flags?.trim() ||
-    "No active health alerts";
+  const allergiesText = formatAllergiesText(shift);
+  const healthAlertText = formatHealthAlertsText(shift);
+  const summary = shift.completion_summary;
+  const notesSubmitted = summary?.notes_submitted === true;
+  const shiftDetailHref = `/my-shifts/${shift.id}`;
+  const sessionNotesHref = shift.session_id ? `/sessions/${shift.session_id}` : shiftDetailHref;
+  const completedCtaHref = notesSubmitted ? shiftDetailHref : sessionNotesHref;
+  const completedCtaLabel = notesSubmitted
+    ? "View completed shift"
+    : "Complete Session Notes — Stay Compliant";
+
   const goals = shift.active_goals ?? [];
   const mapsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
@@ -161,7 +195,6 @@ export function ShiftListCard({ shift }: Props) {
   const profileHref = shift.participant_id
     ? `/my-clients/${shift.participant_id}`
     : `/my-shifts/${shift.id}`;
-  const notesHref = shift.session_id ? `/sessions/${shift.session_id}` : `/my-shifts/${shift.id}`;
 
   const durationMeta = (() => {
     if (isCompleted && scheduledLabel && recordedLabel) {
@@ -265,14 +298,43 @@ export function ShiftListCard({ shift }: Props) {
     <>
       {primaryActions}
 
+      {isCompleted && summary && (
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-[#E2DEF2] bg-[#FAFAFE] p-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              Tasks
+            </p>
+            <p className="mt-0.5 text-sm font-black" style={{ color: TEXT }}>
+              {summary.tasks_completed}/{summary.tasks_total}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              Session notes
+            </p>
+            <p className="mt-0.5 text-sm font-black" style={{ color: notesSubmitted ? "#059669" : CORAL }}>
+              {notesSubmitted ? "Submitted" : "Pending"}
+            </p>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              Signature
+            </p>
+            <p className="mt-0.5 text-sm font-black" style={{ color: shift.shift_signature ? "#059669" : MUTED }}>
+              {shift.shift_signature ? "Signed" : "—"}
+            </p>
+          </div>
+        </div>
+      )}
+
       {isCompleted && (
-        <Link href={notesHref}>
+        <Link href={completedCtaHref}>
           <button
             type="button"
             className="mb-4 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
-            style={{ background: CORAL }}
+            style={{ background: notesSubmitted ? PLUM : CORAL }}
           >
-            Complete Session Notes — Stay Compliant
+            {completedCtaLabel}
           </button>
         </Link>
       )}
@@ -398,13 +460,13 @@ export function ShiftListCard({ shift }: Props) {
         </button>
 
         {!expanded && isCompleted && (
-          <Link href={notesHref}>
+          <Link href={completedCtaHref}>
             <button
               type="button"
               className="mt-3 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
-              style={{ background: CORAL }}
+              style={{ background: notesSubmitted ? PLUM : CORAL }}
             >
-              Complete Session Notes — Stay Compliant
+              {completedCtaLabel}
             </button>
           </Link>
         )}

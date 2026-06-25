@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { LogOut, Settings, User, ShieldCheck, LockKeyhole } from "lucide-react";
+import { LogOut, Settings, User, ShieldCheck, LockKeyhole, Shield } from "lucide-react";
 import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
 
 interface ProfileDropdownProps {
@@ -102,6 +102,20 @@ export function ProfileDropdown({
                 >
                   <User size={16} strokeWidth={2} />
                   <span>My Profile</span>
+                </button>
+              </Link>
+            )}
+
+            {/* Your data & privacy */}
+            {isWorker && (
+              <Link href="/worker/privacy">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-black/5"
+                  style={{ color: DS.TEXT.primary }}
+                >
+                  <Shield size={16} strokeWidth={2} />
+                  <span>Your data &amp; privacy</span>
                 </button>
               </Link>
             )}

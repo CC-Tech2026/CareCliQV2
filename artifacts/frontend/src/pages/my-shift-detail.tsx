@@ -56,6 +56,7 @@ import {
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
+import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
@@ -149,6 +150,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [validationOpen, setValidationOpen] = useState(false);
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [forceEndPending, setForceEndPending] = useState(false);
@@ -594,13 +596,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const handleValidationEndAnyway = () => {
     setValidationOpen(false);
     setForceEndPending(true);
-    setEndShiftOpen(true);
+    setSignatureOpen(true);
   };
 
   const handleValidationEndShift = () => {
     setValidationOpen(false);
     setForceEndPending(false);
-    setEndShiftOpen(true);
+    setSignatureOpen(true);
   };
 
   const handleBackToMandatoryTasks = () => {
@@ -618,6 +620,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const handleEndAnywayFromMandatory = () => {
     setMandatoryAlertOpen(false);
     setForceEndPending(true);
+    setSignatureOpen(true);
+  };
+
+  const handleSignatureComplete = () => {
     void handleEndShift();
   };
 
@@ -738,6 +744,16 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const dialogs = (
     <>
+      {shift && (
+        <ShiftSignatureModal
+          open={signatureOpen}
+          onOpenChange={setSignatureOpen}
+          shiftId={shift.id}
+          busy={busy === "end"}
+          onSigned={handleSignatureComplete}
+        />
+      )}
+
       {shift && (
         <EndShiftValidationModal
           open={validationOpen}
