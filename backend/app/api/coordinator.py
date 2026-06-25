@@ -7,7 +7,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,12 @@ from ..services.pattern_detection_service import (
     run_pattern_detection_for_org,
 )
 from ..services import participant_service, session_service, shift_service
+from ..services.compliance_evidence_service import (
+    coordinator_delete_evidence,
+    export_shift_evidence_audit_csv,
+    list_session_evidence_metadata,
+    list_shift_audit_log,
+)
 from ..services.credential_verification_service import (
     get_shift_credential_requirements,
     verify_worker_credentials,
@@ -3005,3 +3012,76 @@ async def delete_task_template(
         supabase.table("participant_task_templates").update({"is_active": False}).eq("id", template_id).eq("organization_id", org_id).execute()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task template delete failed: {exc}")
+
+
+class EvidenceDeleteBody(BaseModel):
+    reason: str = Field(min_length=3)
+
+
+@router.get("/sessions/{session_id}/evidence-metadata")
+async def coordinator_list_evidence_metadata(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Chain-of-custody metadata for all session evidence (CARECLIQV2-271)."""
+    org_id = _require_coordinator(current_user)
+    items = list_session_evidence_metadata(session_id, org_id)
+    return {"evidence": items}
+
+
+@router.delete("/evidence/{evidence_id}")
+async def coordinator_delete_evidence_item(
+    evidence_id: str,
+    body: EvidenceDeleteBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Coordinator-only evidence deletion with mandatory reason (CARECLIQV2-271)."""
+    org_id = _require_coordinator(current_user)
+    coordinator_id = get_user_id(current_user)
+    try:
+        return coordinator_delete_evidence(evidence_id, coordinator_id, org_id, body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/shifts/{shift_id}/evidence-audit")
+async def coordinator_shift_evidence_audit(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only evidence audit log for a shift (CARECLIQV2-271)."""
+    org_id = _require_coordinator(current_user)
+    return {"entries": list_shift_audit_log(shift_id, org_id)}
+
+
+@router.get("/shifts/{shift_id}/evidence-audit.csv")
+async def coordinator_export_evidence_audit_csv(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Export full evidence audit trail for a shift as CSV (CARECLIQV2-271)."""
+    org_id = _require_coordinator(current_user)
+    filename, content = export_shift_evidence_audit_csv(shift_id, org_id)
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/shifts/{shift_id}/signature")
+async def coordinator_get_shift_signature(
+    shift_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only shift signature for coordinator review (CARECLIQV2-270)."""
+    org_id = _require_coordinator(current_user)
+    from ..services.shift_signature_service import get_shift_signature
+
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=404, detail="Shift not found")
+    signature = get_shift_signature(shift_id)
+    if not signature:
+        raise HTTPException(status_code=404, detail="No signature on file for this shift")
+    return signature

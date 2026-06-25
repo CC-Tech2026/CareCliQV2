@@ -59,6 +59,7 @@ import WorkerNotificationsPage from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
+import WorkerPrivacy from "@/pages/worker-privacy";
 import AccountSecure from "@/pages/account-secure";
 
 // All authenticated roles
@@ -191,17 +192,17 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/tasks">
+      {/* <Route path="/tasks">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
-      </Route>
+      </Route> */}
 
-      <Route path="/worker/messages">
+      {/* <Route path="/worker/messages">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerMessages /></AppLayout>
         </ProtectedRoute>
-      </Route>
+      </Route> */}
 
       <Route path="/worker/notifications">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -371,6 +372,12 @@ function Router() {
       <Route path="/worker/security">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerSecurity /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/privacy">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPrivacy /></AppLayout>
         </ProtectedRoute>
       </Route>
 

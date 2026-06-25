@@ -1,5 +1,6 @@
-import { CheckCircle2, FileText } from "lucide-react";
+import { CheckCircle2, FileText, PenLine } from "lucide-react";
 import type { ShiftCompletionSummary as Summary, WorkerShift } from "@/services/shiftService";
+import type { ShiftSignature } from "@/services/complianceService";
 import { BORDER, MUTED, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
 
 type Props = {
@@ -65,6 +66,26 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
             <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
               {new Date(shift.risks_acknowledged_at).toLocaleString()}
               {shift.risks_acknowledged_by_name ? ` · ${shift.risks_acknowledged_by_name}` : ""}
+            </dd>
+          </div>
+        )}
+        {(shift.shift_signature as ShiftSignature | undefined) && (
+          <div className="rounded-xl bg-white p-3 sm:col-span-2">
+            <dt className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              <PenLine size={12} /> Digital signature
+            </dt>
+            <dd>
+              {(shift.shift_signature as ShiftSignature).signature_png_url && (
+                <img
+                  src={(shift.shift_signature as ShiftSignature).signature_png_url}
+                  alt="Shift signature"
+                  className="mb-2 max-h-16 rounded border border-slate-200 bg-white p-1"
+                />
+              )}
+              <p className="text-sm font-bold" style={{ color: TEXT }}>
+                Signed by {(shift.shift_signature as ShiftSignature).signer_name ?? "worker"} on{" "}
+                {new Date((shift.shift_signature as ShiftSignature).signed_at).toLocaleString()}
+              </p>
             </dd>
           </div>
         )}

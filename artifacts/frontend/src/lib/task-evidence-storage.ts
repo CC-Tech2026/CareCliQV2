@@ -149,6 +149,49 @@ export function newEvidenceId() {
   return `evid_${crypto.randomUUID().slice(0, 12)}`;
 }
 
+/** Local-only ids created when hydrating from shift task fields (not from the server). */
+export function isSyntheticEvidenceId(evidenceId: string) {
+  return evidenceId.startsWith("shift_");
+}
+
+function textEvidenceRank(record: TaskEvidenceRecord) {
+  let score = 0;
+  if (!isSyntheticEvidenceId(record.evidence_id)) score += 100;
+  if (record.synced) score += 10;
+  return score;
+}
+
+/** Collapse duplicate text thread entries (same content) — keeps the server-backed record. */
+export function dedupeTaskEvidenceRecords(records: TaskEvidenceRecord[]): TaskEvidenceRecord[] {
+  const sorted = [...records].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const keptTextByContent = new Map<string, TaskEvidenceRecord>();
+  const result: TaskEvidenceRecord[] = [];
+
+  for (const record of sorted) {
+    if (record.type !== "text") {
+      result.push(record);
+      continue;
+    }
+    const key = (record.content ?? "").trim();
+    if (!key) continue;
+
+    const existing = keptTextByContent.get(key);
+    if (!existing) {
+      keptTextByContent.set(key, record);
+      result.push(record);
+      continue;
+    }
+
+    if (textEvidenceRank(record) > textEvidenceRank(existing)) {
+      const index = result.findIndex((row) => row.evidence_id === existing.evidence_id);
+      if (index >= 0) result[index] = record;
+      keptTextByContent.set(key, record);
+    }
+  }
+
+  return result.sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
 /** Seed IndexedDB thread from persisted shift task fields when local records are empty. */
 export function buildRecordsFromShiftTask(
   task: {
@@ -172,6 +215,8 @@ export function buildRecordsFromShiftTask(
     new Date().toISOString();
   const rows: TaskEvidenceRecord[] = [];
 
+  // Text notes are also mirrored on shift.tasks[].note after sync; only seed when no
+  // thread records exist yet (handled by caller). Synthetic id is replaced on first submit.
   if (task.note?.trim()) {
     rows.push({
       evidence_id: `shift_${task.task_id}_note`,

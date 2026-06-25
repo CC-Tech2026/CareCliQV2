@@ -1293,6 +1293,14 @@ def get_shift_detail_for_worker(
     primary_contact = (payload.get("profile") or {}).get("emergency_contact")
     if primary_contact:
         payload["primary_contact"] = primary_contact
+    try:
+        from .shift_signature_service import get_shift_signature
+
+        signature = get_shift_signature(shift_id)
+        if signature:
+            payload["shift_signature"] = signature
+    except Exception:
+        pass
     return payload
 
 
@@ -2116,6 +2124,10 @@ def end_shift(
     if not shift.get("clocked_in_at"):
         raise ValueError("Clock in before ending the shift.")
 
+    from .shift_signature_service import require_signature_for_shift
+
+    require_signature_for_shift(shift_id)
+
     tasks = shift.get("tasks") or []
     validation = compute_shift_validation(tasks)
     if force:
@@ -2182,6 +2194,14 @@ def end_shift(
         from .conversation_service import set_conversation_read_only_for_shift
 
         set_conversation_read_only_for_shift(shift_id)
+    except Exception:
+        pass
+    try:
+        from .shift_signature_service import get_shift_signature
+
+        sig = get_shift_signature(shift_id)
+        if sig:
+            payload["shift_signature"] = sig
     except Exception:
         pass
     return payload

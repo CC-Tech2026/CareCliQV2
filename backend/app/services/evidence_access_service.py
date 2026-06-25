@@ -287,13 +287,15 @@ async def verify_and_download_evidence(
     storage_path = metadata["storage_path"]
     
     try:
-        if storage_provider == "supabase":
-            bucket_name = "session-evidence"  # or from settings
-            bucket = supabase.storage.from_(bucket_name)
-            file_bytes = bucket.download(storage_path)
-        else:
-            # TODO: Implement S3/Azure download
-            raise NotImplementedError(f"Provider {storage_provider} not yet implemented")
+        from .object_storage import get_evidence_storage_backend
+
+        backend = get_evidence_storage_backend()
+        file_bytes = backend._download_bytes(storage_path) if hasattr(backend, "_download_bytes") else None
+        if file_bytes is None:
+            if storage_provider == "supabase" and hasattr(backend, "_bucket"):
+                file_bytes = backend._bucket.download(storage_path)  # noqa: SLF001
+            else:
+                raise NotImplementedError(f"Provider {storage_provider} download not configured")
     except Exception as exc:
         logger.error(f"Failed to download file from storage: {storage_path}: {exc}")
         await log_evidence_access(
