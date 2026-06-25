@@ -802,6 +802,73 @@ async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(g
     return shift
 
 
+from ..schemas.safety_protocol import SafetyProtocolAcknowledge
+from ..services import safety_protocol_service
+
+
+async def _worker_can_access_participant(
+    participant_id: str,
+    current_user: dict,
+) -> bool:
+    participant = await participant_service.get_participant_by_id(participant_id, current_user)
+    if participant:
+        return True
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    return shift_service.worker_has_shift_for_participant(
+        participant_id,
+        str(worker_id or ""),
+        str(org_id or ""),
+    )
+
+
+@router.get("/participants/{participant_id}/safety-protocol")
+async def worker_get_safety_protocol(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Participant safety protocols for worker (read-only)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    protocol = safety_protocol_service.get_protocol(participant_id, str(org_id or ""))
+    return safety_protocol_service.enrich_protocol_for_worker(protocol, worker_id=worker_id)
+
+
+@router.post("/participants/{participant_id}/safety-protocol/acknowledge")
+async def worker_acknowledge_safety_protocol(
+    participant_id: str,
+    body: SafetyProtocolAcknowledge,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log mandatory safety card acknowledgement."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    try:
+        result = safety_protocol_service.acknowledge_protocol(
+            worker_id=worker_id,
+            participant_id=participant_id,
+            organization_id=str(org_id or ""),
+            content_version=body.content_version,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    await audit_service.log_action(
+        action_type="worker.safety_protocol.acknowledged",
+        entity_type="participant",
+        entity_id=participant_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"content_version": body.content_version},
+    )
+    return result
+
+
 @router.post("/shifts/{shift_id}/start-session")
 async def worker_start_session(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Start an active session from a clocked-in shift (CARECLIQV2-116 comment 10051)."""

@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { WorkerShift } from "@/services/shiftService";
 import { formatActiveGoalLabel } from "@/services/shiftService";
 import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { ParticipantRiskAlerts } from "@/components/shifts/ParticipantRiskAlerts";
 
 type Props = {
   shift: WorkerShift;
@@ -47,7 +48,11 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
           )}
           {shift.health_alerts && shift.health_alerts.length > 0 && (
             <BriefBlock icon={ShieldAlert} title="Health Alerts" tone="yellow">
-              {shift.health_alerts.map((a) => a.title || a.detail).join(" ")}
+              <div style={{ whiteSpace: "pre-line" }}>
+                {shift.health_alerts
+                  .map((a) => a.title || a.detail || "")
+                  .join("\n")}
+              </div>
             </BriefBlock>
           )}
           {shift.active_goals && shift.active_goals.length > 0 && (
@@ -92,7 +97,7 @@ function BriefBlock({
       <p className="mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
         <Icon size={12} /> {title}
       </p>
-      <p className="text-sm font-medium leading-relaxed" style={{ color: TEXT }}>
+      <p className="whitespace-pre-wrap text-sm font-medium leading-relaxed" style={{ color: TEXT }}>
         {children}
       </p>
     </div>

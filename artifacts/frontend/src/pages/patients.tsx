@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
+import { ParticipantSafetyProtocolEditor } from "@/components/participants/ParticipantSafetyProtocolEditor";
 import { apiFetch } from "@/lib/api-fetch";
 import {
   Select,
@@ -48,6 +49,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -158,6 +166,27 @@ function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
   } catch {
     return dateStr;
   }
+}
+
+function toDateInput(value?: string | null): string {
+  if (!value) return "";
+  return String(value).slice(0, 10);
+}
+
+const PLAN_STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "review", label: "Review" },
+  { value: "pending", label: "Pending" },
+  { value: "inactive", label: "Inactive" },
+  { value: "expired", label: "Expired" },
+] as const;
+
+function budgetCategoryAmount(
+  budgets: BudgetSummary["budgets"] | undefined,
+  category: string,
+): number {
+  const row = budgets?.find((b) => b.category === category);
+  return Number(row?.allocated ?? 0);
 }
 
 function money(value?: number | string | null) {
@@ -348,10 +377,11 @@ function ParticipantForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
+                    {PLAN_STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -413,35 +443,91 @@ function ParticipantForm({
 }
 
 // ---------------------------------------------------------------------------
-// Edit Participant Inline Panel
+// Edit Participant + NDIS Plan Setup (sheet modals)
 // ---------------------------------------------------------------------------
 
-function EditParticipantPanel({
+function buildParticipantFormValues(
+  participant: ParticipantRecord,
+  budget?: BudgetSummary,
+): ParticipantFormValues {
+  const planStatus = String(participant.plan_status ?? "active");
+  const knownStatus = PLAN_STATUS_OPTIONS.some((opt) => opt.value === planStatus);
+
+  return {
+    full_name: String(participant.full_name ?? ""),
+    ndis_number: String(participant.ndis_number ?? ""),
+    date_of_birth: toDateInput(participant.date_of_birth),
+    email: String(participant.email ?? ""),
+    phone: String(participant.phone ?? ""),
+    primary_disability: String(participant.primary_disability ?? ""),
+    biological_sex: String(participant.biological_sex ?? "unspecified"),
+    plan_status: knownStatus ? planStatus : "active",
+    plan_start_date:
+      toDateInput(participant.plan_start_date) || toDateInput(budget?.plan_start),
+    plan_end_date:
+      toDateInput(participant.plan_end_date) || toDateInput(budget?.plan_end),
+    total_budget: Number(participant.total_budget ?? budget?.total_funding ?? 0),
+  };
+}
+
+function buildPlanFormValues(
+  participant: ParticipantRecord,
+  budget?: BudgetSummary,
+): PlanFormValues {
+  const core = budgetCategoryAmount(budget?.budgets, "core");
+  const capacity = budgetCategoryAmount(budget?.budgets, "capacity_building");
+  const capital = budgetCategoryAmount(budget?.budgets, "capital");
+  const totalFromCategories = core + capacity + capital;
+  const totalFunding = Number(
+    budget?.total_funding ?? participant.total_budget ?? totalFromCategories ?? 0,
+  );
+
+  return {
+    plan_number: budget?.plan_number ?? "",
+    plan_start:
+      toDateInput(budget?.plan_start) || toDateInput(participant.plan_start_date),
+    plan_end:
+      toDateInput(budget?.plan_end) || toDateInput(participant.plan_end_date),
+    total_funding: totalFunding || totalFromCategories,
+    core_budget: core,
+    capacity_budget: capacity,
+    capital_budget: capital,
+  };
+}
+
+function ParticipantActionSheets({
   participant,
+  budget,
   onSaved,
 }: {
-  participant: any;
+  participant: ParticipantRecord;
+  budget?: BudgetSummary;
   onSaved: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<"edit" | "plan" | null>(null);
   const { toast } = useToast();
 
   const editForm = useForm<ParticipantFormValues>({
     resolver: zodResolver(participantSchema),
-    defaultValues: {
-      full_name: String(participant.full_name ?? ""),
-      ndis_number: String(participant.ndis_number ?? ""),
-      date_of_birth: participant.date_of_birth ? String(participant.date_of_birth).slice(0, 10) : "",
-      email: String(participant.email ?? ""),
-      phone: String(participant.phone ?? ""),
-      primary_disability: String(participant.primary_disability ?? ""),
-      biological_sex: String(participant.biological_sex ?? "unspecified"),
-      plan_status: String(participant.plan_status ?? "active"),
-      plan_start_date: participant.plan_start_date ? String(participant.plan_start_date).slice(0, 10) : "",
-      plan_end_date: participant.plan_end_date ? String(participant.plan_end_date).slice(0, 10) : "",
-      total_budget: Number(participant.total_budget ?? 0),
-    },
+    defaultValues: buildParticipantFormValues(participant, budget),
   });
+
+  const planForm = useForm<PlanFormValues>({
+    resolver: zodResolver(planSchema),
+    defaultValues: buildPlanFormValues(participant, budget),
+  });
+
+  useEffect(() => {
+    if (panel === "edit") {
+      editForm.reset(buildParticipantFormValues(participant, budget));
+    }
+  }, [panel, participant, budget, editForm]);
+
+  useEffect(() => {
+    if (panel === "plan") {
+      planForm.reset(buildPlanFormValues(participant, budget));
+    }
+  }, [panel, participant, budget, planForm]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: ParticipantFormValues) => {
@@ -451,6 +537,7 @@ function EditParticipantPanel({
       if (!payload.primary_disability) delete payload.primary_disability;
       if (!payload.plan_start_date) delete payload.plan_start_date;
       if (!payload.plan_end_date) delete payload.plan_end_date;
+      if (payload.biological_sex === "unspecified") delete payload.biological_sex;
 
       const res = await apiFetch(`/api/participants/${participant.id}`, {
         method: "PATCH",
@@ -465,7 +552,7 @@ function EditParticipantPanel({
     },
     onSuccess: () => {
       toast({ title: "Participant updated successfully" });
-      setOpen(false);
+      setPanel(null);
       onSaved();
     },
     onError: (err: Error) => {
@@ -473,197 +560,215 @@ function EditParticipantPanel({
     },
   });
 
-  return (
-    <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <Edit className="h-3.5 w-3.5" /> {open ? "Close Edit" : "Edit"}
-      </Button>
-      {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Edit Participant</h4>
-          <ParticipantForm
-            form={editForm}
-            onSubmit={(data) => updateMutation.mutate(data)}
-            isPending={updateMutation.isPending}
-            onCancel={() => setOpen(false)}
-            submitLabel="Save Changes"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// NDIS Plan Setup Inline Panel
-// ---------------------------------------------------------------------------
-
-function SetupPlanPanel({
-  participantId,
-  onSaved,
-}: {
-  participantId: string;
-  onSaved: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const { toast } = useToast();
-
-  const planForm = useForm<PlanFormValues>({
-    resolver: zodResolver(planSchema),
-    defaultValues: {
-      plan_number: "",
-      plan_start: "",
-      plan_end: "",
-      total_funding: 0,
-      core_budget: 0,
-      capacity_budget: 0,
-      capital_budget: 0,
-    },
-  });
-
   const createPlan = useMutation({
     mutationFn: async (data: PlanFormValues) => {
-      const res = await apiFetch(`/api/participants/${participantId}/plan`, {
+      const categoryTotal =
+        Number(data.core_budget ?? 0) +
+        Number(data.capacity_budget ?? 0) +
+        Number(data.capital_budget ?? 0);
+      const payload = {
+        ...data,
+        total_funding:
+          Number(data.total_funding) > 0 ? Number(data.total_funding) : categoryTotal,
+      };
+
+      const res = await apiFetch(`/api/participants/${participant.id}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to save plan");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail = (err as { detail?: string | Array<{ msg?: string }> }).detail;
+        const message =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg).filter(Boolean).join(", ")
+              : "Failed to save plan";
+        throw new Error(message);
+      }
       return res.json();
     },
     onSuccess: () => {
       toast({ title: "NDIS plan saved" });
-      setOpen(false);
+      setPanel(null);
       onSaved();
     },
-    onError: () => toast({ title: "Failed to save plan", variant: "destructive" }),
+    onError: (err: Error) => {
+      toast({ title: err.message || "Failed to save plan", variant: "destructive" });
+    },
   });
 
   return (
-    <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <PlusCircle className="h-3.5 w-3.5" /> {open ? "Close Plan Setup" : "Set Up NDIS Plan"}
-      </Button>
-      {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Set Up NDIS Plan</h4>
+    <>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => setPanel((prev) => (prev === "edit" ? null : "edit"))}
+        >
+          <Edit className="h-3.5 w-3.5" /> Edit
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => setPanel((prev) => (prev === "plan" ? null : "plan"))}
+        >
+          <PlusCircle className="h-3.5 w-3.5" /> Set Up NDIS Plan
+        </Button>
+      </div>
+
+      <Dialog open={panel === "edit"} onOpenChange={(open) => setPanel(open ? "edit" : null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Participant</DialogTitle>
+            <DialogDescription>
+              Update profile and plan summary for {participant.full_name}.
+            </DialogDescription>
+          </DialogHeader>
+          <ParticipantForm
+            form={editForm}
+            onSubmit={(data) => updateMutation.mutate(data)}
+            isPending={updateMutation.isPending}
+            onCancel={() => setPanel(null)}
+            submitLabel="Save Changes"
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={panel === "plan"} onOpenChange={(open) => setPanel(open ? "plan" : null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Set Up NDIS Plan</DialogTitle>
+            <DialogDescription>
+              {budget?.has_plan
+                ? "Update funding periods and category budgets for this participant."
+                : "Create the participant's NDIS plan and category budgets."}
+            </DialogDescription>
+          </DialogHeader>
           <Form {...planForm}>
-            <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={planForm.control}
-                name="plan_number"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Plan Reference Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 2024-ABC-001" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_start"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Plan Start <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_end"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Plan End <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="total_funding"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Total Funding ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="50000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="col-span-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" /> Budget by Support Category
-                </p>
+            <form
+              onSubmit={planForm.handleSubmit((data) => createPlan.mutate(data))}
+              className="space-y-4"
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={planForm.control}
+                  name="plan_number"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Plan Reference Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. 2026-NDIS-001" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_start"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Plan Start <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_end"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Plan End <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="total_funding"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Total Funding ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="120000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" /> Budget by Support Category
+                  </p>
+                </div>
+                <FormField
+                  control={planForm.control}
+                  name="core_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Core Supports ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="capacity_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Capacity Building ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="capital_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Capital Supports ($)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <FormField
-                control={planForm.control}
-                name="core_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Core Supports ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capacity_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Capacity Building ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capital_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Capital Supports ($)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Plan
-              </Button>
-            </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setPanel(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createPlan.isPending}>
+                  {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Plan
+                </Button>
+              </div>
             </form>
           </Form>
-        </div>
-      )}
-    </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -827,21 +932,25 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               {participant.full_name}
             </h3>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <EditParticipantPanel
-              participant={participant}
-              onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
-            />
-            <SetupPlanPanel participantId={id} onSaved={onRefreshList} />
-          </div>
+          <ParticipantActionSheets
+            participant={participant}
+            budget={budget}
+            onSaved={() => {
+              participantQuery.refetch();
+              budgetQuery.refetch();
+              onRefreshList();
+            }}
+          />
         </div>
 
         {/* NDIS number + plan dates */}
         <p className="text-[11px] text-[#7A6A9E] ml-[52px] -mt-2 mb-3 leading-relaxed">
           NDIS {participant.ndis_number || "not recorded"}
-          {participant.plan_start_date && participant.plan_end_date && (
+          {participant.plan_start_date && participant.plan_end_date ? (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
-          )}
+          ) : budget?.plan_start && budget?.plan_end ? (
+            <> &middot; Plan {safeFormat(budget.plan_start)} – {safeFormat(budget.plan_end)}</>
+          ) : null}
         </p>
 
         {/* 4-stat strip */}
@@ -1236,6 +1345,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             </div>
 
             <ParticipantShiftContextEditor participantId={id} />
+            <ParticipantSafetyProtocolEditor participantId={id} />
           </section>
         )}
 
@@ -1298,10 +1408,11 @@ export default function Patients() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                {PLAN_STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

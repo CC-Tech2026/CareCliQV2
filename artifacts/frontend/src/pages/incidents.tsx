@@ -47,6 +47,9 @@ interface Incident {
   id: string; title: string; incident_type: string; severity: string;
   status: string; incident_date: string; ndis_pending: boolean;
   overdue: boolean; participant_name?: string;
+  reference_number?: string;
+  worker_status_label?: string;
+  worker_severity_label?: string;
 }
 interface IncidentStats {
   total: number; open: number; ndis_pending: number; overdue: number; critical: number;
@@ -226,6 +229,7 @@ export default function Incidents() {
                       {incident.title}
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
+                      {incident.reference_number ? `${incident.reference_number} · ` : ""}
                       {incident.participant_name || "No participant linked"}
                       {" · "}
                       {INCIDENT_TYPES[incident.incident_type] ?? incident.incident_type}
@@ -241,7 +245,7 @@ export default function Incidents() {
                       {sev.label}
                     </span>
                     <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${st.bg}`}>
-                      {st.label}
+                      {incident.worker_status_label || st.label}
                     </span>
                     {incident.ndis_pending && (
                       <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold bg-red-50 text-red-700 border-red-200">

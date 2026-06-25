@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, ChevronDown, MessageSquare, Phone, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -13,34 +12,17 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { compressImageFile } from "@/lib/task-evidence-storage";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { createIncident, listIncidents, type IncidentPayload } from "@/services/incidentService";
+import { listIncidents } from "@/services/incidentService";
+import { WorkerIncidentReportForm } from "@/components/shifts/WorkerIncidentReportForm";
 import { listShiftMessages, sendShiftOfficeMessage, type ShiftOfficeMessage } from "@/services/shiftService";
-import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 
-const INCIDENT_TYPES = [
-  { value: "injury", label: "Fall / Injury" },
-  { value: "medication_error", label: "Medication error" },
-  { value: "behaviour_of_concern", label: "Behaviour" },
-  { value: "near_miss", label: "Near miss" },
-  { value: "other", label: "Other" },
-] as const;
-
-type IncidentPhotoDraft = {
-  dataUrl: string;
-  description: string;
-  capturedAt: string;
-};
+const DEFAULT_OFFICE_PHONE = "1300 000 000";
 
 type IncidentListItem = {
   id: string;
   title?: string;
+  reference_number?: string;
   incident_type?: string;
   incident_date?: string;
   severity?: string;
@@ -58,8 +40,6 @@ type Props = {
   officePhone?: string;
 };
 
-const DEFAULT_OFFICE_PHONE = "1300 000 000";
-
 export function DuringShiftAccordion({
   shiftId,
   participantId,
@@ -72,20 +52,9 @@ export function DuringShiftAccordion({
 }: Props) {
   const resolvedOfficePhone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
   const { toast } = useToast();
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [showIncidentForm, setShowIncidentForm] = useState(false);
   const [showMessageForm, setShowMessageForm] = useState(false);
-  const [incidentType, setIncidentType] = useState("injury");
-  const [incidentTime, setIncidentTime] = useState(() => new Date().toISOString().slice(0, 16));
-  const [description, setDescription] = useState("");
-  const [peopleInvolved, setPeopleInvolved] = useState("");
-  const [injuries, setInjuries] = useState("");
-  const [actionsTaken, setActionsTaken] = useState("");
-  const [escalate, setEscalate] = useState(false);
-  const [photoPreviews, setPhotoPreviews] = useState<IncidentPhotoDraft[]>([]);
-  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [incidentHistory, setIncidentHistory] = useState<IncidentListItem[]>([]);
 
   const [officeMessage, setOfficeMessage] = useState("");
@@ -111,18 +80,6 @@ export function DuringShiftAccordion({
     if (open) void loadHistory();
   }, [open, loadHistory]);
 
-  const handlePhotoPick = async (file: File | null) => {
-    if (!file) return;
-    try {
-      const { dataUrl } = await compressImageFile(file);
-      setPhotoPreviews((prev) =>
-        [...prev, { dataUrl, description: "", capturedAt: new Date().toISOString() }].slice(0, 4),
-      );
-    } catch {
-      toast({ title: "Could not add photo", variant: "destructive" });
-    }
-  };
-
   const handleMessagePhotoPick = async (file: File | null) => {
     if (!file) return;
     try {
@@ -130,57 +87,6 @@ export function DuringShiftAccordion({
       setMessagePhotoPreviews((prev) => [...prev, dataUrl].slice(0, 2));
     } catch {
       toast({ title: "Could not add photo", variant: "destructive" });
-    }
-  };
-
-  const handleSubmitIncident = async () => {
-    if (!description.trim()) {
-      toast({ title: "Description required", description: "Describe what happened.", variant: "destructive" });
-      return;
-    }
-    const typeLabel = INCIDENT_TYPES.find((t) => t.value === incidentType)?.label ?? "Incident";
-    setSubmitting(true);
-    try {
-      const payload: IncidentPayload = {
-        participant_id: participantId,
-        session_id: sessionId ?? undefined,
-        shift_id: shiftId,
-        incident_type: incidentType,
-        severity: escalate || incidentType === "injury" ? "high" : "medium",
-        title: `${typeLabel} — ${participantName ?? "shift"}`,
-        description: description.trim(),
-        location: shiftAddress,
-        witnesses: peopleInvolved.trim() || undefined,
-        participant_impact: injuries.trim() || undefined,
-        worker_actions: actionsTaken.trim() || undefined,
-        incident_date: new Date(incidentTime).toISOString(),
-        escalate,
-        photo_items: photoPreviews.length
-          ? photoPreviews.map((photo) => ({
-              data: photo.dataUrl,
-              description: photo.description.trim() || undefined,
-              captured_at: photo.capturedAt,
-            }))
-          : undefined,
-      };
-      await createIncident(payload);
-      toast({ title: "Incident reported", description: "Your report has been submitted to the office." });
-      setDescription("");
-      setPeopleInvolved("");
-      setInjuries("");
-      setActionsTaken("");
-      setPhotoPreviews([]);
-      setEscalate(false);
-      setShowIncidentForm(false);
-      void loadHistory();
-    } catch (err) {
-      toast({
-        title: "Could not submit report",
-        description: (err as Error).message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -278,124 +184,24 @@ export function DuringShiftAccordion({
           </div>
 
           {showIncidentForm && (
-            <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/40 p-3">
-              <div className="flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-1">
                 <p className="text-xs font-black uppercase tracking-wider text-red-800">Incident report</p>
                 <button type="button" onClick={() => setShowIncidentForm(false)} aria-label="Close incident form">
                   <X size={16} className="text-red-600" />
                 </button>
               </div>
-              <Select value={incidentType} onValueChange={setIncidentType}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Incident type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INCIDENT_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                type="datetime-local"
-                value={incidentTime}
-                onChange={(e) => setIncidentTime(e.target.value)}
-                className="bg-white"
+              <WorkerIncidentReportForm
+                shiftId={shiftId}
+                participantId={participantId}
+                participantName={participantName}
+                sessionId={sessionId}
+                shiftAddress={shiftAddress}
+                onSubmitted={() => {
+                  void loadHistory();
+                }}
+                onCancel={() => setShowIncidentForm(false)}
               />
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What happened?"
-                className="min-h-[80px] bg-white"
-              />
-              <Input
-                value={peopleInvolved}
-                onChange={(e) => setPeopleInvolved(e.target.value)}
-                placeholder="People involved"
-                className="bg-white"
-              />
-              <Input
-                value={injuries}
-                onChange={(e) => setInjuries(e.target.value)}
-                placeholder="Injuries / impact"
-                className="bg-white"
-              />
-              <Textarea
-                value={actionsTaken}
-                onChange={(e) => setActionsTaken(e.target.value)}
-                placeholder="Actions taken"
-                className="min-h-[60px] bg-white"
-              />
-              <label className="flex items-center gap-2 text-xs font-bold text-red-800">
-                <input type="checkbox" checked={escalate} onChange={(e) => setEscalate(e.target.checked)} />
-                Escalate to coordinator immediately
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {photoPreviews.map((photo, i) => (
-                  <div key={`${i}-${photo.dataUrl.slice(0, 32)}`} className="relative w-[88px] shrink-0">
-                    <button
-                      type="button"
-                      className="h-16 w-full overflow-hidden rounded-lg border bg-white shadow-sm ring-offset-1 transition hover:ring-2 hover:ring-violet-300"
-                      onClick={() => setPreviewPhoto(photo.dataUrl)}
-                      aria-label={`View incident photo ${i + 1}`}
-                    >
-                      <img
-                        src={photo.dataUrl}
-                        alt={`Incident photo ${i + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      className="absolute -right-1 -top-1 rounded-full bg-black/70 p-0.5 text-white shadow"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPhotoPreviews((prev) => prev.filter((_, idx) => idx !== i));
-                        if (previewPhoto === photo.dataUrl) setPreviewPhoto(null);
-                      }}
-                      aria-label={`Remove photo ${i + 1}`}
-                    >
-                      <X size={12} />
-                    </button>
-                    <Input
-                      value={photo.description}
-                      onChange={(e) =>
-                        setPhotoPreviews((prev) =>
-                          prev.map((item, idx) =>
-                            idx === i ? { ...item, description: e.target.value } : item,
-                          ),
-                        )
-                      }
-                      placeholder="Photo note"
-                      className="mt-1 h-7 bg-white text-[10px]"
-                    />
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="grid h-16 w-16 place-items-center rounded-lg border border-dashed bg-white"
-                  onClick={() => photoInputRef.current?.click()}
-                >
-                  <Camera size={18} style={{ color: PLUM }} />
-                </button>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => void handlePhotoPick(e.target.files?.[0] ?? null)}
-                />
-              </div>
-              <Button
-                type="button"
-                className="w-full rounded-xl font-bold text-white"
-                style={{ background: CORAL }}
-                disabled={submitting}
-                onClick={() => void handleSubmitIncident()}
-              >
-                {submitting ? "Submitting…" : "Submit incident"}
-              </Button>
             </div>
           )}
 
@@ -487,7 +293,7 @@ export function DuringShiftAccordion({
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
                   <li key={item.id} className="rounded-lg bg-white px-2 py-1.5">
-                    <span className="font-bold">{item.title || item.incident_type}</span>
+                    <span className="font-bold">{item.reference_number || item.title || item.incident_type}</span>
                     {item.incident_date && (
                       <span className="ml-1 text-muted-foreground">
                         · {new Date(item.incident_date).toLocaleString()}
@@ -500,22 +306,6 @@ export function DuringShiftAccordion({
           )}
         </div>
       )}
-
-      <Dialog open={Boolean(previewPhoto)} onOpenChange={(open) => !open && setPreviewPhoto(null)}>
-        <DialogContent className="max-w-[min(92vw,640px)] gap-3 p-4 sm:p-5">
-          <DialogHeader>
-            <DialogTitle>Incident photo</DialogTitle>
-            <DialogDescription>Tap outside or close to return to the report.</DialogDescription>
-          </DialogHeader>
-          {previewPhoto && (
-            <img
-              src={previewPhoto}
-              alt="Incident photo full size"
-              className="max-h-[70vh] w-full rounded-lg object-contain bg-black/5"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }

@@ -1,6 +1,46 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import date, datetime
+
+WORKER_REPORT_TYPES = [
+    "safety_hazard",
+    "participant_behaviour",
+    "equipment_damage",
+    "travel_accident",
+    "other",
+]
+
+BEHAVIOUR_SUBTYPES = ["verbal", "physical", "property"]
+
+WORKER_SEVERITIES = ["low", "medium", "high", "emergency"]
+
+WORKER_REPORT_TYPE_TO_INCIDENT: dict[str, str] = {
+    "safety_hazard": "environmental",
+    "participant_behaviour": "behaviour_of_concern",
+    "equipment_damage": "property_damage",
+    "travel_accident": "injury",
+    "other": "other",
+}
+
+WORKER_STATUS_LABELS: dict[str, str] = {
+    "reported": "Under review",
+    "under_investigation": "Under review",
+    "resolved": "Actioned",
+    "closed": "Closed",
+}
+
+
+def map_worker_severity(severity: str) -> str:
+    normalized = (severity or "medium").strip().lower()
+    if normalized == "emergency":
+        return "critical"
+    if normalized in INCIDENT_SEVERITIES:
+        return normalized
+    return "medium"
+
+
+def worker_status_label(status: str) -> str:
+    return WORKER_STATUS_LABELS.get((status or "").strip().lower(), "Under review")
 
 INCIDENT_TYPES = [
     "injury",
@@ -53,6 +93,8 @@ class IncidentPhotoItem(BaseModel):
     data: str
     description: Optional[str] = None
     captured_at: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
 
 class IncidentCreate(BaseModel):
@@ -75,6 +117,68 @@ class IncidentCreate(BaseModel):
     photo_data: Optional[list[str]] = None
     photo_items: Optional[list[IncidentPhotoItem]] = None
     created_by: Optional[str] = None
+    worker_report_type: Optional[str] = None
+    behaviour_subtype: Optional[str] = None
+    participant_present: Optional[bool] = None
+    participant_harmed: Optional[str] = None
+
+
+class WorkerIncidentCreate(BaseModel):
+    """Worker shift incident report (CARECLIQV2-265)."""
+
+    participant_id: Optional[str] = None
+    session_id: Optional[str] = None
+    shift_id: Optional[str] = None
+    worker_report_type: str = "other"
+    behaviour_subtype: Optional[str] = None
+    severity: str = "medium"
+    description: str = Field(min_length=20, max_length=2000)
+    incident_date: datetime
+    location: Optional[str] = None
+    participant_present: Optional[bool] = None
+    participant_harmed: Optional[str] = None
+    worker_actions: Optional[str] = None
+    photo_items: Optional[list[IncidentPhotoItem]] = None
+
+    @field_validator("worker_report_type")
+    @classmethod
+    def validate_worker_report_type(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in WORKER_REPORT_TYPES:
+            raise ValueError(f"worker_report_type must be one of: {', '.join(WORKER_REPORT_TYPES)}")
+        return normalized
+
+    @field_validator("behaviour_subtype")
+    @classmethod
+    def validate_behaviour_subtype(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in BEHAVIOUR_SUBTYPES:
+            raise ValueError(f"behaviour_subtype must be one of: {', '.join(BEHAVIOUR_SUBTYPES)}")
+        return normalized
+
+    @field_validator("severity")
+    @classmethod
+    def validate_worker_severity(cls, value: str) -> str:
+        normalized = (value or "medium").strip().lower()
+        if normalized not in WORKER_SEVERITIES:
+            raise ValueError(f"severity must be one of: {', '.join(WORKER_SEVERITIES)}")
+        return normalized
+
+    @field_validator("participant_harmed")
+    @classmethod
+    def validate_participant_harmed(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if normalized not in ("yes", "no", "unknown"):
+            raise ValueError("participant_harmed must be yes, no, or unknown")
+        return normalized
+
+
+class IncidentCorrectionCreate(BaseModel):
+    note: str = Field(min_length=1, max_length=2000)
 
 
 class IncidentUpdate(BaseModel):
