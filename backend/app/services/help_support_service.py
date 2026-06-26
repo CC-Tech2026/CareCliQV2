@@ -14,6 +14,7 @@ TUTORIAL_STEPS = (
     "open_shift",
     "shift_overview",
     "risk_acknowledgement",
+    "risk_acknowledgement_modal",
     "clock_in",
     "clock_in_modal",
     "start_session",

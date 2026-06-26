@@ -3,6 +3,7 @@ export type TutorialStepKey =
   | "open_shift"
   | "shift_overview"
   | "risk_acknowledgement"
+  | "risk_acknowledgement_modal"
   | "clock_in"
   | "clock_in_modal"
   | "start_session"
@@ -23,6 +24,10 @@ export type TutorialStep = {
   requiresShift?: boolean;
   popoverSide?: "top" | "bottom" | "left" | "right" | "over";
   popoverAlign?: "start" | "center" | "end";
+  /** Show the popover Next button (default true). Set false when the UI action should advance. */
+  showNext?: boolean;
+  /** Show the popover Skip button (default true). */
+  showSkip?: boolean;
 };
 
 export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
@@ -33,6 +38,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     target: "[data-tutorial='shift-list']",
     popoverSide: "bottom",
     popoverAlign: "start",
+    showSkip: false,
   },
   {
     key: "open_shift",
@@ -42,6 +48,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     fallbackTarget: "[data-tutorial='shift-list']",
     popoverSide: "bottom",
     popoverAlign: "start",
+    showSkip: false,
   },
   {
     key: "shift_overview",
@@ -60,6 +67,19 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     requiresShift: true,
     popoverSide: "top",
     popoverAlign: "center",
+    showNext: true,
+    showSkip: false,
+  },
+  {
+    key: "risk_acknowledgement_modal",
+    title: "Acknowledge safety alerts",
+    body: "Before clock-in, confirm you have read and understand all safety alerts for this participant.",
+    target: "[data-tutorial='risk-ack-dialog']",
+    requiresShift: true,
+    popoverSide: "top",
+    popoverAlign: "center",
+    showNext: false,
+    showSkip: false,
   },
   {
     key: "clock_in",
@@ -69,6 +89,8 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     fallbackTarget: "[data-tutorial='shift-header']",
     requiresShift: true,
     popoverSide: "top",
+    showNext: false,
+    showSkip: false,
   },
   {
     key: "clock_in_modal",
@@ -77,6 +99,8 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     target: "[data-tutorial='clock-in-modal']",
     requiresShift: true,
     popoverSide: "right",
+    showNext: true,
+    showSkip: false,
   },
   {
     key: "start_session",
@@ -86,6 +110,8 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     fallbackTarget: "[data-tutorial='shift-progress']",
     requiresShift: true,
     popoverSide: "top",
+    showNext: false,
+    showSkip: true,
   },
   {
     key: "task_evidence",
@@ -113,15 +139,19 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     fallbackTarget: "[data-tutorial='live-progress-note']",
     requiresShift: true,
     popoverSide: "top",
+    showNext: false,
+    showSkip: true,
   },
   {
     key: "end_shift",
     title: "End your shift",
     body: "When finished, tap End Shift. The app checks tasks and evidence before you sign off.",
     target: "[data-tutorial='end-shift']",
-    fallbackTarget: "[data-tutorial='shift-progress']",
     requiresShift: true,
     popoverSide: "top",
+    popoverAlign: "center",
+    showNext: false,
+    showSkip: true,
   },
   {
     key: "end_shift_review",
@@ -130,6 +160,8 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     target: "[data-tutorial='end-shift-review']",
     requiresShift: true,
     popoverSide: "over",
+    showNext: false,
+    showSkip: true,
   },
   {
     key: "shift_signature",
@@ -137,7 +169,9 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     body: "Confirm the statements and sign with your finger. This locks the shift for compliance reporting.",
     target: "[data-tutorial='shift-signature']",
     requiresShift: true,
-    popoverSide: "over",
+    popoverSide: "left",
+    showNext: true,
+    showSkip: true,
   },
   {
     key: "notifications",
@@ -146,6 +180,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     target: "[data-tutorial='worker-notifications']",
     popoverSide: "bottom",
     popoverAlign: "end",
+    showSkip: false,
   },
 ];
 
@@ -172,11 +207,23 @@ function isElementVisible(el: Element): boolean {
 }
 
 function queryVisible(selector: string): Element | null {
-  const nodes = document.querySelectorAll(selector);
-  for (const node of nodes) {
-    if (isElementVisible(node)) return node;
+  let best: Element | null = null;
+  let bestArea = 0;
+  for (const node of document.querySelectorAll(selector)) {
+    if (!isElementVisible(node)) continue;
+    const rect = node.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    if (area > bestArea) {
+      bestArea = area;
+      best = node;
+    }
   }
-  return null;
+  return best;
+}
+
+export function scrollTutorialTargetIntoView(target: Element | null) {
+  if (!target) return;
+  target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
 }
 
 export function findTutorialTarget(step: TutorialStep): Element | null {
@@ -234,7 +281,7 @@ export async function waitForTutorialTarget(
   while (Date.now() < deadline) {
     const el = findTutorialTarget(step);
     if (el) {
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
       return el;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 100));

@@ -43,6 +43,7 @@ export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, tutoria
     if (!canSign) return;
     if (tutorialDemo) {
       onOpenChange(false);
+      onSigned();
       return;
     }
     setSubmitting(true);

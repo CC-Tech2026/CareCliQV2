@@ -23,10 +23,15 @@ import {
 } from "@/services/helpService";
 import { getWorkerShifts } from "@/services/shiftService";
 import { confirmTutorialDismiss } from "@/lib/worker-tutorial-dismiss";
+import { clearTutorialModalBlocking } from "@/lib/worker-tutorial-modal";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   getNextTutorialStepIndex,
   isTutorialStepApplicable,
+  resolveTutorialResumeIndex,
   resolveTutorialStartIndex,
+  shouldAdvanceFromDismissedStep,
+  waitForShiftTutorialReady,
 } from "@/lib/worker-tutorial-gates";
 import {
   WORKER_TUTORIAL_STEPS,
@@ -36,6 +41,7 @@ import {
 
 const LOCAL_KEY = "ccq_tutorial_progress";
 const DISMISSED_KEY = "ccq_tutorial_dismissed_session";
+const IN_PROGRESS_KEY = "ccq_tutorial_in_progress";
 
 type WorkerTutorialContextValue = {
   loading: boolean;
@@ -45,10 +51,13 @@ type WorkerTutorialContextValue = {
   tutorialShiftId: string | null;
   isTutorialMode: boolean;
   start: (fromIndex?: number, topicKey?: TutorialStepKey) => Promise<void>;
+  resume: () => Promise<void>;
   skipStep: () => Promise<void>;
   nextStep: () => Promise<void>;
   replay: () => Promise<void>;
   close: (skipConfirm?: boolean) => void;
+  /** Tear down the driver overlay so modal buttons stay clickable; pass false to restore. */
+  setDriverSuppressed: (suppressed: boolean) => void;
 };
 
 const WorkerTutorialContext = createContext<WorkerTutorialContextValue | null>(null);
@@ -87,10 +96,13 @@ async function resolveTutorialShiftId(): Promise<string | null> {
 
 export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   const [location, navigate] = useLocation();
+  const { isAuthenticated } = useAuth();
   const [progress, setProgress] = useState<TutorialProgress>(loadLocalProgress);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [tutorialShiftId, setTutorialShiftId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [driverSuppressed, setDriverSuppressedState] = useState(false);
+  const [stepPromptHidden, setStepPromptHidden] = useState(false);
   const driverRef = useRef<Driver | null>(null);
   const activeIndexRef = useRef<number | null>(null);
 
@@ -116,10 +128,23 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     activeIndexRef.current = activeIndex;
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (isAuthenticated) return;
+    destroyTutorialDriver(driverRef.current);
+    driverRef.current = null;
+    setActiveIndex(null);
+    setDriverSuppressedState(false);
+    setStepPromptHidden(false);
+    clearTutorialModalBlocking();
+    sessionStorage.setItem(DISMISSED_KEY, "1");
+    sessionStorage.removeItem(IN_PROGRESS_KEY);
+  }, [isAuthenticated]);
+
   const goToStep = useCallback(
     async (index: number, shiftId: string | null) => {
       const step = WORKER_TUTORIAL_STEPS[index];
       if (!step) return;
+      setStepPromptHidden(false);
       setActiveIndex(index);
       const route = tutorialStepRoute(step, shiftId);
       navigate(route);
@@ -130,6 +155,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   const start = useCallback(
     async (fromIndex = 0, topicKey?: TutorialStepKey) => {
       sessionStorage.removeItem(DISMISSED_KEY);
+      sessionStorage.setItem(IN_PROGRESS_KEY, "1");
       const requested = topicKey
         ? WORKER_TUTORIAL_STEPS.findIndex((step) => step.key === topicKey)
         : fromIndex;
@@ -140,6 +166,30 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     },
     [goToStep],
   );
+
+  const resume = useCallback(async () => {
+    if (progress.completed) return;
+    sessionStorage.removeItem(DISMISSED_KEY);
+    sessionStorage.setItem(IN_PROGRESS_KEY, "1");
+    const shiftId = await resolveTutorialShiftId();
+    setTutorialShiftId(shiftId);
+
+    const tentativeIndex = resolveTutorialResumeIndex(progress);
+    if (tentativeIndex >= WORKER_TUTORIAL_STEPS.length) return;
+
+    const tentativeStep = WORKER_TUTORIAL_STEPS[tentativeIndex];
+    if (tentativeStep.requiresShift && shiftId) {
+      navigate(tutorialStepRoute(tentativeStep, shiftId));
+      await waitForShiftTutorialReady(shiftId);
+    }
+
+    const index = resolveTutorialStartIndex(
+      resolveTutorialResumeIndex(progress),
+      WORKER_TUTORIAL_STEPS,
+    );
+    if (index >= WORKER_TUTORIAL_STEPS.length) return;
+    await goToStep(index, shiftId);
+  }, [progress, goToStep, navigate]);
 
   const persistStep = useCallback(async (skipped: boolean) => {
     const index = activeIndexRef.current;
@@ -170,15 +220,23 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       return;
     }
     setActiveIndex(null);
+    sessionStorage.removeItem(IN_PROGRESS_KEY);
     if (location.includes("tutorial=1")) {
       navigate(location.replace(/[?&]tutorial=1/, "").replace(/\?$/, "") || "/my-shifts");
     }
   }, [tutorialShiftId, goToStep, location, navigate]);
 
   const skipStep = useCallback(async () => {
-    await persistStep(true);
-    await advance();
-  }, [advance, persistStep]);
+    setStepPromptHidden(true);
+    destroyTutorialDriver(driverRef.current);
+    driverRef.current = null;
+    clearTutorialModalBlocking();
+    document.body.classList.remove(
+      "ccq-tutorial-active",
+      "ccq-tutorial-allow-interaction",
+      "ccq-tutorial-modal-open",
+    );
+  }, []);
 
   const nextStep = useCallback(async () => {
     await persistStep(false);
@@ -204,14 +262,25 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     destroyTutorialDriver(driverRef.current);
     driverRef.current = null;
     setActiveIndex(null);
+    setDriverSuppressedState(false);
+    setStepPromptHidden(false);
     sessionStorage.setItem(DISMISSED_KEY, "1");
+    sessionStorage.removeItem(IN_PROGRESS_KEY);
     if (location.includes("tutorial=1")) {
       navigate("/my-shifts");
     }
   }, [location, navigate]);
 
+  const setDriverSuppressed = useCallback((suppressed: boolean) => {
+    setDriverSuppressedState(suppressed);
+    if (suppressed) {
+      destroyTutorialDriver(driverRef.current);
+      driverRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
-    if (activeIndex === null) {
+    if (activeIndex === null || driverSuppressed || stepPromptHidden) {
       destroyTutorialDriver(driverRef.current);
       driverRef.current = null;
       return;
@@ -260,7 +329,22 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       destroyTutorialDriver(driverRef.current);
       driverRef.current = null;
     };
-  }, [activeIndex, location, tutorialShiftId, close, nextStep, skipStep]);
+  }, [activeIndex, driverSuppressed, stepPromptHidden, location, tutorialShiftId, close, nextStep, skipStep]);
+
+  useEffect(() => {
+    if (activeIndex === null || !stepPromptHidden) return;
+
+    const check = () => {
+      if (activeIndexRef.current !== activeIndex) return;
+      if (shouldAdvanceFromDismissedStep(activeIndex)) {
+        void nextStep();
+      }
+    };
+
+    check();
+    const timer = window.setInterval(check, 400);
+    return () => window.clearInterval(timer);
+  }, [activeIndex, stepPromptHidden, nextStep]);
 
   const activeStep = activeIndex !== null ? WORKER_TUTORIAL_STEPS[activeIndex] : null;
 
@@ -273,10 +357,12 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       tutorialShiftId,
       isTutorialMode,
       start,
+      resume,
       skipStep,
       nextStep,
       replay,
       close,
+      setDriverSuppressed,
     }),
     [
       loading,
@@ -286,10 +372,12 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       tutorialShiftId,
       isTutorialMode,
       start,
+      resume,
       skipStep,
       nextStep,
       replay,
       close,
+      setDriverSuppressed,
     ],
   );
 
@@ -315,3 +403,5 @@ export function isTutorialSessionDismissed() {
     return false;
   }
 }
+
+export { IN_PROGRESS_KEY as TUTORIAL_IN_PROGRESS_KEY };

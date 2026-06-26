@@ -63,6 +63,14 @@ import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -116,6 +124,7 @@ import {
   isTutorialActive,
   parseTutorialStepKey,
 } from "@/lib/worker-tutorial-scene";
+import { useWorkerTutorialOptional } from "@/contexts/WorkerTutorialContext";
 
 type Props = { id: string };
 
@@ -141,7 +150,11 @@ const SERVICE_TAG_STYLES: Record<string, string> = {
 function resolveDisplayVisualState(
   shift: WorkerShift,
   instantSessionActive: boolean,
+  tutorialDemoClockedIn = false,
 ): ShiftVisualState {
+  if (tutorialDemoClockedIn && shift.visual_state === "scheduled") {
+    return "clocked_in";
+  }
   if (instantSessionActive && shift.visual_state === "clocked_in") {
     return "session_active";
   }
@@ -157,6 +170,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const isTutorialDemo = isTutorialPreview && tutorialStepKey !== null;
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
+  const tutorial = useWorkerTutorialOptional();
   const { toast } = useToast();
   const orgId = user?.organizationId ?? "__no_org__";
   const [briefingOpen, setBriefingOpen] = useState(true);
@@ -182,6 +196,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [forceEndPending, setForceEndPending] = useState(false);
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
+  const [tutorialDemoClockedIn, setTutorialDemoClockedIn] = useState(false);
+  const [tutorialSignatureDone, setTutorialSignatureDone] = useState(false);
   const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
   const [safetyProtocolOpen, setSafetyProtocolOpen] = useState(false);
   const [safetyProtocolMandatory, setSafetyProtocolMandatory] = useState(false);
@@ -343,6 +359,15 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const performVerifiedClockIn = async (payload: ClockInRequest) => {
     if (!shift) return;
+    if (isTutorialDemo) {
+      setTutorialDemoClockedIn(true);
+      setClockInFlowOpen(false);
+      toast({
+        title: "Tutorial check-in",
+        description: "Check-in preview complete — continue the walkthrough.",
+      });
+      return;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       await enqueueClockIn({
         shiftId: shift.id,
@@ -444,7 +469,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }, [id, clockInFlowOpen, invalidate, refetch, toast]);
 
   const displayVisualState = shift
-    ? resolveDisplayVisualState(shift, instantSessionActive)
+    ? resolveDisplayVisualState(shift, instantSessionActive, tutorialDemoClockedIn)
     : "scheduled";
   const timerActive =
     displayVisualState === "clocked_in" || displayVisualState === "session_active";
@@ -458,6 +483,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const invalidateShifts = () => {
     invalidate();
+  };
+
+  const closeAckDialog = (open: boolean) => {
+    setAckConfirmOpen(open);
+    if (!open && !shift?.risks_acknowledged) {
+      setAckChecked(false);
+    }
   };
 
   const handleAcknowledge = async () => {
@@ -681,6 +713,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   };
 
   const handleSignatureComplete = () => {
+    if (isTutorialDemo) {
+      setTutorialSignatureDone(true);
+      setSignatureOpen(false);
+      return;
+    }
     void handleEndShift();
   };
 
@@ -781,7 +818,12 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       ackChecked={ackChecked}
       setAckChecked={setAckChecked}
       busy={busy}
-      onRequestAcknowledge={() => setAckConfirmOpen(true)}
+      onRequestAcknowledge={() => {
+        setAckConfirmOpen(true);
+        if (isTutorialPreview && tutorialStepKey === "risk_acknowledgement") {
+          void tutorial?.nextStep();
+        }
+      }}
       onViewSupportInstructions={() => {
         setSupportOpen(true);
         requestAnimationFrame(() => {
@@ -906,29 +948,40 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={ackConfirmOpen}
-        onOpenChange={(open) => {
-          setAckConfirmOpen(open);
-          if (!open && !shift?.risks_acknowledged) setAckChecked(false);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Acknowledge safety alerts?</AlertDialogTitle>
-            <AlertDialogDescription>
+      <Dialog open={ackConfirmOpen} onOpenChange={closeAckDialog}>
+        <DialogContent
+          data-tutorial="risk-ack-dialog"
+          id="risk-ack-dialog"
+          hideCloseButton
+          className={cn("max-w-lg rounded-2xl", isTutorialPreview && "z-[10002]")}
+          overlayClassName={isTutorialPreview ? "z-[10002]" : undefined}
+          data-state={ackConfirmOpen ? "open" : "closed"}
+        >
+          <DialogHeader>
+            <DialogTitle>Acknowledge safety alerts?</DialogTitle>
+            <DialogDescription>
               Confirm you have read and understand all safety alerts for {shift?.participant_name ?? "this participant"}.
               This will be logged with your name and timestamp.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
-              Acknowledge Risks
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => closeAckDialog(false)} disabled={busy === "ack"}>
+              Cancel
+            </Button>
+            <Button onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
+              {busy === "ack" ? "Saving…" : "Acknowledge Risks"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {tutorialSignatureDone && (
+        <div
+          data-tutorial="shift-signature-complete"
+          className="pointer-events-none absolute left-0 top-0 h-[2px] w-[2px] overflow-hidden opacity-0"
+          aria-hidden="true"
+        />
+      )}
     </>
   );
 
@@ -1138,7 +1191,14 @@ function ShiftWorkflow({
   const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
 
   return (
-    <div className="space-y-4 pb-4" data-tutorial="shift-workspace">
+    <div className="relative space-y-4 pb-4" data-tutorial="shift-workspace">
+      {(visualState === "clocked_in" || visualState === "session_active") && (
+        <div
+          data-tutorial="clock-in-complete"
+          className="pointer-events-none absolute left-0 top-0 h-[2px] w-[2px] overflow-hidden opacity-0"
+          aria-hidden="true"
+        />
+      )}
       {isCompleted && (
         <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
       )}

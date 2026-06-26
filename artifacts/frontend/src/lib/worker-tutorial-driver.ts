@@ -1,13 +1,18 @@
 import { driver, type Driver } from "driver.js";
 import {
   getTutorialGate,
+  isTutorialBlockingModalOpen,
   tutorialCanProceed,
   tutorialGateWaitingMessage,
+  tutorialShowNext,
+  tutorialShowSkip,
 } from "@/lib/worker-tutorial-gates";
 import { confirmTutorialDismiss } from "@/lib/worker-tutorial-dismiss";
+import { clearTutorialModalBlocking, setTutorialModalBlocking } from "@/lib/worker-tutorial-modal";
 import {
   WORKER_TUTORIAL_STEPS,
   findTutorialTarget,
+  scrollTutorialTargetIntoView,
   tutorialStepHelperText,
   waitForTutorialTarget,
   type TutorialStep,
@@ -18,6 +23,8 @@ export type TutorialDriverCallbacks = {
   onSkip: () => void;
   onClose: () => void;
 };
+
+const SKIP_BUTTON_SELECTOR = ".ccq-driver-popover .driver-popover-skip-btn";
 
 export async function waitForTutorialStepReady(
   step: TutorialStep,
@@ -41,12 +48,45 @@ function buildDescription(step: TutorialStep, shiftId: string | null, target: El
   return parts.join("\n\n");
 }
 
+function getNavigationFooter(): HTMLElement | null {
+  return document.querySelector(".ccq-driver-popover .driver-popover-navigation-btns");
+}
+
+function targetRectKey(el: Element | null): string {
+  if (!el) return "";
+  const rect = el.getBoundingClientRect();
+  return `${Math.round(rect.top)}|${Math.round(rect.left)}|${Math.round(rect.width)}|${Math.round(rect.height)}`;
+}
+
 function setNextEnabled(nextButton: HTMLButtonElement | null | undefined, enabled: boolean) {
   if (!nextButton) return;
   nextButton.disabled = !enabled;
   nextButton.classList.toggle("ccq-driver-next-disabled", !enabled);
   nextButton.style.opacity = enabled ? "" : "0.45";
   nextButton.style.pointerEvents = enabled ? "" : "none";
+}
+
+function setNextVisible(nextButton: HTMLButtonElement | null | undefined, visible: boolean) {
+  if (!nextButton) return;
+  nextButton.style.display = visible ? "" : "none";
+}
+
+function setTutorialBodyClasses(options: {
+  active: boolean;
+  allowInteraction: boolean;
+  modalOpen: boolean;
+}) {
+  document.body.classList.toggle("ccq-tutorial-active", options.active);
+  document.body.classList.toggle("ccq-tutorial-allow-interaction", options.active && options.allowInteraction);
+  document.body.classList.toggle("ccq-tutorial-modal-open", options.active && options.modalOpen);
+}
+
+function clearTutorialBodyClasses() {
+  document.body.classList.remove(
+    "ccq-tutorial-active",
+    "ccq-tutorial-allow-interaction",
+    "ccq-tutorial-modal-open",
+  );
 }
 
 export function launchTutorialStep(options: {
@@ -63,10 +103,30 @@ export function launchTutorialStep(options: {
   let pollTimer: number | null = null;
   let autoAdvanced = false;
   let intentionalDestroy = false;
+  let skipRequested = false;
+  let lastPositionKey = "";
+  let activeDriverRef: Driver | null = null;
+
+  const teardown = () => {
+    if (pollTimer !== null) window.clearInterval(pollTimer);
+    pollTimer = null;
+    document.removeEventListener("click", onDocumentClick, true);
+    window.removeEventListener("resize", onLayoutChange);
+    clearTutorialModalBlocking();
+    clearTutorialBodyClasses();
+  };
+
+  const finishSkip = () => {
+    if (skipRequested || autoAdvanced) return;
+    skipRequested = true;
+    intentionalDestroy = true;
+    teardown();
+    callbacks.onSkip();
+  };
 
   const destroyDriver = (activeDriver: Driver) => {
     intentionalDestroy = true;
-    if (pollTimer !== null) window.clearInterval(pollTimer);
+    teardown();
     activeDriver.destroy();
   };
 
@@ -76,7 +136,74 @@ export function launchTutorialStep(options: {
     callbacks.onClose();
   };
 
-  const resolveTarget = () => findTutorialTarget(step);
+  const resolveTarget = () => findTutorialTarget(step) ?? options.target;
+
+  const ensureSkipButton = (): HTMLButtonElement | null => {
+    const footer = getNavigationFooter();
+    if (!footer) return null;
+
+    let skipButton = footer.querySelector<HTMLButtonElement>(".driver-popover-skip-btn");
+    if (!skipButton) {
+      skipButton = document.createElement("button");
+      skipButton.type = "button";
+      skipButton.textContent = "Skip";
+      skipButton.className = "driver-popover-skip-btn";
+      footer.insertBefore(skipButton, footer.firstChild);
+    }
+    return skipButton;
+  };
+
+  const syncPopoverChrome = (popover: {
+    description?: HTMLElement;
+    nextButton?: HTMLButtonElement;
+  }) => {
+    const skipEl = ensureSkipButton();
+    const showNext = tutorialShowNext(step);
+    const showSkip = tutorialShowSkip(step);
+    setNextVisible(popover.nextButton, showNext);
+    if (skipEl) skipEl.style.display = showSkip ? "" : "none";
+    if (showNext) setNextEnabled(popover.nextButton, tutorialCanProceed(step));
+
+    const nextTarget = resolveTarget();
+    if (popover.description) {
+      popover.description.textContent = buildDescription(step, shiftId, nextTarget);
+    }
+    return nextTarget;
+  };
+
+  const maybeReposition = (activeDriver: Driver, target: Element | null) => {
+    if (!target || isTutorialBlockingModalOpen(step)) return;
+    const key = targetRectKey(target);
+    if (key === lastPositionKey) return;
+    lastPositionKey = key;
+    try {
+      activeDriver.refresh();
+      ensureSkipButton();
+    } catch {
+      /* noop */
+    }
+  };
+
+  const onDocumentClick = (event: Event) => {
+    const target = event.target as Element | null;
+    if (!target?.closest(SKIP_BUTTON_SELECTOR)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    finishSkip();
+  };
+
+  const onLayoutChange = () => {
+    if (!activeDriverRef || skipRequested || autoAdvanced) return;
+    lastPositionKey = "";
+    const target = resolveTarget();
+    maybeReposition(activeDriverRef, target);
+    const popover = document.querySelector(".ccq-driver-popover");
+    if (popover) {
+      const nextBtn = popover.querySelector<HTMLButtonElement>(".driver-popover-next-btn");
+      const description = popover.querySelector<HTMLElement>(".driver-popover-description");
+      syncPopoverChrome({ nextButton: nextBtn ?? undefined, description: description ?? undefined });
+    }
+  };
 
   const driverObj = driver({
     animate: true,
@@ -85,9 +212,10 @@ export function launchTutorialStep(options: {
     overlayClickBehavior: () => {
       /* Block backdrop dismiss — close only via the X button with confirmation. */
     },
-    smoothScroll: true,
+    smoothScroll: false,
     stagePadding: 8,
     stageRadius: 10,
+    popoverOffset: 20,
     overlayOpacity: 0.55,
     disableActiveInteraction: !allowInteraction,
     popoverClass: "ccq-driver-popover",
@@ -96,19 +224,18 @@ export function launchTutorialStep(options: {
     showButtons: ["next", "close"],
     nextBtnText: "Next",
     doneBtnText: isTourComplete ? "Done" : "Next",
-    closeBtnText: "Close",
     steps: [
       {
-        element: () => resolveTarget() ?? undefined,
+        element: () => resolveTarget() ?? options.target ?? document.body,
         popover: {
           title: step.title,
           description: buildDescription(step, shiftId, options.target),
-          side: (() => {
-            const el = resolveTarget();
-            return el ? (step.popoverSide ?? "bottom") : "over";
-          })(),
+          side: step.popoverSide ?? "bottom",
           align: step.popoverAlign ?? "start",
           onPopoverRender: (popover, { driver: activeDriver }) => {
+            activeDriverRef = activeDriver;
+            scrollTutorialTargetIntoView(resolveTarget());
+
             if (popover.progress) {
               popover.progress.textContent = `Step ${stepIndex + 1} of ${WORKER_TUTORIAL_STEPS.length}`;
             }
@@ -121,53 +248,32 @@ export function launchTutorialStep(options: {
               };
             }
 
-            const skip = document.createElement("button");
-            skip.type = "button";
-            skip.textContent = "Skip";
-            skip.className = "driver-popover-skip-btn";
-            skip.addEventListener("click", (event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              destroyDriver(activeDriver);
-              callbacks.onSkip();
-            });
-            popover.footerButtons.insertBefore(skip, popover.footerButtons.firstChild);
+            const poll = () => {
+              if (autoAdvanced || skipRequested) return;
 
-            const refresh = () => {
-              if (autoAdvanced) return;
+              const modalOpen = isTutorialBlockingModalOpen(step);
+              setTutorialBodyClasses({ active: true, allowInteraction, modalOpen });
+              setTutorialModalBlocking(modalOpen);
 
-              const nextTarget = resolveTarget();
-              if (nextTarget) {
-                try {
-                  activeDriver.refresh();
-                } catch {
-                  /* noop */
-                }
-              }
+              const nextTarget = syncPopoverChrome(popover);
+              maybeReposition(activeDriver, nextTarget);
 
-              const canProceed = tutorialCanProceed(step);
-              setNextEnabled(popover.nextButton, canProceed);
-
-              if (popover.description) {
-                popover.description.textContent = buildDescription(step, shiftId, nextTarget);
-              }
-
-              if (gate?.autoAdvanceWhen?.() && canProceed) {
+              if (gate?.autoAdvanceWhen?.()) {
                 autoAdvanced = true;
                 destroyDriver(activeDriver);
                 callbacks.onNext();
               }
             };
 
-            setNextEnabled(popover.nextButton, tutorialCanProceed(step));
-            refresh();
-            pollTimer = window.setInterval(refresh, 400);
+            ensureSkipButton();
+            poll();
+            pollTimer = window.setInterval(poll, 500);
           },
         },
       },
     ],
     onNextClick: (_element, _step, { driver: activeDriver }) => {
-      if (!tutorialCanProceed(step)) return;
+      if (!tutorialShowNext(step) || !tutorialCanProceed(step)) return;
       destroyDriver(activeDriver);
       callbacks.onNext();
     },
@@ -175,23 +281,29 @@ export function launchTutorialStep(options: {
       requestTutorialClose(activeDriver);
     },
     onDestroyStarted: (_element, _step, { driver: activeDriver }) => {
-      if (intentionalDestroy) return;
+      if (intentionalDestroy || skipRequested) return;
       if (!confirmTutorialDismiss()) {
         activeDriver.drive();
         return;
       }
       intentionalDestroy = true;
-      if (pollTimer !== null) window.clearInterval(pollTimer);
+      teardown();
       callbacks.onClose();
     },
     onDestroyed: () => {
-      if (pollTimer !== null) window.clearInterval(pollTimer);
-      document.body.classList.remove("ccq-tutorial-active");
+      activeDriverRef = null;
+      teardown();
     },
   });
 
-  document.body.classList.add("ccq-tutorial-active");
+  document.addEventListener("click", onDocumentClick, true);
+  window.addEventListener("resize", onLayoutChange);
+
+  const launchTarget = resolveTarget();
+  scrollTutorialTargetIntoView(launchTarget);
+  setTutorialBodyClasses({ active: true, allowInteraction, modalOpen: false });
   driverObj.drive();
+  activeDriverRef = driverObj;
   return driverObj;
 }
 
@@ -201,5 +313,9 @@ export function destroyTutorialDriver(driverRef: Driver | null) {
   } catch {
     /* noop */
   }
-  document.body.classList.remove("ccq-tutorial-active");
+  document
+    .querySelectorAll(".driver-overlay, .driver-popover, .driver-active-element")
+    .forEach((node) => node.remove());
+  clearTutorialModalBlocking();
+  clearTutorialBodyClasses();
 }

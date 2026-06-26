@@ -181,7 +181,7 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
     { href: "/dashboard",     label: "Home",       icon: LayoutDashboard },
     { href: "/my-shifts",     label: "Shifts",     icon: CalendarDays },
     { href: "/my-clients",    label: "Clients",    icon: UserRound },
-    { href: "/tasks",         label: "Tasks",      icon: ClipboardList },
+    // { href: "/tasks",         label: "Tasks",      icon: ClipboardList },
     { href: "/my-compliance", label: "Compliance", icon: ShieldCheck },
   ],
   allied_health: [

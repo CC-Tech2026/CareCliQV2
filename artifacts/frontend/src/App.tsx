@@ -200,9 +200,9 @@ function Router() {
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
-      </Route> */}
+      </Route>
 
-      {/* <Route path="/worker/messages">
+      <Route path="/worker/messages">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerMessages /></AppLayout>
         </ProtectedRoute>
