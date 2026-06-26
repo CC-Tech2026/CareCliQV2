@@ -1,12 +1,12 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, FileText, ShieldCheck, TrendingUp } from "lucide-react";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 interface KPICardProps {
   label: string;
@@ -19,7 +19,7 @@ interface KPICardProps {
 function KPICard({ label, value, caption, icon: Icon, valueColor = PLUM }: KPICardProps) {
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-sm"
+      className="flex flex-col gap-3 rounded-2xl border bg-cc-surface p-5 shadow-sm"
       style={{ borderColor: BORDER }}
     >
       <div className="flex items-start justify-between gap-2">

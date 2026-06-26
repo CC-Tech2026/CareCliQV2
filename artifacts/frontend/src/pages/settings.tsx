@@ -75,10 +75,10 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-[#F8F6FE] transition-colors rounded-xl group">
+    <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-cc-bg transition-colors rounded-xl group">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold" style={{ color: "#1E1640" }}>{title}</p>
-        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
+        <p className="text-[14px] font-semibold" style={{ color: 'var(--cc-text)' }}>{title}</p>
+        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: 'var(--cc-muted)' }}>{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -106,11 +106,11 @@ function Section({
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: "linear-gradient(135deg, rgba(85,51,204,0.12), rgba(85,51,204,0.06))" }}
         >
-          <Icon className="h-[18px] w-[18px]" style={{ color: "#5533CC" }} />
+          <Icon className="h-[18px] w-[18px]" style={{ color: 'var(--cc-plum)' }} />
         </div>
         <div>
-          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>{title}</h2>
-          <p className="text-[12px] leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
+          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: 'var(--cc-text)' }}>{title}</h2>
+          <p className="text-[12px] leading-relaxed" style={{ color: 'var(--cc-muted)' }}>{description}</p>
         </div>
       </div>
       {children}
@@ -132,7 +132,7 @@ function PanelCard({
 }) {
   return (
     <div
-      className={cn("bg-white rounded-2xl overflow-hidden", className)}
+      className={cn("bg-cc-surface rounded-2xl overflow-hidden", className)}
       style={{
         border: "1px solid #EBE5F6",
         boxShadow: "0 2px 12px rgba(85,51,204,0.05), 0 1px 3px rgba(0,0,0,0.03)",
@@ -146,7 +146,7 @@ function PanelCard({
             borderColor: "#EBE5F6",
           }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#5533CC" }}>{label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--cc-plum)' }}>{label}</p>
         </div>
       )}
       <div className="p-5">{children}</div>
@@ -164,7 +164,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: "#5533CC" },
+  support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: 'var(--cc-plum)' },
   allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
 };
@@ -289,7 +289,7 @@ function NotificationsSection() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "#7A6A9E" }}>
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: 'var(--cc-muted)' }}>
         <Loader2 size={14} className="animate-spin" /> Loading preferences…
       </div>
     );
@@ -305,22 +305,22 @@ function NotificationsSection() {
       <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E2DEF2" }}>
         <table className="w-full text-[13px]">
           <thead>
-            <tr style={{ background: "#F5F3FC" }}>
-              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: "#7A6A9E" }}>Event</th>
+            <tr style={{ background: 'var(--cc-bg)' }}>
+              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: 'var(--cc-muted)' }}>Event</th>
               {NOTIF_CHANNELS.map((ch) => (
-                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: "#7A6A9E" }}>
+                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: 'var(--cc-muted)' }}>
                   {CHANNEL_LABELS[ch]}
-                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
+                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-cc-bg text-cc-muted">always</span>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {NOTIF_EVENTS.map((ev, i) => (
-              <tr key={ev.key} style={{ background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+              <tr key={ev.key} className={i % 2 === 0 ? "bg-cc-surface" : "bg-cc-bg"}>
                 <td className="px-4 py-3">
-                  <p className="font-semibold" style={{ color: "#1E1640" }}>{ev.label}</p>
-                  <p className="text-[11px]" style={{ color: "#7A6A9E" }}>{ev.description}</p>
+                  <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>{ev.label}</p>
+                  <p className="text-[11px]" style={{ color: 'var(--cc-muted)' }}>{ev.description}</p>
                 </td>
                 {NOTIF_CHANNELS.map((ch) => (
                   <td key={ch} className="px-4 py-3 text-center">
@@ -342,11 +342,11 @@ function NotificationsSection() {
       {/* Mobile Card View (sm, md only) */}
       <div className="md:hidden space-y-3">
         {NOTIF_EVENTS.map((ev) => (
-          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: "#fff" }}>
+          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: 'var(--cc-surface)' }}>
             {/* Event name & description */}
             <div className="mb-3">
-              <p className="text-[13px] font-bold" style={{ color: "#1E1640" }}>{ev.label}</p>
-              <p className="text-[12px] mt-1" style={{ color: "#7A6A9E" }}>{ev.description}</p>
+              <p className="text-[13px] font-bold" style={{ color: 'var(--cc-text)' }}>{ev.label}</p>
+              <p className="text-[12px] mt-1" style={{ color: 'var(--cc-muted)' }}>{ev.description}</p>
             </div>
 
             {/* Channel toggles */}
@@ -372,18 +372,18 @@ function NotificationsSection() {
       </div>
 
       {/* Quiet hours */}
-      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "#F5F3FC", border: "1px solid #E2DEF2" }}>
+      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: 'var(--cc-bg)', border: "1px solid #E2DEF2" }}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-bold text-[14px]" style={{ color: "#1E1640" }}>Quiet Hours</p>
-            <p className="text-[12px]" style={{ color: "#7A6A9E" }}>Suppress non-critical notifications during these hours</p>
+            <p className="font-bold text-[14px]" style={{ color: 'var(--cc-text)' }}>Quiet Hours</p>
+            <p className="text-[12px]" style={{ color: 'var(--cc-muted)' }}>Suppress non-critical notifications during these hours</p>
           </div>
           <Switch checked={prefs.quiet_hours_enabled} onCheckedChange={(v) => setPrefs((p) => ({ ...p, quiet_hours_enabled: v }))} />
         </div>
         {prefs.quiet_hours_enabled && (
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "#7A6A9E" }}>From</label>
+              <label className="text-xs font-semibold" style={{ color: 'var(--cc-muted)' }}>From</label>
               <input
                 type="time"
                 value={prefs.quiet_from}
@@ -393,7 +393,7 @@ function NotificationsSection() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: "#7A6A9E" }}>To</label>
+              <label className="text-xs font-semibold" style={{ color: 'var(--cc-muted)' }}>To</label>
               <input
                 type="time"
                 value={prefs.quiet_to}
@@ -410,7 +410,7 @@ function NotificationsSection() {
       <div className="flex justify-end pt-2">
         <Button
           className="rounded-2xl px-8"
-          style={{ background: "#5533CC", color: "#fff" }}
+          style={{ background: 'var(--cc-plum)', color: 'var(--cc-surface)' }}
           disabled={saving}
           onClick={save}
         >
@@ -863,11 +863,11 @@ export default function Settings() {
           className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: "rgba(85,51,204,0.1)" }}
         >
-          <Settings2 className="h-5 w-5" style={{ color: "#5533CC" }} />
+          <Settings2 className="h-5 w-5" style={{ color: 'var(--cc-plum)' }} />
         </div>
         <div>
-          <h1 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>Workspace Settings</h1>
-          <p className="text-[12px] mt-0.5" style={{ color: "#7A6A9E" }}>
+          <h1 className="text-[18px] font-bold tracking-tight" style={{ color: 'var(--cc-text)' }}>Workspace Settings</h1>
+          <p className="text-[12px] mt-0.5" style={{ color: 'var(--cc-muted)' }}>
             Manage your account, provider details, session defaults and compliance rules
           </p>
         </div>
@@ -898,12 +898,12 @@ export default function Settings() {
         <div
           className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
           style={{
-            background: "white",
+            background: 'var(--cc-surface)',
             border: "1px solid #EBE5F6",
             boxShadow: "0 2px 12px rgba(85,51,204,0.05)",
           }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "#7A6A9E" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: 'var(--cc-muted)' }}>
             Navigation
           </p>
           {visibleNavItems.map(({ id, label, icon: Icon }) => (
@@ -958,7 +958,7 @@ export default function Settings() {
                           <Trash2 className="h-3 w-3" /> Remove
                         </Button>
                       </div>
-                      <div className="bg-white rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
+                      <div className="bg-cc-surface rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
                         <img src={savedSignature} alt="Saved signature" className="max-h-full max-w-full object-contain" />
                       </div>
                     </div>
@@ -979,7 +979,7 @@ export default function Settings() {
                         Draw your signature using your mouse, stylus, or finger on a touchscreen.
                       </p>
                       <div
-                        className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors")}
+                        className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-cc-surface transition-colors")}
                         style={{ borderColor: hasDrawing ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
                       >
                         <canvas
@@ -1013,7 +1013,7 @@ export default function Settings() {
                         Upload a PNG or JPG of your handwritten signature. Scan on a white background for best results. Max 2 MB.
                       </p>
                       <div
-                        className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white hover:bg-[#F6F4FB]"
+                        className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-cc-surface hover:bg-[#F6F4FB]"
                         style={{ borderColor: uploadPreview ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)" }}
                         onClick={() => fileInputRef.current?.click()}
                       >
@@ -1306,8 +1306,7 @@ export default function Settings() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed"
-                      style={{ color: "#7A6A8A", background: "rgba(246,244,251,0.8)", borderColor: "rgba(232,213,232,0.7)" }}>
+                    <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed text-cc-muted bg-cc-bg border-cc-border">
                       <Info className="h-3.5 w-3.5 shrink-0" />
                       <span>No custom types saved — the built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
                     </div>
@@ -1371,7 +1370,7 @@ export default function Settings() {
                     borderLeft: "3px solid #5533CC",
                   }}
                 >
-                  <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How compliance requirements work</p>
+                  <p className="font-bold text-[13px]" style={{ color: 'var(--cc-text)' }}>How compliance requirements work</p>
                   <p style={{ color: "#4A3D5A" }}>
                     These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
                     Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session
@@ -1418,17 +1417,17 @@ export default function Settings() {
                         {/* Avatar */}
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                          style={{ background: "rgba(85,51,204,0.08)", color: "#5533CC" }}
+                          style={{ background: "rgba(85,51,204,0.08)", color: 'var(--cc-plum)' }}
                         >
                           {(m.full_name || m.email || "?")[0].toUpperCase()}
                         </div>
 
                         {/* Name + email */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--cc-text)' }}>
                             {m.full_name || "(No name)"}
                           </p>
-                          <p className="text-[11px] truncate" style={{ color: "#7A6A9E" }}>{m.email}</p>
+                          <p className="text-[11px] truncate" style={{ color: 'var(--cc-muted)' }}>{m.email}</p>
                         </div>
 
                         {/* Role selector — prevent changing own role */}
@@ -1453,7 +1452,7 @@ export default function Settings() {
                         )}
 
                         {/* Joined date */}
-                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "#7A6A9E" }}>
+                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: 'var(--cc-muted)' }}>
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </span>
 
@@ -1490,7 +1489,7 @@ export default function Settings() {
                     return (
                       <div key={inv.id} className="flex items-center gap-3 py-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>{inv.email}</p>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--cc-text)' }}>{inv.email}</p>
                           <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#7A6A9E" }}>
                             {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                           </p>
@@ -1544,7 +1543,7 @@ export default function Settings() {
                 borderLeft: "3px solid #5533CC",
               }}
             >
-              <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How staff invitations work</p>
+              <p className="font-bold text-[13px]" style={{ color: 'var(--cc-text)' }}>How staff invitations work</p>
               <p style={{ color: "#4A3D5A" }}>
                 Inviting a staff member generates a secure token link (7-day expiry). The invitee
                 clicks the link, sets their password, and is immediately added to your organisation

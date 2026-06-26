@@ -1,7 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BORDER, PLUM } from "@/lib/shift-utils";
 import { RotateCcw } from "lucide-react";
+
+function inkColor() {
+  if (typeof document === "undefined") return "#1E1640";
+  return getComputedStyle(document.documentElement).getPropertyValue("--cc-text").trim() || "#1E1640";
+}
 
 type Props = {
   minWidth?: number;
@@ -21,7 +27,8 @@ export function SignatureCanvas({ minWidth = 150, minHeight = 60, className, onC
   const emitChange = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !onChange) return;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}"><path d="${pathsRef.current.join(" ")}" stroke="#1E1640" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const stroke = inkColor();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas.width} ${canvas.height}"><path d="${pathsRef.current.join(" ")}" stroke="${stroke}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     onChange({
       svg,
       pngDataUrl: canvas.toDataURL("image/png"),
@@ -63,7 +70,7 @@ export function SignatureCanvas({ minWidth = 150, minHeight = 60, className, onC
       ctx.beginPath();
       ctx.moveTo(lastPosRef.current?.x ?? pos.x, lastPosRef.current?.y ?? pos.y);
       ctx.lineTo(pos.x, pos.y);
-      ctx.strokeStyle = "#1E1640";
+      ctx.strokeStyle = inkColor();
       ctx.lineWidth = 2;
       ctx.lineCap = "round";
       ctx.stroke();
@@ -98,8 +105,8 @@ export function SignatureCanvas({ minWidth = 150, minHeight = 60, className, onC
   return (
     <div className={cn("space-y-2", className)}>
       <div
-        className="overflow-hidden rounded-xl border-2 border-dashed bg-white"
-        style={{ borderColor: hasStroke ? "rgba(85,51,204,0.35)" : "#E2DEF2", touchAction: "none" }}
+        className="overflow-hidden rounded-xl border-2 border-dashed bg-[var(--cc-surface)]"
+        style={{ borderColor: hasStroke ? PLUM : BORDER, touchAction: "none", opacity: hasStroke ? 1 : undefined }}
       >
         <canvas
           ref={canvasRef}

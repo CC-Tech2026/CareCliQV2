@@ -33,11 +33,10 @@ import {
   type CalendarShift,
   type TimeOffBlock,
 } from "@/services/workerCalendarService";
-import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
 type ViewMode = "month" | "week";
 
-const SOFT = "#F5F3FC";
 const MIN_BLOCK_PX = 30;
 
 function shiftOnLocalDay(shift: CalendarShift, d: Date): boolean {
@@ -85,7 +84,7 @@ function shiftStatusCfg(shift: CalendarShift) {
   if (shift.calendar_status === "tentative") {
     return { label: "Tentative", bg: "#FEF3C7", color: "#D97706" };
   }
-  return { label: "Scheduled", bg: "#EDE9FF", color: "#5533CC" };
+  return { label: "Scheduled", bg: "#EDE9FF", color: 'var(--cc-plum)' };
 }
 
 function WorkerShiftChip({
@@ -144,7 +143,7 @@ function WorkerMonthGrid({
   }, [shifts]);
 
   return (
-    <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
       <div
         className="grid grid-cols-7"
         style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}
@@ -174,11 +173,11 @@ function WorkerMonthGrid({
             <div
               key={key}
               onClick={() => onSelectDay(day)}
-              className="min-h-[88px] cursor-pointer p-1.5 transition-colors hover:bg-[#F8F6FE]"
+              className="min-h-[88px] cursor-pointer p-1.5 transition-colors hover:bg-cc-bg"
               style={{
                 borderBottom: `1px solid ${BORDER}`,
                 borderRight: `1px solid ${BORDER}`,
-                background: isSelected ? "#F0ECFF" : "white",
+                background: isSelected ? "#F0ECFF" : 'var(--cc-surface)',
                 opacity: inMonth ? 1 : 0.38,
               }}
             >
@@ -245,7 +244,7 @@ function WorkerDayPanel({
   const off = timeOffOnDay(timeOff, day);
 
   return (
-    <div className="flex flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
+    <div className="flex flex-col rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       <div
         className="flex items-center justify-between px-4 py-3.5"
         style={{ borderBottom: `1px solid ${BORDER}` }}
@@ -303,7 +302,7 @@ function WorkerDayPanel({
                 key={shift.id}
                 type="button"
                 onClick={() => onShiftClick(shift)}
-                className="w-full rounded-xl border p-3.5 text-left transition-colors hover:bg-[#F8F6FE]"
+                className="w-full rounded-xl border p-3.5 text-left transition-colors hover:bg-cc-bg"
                 style={{
                   borderColor: BORDER,
                   borderLeftWidth: 3,
@@ -368,7 +367,7 @@ export default function WorkerScheduleCalendar() {
     ? endOfWeek(weekStart, { weekStartsOn: 1 })
     : endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
 
-  const { data, isLoading } = useOrgQuery(
+  const { data, isLoading, isError, error } = useOrgQuery(
     ["worker", "calendar", format(rangeStart, "yyyy-MM-dd"), format(rangeEnd, "yyyy-MM-dd")],
     {
       queryFn: () =>
@@ -505,7 +504,7 @@ export default function WorkerScheduleCalendar() {
       </header>
 
       <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-2xl border bg-cc-surface px-4 py-3"
         style={{ borderColor: BORDER }}
       >
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
@@ -515,7 +514,7 @@ export default function WorkerScheduleCalendar() {
               type="button"
               onClick={() => setViewMode(m)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === m ? PLUM : "white", color: viewMode === m ? "white" : MUTED }}
+              style={{ background: viewMode === m ? PLUM : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
             >
               {m}
             </button>
@@ -525,7 +524,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigatePrev}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >
             <ChevronLeft size={15} />
@@ -536,7 +535,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={navigateNext}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER }}
           >
             <ChevronRight size={15} />
@@ -544,7 +543,7 @@ export default function WorkerScheduleCalendar() {
           <button
             type="button"
             onClick={handleToday}
-            className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
+            className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             Today
@@ -572,13 +571,21 @@ export default function WorkerScheduleCalendar() {
       </div>
 
       {feedUrl && (
-        <div className="rounded-xl border bg-[#F8F6FE] p-3 text-xs" style={{ borderColor: BORDER }}>
+        <div className="rounded-xl border bg-cc-bg p-3 text-xs" style={{ borderColor: BORDER }}>
           <p className="font-black" style={{ color: TEXT }}>iCal subscription URL</p>
           <p className="mt-1 break-all font-mono" style={{ color: MUTED }}>{feedUrl}</p>
         </div>
       )}
 
-      {viewMode === "month" && !isLoading && (
+      {isError && (
+        <div
+          className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-[var(--cc-status-critical)] dark:bg-[var(--cc-status-critical-bg)] dark:text-[var(--cc-status-critical)]"
+        >
+          Could not load calendar: {(error as Error)?.message || "Please try again."}
+        </div>
+      )}
+
+      {viewMode === "month" && !isLoading && !isError && (
         <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
           <WorkerMonthGrid
             month={month}
@@ -597,7 +604,7 @@ export default function WorkerScheduleCalendar() {
         </div>
       )}
 
-      {viewMode === "week" && !isLoading && (
+      {viewMode === "week" && !isLoading && !isError && (
         <div className="space-y-2">
           {weekDays.map((day) => {
             const dayShifts = shiftsOnDay(shifts, day).sort((a, b) =>
@@ -607,7 +614,7 @@ export default function WorkerScheduleCalendar() {
             return (
               <div
                 key={day.toISOString()}
-                className="rounded-2xl border bg-white p-3"
+                className="rounded-2xl border bg-cc-surface p-3"
                 style={{ borderColor: BORDER }}
               >
                 <p className="mb-2 text-xs font-black uppercase" style={{ color: isToday(day) ? PLUM : MUTED }}>
@@ -654,14 +661,14 @@ export default function WorkerScheduleCalendar() {
       )}
 
       {isLoading && viewMode === "month" && (
-        <div className="rounded-2xl border bg-white p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-cc-surface p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
           <CalendarDays className="mx-auto mb-2 opacity-40" />
           Loading schedule…
         </div>
       )}
 
       <div
-        className="flex flex-wrap gap-4 rounded-xl border bg-white px-4 py-3 text-[11px] font-bold"
+        className="flex flex-wrap gap-4 rounded-xl border bg-cc-surface px-4 py-3 text-[11px] font-bold"
         style={{ borderColor: BORDER }}
       >
         <LegendItem label="Confirmed" swatch={{ background: PLUM }} />

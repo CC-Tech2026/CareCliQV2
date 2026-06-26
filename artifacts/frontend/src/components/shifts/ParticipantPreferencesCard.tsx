@@ -44,7 +44,7 @@ function PreferenceSection({ label, icon: Icon, body }: { label: string; icon: L
   );
 
   return (
-    <div className="rounded-xl bg-[#F8F6FE]">
+    <div className="rounded-xl bg-cc-bg">
       {long ? (
         <button
           type="button"
@@ -83,7 +83,7 @@ export function ParticipantPreferencesCard({ preferences, open = true, onToggle 
   }));
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"

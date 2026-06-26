@@ -45,13 +45,8 @@ import {
 } from "@/services/workerService";
 import { ActiveGoalsPanel } from "@/components/ActiveGoalsPanel";
 import { useToast } from "@/hooks/use-toast";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
 
 type TabKey = "overview" | "plan" | "sessions" | "notes" | "compliance";
 type ClientSummary = WorkerClientDetail["participant"];
@@ -168,7 +163,7 @@ function restrictivePracticeWarning(text: string) {
 
 function Section({ title, icon: Icon, children }: { title: string; icon: ComponentType<{ size?: number }>; children: ReactNode }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Icon size={18} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
@@ -222,7 +217,7 @@ function ParticipantSnapshotCard({ client }: { client: ClientSummary }) {
           ["Plan Start", client.plan_start_date ? safeDate(client.plan_start_date) : ""],
           ["Plan End", client.plan_end_date ? safeDate(client.plan_end_date) : ""],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-[#F8F6FE] p-3">
+          <div key={label} className="rounded-lg bg-cc-bg p-3">
             <dt className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>{label}</dt>
             <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>{value || "Not recorded"}</dd>
           </div>
@@ -289,7 +284,7 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
     <Section title="Behaviour Support" icon={ShieldCheck}>
       <div className="space-y-3">
         {client.behaviour_support_plan?.trim() && (
-          <div className="rounded-lg bg-[#F8F6FE] p-3">
+          <div className="rounded-lg bg-cc-bg p-3">
             <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behaviour Support Plan</p>
             <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
               {client.behaviour_support_plan}
@@ -297,7 +292,7 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
           </div>
         )}
         {client.restricted_behavioural_notes?.trim() && (
-          <div className="rounded-lg bg-[#F8F6FE] p-3">
+          <div className="rounded-lg bg-cc-bg p-3">
             <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behavioural Notes</p>
             <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
               {client.restricted_behavioural_notes}
@@ -398,7 +393,7 @@ function SplitSessionLayout({
       <button
         type="button"
         onPointerDown={startDrag}
-        className="hidden cursor-col-resize items-center justify-center rounded-full border bg-white shadow-sm transition hover:bg-[#F8F6FE] xl:flex"
+        className="hidden cursor-col-resize items-center justify-center rounded-full border bg-cc-surface shadow-sm transition hover:bg-cc-bg xl:flex"
         style={{ borderColor: BORDER, color: MUTED }}
         aria-label="Resize client overview and live session panels"
       >
@@ -442,12 +437,12 @@ function GoalSelector({
             <button
               type="button"
               onClick={() => onToggle(goal)}
-              className="flex w-full items-start gap-3 p-3 text-left transition hover:bg-[#F8F6FE]"
+              className="flex w-full items-start gap-3 p-3 text-left transition hover:bg-cc-bg"
             >
               <span
                 className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2"
                 style={{
-                  borderColor: isSelected ? PLUM : "#C4B8E8",
+                  borderColor: isSelected ? PLUM : BORDER,
                   background: isSelected ? PLUM : "transparent",
                 }}
               >
@@ -463,7 +458,7 @@ function GoalSelector({
               </span>
             </button>
             {isSelected && (
-              <div className="border-t px-3 pb-3 pt-2 space-y-2" style={{ borderColor: "#EEEAFB" }}>
+              <div className="border-t px-3 pb-3 pt-2 space-y-2" style={{ borderColor: 'var(--cc-border)' }}>
                 {(["evidence_provided", "outcome", "observation"] as const).map((field) => (
                   <div key={field}>
                     <label className="block text-[11px] font-black uppercase tracking-wider mb-1" style={{ color: MUTED }}>
@@ -473,8 +468,8 @@ function GoalSelector({
                       value={note?.[field] || ""}
                       onChange={(e) => onNoteChange(goal.id, field, e.target.value)}
                       rows={2}
-                      className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#5533CC]"
-                      style={{ borderColor: "#E2DEF2", color: TEXT }}
+                      className="w-full rounded-lg border bg-cc-surface px-3 py-2 text-sm font-medium outline-none focus:border-cc-plum"
+                      style={{ borderColor: BORDER, color: TEXT }}
                       placeholder={
                         field === "evidence_provided"
                           ? "What did you do to support this goal?"
@@ -593,14 +588,14 @@ function InlineSessionComposer({
   ];
   return (
     <section
-      className="flex flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
+      className="flex flex-col overflow-hidden rounded-lg border bg-cc-surface shadow-sm"
       style={{
         borderColor: BORDER,
         height: "clamp(520px, calc(100vh - 250px), 720px)",
       }}
     >
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--cc-border)' }}>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
@@ -609,8 +604,8 @@ function InlineSessionComposer({
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E2DEF2" : "#A7F3D0",
-                background: ended ? "#F5F3FC" : "#ECFDF5",
+                borderColor: ended ? BORDER : "#A7F3D0",
+                background: ended ? SOFT : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
@@ -634,7 +629,7 @@ function InlineSessionComposer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            className="rounded-full p-2 transition hover:bg-cc-bg"
             style={{ color: MUTED }}
             aria-label="Close session composer"
           >
@@ -645,7 +640,7 @@ function InlineSessionComposer({
 
       {/* Step tabs — only visible after session ended */}
       {ended && (
-        <div className="shrink-0 flex gap-1 border-b px-4 py-2" style={{ borderColor: "#EEEAFB" }}>
+        <div className="shrink-0 flex gap-1 border-b px-4 py-2" style={{ borderColor: 'var(--cc-border)' }}>
           {STEPS.map((step) => (
             <button
               key={step.key}
@@ -654,7 +649,7 @@ function InlineSessionComposer({
               className="rounded-full px-3 py-1.5 text-xs font-black transition"
               style={{
                 background: composerStep === step.key ? PLUM : "transparent",
-                color: composerStep === step.key ? "#fff" : MUTED,
+                color: composerStep === step.key ? 'var(--cc-surface)' : MUTED,
               }}
             >
               {step.label}
@@ -666,7 +661,7 @@ function InlineSessionComposer({
       {/* Step: record (always shown while recording; also accessible after end) */}
       {composerStep === "record" && (
         <>
-          <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: 'var(--cc-border)' }}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                 <Languages size={15} />
@@ -675,7 +670,7 @@ function InlineSessionComposer({
               <select
                 value={language}
                 onChange={(event) => onLanguageChange(event.target.value)}
-                className="h-10 rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none"
+                className="h-10 rounded-full border bg-cc-bg px-4 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
                 {INPUT_LANGUAGES.map((item) => (
@@ -685,9 +680,9 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-cc-bg p-4">
             <div className="mx-auto max-w-3xl space-y-3">
-              <div className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
+              <div className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-cc-surface px-3 py-1 text-xs font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
                 {isListening && (
                   <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
                     <span className="h-2 w-1 animate-pulse rounded-full" style={{ background: PLUM }} />
@@ -729,7 +724,7 @@ function InlineSessionComposer({
                   <textarea
                     value={generated}
                     onChange={(event) => onGeneratedChange(event.target.value)}
-                    className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                    className="min-h-28 w-full rounded-lg border bg-cc-surface p-4 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
                 </div>
@@ -744,13 +739,13 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-cc-surface p-3" style={{ borderColor: 'var(--cc-border)' }}>
             {ended ? (
               <div className="space-y-2">
                 {translatedFromLang && (
                   <div
                     className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold w-fit"
-                    style={{ borderColor: "#C4B8E8", color: PLUM, background: "#F5F3FC" }}
+                    style={{ borderColor: BORDER, color: PLUM, background: SOFT }}
                   >
                     <Languages size={13} />
                     Translated from{" "}
@@ -792,7 +787,7 @@ function InlineSessionComposer({
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm" style={{ borderColor: BORDER }}>
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-cc-surface px-3 py-2 shadow-sm" style={{ borderColor: BORDER }}>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -816,7 +811,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-bg"
                     style={{ color: PLUM }}
                     aria-label="Attach file"
                   >
@@ -825,7 +820,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-bg"
                     style={{ color: PLUM }}
                     aria-label="Add photo evidence"
                   >
@@ -844,7 +839,7 @@ function InlineSessionComposer({
               </div>
             )}
             {!ended && attachmentName && (
-              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F5F3FC] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
+              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-cc-bg px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
                 <Paperclip size={12} className="mr-1 shrink-0" />
                 <span className="truncate">{attachmentName}</span>
               </p>
@@ -867,7 +862,7 @@ function InlineSessionComposer({
               {ended && (
                 <div
                   className="space-y-4 rounded-xl border p-4"
-                  style={{ borderColor: "#EEEAFB", background: "#FBFAFF" }}
+                  style={{ borderColor: 'var(--cc-border)', background: "#FBFAFF" }}
                 >
                   {composerGoals && composerGoals.length > 0 && (
                     <div>
@@ -894,7 +889,7 @@ function InlineSessionComposer({
                               className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
                               style={{
                                 borderColor: selected ? PLUM : BORDER,
-                                background: selected ? SOFT : "white",
+                                background: selected ? SOFT : 'var(--cc-surface)',
                                 color: selected ? PLUM : MUTED,
                               }}
                             >
@@ -916,7 +911,7 @@ function InlineSessionComposer({
                       onChange={(event) => onOutcomeChange?.(event.target.value)}
                       placeholder="What was achieved? Describe measurable progress and participant response..."
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-cc-surface p-3 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -931,7 +926,7 @@ function InlineSessionComposer({
                       onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
                       placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-cc-surface p-3 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -946,7 +941,7 @@ function InlineSessionComposer({
                       onChange={(event) => onRecommendationsChange?.(event.target.value)}
                       placeholder="Recommendations for coordinator or next session (optional)..."
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-cc-surface p-3 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -978,7 +973,7 @@ function InlineSessionComposer({
             </div>
           </div>
 
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-cc-surface p-3 flex items-center justify-between gap-3" style={{ borderColor: 'var(--cc-border)' }}>
             <button
               type="button"
               onClick={() => setComposerStep("record")}
@@ -1031,14 +1026,14 @@ function InlineSessionComposer({
                   value={choiceControl}
                   onChange={(e) => onChoiceControlChange(e.target.value)}
                   rows={5}
-                  className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  className="w-full rounded-lg border bg-cc-surface p-4 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
                   style={{ borderColor: BORDER, color: TEXT }}
                   placeholder="Describe how the participant exercised choice during the session. e.g., Participant chose the location for today's community outing."
                 />
               </div>
             </div>
           </div>
-          <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
+          <div className="shrink-0 border-t bg-cc-surface p-3 flex items-center justify-between gap-3" style={{ borderColor: 'var(--cc-border)' }}>
             <button type="button" onClick={() => setComposerStep("goals")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
               ← Back
             </button>
@@ -1168,7 +1163,7 @@ function IncidentReportModal({
         action: (
           <button
             onClick={() => { onClose(); navigate("/incidents"); }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-cc-surface/20 px-3 py-1.5 text-xs font-black text-white hover:bg-cc-bg/30 transition"
           >
             <Siren size={12} />
             View Incidents
@@ -1201,7 +1196,7 @@ function IncidentReportModal({
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
-        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl"
+        className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-cc-surface shadow-2xl"
         style={{ borderColor: BORDER, maxHeight: "92vh" }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: BORDER }}>
@@ -1217,7 +1212,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            className="rounded-full p-2 transition hover:bg-cc-bg"
             style={{ color: MUTED }}
             aria-label="Close incident form"
           >
@@ -1242,7 +1237,7 @@ function IncidentReportModal({
               <select
                 value={form.incident_type}
                 onChange={(event) => setField("incident_type", event.target.value)}
-                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                className="h-10 w-full rounded-xl border bg-cc-bg px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
                 {INCIDENT_TYPES_LIST.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
@@ -1253,7 +1248,7 @@ function IncidentReportModal({
               <select
                 value={form.severity}
                 onChange={(event) => setField("severity", event.target.value)}
-                className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
+                className="h-10 w-full rounded-xl border bg-cc-bg px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
                 {INCIDENT_SEVERITIES_LIST.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -1267,7 +1262,7 @@ function IncidentReportModal({
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder="Brief description of what occurred..."
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+              className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm font-medium outline-none focus:border-cc-plum"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1293,7 +1288,7 @@ function IncidentReportModal({
               onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
               placeholder="Describe the incident in full — who, what, when, where, how..."
               rows={4}
-              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+              className="w-full rounded-xl border bg-cc-surface p-3 text-sm font-medium leading-6 outline-none focus:border-cc-plum"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1309,17 +1304,17 @@ function IncidentReportModal({
               follow_up_indicators: "Follow-up clarity",
             };
             return (
-              <div className="space-y-3 rounded-xl border bg-[#F8F6FE] p-4" style={{ borderColor: "#DDD8F5" }}>
+              <div className="space-y-3 rounded-xl border bg-cc-bg p-4" style={{ borderColor: "#DDD8F5" }}>
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Compliance Score</p>
                   <span className="text-sm font-black" style={{ color: scoreColor }}>{r.compliance_score}%</span>
                 </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-white/70">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-cc-surface/70">
                   <div className="h-full rounded-full transition-all" style={{ width: `${r.compliance_score}%`, background: scoreColor }} />
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: "white" }}>
+                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: 'var(--cc-surface)' }}>
                     {r.practice_standard}
                   </span>
                   {r.ndis_reportable && (
@@ -1338,7 +1333,7 @@ function IncidentReportModal({
                           <span className="text-[10px] font-bold" style={{ color: MUTED }}>{criteriaLabels[key] ?? key}</span>
                           <span className="text-[10px] font-black" style={{ color: c }}>{val}%</span>
                         </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-cc-surface">
                           <div className="h-full rounded-full" style={{ width: `${val}%`, background: c }} />
                         </div>
                       </div>
@@ -1365,7 +1360,7 @@ function IncidentReportModal({
                 )}
 
                 {r.suggested_follow_up && (
-                  <div className="rounded-lg bg-white px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
+                  <div className="rounded-lg bg-cc-surface px-3 py-2" style={{ border: '1px solid var(--cc-border)' }}>
                     <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-0.5" style={{ color: MUTED }}>Suggested Next Steps</p>
                     <p className="text-xs font-medium" style={{ color: TEXT }}>{r.suggested_follow_up}</p>
                   </div>
@@ -1382,7 +1377,7 @@ function IncidentReportModal({
                     setComply({ loading: false, result: null });
                     toast({ title: "NDIS-compliant text applied", description: "Review it before submitting." });
                   }}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-white"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-cc-bg"
                   style={{ borderColor: "#C4B8F0", color: PLUM, background: "rgba(255,255,255,0.5)" }}
                 >
                   <Sparkles size={13} />
@@ -1399,7 +1394,7 @@ function IncidentReportModal({
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
                 placeholder="Where did it occur?"
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm font-medium outline-none focus:border-cc-plum"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1409,7 +1404,7 @@ function IncidentReportModal({
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
                 placeholder="First aid, supervisor notified..."
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm font-medium outline-none focus:border-cc-plum"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1420,7 +1415,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-[#F8F6FE]"
+            className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-cc-bg"
             style={{ borderColor: BORDER, color: MUTED }}
           >
             Cancel
@@ -1452,12 +1447,12 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
   const [, navigate] = useLocation();
   const recent = incidents.slice(0, 3);
   return (
-    <section className="rounded-xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex shrink-0 items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Siren size={14} className="text-red-600" />
           <p className="text-sm font-black" style={{ color: TEXT }}>Reported Incidents</p>
-          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "#FEF2F2", color: "#DC2626" }}>
+          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--cc-status-critical-bg)', color: "#DC2626" }}>
             {incidents.length}
           </span>
         </div>
@@ -1469,7 +1464,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
           View all
         </button>
       </div>
-      <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+      <div className="divide-y" style={{ borderColor: 'var(--cc-border)' }}>
         {recent.map((inc, idx) => {
           const sev = String(inc.severity || "medium");
           const incDate = inc.incident_date ? (() => { try { return formatDistanceToNow(parseISO(String(inc.incident_date)), { addSuffix: true }); } catch { return ""; } })() : "";
@@ -1477,7 +1472,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
             <button
               key={String(inc.id || idx)}
               onClick={() => navigate(`/incidents/${String(inc.id || "")}`)}
-              className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-[#F8F6FE]"
+              className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-cc-bg"
             >
               <div className="flex-1 min-w-0">
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{String(inc.title || "Incident")}</p>
@@ -1504,7 +1499,7 @@ function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
     <div className="space-y-3">
       {rows.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No worker-owned records returned.</p>}
       {rows.map((session) => (
-        <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+        <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: 'var(--cc-border)' }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-black capitalize" style={{ color: TEXT }}>{(session.session_type || "session").replace("_", " ")}</p>
@@ -1910,7 +1905,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setActiveTab("notes")}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm"
+            className="inline-flex items-center gap-2 rounded-full border bg-cc-surface px-5 py-3 text-sm font-black shadow-sm"
             style={{ borderColor: BORDER, color: PLUM }}
           >
             <Plus size={16} />
@@ -1918,7 +1913,7 @@ export default function MyClientDetail({ id }: { id: string }) {
           </button>
           <button
             onClick={() => setIncidentModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm transition hover:bg-red-50"
+            className="inline-flex items-center gap-2 rounded-full border bg-cc-surface px-5 py-3 text-sm font-black shadow-sm transition hover:bg-red-50"
             style={{ borderColor: "#FECACA", color: CORAL }}
           >
             <Siren size={16} />
@@ -1927,7 +1922,7 @@ export default function MyClientDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto rounded-lg border bg-white p-2" style={{ borderColor: BORDER }}>
+      <div className="flex gap-2 overflow-x-auto rounded-lg border bg-cc-surface p-2" style={{ borderColor: BORDER }}>
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -2019,7 +2014,7 @@ export default function MyClientDetail({ id }: { id: string }) {
               const category = String(g.category || g.support_category || "");
               const isActive = !["completed", "achieved", "archived"].includes(status.toLowerCase());
               return (
-                <div key={String(g.id || index)} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
+                <div key={String(g.id || index)} className="rounded-lg border p-4" style={{ borderColor: 'var(--cc-border)' }}>
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-black" style={{ color: TEXT }}>{title}</p>
                     <span
@@ -2061,7 +2056,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             <textarea
               value={noteText}
               onChange={(event) => setNoteText(event.target.value)}
-              className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#5533CC]"
+              className="min-h-32 w-full rounded-lg border bg-cc-surface p-4 text-sm font-medium outline-none focus:border-cc-plum"
               style={{ borderColor: BORDER, color: TEXT }}
               placeholder="Write a worker-owned progress note..."
             />

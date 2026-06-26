@@ -12,8 +12,8 @@ import {
   setRememberDevicePreference,
 } from "@/lib/auth-session";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
 const BORDER = "#D8D0F0";
 
 export default function Login() {
@@ -113,7 +113,7 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-[#5533CC]/20 relative overflow-hidden"
+      className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-12 font-sans selection:bg-cc-plum/20 relative overflow-hidden"
       style={{ animation: "authPageEnter 0.3s ease-out" }}
     >
       <style
@@ -167,11 +167,11 @@ export default function Login() {
         }}
       />
 
-      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white/95 backdrop-blur-md relative z-10 shadow-[8px_0_32px_rgba(0,0,0,0.08)]">
+      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-cc-surface/95 backdrop-blur-md relative z-10 shadow-[8px_0_32px_rgba(0,0,0,0.08)]">
         <div className="flex items-center gap-3">
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-13 w-auto object-contain transition-transform duration-300 hover:scale-[1.02]" />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">Workspace</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-cc-muted">Workspace</span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8 transition-transform duration-500 ease-out">
@@ -179,7 +179,7 @@ export default function Login() {
             <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
               {mfaStep ? "Verify your identity" : "Welcome back"}
             </h1>
-            <p className="text-[14px] font-medium mt-1" style={{ color: "#7A6A9E" }}>
+            <p className="text-[14px] font-medium mt-1" style={{ color: 'var(--cc-muted)' }}>
               {mfaStep
                 ? "Enter the 6-digit code from your authenticator app or a recovery code."
                 : "Sign in to your clinical note workspace."}
@@ -198,9 +198,9 @@ export default function Login() {
                 Back to sign in
               </button>
 
-              <div className="rounded-2xl border bg-[#F5F3FC] p-4 flex items-start gap-3" style={{ borderColor: BORDER }}>
+              <div className="rounded-2xl border bg-cc-bg p-4 flex items-start gap-3" style={{ borderColor: BORDER }}>
                 <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5" style={{ color: PLUM }} />
-                <p className="text-[13px] leading-relaxed font-medium" style={{ color: "#7A6A9E" }}>
+                <p className="text-[13px] leading-relaxed font-medium" style={{ color: 'var(--cc-muted)' }}>
                   Two-factor authentication is enabled on this account. Open your authenticator app to get your code.
                 </p>
               </div>
@@ -208,7 +208,7 @@ export default function Login() {
               <div className="group relative">
                 <label
                   htmlFor="login-mfa-code"
-                  className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block transition-colors duration-200 group-focus-within:text-[#F03060]"
+                  className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block transition-colors duration-200 group-focus-within:text-cc-coral"
                   style={{ color: PLUM }}
                 >
                   Verification code
@@ -228,8 +228,8 @@ export default function Login() {
                   required
                   aria-invalid={!!mfaCodeError}
                   aria-describedby={mfaCodeError ? "login-mfa-code-error" : undefined}
-                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium tracking-widest outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-[#F5F3FC]"
-                  style={{ borderColor: mfaCodeError ? CORAL : BORDER, color: "#1E1640" }}
+                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium tracking-widest outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-cc-bg"
+                  style={{ borderColor: mfaCodeError ? CORAL : BORDER, color: 'var(--cc-text)' }}
                 />
                 {mfaCodeError ? (
                   <p id="login-mfa-code-error" className="mt-1.5 text-[12px] font-medium" style={{ color: CORAL }}>
@@ -244,9 +244,9 @@ export default function Login() {
                   checked={trustDevice}
                   onChange={(e) => setTrustDevice(e.target.checked)}
                   disabled={busy}
-                  className="h-4 w-4 rounded border-[#D8D0F0] text-[#5533CC] focus:ring-[#5533CC]"
+                  className="h-4 w-4 rounded border-cc-border text-cc-plum focus:ring-[#5533CC]"
                 />
-                <span className="text-[13px] font-medium" style={{ color: "#7A6A9E" }}>
+                <span className="text-[13px] font-medium" style={{ color: 'var(--cc-muted)' }}>
                   Trust this device for 30 days
                 </span>
               </label>
@@ -275,7 +275,7 @@ export default function Login() {
             <div className="group relative">
               <label
                 htmlFor="login-identifier"
-                className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block transition-colors duration-200 group-focus-within:text-[#F03060]"
+                className="text-[11px] font-bold uppercase tracking-wider mb-1.5 block transition-colors duration-200 group-focus-within:text-cc-coral"
                 style={{ color: PLUM }}
               >
                 Email or mobile number
@@ -295,10 +295,10 @@ export default function Login() {
                 required
                 aria-invalid={!!identifierError}
                 aria-describedby={identifierError ? "login-identifier-error" : undefined}
-                className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-[#F5F3FC]"
+                className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-cc-bg"
                 style={{
                   borderColor: identifierError ? CORAL : BORDER,
-                  color: "#1E1640",
+                  color: 'var(--cc-text)',
                 }}
               />
               {identifierError ? (
@@ -312,7 +312,7 @@ export default function Login() {
               <div className="flex justify-between items-center mb-1.5">
                 <label
                   htmlFor="login-password"
-                  className="text-[11px] font-bold uppercase tracking-wider transition-colors duration-200 group-focus-within:text-[#F03060]"
+                  className="text-[11px] font-bold uppercase tracking-wider transition-colors duration-200 group-focus-within:text-cc-coral"
                   style={{ color: PLUM }}
                 >
                   Password
@@ -339,8 +339,8 @@ export default function Login() {
                 required
                 aria-invalid={!!passwordError}
                 aria-describedby={passwordError ? "login-password-error" : undefined}
-                className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-[#F5F3FC]"
-                style={{ borderColor: passwordError ? CORAL : BORDER, color: "#1E1640" }}
+                className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none transition-all duration-200 border border-solid focus:shadow-[0_0_0_4px_rgba(240,48,96,0.12)] bg-cc-bg"
+                style={{ borderColor: passwordError ? CORAL : BORDER, color: 'var(--cc-text)' }}
               />
               {passwordError ? (
                 <p id="login-password-error" className="mt-1.5 text-[12px] font-medium" style={{ color: CORAL }}>
@@ -355,9 +355,9 @@ export default function Login() {
                 checked={rememberDevice}
                 onChange={(e) => setRememberDevice(e.target.checked)}
                 disabled={busy}
-                className="h-4 w-4 rounded border-[#D8D0F0] text-[#5533CC] focus:ring-[#5533CC]"
+                className="h-4 w-4 rounded border-cc-border text-cc-plum focus:ring-[#5533CC]"
               />
-              <span className="text-[13px] font-medium" style={{ color: "#7A6A9E" }}>
+              <span className="text-[13px] font-medium" style={{ color: 'var(--cc-muted)' }}>
                 Remember this device
               </span>
             </label>
@@ -384,7 +384,7 @@ export default function Login() {
           )}
 
           {!mfaStep ? (
-          <p className="text-center text-[13px] font-medium mt-6" style={{ color: "#7A6A9E" }}>
+          <p className="text-center text-[13px] font-medium mt-6" style={{ color: 'var(--cc-muted)' }}>
             Don't have an account?{" "}
             <button
               onClick={() => navigate("/signup")}
@@ -410,7 +410,7 @@ export default function Login() {
           <img src="/shape2_login.png" alt="" className="absolute bottom-[-6%] right-[-5%] w-[75%] h-auto max-w-[400px] object-contain animate-shape-2" />
         </div>
         <div className="w-full max-w-xl flex flex-col items-center relative z-10 animate-float-card">
-          <div className="w-full aspect-[4/3] bg-white/40 backdrop-blur-md rounded-[2.5rem] p-4 border border-solid border-white/20 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] relative overflow-hidden flex items-center justify-center group">
+          <div className="w-full aspect-[4/3] bg-cc-surface/40 backdrop-blur-md rounded-[2.5rem] p-4 border border-solid border-white/20 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.15)] relative overflow-hidden flex items-center justify-center group">
             <img
               src="/login_welcome.jpg"
               alt="CareCliQ Connections Workspace Overview"

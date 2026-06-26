@@ -4,6 +4,7 @@ import { AlertCircle, BookOpen, CheckCircle2, Clock, FileText, Plus, Send } from
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import {
   createTrainingRequest,
   getTrainingHistory,
@@ -14,11 +15,6 @@ import {
   type WorkerCertification,
 } from "@/services/workerPerformanceService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
 
 const CERT_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   valid: { bg: "#ECFDF5", text: "#059669", label: "Current" },
@@ -31,7 +27,7 @@ const CERT_STYLES: Record<string, { bg: string; text: string; label: string }> =
 function CertCard({ cert }: { cert: WorkerCertification }) {
   const style = CERT_STYLES[cert.display_status] ?? CERT_STYLES.valid;
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm font-black" style={{ color: TEXT }}>{cert.title}</p>
@@ -117,7 +113,7 @@ export default function WorkerTrainingPage() {
         </button>
       </header>
 
-      <div className="flex rounded-full bg-[#F0EDF8] p-1">
+      <div className="flex rounded-full bg-cc-bg p-1">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -125,7 +121,7 @@ export default function WorkerTrainingPage() {
             onClick={() => setTab(t.id)}
             className="flex-1 rounded-full py-2.5 text-xs font-black transition sm:text-sm"
             style={{
-              background: tab === t.id ? "#fff" : "transparent",
+              background: tab === t.id ? 'var(--cc-surface)' : 'transparent',
               color: tab === t.id ? TEXT : MUTED,
               boxShadow: tab === t.id ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
             }}
@@ -151,7 +147,7 @@ export default function WorkerTrainingPage() {
       {tab === "modules" && (
         <div className="space-y-4">
           {(modulesQuery.data?.modules ?? []).map((mod) => (
-            <section key={mod.id} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section key={mod.id} className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-base font-black" style={{ color: TEXT }}>{mod.title}</h3>
@@ -179,7 +175,7 @@ export default function WorkerTrainingPage() {
                         href={res.external_url || "#"}
                         target={res.resource_type === "external_link" ? "_blank" : undefined}
                         rel="noreferrer"
-                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition hover:bg-[#F8F6FE]"
+                        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition hover:bg-cc-bg"
                         style={{ color: PLUM }}
                       >
                         {res.resource_type === "video" && <BookOpen size={16} />}
@@ -199,7 +195,7 @@ export default function WorkerTrainingPage() {
             </p>
           )}
           {!!historyQuery.data?.history?.length && (
-            <section className="rounded-2xl border bg-white p-5" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-cc-surface p-5" style={{ borderColor: BORDER }}>
               <h3 className="text-sm font-black" style={{ color: TEXT }}>Training history</h3>
               <ul className="mt-3 space-y-2">
                 {historyQuery.data.history.map((h: Record<string, unknown>) => (
@@ -224,7 +220,7 @@ export default function WorkerTrainingPage() {
             const status = String(req.status ?? "pending");
             const isPending = status === "pending";
             return (
-              <div key={String(req.id)} className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+              <div key={String(req.id)} className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
                 <div className="flex items-center gap-2">
                   {isPending ? (
                     <Clock size={16} style={{ color: "#D97706" }} />
@@ -235,7 +231,7 @@ export default function WorkerTrainingPage() {
                   )}
                   <span className="text-xs font-black uppercase" style={{ color: MUTED }}>{status}</span>
                   {req.urgent && (
-                    <span className="rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: "#FEE2E2", color: CORAL }}>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: 'var(--cc-status-critical-bg)', color: CORAL }}>
                       Urgent
                     </span>
                   )}
@@ -243,7 +239,7 @@ export default function WorkerTrainingPage() {
                 <p className="mt-2 text-sm font-bold" style={{ color: TEXT }}>{String(req.request_text)}</p>
                 <p className="mt-1 text-xs" style={{ color: MUTED }}>{String(req.reason)}</p>
                 {req.coordinator_response && (
-                  <p className="mt-2 rounded-lg bg-[#F8F6FE] p-2 text-xs font-medium" style={{ color: TEXT }}>
+                  <p className="mt-2 rounded-lg bg-cc-bg p-2 text-xs font-medium" style={{ color: TEXT }}>
                     {String(req.coordinator_response)}
                   </p>
                 )}
@@ -260,7 +256,7 @@ export default function WorkerTrainingPage() {
 
       {requestOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-cc-surface p-6 shadow-xl">
             <h3 className="text-lg font-black" style={{ color: TEXT }}>Request training</h3>
             <label className="mt-4 block">
               <span className="text-xs font-black uppercase" style={{ color: MUTED }}>What training do you need?</span>
@@ -291,7 +287,7 @@ export default function WorkerTrainingPage() {
                 type="button"
                 onClick={() => setRequestOpen(false)}
                 className="flex-1 rounded-full py-2.5 text-sm font-black"
-                style={{ background: "#F0EDF8", color: MUTED }}
+                style={{ background: 'var(--cc-active)', color: MUTED }}
               >
                 Cancel
               </button>

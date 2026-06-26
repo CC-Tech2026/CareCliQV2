@@ -51,7 +51,7 @@ export function TranslationAuditView({
     : null;
 
   return (
-    <div className="rounded-xl border border-[rgba(232,213,232,0.5)] overflow-hidden bg-white shadow-[0_1px_4px_rgba(84,34,105,0.06)]">
+    <div className="rounded-xl border border-[rgba(232,213,232,0.5)] overflow-hidden bg-cc-surface shadow-[0_1px_4px_rgba(84,34,105,0.06)]">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[rgba(84,34,105,0.04)] border-b border-[rgba(232,213,232,0.4)]">
         <div className="flex items-center gap-2">

@@ -24,12 +24,12 @@ import {
   CalendarClock, ShieldCheck,
 } from "lucide-react";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   standard_support: "Standard Support",
@@ -274,7 +274,7 @@ export function ShiftAssignmentModal({
               className="rounded-xl border p-3.5"
               style={{
                 borderColor: hasBlock ? "#FECACA" : hasExpiring ? "#FDE68A" : "#BBF7D0",
-                background:  hasBlock ? "#FFF1F1" : hasExpiring ? "#FFFBEB" : "#F0FDF4",
+                background:  hasBlock ? 'var(--cc-status-critical-bg)' : hasExpiring ? 'var(--cc-status-warning-bg)' : 'var(--cc-status-success-bg)',
               }}
             >
               <div className="flex items-start gap-2.5">

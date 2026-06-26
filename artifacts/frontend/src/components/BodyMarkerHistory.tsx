@@ -92,7 +92,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                   "px-3 py-1.5 transition-colors",
                   view === "front"
                     ? "bg-indigo-600 text-white"
-                    : "bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50",
+                    : "bg-cc-surface dark:bg-slate-800 text-slate-500 hover:bg-cc-bg",
                 )}
               >
                 Front
@@ -103,7 +103,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                   "px-3 py-1.5 transition-colors border-l border-slate-200",
                   view === "back"
                     ? "bg-indigo-600 text-white"
-                    : "bg-white dark:bg-slate-800 text-slate-500 hover:bg-slate-50",
+                    : "bg-cc-surface dark:bg-slate-800 text-slate-500 hover:bg-cc-bg",
                 )}
               >
                 Back
@@ -171,7 +171,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                 >
                   <button
                     onClick={() => setExpandedSession(isExpanded ? null : s.id)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-cc-bg dark:hover:bg-slate-800/50 transition-colors"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

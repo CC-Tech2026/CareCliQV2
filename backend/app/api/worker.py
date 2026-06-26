@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service
+from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
 from ..services import shift_signature_service
 from ..services.evidence_access_service import verify_and_download_evidence
@@ -114,6 +114,7 @@ class ClockInBody(BaseModel):
     location: Optional[ClockInLocationBody] = None
     qr_token: Optional[str] = None
     client_timestamp: Optional[str] = None
+    claimed_km: Optional[float] = Field(default=None, gt=0, le=2000)
 
 
 class TaskEvidenceItem(BaseModel):
@@ -728,6 +729,13 @@ async def worker_clock_in(
             "verified": shift.get("clock_in_verified"),
         },
     )
+    await travel_expense_service.auto_save_mileage_on_clock_in(
+        shift_id=shift_id,
+        worker_id=worker_id,
+        organization_id=org_id,
+        participant_address=shift.get("participant_address"),
+        claimed_km_override=body.claimed_km,
+    )
     return shift
 
 
@@ -933,6 +941,7 @@ async def worker_clock_out(shift_id: str, current_user: dict = Depends(get_curre
 @router.post("/shifts/{shift_id}/end-shift")
 async def worker_end_shift(
     shift_id: str,
+    background_tasks: BackgroundTasks,
     body: EndShiftBody = EndShiftBody(),
     current_user: dict = Depends(get_current_user),
 ):
@@ -954,6 +963,17 @@ async def worker_end_shift(
         organization_id=org_id,
         after_state={"session_id": shift.get("session_id")},
     )
+
+    async def _auto_summary_and_notify() -> None:
+        from ..services import shift_pdf_export_service
+
+        try:
+            shift_pdf_export_service.run_auto_shift_summary_export(shift_id, worker_id, org_id)
+            await shift_pdf_export_service.notify_shift_summary_ready(worker_id, shift_id)
+        except Exception as exc:
+            logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
+
+    background_tasks.add_task(_auto_summary_and_notify)
     return shift
 
 

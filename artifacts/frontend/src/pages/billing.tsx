@@ -14,12 +14,12 @@ import { NdisPriceEditor } from "@/components/NdisPriceEditor";
 import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 interface Subscription {
   plan_name: string; status: string; billing_email?: string | null;
@@ -54,7 +54,7 @@ function Card({ title, children, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <div className="px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER }}>
         <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
         {action}
@@ -250,17 +250,17 @@ export default function Billing() {
 
         {/* ── Summary stat cards ────────────────────────────────────────────── */}
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Invoices</p>
             <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>{invoices.length}</p>
             <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>All time records</p>
           </section>
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Outstanding</p>
             <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: totalOutstanding > 0 ? "#D97706" : TEXT }}>{cents(totalOutstanding)}</p>
             <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Awaiting payment</p>
           </section>
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Paid</p>
             <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: "#16A34A" }}>{cents(totalPaid)}</p>
             <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Confirmed payments</p>
@@ -289,7 +289,7 @@ export default function Billing() {
                 <select
                   value={subscription.plan_name}
                   onChange={e => setSubscription({ ...subscription, plan_name: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-cc-surface focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
                   style={{ borderColor: BORDER }}
                 >
                   {["starter", "team", "pro", "enterprise"].map(p => (
@@ -302,7 +302,7 @@ export default function Billing() {
                 <select
                   value={subscription.status}
                   onChange={e => setSubscription({ ...subscription, status: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-cc-surface focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
                   style={{ borderColor: BORDER }}
                 >
                   {["trialing", "active", "past_due", "cancelled", "manual_review"].map(s => (
@@ -426,7 +426,7 @@ export default function Billing() {
               </div>
 
               {/* Running total */}
-              <div className="rounded-lg px-4 py-3 flex items-center justify-between" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+              <div className="rounded-lg px-4 py-3 flex items-center justify-between" style={{ background: SOFT, border: '1px solid var(--cc-border)' }}>
                 <span className="text-xs font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>Invoice total</span>
                 <span className="text-lg font-black" style={{ color: TEXT }}>{cents(liveTotal)}</span>
               </div>
@@ -463,7 +463,7 @@ export default function Billing() {
                   </p>
                 </div>
               ) : (
-                <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+                <div className="divide-y" style={{ borderColor: 'var(--cc-border)' }}>
                   {invoices.map(invoice => (
                     <div key={invoice.id} className="flex items-center gap-4 py-3.5 first:pt-0 last:pb-0">
                       {/* Initials circle */}
@@ -531,7 +531,7 @@ function RevenueReportPanel() {
   }
 
   return (
-    <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <div className="px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER }}>
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Revenue Report</h2>
         <TrendingUp size={18} style={{ color: MUTED }} />
@@ -552,7 +552,7 @@ function RevenueReportPanel() {
                 { label: "Total Paid",    value: fmt(data.total_paid_cents),        color: "#16A34A"  },
                 { label: "Outstanding",   value: fmt(data.total_outstanding_cents), color: (data.total_outstanding_cents ?? 0) > 0 ? "#D97706" : TEXT },
               ] as const).map(({ label, value, color }) => (
-                <div key={label} className="rounded-lg p-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+                <div key={label} className="rounded-lg p-4" style={{ background: SOFT, border: '1px solid var(--cc-border)' }}>
                   <p className="text-[11px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>{label}</p>
                   <p className="mt-2 text-base font-black" style={{ color }}>{value}</p>
                 </div>
@@ -569,7 +569,7 @@ function RevenueReportPanel() {
                     const paid     = m.paid   ?? 0;
                     const paidPct  = billed > 0 ? Math.round((paid / billed) * 100) : 0;
                     return (
-                      <div key={m.month} className="flex items-center gap-4 px-4 py-3 hover:bg-[#F8F6FE] transition-colors">
+                      <div key={m.month} className="flex items-center gap-4 px-4 py-3 hover:bg-cc-bg transition-colors">
                         <p className="text-sm font-black w-20 shrink-0" style={{ color: TEXT }}>{m.month}</p>
                         <div className="flex-1 min-w-0">
                           <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "#EEEAFB" }}>

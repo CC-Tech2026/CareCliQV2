@@ -24,12 +24,12 @@ import {
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
 
-const PLUM  = "#5533CC";
-const CORAL = "#F03060";
-const TEXT  = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT  = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 function complianceColour(score: number | null | undefined): string {
   if (score == null) return MUTED;
@@ -174,7 +174,7 @@ export default function Team() {
             onClick={() => setTab(t)}
             className="flex-1 rounded-lg py-2 text-sm font-bold capitalize transition-colors"
             style={{
-              background: tab === t ? "#fff" : "transparent",
+              background: tab === t ? 'var(--cc-surface)' : 'transparent',
               color: tab === t ? PLUM : MUTED,
               boxShadow: tab === t ? "0 1px 3px rgba(85,51,204,0.12)" : "none",
             }}
@@ -199,7 +199,7 @@ export default function Team() {
             {workers.map((w) => (
               <div
                 key={w.id}
-                className="rounded-2xl bg-white p-5 space-y-4"
+                className="rounded-2xl bg-cc-surface p-5 space-y-4"
                 style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}
               >
                 {(() => {
@@ -290,7 +290,7 @@ export default function Team() {
           </div>
 
           {!stats.isLoading && workers.length === 0 && (
-            <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl bg-cc-surface p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
               <p className="text-sm font-bold" style={{ color: MUTED }}>No team members yet. Invite workers to get started.</p>
             </div>
@@ -305,7 +305,7 @@ export default function Team() {
           {workers.map((w) => (
             <div
               key={w.id}
-              className="rounded-2xl bg-white p-5"
+              className="rounded-2xl bg-cc-surface p-5"
               style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -392,7 +392,7 @@ export default function Team() {
           ))}
 
           {!stats.isLoading && workers.length === 0 && (
-            <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl bg-cc-surface p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
               <p className="text-sm font-bold" style={{ color: MUTED }}>No team members yet.</p>
             </div>
@@ -401,7 +401,7 @@ export default function Team() {
       )}
 
       {inviteOpen && (
-        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl bg-cc-surface p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black flex items-center gap-2" style={{ color: PLUM }}>
               <UserPlus size={18} /> Invite Team Member
@@ -466,7 +466,7 @@ export default function Team() {
       )}
 
       {assignWorker && (
-        <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl bg-cc-surface p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black" style={{ color: PLUM }}>
               Assign Client to {assignWorker.full_name}

@@ -11,12 +11,13 @@ import {
   type CoordinatorAlert,
 } from "@/services/coordinatorService";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const PLUM_RING = "var(--cc-plum-ring)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 const SEVERITY_LEVELS = {
   critical: { color: "#DC2626", label: "Critical", bg: "#FEE2E2" },
@@ -63,7 +64,7 @@ function AlertRow({
 
   return (
     <div
-      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer"
+      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-cc-bg cursor-pointer"
       style={{ opacity: alert.is_read ? 0.6 : 1 }}
       onClick={() => !alert.is_read && onRead(alert.id)}
     >
@@ -148,7 +149,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"
-      style={{ background: "#fff", borderLeft: `1px solid ${BORDER}` }}
+      style={{ background: 'var(--cc-surface)', borderLeft: '1px solid var(--cc-border)' }}
     >
       {/* Header */}
       <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
@@ -159,7 +160,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
             {unread > 0 && (
               <span
                 className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center"
-                style={{ background: CORAL, color: "#fff" }}
+                style={{ background: CORAL, color: 'var(--cc-surface)' }}
               >
                 {unread}
               </span>
@@ -194,7 +195,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-              style={{ borderColor: BORDER, "--tw-ring-color": `${PLUM}20` } as any}
+              style={{ borderColor: BORDER, "--tw-ring-color": PLUM_RING } as any}
             />
           </div>
           <button
@@ -292,7 +293,7 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
       {unread > 0 && (
         <span
           className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center"
-          style={{ background: CORAL, color: "#fff" }}
+          style={{ background: CORAL, color: 'var(--cc-surface)' }}
         >
           {unread > 99 ? "99+" : unread}
         </span>

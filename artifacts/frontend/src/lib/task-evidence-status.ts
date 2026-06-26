@@ -3,6 +3,7 @@
  */
 
 import type { ShiftTask } from "@/services/shiftService";
+import { CC, CC_STATUS } from "@/lib/brand-tokens";
 
 export type EvidenceStatus = "with_evidence" | "without_evidence";
 
@@ -111,27 +112,27 @@ export const TASK_STATE_STYLES: Record<
   { border: string; bg: string; text: string; label: string }
 > = {
   not_started: {
-    border: "#E2DEF2",
-    bg: "#FFFFFF",
-    text: "#7A6A9E",
+    border: CC.border,
+    bg: CC.surface,
+    text: CC.muted,
     label: "Not started",
   },
   in_progress: {
-    border: "#FCD34D",
-    bg: "#FFFBEB",
-    text: "#92400E",
+    border: CC_STATUS.warning,
+    bg: CC_STATUS.warningBg,
+    text: CC_STATUS.warning,
     label: "In progress",
   },
   evidence_required: {
-    border: "#FB923C",
-    bg: "#FFF7ED",
-    text: "#C2410C",
+    border: CC_STATUS.critical,
+    bg: CC_STATUS.criticalBg,
+    text: CC_STATUS.critical,
     label: "Evidence required",
   },
   complete: {
-    border: "#34D399",
-    bg: "#ECFDF5",
-    text: "#047857",
+    border: CC_STATUS.success,
+    bg: CC_STATUS.successBg,
+    text: CC_STATUS.success,
     label: "Complete",
   },
 };

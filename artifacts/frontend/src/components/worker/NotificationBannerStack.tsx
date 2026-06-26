@@ -215,13 +215,13 @@ export function NotificationBannerStack() {
       className="border-b px-5 py-4 md:px-8"
       style={{
         background: "linear-gradient(180deg,rgb(255, 255, 255) 0%,rgb(255, 255, 255) 100%)",
-        borderColor: "#E2DEF2",
+        borderColor: 'var(--cc-border)',
       }}
       aria-label="Important alerts"
     >
       {/* <p
         className="mb-3 text-[10px] font-black uppercase tracking-[0.18em]"
-        style={{ color: "#7A6A9E" }}
+        style={{ color: 'var(--cc-muted)' }}
       >
         Requires your attention
       </p> */}

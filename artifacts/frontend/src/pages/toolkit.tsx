@@ -21,11 +21,11 @@ import {
   type ToolkitMovement,
 } from "@/services/toolkitService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 function isLow(item: ToolkitItem) {
   return Number(item.quantity || 0) <= Number(item.minimum_quantity || 0);
@@ -46,10 +46,10 @@ function ItemRow({
 }) {
   const low = isLow(item);
   return (
-    <div className="grid gap-3 border-b border-[#EEEAFB] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
+    <div className="grid gap-3 border-b border-cc-border py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-black text-[#1E1640]">{item.name}</p>
+          <p className="font-black text-cc-text">{item.name}</p>
           {low && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700">
               <AlertTriangle className="h-3 w-3" />
@@ -57,7 +57,7 @@ function ItemRow({
             </span>
           )}
         </div>
-        <p className="mt-1 text-xs text-[#7A6A9E]">
+        <p className="mt-1 text-xs text-cc-muted">
           {item.category || "General"} • {item.quantity} {item.unit || "units"} available
           {item.minimum_quantity ? ` • minimum ${item.minimum_quantity}` : ""}
           {item.expiry_date ? ` • expires ${item.expiry_date}` : ""}
@@ -67,7 +67,7 @@ function ItemRow({
         {!coordinator && (
           <>
             <Button variant="outline" size="sm" onClick={() => onUse(item)} className="rounded-xl">Use item</Button>
-            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-[#5533CC]">Request restock</Button>
+            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-cc-plum">Request restock</Button>
           </>
         )}
         {coordinator && (
@@ -192,18 +192,18 @@ export default function Toolkit() {
           ["Low stock", summary.low],
           ["Assigned", summary.assigned],
         ].map(([label, value]) => (
-          <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-xs font-bold uppercase text-[#7A6A9E]">{label}</p>
-            <p className="mt-1 text-2xl font-black text-[#1E1640]">{value}</p>
+          <div key={label} className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+            <p className="text-xs font-bold uppercase text-cc-muted">{label}</p>
+            <p className="mt-1 text-2xl font-black text-cc-text">{value}</p>
           </div>
         ))}
       </div>
 
       {isCoordinator && (
-        <form onSubmit={addItem} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <form onSubmit={addItem} className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex items-center gap-2">
-            <PackagePlus className="h-5 w-5 text-[#5533CC]" />
-            <h2 className="font-black text-[#1E1640]">Add stock item</h2>
+            <PackagePlus className="h-5 w-5 text-cc-plum" />
+            <h2 className="font-black text-cc-text">Add stock item</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-5">
             <div className="md:col-span-2">
@@ -232,15 +232,15 @@ export default function Toolkit() {
         </form>
       )}
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <Wrench className="h-5 w-5 text-[#5533CC]" />
+          <Wrench className="h-5 w-5 text-cc-plum" />
           <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation stock" : "Assigned kit"}</h2>
         </div>
         {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>Loading toolkit...</p>}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && items.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-cc-bg p-4 text-sm font-medium" style={{ color: MUTED }}>
             No toolkit items are currently assigned.
           </p>
         )}
@@ -259,25 +259,25 @@ export default function Toolkit() {
       </section>
 
       {isCoordinator && (
-        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
-            <RotateCcw className="h-5 w-5 text-[#5533CC]" />
+            <RotateCcw className="h-5 w-5 text-cc-plum" />
             <h2 className="font-black" style={{ color: TEXT }}>Restock requests</h2>
           </div>
           {restockRequests.length === 0 ? (
-            <p className="mt-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
+            <p className="mt-4 rounded-2xl bg-cc-bg p-4 text-sm font-medium" style={{ color: MUTED }}>No pending restock requests.</p>
           ) : (
             <div className="mt-3 divide-y divide-[#EEEAFB]">
               {restockRequests.map((request) => (
                 <div key={request.id} className="flex flex-wrap items-center gap-3 py-3">
                   <div className="flex-1">
-                    <p className="font-bold text-[#1E1640]">{request.item?.name || request.item_id}</p>
-                    <p className="text-xs text-[#7A6A9E]">{request.quantity_requested} requested • {request.status}</p>
+                    <p className="font-bold text-cc-text">{request.item?.name || request.item_id}</p>
+                    <p className="text-xs text-cc-muted">{request.quantity_requested} requested • {request.status}</p>
                   </div>
                   {request.status === "pending" && (
                     <>
                       <Button variant="outline" size="sm" onClick={() => restockReviewMutation.mutate({ request, status: "approved" })}>Approve</Button>
-                      <Button variant="ghost" size="sm" className="text-[#F03060]" onClick={() => restockReviewMutation.mutate({ request, status: "rejected" })}>Reject</Button>
+                      <Button variant="ghost" size="sm" className="text-cc-coral" onClick={() => restockReviewMutation.mutate({ request, status: "rejected" })}>Reject</Button>
                     </>
                   )}
                 </div>
@@ -287,24 +287,24 @@ export default function Toolkit() {
         </section>
       )}
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
-          <RotateCcw className="h-5 w-5 text-[#5533CC]" />
+          <RotateCcw className="h-5 w-5 text-cc-plum" />
           <h2 className="font-black" style={{ color: TEXT }}>Movement history</h2>
         </div>
         {movements.length === 0 ? (
-          <p className="mt-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="mt-4 rounded-2xl bg-cc-bg p-4 text-sm font-medium" style={{ color: MUTED }}>
             No toolkit movements have been recorded yet.
           </p>
         ) : (
           <div className="mt-3 divide-y divide-[#EEEAFB]">
             {movements.slice(0, 8).map((movement) => (
               <div key={movement.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                <span className="rounded-full bg-[#F5F3FC] px-3 py-1 text-xs font-black uppercase text-[#5533CC]">
+                <span className="rounded-full bg-cc-bg px-3 py-1 text-xs font-black uppercase text-cc-plum">
                   {movement.movement_type}
                 </span>
-                <span className="font-bold text-[#1E1640]">{movement.quantity}</span>
-                <span className="text-[#7A6A9E]">{movement.notes || movement.item_id}</span>
+                <span className="font-bold text-cc-text">{movement.quantity}</span>
+                <span className="text-cc-muted">{movement.notes || movement.item_id}</span>
               </div>
             ))}
           </div>

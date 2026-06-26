@@ -44,7 +44,7 @@ export function StatusCard({
   return (
     <div
       onClick={onClick}
-      className={`rounded-lg border bg-white p-4 transition-all ${
+      className={`rounded-lg border bg-cc-surface p-4 transition-all ${
         onClick ? "cursor-pointer hover:shadow-md hover:border-slate-300" : ""
       } ${className}`}
       style={{
@@ -205,7 +205,7 @@ export function ContextCard({
   
   return (
     <div
-      className="rounded-lg border bg-white p-4"
+      className="rounded-lg border bg-cc-surface p-4"
       style={{
         borderColor: BORDER.light,
         boxShadow: DS.SHADOWS.card,
@@ -321,8 +321,8 @@ export function DataRow({
   return (
     <div
       onClick={onClick}
-      className={`flex items-center justify-between gap-3 rounded-lg border bg-white p-3 transition-all ${
-        onClick ? "cursor-pointer hover:bg-slate-50" : ""
+      className={`flex items-center justify-between gap-3 rounded-lg border bg-cc-surface p-3 transition-all ${
+        onClick ? "cursor-pointer hover:bg-cc-bg" : ""
       } ${className}`}
       style={{
         borderColor: BORDER.light,

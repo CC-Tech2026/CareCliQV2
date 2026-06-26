@@ -82,7 +82,7 @@ function DashboardStatCard({
 }) {
   return (
     <section 
-      className="rounded-lg border bg-white p-5 transition-shadow hover:shadow-md"
+      className="rounded-lg border bg-cc-surface p-5 transition-shadow hover:shadow-md"
       style={{ 
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
@@ -117,7 +117,7 @@ function DashboardStatCard({
 function ClientListCard({ clients }: { clients: DashboardClient[] }) {
   return (
     <section
-      className="rounded-lg border bg-white p-6"
+      className="rounded-lg border bg-cc-surface p-6"
       style={{
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
@@ -129,13 +129,13 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
-          <p className="rounded-lg bg-[#F5F3FC] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             No assigned sessions are scheduled for today.
           </p>
         )}
         {clients.map((client) => (
           <Link key={client.id} href={`/my-clients/${client.id}`}>
-            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]">
+            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-cc-border hover:bg-cc-bg">
               <div className="grid h-10 w-10 place-items-center rounded-full text-sm font-black text-white" style={{ background: PLUM }}>
                 {client.full_name?.split(" ").map((p) => p[0]).join("").slice(0, 2)}
               </div>
@@ -159,7 +159,7 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
 function SessionListCard({ title, sessions }: { title: string; sessions: DashboardSession[] }) {
   return (
     <section
-      className="rounded-lg border bg-white p-6"
+      className="rounded-lg border bg-cc-surface p-6"
       style={{
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
@@ -169,7 +169,7 @@ function SessionListCard({ title, sessions }: { title: string; sessions: Dashboa
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {sessions.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No records need attention.</p>}
         {sessions.map((session) => (
-          <div key={session.id} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
+          <div key={session.id} className="rounded-lg border p-3" style={{ borderColor: 'var(--cc-border)' }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold" style={{ color: TEXT }}>
@@ -225,7 +225,7 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
 
   return (
     <section 
-      className="rounded-lg border bg-white p-6"
+      className="rounded-lg border bg-cc-surface p-6"
       style={{ 
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
@@ -250,9 +250,9 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
       <div className="grid gap-6 md:grid-cols-[140px_1fr]">
         <div
           className="relative mx-auto grid h-28 w-28 place-items-center rounded-full"
-          style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #EEEAFB 0deg)` }}
+          style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, var(--cc-border) 0deg)` }}
         >
-          <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
+          <div className="grid h-20 w-20 place-items-center rounded-full bg-cc-surface">
             <div className="text-center">
               <span className="block text-2xl font-black" style={{ color: PLUM }}>{score}</span>
               <span className="block text-[10px] font-bold uppercase" style={{ color: MUTED }}>score</span>
@@ -282,12 +282,12 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
         </p>
         <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
           {data.workers_needing_attention.length === 0 && (
-            <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            <p className="rounded-lg bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
               No worker compliance issues are currently open.
             </p>
           )}
           {data.workers_needing_attention.slice(0, 4).map((worker) => (
-            <div key={worker.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
+            <div key={worker.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: 'var(--cc-border)' }}>
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
                 {initials(worker.full_name)}
               </div>
@@ -295,7 +295,7 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{worker.full_name}</p>
                 <p className="truncate text-xs font-medium" style={{ color: MUTED }}>{worker.reason || "Compliance review required"}</p>
               </div>
-              <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFE8EE", color: CORAL }}>
+              <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: 'var(--cc-status-critical-bg)', color: CORAL }}>
                 Review
               </span>
             </div>
@@ -308,7 +308,7 @@ function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard })
 
 function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] }) {
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-5 flex items-center justify-between gap-3">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Sessions</h2>
         <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: SOFT, color: PLUM }}>
@@ -317,12 +317,12 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {sessions.length === 0 && (
-          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             No sessions are scheduled for today.
           </p>
         )}
         {sessions.slice(0, 8).map((session) => (
-          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
+          <div key={session.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: 'var(--cc-border)' }}>
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
               {initials(session.participant_name)}
             </div>
@@ -346,7 +346,7 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
   const max = Math.max(...issues.map((issue) => issue.count), 1);
   return (
     <section 
-      className="rounded-lg border bg-white p-6"
+      className="rounded-lg border bg-cc-surface p-6"
       style={{ 
         borderColor: BORDER,
         boxShadow: DS.SHADOWS.card,
@@ -550,7 +550,7 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Link href="/session-review">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
+        <div className="group cursor-pointer rounded-xl border bg-cc-surface p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Flagged Sessions</p>
@@ -565,7 +565,7 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/incidents">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
+        <div className="group cursor-pointer rounded-xl border bg-cc-surface p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Pending Incidents</p>
@@ -580,7 +580,7 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/credentials">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
+        <div className="group cursor-pointer rounded-xl border bg-cc-surface p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiring Credentials</p>
@@ -595,7 +595,7 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
       </Link>
 
       <Link href="/toolkit">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
+        <div className="group cursor-pointer rounded-xl border bg-cc-surface p-5 transition hover:shadow-md" style={{ borderColor: BORDER, boxShadow: DS.SHADOWS.xs }}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Training Due</p>

@@ -4,8 +4,8 @@ import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Loader2, Mail, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
 const BORDER = "#D8D0F0";
 
 export default function ForgotPassword() {
@@ -43,12 +43,12 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F3FC]">
-      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-cc-bg">
+      <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-cc-surface">
         <div className="flex items-center gap-3">
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">Workspace</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-cc-muted">Workspace</span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8">
@@ -65,16 +65,16 @@ export default function ForgotPassword() {
             <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
               Reset password
             </h1>
-            <p className="text-[14px] font-medium mt-1" style={{ color: "#7A6A9E" }}>
+            <p className="text-[14px] font-medium mt-1" style={{ color: 'var(--cc-muted)' }}>
               Enter your email and we will send a secure reset link.
             </p>
           </div>
 
           {sent ? (
-            <div className="rounded-2xl border p-5" style={{ borderColor: BORDER, background: "#F5F3FC" }}>
+            <div className="rounded-2xl border p-5" style={{ borderColor: BORDER, background: 'var(--cc-bg)' }}>
               <CheckCircle2 className="h-8 w-8 mb-3" style={{ color: PLUM }} />
-              <p className="text-[15px] font-bold" style={{ color: "#1E1640" }}>Check your email</p>
-              <p className="text-[13px] mt-1 leading-relaxed" style={{ color: "#7A6A9E" }}>
+              <p className="text-[15px] font-bold" style={{ color: 'var(--cc-text)' }}>Check your email</p>
+              <p className="text-[13px] mt-1 leading-relaxed" style={{ color: 'var(--cc-muted)' }}>
                 If an account exists for this email, a reset link has been sent.
               </p>
             </div>
@@ -85,7 +85,7 @@ export default function ForgotPassword() {
                   Email address
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7A6A9E]" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cc-muted" />
                   <input
                     type="email"
                     value={email}
@@ -93,8 +93,8 @@ export default function ForgotPassword() {
                     placeholder="you@example.com"
                     required
                     disabled={busy}
-                    className="w-full h-12 pl-11 pr-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F5F3FC]"
-                    style={{ borderColor: BORDER, color: "#1E1640" }}
+                    className="w-full h-12 pl-11 pr-4 rounded-2xl text-[14px] font-medium outline-none border bg-cc-bg"
+                    style={{ borderColor: BORDER, color: 'var(--cc-text)' }}
                   />
                 </div>
               </div>

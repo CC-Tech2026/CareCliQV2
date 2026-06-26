@@ -270,6 +270,7 @@ export type ClockInRequest = {
   location?: { lat: number; lng: number; accuracy?: number } | null;
   qr_token?: string | null;
   client_timestamp?: string;
+  claimed_km?: number;
 };
 
 export function clockInShift(id: string, body: ClockInRequest) {

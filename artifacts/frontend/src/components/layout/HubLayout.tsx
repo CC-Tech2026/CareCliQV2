@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { CC } from "@/lib/brand-tokens";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F7F5FF";
-const PLUM   = "#5533CC";
+const TEXT = CC.text;
+const MUTED = CC.muted;
+const BORDER = CC.border;
+const SOFT = CC.bg;
+const PLUM = CC.plum;
+const ACTIVE = CC.active;
 
 const ROLE_LABEL: Record<string, string> = {
   support_worker:     "Support Worker",
@@ -42,12 +44,12 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: SOFT }}>
+    <div className="min-h-screen" style={{ background: SOFT, color: TEXT }}>
 
       {/* ── STICKY HEADER ─────────────────────────────── */}
       <header
-        className="sticky top-0 z-50 bg-white"
-        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 0 #E2DEF2" }}
+        className="sticky top-0 z-50 bg-cc-surface"
+        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: `0 1px 0 0 ${BORDER}` }}
       >
         {/* Plum accent line */}
         <div style={{ height: 3, background: PLUM }} />
@@ -87,7 +89,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-black"
-                style={{ background: "#EDEAFF", color: PLUM }}
+                style={{ background: ACTIVE, color: PLUM }}
               >
                 {initials}
               </div>

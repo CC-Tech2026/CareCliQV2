@@ -9,9 +9,9 @@ export function WorkerOnboardingChecklist({
   onToggle: (key: string, completed: boolean) => void;
 }) {
   return (
-    <div className="divide-y divide-[#EEEAFB] rounded-2xl border border-[#E2DEF2] bg-white">
+    <div className="divide-y divide-[#EEEAFB] rounded-2xl border border-cc-border bg-cc-surface">
       {items.map((item) => (
-        <label key={item.key} className="flex cursor-pointer items-center gap-3 px-4 py-3 transition hover:bg-[#F8F6FE]">
+        <label key={item.key} className="flex cursor-pointer items-center gap-3 px-4 py-3 transition hover:bg-cc-bg">
           <input
             type="checkbox"
             className="sr-only"
@@ -21,9 +21,9 @@ export function WorkerOnboardingChecklist({
           {item.completed ? (
             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
           ) : (
-            <Circle className="h-5 w-5 text-[#7A6A9E]" />
+            <Circle className="h-5 w-5 text-cc-muted" />
           )}
-          <span className="text-sm font-bold text-[#1E1640]">{item.label}</span>
+          <span className="text-sm font-bold text-cc-text">{item.label}</span>
         </label>
       ))}
     </div>

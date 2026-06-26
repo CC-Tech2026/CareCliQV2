@@ -135,17 +135,88 @@ def _feedback_summary_for_shift(shift_id: str) -> dict[str, Any]:
     return {"count": len(rows), "has_unread": unread > 0, "unread_count": unread}
 
 
+def _worker_display_name(worker_id: str | None) -> str | None:
+    if not worker_id:
+        return None
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("users")
+            .select("full_name, first_name, email")
+            .eq("id", str(worker_id))
+            .limit(1)
+            .execute()
+        )
+        row = (resp.data or [None])[0]
+        if not row:
+            return None
+        return (
+            row.get("full_name")
+            or row.get("first_name")
+            or (str(row.get("email") or "").split("@")[0])
+        )
+    except Exception:
+        return None
+
+
+def _task_evidence_items(task: dict[str, Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    photo_item = _photo_evidence_item(task)
+    if photo_item:
+        items.append({**photo_item, "type": "photo"})
+    if task.get("voice_evidence"):
+        items.append({
+            "task_id": task.get("task_id"),
+            "label": task.get("label"),
+            "type": "voice",
+        })
+    note_text = str(task.get("note") or task.get("context_note") or "").strip()
+    if len(note_text) >= 20:
+        items.append({
+            "task_id": task.get("task_id"),
+            "label": task.get("label"),
+            "type": "written note",
+        })
+    return items
+
+
 def _history_row(shift: dict[str, Any]) -> dict[str, Any]:
     validation = _get_session_validation(shift)
     score = validation.get("compliance_score")
     feedback = _feedback_summary_for_shift(str(shift.get("id") or ""))
     shift_date = shift.get("scheduled_start") or shift.get("clocked_out_at") or shift.get("updated_at")
+    worker_id = shift.get("worker_id")
+    created_by = shift.get("created_by")
+    coordinator_email = None
+    if created_by:
+        try:
+            resp = (
+                get_supabase_admin()
+                .table("users")
+                .select("email")
+                .eq("id", str(created_by))
+                .limit(1)
+                .execute()
+            )
+            row = (resp.data or [None])[0]
+            if row:
+                coordinator_email = str(row.get("email") or "").strip() or None
+        except Exception:
+            pass
     return {
         "id": shift.get("id"),
         "shift_date": shift_date,
+        "scheduled_start": shift.get("scheduled_start"),
+        "scheduled_end": shift.get("scheduled_end"),
+        "clocked_in_at": shift.get("clocked_in_at"),
+        "clocked_out_at": shift.get("clocked_out_at"),
         "participant_id": shift.get("participant_id"),
         "participant_name": shift.get("participant_name"),
         "participant_first_name": _participant_first_name(shift.get("participant_name")),
+        "worker_id": worker_id,
+        "worker_name": _worker_display_name(str(worker_id) if worker_id else None),
+        "coordinator_id": created_by,
+        "coordinator_email": coordinator_email,
         "duration_minutes": _shift_duration_minutes(shift),
         "compliance_score": score,
         "compliance_band": compliance_score_band(score),
@@ -172,7 +243,8 @@ def list_completed_shifts(
             .table("shifts")
             .select(
                 "id, participant_id, participant_name, scheduled_start, scheduled_end, "
-                "duration_minutes, status, session_id, tasks, clocked_out_at, updated_at"
+                "duration_minutes, status, session_id, tasks, clocked_in_at, clocked_out_at, "
+                "updated_at, worker_id, created_by"
             )
             .eq("worker_id", worker_id)
             .eq("organization_id", organization_id)
@@ -257,16 +329,12 @@ def get_shift_history_detail(
 
     evidence_items: list[dict[str, Any]] = []
     for task in tasks:
-        photo_item = _photo_evidence_item(task)
-        if photo_item:
-            evidence_items.append(photo_item)
-        if task.get("voice_evidence"):
-            evidence_items.append({
-                "task_id": task.get("task_id"),
-                "label": task.get("label"),
-                "type": "voice",
-                "url": task.get("voice_evidence"),
-            })
+        for item in _task_evidence_items(task):
+            if not any(
+                e.get("task_id") == item.get("task_id") and e.get("type") == item.get("type")
+                for e in evidence_items
+            ):
+                evidence_items.append(item)
 
     feedback_items: list[dict[str, Any]] = []
     try:
@@ -362,16 +430,26 @@ def list_shift_exports(worker_id: str) -> list[dict[str, Any]]:
         resp = (
             get_supabase_admin()
             .table("shift_export_requests")
-            .select("id, shift_id, status, file_url, expires_at, created_at")
+            .select(
+                "id, shift_id, status, file_url, expires_at, created_at, auto_generated"
+            )
             .eq("requested_by", worker_id)
-            .gte("expires_at", now)
             .eq("status", "ready")
             .order("created_at", desc=True)
-            .limit(20)
+            .limit(100)
             .execute()
         )
-        return resp.data or []
+        rows = resp.data or []
     except Exception as exc:
         if _is_missing_schema(exc):
             return []
         raise
+    visible: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("auto_generated"):
+            visible.append(row)
+            continue
+        expires = row.get("expires_at")
+        if expires and str(expires) >= now:
+            visible.append(row)
+    return visible

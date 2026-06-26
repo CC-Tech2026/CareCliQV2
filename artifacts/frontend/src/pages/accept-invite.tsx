@@ -6,8 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import { persistAuthSession, getRememberDevicePreference } from "@/lib/auth-session";
 import { Loader2, Eye, EyeOff, CheckCircle2, AlertTriangle } from "lucide-react";
 
-const PLUM  = "#5533CC";
-const CORAL = "#F03060";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
 const BORDER = "#D8D0F0";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -120,7 +120,7 @@ export default function AcceptInvite() {
     >
       <div
         className="w-full max-w-md rounded-3xl p-8 shadow-xl"
-        style={{ background: "rgba(255,255,255,0.96)", border: `1px solid ${BORDER}` }}
+        style={{ background: "rgba(255,255,255,0.96)", border: '1px solid var(--cc-border)' }}
       >
         {/* Logo mark */}
         <div className="flex justify-center mb-6">
@@ -135,15 +135,15 @@ export default function AcceptInvite() {
         {step === "loading" && (
           <div className="flex flex-col items-center gap-3 py-8">
             <Loader2 className="animate-spin" style={{ color: PLUM }} size={32} />
-            <p className="text-sm" style={{ color: "#7A6A9E" }}>Validating your invitation…</p>
+            <p className="text-sm" style={{ color: 'var(--cc-muted)' }}>Validating your invitation…</p>
           </div>
         )}
 
         {step === "error" && (
           <div className="flex flex-col items-center gap-4 py-4 text-center">
             <AlertTriangle size={40} style={{ color: CORAL }} />
-            <h2 className="text-xl font-bold" style={{ color: "#1E1640" }}>Invitation Issue</h2>
-            <p className="text-sm leading-relaxed" style={{ color: "#7A6A9E" }}>{errorMsg}</p>
+            <h2 className="text-xl font-bold" style={{ color: 'var(--cc-text)' }}>Invitation Issue</h2>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--cc-muted)' }}>{errorMsg}</p>
             <a
               href="/login"
               className="text-sm font-medium underline underline-offset-2"
@@ -157,19 +157,19 @@ export default function AcceptInvite() {
         {step === "done" && (
           <div className="flex flex-col items-center gap-4 py-4 text-center">
             <CheckCircle2 size={48} style={{ color: "#22c55e" }} />
-            <h2 className="text-xl font-bold" style={{ color: "#1E1640" }}>Account Activated!</h2>
-            <p className="text-sm" style={{ color: "#7A6A9E" }}>Taking you to your dashboard…</p>
+            <h2 className="text-xl font-bold" style={{ color: 'var(--cc-text)' }}>Account Activated!</h2>
+            <p className="text-sm" style={{ color: 'var(--cc-muted)' }}>Taking you to your dashboard…</p>
           </div>
         )}
 
         {step === "form" && invite && (
           <>
-            <h1 className="text-2xl font-bold text-center mb-1" style={{ color: "#1E1640" }}>
+            <h1 className="text-2xl font-bold text-center mb-1" style={{ color: 'var(--cc-text)' }}>
               You've been invited
             </h1>
-            <p className="text-sm text-center mb-6" style={{ color: "#7A6A9E" }}>
+            <p className="text-sm text-center mb-6" style={{ color: 'var(--cc-muted)' }}>
               {invite.organization_name
-                ? <><strong style={{ color: "#1E1640" }}>{invite.organization_name}</strong> has invited you as a{" "}</>
+                ? <><strong style={{ color: 'var(--cc-text)' }}>{invite.organization_name}</strong> has invited you as a{" "}</>
                 : "You've been invited as a "}
               <span
                 className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold"
@@ -181,9 +181,9 @@ export default function AcceptInvite() {
 
             {/* Pre-filled email (read-only) */}
             <div className="mb-4 rounded-xl px-4 py-3 flex items-center gap-2"
-              style={{ background: "rgba(85,51,204,0.04)", border: `1px solid ${BORDER}` }}>
-              <span className="text-xs font-medium" style={{ color: "#7A6A9E" }}>Email</span>
-              <span className="ml-auto text-sm font-medium" style={{ color: "#1E1640" }}>{invite.email}</span>
+              style={{ background: "rgba(85,51,204,0.04)", border: '1px solid var(--cc-border)' }}>
+              <span className="text-xs font-medium" style={{ color: 'var(--cc-muted)' }}>Email</span>
+              <span className="ml-auto text-sm font-medium" style={{ color: 'var(--cc-text)' }}>{invite.email}</span>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -197,7 +197,7 @@ export default function AcceptInvite() {
                   placeholder="e.g. Jordan Smith"
                   required
                   className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all"
-                  style={{ border: `1.5px solid ${BORDER}`, color: "#1E1640" }}
+                  style={{ border: `1.5px solid ${BORDER}`, color: 'var(--cc-text)' }}
                   onFocus={(e) => (e.target.style.borderColor = PLUM)}
                   onBlur={(e) => (e.target.style.borderColor = BORDER)}
                 />
@@ -214,7 +214,7 @@ export default function AcceptInvite() {
                     placeholder="Min. 8 characters"
                     required
                     className="w-full rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all"
-                    style={{ border: `1.5px solid ${BORDER}`, color: "#1E1640" }}
+                    style={{ border: `1.5px solid ${BORDER}`, color: 'var(--cc-text)' }}
                     onFocus={(e) => (e.target.style.borderColor = PLUM)}
                     onBlur={(e) => (e.target.style.borderColor = BORDER)}
                   />
@@ -222,7 +222,7 @@ export default function AcceptInvite() {
                     type="button"
                     onClick={() => setShowPass(!showPass)}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
-                    style={{ color: "#7A6A9E" }}
+                    style={{ color: 'var(--cc-muted)' }}
                   >
                     {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -240,7 +240,7 @@ export default function AcceptInvite() {
                     placeholder="Repeat password"
                     required
                     className="w-full rounded-xl px-4 py-3 pr-11 text-sm outline-none transition-all"
-                    style={{ border: `1.5px solid ${confirm && confirm !== password ? CORAL : BORDER}`, color: "#1E1640" }}
+                    style={{ border: `1.5px solid ${confirm && confirm !== password ? CORAL : BORDER}`, color: 'var(--cc-text)' }}
                     onFocus={(e) => (e.target.style.borderColor = confirm !== password ? CORAL : PLUM)}
                     onBlur={(e) => (e.target.style.borderColor = confirm && confirm !== password ? CORAL : BORDER)}
                   />
@@ -248,7 +248,7 @@ export default function AcceptInvite() {
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
                     className="absolute right-3 top-1/2 -translate-y-1/2"
-                    style={{ color: "#7A6A9E" }}
+                    style={{ color: 'var(--cc-muted)' }}
                   >
                     {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -272,7 +272,7 @@ export default function AcceptInvite() {
               </button>
             </form>
 
-            <p className="text-center text-xs mt-5" style={{ color: "#7A6A9E" }}>
+            <p className="text-center text-xs mt-5" style={{ color: 'var(--cc-muted)' }}>
               Already have an account?{" "}
               <a href="/login" className="font-medium underline underline-offset-2" style={{ color: PLUM }}>
                 Sign in

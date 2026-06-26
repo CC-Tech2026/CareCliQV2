@@ -2,12 +2,8 @@ import { ArrowDown, ArrowUp, Award, GraduationCap, Minus, TrendingUp } from "luc
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getPerformanceDashboard } from "@/services/workerPerformanceService";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
 
 function TrendIcon({ direction }: { direction: string }) {
   if (direction === "up") return <ArrowUp size={28} className="text-emerald-600" />;
@@ -41,7 +37,7 @@ export default function WorkerPerformanceDashboardPage() {
       </header>
 
       <section
-        className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+        className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
         style={{ borderColor: BORDER }}
       >
         <div className="grid sm:grid-cols-[1fr_auto]">
@@ -75,7 +71,7 @@ export default function WorkerPerformanceDashboardPage() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#059669" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>Recurring strengths</h2>
@@ -86,7 +82,7 @@ export default function WorkerPerformanceDashboardPage() {
                 <span
                   key={s.label}
                   className="rounded-full px-3 py-1.5 text-xs font-black"
-                  style={{ background: "#ECFDF5", color: "#059669" }}
+                  style={{ background: 'var(--cc-status-success-bg)', color: "#059669" }}
                 >
                   {s.label}
                 </span>
@@ -99,7 +95,7 @@ export default function WorkerPerformanceDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#D97706" }} />
             <h2 className="text-sm font-black" style={{ color: TEXT }}>Focus areas</h2>
@@ -110,7 +106,7 @@ export default function WorkerPerformanceDashboardPage() {
                 <span
                   key={s.label}
                   className="rounded-full px-3 py-1.5 text-xs font-black"
-                  style={{ background: "#FFFBEB", color: "#D97706" }}
+                  style={{ background: 'var(--cc-status-warning-bg)', color: "#D97706" }}
                 >
                   {s.label}
                 </span>
@@ -124,7 +120,7 @@ export default function WorkerPerformanceDashboardPage() {
         </section>
       </div>
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Award size={18} style={{ color: PLUM }} />
           <h2 className="text-sm font-black" style={{ color: TEXT }}>Achievement badges</h2>
@@ -137,7 +133,7 @@ export default function WorkerPerformanceDashboardPage() {
               style={{
                 borderColor: BORDER,
                 opacity: badge.unlocked ? 1 : 0.55,
-                background: badge.unlocked ? "#F8F6FE" : "#fff",
+                background: badge.unlocked ? "#F8F6FE" : 'var(--cc-surface)',
               }}
             >
               <p className="text-sm font-black" style={{ color: TEXT }}>{badge.title}</p>
@@ -158,12 +154,12 @@ export default function WorkerPerformanceDashboardPage() {
         <Link href="/worker/training">
           <section
             className="block rounded-2xl border p-5 shadow-sm transition hover:shadow-md"
-            style={{ borderColor: BORDER, background: "linear-gradient(135deg, #F8F6FE 0%, #fff 100%)" }}
+            style={{ borderColor: BORDER, background: "linear-gradient(135deg, var(--cc-bg) 0%, var(--cc-surface) 100%)" }}
           >
             <div className="flex items-start gap-3">
               <div
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ background: "#EDEAFF" }}
+                style={{ background: 'var(--cc-active)' }}
               >
                 <GraduationCap size={22} style={{ color: PLUM }} />
               </div>

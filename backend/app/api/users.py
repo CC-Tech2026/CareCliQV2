@@ -352,3 +352,64 @@ async def delete_my_profile_photo(current_user: dict = Depends(get_current_user)
             pass
     supabase.table("users").update({"profile_photo_path": None, "profile_photo_url": None}).eq("id", user_id).execute()
     return None
+
+
+class AccessibilityPreferencesBody(BaseModel):
+    device_id: str = Field(min_length=8, max_length=128)
+    font_size: str | None = None
+    theme_mode: str | None = None
+    high_contrast: bool | None = None
+    dyslexia_font: bool | None = None
+
+
+class LanguagePreferenceBody(BaseModel):
+    preferred_language: str = Field(min_length=2, max_length=10)
+
+
+@router.get("/me/accessibility")
+async def get_my_accessibility_preferences(
+    device_id: str = Query(..., min_length=8, max_length=128),
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services import accessibility_service
+
+    user_id = get_user_id(current_user)
+    prefs = accessibility_service.get_accessibility_preferences(user_id, device_id)
+    language = accessibility_service.get_preferred_language(user_id)
+    return {"preferences": prefs, "preferred_language": language}
+
+
+@router.put("/me/accessibility")
+async def save_my_accessibility_preferences(
+    body: AccessibilityPreferencesBody,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services import accessibility_service
+
+    user_id = get_user_id(current_user)
+    prefs = accessibility_service.save_accessibility_preferences(
+        user_id,
+        body.device_id,
+        font_size=body.font_size,
+        theme_mode=body.theme_mode,
+        high_contrast=body.high_contrast,
+        dyslexia_font=body.dyslexia_font,
+    )
+    return {"preferences": prefs}
+
+
+@router.patch("/me/language")
+async def update_my_language(
+    body: LanguagePreferenceBody,
+    current_user: dict = Depends(get_current_user),
+):
+    from ..services import accessibility_service
+
+    user_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    result = await accessibility_service.set_preferred_language(
+        user_id,
+        org_id,
+        body.preferred_language,
+    )
+    return result

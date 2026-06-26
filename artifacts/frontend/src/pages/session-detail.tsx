@@ -768,7 +768,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Left column — notes + transcription + structural outputs */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
@@ -875,7 +875,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {(session.original_language_input || session.translated_english_note) && (
-            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                 <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Translation Audit Trail</p>
               </div>
@@ -902,7 +902,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             const filledSections = sections.filter((sec) => sec.value && sec.value.trim());
             if (filledSections.length === 0) return null;
             return (
-              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <Shield className="h-4 w-4" style={{ color: "#7A6A8A" }} />
                   <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Structured Clinical Notes</p>
@@ -1017,7 +1017,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             const markers = (session as ExtendedSession).body_markers;
             if (!markers || markers.length === 0) return null;
             return (
-              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <Activity className="h-4 w-4" style={{ color: "#7A6A8A" }} />
                   <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Physical Examination</p>
@@ -1038,7 +1038,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
-          <div className="rounded-2xl overflow-hidden bg-white" style={{
+          <div className="rounded-2xl overflow-hidden bg-cc-surface" style={{
             boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)",
             ...(session.compliance_score
               ? claimStatus === "compliant"
@@ -1113,7 +1113,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         {warnFailures.map(r => {
                           const acked = acknowledgedWarnRules.has(r.rule);
                           return (
-                            <label key={r.rule} className={`flex items-start gap-2.5 text-xs cursor-pointer rounded-lg px-2 py-1.5 transition-colors ${acked ? "bg-amber-100/60" : "bg-white/60"}`}>
+                            <label key={r.rule} className={`flex items-start gap-2.5 text-xs cursor-pointer rounded-lg px-2 py-1.5 transition-colors ${acked ? "bg-amber-100/60" : "bg-cc-surface/60"}`}>
                               <input
                                 type="checkbox"
                                 checked={acked}
@@ -1206,7 +1206,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       ) : explanation ? (
                         <div className="space-y-2 leading-relaxed">
                           <p>{explanation.explanation}</p>
-                          <div className="bg-white/80 p-2 rounded-lg border border-amber-200/40 font-medium">
+                          <div className="bg-cc-surface/80 p-2 rounded-lg border border-amber-200/40 font-medium">
                             <span className="text-amber-700 font-bold">Actionable Fix:</span> {explanation.fix_suggestion}
                           </div>
                         </div>
@@ -1247,7 +1247,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         <div className="space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Per-Rule Fixes</p>
                           {improveNoteMutation.data.rule_suggestions.map((s, i) => (
-                            <div key={i} className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
+                            <div key={i} className="bg-cc-surface/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
                               <p className="font-semibold text-purple-800 capitalize">{s.rule.replace(/_/g, " ")}</p>
                               <p className="text-slate-500 text-[11px]">{s.issue}</p>
                               <div className="flex items-start gap-2">
@@ -1274,7 +1274,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       {improveNoteMutation.data.improved_note && (
                         <div className="space-y-1.5">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Full Rewrite</p>
-                          <div className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 text-slate-700 leading-relaxed max-h-40 overflow-y-auto">
+                          <div className="bg-cc-surface/80 border border-purple-100/60 rounded-lg p-2.5 text-slate-700 leading-relaxed max-h-40 overflow-y-auto">
                             {improveNoteMutation.data.improved_note}
                           </div>
                           <Button
@@ -1299,7 +1299,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Goals Worked On & Tags */}
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <Target className="h-4 w-4 text-slate-500" />
               <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Core Mapping</p>
@@ -1387,7 +1387,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Funding Support Category & Billing Metrics */}
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <DollarSign className="h-4 w-4 text-slate-500" />
               <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Billing Accounts</p>
@@ -1407,7 +1407,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Media Attachments & Session Evidence */}
-          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <ImageIcon className="h-4 w-4 text-slate-500" /> Evidence Uploads
@@ -1423,7 +1423,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               />
               <Button 
                 variant="outline" 
-                className="w-full border-dashed h-20 flex flex-col justify-center items-center gap-1 rounded-xl hover:bg-slate-50/80 transition-colors"
+                className="w-full border-dashed h-20 flex flex-col justify-center items-center gap-1 rounded-xl hover:bg-cc-bg/80 transition-colors"
                 disabled={isUploading}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -1444,7 +1444,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       href={attachment.public_url || attachment.file_path || "#"}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-cc-bg"
                     >
                       <FileText className="h-3.5 w-3.5 text-slate-400" />
                       <span className="truncate">{attachment.file_name}</span>

@@ -117,7 +117,7 @@ export default function WorkerAvailabilityPage() {
 
       {isLoading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
 
-      <section className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black mb-3" style={{ color: TEXT }}>Weekly availability</h2>
         <p className="text-xs mb-3" style={{ color: MUTED }}>Tap cells to cycle: Available → Unavailable → Preferred</p>
         <div className="overflow-x-auto">
@@ -162,7 +162,7 @@ export default function WorkerAvailabilityPage() {
         </button>
       </section>
 
-      <section className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black" style={{ color: TEXT }}>Max shifts per week</h2>
         <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>Soft limit shown to your coordinator — they can override with a reason.</p>
         <input
@@ -179,7 +179,7 @@ export default function WorkerAvailabilityPage() {
         </button>
       </section>
 
-      <section className="rounded-2xl border bg-white p-4 space-y-3" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border bg-cc-surface p-4 space-y-3" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black" style={{ color: TEXT }}>Blackout dates</h2>
         <p className="text-xs" style={{ color: MUTED }}>Up to 12 future date ranges when you are unavailable.</p>
         {blackouts.map((b, i) => (

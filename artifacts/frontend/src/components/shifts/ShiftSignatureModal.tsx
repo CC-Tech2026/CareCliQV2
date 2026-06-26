@@ -84,7 +84,7 @@ export function ShiftSignatureModal({ open, onOpenChange, shiftId, busy, tutoria
           {CHECKBOXES.map((item) => (
             <label
               key={item.key}
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#E2DEF2] bg-white p-3"
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-cc-border bg-cc-surface p-3"
             >
               <Checkbox
                 checked={checks[item.key]}

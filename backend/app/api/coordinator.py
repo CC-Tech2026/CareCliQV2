@@ -3301,13 +3301,22 @@ async def coordinator_export_shift(shift_id: str, current_user: dict = Depends(g
     shift = shift_service.get_shift_by_id(shift_id)
     if not shift or str(shift.get("organization_id")) != str(org_id):
         raise HTTPException(status_code=404, detail="Shift not found")
-    return shift_pdf_export_service.create_shift_export(
+    return shift_pdf_export_service.get_or_create_auto_export(
         shift_id,
         get_user_id(current_user),
         org_id,
         is_coordinator=True,
         worker_id=str(shift.get("worker_id") or ""),
     )
+
+
+@router.post("/shifts/summaries/backfill")
+async def coordinator_backfill_shift_summaries(
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return shift_pdf_export_service.backfill_shift_summaries(org_id, limit=limit)
 
 
 # ── CARECLIQV2-289: Training administration ───────────────────────────────────
@@ -3397,3 +3406,74 @@ async def coordinator_recommend_training(
     }
     result = get_supabase_admin().table("worker_training_recommendations").insert(payload).execute()
     return result.data[0] if result.data else payload
+
+
+# ── CARECLIQV2-292: Travel expense approvals ─────────────────────────────────
+
+class TravelRateBody(BaseModel):
+    mileage_rate_cents: int = Field(gt=0, le=500)
+
+
+class TravelSubmissionActionBody(BaseModel):
+    approve: bool = True
+    rejection_reason: Optional[str] = None
+    mark_paid: bool = False
+
+
+@router.get("/travel/submissions")
+async def coordinator_travel_submissions(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import travel_expense_service
+
+    return {"submissions": travel_expense_service.list_pending_for_coordinator(org_id)}
+
+
+@router.get("/travel/settings")
+async def coordinator_travel_settings(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    from ..services import travel_expense_service
+
+    return travel_expense_service.get_org_travel_settings(org_id)
+
+
+@router.post("/travel/submissions/{submission_id}/action")
+async def coordinator_travel_submission_action(
+    submission_id: str,
+    body: TravelSubmissionActionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import travel_expense_service
+
+    return travel_expense_service.action_submission(
+        submission_id,
+        get_user_id(current_user),
+        org_id,
+        approve=body.approve,
+        rejection_reason=body.rejection_reason,
+        mark_paid=body.mark_paid,
+    )
+
+
+@router.put("/travel/settings")
+async def coordinator_update_travel_rate(
+    body: TravelRateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    record = {
+        "organization_id": org_id,
+        "mileage_rate_cents": body.mileage_rate_cents,
+        "updated_by": get_user_id(current_user),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    get_supabase_admin().table("organization_travel_settings").upsert(
+        record,
+        on_conflict="organization_id",
+    ).execute()
+    get_supabase_admin().table("organization_mileage_rate_history").insert({
+        "organization_id": org_id,
+        "rate_cents": body.mileage_rate_cents,
+        "created_by": get_user_id(current_user),
+    }).execute()
+    return {"mileage_rate_cents": body.mileage_rate_cents, "rate_display": f"${body.mileage_rate_cents / 100:.2f}/km"}

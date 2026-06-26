@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { WORKER_FAQ_FALLBACK } from "@/content/worker-faq-fallback";
 import { useWorkerTutorial } from "@/hooks/useWorkerTutorial";
 import { WORKER_TUTORIAL_STEPS } from "@/lib/worker-tutorial-steps";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   getKnownIssues,
   getSupportConfig,
@@ -16,9 +18,6 @@ import {
   type SupportConfig,
 } from "@/services/helpService";
 
-const PLUM = "#5533CC";
-const MUTED = "#7A6A9E";
-const TEXT = "#1E1640";
 
 type Tab = "tutorial" | "faq" | "chat" | "issues";
 
@@ -69,8 +68,8 @@ function IntercomPanel({ appId }: { appId?: string | null }) {
   }
 
   return (
-    <div className="rounded-2xl border border-[#E2DEF2] bg-[#FAFAFF] p-6 text-center">
-      <MessageCircle className="mx-auto h-8 w-8 text-[#5533CC]" />
+    <div className="rounded-2xl border border-cc-border bg-cc-bg p-6 text-center">
+      <MessageCircle className="mx-auto h-8 w-8 text-cc-plum" />
       <p className="mt-3 text-sm font-bold" style={{ color: TEXT }}>
         Chat is available in the corner of this screen.
       </p>
@@ -89,6 +88,7 @@ function IntercomPanel({ appId }: { appId?: string | null }) {
 }
 
 export default function WorkerHelp() {
+  const { translate } = useAccessibility();
   const [tab, setTab] = useState<Tab>("faq");
   const [query, setQuery] = useState("");
   const [faq, setFaq] = useState<FaqArticle[]>([]);
@@ -136,16 +136,16 @@ export default function WorkerHelp() {
   ];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12">
+    <div className="mx-auto max-w-4xl space-y-6 pb-12 text-safe">
       <div>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
-          Help & support
+          {translate("nav.help")}
         </p>
         <h1 className="mt-1 text-3xl font-black" style={{ color: TEXT }}>
-          Worker help centre
+          {translate("help.title")}
         </h1>
-        <p className="mt-2 text-sm" style={{ color: MUTED }}>
-          Answers, tutorials, and contact options without leaving the app.
+        <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
+          {translate("help.subtitle")}
         </p>
       </div>
 
@@ -156,7 +156,7 @@ export default function WorkerHelp() {
             type="button"
             onClick={() => setTab(item.id)}
             className={`rounded-full px-4 py-2 text-xs font-black transition ${
-              tab === item.id ? "bg-[#5533CC] text-white" : "bg-[#F0EDF8] text-[#7A6A9E]"
+              tab === item.id ? "bg-cc-plum text-white" : "bg-cc-bg text-cc-muted"
             }`}
           >
             {item.label}
@@ -166,12 +166,12 @@ export default function WorkerHelp() {
 
       {loading && (
         <div className="flex justify-center py-12">
-          <Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" />
+          <Loader2 className="h-7 w-7 animate-spin text-cc-plum" />
         </div>
       )}
 
       {!loading && tab === "tutorial" && (
-        <div className="space-y-4 rounded-2xl border border-[#E2DEF2] bg-white p-6">
+        <div className="space-y-4 rounded-2xl border border-cc-border bg-cc-surface p-6">
           <p className="text-sm" style={{ color: MUTED }}>
             Interactive walkthrough of the core shift workflow. Replay anytime — it does not change live shift data.
           </p>
@@ -184,7 +184,7 @@ export default function WorkerHelp() {
                 key={step.key}
                 type="button"
                 onClick={() => tutorial.start(0, step.key)}
-                className="rounded-xl border border-[#E2DEF2] p-4 text-left transition hover:bg-[#F8F6FE]"
+                className="rounded-xl border border-cc-border p-4 text-left transition hover:bg-cc-bg"
               >
                 <p className="text-sm font-black" style={{ color: TEXT }}>
                   {step.title}
@@ -202,7 +202,7 @@ export default function WorkerHelp() {
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
           <div className="space-y-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7A6A9E]" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cc-muted" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -210,14 +210,14 @@ export default function WorkerHelp() {
                 className="rounded-xl pl-9"
               />
             </div>
-            <div className="max-h-[420px] space-y-1 overflow-y-auto rounded-2xl border border-[#E2DEF2] bg-white p-2">
+            <div className="max-h-[420px] space-y-1 overflow-y-auto rounded-2xl border border-cc-border bg-cc-surface p-2">
               {filteredFaq.map((article) => (
                 <button
                   key={article.slug}
                   type="button"
                   onClick={() => setSelectedSlug(article.slug)}
                   className={`w-full rounded-xl px-3 py-2 text-left text-sm font-bold ${
-                    selectedArticle?.slug === article.slug ? "bg-[#EDEAFF] text-[#5533CC]" : "text-[#1E1640]"
+                    selectedArticle?.slug === article.slug ? "bg-[#EDEAFF] text-cc-plum" : "text-cc-text"
                   }`}
                 >
                   {article.title}
@@ -225,7 +225,7 @@ export default function WorkerHelp() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-[#E2DEF2] bg-white p-6">
+          <div className="rounded-2xl border border-cc-border bg-cc-surface p-6">
             {selectedArticle ? (
               <>
                 <h2 className="text-xl font-black" style={{ color: TEXT }}>
@@ -262,7 +262,7 @@ export default function WorkerHelp() {
             </div>
           )}
 
-          <div className="rounded-2xl border border-[#E2DEF2] bg-white p-6">
+          <div className="rounded-2xl border border-cc-border bg-cc-surface p-6">
             <h2 className="text-lg font-black" style={{ color: TEXT }}>
               Can&apos;t find what you need?
             </h2>
@@ -272,14 +272,14 @@ export default function WorkerHelp() {
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <a
                 href={`tel:${(config?.support_phone || "").replace(/\s/g, "")}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E2DEF2] px-4 py-3 text-sm font-bold"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-cc-border px-4 py-3 text-sm font-bold"
               >
                 <Phone className="h-4 w-4" />
                 Call now — {config?.support_phone}
               </a>
               <a
                 href={`mailto:${config?.support_email}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E2DEF2] px-4 py-3 text-sm font-bold"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-cc-border px-4 py-3 text-sm font-bold"
               >
                 <Mail className="h-4 w-4" />
                 {config?.support_email}
@@ -292,12 +292,12 @@ export default function WorkerHelp() {
       {!loading && tab === "issues" && (
         <div className="space-y-3">
           {issues.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#E2DEF2] bg-white p-8 text-center text-sm" style={{ color: MUTED }}>
+            <div className="rounded-2xl border border-dashed border-cc-border bg-cc-surface p-8 text-center text-sm" style={{ color: MUTED }}>
               No active known issues. Everything looks good.
             </div>
           ) : (
             issues.map((issue) => (
-              <div key={issue.id} className="rounded-2xl border border-[#E2DEF2] bg-white p-5">
+              <div key={issue.id} className="rounded-2xl border border-cc-border bg-cc-surface p-5">
                 <h3 className="font-black" style={{ color: TEXT }}>
                   {issue.title}
                 </h3>

@@ -123,7 +123,7 @@ export function SessionTimeline({ sessionId, tasks, open = false, onToggle }: Pr
   if (!sessionId) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"

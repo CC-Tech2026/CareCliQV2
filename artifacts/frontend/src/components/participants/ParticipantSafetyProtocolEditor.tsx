@@ -98,7 +98,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
   }
 
   return (
-    <div className="space-y-6 rounded-2xl border bg-white p-6 shadow-sm">
+    <div className="space-y-6 rounded-2xl border bg-cc-surface p-6 shadow-sm">
       <div>
         <h3 className="text-sm font-black uppercase tracking-wider text-violet-800">Safety card</h3>
         <p className="mt-1 text-xs text-muted-foreground">

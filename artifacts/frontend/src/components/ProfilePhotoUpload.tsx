@@ -80,11 +80,11 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <div className="h-24 w-24 overflow-hidden rounded-full border border-[#E2DEF2] bg-[#F5F3FC]">
+      <div className="h-24 w-24 overflow-hidden rounded-full border border-cc-border bg-cc-bg">
         {preview ? (
           <img src={preview} alt="Profile" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-xl font-black text-[#5533CC]">
+          <div className="flex h-full w-full items-center justify-center text-xl font-black text-cc-plum">
             {initials}
           </div>
         )}
@@ -109,13 +109,13 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
             {preview ? "Replace photo" : "Upload photo"}
           </Button>
           {preview && (
-            <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-[#F03060]">
+            <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-cc-coral">
               <Trash2 className="h-4 w-4" />
               Remove
             </Button>
           )}
         </div>
-        <p className="text-xs font-medium text-[#7A6A9E]">JPEG or PNG. Maximum 5MB.{cropCircle ? " Cropped to a circle on upload." : ""}</p>
+        <p className="text-xs font-medium text-cc-muted">JPEG or PNG. Maximum 5MB.{cropCircle ? " Cropped to a circle on upload." : ""}</p>
       </div>
     </div>
   );

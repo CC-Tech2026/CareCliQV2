@@ -10,52 +10,54 @@
  * - Consistent: Single source of truth for all pages
  */
 
+import { CC, CC_STATUS } from "@/lib/brand-tokens";
+
 // ── Brand Colors ──────────────────────────────────────────────────────────────
+
 export const BRAND = {
-  primary:   "#5533CC",    // Brand purple (keep for brand recognition)
-  secondary: "#F03060",    // Brand coral (accent only)
+  primary:   CC.plum,
+  secondary: CC.coral,
 } as const;
 
 // ── Semantic Status Colors ────────────────────────────────────────────────────
-// Healthcare industry standard
 export const STATUS = {
-  success:   "#16A34A",    // Green - Compliant, healthy, safe
-  warning:   "#D97706",    // Amber - Needs attention, expiring
-  critical:  "#DC2626",    // Red - Urgent, non-compliant, critical
-  info:      "#2563EB",    // Blue - Information, neutral
-  inactive:  "#6B7280",    // Gray - Inactive, archived
+  success:   CC_STATUS.success,
+  warning:   CC_STATUS.warning,
+  critical:  CC_STATUS.critical,
+  info:      CC_STATUS.info,
+  inactive:  CC.muted,
 } as const;
 
 // ── Text Colors ───────────────────────────────────────────────────────────────
 export const TEXT = {
-  primary:   "#0F172A",    // Dark slate - Main text (high contrast)
-  secondary: "#475569",    // Slate - Secondary text
-  muted:     "#64748B",    // Gray slate - Muted/tertiary text
-  inverted:  "#FFFFFF",    // White - On colored backgrounds
+  primary:   CC.text,
+  secondary: CC.muted,
+  muted:     CC.muted,
+  inverted:  "#FFFFFF",
 } as const;
 
 // ── Background Colors ─────────────────────────────────────────────────────────
 export const BACKGROUND = {
-  page:      "#FFFFFF",    // Page background
-  section:   "#F8FAFC",    // Section background (subtle gray)
-  card:      "#FFFFFF",    // Card background
-  overlay:   "rgba(15, 23, 42, 0.5)",  // Modal overlay
+  page:      CC.surface,
+  section:   CC.bg,
+  card:      CC.surface,
+  overlay:   "rgba(15, 23, 42, 0.5)",
 } as const;
 
 // ── Border & Divider Colors ───────────────────────────────────────────────────
 export const BORDER = {
-  light:     "#E2E8F0",    // Light borders
-  default:   "#CBD5E1",    // Default borders
-  strong:    "#94A3B8",    // Strong borders (rarely used)
+  light:     CC.border,
+  default:   CC.border,
+  strong:    CC.muted,
 } as const;
 
 // ── Status Background Colors (light tints for badges/backgrounds) ────────────
 export const STATUS_BG = {
-  success:   "#DCFCE7",    // Light green background
-  warning:   "#FEF3C7",    // Light amber background
-  critical:  "#FEE2E2",    // Light red background
-  info:      "#DBEAFE",    // Light blue background
-  inactive:  "#F3F4F6",    // Light gray background
+  success:   CC_STATUS.successBg,
+  warning:   CC_STATUS.warningBg,
+  critical:  CC_STATUS.criticalBg,
+  info:      CC_STATUS.infoBg,
+  inactive:  CC.bg,
 } as const;
 
 // ── Spacing Scale (8px base) ──────────────────────────────────────────────────
