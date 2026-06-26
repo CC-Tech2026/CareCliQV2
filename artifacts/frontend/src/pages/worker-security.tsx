@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
@@ -44,9 +44,9 @@ import {
   type UserSession,
 } from "@/services/securityService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const BORDER = "var(--cc-border)";
 
 function formatWhen(value?: string | null) {
   if (!value) return "—";
@@ -251,7 +251,7 @@ export default function WorkerSecurity() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
       </div>
     );
   }
@@ -261,25 +261,25 @@ export default function WorkerSecurity() {
       {modal}
 
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="hidden" style={{ color: CORAL }}>
           Account
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-          Security settings
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          Security
         </h1>
-        <p className="mt-2 text-sm text-[#7A6A9E]">
+        <p className="mt-2 text-sm text-[#6B7280]">
           Manage two-factor authentication, trusted devices, active sessions, and sign-in history.
         </p>
       </div>
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <ShieldCheck className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Two-factor authentication</h2>
-            <p className="text-sm text-[#7A6A9E]">
+            <h2 className="text-lg font-bold text-[#111827]">Two-factor authentication</h2>
+            <p className="text-sm text-[#6B7280]">
               {mfaStatus?.enabled
                 ? "Authenticator app verification is active on your account."
                 : "Add an extra layer of protection with an authenticator app."}
@@ -293,7 +293,7 @@ export default function WorkerSecurity() {
             <p className="mt-1 text-sm text-amber-800">
               Each code can be used once if you lose access to your authenticator app.
             </p>
-            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#1E1640] sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
               {recoveryCodes.map((code) => (
                 <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">
                   {code}
@@ -310,13 +310,13 @@ export default function WorkerSecurity() {
         {!mfaStatus?.enabled ? (
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
-              <div className="rounded-2xl bg-[#F5F3FC] p-4">
-                <p className="text-sm font-semibold text-[#1E1640]">Set up your authenticator app</p>
-                <p className="mt-1 text-sm text-[#7A6A9E]">
+              <div className="rounded-2xl bg-[#F8F8FE] p-4">
+                <p className="text-sm font-semibold text-[#111827]">Set up your authenticator app</p>
+                <p className="mt-1 text-sm text-[#6B7280]">
                   Scan the QR code or add a manual entry in Google Authenticator, Authy, or 1Password.
                 </p>
                 <div className="mt-3 flex items-stretch gap-2">
-                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#5533CC]">
+                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">
                     {enrollSecret}
                   </code>
                   <button
@@ -324,10 +324,10 @@ export default function WorkerSecurity() {
                     onClick={() => setQrOpen(true)}
                     aria-label="Show QR code for authenticator app"
                     title="Show QR code"
-                    className="flex min-w-[52px] items-center justify-center rounded-xl border bg-white px-3 transition-colors hover:bg-[#EDEAFF]"
+                    className="flex min-w-[52px] items-center justify-center rounded-xl border bg-white px-3 transition-colors hover:bg-[#EEF2FF]"
                     style={{ borderColor: BORDER }}
                   >
-                    <QrCode className="h-5 w-5 text-[#5533CC]" />
+                    <QrCode className="h-5 w-5 text-[#3730A3]" />
                   </button>
                 </div>
               </div>
@@ -382,7 +382,7 @@ export default function WorkerSecurity() {
           )
         ) : (
           <form onSubmit={handleDisableMfa} className="max-w-md space-y-3">
-            <p className="text-sm text-[#7A6A9E]">
+            <p className="text-sm text-[#6B7280]">
               To turn off two-factor authentication, confirm your current password.
             </p>
             <div>
@@ -408,17 +408,17 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <MonitorSmartphone className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <MonitorSmartphone className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Trusted devices</h2>
-            <p className="text-sm text-[#7A6A9E]">Devices that can skip 2FA for 30 days.</p>
+            <h2 className="text-lg font-bold text-[#111827]">Trusted devices</h2>
+            <p className="text-sm text-[#6B7280]">Devices that can skip 2FA for 30 days.</p>
           </div>
         </div>
 
         {trustedDevices.length === 0 ? (
-          <p className="text-sm text-[#7A6A9E]">No trusted devices yet.</p>
+          <p className="text-sm text-[#6B7280]">No trusted devices yet.</p>
         ) : (
           <div className="space-y-3">
             {trustedDevices.map((device) => (
@@ -428,15 +428,15 @@ export default function WorkerSecurity() {
                 style={{ borderColor: BORDER }}
               >
                 <div>
-                  <p className="font-semibold text-[#1E1640]">
+                  <p className="font-semibold text-[#111827]">
                     {device.device_name}
                     {device.is_current ? (
-                      <span className="ml-2 rounded-full bg-[#EDEAFF] px-2 py-0.5 text-[11px] font-bold text-[#5533CC]">
+                      <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
                         This device
                       </span>
                     ) : null}
                   </p>
-                  <p className="text-sm text-[#7A6A9E]">
+                  <p className="text-sm text-[#6B7280]">
                     {device.os_name} · trusted until {formatWhen(device.trusted_until)}
                   </p>
                 </div>
@@ -472,12 +472,12 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <LockKeyhole className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Active sessions</h2>
-            <p className="text-sm text-[#7A6A9E]">Devices currently signed in to your account.</p>
+            <h2 className="text-lg font-bold text-[#111827]">Active sessions</h2>
+            <p className="text-sm text-[#6B7280]">Devices currently signed in to your account.</p>
           </div>
         </div>
 
@@ -489,15 +489,15 @@ export default function WorkerSecurity() {
               style={{ borderColor: BORDER }}
             >
               <div>
-                <p className="font-semibold text-[#1E1640]">
+                <p className="font-semibold text-[#111827]">
                   {session.device_name}
                   {session.is_current ? (
-                    <span className="ml-2 rounded-full bg-[#EDEAFF] px-2 py-0.5 text-[11px] font-bold text-[#5533CC]">
+                    <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
                       Current session
                     </span>
                   ) : null}
                 </p>
-                <p className="text-sm text-[#7A6A9E]">
+                <p className="text-sm text-[#6B7280]">
                   {session.city || "Unknown city"}, {session.country || "Unknown"} · active {formatWhen(session.last_active_at)}
                 </p>
               </div>
@@ -519,7 +519,7 @@ export default function WorkerSecurity() {
         </div>
 
         <form onSubmit={handleLogoutOthers} className="mt-6 max-w-md space-y-3 border-t pt-6" style={{ borderColor: BORDER }}>
-          <p className="text-sm font-semibold text-[#1E1640]">Sign out all other devices</p>
+          <p className="text-sm font-semibold text-[#111827]">Sign out all other devices</p>
           <div>
             <Label htmlFor="logout-others-password">Confirm your password</Label>
             <PasswordInput
@@ -542,34 +542,34 @@ export default function WorkerSecurity() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <AlertTriangle className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <AlertTriangle className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Recent sign-ins</h2>
-            <p className="text-sm text-[#7A6A9E]">Review recent account access activity.</p>
+            <h2 className="text-lg font-bold text-[#111827]">Recent sign-ins</h2>
+            <p className="text-sm text-[#6B7280]">Review recent account access activity.</p>
           </div>
         </div>
 
         {loginHistory.length === 0 ? (
-          <p className="text-sm text-[#7A6A9E]">No sign-in history yet.</p>
+          <p className="text-sm text-[#6B7280]">No sign-in history yet.</p>
         ) : (
           <div className="space-y-3">
             {loginHistory.map((entry) => (
               <div
                 key={entry.id}
                 className="rounded-2xl border px-4 py-3"
-                style={{ borderColor: entry.is_suspicious ? "rgba(240,48,96,0.35)" : BORDER }}
+                style={{ borderColor: entry.is_suspicious ? "rgba(190,24,93,0.35)" : BORDER }}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-semibold text-[#1E1640]">{entry.device_name}</p>
+                  <p className="font-semibold text-[#111827]">{entry.device_name}</p>
                   {entry.is_suspicious ? (
                     <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
                       Unusual sign-in
                     </span>
                   ) : null}
                 </div>
-                <p className="text-sm text-[#7A6A9E]">
+                <p className="text-sm text-[#6B7280]">
                   {entry.location_label} · {formatWhen(entry.created_at)}
                 </p>
               </div>
@@ -581,17 +581,17 @@ export default function WorkerSecurity() {
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-sm rounded-[1.5rem] border-0 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#1E1640]">Scan QR code</DialogTitle>
-            <DialogDescription className="text-[#7A6A9E]">
+            <DialogTitle className="text-[#111827]">Scan QR code</DialogTitle>
+            <DialogDescription className="text-[#6B7280]">
               Open your authenticator app and scan this code to add CareCliQ.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-center rounded-2xl bg-white p-5 ring-1 ring-[#E2DEF2]">
+          <div className="flex justify-center rounded-2xl bg-white p-5 ring-1 ring-[#E5E7EB]">
             {enrollOtpAuthUrl ? (
-              <QRCode value={enrollOtpAuthUrl} size={220} bgColor="#FFFFFF" fgColor="#1E1640" />
+              <QRCode value={enrollOtpAuthUrl} size={220} bgColor="#FFFFFF" fgColor="#111827" />
             ) : null}
           </div>
-          <p className="text-center text-xs text-[#7A6A9E]">
+          <p className="text-center text-xs text-[#6B7280]">
             Or enter the secret key manually if scanning is not available.
           </p>
         </DialogContent>
@@ -601,9 +601,9 @@ export default function WorkerSecurity() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#1E1640]">Rename device</h3>
+              <h3 className="text-lg font-bold text-[#111827]">Rename device</h3>
               <button type="button" onClick={() => setRenamingId(null)} aria-label="Close">
-                <X className="h-5 w-5 text-[#7A6A9E]" />
+                <X className="h-5 w-5 text-[#6B7280]" />
               </button>
             </div>
             <Input

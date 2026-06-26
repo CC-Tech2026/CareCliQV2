@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { secureAccount } from "@/services/securityService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#D8D0F0";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const BORDER = "#C7D2FE";
 
 function readSecureToken(): string {
   return new URLSearchParams(window.location.search).get("token") || "";
@@ -45,12 +45,12 @@ export default function AccountSecure() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F3FC]">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F8F8FE]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">Security</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Security</span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8">
@@ -60,23 +60,23 @@ export default function AccountSecure() {
               <h1 className="mt-4 text-2xl font-black" style={{ color: PLUM }}>
                 Account secured
               </h1>
-              <p className="mt-2 text-sm text-[#7A6A9E]">
+              <p className="mt-2 text-sm text-[#6B7280]">
                 All active sessions were signed out. Sign in again with your password and enable two-factor authentication if you have not already.
               </p>
               <button
                 type="button"
                 onClick={() => navigate("/login")}
                 className="mt-6 h-12 w-full rounded-2xl text-white text-[15px] font-black"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 Go to sign in
               </button>
             </div>
           ) : (
             <>
-              <div className="mb-6 flex items-center gap-3 rounded-2xl border bg-[#FFF7F9] p-4" style={{ borderColor: "rgba(240,48,96,0.25)" }}>
+              <div className="mb-6 flex items-center gap-3 rounded-2xl border bg-[#FFF7F9] p-4" style={{ borderColor: "rgba(190,24,93,0.25)" }}>
                 <ShieldAlert className="h-6 w-6 shrink-0" style={{ color: CORAL }} />
-                <p className="text-sm font-medium text-[#1E1640]">
+                <p className="text-sm font-medium text-[#111827]">
                   If you did not sign in recently, secure your account now to sign out all devices.
                 </p>
               </div>
@@ -84,7 +84,7 @@ export default function AccountSecure() {
               <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
                 Secure your account
               </h1>
-              <p className="mt-2 text-sm text-[#7A6A9E]">
+              <p className="mt-2 text-sm text-[#6B7280]">
                 This will immediately revoke all active sessions and remove trusted devices.
               </p>
 
@@ -93,7 +93,7 @@ export default function AccountSecure() {
                 onClick={() => void handleSecureAccount()}
                 disabled={busy || !token}
                 className="mt-8 h-14 w-full rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {busy ? (
                   <>
@@ -106,7 +106,7 @@ export default function AccountSecure() {
               </button>
 
               {!token ? (
-                <p className="mt-4 rounded-xl border px-4 py-3 text-[13px] font-medium" style={{ borderColor: "rgba(240,48,96,0.25)", background: "rgba(240,48,96,0.06)", color: CORAL }}>
+                <p className="mt-4 rounded-xl border px-4 py-3 text-[13px] font-medium" style={{ borderColor: "rgba(190,24,93,0.25)", background: "rgba(190,24,93,0.06)", color: CORAL }}>
                   This secure link is invalid or has expired.
                 </p>
               ) : null}
@@ -120,10 +120,10 @@ export default function AccountSecure() {
       </div>
 
       <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-20" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }} />
+        <div className="absolute inset-0 opacity-20" style={{ background: PLUM }} />
         <div className="relative z-10 max-w-lg rounded-[2rem] border border-white/30 bg-white/70 p-8 backdrop-blur-md">
-          <h2 className="text-xl font-black text-[#1E1640]">What happens next?</h2>
-          <ul className="mt-4 space-y-3 text-sm text-[#7A6A9E]">
+          <h2 className="text-xl font-black text-[#111827]">What happens next?</h2>
+          <ul className="mt-4 space-y-3 text-sm text-[#6B7280]">
             <li>All signed-in devices will be logged out immediately.</li>
             <li>Trusted devices will be removed and 2FA will be required again on new sign-ins.</li>
             <li>Sign in with your password and review your security settings.</li>

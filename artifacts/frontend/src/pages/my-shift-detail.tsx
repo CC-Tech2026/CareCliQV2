@@ -741,7 +741,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#F03060] hover:bg-[#d92854]"
+              className="bg-[#BE185D] hover:bg-[#d92854]"
               onClick={(event) => {
                 event.preventDefault();
                 void handleEndShift();
@@ -1012,7 +1012,7 @@ function ShiftWorkflow({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-black" style={{ color: TEXT }}>
+                <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>
                   {shift.participant_name}
                 </h1>
                 <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase", tagStyle)}>
@@ -1086,7 +1086,7 @@ function ShiftWorkflow({
         <Button
           type="button"
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
-          style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
+          style={{ background: "#F59E0B" }}
           disabled={busy !== null || (needsRiskAck && !ackChecked)}
           onClick={onClockIn}
         >
@@ -1261,7 +1261,7 @@ function ShiftWorkflow({
                   "rounded-full border px-2.5 py-1 text-[10px] font-black",
                   feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-[#E2DEF2] bg-white text-[#6D4BDA]",
+                    : "border-[#E5E7EB] bg-white text-[#6D4BDA]",
                 )}
               >
                 {feedSummary.goalsComplete}/{feedSummary.goalsTotal}

@@ -27,7 +27,7 @@ export function DashboardComplianceAlerts({ alerts }: { alerts: DashboardComplia
         )}
         {alerts.map((alert) => (
           <Link key={alert.id} href={alert.action_url || "/credentials"}>
-            <div className="rounded-xl border p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]" style={{ borderColor: "#EEEAFB" }}>
+            <div className="rounded-xl border p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]" style={{ borderColor: "#EEEAFB" }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-black" style={{ color: TEXT }}>

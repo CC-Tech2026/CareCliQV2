@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,12 +17,12 @@ import {
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const STATUS_RING: Record<LiveShift["live_status"], { ring: string; bg: string; label: string }> = {
   green:  { ring: "#22C55E", bg: "#F0FDF4", label: "On Track"  },
@@ -56,7 +56,7 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
 // ── Task progress bar ──────────────────────────────────────────────────────────
 function TaskBar({ total, completed }: { total: number; completed: number }) {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E2DEF2";
+  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E5E7EB";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
@@ -160,7 +160,7 @@ function MessageModal({
                 <div
                   className="max-w-[80%] px-3 py-2 rounded-2xl text-[13px]"
                   style={{
-                    background: mine ? PLUM : "#fff",
+                    background: mine ? PLUM : "var(--cc-bg)",
                     color: mine ? "#fff" : TEXT,
                     border: mine ? "none" : `1px solid ${BORDER}`,
                   }}
@@ -310,7 +310,7 @@ function LiveShiftCard({
     <div
       className="rounded-2xl p-4 flex flex-col gap-3 transition-shadow hover:shadow-md cursor-pointer"
       style={{
-        background: "#fff",
+        background: "var(--cc-bg)",
         border: `2px solid ${s.ring}`,
         boxShadow: `0 2px 12px ${s.ring}22`,
       }}
@@ -576,7 +576,7 @@ export default function CoordinatorLivePage() {
   const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 
   return (
-    <div className="min-h-screen p-6" style={{ background: "#F5F3FC" }}>
+    <div className="min-h-screen p-6" style={{ background: "var(--cc-soft)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -584,7 +584,7 @@ export default function CoordinatorLivePage() {
             <Radio size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-[22px] font-black leading-tight" style={{ color: TEXT }}>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
               Live Monitoring
             </h1>
             <p className="text-[12px]" style={{ color: MUTED }}>
@@ -625,7 +625,7 @@ export default function CoordinatorLivePage() {
               onClick={() => setFilter(k)}
               className="rounded-2xl p-4 text-left transition-all"
               style={{
-                background: filter === k ? meta.bg : "#fff",
+                background: filter === k ? meta.bg : "var(--cc-bg)",
                 border: `2px solid ${filter === k ? meta.ring : BORDER}`,
               }}
             >
@@ -648,7 +648,7 @@ export default function CoordinatorLivePage() {
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <div className="rounded-2xl p-12 text-center" style={{ background: "#fff", border: `1px solid ${BORDER}` }}>
+        <div className="rounded-2xl p-12 text-center" style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}` }}>
           <Activity size={36} className="mx-auto mb-3" style={{ color: BORDER }} />
           <p className="font-black text-[16px] mb-1" style={{ color: TEXT }}>
             {filter === "all" ? "No active shifts right now" : `No ${STATUS_RING[filter as "green" | "yellow" | "red"].label.toLowerCase()} shifts`}

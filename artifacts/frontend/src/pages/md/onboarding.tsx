@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+﻿import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, GraduationCap, Users, CheckCircle2, Clock, AlertTriangle,
@@ -26,12 +26,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
 const GREEN  = "#10B981";
 const AMBER  = "#F59E0B";
 
@@ -370,7 +370,7 @@ function StageSheet({
                     type="checkbox"
                     checked={!!reqs[key]}
                     onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#5533CC]"
+                    className="h-4 w-4 rounded accent-[#3730A3]"
                   />
                   <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
                 </label>
@@ -404,7 +404,7 @@ function StageSheet({
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#5533CC] shrink-0"
+                      className="h-4 w-4 rounded accent-[#3730A3] shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
@@ -679,7 +679,7 @@ function BuilderTab() {
               className="rounded-lg border px-4 py-2 text-[12px] font-black transition"
               style={{
                 borderColor: selectedProgram?.id === p.id ? PLUM : BORDER,
-                background: selectedProgram?.id === p.id ? PLUM : "white",
+                background: selectedProgram?.id === p.id ? PLUM : "var(--cc-bg)",
                 color: selectedProgram?.id === p.id ? "#fff" : TEXT,
               }}
             >
@@ -1183,7 +1183,7 @@ export default function MDOnboardingPage() {
               onClick={() => setActiveTab(tab.id)}
               className="flex-1 rounded-lg py-2 text-[12px] font-black transition"
               style={{
-                background: activeTab === tab.id ? "#fff" : "transparent",
+                background: activeTab === tab.id ? "var(--cc-bg)" : "transparent",
                 color: activeTab === tab.id ? PLUM : MUTED,
                 boxShadow: activeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}

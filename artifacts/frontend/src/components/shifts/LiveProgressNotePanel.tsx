@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+﻿import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Camera, Languages, Mic, MicOff, Paperclip, StopCircle, X } from "lucide-react";
 import {
   AlertDialog,
@@ -415,8 +415,8 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E2DEF2" : "#A7F3D0",
-                background: ended ? "#F5F3FC" : "#ECFDF5",
+                borderColor: ended ? "#E5E7EB" : "#A7F3D0",
+                background: ended ? "#F8F8FE" : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
@@ -433,7 +433,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               type="button"
               onClick={handleEndSession}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+              style={{ background: PLUM }}
             >
               <StopCircle size={15} />
               End Session
@@ -443,7 +443,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+              className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
               style={{ color: MUTED }}
               aria-label="Close session composer"
             >
@@ -561,7 +561,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                 style={{ color: PLUM }}
                 aria-label="Attach file"
               >
@@ -570,7 +570,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                 style={{ color: PLUM }}
                 aria-label="Capture photo"
               >

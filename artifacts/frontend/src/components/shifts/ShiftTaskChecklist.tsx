@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -268,7 +268,7 @@ export function ShiftTaskChecklist({
         {goalGroups.map((group) => (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-[#E2DEF2] bg-white"
+            className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
             <div className="flex w-full items-center gap-2 px-3 py-2.5 text-left" style={{ background: group.accent.soft }}>
@@ -288,13 +288,13 @@ export function ShiftTaskChecklist({
               </div>
               <span
                 className="rounded-full border px-2 py-0.5 text-[10px] font-black"
-                style={{ borderColor: group.accent.border, background: "white", color: group.accent.main }}
+                style={{ borderColor: group.accent.border, background: "var(--cc-bg)", color: group.accent.main }}
               >
                 {group.tasks.filter((t) => t.completed).length}/{group.tasks.length}
               </span>
             </div>
 
-            <div className="space-y-2 border-t border-[#E2DEF2] bg-[#FCFBFF] p-2">
+            <div className="space-y-2 border-t border-[#E5E7EB] bg-[#FCFBFF] p-2">
               {group.tasks.map((task) => (
                 <PreviewTaskRow key={task.task_id} task={task} />
               ))}
@@ -328,7 +328,7 @@ export function ShiftTaskChecklist({
         return (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-[#E2DEF2] bg-white"
+            className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
             <button
@@ -353,14 +353,14 @@ export function ShiftTaskChecklist({
               </div>
               <span
                 className="rounded-full border px-2 py-0.5 text-[10px] font-black"
-                style={{ borderColor: group.accent.border, background: "white", color: group.accent.main }}
+                style={{ borderColor: group.accent.border, background: "var(--cc-bg)", color: group.accent.main }}
               >
                 {done}/{group.tasks.length}
               </span>
               <ChevronDown size={16} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
             </button>
             {open && (
-              <div className="space-y-2 border-t border-[#E2DEF2] bg-[#FCFBFF] p-2">
+              <div className="space-y-2 border-t border-[#E5E7EB] bg-[#FCFBFF] p-2">
                 <SessionTaskGroup
                   tasks={group.tasks}
                   expandedNote={expandedNote}
@@ -386,7 +386,7 @@ export function ShiftTaskChecklist({
 function PreviewTaskRow({ task }: { task: ShiftTask }) {
   const required = isMandatory(task);
   return (
-    <div className="rounded-xl border border-[#E2DEF2] bg-white px-3 py-2.5">
+    <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-[#D8D0EE] bg-white" />
         <div className="min-w-0 flex-1">
@@ -443,7 +443,7 @@ function QuickNoteField({
       <button
         type="button"
         disabled={disabled}
-        className="mt-2 w-full rounded-lg border border-[#E2DEF2] bg-[#F8F6FE] px-2.5 py-1.5 text-left text-[11px] font-medium italic"
+        className="mt-2 w-full rounded-lg border border-[#E5E7EB] bg-[#F8F6FE] px-2.5 py-1.5 text-left text-[11px] font-medium italic"
         style={{ color: MUTED }}
         onClick={() => {
           setDraft(task.context_note ?? "");
@@ -463,7 +463,7 @@ function QuickNoteField({
         rows={2}
         value={draft}
         placeholder="What was done? Any observations?"
-        className="w-full resize-none rounded-lg border border-[#E2DEF2] bg-white px-2.5 py-1.5 text-xs"
+        className="w-full resize-none rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs"
         onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
         onBlur={() => {
           onSave(draft.trim());
@@ -622,7 +622,7 @@ function SessionTaskGroup({
                   <p className="mt-0.5 text-[11px] font-semibold" style={{ color: stateStyle.text }}>
                     {required ? "Mandatory · " : "Optional · "}
                     {stateStyle.label}
-                    {task.completed && withoutEvidence && " · ⚠️ No evidence"}
+                    {task.completed && withoutEvidence && " · No evidence"}
                     {task.completed && withEvidence && " · With evidence"}
                     {!task.completed && needsEvidence && " · Add photo, voice, or note (20+ chars)"}
                     {!task.completed && readyToComplete && " · Ready to complete"}
@@ -675,7 +675,7 @@ function SessionTaskGroup({
               />
             )}
             {panelOpen && !sessionId && (
-              <div className="border-t border-[#E2DEF2] bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
+              <div className="border-t border-[#E5E7EB] bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
                 Start a session to capture photo, voice, and written evidence for this task.
               </div>
             )}

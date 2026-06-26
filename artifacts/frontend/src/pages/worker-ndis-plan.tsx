@@ -1,12 +1,12 @@
-import { useOrgQuery } from "@/hooks/useOrgQuery";
+﻿import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { ClipboardList } from "lucide-react";
 import { getMyClients, getMyClientNdisPlan } from "@/services/workerService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 function ClientPlan({ id }: { id: string }) {
   const { data } = useOrgQuery(["worker", "plan", id], { queryFn: () => getMyClientNdisPlan(id) });
@@ -28,8 +28,8 @@ export default function WorkerNdisPlan() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>NDIS Plan</h1>
+        <p className="hidden" style={{ color: CORAL }}>Support Worker</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>NDIS Plan</h1>
       </div>
       <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-4 flex items-center gap-2">

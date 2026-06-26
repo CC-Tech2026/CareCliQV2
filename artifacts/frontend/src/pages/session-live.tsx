@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
@@ -217,8 +217,8 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-[#F5F3FC] text-[#7A6A9E] border-[#E2DEF2]", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-[#FFE8EE] text-[#F03060] border-[#F8C0CE]", icon: Activity },
+  not_started: { label: "Not Started", cls: "bg-[#F8F8FE] text-[#6B7280] border-[#E5E7EB]", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-[#FCE7F3] text-[#BE185D] border-[#F8C0CE]", icon: Activity },
   achieved: { label: "Achieved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
   needs_review: { label: "Needs Review", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: AlertCircle },
 };
@@ -328,7 +328,7 @@ function MessageBubble({
   if (msg.type === "system") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#7A6A9E] shadow-sm">{msg.content}</span>
+        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#6B7280] shadow-sm">{msg.content}</span>
       </div>
     );
   }
@@ -338,10 +338,10 @@ function MessageBubble({
     const AIcon = def?.icon ?? Activity;
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-white border border-[#E2DEF2] rounded-full px-3 py-1 shadow-sm">
-          <AIcon className="h-2.5 w-2.5 text-[#5533CC] shrink-0" />
-          <span className="text-[10px] text-[#1E1640] font-semibold">{msg.activityType || msg.content}</span>
-          <span className="text-[9px] text-[#7A6A9E]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-full px-3 py-1 shadow-sm">
+          <AIcon className="h-2.5 w-2.5 text-[#3730A3] shrink-0" />
+          <span className="text-[10px] text-[#111827] font-semibold">{msg.activityType || msg.content}</span>
+          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -350,10 +350,10 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#FFE8EE] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
-          <Target className="h-2.5 w-2.5 text-[#F03060] shrink-0" />
-          <span className="text-[10px] text-[#1E1640] font-semibold">{msg.content}</span>
-          <span className="text-[9px] text-[#7A6A9E]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-[#FCE7F3] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
+          <Target className="h-2.5 w-2.5 text-[#BE185D] shrink-0" />
+          <span className="text-[10px] text-[#111827] font-semibold">{msg.content}</span>
+          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -363,7 +363,7 @@ function MessageBubble({
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-white border border-[#E2DEF2] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
@@ -377,12 +377,12 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#F5F3FC] rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#5533CC]" />
+              <div className="h-9 w-9 bg-[#F8F8FE] rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#3730A3]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[#1E1640] text-sm font-semibold leading-tight truncate">{msg.content}</p>
-                <p className="text-[#7A6A9E] text-[10px]">Document attached</p>
+                <p className="text-[#111827] text-sm font-semibold leading-tight truncate">{msg.content}</p>
+                <p className="text-[#6B7280] text-[10px]">Document attached</p>
               </div>
             </div>
           )}
@@ -390,17 +390,17 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#5533CC]">
+                  <div className="flex items-center gap-1 text-[#3730A3]">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
                   {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
-                    <span className="text-[9px] bg-[#F5F3FC] text-[#7A6A9E] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] bg-[#F8F8FE] text-[#6B7280] px-1.5 py-0.5 rounded-full">
                       {msg.detectedLanguage.toUpperCase()}
                     </span>
                   )}
                   {msg.isTranslating && (
-                    <div className="flex items-center gap-1 text-[#7A6A9E]">
+                    <div className="flex items-center gap-1 text-[#6B7280]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
                       <span className="text-[9px]">Translating…</span>
                     </div>
@@ -408,27 +408,27 @@ function MessageBubble({
                 </div>
               )}
               {(msg.type === "text" || msg.type === "voice") && (
-                <p className="text-[#1E1640] text-sm leading-relaxed">{msg.content}</p>
+                <p className="text-[#111827] text-sm leading-relaxed">{msg.content}</p>
               )}
               {msg.type === "voice" && (
                 <div className="mt-2 pt-2 border-t border-[#E8D5E8]">
                   <div className="mb-1">
                     {msg.isTranslating ? (
-                      <span className="text-[9px] text-[#7A6A9E]">Translating...</span>
+                      <span className="text-[9px] text-[#6B7280]">Translating...</span>
                     ) : msg.translationStatus === "translated" ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#5533CC]">Translated to English</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#3730A3]">Translated to English</span>
                     ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
                       <span className="text-[9px] font-semibold text-red-600">Translation failed - retry</span>
                     ) : msg.translationStatus === "not_required" ? (
-                      <span className="text-[9px] text-[#7A6A9E]">English legal output</span>
+                      <span className="text-[9px] text-[#6B7280]">English legal output</span>
                     ) : null}
                   </div>
                   {msg.translated ? (
                     <>
-                      <p className="text-[#4A3D5A] text-sm leading-relaxed">{msg.translated}</p>
+                      <p className="text-[#374151] text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-[#7A6A9E] text-xs italic">English translation unavailable</p>
+                    <p className="text-[#6B7280] text-xs italic">English translation unavailable</p>
                   ) : null}
                 </div>
               )}
@@ -1479,16 +1479,16 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E2DEF2]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5533CC]" />
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E5E7EB]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3730A3]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E2DEF2]">
-        <p className="text-[#7A6A9E]">Session not found</p>
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E5E7EB]">
+        <p className="text-[#6B7280]">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
         </Button>
@@ -1531,7 +1531,7 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E2DEF2] bg-white shadow-[0_14px_40px_rgba(84,34,105,0.08)]">
+    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E5E7EB] bg-white shadow-[0_14px_40px_rgba(55,48,163,0.08)]">
 
       {/* ── Top control bar ── */}
       <div
@@ -1540,16 +1540,16 @@ export default function SessionLive() {
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1.5 text-[#7A6A9E] hover:text-[#5533CC] text-sm transition-colors font-semibold"
+            className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#3730A3] text-sm transition-colors font-semibold"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
           <div className="min-w-0 flex-1 px-1">
-            <h1 className="text-[#1E1640] font-black text-base tracking-tight leading-tight truncate">
+            <h1 className="text-[#111827] font-black text-base tracking-tight leading-tight truncate">
               {participantName}
             </h1>
-            <p className="text-[#7A6A9E] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
+            <p className="text-[#6B7280] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1562,7 +1562,7 @@ export default function SessionLive() {
                 languageManuallySelectedRef.current = true;
                 setSelectedDocumentationLanguage(event.target.value);
               }}
-              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E2DEF2] bg-[#F5F3FC] px-3 text-[12px] font-bold text-[#1E1640] outline-none hover:bg-white disabled:opacity-50"
+              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E5E7EB] bg-[#F8F8FE] px-3 text-[12px] font-bold text-[#111827] outline-none hover:bg-white disabled:opacity-50"
             >
               {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
                 <option key={language.code} value={language.code}>
@@ -1572,8 +1572,8 @@ export default function SessionLive() {
             </select>
 
             <div className="hidden sm:flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5 text-[#7A6A9E] shrink-0" />
-              <div className="flex rounded-full border border-[#E2DEF2] bg-[#F5F3FC] p-0.5 overflow-hidden">
+              <Globe className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
+              <div className="flex rounded-full border border-[#E5E7EB] bg-[#F8F8FE] p-0.5 overflow-hidden">
                 {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                   <button
                     key={v}
@@ -1581,8 +1581,8 @@ export default function SessionLive() {
                     className={cn(
                       "px-2.5 py-1 text-[10px] font-bold rounded-full transition-colors",
                       translationView === v
-                        ? "bg-white text-[#5533CC] shadow-sm"
-                        : "text-[#7A6A9E] hover:text-[#5533CC]",
+                        ? "bg-white text-[#3730A3] shadow-sm"
+                        : "text-[#6B7280] hover:text-[#3730A3]",
                     )}
                   >
                     {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
@@ -1597,7 +1597,7 @@ export default function SessionLive() {
               disabled={!isActive || isUploadingAttachment}
               aria-label="Add photo evidence"
               title="Add photo evidence"
-              className="h-9 w-9 rounded-full border border-[#E2DEF2] bg-white text-[#5533CC] hover:bg-[#F5F3FC] disabled:opacity-40 flex items-center justify-center transition-colors"
+              className="h-9 w-9 rounded-full border border-[#E5E7EB] bg-white text-[#3730A3] hover:bg-[#F8F8FE] disabled:opacity-40 flex items-center justify-center transition-colors"
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
@@ -1605,7 +1605,7 @@ export default function SessionLive() {
             {elapsed > 0 && (
               <button
                 onClick={() => setShowRestartConfirm(true)}
-                className="hidden sm:inline-flex text-[#7A6A9E] hover:text-[#5533CC] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F5F3FC] transition-colors"
+                className="hidden sm:inline-flex text-[#6B7280] hover:text-[#3730A3] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F8F8FE] transition-colors"
               >
                 Restart
               </button>
@@ -1623,7 +1623,7 @@ export default function SessionLive() {
               <Button
                 onClick={handleStop}
                 className="gap-1 text-white font-bold px-3 py-2 h-9 text-xs rounded-full"
-                style={{ background: "linear-gradient(135deg, #F03060 0%, #5533CC 100%)" }}
+                style={{ background: "var(--cc-plum)" }}
               >
                 <Square className="h-3 w-3 fill-white" />
                 End
@@ -1635,7 +1635,7 @@ export default function SessionLive() {
         {/* Timer bar */}
         <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-[#F0ECFA] bg-[#F8F6FF]">
           <div className="flex items-center gap-2.5">
-            <span className="font-mono text-lg font-black text-[#1E1640] tracking-tight">
+            <span className="font-mono text-lg font-black text-[#111827] tracking-tight">
               {formatDuration(elapsed)}
             </span>
             <span
@@ -1643,7 +1643,7 @@ export default function SessionLive() {
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border",
                 isActive
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-white text-[#7A6A9E] border-[#E2DEF2]",
+                  : "bg-white text-[#6B7280] border-[#E5E7EB]",
               )}
             >
               <span
@@ -1660,7 +1660,7 @@ export default function SessionLive() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-medium text-[#7A6A9E]">
+          <div className="flex items-center gap-3 text-[10px] font-medium text-[#6B7280]">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {session.duration_minutes}m planned
@@ -1676,7 +1676,7 @@ export default function SessionLive() {
       {goals.length > 0 ? (
         <div className="shrink-0 border-b border-[#E8D5E8] bg-white px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#7A6A9E] shrink-0">
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0">
               <Target className="h-3 w-3" /> Goals:
             </span>
             {goals.map((goal) => (
@@ -1693,7 +1693,7 @@ export default function SessionLive() {
             ))}
             <button
               onClick={() => setBodyMapOpen((o) => !o)}
-              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#7A6A9E] hover:text-[#5533CC] transition-colors"
+              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#6B7280] hover:text-[#3730A3] transition-colors"
             >
               <HeartPulse className="h-3 w-3" />
               {bodyMapOpen ? "Hide" : "Body Map"}
@@ -1758,12 +1758,12 @@ export default function SessionLive() {
       {bodyMapOpen && (
         <div className="shrink-0 bg-[#F8F6FF] border-b border-[#E8D5E8] px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-bold text-[#7A6A9E] uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
             </h3>
             <button
               onClick={() => setBodyMapOpen(false)}
-              className="text-[#7A6A9E] hover:text-[#5533CC]"
+              className="text-[#6B7280] hover:text-[#3730A3]"
             >
               <X className="h-4 w-4" />
             </button>
@@ -1780,9 +1780,9 @@ export default function SessionLive() {
       <div className="flex-1 overflow-y-auto bg-[#F6F4FB] px-3 py-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
-            <MessageSquare className="h-10 w-10 text-[#D8D0F0] mb-3" />
-            <p className="text-[#1E1640] text-sm font-bold">Session started</p>
-            <p className="text-[#7A6A9E] text-xs mt-1">Document notes, voice, and evidence below.</p>
+            <MessageSquare className="h-10 w-10 text-[#C7D2FE] mb-3" />
+            <p className="text-[#111827] text-sm font-bold">Session started</p>
+            <p className="text-[#6B7280] text-xs mt-1">Document notes, voice, and evidence below.</p>
           </div>
         )}
 
@@ -1796,11 +1796,11 @@ export default function SessionLive() {
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
             <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5 text-[#F03060]">
+              <div className="flex items-center gap-2 mb-1.5 text-[#BE185D]">
                 <Radio className="h-3 w-3 animate-pulse" />
                 <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
               </div>
-              <p className="text-[#7A6A9E] text-sm italic">
+              <p className="text-[#6B7280] text-sm italic">
                 {recordingText || "Speak clearly…"}
               </p>
             </div>
@@ -1830,9 +1830,9 @@ export default function SessionLive() {
       )}
 
       {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E2DEF2] shadow-[0_-8px_24px_rgba(84,34,105,0.06)]">
+      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E5E7EB] shadow-[0_-8px_24px_rgba(55,48,163,0.06)]">
         <div className="client-translation-composer flex items-center gap-2 sm:gap-3">
-          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#D8D0F0] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
+          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#C7D2FE] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -1844,14 +1844,14 @@ export default function SessionLive() {
               }}
               placeholder="Message"
               disabled={!isActive}
-              className="min-w-0 flex-1 bg-transparent text-[#1E1640] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 bg-transparent text-[#111827] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
             />
             <button
               type="button"
               aria-label="Attach file"
               onClick={() => fileAttachRef.current?.click()}
               disabled={!isActive || isUploadingAttachment}
-              className="h-10 w-10 rounded-full flex items-center justify-center text-[#5533CC] hover:bg-[#F5F3FC] transition-colors disabled:opacity-40 shrink-0"
+              className="h-10 w-10 rounded-full flex items-center justify-center text-[#3730A3] hover:bg-[#F8F8FE] transition-colors disabled:opacity-40 shrink-0"
             >
               {isUploadingAttachment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
             </button>
@@ -1863,7 +1863,7 @@ export default function SessionLive() {
             disabled={!isActive}
             title={isRecording ? "Stop recording" : "Start voice note"}
             className={cn(
-              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(85,51,204,0.24)] ring-4 ring-white border border-[#E2DEF2] transition-all shrink-0 disabled:opacity-45",
+              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(55,48,163,0.24)] ring-4 ring-white border border-[#E5E7EB] transition-all shrink-0 disabled:opacity-45",
               isRecording
                 ? "bg-[#FF2D6F] animate-pulse"
                 : "bg-gradient-to-br from-[#6D35D8] to-[#FF2D6F] hover:scale-[1.02]",
@@ -1898,14 +1898,14 @@ export default function SessionLive() {
           onClick={() => setShowActivitySheet(false)}
         >
           <div
-            className="w-full bg-white border-t border-[#E2DEF2] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full bg-white border-t border-[#E5E7EB] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[#1E1640] font-bold text-sm">Log Activity</h3>
+              <h3 className="text-[#111827] font-bold text-sm">Log Activity</h3>
               <button
                 onClick={() => setShowActivitySheet(false)}
-                className="text-[#7A6A9E] hover:text-[#5533CC]"
+                className="text-[#6B7280] hover:text-[#3730A3]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1916,8 +1916,8 @@ export default function SessionLive() {
                 return (
                   <div key={cat.label}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <CatIcon className="h-3 w-3 text-[#7A6A9E]" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#7A6A9E]">
+                      <CatIcon className="h-3 w-3 text-[#6B7280]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#6B7280]">
                         {cat.label}
                       </span>
                     </div>
@@ -1957,7 +1957,7 @@ export default function SessionLive() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl p-0 bg-white" style={{ border: "1px solid rgba(232,213,232,0.5)" }}>
           <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
             <DialogTitle className="font-bold text-[18px] flex items-center gap-2" style={{ color: "#1C1626" }}>
-              <Shield className="h-5 w-5" style={{ color: "#542269" }} />
+              <Shield className="h-5 w-5" style={{ color: "#3730A3" }} />
               Review &amp; Approve Session Notes
             </DialogTitle>
             <DialogDescription className="text-[12px] mt-1" style={{ color: "#7A6A8A" }}>
@@ -1989,7 +1989,7 @@ export default function SessionLive() {
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
                 className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
-                style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+                style={{ background: "var(--cc-plum)" }}
               >
                 <FileText className="h-4 w-4" />
                 View Session Record
@@ -1997,19 +1997,19 @@ export default function SessionLive() {
             </div>
           ) : summaryLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#542269" }} />
+              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#3730A3" }} />
             </div>
           ) : summary ? (
             <div className="p-6 space-y-5">
               {/* Stat row */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                <div className="rounded-xl p-3 text-center border" style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)" }}>
                   <p className="text-xl font-bold font-mono" style={{ color: "#1C1626" }}>{summary.duration}</p>
                   <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Duration
                   </p>
                 </div>
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                <div className="rounded-xl p-3 text-center border" style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)" }}>
                   <p className="text-xl font-bold" style={{ color: "#1C1626" }}>{summary.activities.length}</p>
                   <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Activities
@@ -2105,7 +2105,7 @@ export default function SessionLive() {
                   ] as const
                 ).map(({ key, label, placeholder, required }) => (
                   <div key={key}>
-                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
+                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "var(--cc-text)" }}>
                       {label}
                       {required && <span className="text-red-400 ml-0.5">*</span>}
                     </label>
@@ -2117,7 +2117,7 @@ export default function SessionLive() {
                       rows={4}
                       placeholder={placeholder}
                       className="text-[12px] p-3 rounded-xl leading-relaxed min-h-[120px]"
-                      style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
+                      style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                     />
                   </div>
                 ))}
@@ -2205,7 +2205,7 @@ export default function SessionLive() {
                   rows={6}
                   placeholder="Combined clinical record…"
                   className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
-                  style={{ background: "white", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
+                  style={{ background: "var(--cc-bg)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                 />
               </div>
 
@@ -2220,7 +2220,7 @@ export default function SessionLive() {
                       <span
                         key={i}
                         className="text-[10px] px-2.5 py-1 rounded-full font-medium"
-                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}
+                        style={{ background: "rgba(55,48,163,0.07)", color: "#3730A3" }}
                       >
                         {a}
                       </span>
@@ -2237,7 +2237,7 @@ export default function SessionLive() {
                   </label>
                   <div className="space-y-1">
                     {summary.goalProgress.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "#4A3D5A" }}>
+                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-text)" }}>
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         {g}
                       </div>
@@ -2248,12 +2248,12 @@ export default function SessionLive() {
 
               {/* Evidence */}
               <div className="flex gap-3">
-                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "var(--cc-soft)", border: "1px solid rgba(232,213,232,0.5)", color: "var(--cc-text)" }}>
                   <ImageIcon className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                   {summary.evidenceSummary}
                 </div>
                 {summary.voiceNoteCount > 0 && (
-                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "var(--cc-soft)", border: "1px solid rgba(232,213,232,0.5)", color: "var(--cc-text)" }}>
                     <Mic className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                     {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""}{" "}
                     captured
@@ -2329,7 +2329,7 @@ export default function SessionLive() {
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
                   className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
-                  style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+                  style={{ background: "var(--cc-plum)" }}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

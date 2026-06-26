@@ -919,6 +919,7 @@ class AssignShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    selected_task_ids: Optional[list[str]] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1345,6 +1346,21 @@ async def assign_shift(
             )
         
         shift = result.data[0]
+        
+        # Save selected tasks for this shift
+        if body.selected_task_ids:
+            try:
+                shift_task_records = [
+                    {
+                        "shift_id": shift_id,
+                        "task_id": task_id,
+                        "organization_id": org_id,
+                    }
+                    for task_id in body.selected_task_ids
+                ]
+                supabase.table("shift_tasks").insert(shift_task_records).execute()
+            except Exception as task_exc:
+                logger.warning(f"Failed to save shift tasks: {task_exc}")
         
         # Send notification to worker about new shift
         try:
@@ -3005,3 +3021,291 @@ async def delete_task_template(
         supabase.table("participant_task_templates").update({"is_active": False}).eq("id", template_id).eq("organization_id", org_id).execute()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Task template delete failed: {exc}")
+
+
+# ── Participant Task Instances (CARECLIQV2-303/304/305) ─────────────────────
+
+class ParticipantTaskPayload(BaseModel):
+    goal_id: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    frequency: Optional[str] = None
+    status: str = "pending"
+    is_mandatory: bool = False
+
+
+@router.get("/participants/{participant_id}/goals-and-tasks-validation")
+async def check_goals_and_tasks(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Check if participant has active goals with associated tasks.
+    Used by shift creation form to validate prerequisites.
+    Returns: { has_valid: bool, active_goals: int, tasks_count: int, message?: str }
+    """
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        # Get active goals for participant
+        goals_resp = (
+            supabase.table("ndis_goals")
+            .select("id")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .eq("status", "active")
+            .execute()
+        )
+        goals = goals_resp.data or []
+        active_goals = len(goals)
+        
+        # Get task count for participant
+        tasks_resp = (
+            supabase.table("participant_tasks")
+            .select("id", count="exact")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        tasks_count = tasks_resp.count or 0
+        
+        has_valid = active_goals > 0 and tasks_count > 0
+        message = None
+        if not has_valid:
+            if active_goals == 0:
+                message = "No active NDIS goals found. Please create goals first."
+            elif tasks_count == 0:
+                message = "No tasks found for active goals. Please add tasks first."
+        
+        return {
+            "has_valid": has_valid,
+            "active_goals": active_goals,
+            "tasks_count": tasks_count,
+            "message": message,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Validation check failed: {exc}")
+
+
+@router.get("/participants/{participant_id}/tasks")
+async def list_participant_tasks(
+    participant_id: str,
+    status: Optional[str] = Query(default=None),
+    goal_id: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    """List tasks for a participant, optionally filtered by status or goal."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    try:
+        q = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+        )
+        if status:
+            q = q.eq("status", status)
+        if goal_id:
+            q = q.eq("goal_id", goal_id)
+        
+        resp = q.order("created_at", desc=True).execute()
+        tasks = resp.data or []
+        
+        # Format response to include goal_name
+        formatted = []
+        for task in tasks:
+            goal_info = task.get("ndis_goals") or {}
+            formatted.append({
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "completed_at": task.get("completed_at"),
+                "created_at": task.get("created_at"),
+            })
+        
+        return formatted
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task list failed: {exc}")
+
+
+@router.post("/participants/{participant_id}/tasks", status_code=201)
+async def create_participant_task(
+    participant_id: str,
+    body: ParticipantTaskPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new task instance for a participant under a goal."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Verify goal exists if provided
+    if body.goal_id:
+        goal_resp = (
+            supabase.table("ndis_goals")
+            .select("id")
+            .eq("id", body.goal_id)
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .single()
+            .execute()
+        )
+        if not goal_resp.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Goal not found or does not belong to this participant"
+            )
+    
+    try:
+        payload = {
+            "participant_id": participant_id,
+            "goal_id": body.goal_id,
+            "organization_id": org_id,
+            "created_by": get_user_id(current_user),
+            "name": body.name,
+            "description": body.description,
+            "frequency": body.frequency,
+            "status": body.status,
+            "is_mandatory": body.is_mandatory,
+            "created_at": now,
+            "updated_at": now,
+        }
+        
+        resp = supabase.table("participant_tasks").insert(payload).execute()
+        task = (resp.data or [payload])[0]
+        
+        # Fetch with goal info
+        full_resp = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("id", task.get("id"))
+            .single()
+            .execute()
+        )
+        
+        if full_resp.data:
+            task = full_resp.data
+            goal_info = task.get("ndis_goals") or {}
+            return {
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "created_at": task.get("created_at"),
+            }
+        
+        return task
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task creation failed: {exc}")
+
+
+@router.put("/tasks/{task_id}")
+async def update_participant_task(
+    task_id: str,
+    body: ParticipantTaskPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update a participant task."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Verify task exists and belongs to org
+    task_resp = (
+        supabase.table("participant_tasks")
+        .select("id, participant_id")
+        .eq("id", task_id)
+        .eq("organization_id", org_id)
+        .single()
+        .execute()
+    )
+    if not task_resp.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    try:
+        update_data = {
+            "name": body.name,
+            "description": body.description,
+            "frequency": body.frequency,
+            "status": body.status,
+            "is_mandatory": body.is_mandatory,
+            "updated_at": now,
+        }
+        
+        # Handle completed_at timestamp when marking complete
+        if body.status == "completed" and update_data.get("completed_at") is None:
+            update_data["completed_at"] = now
+        
+        resp = (
+            supabase.table("participant_tasks")
+            .update(update_data)
+            .eq("id", task_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        
+        task = (resp.data or [update_data])[0]
+        
+        # Fetch with goal info
+        full_resp = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("id", task_id)
+            .single()
+            .execute()
+        )
+        
+        if full_resp.data:
+            task = full_resp.data
+            goal_info = task.get("ndis_goals") or {}
+            return {
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "updated_at": task.get("updated_at"),
+            }
+        
+        return task
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task update failed: {exc}")
+
+
+@router.delete("/tasks/{task_id}", status_code=204)
+async def delete_participant_task(
+    task_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a participant task."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    
+    try:
+        # First delete any shift_tasks associations
+        supabase.table("shift_tasks").delete().eq("task_id", task_id).execute()
+        
+        # Then delete the task itself
+        supabase.table("participant_tasks").delete().eq("id", task_id).eq("organization_id", org_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task deletion failed: {exc}")

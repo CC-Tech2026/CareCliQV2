@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 import { Check, Loader2, X, Upload, AlertCircle } from "lucide-react";
 import { loadNdisPriceSchedule } from "@/services/ndisService";
 import { useToast } from "@/hooks/use-toast";
@@ -6,12 +6,12 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 
 // Design tokens aligned with billing.tsx
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 interface ScheduleLoaderProps {
   onClose: () => void;
@@ -92,7 +92,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-full max-w-2xl mx-4 rounded-lg bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: "white" }}>
+        <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <h2 className="text-lg font-black" style={{ color: TEXT }}>Load NDIS Price Schedule</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <X className="w-5 h-5" style={{ color: MUTED }} />

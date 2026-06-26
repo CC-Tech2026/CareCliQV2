@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Cake, Award, Sparkles, Heart, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getStaffCommunity, type CommunityItem } from "@/services/hubService";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const SOFT   = "#F5F3FC";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const SOFT   = "var(--cc-soft)";
 
 type CommunityType = "birthday" | "anniversary" | "new_starter" | "shoutout";
 
@@ -16,7 +16,7 @@ const TYPE_CONFIG: Record<
   CommunityType,
   { icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; label: string; color: string; bg: string; chip: string }
 > = {
-  birthday:    { icon: Cake,     label: "Birthday",    color: CORAL,     bg: "#FFE8EE", chip: "bg-pink-50 text-pink-700" },
+  birthday:    { icon: Cake,     label: "Birthday",    color: CORAL,     bg: "#FCE7F3", chip: "bg-pink-50 text-pink-700" },
   anniversary: { icon: Award,    label: "Anniversary", color: PLUM,      bg: "#EEEAFB", chip: "bg-purple-50 text-purple-700" },
   new_starter: { icon: Sparkles, label: "New Starter", color: "#0EA5E9", bg: "#E0F2FE", chip: "bg-sky-50 text-sky-700" },
   shoutout:    { icon: Heart,    label: "Shout-out",   color: "#10B981", bg: "#D1FAE5", chip: "bg-emerald-50 text-emerald-700" },
@@ -24,7 +24,7 @@ const TYPE_CONFIG: Record<
 
 const AVATAR_COLORS = [
   { bg: "#EEEAFB", color: PLUM },
-  { bg: "#FFE8EE", color: CORAL },
+  { bg: "#FCE7F3", color: CORAL },
   { bg: "#D1FAE5", color: "#059669" },
   { bg: "#E0F2FE", color: "#0284C7" },
   { bg: "#FEF3C7", color: "#D97706" },

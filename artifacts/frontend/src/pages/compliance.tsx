@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetComplianceOverview, useGetComplianceReport } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -21,13 +21,13 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM  = "#542269";
+const PLUM  = "var(--cc-plum)";
 const CORAL = "#F1738A";
-const T1    = "#1C1626";
-const T2    = "#4A3D5A";
-const T3    = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const T1    = "var(--cc-text)";
+const T2    = "var(--cc-text)";
+const T3    = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 // ── Extended types ────────────────────────────────────────────────────────────
 interface ExtendedComplianceOverview {
@@ -66,7 +66,7 @@ function StatusBadge({ status }: { status: string }) {
     compliant:     { color: "#16A34A", bg: "rgba(22,163,74,0.08)",    label: "Compliant"     },
     at_risk:       { color: "#D97706", bg: "rgba(245,158,11,0.08)",   label: "At Risk"       },
     non_compliant: { color: "#DC2626", bg: "rgba(239,68,68,0.08)",    label: "Non-Compliant" },
-    draft:         { color: T3,        bg: `rgba(84,34,105,0.06)`,    label: "Draft"         },
+    draft:         { color: T3,        bg: `rgba(55,48,163,0.06)`,    label: "Draft"         },
   };
   const c = cfg[status] ?? cfg.draft;
   return (
@@ -179,19 +179,12 @@ export default function Compliance() {
   const circ = 2 * Math.PI * 60;
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 md:p-8 selection:bg-[#542269]/10 h-full">
+    <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 md:p-8 selection:bg-[#3730A3]/10 h-full">
 
       {/* ── Header Area ── */}
-      <div className="flex items-start gap-3.5 border-b border-purple-100 pb-4">
-        <div className="mt-1 h-7 w-1 rounded-full shrink-0" style={{ background: PLUM }} />
-        <div className="flex flex-col justify-center">
-          <h1 className="text-[24px] font-black tracking-tight leading-none" style={{ color: T1 }}>
-            Compliance Centre
-          </h1>
-          <p className="text-[13px] mt-2 font-medium tracking-wide leading-none" style={{ color: T2 }}>
-            Monitor NDIS documentation compliance, claim readiness, and audit preparedness.
-          </p>
-        </div>
+      <div className="border-b pb-4" style={{ borderColor: BORDER }}>
+        <p className="hidden" style={{ color: T3 }}>Support Coordinator</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Compliance Centre</h1>
       </div>
 
       {/* ── Analytical Gauge & Performance Cards ── */}
@@ -230,50 +223,49 @@ export default function Compliance() {
           </p>
         </div>
 
-        {/* Three Stat Cards & Dynamic Compliance Warning Bar */}
-        <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#16A34A" }}>
-              <FileCheck2 size={13} /> Compliant
-            </p>
-            <div className="mt-4">
-              {overviewLoading ? <Skeleton className="h-8 w-16" /> : (
-                <p className="text-[32px] font-black tracking-tight leading-none" style={{ color: T1 }}>{compliant}</p>
-              )}
-              <p className="text-[11px] font-semibold mt-2 leading-none" style={{ color: T3 }}>Score &ge; 85%</p>
+        {/* Three stat rows — flat, no shadow cards */}
+        <div className="md:col-span-3 flex flex-col gap-3">
+          <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
+            <div className="divide-y" style={{ borderColor: BORDER }}>
+              <div className="flex items-center justify-between px-5 py-3.5">
+                <div className="flex items-center gap-2">
+                  <FileCheck2 size={14} className="text-emerald-600 shrink-0" />
+                  <span className="text-sm font-bold text-emerald-700">Compliant</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>≥ 85%</span>
+                </div>
+                {overviewLoading
+                  ? <Skeleton className="h-6 w-12" />
+                  : <span className="text-xl font-black" style={{ color: T1 }}>{compliant}</span>}
+              </div>
+              <div className="flex items-center justify-between px-5 py-3.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-500 shrink-0" />
+                  <span className="text-sm font-bold text-amber-700">At Risk</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>60–84%</span>
+                </div>
+                {overviewLoading
+                  ? <Skeleton className="h-6 w-12" />
+                  : <span className="text-xl font-black" style={{ color: T1 }}>{atRisk}</span>}
+              </div>
+              <div className="flex items-center justify-between px-5 py-3.5">
+                <div className="flex items-center gap-2">
+                  <XCircle size={14} className="text-red-600 shrink-0" />
+                  <span className="text-sm font-bold text-red-700">Non-Compliant</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>&lt; 60%</span>
+                </div>
+                {overviewLoading
+                  ? <Skeleton className="h-6 w-12" />
+                  : <span className="text-xl font-black" style={{ color: T1 }}>{nonCompliant}</span>}
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#D97706" }}>
-              <AlertTriangle size={13} /> At Risk
-            </p>
-            <div className="mt-4">
-              {overviewLoading ? <Skeleton className="h-8 w-16" /> : (
-                <p className="text-[32px] font-black tracking-tight leading-none" style={{ color: T1 }}>{atRisk}</p>
-              )}
-              <p className="text-[11px] font-semibold mt-2 leading-none" style={{ color: T3 }}>Score 60&ndash;84%</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
-            <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#DC2626" }}>
-              <XCircle size={13} /> Non-Compliant
-            </p>
-            <div className="mt-4">
-              {overviewLoading ? <Skeleton className="h-8 w-16" /> : (
-                <p className="text-[32px] font-black tracking-tight leading-none" style={{ color: T1 }}>{nonCompliant}</p>
-              )}
-              <p className="text-[11px] font-semibold mt-2 leading-none" style={{ color: T3 }}>Score &lt; 60%</p>
-            </div>
-          </div>
-
-          {/* Guidelines info text footer bar */}
-          <div className="sm:col-span-3 rounded-2xl px-4 py-3.5 flex items-start gap-3"
-            style={{ background: `${PLUM}05`, border: `1px solid rgba(84,34,105,0.08)` }}>
-            <Info size={15} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
+          {/* Guidelines info bar */}
+          <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+            style={{ background: `${PLUM}06`, border: `1px solid rgba(55,48,163,0.10)` }}>
+            <Info size={14} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
             <p className="text-[12px] leading-relaxed font-medium" style={{ color: T2 }}>
-              NDIS audit readiness requires an operational threshold score of 85%+. Sessions designated as at-risk are subject to external system rejections during regular automated processing routines.
+              NDIS audit readiness requires a score of 85%+. At-risk sessions may be rejected during automated claims processing.
             </p>
           </div>
         </div>
@@ -588,7 +580,7 @@ export default function Compliance() {
                         </td>
                         <td className="px-5 py-3.5 text-right whitespace-nowrap">
                           <Link href={`/sessions/${String(item.session_id)}`}>
-                            <button className="text-[12px] font-bold px-3 py-1.5 rounded-lg border border-transparent transition-all hover:bg-purple-50 hover:text-[#542269] active:scale-[0.97]"
+                            <button className="text-[12px] font-bold px-3 py-1.5 rounded-lg border border-transparent transition-all hover:bg-purple-50 hover:text-[#3730A3] active:scale-[0.97]"
                               style={{ color: CORAL }}>
                               Review &rarr;
                             </button>
@@ -611,7 +603,7 @@ export default function Compliance() {
                     try { dateStr = format(parseISO(String(item.session_date)), "MMM d, yyyy"); } catch {}
                   }
                   return (
-                    <div key={String(item.session_id)} className="rounded-xl p-4 border transition-colors hover:bg-[#F6F4FB]" style={{ borderColor: "rgba(232,213,232,0.5)", background: "#fff" }}>
+                    <div key={String(item.session_id)} className="rounded-xl p-4 border transition-colors hover:bg-[#F6F4FB]" style={{ borderColor: "rgba(232,213,232,0.5)", background: "var(--cc-bg)" }}>
                       {/* Header: Date + Status */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div>

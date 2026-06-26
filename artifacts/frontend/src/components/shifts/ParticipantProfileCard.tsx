@@ -62,7 +62,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
           )}
 
           {caseManager?.name && (
-            <div className="rounded-xl border border-[#E2DEF2] bg-[#F0EDFC] p-3">
+            <div className="rounded-xl border border-[#E5E7EB] bg-[#F0EDFC] p-3">
               <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 <UserCircle size={12} aria-hidden />
                 Case manager
@@ -71,7 +71,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                 {caseManager.phone ? (
                   <a
                     href={`tel:${caseManager.phone}`}
-                    className="underline decoration-[#5533CC]/30 underline-offset-2"
+                    className="underline decoration-[#3730A3]/30 underline-offset-2"
                   >
                     {caseManager.name} — {caseManager.phone}
                   </a>
@@ -90,7 +90,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                 </dt>
                 <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
                   {href && value ? (
-                    <a href={href} className="underline decoration-[#5533CC]/30 underline-offset-2">
+                    <a href={href} className="underline decoration-[#3730A3]/30 underline-offset-2">
                       {value}
                     </a>
                   ) : (

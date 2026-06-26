@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -9,11 +9,11 @@ import {
   Sparkles, ExternalLink,
 } from "lucide-react";
 
-const PLUM  = "#5533CC";
-const CORAL = "#F03060";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM  = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
 
 interface ChecklistStep {
   id: string;
@@ -123,19 +123,19 @@ export default function CoordinatorOnboarding() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-start py-12 px-4"
-      style={{ background: "linear-gradient(160deg, #F5F3FC 0%, #EDE9FF 60%, #FCE9EF 100%)" }}
+      style={{ background: "var(--cc-bg)" }}
     >
       {/* Header */}
       <div className="w-full max-w-2xl mb-8 text-center">
         <div className="flex justify-center mb-4">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: `linear-gradient(135deg, ${PLUM} 0%, ${CORAL} 100%)` }}
+            style={{ background: PLUM }}
           >
             <Sparkles className="text-white" size={26} />
           </div>
         </div>
-        <h1 className="text-3xl font-black mb-2" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black mb-2" style={{ color: PLUM }}>
           Welcome to CareCliQ{orgName ? `, ${orgName}` : ""}!
         </h1>
         <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: MUTED }}>
@@ -147,7 +147,7 @@ export default function CoordinatorOnboarding() {
       <div className="w-full max-w-2xl mb-6">
         <div
           className="rounded-2xl p-5"
-          style={{ background: "white", border: `1px solid ${BORDER}`, boxShadow: "0 4px 24px -8px rgba(85,51,204,0.1)" }}
+          style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}`, boxShadow: "0 4px 24px -8px rgba(55,48,163,0.1)" }}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold" style={{ color: PLUM }}>
@@ -163,8 +163,8 @@ export default function CoordinatorOnboarding() {
               style={{
                 width: `${progress}%`,
                 background: allDone
-                  ? "linear-gradient(90deg, #16A34A, #22c55e)"
-                  : `linear-gradient(90deg, ${PLUM}, ${CORAL})`,
+                  ? "#16A34A"
+                  : PLUM,
               }}
             />
           </div>
@@ -188,9 +188,9 @@ export default function CoordinatorOnboarding() {
               key={step.id}
               className="rounded-2xl transition-all"
               style={{
-                background: done ? (isAuto ? `${PLUM}08` : `${CORAL}06`) : "white",
+                background: done ? (isAuto ? `${PLUM}08` : `${CORAL}06`) : "var(--cc-bg)",
                 border: `1.5px solid ${done ? (isAuto ? `${PLUM}30` : `${CORAL}25`) : BORDER}`,
-                boxShadow: done ? "none" : "0 2px 12px -4px rgba(85,51,204,0.06)",
+                boxShadow: done ? "none" : "0 2px 12px -4px rgba(55,48,163,0.06)",
               }}
             >
               <div className="flex items-start gap-4 p-5">
@@ -221,7 +221,7 @@ export default function CoordinatorOnboarding() {
                     <p
                       className="text-[14px] font-bold"
                       style={{
-                        color: done ? "#1E1640" : "#1E1640",
+                        color: done ? "#111827" : "#111827",
                         textDecoration: done && !isAuto ? "line-through" : "none",
                         opacity: done && !isAuto ? 0.6 : 1,
                       }}
@@ -277,7 +277,7 @@ export default function CoordinatorOnboarding() {
           type="button"
           onClick={handleGoToDashboard}
           className="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 text-white"
-          style={{ background: `linear-gradient(135deg, ${PLUM} 0%, ${CORAL} 100%)` }}
+          style={{ background: PLUM }}
         >
           {allDone ? "Go to Dashboard" : "Continue to Dashboard"}
           <ArrowRight size={16} />

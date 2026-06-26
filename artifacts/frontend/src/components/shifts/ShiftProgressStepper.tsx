@@ -1,4 +1,4 @@
-import { Check, Pause } from "lucide-react";
+﻿import { Check, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import type { ShiftVisualState } from "@/services/shiftService";
@@ -17,7 +17,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
   const current = stepIndex(visualState);
 
   return (
-    <section className="rounded-2xl border bg-white px-4 py-4 shadow-sm" style={{ borderColor: "#E2DEF2" }}>
+    <section className="rounded-2xl border bg-white px-4 py-4 shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
       <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
         Shift Progress
       </p>
@@ -33,7 +33,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                 {i > 0 && (
                   <div
                     className="absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: connectorDone ? PLUM : "#E2DEF2" }}
+                    style={{ background: connectorDone ? PLUM : "#E5E7EB" }}
                   />
                 )}
                 <div
@@ -45,7 +45,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                   )}
                   style={{
                     background: active && !done ? PLUM : undefined,
-                    borderColor: !done && !active ? "#E2DEF2" : undefined,
+                    borderColor: !done && !active ? "#E5E7EB" : undefined,
                     color: !done && !active ? MUTED : undefined,
                   }}
                 >
@@ -54,7 +54,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                 {i < STEPS.length - 1 && (
                   <div
                     className="absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: done ? PLUM : "#E2DEF2" }}
+                    style={{ background: done ? PLUM : "#E5E7EB" }}
                   />
                 )}
               </div>

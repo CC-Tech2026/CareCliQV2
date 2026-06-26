@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -94,10 +94,10 @@ export default function WorkerNotificationsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5 pb-10">
       <header>
-        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
+        <p className="hidden" style={{ color: CORAL }}>
           Notifications
         </p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
           History
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>

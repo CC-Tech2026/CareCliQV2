@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,13 +19,13 @@ import {
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const T1     = "#1E1640";
-const T2     = "#4A3D5A";
-const T3     = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const T1     = "#111827";
+const T2     = "#374151";
+const T3     = "#6B7280";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 function safeDate(v?: string | null, fmt = "d MMM yyyy") {
   if (!v) return "—";
@@ -205,7 +205,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   return (
     <>
       <div
-        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#5533CC]" : ""}`}
+        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#3730A3]" : ""}`}
         style={{ borderColor: selected ? PLUM : BORDER }}
       >
         {/* ── Card header ── */}
@@ -216,7 +216,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Flag size={13} className="text-[#F03060] shrink-0" />
+              <Flag size={13} className="text-[#BE185D] shrink-0" />
               <span className="text-[13px] font-black" style={{ color: T1 }}>
                 {session.participant_name || "Participant"}
               </span>
@@ -409,10 +409,10 @@ export default function SessionReview() {
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Quality & Safety
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
             Session Review Queue
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
@@ -427,7 +427,7 @@ export default function SessionReview() {
             onClick={handleBulkApprove}
             disabled={bulkApproving}
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, #059669, #047857)` }}
+            style={{ background: "#059669" }}
           >
             {bulkApproving
               ? <Loader2 size={16} className="animate-spin" />
@@ -457,10 +457,10 @@ export default function SessionReview() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
               <div className="flex gap-3">
-                <div className="h-4 w-4 rounded bg-[#E2DEF2]" />
+                <div className="h-4 w-4 rounded bg-[#E5E7EB]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 rounded bg-[#E2DEF2]" />
-                  <div className="h-3 w-32 rounded bg-[#E2DEF2]" />
+                  <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+                  <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
                 </div>
               </div>
             </div>

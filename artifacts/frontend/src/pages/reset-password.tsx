@@ -1,13 +1,13 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, CheckCircle2, Loader2, LockKeyhole } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#D8D0F0";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const BORDER = "#C7D2FE";
 
 function readRecoveryParams(): { access_token: string; token_hash: string } {
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
@@ -67,12 +67,12 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F5F3FC]">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-12 bg-[#F8F8FE]">
       <div className="lg:col-span-5 flex flex-col justify-between p-6 sm:p-10 md:p-12 bg-white">
         <div className="flex items-center gap-3">
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#7A6A9E]">Workspace</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Workspace</span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8">
@@ -89,15 +89,15 @@ export default function ResetPassword() {
             <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
               Create new password
             </h1>
-            <p className="text-[14px] font-medium mt-1" style={{ color: "#7A6A9E" }}>
+            <p className="text-[14px] font-medium mt-1" style={{ color: "var(--cc-muted)" }}>
               Choose a new password for your CareCliQ workspace.
             </p>
           </div>
 
           {complete ? (
-            <div className="rounded-2xl border p-5" style={{ borderColor: BORDER, background: "#F5F3FC" }}>
+            <div className="rounded-2xl border p-5" style={{ borderColor: BORDER, background: "var(--cc-soft)" }}>
               <CheckCircle2 className="h-8 w-8 mb-3" style={{ color: PLUM }} />
-              <p className="text-[15px] font-bold" style={{ color: "#1E1640" }}>Password updated</p>
+              <p className="text-[15px] font-bold" style={{ color: "var(--cc-text)" }}>Password updated</p>
               <button
                 type="button"
                 onClick={() => navigate("/login")}
@@ -119,15 +119,15 @@ export default function ResetPassword() {
                   New password
                 </label>
                 <div className="relative">
-                  <LockKeyhole className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-[#7A6A9E]" />
+                  <LockKeyhole className="absolute left-4 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
                   <PasswordNativeInput
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 8 characters"
                     required
                     disabled={busy}
-                    className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#F5F3FC]"
-                    style={{ borderColor: BORDER, color: "#1E1640" }}
+                    className="w-full h-12 pl-11 rounded-2xl text-[14px] font-medium outline-none border bg-[#F8F8FE]"
+                    style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                   />
                 </div>
               </div>
@@ -141,15 +141,15 @@ export default function ResetPassword() {
                   placeholder="Repeat password"
                   required
                   disabled={busy}
-                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F5F3FC]"
-                  style={{ borderColor: BORDER, color: "#1E1640" }}
+                  className="w-full h-12 px-4 rounded-2xl text-[14px] font-medium outline-none border bg-[#F8F8FE]"
+                  style={{ borderColor: BORDER, color: "var(--cc-text)" }}
                 />
               </div>
               <button
                 type="submit"
                 disabled={busy || !hasRecoveryToken || password.length < 8 || password !== confirm}
                 className="w-full h-14 rounded-2xl text-white text-[15px] font-black flex items-center justify-center gap-2 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Update password
@@ -163,7 +163,7 @@ export default function ResetPassword() {
         </p>
       </div>
 
-      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#F03060] via-[#9B5DE5] to-[#5533CC]">
+      <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 bg-gradient-to-br from-[#BE185D] via-[#9B5DE5] to-[#3730A3]">
         <img src="/login_welcome.jpg" alt="CareCliQ workspace" className="max-w-xl w-full rounded-[2rem] shadow-2xl" />
       </div>
     </div>

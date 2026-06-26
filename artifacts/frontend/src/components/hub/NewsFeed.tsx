@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import {
   Megaphone,
@@ -14,11 +14,11 @@ import {
 import { getAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
 
 type Severity = "critical" | "high" | "medium" | "info" | "positive";
 

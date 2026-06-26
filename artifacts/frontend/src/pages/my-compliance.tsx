@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
@@ -6,11 +6,11 @@ import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCa
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
 import { getMyCompliance, getWorkerComplianceDetail } from "@/services/workerService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 function safeDate(value?: string) {
   if (!value) return "Not recorded";
@@ -45,26 +45,31 @@ export default function MyCompliance() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 pb-10">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>My Compliance</h1>
+        <p className="hidden" style={{ color: MUTED }}>Support Worker</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>My Compliance</h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <ShieldCheck size={22} style={{ color: PLUM }} />
-          <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{data?.average_score ?? 0}%</p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Average score</p>
-        </section>
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <CheckCircle2 size={22} className="text-emerald-600" />
-          <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{data?.reviewed_sessions ?? 0}</p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Reviewed records</p>
-        </section>
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <AlertTriangle size={22} style={{ color: CORAL }} />
-          <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{data?.at_risk ?? 0}</p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Needs attention</p>
-        </section>
+      <div
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-white px-5 py-4"
+        style={{ borderColor: BORDER }}
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={15} style={{ color: PLUM }} />
+          <span className="text-sm font-black" style={{ color: TEXT }}>{data?.average_score ?? 0}%</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>avg score</span>
+        </div>
+        <div className="h-4 w-px" style={{ background: BORDER }} />
+        <div className="flex items-center gap-2">
+          <CheckCircle2 size={15} className="text-emerald-500" />
+          <span className="text-sm font-black text-emerald-700">{data?.reviewed_sessions ?? 0}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>reviewed</span>
+        </div>
+        <div className="h-4 w-px" style={{ background: BORDER }} />
+        <div className="flex items-center gap-2">
+          <AlertTriangle size={15} style={{ color: CORAL }} />
+          <span className="text-sm font-black" style={{ color: CORAL }}>{data?.at_risk ?? 0}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>needs attention</span>
+        </div>
       </div>
 
       {complianceDetail && (

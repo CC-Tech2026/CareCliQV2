@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Private dev / QA console — not linked in nav.
  * Route: /dev/progress-test (bookmark + password only)
  */
@@ -26,12 +26,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const APP_BG = "#F5F3FC";
-const ACTIVE = "#EDEAFF";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const APP_BG = "#F8F8FE";
+const ACTIVE = "var(--cc-active-bg)";
+const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;
 
 const DEV_CONSOLE_PASSWORD = (
@@ -439,7 +439,7 @@ function PatternsStatusNote({ run, list }: { run: ApiResult | null; list: ApiRes
   return (
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
-      style={{ borderColor: BORDER, background: "#FAFAFF", color: TEXT }}
+      style={{ borderColor: BORDER, background: "var(--cc-soft)", color: TEXT }}
     >
       <p className="font-semibold">How to read this (CARECLIQV2-34)</p>
       {patterns.length === 0 ? (
@@ -493,7 +493,7 @@ function BudgetRulesStatusNote({
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
       style={{
-        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E2DEF2",
+        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E5E7EB",
         background: exceeded ? "#FEF2F2" : warning ? "#FFFBEB" : hasPlan ? "#F0FDF4" : "#F8F7FC",
         color: TEXT,
       }}

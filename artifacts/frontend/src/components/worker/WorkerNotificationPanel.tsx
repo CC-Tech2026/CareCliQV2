@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,12 +8,12 @@ import {
   Search, Filter, Send, ChevronRight, Zap, AlertCircle,
 } from "lucide-react";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const SEVERITY_LEVELS = {
   urgent: { color: "#DC2626", label: "Urgent", bg: "#FEE2E2" },
@@ -448,7 +448,7 @@ function MessageRow({
         <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: message.is_read ? 400 : 600 }}>
           {message.title}
         </p>
-        <p className="text-[12px] text-[#7A6A9E] mt-0.5 line-clamp-2 whitespace-pre-wrap">
+        <p className="text-[12px] text-[#6B7280] mt-0.5 line-clamp-2 whitespace-pre-wrap">
           {message.message}
         </p>
         <div className="flex items-center gap-2 mt-2">
@@ -548,7 +548,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"
-      style={{ background: "#fff", borderLeft: `1px solid ${BORDER}` }}
+      style={{ background: "var(--cc-bg)", borderLeft: `1px solid ${BORDER}` }}
     >
       {/* Header */}
       <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>

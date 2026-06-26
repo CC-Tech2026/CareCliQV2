@@ -1,4 +1,4 @@
-import { ChevronDown, ClipboardList, Pill, ShieldAlert, Target, type LucideIcon } from "lucide-react";
+﻿import { ChevronDown, ClipboardList, Pill, ShieldAlert, Target, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkerShift } from "@/services/shiftService";
 import { formatActiveGoalLabel } from "@/services/shiftService";
@@ -20,7 +20,7 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
   if (!hasContent) return null;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "#E2DEF2" }}>
+    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -34,7 +34,7 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
       </button>
 
       {open && (
-        <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: "#E2DEF2" }}>
+        <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: "var(--cc-border)" }}>
           {shift.coordinator_notes && (
             <BriefBlock icon={ClipboardList} title="Coordinator Note" tone="amber">
               {shift.coordinator_notes}

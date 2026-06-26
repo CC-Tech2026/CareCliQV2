@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, HelpCircle, Info, XCircle } from "lucide-react";
+﻿import { AlertTriangle, CheckCircle2, HelpCircle, Info, XCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -6,10 +6,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 export type ComplianceRuleResult = {
   rule: string;
@@ -47,7 +47,7 @@ function statusLabel(status: string) {
 function scoreRingColor(score: number) {
   if (score >= 85) return PLUM;
   if (score >= 60) return "#D97706";
-  return "#F03060";
+  return "#BE185D";
 }
 
 export function ComplianceDetailCard({
@@ -133,11 +133,11 @@ export function ComplianceDetailCard({
                     {rule.explanation && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button type="button" className="shrink-0 text-[#9A8DBF] hover:text-[#5533CC]">
+                          <button type="button" className="shrink-0 text-[#9A8DBF] hover:text-[#3730A3]">
                             <HelpCircle className="h-3.5 w-3.5" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs bg-[#1E1640] text-white">
+                        <TooltipContent side="top" className="max-w-xs bg-[#111827] text-white">
                           <p className="text-xs leading-relaxed">{rule.explanation}</p>
                         </TooltipContent>
                       </Tooltip>

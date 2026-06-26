@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -26,13 +26,13 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
-const T2     = "#4A3D5A";
+const T2     = "#374151";
 const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BORDER = "var(--cc-border)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 // ── Quick intents ─────────────────────────────────────────────────────────────
 const QUICK_INTENTS = [
@@ -455,7 +455,7 @@ export default function SessionNew() {
                 disabled={startDisabled || createSessionMutation.isPending}
                 title={startDisabled ? "Select at least one participant goal before starting." : undefined}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {createSessionMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 Start Session

@@ -51,7 +51,7 @@ export function LoginGraphic() {
           height: 200,
           maxWidth: "90%",
           animation: "cs-float 4.5s ease-in-out infinite",
-          filter: "drop-shadow(0 8px 24px rgba(84,34,105,0.25))",
+          filter: "drop-shadow(0 8px 24px rgba(55,48,163,0.25))",
         }}
       />
 
@@ -91,7 +91,7 @@ export function SignupGraphic() {
           height: 130,
           maxWidth: "85%",
           animation: "cs-float 4s ease-in-out infinite 0.5s",
-          filter: "drop-shadow(0 6px 18px rgba(84,34,105,0.22))",
+          filter: "drop-shadow(0 6px 18px rgba(55,48,163,0.22))",
         }}
       />
 

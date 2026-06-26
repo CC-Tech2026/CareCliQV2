@@ -51,7 +51,7 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
     <div
       className={cn(
         "overflow-hidden rounded-xl border",
-        critical ? "border-red-200 bg-red-50/80" : "border-[#E2DEF2] bg-[#F8F6FE]",
+        critical ? "border-red-200 bg-red-50/80" : "border-[#E5E7EB] bg-[#F8F6FE]",
       )}
     >
       <button

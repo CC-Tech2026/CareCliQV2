@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Plus, TrendingUp, Zap, Settings } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getRevenueReport } from "@/services/coordinatorService";
@@ -14,12 +14,12 @@ import { NdisPriceEditor } from "@/components/NdisPriceEditor";
 import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 interface Subscription {
   plan_name: string; status: string; billing_email?: string | null;
@@ -54,12 +54,12 @@ function Card({ title, children, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER }}>
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
+    <section className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
+      <div className="flex items-center justify-between gap-4 border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
+        <h2 className="text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>{title}</h2>
         {action}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -215,7 +215,7 @@ export default function Billing() {
   if (!canInvoice) {
     return (
       <div className="mx-auto max-w-2xl space-y-2 py-10">
-        <h1 className="text-3xl font-black" style={{ color: PLUM }}>Billing & Invoicing</h1>
+        <h1 className="text-xl font-black" style={{ color: PLUM }}>Billing & Invoicing</h1>
         <p className="text-sm font-medium" style={{ color: MUTED }}>Available to support coordinators and allied health professionals only.</p>
       </div>
     );
@@ -237,34 +237,36 @@ export default function Billing() {
       <div className="mx-auto max-w-7xl space-y-6 pb-10">
 
         {/* ── Page header ───────────────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-              {user?.role === "allied_health" ? "Allied Health" : "Support Coordination"}
-            </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-              Billing & Invoicing
-            </h1>
-          </div>
+        <div>
+          <p className="hidden" style={{ color: MUTED }}>
+            {user?.role === "allied_health" ? "Allied Health" : "Support Coordination"}
+          </p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            Billing & Invoicing
+          </h1>
         </div>
 
-        {/* ── Summary stat cards ────────────────────────────────────────────── */}
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Invoices</p>
-            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: TEXT }}>{invoices.length}</p>
-            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>All time records</p>
-          </section>
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Outstanding</p>
-            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: totalOutstanding > 0 ? "#D97706" : TEXT }}>{cents(totalOutstanding)}</p>
-            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Awaiting payment</p>
-          </section>
-          <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Total Paid</p>
-            <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: "#16A34A" }}>{cents(totalPaid)}</p>
-            <p className="mt-3 text-sm font-medium" style={{ color: MUTED }}>Confirmed payments</p>
-          </section>
+        {/* ── Inline stat strip ─────────────────────────────────────────────── */}
+        <div
+          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-white px-5 py-4"
+          style={{ borderColor: BORDER }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black" style={{ color: TEXT }}>{invoices.length}</span>
+            <span className="text-sm font-medium" style={{ color: MUTED }}>total invoices</span>
+          </div>
+          <div className="h-4 w-px" style={{ background: BORDER }} />
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black" style={{ color: totalOutstanding > 0 ? "#D97706" : TEXT }}>
+              {cents(totalOutstanding)}
+            </span>
+            <span className="text-sm font-medium" style={{ color: MUTED }}>outstanding</span>
+          </div>
+          <div className="h-4 w-px" style={{ background: BORDER }} />
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-black text-emerald-700">{cents(totalPaid)}</span>
+            <span className="text-sm font-medium" style={{ color: MUTED }}>paid</span>
+          </div>
         </div>
 
         {/* ── Subscription management (coordinator only) ────────────────────── */}
@@ -289,7 +291,7 @@ export default function Billing() {
                 <select
                   value={subscription.plan_name}
                   onChange={e => setSubscription({ ...subscription, plan_name: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
                   style={{ borderColor: BORDER }}
                 >
                   {["starter", "team", "pro", "enterprise"].map(p => (
@@ -302,7 +304,7 @@ export default function Billing() {
                 <select
                   value={subscription.status}
                   onChange={e => setSubscription({ ...subscription, status: e.target.value })}
-                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#5533CC]/20"
+                  className="mt-1.5 h-10 w-full rounded-lg border px-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#3730A3]/20"
                   style={{ borderColor: BORDER }}
                 >
                   {["trialing", "active", "past_due", "cancelled", "manual_review"].map(s => (
@@ -350,14 +352,14 @@ export default function Billing() {
                   className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
                   style={{ background: PLUM }}
                 >
-                  📋 Load Annual Schedule
+                  Load Annual Schedule
                 </button>
                 <button
                   onClick={() => setShowPriceEditor(true)}
                   className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
                   style={{ background: CORAL }}
                 >
-                  ✏️ Edit Item Price
+                  Edit Item Price
                 </button>
               </div>
             </div>
@@ -440,7 +442,7 @@ export default function Billing() {
                 onClick={createInvoice}
                 disabled={creatingInvoice || !form.recipient_name.trim() || !form.description.trim()}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-full py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
-                style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                style={{ background: PLUM }}
               >
                 {creatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Create Draft Invoice

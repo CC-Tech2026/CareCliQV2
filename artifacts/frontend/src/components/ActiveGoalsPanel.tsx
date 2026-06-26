@@ -1,12 +1,12 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Target } from "lucide-react";
 import type { GoalDetail } from "@/services/workerService";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
 
 function Section({
   title,

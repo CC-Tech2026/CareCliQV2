@@ -61,7 +61,7 @@ function StatRow({
         "flex items-center justify-between rounded-xl border px-3 py-2 text-sm",
         tone === "warn" && "border-amber-200 bg-amber-50",
         tone === "ok" && "border-emerald-200 bg-emerald-50",
-        !tone && "border-[#E2DEF2] bg-white",
+        !tone && "border-[#E5E7EB] bg-white",
       )}
     >
       <span className="font-semibold" style={{ color: TEXT }}>

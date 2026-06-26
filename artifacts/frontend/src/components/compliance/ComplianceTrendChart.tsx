@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+﻿import { format, parseISO } from "date-fns";
 import {
   CartesianGrid,
   Line,
@@ -10,9 +10,9 @@ import {
   YAxis,
 } from "recharts";
 
-const PLUM = "#5533CC";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 export type ComplianceTrendPoint = {
   date: string;
@@ -47,7 +47,7 @@ export function ComplianceTrendChart({
     <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black" style={{ color: "#1E1640" }}>Compliance History</h3>
+          <h3 className="text-sm font-black" style={{ color: "var(--cc-text)" }}>Compliance History</h3>
           <p className="text-xs font-medium" style={{ color: MUTED }}>
             Daily average score over the last {days} days
           </p>

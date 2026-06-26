@@ -5,7 +5,7 @@ import {
   type Session,
 } from "@workspace/api-client-react";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -14,7 +14,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,39 +28,24 @@ import {
   getCachedParticipants,
 } from "@/hooks/useOfflineCache";
 
-function statusColor(
-  status: string,
-  colors: ReturnType<typeof useColors>
-): string {
+type FilterType = "all" | "live" | "done";
+
+const FILTERS: { id: FilterType; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "live", label: "Live" },
+  { id: "done", label: "Done" },
+];
+
+function statusColor(status: string, colors: ReturnType<typeof useColors>): string {
   switch (status) {
-    case "in_progress":
-      return colors.accent;
-    case "completed":
-      return colors.success;
-    case "draft":
-      return colors.mutedForeground;
-    default:
-      return colors.mutedForeground;
+    case "in_progress": return colors.accent;
+    case "completed": return "#22C55E";
+    case "draft": return colors.mutedForeground;
+    default: return colors.mutedForeground;
   }
 }
 
-function statusLabel(status: string): string {
-  switch (status) {
-    case "in_progress":
-      return "Live";
-    case "completed":
-      return "Done";
-    case "draft":
-      return "Draft";
-    default:
-      return status;
-  }
-}
-
-function complianceBadgeColor(
-  score: number | null | undefined,
-  colors: ReturnType<typeof useColors>
-): string {
+function complianceBadgeColor(score: number | null | undefined, colors: ReturnType<typeof useColors>): string {
   if (score == null) return colors.mutedForeground;
   if (score >= 85) return "#22C55E";
   if (score >= 60) return colors.warning;
@@ -70,134 +54,106 @@ function complianceBadgeColor(
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 }
 
-interface SessionCardProps {
+function FilterPills({ filter, onChange }: { filter: FilterType; onChange: (f: FilterType) => void }) {
+  const colors = useColors();
+  return (
+    <View style={[styles.filterRow, { borderBottomColor: colors.border }]}>
+      {FILTERS.map((f) => {
+        const active = filter === f.id;
+        return (
+          <Pressable
+            key={f.id}
+            onPress={() => onChange(f.id)}
+            style={[
+              styles.filterPill,
+              { backgroundColor: active ? colors.primary : colors.muted },
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterPillText,
+                { color: active ? "#FFFFFF" : colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
+              ]}
+            >
+              {f.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+interface SessionRowProps {
   session: Session;
   participantName?: string;
   onPress: () => void;
+  isLast?: boolean;
 }
 
-function SessionCard({ session, participantName, onPress }: SessionCardProps) {
+function SessionRow({ session, participantName, onPress, isLast }: SessionRowProps) {
   const colors = useColors();
   const isLive = session.status === "in_progress";
+  const isDone = session.status === "completed";
+  const dotColor = statusColor(session.status, colors);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.card,
+        styles.row,
         {
           backgroundColor: colors.card,
-          borderColor: isLive ? colors.accent : colors.border,
-          borderWidth: isLive ? 2 : 1,
-          opacity: pressed ? 0.85 : 1,
+          borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+          opacity: pressed ? 0.75 : 1,
         },
       ]}
-      testID={`session-card-${session.id}`}
+      testID={`session-row-${session.id}`}
     >
-      <View style={styles.cardHeader}>
-        <View style={styles.cardLeft}>
-          <Text
-            style={[
-              styles.participantName,
-              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
-            ]}
-            numberOfLines={1}
-          >
-            {participantName ?? session.participants?.full_name ?? "Unknown"}
-          </Text>
-          <Text
-            style={[
-              styles.sessionMeta,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            {formatDate(session.session_date)} · {session.session_type}
-          </Text>
-        </View>
-        <View style={styles.cardRight}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: statusColor(session.status, colors) + "20" },
-            ]}
-          >
-            {isLive && (
-              <View
-                style={[
-                  styles.liveDot,
-                  { backgroundColor: statusColor(session.status, colors) },
-                ]}
-              />
-            )}
-            <Text
-              style={[
-                styles.statusText,
-                {
-                  color: statusColor(session.status, colors),
-                  fontFamily: "Inter_600SemiBold",
-                },
-              ]}
-            >
-              {statusLabel(session.status)}
-            </Text>
-          </View>
-          {session.compliance_score != null && (
-            <Text
-              style={[
-                styles.complianceScore,
-                {
-                  color: complianceBadgeColor(session.compliance_score, colors),
-                  fontFamily: "Inter_600SemiBold",
-                },
-              ]}
-            >
-              {Math.round(session.compliance_score)}%
-            </Text>
-          )}
-        </View>
+      <View style={[styles.rowDot, { backgroundColor: dotColor }]} />
+
+      <View style={styles.rowContent}>
+        <Text
+          style={[styles.rowName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+          numberOfLines={1}
+        >
+          {participantName ?? (session as Record<string, unknown>)?.participants?.full_name as string ?? "Unknown"}
+        </Text>
+        <Text
+          style={[styles.rowMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+          numberOfLines={1}
+        >
+          {formatDate(session.session_date)} · {session.session_type}
+        </Text>
       </View>
-      {session.notes ? (
-        <Text
-          style={[
-            styles.notePreview,
-            { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-          ]}
-          numberOfLines={2}
-        >
-          {session.notes}
-        </Text>
-      ) : null}
-      <View style={styles.cardFooter}>
-        <Text
-          style={[
-            styles.duration,
-            { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-          ]}
-        >
-          {session.duration_minutes} min
-        </Text>
-        {isLive && (
-          <View
-            style={[styles.resumeBtn, { backgroundColor: colors.accent + "20" }]}
-          >
-            <Feather name="play" size={12} color={colors.accent} />
-            <Text
-              style={[
-                styles.resumeText,
-                { color: colors.accent, fontFamily: "Inter_600SemiBold" },
-              ]}
-            >
-              Resume
+
+      <View style={styles.rowRight}>
+        {isLive ? (
+          <View style={[styles.livePill, { backgroundColor: colors.accent + "20" }]}>
+            <View style={[styles.liveDot, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.livePillText, { color: colors.accent, fontFamily: "Inter_700Bold" }]}>
+              LIVE
             </Text>
           </View>
+        ) : isDone && session.compliance_score != null ? (
+          <Text
+            style={[
+              styles.complianceScore,
+              { color: complianceBadgeColor(session.compliance_score, colors), fontFamily: "Inter_600SemiBold" },
+            ]}
+          >
+            {Math.round(session.compliance_score)}%
+          </Text>
+        ) : (
+          <Text style={[styles.draftLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            Draft
+          </Text>
         )}
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </View>
     </Pressable>
   );
@@ -207,7 +163,7 @@ export default function SessionsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterType>("all");
   const { isOnline } = useOffline();
 
   const [cachedSessions, setCachedSessions] = useState<Session[] | null>(null);
@@ -255,7 +211,7 @@ export default function SessionsScreen() {
 
   const activeSessions = sessions ?? (isOnline ? undefined : cachedSessions ?? undefined);
 
-  const participantMap = React.useMemo(() => {
+  const participantMap = useMemo(() => {
     if (participants) {
       const map: Record<string, string> = {};
       participants.forEach((p) => { map[p.id] = p.full_name; });
@@ -264,14 +220,14 @@ export default function SessionsScreen() {
     return cachedParticipantMap;
   }, [participants, cachedParticipantMap]);
 
-  const filtered = React.useMemo(() => {
+  const filtered = useMemo(() => {
     if (!activeSessions) return [];
-    const q = search.toLowerCase();
     return activeSessions.filter((s) => {
-      const name = (participantMap[s.participant_id] ?? s.participants?.full_name ?? "").toLowerCase();
-      return !q || name.includes(q) || s.session_type.toLowerCase().includes(q);
+      if (filter === "live") return s.status === "in_progress";
+      if (filter === "done") return s.status === "completed";
+      return true;
     });
-  }, [activeSessions, search, participantMap]);
+  }, [activeSessions, filter]);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const showLoading = isLoading && !cachedSessions;
@@ -279,48 +235,32 @@ export default function SessionsScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <OfflineBanner />
+
+      {/* Header */}
       <View
         style={[
           styles.header,
           { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
         ]}
       >
-        <Text
-          style={[
-            styles.headerTitle,
-            { color: colors.foreground, fontFamily: "Inter_700Bold" },
-          ]}
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            My Shifts
+          </Text>
+          <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {isOnline ? "Live data" : "Offline — cached"}
+          </Text>
+        </View>
+        <Pressable
+          onPress={() => router.push("/sessions/new")}
+          style={[styles.newShiftBtn, { backgroundColor: colors.primary }]}
         >
-          Sessions
-        </Text>
+          <Feather name="plus" size={18} color="#FFFFFF" />
+        </Pressable>
       </View>
 
-      <View style={[styles.searchContainer, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <View
-          style={[
-            styles.searchBar,
-            { backgroundColor: colors.muted, borderColor: colors.border },
-          ]}
-        >
-          <Feather name="search" size={16} color={colors.mutedForeground} />
-          <TextInput
-            style={[
-              styles.searchInput,
-              { color: colors.foreground, fontFamily: "Inter_400Regular" },
-            ]}
-            placeholder="Search sessions..."
-            placeholderTextColor={colors.mutedForeground}
-            value={search}
-            onChangeText={setSearch}
-            testID="sessions-search"
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")}>
-              <Feather name="x" size={16} color={colors.mutedForeground} />
-            </Pressable>
-          )}
-        </View>
-      </View>
+      {/* Filter pills */}
+      <FilterPills filter={filter} onChange={setFilter} />
 
       {showLoading ? (
         <View style={styles.center}>
@@ -334,7 +274,6 @@ export default function SessionsScreen() {
             styles.list,
             { paddingBottom: insets.bottom + 100 },
           ]}
-          scrollEnabled={!!filtered.length}
           showsVerticalScrollIndicator={false}
           refreshControl={
             isOnline ? (
@@ -345,30 +284,28 @@ export default function SessionsScreen() {
               />
             ) : undefined
           }
-          renderItem={({ item }) => (
-            <SessionCard
+          renderItem={({ item, index }) => (
+            <SessionRow
               session={item}
               participantName={participantMap[item.participant_id]}
               onPress={() => router.push(`/session/${item.id}`)}
+              isLast={index === filtered.length - 1}
             />
           )}
+          ListHeaderComponent={
+            filtered.length > 0 ? (
+              <View style={[styles.listCard, { borderColor: colors.border }]} />
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Feather name="clipboard" size={40} color={colors.mutedForeground} />
-              <Text
-                style={[
-                  styles.emptyText,
-                  { color: colors.mutedForeground, fontFamily: "Inter_500Medium" },
-                ]}
-              >
-                No sessions found
+              <View style={[styles.emptyIconWrap, { backgroundColor: colors.muted }]}>
+                <Feather name="clipboard" size={28} color={colors.mutedForeground} />
+              </View>
+              <Text style={[styles.emptyText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                {filter === "live" ? "No live shifts" : filter === "done" ? "No completed shifts" : "No shifts found"}
               </Text>
-              <Text
-                style={[
-                  styles.emptySubtext,
-                  { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-                ]}
-              >
+              <Text style={[styles.emptySubtext, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                 {isOnline
                   ? "Start a session from a participant's profile"
                   : "No cached sessions available"}
@@ -383,48 +320,73 @@ export default function SessionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headerTitle: { fontSize: 28, letterSpacing: -0.5 },
-  searchContainer: {
+  headerSub: { fontSize: 12, marginTop: 1 },
+  newShiftBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  filterRow: {
+    flexDirection: "row",
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  searchBar: {
+  filterPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  filterPillText: { fontSize: 13 },
+
+  list: { paddingHorizontal: 16, paddingTop: 12, gap: 0 },
+
+  listCard: {
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    overflow: "hidden",
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+    minHeight: 68,
+  },
+  rowDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    flexShrink: 0,
+  },
+  rowContent: { flex: 1, gap: 3 },
+  rowName: { fontSize: 15 },
+  rowMeta: { fontSize: 13 },
+  rowRight: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
+    flexShrink: 0,
   },
-  searchInput: { flex: 1, fontSize: 15, padding: 0 },
-  list: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
-  card: {
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  cardLeft: { flex: 1, marginRight: 8 },
-  cardRight: { alignItems: "flex-end", gap: 4 },
-  participantName: { fontSize: 15 },
-  sessionMeta: { fontSize: 13, marginTop: 2 },
-  statusBadge: {
+  livePill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
@@ -433,26 +395,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   liveDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11 },
+  livePillText: { fontSize: 11 },
   complianceScore: { fontSize: 13 },
-  notePreview: { fontSize: 13, lineHeight: 18 },
-  cardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  duration: { fontSize: 12 },
-  resumeBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  resumeText: { fontSize: 12 },
+  draftLabel: { fontSize: 13 },
+
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 10 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80, gap: 12 },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emptyText: { fontSize: 17 },
   emptySubtext: { fontSize: 14, textAlign: "center", paddingHorizontal: 40 },
 });

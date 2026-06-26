@@ -3,7 +3,7 @@ import { Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DEBOUNCE_MS = 500;
-const GRADIENT = "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)";
+const GRADIENT = "#3730A3";
 
 type Props = {
   shiftId: string;

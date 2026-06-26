@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
@@ -10,12 +10,12 @@ import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const INCIDENT_TYPES: Record<string, string> = {
@@ -83,17 +83,17 @@ export default function Incidents() {
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             NDIS Practice Standard 2.3
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
             Incident Management
           </h1>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
           className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-          style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          style={{ background: PLUM }}
         >
           <Plus size={15} strokeWidth={2.5} />
           Log Incident
@@ -222,7 +222,7 @@ export default function Incidents() {
 
                   {/* Main text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black truncate transition group-hover:text-[#5533CC]" style={{ color: TEXT }}>
+                    <p className="text-sm font-black truncate transition group-hover:text-[#3730A3]" style={{ color: TEXT }}>
                       {incident.title}
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>

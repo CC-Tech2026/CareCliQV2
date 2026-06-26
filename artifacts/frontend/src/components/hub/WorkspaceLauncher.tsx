@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -13,12 +13,12 @@ import {
   GraduationCap,
 } from "lucide-react";
 
-const PLUM   = "#5533CC";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const SOFT   = "#F5F3FC";
-const BORDER = "#E2DEF2";
-const CORAL  = "#F03060";
+const PLUM   = "var(--cc-plum)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const SOFT   = "var(--cc-soft)";
+const BORDER = "var(--cc-border)";
+const CORAL  = "var(--cc-coral)";
 const AMBER  = "#F59E0B";
 const GREEN  = "#10B981";
 const SKY    = "#0EA5E9";
@@ -138,7 +138,7 @@ export function WorkspaceLauncher() {
           <button
             onClick={handleLaunch}
             disabled={!!launching}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#F5F3FC] disabled:pointer-events-none"
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#F8F8FE] disabled:pointer-events-none"
           >
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -198,7 +198,7 @@ function MDWorkspaceLauncher({
                 key={ws.href}
                 onClick={() => handleLaunch(ws)}
                 disabled={!!launching}
-                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#F5F3FC] disabled:pointer-events-none"
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#F8F8FE] disabled:pointer-events-none"
               >
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
@@ -242,10 +242,10 @@ function LaunchOverlay({ ws }: { ws: WorkspaceDef }) {
         </div>
       </div>
       <div className="flex flex-col items-center gap-1.5">
-        <p className="text-[16px] font-bold" style={{ color: "#1E1640" }}>
+        <p className="text-[16px] font-bold" style={{ color: "var(--cc-text)" }}>
           {ws.title}
         </p>
-        <p className="flex items-center gap-2 text-[12px]" style={{ color: "#7A6A9E" }}>
+        <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-muted)" }}>
           <Loader2 size={12} strokeWidth={2} className="animate-spin" />
           Opening workspace…
         </p>

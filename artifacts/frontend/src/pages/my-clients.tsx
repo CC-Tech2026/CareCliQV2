@@ -1,104 +1,214 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
-import { AlertTriangle, ArrowRight, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, Search, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 function initials(name?: string) {
-  return (name || "Client").split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return (name || "?").split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 }
 
 function safeDate(value?: string | null) {
-  if (!value) return "Not seen yet";
-  try {
-    return format(parseISO(value), "MMM d");
-  } catch {
-    return value;
-  }
+  if (!value) return null;
+  try { return format(parseISO(value), "d MMM"); } catch { return value; }
 }
 
-function statusClass(status?: string) {
-  if (status === "compliant") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "non_compliant") return "border-red-200 bg-red-50 text-red-700";
-  return "border-amber-200 bg-amber-50 text-amber-700";
+function statusMeta(status?: string): { label: string; cls: string } {
+  if (status === "compliant")     return { label: "Compliant",    cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  if (status === "non_compliant") return { label: "Non-compliant", cls: "border-red-200 bg-red-50 text-red-700" };
+  return { label: "Needs review", cls: "border-amber-200 bg-amber-50 text-amber-700" };
 }
 
-function ClientRow({ client }: { client: WorkerClient }) {
+function ClientCard({ client }: { client: WorkerClient }) {
+  const { label, cls } = statusMeta(client.compliance_status);
+  const lastSeen = safeDate(client.last_seen);
+  const ndis = (client as WorkerClient & { ndis_number?: string }).ndis_number;
+
   return (
     <Link href={`/my-clients/${client.id}`}>
-      <div className="flex items-center gap-4 rounded-lg border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style={{ borderColor: BORDER }}>
-        <div className="grid h-12 w-12 place-items-center rounded-full text-sm font-black text-white" style={{ background: PLUM }}>
+      {/* Mobile: card layout; desktop: row layout */}
+      <div
+        className="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-[var(--cc-soft)] active:bg-[var(--cc-soft)] border-b last:border-b-0"
+        style={{ borderColor: BORDER }}
+      >
+        {/* Avatar */}
+        <div
+          className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-[13px] font-black text-white"
+          style={{ background: PLUM }}
+        >
           {initials(client.full_name)}
         </div>
+
+        {/* Main info */}
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-black" style={{ color: TEXT }}>{client.full_name}</p>
-          <p className="truncate text-sm font-medium" style={{ color: MUTED }}>
-            {client.plan_management_type || "Plan details not recorded"} · Last seen {safeDate(client.last_seen)}
+          <p className="text-[14px] font-black truncate leading-tight" style={{ color: TEXT }}>
+            {client.full_name}
+          </p>
+
+          {/* NDIS number as a clear identifier */}
+          {ndis && (
+            <span
+              className="inline-block mt-0.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
+              style={{ background: "var(--cc-soft)", color: MUTED }}
+            >
+              NDIS {ndis}
+            </span>
+          )}
+
+          {/* Secondary meta */}
+          <p className="text-[12px] font-medium mt-0.5 truncate" style={{ color: MUTED }}>
+            {client.plan_management_type ?? "No plan type"}
+            {lastSeen ? ` · Last seen ${lastSeen}` : ""}
           </p>
         </div>
-        <span className={`hidden rounded-full border px-3 py-1 text-xs font-bold capitalize sm:inline-flex ${statusClass(client.compliance_status)}`}>
-          {client.compliance_status?.replace("_", " ")}
-        </span>
-        <button className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-black" style={{ background: "#F5F3FC", color: PLUM }}>
-          View <ArrowRight size={14} strokeWidth={2.5} />
-        </button>
+
+        {/* Compliance badge */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${cls}`}>
+            {label}
+          </span>
+          <ArrowRight size={14} strokeWidth={2} style={{ color: MUTED }} />
+        </div>
       </div>
     </Link>
   );
 }
 
 export default function MyClients() {
-  const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], { queryFn: getMyClients });
+  const [search, setSearch] = useState("");
+
+  const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], {
+    queryFn: getMyClients,
+  });
+
+  const filtered = data
+    .filter((c) => {
+      const q = search.toLowerCase();
+      if (!q) return true;
+      const ndis = ((c as WorkerClient & { ndis_number?: string }).ndis_number ?? "").toLowerCase();
+      return c.full_name.toLowerCase().includes(q) || ndis.includes(q);
+    })
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+  const compliantCount    = data.filter((c) => c.compliance_status === "compliant").length;
+  const needsReviewCount  = data.filter((c) => c.compliance_status !== "compliant").length;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>My Clients</h1>
+    <div className="mx-auto max-w-2xl space-y-4 pb-24 md:pb-10">
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>My Clients</h1>
+          <p className="text-[13px] font-medium mt-0.5" style={{ color: MUTED }}>
+            {data.length} assigned participant{data.length !== 1 ? "s" : ""}
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <Users size={22} style={{ color: PLUM }} />
-          <p className="mt-3 text-2xl font-black" style={{ color: TEXT }}>{data.length}</p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Assigned clients</p>
-        </section>
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <ShieldCheck size={22} style={{ color: PLUM }} />
-          <p className="mt-3 text-2xl font-black" style={{ color: TEXT }}>
-            {data.filter((client) => client.compliance_status === "compliant").length}
-          </p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Currently compliant</p>
-        </section>
-        <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-          <AlertTriangle size={22} style={{ color: CORAL }} />
-          <p className="mt-3 text-2xl font-black" style={{ color: TEXT }}>
-            {data.filter((client) => client.compliance_status !== "compliant").length}
-          </p>
-          <p className="text-sm font-bold" style={{ color: MUTED }}>Needs review</p>
-        </section>
-      </div>
+      {/* Summary strip */}
+      {!isLoading && data.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border px-4 py-3"
+          style={{ background: "var(--cc-bg)", borderColor: BORDER }}
+        >
+          <div className="flex items-center gap-2">
+            <Users size={14} style={{ color: MUTED }} />
+            <span className="text-[13px] font-black" style={{ color: TEXT }}>{data.length}</span>
+            <span className="text-[13px] font-medium" style={{ color: MUTED }}>assigned</span>
+          </div>
+          <div className="h-3.5 w-px" style={{ background: BORDER }} />
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={14} className="text-emerald-500" />
+            <span className="text-[13px] font-black text-emerald-700">{compliantCount}</span>
+            <span className="text-[13px] font-medium" style={{ color: MUTED }}>compliant</span>
+          </div>
+          {needsReviewCount > 0 && (
+            <>
+              <div className="h-3.5 w-px" style={{ background: BORDER }} />
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} style={{ color: CORAL }} />
+                <span className="text-[13px] font-black" style={{ color: CORAL }}>{needsReviewCount}</span>
+                <span className="text-[13px] font-medium" style={{ color: MUTED }}>needs review</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>Assigned Clients</h2>
-          <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#F5F3FC", color: PLUM }}>
-            Own caseload only
-          </span>
+      {/* Search */}
+      {data.length > 0 && (
+        <div className="relative">
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+            style={{ color: MUTED }}
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or NDIS number…"
+            className="w-full h-11 pl-10 pr-4 rounded-xl text-[14px] outline-none transition-all"
+            style={{
+              background: "var(--cc-soft)",
+              border: `1px solid ${BORDER}`,
+              color: TEXT,
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--cc-plum)")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = BORDER)}
+          />
         </div>
-        {isLoading && <p className="text-sm font-bold" style={{ color: MUTED }}>Loading clients...</p>}
-        {error && <p className="text-sm font-bold text-red-600">{(error as Error).message}</p>}
-        {!isLoading && data.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No assigned clients were returned for this account.</p>}
-        <div className="space-y-3">
-          {(data as WorkerClient[]).map((client) => <ClientRow key={client.id} client={client} />)}
-        </div>
-      </section>
+      )}
+
+      {/* Client list */}
+      <div
+        className="rounded-2xl border overflow-hidden"
+        style={{ background: "var(--cc-bg)", borderColor: BORDER }}
+      >
+        {isLoading && (
+          <div className="py-8 text-center text-[13px] font-medium" style={{ color: MUTED }}>
+            Loading your clients…
+          </div>
+        )}
+
+        {error && (
+          <div className="py-8 text-center text-[13px] font-bold text-red-600 px-4">
+            {(error as Error).message}
+          </div>
+        )}
+
+        {!isLoading && data.length === 0 && (
+          <div className="flex flex-col items-center py-14 gap-3 px-6 text-center">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{ background: "var(--cc-active-bg)" }}
+            >
+              <Users size={22} style={{ color: PLUM, opacity: 0.4 }} />
+            </div>
+            <p className="text-[14px] font-bold" style={{ color: TEXT }}>No assigned clients</p>
+            <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
+              Clients assigned to you by your coordinator will appear here.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && filtered.length === 0 && data.length > 0 && (
+          <div className="py-10 text-center text-[13px] font-medium px-4" style={{ color: MUTED }}>
+            No clients match "{search}"
+          </div>
+        )}
+
+        {filtered.map((client) => (
+          <ClientCard key={client.id} client={client} />
+        ))}
+      </div>
     </div>
   );
 }

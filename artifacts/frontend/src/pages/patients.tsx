@@ -480,7 +480,7 @@ function EditParticipantPanel({
       </Button>
       {open && (
         <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Edit Participant</h4>
+          <h4 className="mb-3 text-[13px] font-black text-[#111827]">Edit Participant</h4>
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
@@ -546,7 +546,7 @@ function SetupPlanPanel({
       </Button>
       {open && (
         <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#1E1640]">Set Up NDIS Plan</h4>
+          <h4 className="mb-3 text-[13px] font-black text-[#111827]">Set Up NDIS Plan</h4>
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -775,7 +775,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
       label: "Budget Remaining",
       value: money(remainingBudget),
       icon: DollarSign,
-      tone: "bg-purple-50 text-[#542269] border-purple-100",
+      tone: "bg-purple-50 text-[#3730A3] border-purple-100",
     },
     {
       label: "Sessions",
@@ -816,14 +816,14 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* Avatar + name + action buttons */}
         <div className="flex items-center gap-3 pb-4">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#F03060] to-[#5533CC] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#BE185D] to-[#3730A3] flex items-center justify-center text-white text-sm font-black shrink-0 select-none">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#F03060] leading-none mb-0.5">
+            <p className="hidden">
               Participant Profile
             </p>
-            <h3 className="text-[16px] font-black text-[#1E1640] leading-tight truncate">
+            <h3 className="text-[16px] font-black leading-tight truncate" style={{ color: "var(--cc-text)" }}>
               {participant.full_name}
             </h3>
           </div>
@@ -837,7 +837,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         </div>
 
         {/* NDIS number + plan dates */}
-        <p className="text-[11px] text-[#7A6A9E] ml-[52px] -mt-2 mb-3 leading-relaxed">
+        <p className="text-[11px] text-[#6B7280] ml-[52px] -mt-2 mb-3 leading-relaxed">
           NDIS {participant.ndis_number || "not recorded"}
           {participant.plan_start_date && participant.plan_end_date && (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
@@ -871,8 +871,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
                   active
-                    ? "border-[#5533CC] text-[#5533CC]"
-                    : "border-transparent text-[#7A6A9E] hover:text-[#1E1640] hover:border-[#E2DEF2]"
+                    ? "border-[#3730A3] text-[#3730A3]"
+                    : "border-transparent text-[#6B7280] hover:text-[#111827] hover:border-[#E5E7EB]"
                 }`}
               >
                 <Icon size={13} strokeWidth={active ? 2.5 : 2} />
@@ -890,8 +890,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         {activeTab === "overview" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">Personal Details</h4>
+              <ClipboardList className="h-3.5 w-3.5 text-[#3730A3]" />
+              <h4 className="text-[13px] font-black text-[#111827]">Personal Details</h4>
             </div>
             <dl className="grid grid-cols-2 gap-2">
               {[
@@ -907,8 +907,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 ["Total budget",      money(totalBudget || budget?.total_funding)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{label}</dt>
-                  <dd className="text-[12px] font-bold text-[#1E1640] truncate" title={String(value)}>{value}</dd>
+                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{label}</dt>
+                  <dd className="text-[12px] font-bold text-[#111827] truncate" title={String(value)}>{value}</dd>
                 </div>
               ))}
             </dl>
@@ -919,8 +919,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         {activeTab === "plan" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
-              <DollarSign className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Funding</h4>
+              <DollarSign className="h-3.5 w-3.5 text-[#3730A3]" />
+              <h4 className="text-[13px] font-black text-[#111827]">NDIS Funding</h4>
             </div>
             {budgetQuery.isLoading ? (
               <Skeleton className="h-24 w-full rounded-xl" />
@@ -933,8 +933,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {/* Plan meta */}
                 {budget?.plan_number && (
                   <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] mb-1">Plan Number</p>
-                    <p className="text-[12px] font-bold text-[#1E1640]">{budget.plan_number}</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1">Plan Number</p>
+                    <p className="text-[12px] font-bold text-[#111827]">{budget.plan_number}</p>
                   </div>
                 )}
                 {/* Total / Used / Remaining */}
@@ -945,8 +945,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     ["Remaining", money(remainingBudget)],
                   ].map(([lbl, val]) => (
                     <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{lbl}</p>
-                      <p className="text-[12px] font-black text-[#1E1640] truncate">{val}</p>
+                      <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{lbl}</p>
+                      <p className="text-[12px] font-black text-[#111827] truncate">{val}</p>
                     </div>
                   ))}
                 </div>
@@ -954,14 +954,14 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {totalBudget > 0 && (
                   <div className="rounded-xl border border-purple-100/60 bg-white p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-[#1E1640]">Overall utilisation</span>
-                      <span className="text-[11px] font-black text-[#7A6A9E]">
+                      <span className="text-[12px] font-bold text-[#111827]">Overall utilisation</span>
+                      <span className="text-[11px] font-black text-[#6B7280]">
                         {Math.round((usedBudget / totalBudget) * 100)}%
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6] transition-all"
+                        className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6] transition-all"
                         style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
                       />
                     </div>
@@ -970,20 +970,20 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {/* Category breakdown */}
                 {(budget?.budgets ?? []).length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A9E]">By Support Category</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">By Support Category</p>
                     {(budget?.budgets ?? []).map((item) => (
                       <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[12px] font-bold text-[#1E1640] truncate">{item.category_label || item.category}</span>
-                          <span className="text-[11px] font-black text-[#7A6A9E] shrink-0">{item.percent_used ?? 0}%</span>
+                          <span className="text-[12px] font-bold text-[#111827] truncate">{item.category_label || item.category}</span>
+                          <span className="text-[11px] font-black text-[#6B7280] shrink-0">{item.percent_used ?? 0}%</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6]"
+                            className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"
                             style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
                           />
                         </div>
-                        <p className="mt-1.5 text-[10px] font-medium text-[#7A6A9E]">
+                        <p className="mt-1.5 text-[10px] font-medium text-[#6B7280]">
                           {money(item.used)} used · {money(item.remaining)} left of {money(item.allocated)}
                         </p>
                       </div>
@@ -999,30 +999,30 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         {activeTab === "goals" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Goals</h4>
+              <Target className="h-3.5 w-3.5 text-[#3730A3]" />
+              <h4 className="text-[13px] font-black text-[#111827]">NDIS Goals</h4>
               {goals.length > 0 && (
-                <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+                <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
                   {goals.length}
                 </span>
               )}
             </div>
             {goals.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <Target className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No goals recorded</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
+                <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#111827]">No goals recorded</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {goals.map((goal, index) => (
                   <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-4 py-3 flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-[#EEEAFB] flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-[10px] font-black text-[#5533CC]">{index + 1}</span>
+                      <span className="text-[10px] font-black text-[#3730A3]">{index + 1}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-[#1E1640] leading-snug">{normalizeGoalTitle(goal, index)}</p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6A9E] mt-1 capitalize">
+                      <p className="text-[13px] font-bold text-[#111827] leading-snug">{normalizeGoalTitle(goal, index)}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B7280] mt-1 capitalize">
                         {String(goal.status || "active")}
                         {goal.category ? ` · ${String(goal.category)}` : ""}
                       </p>
@@ -1042,10 +1042,10 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CalendarDays className="h-3.5 w-3.5 text-[#5533CC]" />
-                <h4 className="text-[13px] font-black text-[#1E1640]">Session History</h4>
+                <CalendarDays className="h-3.5 w-3.5 text-[#3730A3]" />
+                <h4 className="text-[13px] font-black text-[#111827]">Session History</h4>
               </div>
-              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
                 {sessions.length}
               </span>
             </div>
@@ -1055,21 +1055,21 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               </div>
             ) : sessions.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <CalendarDays className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No sessions yet</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Sessions with this participant will appear here.</p>
+                <CalendarDays className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#111827]">No sessions yet</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">Sessions with this participant will appear here.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {sessions.map((session) => (
                   <Link key={session.id} href={`/sessions/${session.id}`}>
-                    <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                    <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors cursor-pointer">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                          <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
                             {(session.session_type || "session").replace(/_/g, " ")}
                           </p>
-                          <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                          <p className="text-[11px] text-[#6B7280] mt-0.5">
                             {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
                           </p>
                         </div>
@@ -1085,7 +1085,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                         </div>
                       </div>
                       {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                        <p className="mt-1.5 text-[11px] text-[#7A6A9E] line-clamp-2 leading-relaxed">
+                        <p className="mt-1.5 text-[11px] text-[#6B7280] line-clamp-2 leading-relaxed">
                           {session.translated_english_note || session.compliance_input_text || session.notes}
                         </p>
                       )}
@@ -1113,8 +1113,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#5533CC]" />
-                <h4 className="text-[13px] font-black text-[#1E1640]">Compliance Audit History</h4>
+                <ShieldCheck className="h-3.5 w-3.5 text-[#3730A3]" />
+                <h4 className="text-[13px] font-black text-[#111827]">Compliance Audit History</h4>
               </div>
               {complianceHistory.length > 0 && averageCompliance != null && (
                 <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
@@ -1128,9 +1128,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               </div>
             ) : complianceHistory.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <ShieldCheck className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No compliance audits yet</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Audits run automatically when sessions are saved with AI.</p>
+                <ShieldCheck className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-[#111827]">No compliance audits yet</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">Audits run automatically when sessions are saved with AI.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1139,13 +1139,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
                   return (
                     <Link key={item.session_id} href={`/sessions/${item.session_id}`}>
-                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#3730A3]/30 hover:bg-[#F8F8FE] transition-colors cursor-pointer">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                            <p className="text-[13px] font-bold text-[#111827] capitalize truncate">
                               {(item.session_type || "session").replace(/_/g, " ")}
                             </p>
-                            <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                            <p className="text-[11px] text-[#6B7280] mt-0.5">
                               Session {safeFormat(item.session_date)}
                               {auditDate ? ` · Audited ${safeFormat(auditDate, "MMM d")}` : ""}
                             </p>
@@ -1155,7 +1155,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                           </span>
                         </div>
                         {item.latest_audit?.status && (
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#7A6A9E]">
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#6B7280]">
                             {item.latest_audit.status.replace(/_/g, " ")}
                           </p>
                         )}
@@ -1245,56 +1245,97 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 }
 
 // ---------------------------------------------------------------------------
+// Helpers for list panel
+// ---------------------------------------------------------------------------
+
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+// ---------------------------------------------------------------------------
 // Main Patients Management Workspace Layout
 // ---------------------------------------------------------------------------
 
 export default function Patients() {
-  const [search, setSearch] = useState("");
+  const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sortOrder, setSortOrder]     = useState<"asc" | "desc">("asc");
+  const [letterFilter, setLetterFilter] = useState<string | null>(null);
+  const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
 
   const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
 
-  const filteredParticipants =
-    participants?.filter((p) => {
-      const matchesSearch =
-        p.full_name.toLowerCase().includes(search.toLowerCase()) || p.ndis_number.includes(search);
+  const filteredParticipants = (participants ?? [])
+    .filter((p) => {
+      const q = search.toLowerCase();
+      const matchesSearch = !q
+        || p.full_name.toLowerCase().includes(q)
+        || (p.ndis_number ?? "").includes(q);
       const matchesStatus = statusFilter === "all" || p.plan_status === statusFilter;
-      return matchesSearch && matchesStatus;
-    }) || [];
+      const matchesLetter = !letterFilter || p.full_name.toUpperCase().startsWith(letterFilter);
+      return matchesSearch && matchesStatus && matchesLetter;
+    })
+    .sort((a, b) => {
+      const cmp = a.full_name.localeCompare(b.full_name);
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+
+  // Which letters actually have participants
+  const activeLetters = new Set(
+    (participants ?? []).map((p) => p.full_name[0]?.toUpperCase()).filter(Boolean)
+  );
 
   return (
     <div className="flex h-[calc(100dvh-7rem)] md:h-[calc(100dvh-8rem)] gap-4 overflow-hidden">
-      {/* Left panel — participant list */}
-      {/* Hidden on mobile/tablet when detail is open; always shown on lg+ */}
+
+      {/* ── Left panel — participant list ─────────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[320px] shrink-0 flex-col bg-white rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[330px] shrink-0 flex-col rounded-2xl overflow-hidden`}
+        style={{ background: "var(--cc-bg)", border: "1px solid var(--cc-border)" }}
       >
-        <div className="p-4 border-b border-purple-100/50 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[16px] text-[#1C1626]">Participants</h2>
+        {/* Panel header */}
+        <div className="px-4 pt-4 pb-3 shrink-0" style={{ borderBottom: "1px solid var(--cc-border)" }}>
+
+          {/* Title row */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>Participants</h2>
+              {!participantsLoading && (
+                <span
+                  className="text-[10px] font-black px-2 py-0.5 rounded-full"
+                  style={{ background: "var(--cc-active-bg)", color: "var(--cc-plum)" }}
+                >
+                  {filteredParticipants.length}
+                  {participants && filteredParticipants.length !== participants.length
+                    ? ` of ${participants.length}` : ""}
+                </span>
+              )}
+            </div>
             <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl border-purple-100/50">
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-xl text-[12px]">
                 <UserPlus className="h-3.5 w-3.5" />
-                <span>Add</span>
+                Add
               </Button>
             </Link>
           </div>
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#7A6A8A]" />
-              <Input
-                placeholder="Search name or NDIS..."
-                className="pl-9 rounded-xl bg-[#F6F4FB] border-purple-100/50"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-testid="input-search-participants"
-              />
-            </div>
+
+          {/* Search */}
+          <div className="relative mb-2">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--cc-muted)" }} />
+            <Input
+              placeholder="Search name, NDIS number…"
+              className="pl-8 h-9 rounded-xl text-[13px]"
+              style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setLetterFilter(null); }}
+              data-testid="input-search-participants"
+            />
+          </div>
+
+          {/* Status + sort controls */}
+          <div className="flex items-center gap-2">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 rounded-xl bg-[#F6F4FB] border-purple-100/50">
-                <SelectValue placeholder="Filter by status" />
+              <SelectTrigger className="h-8 flex-1 rounded-xl text-[12px]" style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}>
+                <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
@@ -1304,69 +1345,132 @@ export default function Patients() {
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* A→Z / Z→A sort toggle */}
+            <button
+              type="button"
+              onClick={() => setSortOrder((o) => o === "asc" ? "desc" : "asc")}
+              className="h-8 px-2.5 rounded-xl text-[11px] font-black shrink-0 transition-colors"
+              style={{
+                background: "var(--cc-active-bg)",
+                color: "var(--cc-plum)",
+                border: "1px solid rgba(55,48,163,0.12)",
+              }}
+              title={sortOrder === "asc" ? "Sorted A → Z (click for Z → A)" : "Sorted Z → A (click for A → Z)"}
+            >
+              {sortOrder === "asc" ? "A→Z" : "Z→A"}
+            </button>
+          </div>
+
+          {/* A–Z alphabet strip */}
+          <div className="flex items-center gap-0.5 mt-2.5 overflow-x-auto scrollbar-none pb-0.5">
+            <button
+              type="button"
+              onClick={() => setLetterFilter(null)}
+              className="shrink-0 h-6 px-1.5 rounded text-[10px] font-black transition-colors"
+              style={{
+                background: !letterFilter ? "var(--cc-plum)" : "var(--cc-soft)",
+                color: !letterFilter ? "white" : "var(--cc-muted)",
+              }}
+            >
+              All
+            </button>
+            {ALPHABET.map((letter) => {
+              const has = activeLetters.has(letter);
+              const active = letterFilter === letter;
+              return (
+                <button
+                  key={letter}
+                  type="button"
+                  disabled={!has}
+                  onClick={() => setLetterFilter(active ? null : letter)}
+                  className="shrink-0 h-6 w-6 rounded text-[10px] font-black transition-colors disabled:opacity-25"
+                  style={{
+                    background: active ? "var(--cc-plum)" : has ? "var(--cc-soft)" : "transparent",
+                    color: active ? "white" : has ? "var(--cc-text)" : "var(--cc-muted)",
+                  }}
+                >
+                  {letter}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {/* Participant list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {participantsLoading ? (
-            Array(5)
-              .fill(0)
-              .map((_, i) => (
-                <div key={i} className="p-3 space-y-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-4 w-24" />
+            Array(6).fill(0).map((_, i) => (
+              <div key={i} className="p-3 flex items-center gap-3">
+                <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-20" />
                 </div>
-              ))
+              </div>
+            ))
           ) : filteredParticipants.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-purple-900/10">
-                <Users className="h-5 w-5 text-[#542269] opacity-50" />
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
+                <Users className="h-5 w-5 opacity-40" style={{ color: "var(--cc-plum)" }} />
               </div>
-              <p className="text-[13px] font-medium text-[#4A3D5A]">No participants found</p>
-              <p className="text-[12px] text-center leading-relaxed text-[#7A6A8A]">
-                Try adjusting your search or add a new participant
+              <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>No participants found</p>
+              <p className="text-[12px] text-center leading-relaxed" style={{ color: "var(--cc-muted)" }}>
+                {letterFilter
+                  ? `No participants starting with "${letterFilter}"`
+                  : "Try adjusting your search or filters"}
               </p>
             </div>
           ) : (
             filteredParticipants.map((p) => {
-              const initials = p.full_name
-                .split(" ")
-                .map((n: string) => n[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase();
+              const inits = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
               const isSelected = selectedId === p.id;
               return (
                 <button
                   key={p.id}
-                  onClick={() => {
-                    setSelectedId(p.id);
-                    setShowMobileDetail(true);
-                  }}
+                  type="button"
+                  onClick={() => { setSelectedId(p.id); setShowMobileDetail(true); }}
                   data-testid={`button-participant-${p.id}`}
-                  className={`w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border ${
-                    isSelected ? "bg-purple-900/10 border-purple-900/20" : "bg-transparent border-transparent hover:bg-[#F6F4FB]"
-                  }`}
+                  className="w-full text-left rounded-xl transition-all duration-150 flex items-center gap-3 px-3 py-2.5 border"
+                  style={{
+                    background: isSelected ? "var(--cc-active-bg)" : "transparent",
+                    borderColor: isSelected ? "rgba(55,48,163,0.18)" : "transparent",
+                    boxShadow: isSelected ? "inset 3px 0 0 var(--cc-plum)" : "none",
+                  }}
                 >
+                  {/* Avatar */}
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0 ${
-                      isSelected ? "bg-gradient-to-br from-[#F1738A] to-[#542269] text-white" : "bg-purple-900/10 text-[#542269]"
-                    }`}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-black shrink-0 transition-colors"
+                    style={{
+                      background: isSelected ? "var(--cc-plum)" : "var(--cc-active-bg)",
+                      color: isSelected ? "white" : "var(--cc-plum)",
+                    }}
                   >
-                    {initials}
+                    {inits}
                   </div>
+
+                  {/* Name + ID */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-[13px] font-semibold truncate flex-1 min-w-0 ${isSelected ? "text-[#542269]" : "text-[#1C1626]"}`}>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span
+                        className="text-[13px] font-bold truncate flex-1 min-w-0"
+                        style={{ color: isSelected ? "var(--cc-plum)" : "var(--cc-text)" }}
+                      >
                         {p.full_name}
                       </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(p.plan_status)}`}>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(p.plan_status)}`}>
                         {p.plan_status}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono block text-[#7A6A8A]">
-                      {p.ndis_number}
-                    </span>
+                    {/* NDIS number as clear identifier */}
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: "var(--cc-soft)", color: "var(--cc-muted)" }}
+                      >
+                        NDIS {p.ndis_number || "—"}
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -1375,14 +1479,18 @@ export default function Patients() {
         </div>
       </div>
 
-      {/* Right panel — participant detail workspace view */}
+      {/* ── Right panel — participant detail ──────────────────────────── */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col bg-white rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col rounded-2xl overflow-hidden`}
+        style={{ background: "var(--cc-bg)", border: "1px solid var(--cc-border)" }}
       >
         {selectedId ? (
           <>
+            {/* Mobile back button */}
             <button
-              className="lg:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-purple-100/50 hover:bg-gray-50 shrink-0 transition-colors text-[#542269]"
+              type="button"
+              className="lg:hidden flex items-center gap-2 text-[13px] font-semibold px-4 py-3 shrink-0 transition-colors"
+              style={{ borderBottom: "1px solid var(--cc-border)", color: "var(--cc-plum)" }}
               onClick={() => setShowMobileDetail(false)}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1396,13 +1504,13 @@ export default function Patients() {
           </>
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-purple-900/10">
-              <Users className="h-7 w-7 text-[#542269] opacity-40" />
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
+              <Users className="h-7 w-7 opacity-40" style={{ color: "var(--cc-plum)" }} />
             </div>
             <div>
-              <p className="text-[15px] font-semibold text-[#4A3D5A]">Select a participant</p>
-              <p className="text-[13px] mt-1.5 leading-relaxed text-[#7A6A8A]">
-                Choose someone from the list to view their clinical profile, NDIS plan, and session history.
+              <p className="text-[15px] font-semibold" style={{ color: "var(--cc-text)" }}>Select a participant</p>
+              <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
+                Choose someone from the list to view their NDIS plan, session history, and clinical profile.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import type { ComponentType, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -46,12 +46,12 @@ import {
 import { ActiveGoalsPanel } from "@/components/ActiveGoalsPanel";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
 
 type TabKey = "overview" | "plan" | "sessions" | "notes" | "compliance";
 type ClientSummary = WorkerClientDetail["participant"];
@@ -148,6 +148,10 @@ function safeDate(value?: string | null) {
   }
 }
 
+function initials(name?: string) {
+  return (name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
 function statusClass(status?: string) {
   if (status === "compliant") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (status === "non_compliant") return "border-red-200 bg-red-50 text-red-700";
@@ -168,10 +172,10 @@ function restrictivePracticeWarning(text: string) {
 
 function Section({ title, icon: Icon, children }: { title: string; icon: ComponentType<{ size?: number }>; children: ReactNode }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="mb-4 flex items-center gap-2">
-        <Icon size={18} />
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>{title}</h2>
+    <section>
+      <div className="mb-3 flex items-center gap-2 border-b pb-2.5" style={{ borderColor: BORDER }}>
+        <Icon size={14} style={{ color: MUTED }} />
+        <h2 className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>{title}</h2>
       </div>
       {children}
     </section>
@@ -210,25 +214,78 @@ function ProminentAlertCard({
   );
 }
 
-function ParticipantSnapshotCard({ client }: { client: ClientSummary }) {
+function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
+  const planEnd = client.plan_end_date ? parseISO(client.plan_end_date) : null;
+  const daysLeft = planEnd
+    ? Math.ceil((planEnd.getTime() - Date.now()) / 86_400_000)
+    : null;
+  const expiryUrgency = daysLeft === null ? null : daysLeft < 30 ? "critical" : daysLeft < 90 ? "warn" : "ok";
+
   return (
-    <Section title="Participant Snapshot" icon={ClipboardList}>
-      <dl className="grid gap-3 sm:grid-cols-2">
-        {[
-          ["Name", client.full_name],
-          ["NDIS Number", client.ndis_number],
-          ["Date of Birth", client.date_of_birth ? safeDate(client.date_of_birth) : ""],
-          ["Plan Status", client.plan_status],
-          ["Plan Start", client.plan_start_date ? safeDate(client.plan_start_date) : ""],
-          ["Plan End", client.plan_end_date ? safeDate(client.plan_end_date) : ""],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-[#F8F6FE] p-3">
-            <dt className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>{label}</dt>
-            <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>{value || "Not recorded"}</dd>
+    <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
+      {/* Top strip — avatar + name + chips */}
+      <div className="flex items-start gap-4 p-5">
+        <div
+          className="grid h-[3.25rem] w-[3.25rem] shrink-0 place-items-center rounded-full text-base font-black text-white"
+          style={{ background: PLUM }}
+        >
+          {initials(client.full_name)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-black leading-snug" style={{ color: TEXT }}>
+            {client.full_name}
+          </h2>
+          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+            {client.ndis_number ? `NDIS #${client.ndis_number}` : "NDIS number not recorded"}
+            {client.date_of_birth ? ` · DOB ${safeDate(client.date_of_birth)}` : ""}
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {client.plan_status && (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold capitalize text-emerald-700">
+                Plan {client.plan_status}
+              </span>
+            )}
+            {daysLeft !== null && (
+              <span
+                className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold"
+                style={{
+                  borderColor: expiryUrgency === "critical" ? "#FECACA" : expiryUrgency === "warn" ? "#FDE68A" : BORDER,
+                  background: expiryUrgency === "critical" ? "#FEF2F2" : expiryUrgency === "warn" ? "#FFFBEB" : "#F8F8FE",
+                  color: expiryUrgency === "critical" ? "#DC2626" : expiryUrgency === "warn" ? "#92400E" : MUTED,
+                }}
+              >
+                {daysLeft > 0 ? `Plan expires in ${daysLeft}d` : "Plan expired"}
+              </span>
+            )}
           </div>
-        ))}
+        </div>
+      </div>
+
+      {/* Plan fact strip */}
+      <dl
+        className="grid grid-cols-2 gap-x-6 gap-y-3 border-t px-5 py-4 sm:grid-cols-3"
+        style={{ borderColor: BORDER }}
+      >
+        {(
+          [
+            ["Plan Start", client.plan_start_date ? safeDate(client.plan_start_date) : null],
+            ["Plan End", client.plan_end_date ? safeDate(client.plan_end_date) : null],
+            ["Plan Management", (client as Record<string, unknown>).plan_management_type as string | null ?? null],
+          ] as [string, string | null][]
+        ).map(([label, value]) =>
+          value ? (
+            <div key={label}>
+              <dt className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
+                {label}
+              </dt>
+              <dd className="mt-0.5 text-sm font-bold" style={{ color: TEXT }}>
+                {value}
+              </dd>
+            </div>
+          ) : null,
+        )}
       </dl>
-    </Section>
+    </div>
   );
 }
 
@@ -334,7 +391,7 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
   if (columns === 1) {
     return (
       <div className="space-y-6">
-        <ParticipantSnapshotCard client={client} />
+        <ParticipantProfileHeader client={client} />
         {safetyGroup}
         {goalsGroup}
       </div>
@@ -343,7 +400,7 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
 
   return (
     <div className="space-y-6">
-      <ParticipantSnapshotCard client={client} />
+      <ParticipantProfileHeader client={client} />
       <div className="grid items-start gap-6 lg:grid-cols-2">
         {safetyGroup ?? <div className="hidden lg:block" />}
         {goalsGroup}
@@ -473,8 +530,8 @@ function GoalSelector({
                       value={note?.[field] || ""}
                       onChange={(e) => onNoteChange(goal.id, field, e.target.value)}
                       rows={2}
-                      className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#5533CC]"
-                      style={{ borderColor: "#E2DEF2", color: TEXT }}
+                      className="w-full rounded-lg border bg-white px-3 py-2 text-sm font-medium outline-none focus:border-[#3730A3]"
+                      style={{ borderColor: "var(--cc-border)", color: TEXT }}
                       placeholder={
                         field === "evidence_provided"
                           ? "What did you do to support this goal?"
@@ -603,14 +660,14 @@ function InlineSessionComposer({
       <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
+            <p className="hidden" style={{ color: MUTED }}>
               Live Progress Note
             </p>
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E2DEF2" : "#A7F3D0",
-                background: ended ? "#F5F3FC" : "#ECFDF5",
+                borderColor: ended ? "#E5E7EB" : "#A7F3D0",
+                background: ended ? "#F8F8FE" : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
@@ -625,7 +682,7 @@ function InlineSessionComposer({
               type="button"
               onClick={() => { onEnd(); setComposerStep("goals"); }}
               className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black text-white shadow-sm"
-              style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+              style={{ background: PLUM }}
             >
               <StopCircle size={15} />
               End Session
@@ -634,7 +691,7 @@ function InlineSessionComposer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
             style={{ color: MUTED }}
             aria-label="Close session composer"
           >
@@ -729,7 +786,7 @@ function InlineSessionComposer({
                   <textarea
                     value={generated}
                     onChange={(event) => onGeneratedChange(event.target.value)}
-                    className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                    className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER, color: TEXT }}
                   />
                 </div>
@@ -750,7 +807,7 @@ function InlineSessionComposer({
                 {translatedFromLang && (
                   <div
                     className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold w-fit"
-                    style={{ borderColor: "#C4B8E8", color: PLUM, background: "#F5F3FC" }}
+                    style={{ borderColor: "#C4B8E8", color: PLUM, background: "var(--cc-soft)" }}
                   >
                     <Languages size={13} />
                     Translated from{" "}
@@ -783,7 +840,7 @@ function InlineSessionComposer({
                     onClick={onSave}
                     disabled={!canSave}
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white transition disabled:opacity-50"
-                    style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                    style={{ background: PLUM }}
                   >
                     {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                     Save Draft
@@ -816,7 +873,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                     style={{ color: PLUM }}
                     aria-label="Attach file"
                   >
@@ -825,7 +882,7 @@ function InlineSessionComposer({
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                     style={{ color: PLUM }}
                     aria-label="Add photo evidence"
                   >
@@ -844,7 +901,7 @@ function InlineSessionComposer({
               </div>
             )}
             {!ended && attachmentName && (
-              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F5F3FC] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
+              <p className="mt-2 inline-flex max-w-full items-center rounded-full bg-[#F8F8FE] px-3 py-1 text-xs font-bold" style={{ color: PLUM }}>
                 <Paperclip size={12} className="mr-1 shrink-0" />
                 <span className="truncate">{attachmentName}</span>
               </p>
@@ -867,7 +924,7 @@ function InlineSessionComposer({
               {ended && (
                 <div
                   className="space-y-4 rounded-xl border p-4"
-                  style={{ borderColor: "#EEEAFB", background: "#FBFAFF" }}
+                  style={{ borderColor: "#EEEAFB", background: "var(--cc-soft)" }}
                 >
                   {composerGoals && composerGoals.length > 0 && (
                     <div>
@@ -894,7 +951,7 @@ function InlineSessionComposer({
                               className="rounded-full border px-3 py-1.5 text-xs font-bold transition"
                               style={{
                                 borderColor: selected ? PLUM : BORDER,
-                                background: selected ? SOFT : "white",
+                                background: selected ? SOFT : "var(--cc-bg)",
                                 color: selected ? PLUM : MUTED,
                               }}
                             >
@@ -916,7 +973,7 @@ function InlineSessionComposer({
                       onChange={(event) => onOutcomeChange?.(event.target.value)}
                       placeholder="What was achieved? Describe measurable progress and participant response..."
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -931,7 +988,7 @@ function InlineSessionComposer({
                       onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
                       placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -946,7 +1003,7 @@ function InlineSessionComposer({
                       onChange={(event) => onRecommendationsChange?.(event.target.value)}
                       placeholder="Recommendations for coordinator or next session (optional)..."
                       rows={2}
-                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                      className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
                     />
                   </div>
@@ -994,7 +1051,7 @@ function InlineSessionComposer({
                   onClick={onSave}
                   disabled={!canSave}
                   className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-black text-white transition disabled:opacity-50"
-                  style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                  style={{ background: PLUM }}
                 >
                   {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                   Save Draft
@@ -1031,7 +1088,7 @@ function InlineSessionComposer({
                   value={choiceControl}
                   onChange={(e) => onChoiceControlChange(e.target.value)}
                   rows={5}
-                  className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+                  className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                   style={{ borderColor: BORDER, color: TEXT }}
                   placeholder="Describe how the participant exercised choice during the session. e.g., Participant chose the location for today's community outing."
                 />
@@ -1051,7 +1108,7 @@ function InlineSessionComposer({
                 onClick={onSave}
                 disabled={!canSave}
                 className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white transition disabled:opacity-50"
-                style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+                style={{ background: PLUM }}
               >
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 Save Draft
@@ -1217,7 +1274,7 @@ function IncidentReportModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+            className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
             style={{ color: MUTED }}
             aria-label="Close incident form"
           >
@@ -1267,7 +1324,7 @@ function IncidentReportModal({
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
               placeholder="Brief description of what occurred..."
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+              className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1293,7 +1350,7 @@ function IncidentReportModal({
               onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
               placeholder="Describe the incident in full — who, what, when, where, how..."
               rows={4}
-              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#5533CC]"
+              className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
           </div>
@@ -1319,7 +1376,7 @@ function IncidentReportModal({
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: "white" }}>
+                  <span className="rounded-full border px-2.5 py-0.5 text-[10px] font-bold" style={{ borderColor: "#C4B8F0", color: PLUM, background: "var(--cc-bg)" }}>
                     {r.practice_standard}
                   </span>
                   {r.ndis_reportable && (
@@ -1399,7 +1456,7 @@ function IncidentReportModal({
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
                 placeholder="Where did it occur?"
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1409,7 +1466,7 @@ function IncidentReportModal({
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
                 placeholder="First aid, supervisor notified..."
-                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#5533CC]"
+                className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
@@ -1430,7 +1487,7 @@ function IncidentReportModal({
             onClick={handleSubmit}
             disabled={saving}
             className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            style={{ background: PLUM }}
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
             Log Incident
@@ -1500,25 +1557,40 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
 }
 
 function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
+  if (rows.length === 0) {
+    return <p className="py-2 text-sm font-medium" style={{ color: MUTED }}>No records found.</p>;
+  }
   return (
-    <div className="space-y-3">
-      {rows.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No worker-owned records returned.</p>}
-      {rows.map((session) => (
-        <div key={session.id} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="font-black capitalize" style={{ color: TEXT }}>{(session.session_type || "session").replace("_", " ")}</p>
-              <p className="text-sm font-medium" style={{ color: MUTED }}>{safeDate(session.session_date)} · {session.duration_minutes || 0} min</p>
+    <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
+      <div className="divide-y" style={{ borderColor: BORDER }}>
+        {rows.map((session) => {
+          const statusVal = session.compliance_status || session.status;
+          const scoreLabel = session.compliance_score != null
+            ? `${Math.round(Number(session.compliance_score))}%`
+            : statusVal ?? "draft";
+          return (
+            <div key={session.id} className="flex items-start gap-4 px-5 py-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-black capitalize" style={{ color: TEXT }}>
+                  {(session.session_type || "Session").replace(/_/g, " ")}
+                </p>
+                <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>
+                  {safeDate(session.session_date)}
+                  {session.duration_minutes ? ` · ${session.duration_minutes} min` : ""}
+                </p>
+                {session.legal_record_text && (
+                  <p className="mt-2 text-sm leading-relaxed line-clamp-2" style={{ color: MUTED }}>
+                    {session.legal_record_text}
+                  </p>
+                )}
+              </div>
+              <span className={`mt-0.5 shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${statusClass(statusVal)}`}>
+                {scoreLabel}
+              </span>
             </div>
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${statusClass(session.compliance_status || session.status)}`}>
-              {session.compliance_score ?? session.status ?? "draft"}
-            </span>
-          </div>
-          {session.legal_record_text && (
-            <p className="mt-3 text-sm leading-6" style={{ color: MUTED }}>{session.legal_record_text}</p>
-          )}
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1882,62 +1954,71 @@ export default function MyClientDetail({ id }: { id: string }) {
   const detail = detailQuery.data as WorkerClientDetail;
   const client = detail.participant;
   const tabs: Array<{ key: TabKey; label: string }> = [
-    { key: "overview", label: "Client Overview" },
-    { key: "plan", label: "NDIS Plan" },
+    { key: "overview", label: "Overview" },
+    { key: "plan", label: "Plan & Goals" },
     { key: "sessions", label: "Sessions" },
     { key: "notes", label: "Notes" },
     { key: "compliance", label: "Compliance" },
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-6xl space-y-5 pb-10">
+      {/* Page header — name + action row */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-            {client.full_name} - Brief Overview
+          <p className="hidden" style={{ color: MUTED }}>My Clients</p>
+          <h1 className="text-xl font-black leading-tight" style={{ color: TEXT }}>
+            {client.full_name}
           </h1>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={openSessionComposer}
             disabled={saveSessionDraft.isPending}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+            style={{ background: PLUM }}
           >
-            {saveSessionDraft.isPending ? <Loader2 size={16} className="animate-spin" /> : <Mic size={16} />}
+            {saveSessionDraft.isPending ? <Loader2 size={15} className="animate-spin" /> : <Mic size={15} />}
             Start Session
           </button>
           <button
             onClick={() => setActiveTab("notes")}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm"
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-[#F8F8FE]"
             style={{ borderColor: BORDER, color: PLUM }}
           >
-            <Plus size={16} />
-            New Note
+            <Plus size={15} />
+            Note
           </button>
           <button
             onClick={() => setIncidentModalOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full border bg-white px-5 py-3 text-sm font-black shadow-sm transition hover:bg-red-50"
-            style={{ borderColor: "#FECACA", color: CORAL }}
+            className="inline-flex items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-sm font-black transition hover:bg-red-50"
+            style={{ borderColor: "#FECACA", color: "#DC2626" }}
           >
-            <Siren size={16} />
-            Report Incident
+            <Siren size={15} />
+            Incident
           </button>
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto rounded-lg border bg-white p-2" style={{ borderColor: BORDER }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className="shrink-0 rounded-full px-4 py-2 text-sm font-black transition"
-            style={{ background: activeTab === tab.key ? SOFT : "transparent", color: activeTab === tab.key ? PLUM : MUTED }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Underline tabs */}
+      <div className="flex gap-0 overflow-x-auto border-b" style={{ borderColor: BORDER }}>
+        {tabs.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className="shrink-0 px-4 pb-3 pt-1 text-sm font-black transition-colors"
+              style={{
+                color: active ? PLUM : MUTED,
+                borderBottom: active ? `2px solid ${PLUM}` : "2px solid transparent",
+                marginBottom: "-1px",
+              }}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {activeTab === "overview" && (
@@ -2006,46 +2087,64 @@ export default function MyClientDetail({ id }: { id: string }) {
 
       {activeTab === "plan" && (
         <div className="space-y-6">
-          {planQuery.isLoading && <p className="text-sm font-bold" style={{ color: MUTED }}>Loading plan...</p>}
+          {planQuery.isLoading && <p className="text-sm font-medium" style={{ color: MUTED }}>Loading plan...</p>}
           {(planQuery.data?.goals || client.goals || []).length === 0 && !planQuery.isLoading && (
             <p className="text-sm font-medium" style={{ color: MUTED }}>No goals recorded for this participant yet.</p>
           )}
-          <div className="space-y-3">
-            {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
-              const g = goal as Record<string, unknown>;
-              const title = String(g.title || g.name || `Goal ${index + 1}`);
-              const description = String(g.description || g.instructions || g.goal_instructions || "");
-              const status = String(g.status || "active");
-              const category = String(g.category || g.support_category || "");
-              const isActive = !["completed", "achieved", "archived"].includes(status.toLowerCase());
-              return (
-                <div key={String(g.id || index)} className="rounded-lg border p-4" style={{ borderColor: "#EEEAFB" }}>
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-black" style={{ color: TEXT }}>{title}</p>
-                    <span
-                      className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold capitalize ${
-                        isActive
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-slate-50 text-slate-600"
-                      }`}
-                    >
-                      {status}
-                    </span>
-                  </div>
-                  {category.trim() && (
-                    <p className="mt-1.5 text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: PLUM }}>
-                      {category}
-                    </p>
-                  )}
-                  {description.trim() && (
-                    <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: MUTED }}>
-                      {description}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {(planQuery.data?.goals || client.goals || []).length > 0 && (
+            <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
+              <div className="flex items-center gap-2 border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
+                <Target size={14} style={{ color: MUTED }} />
+                <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
+                  NDIS Goals · {(planQuery.data?.goals || client.goals || []).length} recorded
+                </p>
+              </div>
+              <div className="divide-y" style={{ borderColor: BORDER }}>
+                {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
+                  const g = goal as Record<string, unknown>;
+                  const title = String(g.title || g.name || `Goal ${index + 1}`);
+                  const description = String(g.description || g.instructions || g.goal_instructions || "");
+                  const status = String(g.status || "active");
+                  const category = String(g.category || g.support_category || "");
+                  const isActive = !["completed", "achieved", "archived"].includes(status.toLowerCase());
+                  return (
+                    <div key={String(g.id || index)} className="px-5 py-4">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${isActive ? "bg-emerald-400" : "bg-slate-300"}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="text-sm font-black leading-snug" style={{ color: TEXT }}>
+                              {title}
+                            </p>
+                            {category.trim() && (
+                              <span
+                                className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                style={{ background: "var(--cc-soft)", color: PLUM }}
+                              >
+                                {category}
+                              </span>
+                            )}
+                          </div>
+                          {description.trim() && (
+                            <p className="mt-1.5 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: MUTED }}>
+                              {description}
+                            </p>
+                          )}
+                          {!isActive && (
+                            <p className="mt-1 text-xs font-bold capitalize" style={{ color: MUTED }}>
+                              {status}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2061,7 +2160,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             <textarea
               value={noteText}
               onChange={(event) => setNoteText(event.target.value)}
-              className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#5533CC]"
+              className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
               placeholder="Write a worker-owned progress note..."
             />

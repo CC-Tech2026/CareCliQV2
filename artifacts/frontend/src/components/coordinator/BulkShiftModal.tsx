@@ -1,4 +1,4 @@
-/**
+﻿/**
  * BulkShiftModal — CARECLIQV2-235
  * Create recurring shifts (every Mon/Wed/Fri for N weeks).
  */
@@ -22,12 +22,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   standard_support: "Standard Support",
@@ -265,7 +265,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#5533CC]"
+                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
@@ -275,7 +275,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#5533CC]"
+                    className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
@@ -366,7 +366,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 disabled={!canSubmit || mutation.isPending}
                 className="flex items-center gap-1.5 rounded-full px-4 py-2 text-[12px] font-bold text-white"
                 style={{
-                  background: canSubmit && !mutation.isPending ? `linear-gradient(135deg, ${PLUM}, ${CORAL})` : MUTED,
+                  background: canSubmit && !mutation.isPending ? PLUM : MUTED,
                 }}
               >
                 {mutation.isPending ? (

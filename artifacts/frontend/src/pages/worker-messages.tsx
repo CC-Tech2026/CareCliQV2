@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -124,7 +124,7 @@ function ThreadView({
               <div
                 className="max-w-[85%] rounded-2xl px-3 py-2 text-sm"
                 style={{
-                  background: mine ? PLUM : "#F5F3FC",
+                  background: mine ? PLUM : "#F8F8FE",
                   color: mine ? "#fff" : TEXT,
                 }}
               >
@@ -205,10 +205,10 @@ export default function WorkerMessages() {
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-5 pb-10 lg:grid-cols-[320px_1fr]">
       <header className="lg:col-span-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
+        <p className="hidden" style={{ color: CORAL }}>
           Communications
         </p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
           Messages
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>

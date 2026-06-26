@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   ChevronDown,
@@ -38,7 +38,7 @@ import {
 } from "@/lib/shift-utils";
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
-  CORE: "bg-[#F0EDF8] text-[#5533CC] border-[#E2DEF2]",
+  CORE: "bg-[#F0EDF8] text-[#3730A3] border-[#E5E7EB]",
   "CAPACITY BUILDING": "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
@@ -87,7 +87,7 @@ function ActionPill({
       href={href}
       target={external ? "_blank" : undefined}
       rel={external ? "noreferrer" : undefined}
-      className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-2 text-[11px] font-bold transition hover:bg-[#FAFAFE]"
+      className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-xs font-bold transition hover:bg-[#FAFAFE] active:bg-[#F0EDF8]"
       style={{ borderColor: BORDER, color: TEXT }}
     >
       <Icon size={14} className="shrink-0" style={{ color: PLUM }} />
@@ -229,11 +229,11 @@ export function ShiftListCard({ shift }: Props) {
       <button
         type="button"
         disabled={starting}
-        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-black text-white disabled:opacity-60"
+        className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white disabled:opacity-60"
         style={{ background: PLUM }}
         onClick={() => void handleSessionAction()}
       >
-        <Zap size={14} />
+        <Zap size={15} />
         {sessionButtonLabel}
       </button>
       {mapsUrl && (
@@ -241,20 +241,20 @@ export function ShiftListCard({ shift }: Props) {
           href={mapsUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border bg-white px-3 py-2.5 text-xs font-black"
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border bg-white px-3 text-sm font-black"
           style={{ borderColor: BORDER, color: TEXT }}
         >
-          <Navigation size={14} />
+          <Navigation size={15} />
           Directions
         </a>
       )}
       {phone && (
         <a
           href={`tel:${phone.replace(/\s/g, "")}`}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border bg-white px-3 py-2.5 text-xs font-black"
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border bg-white px-3 text-sm font-black"
           style={{ borderColor: BORDER, color: TEXT }}
         >
-          <Phone size={14} />
+          <Phone size={15} />
           Call
         </a>
       )}
@@ -269,7 +269,7 @@ export function ShiftListCard({ shift }: Props) {
         <Link href={notesHref}>
           <button
             type="button"
-            className="mb-4 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
+            className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white"
             style={{ background: CORAL }}
           >
             Complete Session Notes — Stay Compliant
@@ -312,13 +312,13 @@ export function ShiftListCard({ shift }: Props) {
         {mapsUrl && <ActionPill href={mapsUrl} icon={Send} label="Open in Maps" external />}
         {phone && <ActionPill href={`tel:${phone.replace(/\s/g, "")}`} icon={Phone} label={phone} />}
         <Link href={profileHref}>
-          <span className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-2 text-[11px] font-bold" style={{ borderColor: BORDER, color: TEXT }}>
+          <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-xs font-bold transition hover:bg-[#F0EDF8]" style={{ borderColor: BORDER, color: TEXT }}>
             <UserRound size={14} style={{ color: PLUM }} />
             Full Profile
           </span>
         </Link>
         <Link href={`/my-shifts/${shift.id}`}>
-          <span className="inline-flex items-center gap-1.5 rounded-full border bg-white px-3 py-2 text-[11px] font-bold" style={{ borderColor: BORDER, color: TEXT }}>
+          <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-xs font-bold transition hover:bg-[#F0EDF8]" style={{ borderColor: BORDER, color: TEXT }}>
             <MessageCircle size={14} style={{ color: PLUM }} />
             Message Coordinator
           </span>
@@ -329,15 +329,15 @@ export function ShiftListCard({ shift }: Props) {
 
   return (
     <article className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="p-4">
+      <div className="p-5">
         <button
           type="button"
-          className="flex w-full items-start gap-3 text-left"
+          className="flex w-full items-start gap-3.5 text-left"
           onClick={() => setExpanded(!expanded)}
         >
           <div
             className={cn(
-              "grid h-12 w-12 shrink-0 place-items-center rounded-full text-sm font-black text-white",
+              "grid size-[3.25rem] shrink-0 place-items-center rounded-full text-sm font-black text-white",
               pulse && "animate-pulse",
             )}
             style={{ background: stateStyle.avatar }}
@@ -345,53 +345,53 @@ export function ShiftListCard({ shift }: Props) {
             {shiftInitials(shift.participant_name)}
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-base font-black" style={{ color: TEXT }}>
+              <h3 className="text-[17px] font-black leading-snug" style={{ color: TEXT }}>
                 {shift.participant_name || "Participant"}
               </h3>
-              <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase", tagStyle)}>
+              <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase", tagStyle)}>
                 {serviceTag}
               </span>
             </div>
 
-            <p className="mt-1 flex flex-wrap items-center gap-1 text-xs font-semibold" style={{ color: MUTED }}>
-              <Clock3 size={12} className="shrink-0" />
+            <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[13px] font-semibold" style={{ color: MUTED }}>
+              <Clock3 size={13} className="shrink-0" />
               <span>{formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}</span>
               {durationMeta && (
                 <>
-                  <span>·</span>
+                  <span className="opacity-40">·</span>
                   <span>{durationMeta}</span>
                 </>
               )}
             </p>
 
             {shift.participant_address && (
-              <p className="mt-0.5 flex items-start gap-1 text-xs font-medium" style={{ color: MUTED }}>
-                <MapPin size={12} className="mt-0.5 shrink-0" />
-                <span className="line-clamp-2">{shift.participant_address}</span>
+              <p className="mt-1 flex items-start gap-1.5 text-[13px] font-medium" style={{ color: MUTED }}>
+                <MapPin size={13} className="mt-0.5 shrink-0" />
+                <span className="line-clamp-1">{shift.participant_address}</span>
               </p>
             )}
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
             {isCancelled ? (
-              <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-red-700">
+              <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700">
                 Cancelled
               </span>
             ) : isCompleted ? (
               <span
-                className="rounded-full border px-2.5 py-1 text-[9px] font-black uppercase tracking-wide"
-                style={{ borderColor: "#E2DEF2", background: "#F0EDF8", color: PLUM }}
+                className="rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
+                style={{ borderColor: "var(--cc-border)", background: "#F0EDF8", color: PLUM }}
               >
-                Completed
+                Done
               </span>
             ) : (
               <ShiftStatusBadge visualState={shift.visual_state} />
             )}
             <ChevronDown
-              size={18}
-              className={cn("transition", expanded && "rotate-180")}
+              size={20}
+              className={cn("transition-transform duration-200", expanded && "rotate-180")}
               style={{ color: MUTED }}
             />
           </div>
@@ -413,7 +413,7 @@ export function ShiftListCard({ shift }: Props) {
       </div>
 
       {expanded && (
-        <div className="border-t bg-white px-4 pb-4 pt-4" style={{ borderColor: BORDER }}>
+        <div className="border-t bg-white px-5 pb-5 pt-4" style={{ borderColor: BORDER }}>
           {expandedBody}
         </div>
       )}

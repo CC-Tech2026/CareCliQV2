@@ -169,6 +169,105 @@
 .brand-blob-b { animation: blob-drift-b 11s ease-in-out infinite; }
 .brand-blob-c { animation: blob-drift-c 7s ease-in-out infinite; }
 
+/* ── CareCliQ design tokens ─────────────────────────────────────────────────
+   These CSS vars are referenced by AppLayout and shared components via
+   inline style={{ color: "var(--cc-plum)" }} etc. They adapt to .dark class.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --cc-plum:       #3730A3;
+  --cc-coral:      #BE185D;
+  --cc-green:      #166534;
+  /* Neutrals */
+  --cc-text:       #111827;
+  --cc-muted:      #6B7280;
+  --cc-border:     #E5E7EB;
+  /* Surfaces */
+  --cc-bg:         #FFFFFF;
+  --cc-surface:    #FFFFFF;
+  --cc-soft:       #F8F8FE;
+  /* Nav state */
+  --cc-active-bg:  #EEF2FF;
+  /* Alert pill */
+  --cc-alert-bg:   #FCE7F3;
+}
+
+.dark {
+  /* Brand — lighter for legibility on dark */
+  --cc-plum:       #818CF8;
+  --cc-coral:      #F472B6;
+  --cc-green:      #4ADE80;
+  /* Neutrals */
+  --cc-text:       #F9FAFB;
+  --cc-muted:      #9CA3AF;
+  --cc-border:     #374151;
+  /* Surfaces */
+  --cc-bg:         #111827;
+  --cc-surface:    #1F2937;
+  --cc-soft:       #1F2937;
+  /* Nav state */
+  --cc-active-bg:  #1E1B4B;
+  /* Alert pill */
+  --cc-alert-bg:   rgba(190, 24, 93, 0.2);
+}
+
+/* ── Dark mode global surface overrides ─────────────────────────────────────
+   Tailwind classes like bg-white, bg-gray-50 etc. are patched here so that
+   page cards / list rows / panels all adapt without requiring per-file changes.
+   Inline style={{ background:"white" }} still needs per-file fixes but these
+   cover the vast majority (97+ files) using Tailwind utility classes.
+   ─────────────────────────────────────────────────────────────────────────── */
+.dark .bg-white       { background-color: var(--cc-surface) !important; }
+.dark .bg-gray-50     { background-color: var(--cc-soft)    !important; }
+.dark .bg-gray-100    { background-color: var(--cc-soft)    !important; }
+.dark .text-gray-900  { color: var(--cc-text)   !important; }
+.dark .text-gray-800  { color: var(--cc-text)   !important; }
+.dark .text-gray-700  { color: var(--cc-muted)  !important; }
+.dark .text-gray-600  { color: var(--cc-muted)  !important; }
+.dark .text-gray-500  { color: var(--cc-muted)  !important; }
+.dark .border-gray-100 { border-color: var(--cc-border) !important; }
+.dark .border-gray-200 { border-color: var(--cc-border) !important; }
+.dark .border-gray-300 { border-color: var(--cc-border) !important; }
+.dark .divide-gray-100 > * + * { border-color: var(--cc-border) !important; }
+.dark .divide-gray-200 > * + * { border-color: var(--cc-border) !important; }
+/* Hover states */
+.dark .hover\:bg-gray-50:hover  { background-color: var(--cc-soft)    !important; }
+.dark .hover\:bg-gray-100:hover { background-color: var(--cc-soft)    !important; }
+/* Tailwind arbitrary text colours — covers text-[#xxxxxx] JIT classes */
+.dark .text-\[#111827\] { color: var(--cc-text)   !important; }
+.dark .text-\[#1F2937\] { color: var(--cc-text)   !important; }
+.dark .text-\[#374151\] { color: var(--cc-text)   !important; }
+.dark .text-\[#4B5563\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#6B7280\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#9CA3AF\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#3730A3\] { color: var(--cc-plum)   !important; }
+.dark .text-\[#BE185D\] { color: var(--cc-coral)  !important; }
+/* Tailwind arbitrary background colours */
+.dark .bg-\[#F8F8FE\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F8F6FE\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#EEF2FF\]  { background-color: var(--cc-active-bg) !important; }
+.dark .bg-\[#F9FAFB\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F3F4F6\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F5F3FF\]  { background-color: var(--cc-bg)        !important; }
+.dark .bg-\[#F6F4FB\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FBFAFF\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FAFAFF\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FCE7F3\]  { background-color: var(--cc-alert-bg)  !important; }
+/* Hover variants */
+.dark .hover\:bg-\[#F6F4FB\]:hover { background-color: var(--cc-soft) !important; }
+/* Semantic status tints — keep recognizable in dark mode */
+.dark .bg-\[#FEF2F2\]  { background-color: rgba(220,38,38,0.15)  !important; }
+.dark .bg-\[#FFF5F5\]  { background-color: rgba(220,38,38,0.12)  !important; }
+.dark .bg-\[#FFF8E1\]  { background-color: rgba(217,119,6,0.15)  !important; }
+.dark .bg-\[#DCFCE7\]  { background-color: rgba(22,163,74,0.15)  !important; }
+.dark .bg-\[#FEF9C3\]  { background-color: rgba(217,119,6,0.12)  !important; }
+/* Tailwind arbitrary border colours */
+.dark .border-\[#E5E7EB\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#D1D5DB\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#EBE5F6\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#C4B8F0\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#EEEAFB\] { border-color: var(--cc-border) !important; }
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
@@ -465,4 +564,22 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+}
+
+/* ── iOS Safe Area Utilities ─────────────────────────────────────────────── */
+
+/* Mobile app header: sits flush under notch / Dynamic Island */
+.safe-header-mobile {
+  padding-top: env(safe-area-inset-top);
+  min-height: calc(4rem + env(safe-area-inset-top));
+}
+
+/* Main scrollable content: clears the fixed bottom nav + safe area */
+.safe-scroll-bottom {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
+/* Bottom navigation bar padding */
+.safe-nav-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

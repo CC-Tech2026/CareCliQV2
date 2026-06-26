@@ -1,13 +1,20 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addHours } from "date-fns";
+import { Link } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   assignShift,
   getCoordinatorCredentialAlerts,
   getCoordinatorWorkerCredentialStatus,
+  checkParticipantGoalsAndTasks,
+  getNdisGoals,
+  getParticipantTasks,
   type WorkerStats,
+  type NdisGoal,
+  type ParticipantTask,
+  type GoalsAndTasksValidation,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,15 +28,15 @@ import {
 } from "@/components/ui/dialog";
 import {
   CheckCircle2, AlertTriangle, Loader2, User2,
-  CalendarClock, ShieldCheck,
+  CalendarClock, ShieldCheck, CheckSquare, ChevronDown,
 } from "lucide-react";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const SHIFT_TYPE_LABELS: Record<string, string> = {
   standard_support: "Standard Support",
@@ -62,6 +69,7 @@ export function ShiftAssignmentModal({
   const [scheduledStart,        setScheduledStart]        = useState("");
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
+  const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
 
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
@@ -81,6 +89,32 @@ export function ShiftAssignmentModal({
     }
   );
 
+  // Check if participant has valid goals and tasks
+  const goalsTasksCheckQuery = useOrgQuery<GoalsAndTasksValidation>(
+    [orgId, "goals-tasks-validation", selectedParticipantId],
+    {
+      queryFn: () => checkParticipantGoalsAndTasks(selectedParticipantId),
+      enabled: !!selectedParticipantId,
+    }
+  );
+
+  // Get goals and tasks for display
+  const goalsQuery = useOrgQuery<NdisGoal[]>(
+    [orgId, "shift-goals", selectedParticipantId],
+    {
+      queryFn: () => getNdisGoals({ participant_id: selectedParticipantId }),
+      enabled: !!selectedParticipantId && goalsTasksCheckQuery.data?.has_valid,
+    }
+  );
+
+  const tasksQuery = useOrgQuery<ParticipantTask[]>(
+    [orgId, "shift-tasks", selectedParticipantId],
+    {
+      queryFn: () => getParticipantTasks(selectedParticipantId),
+      enabled: !!selectedParticipantId && goalsTasksCheckQuery.data?.has_valid,
+    }
+  );
+
   const assignMut = useMutation({
     mutationFn: () =>
       assignShift({
@@ -89,6 +123,7 @@ export function ShiftAssignmentModal({
         scheduled_start: scheduledStart,
         scheduled_end:   scheduledEnd || undefined,
         shift_type:      shiftType,
+        selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
@@ -111,6 +146,7 @@ export function ShiftAssignmentModal({
     setScheduledStart("");
     setScheduledEnd("");
     setShiftType("standard_support");
+    setSelectedTaskIds([]);
   };
 
   const handleQuickEnd = () => {
@@ -130,7 +166,17 @@ export function ShiftAssignmentModal({
   const participantList     = (participants.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
   const selectedParticipant = participantList.find((p) => p.id === selectedParticipantId);
 
-  const canSubmit = Boolean(selectedWorkerId && selectedParticipantId && scheduledStart && !hasBlock && !assignMut.isPending);
+  const goalsTasksValid = goalsTasksCheckQuery.data?.has_valid ?? false;
+  const hasGoalsTasksError = !goalsTasksCheckQuery.isLoading && selectedParticipantId && !goalsTasksValid;
+
+  const canSubmit = Boolean(
+    selectedWorkerId &&
+    selectedParticipantId &&
+    scheduledStart &&
+    !hasBlock &&
+    goalsTasksValid &&
+    !assignMut.isPending
+  );
 
   const credColor = credStatusQuery.isLoading ? MUTED : hasBlock ? "#DC2626" : hasExpiring ? "#D97706" : "#16A34A";
   const credLabel = credStatusQuery.isLoading
@@ -222,54 +268,143 @@ export function ShiftAssignmentModal({
             </Select>
           </div>
 
+          {/* Goals & Tasks validation */}
+          {selectedParticipantId && (
+            <div
+              className="rounded-xl border p-3.5"
+              style={{
+                borderColor: hasGoalsTasksError ? "#FECACA" : "#BBF7D0",
+                background: hasGoalsTasksError ? "#FFF1F1" : "#F0FDF4",
+              }}
+            >
+              <div className="flex items-start gap-2.5">
+                {goalsTasksCheckQuery.isLoading ? (
+                  <Loader2 size={14} className="mt-0.5 animate-spin" style={{ color: MUTED }} />
+                ) : hasGoalsTasksError ? (
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" style={{ color: "#DC2626" }} />
+                ) : (
+                  <CheckCircle2 size={14} className="mt-0.5 shrink-0" style={{ color: "#16A34A" }} />
+                )}
+                <div className="flex-1">
+                  <p
+                    className="text-[12px] font-black"
+                    style={{
+                      color: hasGoalsTasksError ? "#DC2626" : "#16A34A",
+                    }}
+                  >
+                    {goalsTasksCheckQuery.isLoading
+                      ? "Checking goals & tasks…"
+                      : hasGoalsTasksError
+                      ? "No NDIS goals or tasks set up"
+                      : "Goals & tasks configured"}
+                  </p>
+                  {hasGoalsTasksError && (
+                    <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+                      This participant needs at least one NDIS goal with at least one task before creating a shift.{" "}
+                      <Link href="/coordinator-goals" className="font-bold underline" style={{ color: PLUM }}>
+                        Set up goals now →
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Shift type */}
-          <div className="space-y-2">
-            <label className="text-[12px] font-black" style={{ color: TEXT }}>Shift Type</label>
-            <Select value={shiftType} onValueChange={setShiftType}>
-              <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(SHIFT_TYPE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!hasGoalsTasksError && (
+            <div className="space-y-2">
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>Shift Type</label>
+              <Select value={shiftType} onValueChange={setShiftType}>
+                <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SHIFT_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Date & time */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label className="text-[12px] font-black" style={{ color: TEXT }}>Start</label>
-              <Input
-                type="datetime-local"
-                value={scheduledStart}
-                onChange={(e) => setScheduledStart(e.target.value)}
-                className="rounded-xl"
-                style={{ borderColor: BORDER }}
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>End</label>
-                {scheduledStart && !scheduledEnd && (
-                  <button type="button" onClick={handleQuickEnd} className="text-[11px] font-bold" style={{ color: PLUM }}>
-                    +4 hrs
-                  </button>
-                )}
+          {!hasGoalsTasksError && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>Start</label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledStart}
+                  onChange={(e) => setScheduledStart(e.target.value)}
+                  className="rounded-xl"
+                  style={{ borderColor: BORDER }}
+                />
               </div>
-              <Input
-                type="datetime-local"
-                value={scheduledEnd}
-                onChange={(e) => setScheduledEnd(e.target.value)}
-                className="rounded-xl"
-                style={{ borderColor: BORDER }}
-              />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>End</label>
+                  {scheduledStart && !scheduledEnd && (
+                    <button type="button" onClick={handleQuickEnd} className="text-[11px] font-bold" style={{ color: PLUM }}>
+                      +4 hrs
+                    </button>
+                  )}
+                </div>
+                <Input
+                  type="datetime-local"
+                  value={scheduledEnd}
+                  onChange={(e) => setScheduledEnd(e.target.value)}
+                  className="rounded-xl"
+                  style={{ borderColor: BORDER }}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Task selection */}
+          {!hasGoalsTasksError && goalsTasksValid && (tasksQuery.data ?? []).length > 0 && (
+            <div className="space-y-2">
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>Tasks to work on (optional)</label>
+              <p className="text-[11px]" style={{ color: MUTED }}>
+                Select tasks for the worker to complete during this shift
+              </p>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {(goalsQuery.data ?? []).map((goal) => {
+                  const goalTasks = (tasksQuery.data ?? []).filter((t) => t.goal_id === goal.id);
+                  if (goalTasks.length === 0) return null;
+                  return (
+                    <div key={goal.id} className="space-y-1.5">
+                      <p className="text-[11px] font-bold" style={{ color: TEXT }}>
+                        {goal.name}
+                      </p>
+                      {goalTasks.map((task) => (
+                        <label key={task.id} className="flex items-center gap-2 cursor-pointer p-2 rounded-lg hover:bg-gray-50">
+                          <input
+                            type="checkbox"
+                            checked={selectedTaskIds.includes(task.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedTaskIds((ids) => [...ids, task.id]);
+                              } else {
+                                setSelectedTaskIds((ids) => ids.filter((id) => id !== task.id));
+                              }
+                            }}
+                            className="rounded"
+                          />
+                          <span className="text-[12px]" style={{ color: TEXT }}>
+                            {task.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Credential status */}
-          {selectedWorkerId && (
+          {selectedWorkerId && !hasGoalsTasksError && (
             <div
               className="rounded-xl border p-3.5"
               style={{
@@ -313,7 +448,7 @@ export function ShiftAssignmentModal({
           )}
 
           {/* Summary */}
-          {selectedWorkerData && selectedParticipant && scheduledStart && (
+          {selectedWorkerData && selectedParticipant && scheduledStart && !hasGoalsTasksError && (
             <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
               <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>Shift Summary</p>
               <div className="space-y-1.5 text-[12px]">
@@ -323,6 +458,7 @@ export function ShiftAssignmentModal({
                   ["Type",        SHIFT_TYPE_LABELS[shiftType] || shiftType],
                   ["Start",       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
                   ...(scheduledEnd ? [["End", format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
+                  ...(selectedTaskIds.length > 0 ? [["Tasks", `${selectedTaskIds.length} selected`] as [string, string]] : []),
                 ].map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between gap-4">
                     <span style={{ color: MUTED }}>{label}</span>
@@ -351,10 +487,12 @@ export function ShiftAssignmentModal({
             onClick={() => assignMut.mutate()}
             disabled={!canSubmit}
             className="rounded-full text-white flex items-center gap-2"
-            style={{ background: canSubmit ? `linear-gradient(135deg, ${PLUM}, ${CORAL})` : MUTED }}
+            style={{ background: canSubmit ? PLUM : MUTED }}
           >
             {assignMut.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Assigning…</>
+            ) : hasGoalsTasksError ? (
+              <><AlertTriangle size={14} /> Set Up Goals First</>
             ) : hasBlock ? (
               <><AlertTriangle size={14} /> Credentials Required</>
             ) : (

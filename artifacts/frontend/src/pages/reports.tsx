@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
@@ -26,13 +26,13 @@ import {
 } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
-const T2     = "#4A3D5A";
+const T2     = "#374151";
 const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD   = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BORDER = "var(--cc-border)";
+const CARD   = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 const BG     = "#F7F5FC";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -406,7 +406,7 @@ function SessionReportsSection() {
           {[["all","All"],["compliant","Compliant"],["at_risk","At Risk"],["non_compliant","Non-Compliant"],["draft","Draft"]].map(([v, l]) => (
             <button key={v} onClick={() => setFilter(v)}
               className="px-3 h-9 rounded-xl text-[12px] font-semibold border transition-all"
-              style={{ background: filter === v ? PLUM : "white", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
+              style={{ background: filter === v ? PLUM : "var(--cc-bg)", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
               {l}
             </button>
           ))}
@@ -1154,10 +1154,10 @@ export default function Reports() {
 
         {/* Page header */}
         <div className="mb-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Reports &amp; Documentation
           </p>
-          <h1 className="text-[26px] sm:text-[30px] font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
             {activeTab_.label}
           </h1>
         </div>
@@ -1193,7 +1193,7 @@ export default function Reports() {
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all border"
                     style={{
-                      background: active ? PLUM : "white",
+                      background: active ? PLUM : "var(--cc-bg)",
                       color: active ? "white" : T2,
                       borderColor: active ? PLUM : BORDER,
                     }}>

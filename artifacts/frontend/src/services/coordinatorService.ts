@@ -338,6 +338,7 @@ export type AssignShiftPayload = {
   scheduled_end?: string;
   duration_minutes?: number;
   shift_type?: string;
+  selected_task_ids?: string[];
 };
 
 export type AssignShiftResult = {
@@ -948,6 +949,70 @@ export function updateTaskTemplate(
 /** Delete (soft) a task template */
 export function deleteTaskTemplate(templateId: string) {
   return jsonFetch<void>(`/api/coordinator/task-templates/${encodeURIComponent(templateId)}`, {
+    method: "DELETE",
+  });
+}
+
+/** Check if a participant has valid goals and tasks for shift creation */
+export type GoalsAndTasksValidation = {
+  has_valid: boolean;
+  active_goals: number;
+  tasks_count: number;
+  message?: string;
+};
+
+export function checkParticipantGoalsAndTasks(participantId: string) {
+  return jsonFetch<GoalsAndTasksValidation>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/goals-and-tasks-validation`
+  );
+}
+
+/** Get all tasks for a participant (across all goals) */
+export type ParticipantTask = {
+  id: string;
+  goal_id: string;
+  goal_name: string;
+  participant_id: string;
+  name: string;
+  description?: string | null;
+  frequency?: string;
+  status: "pending" | "in_progress" | "completed";
+  is_mandatory?: boolean;
+  created_at?: string;
+};
+
+export function getParticipantTasks(participantId: string) {
+  return jsonFetch<ParticipantTask[]>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/tasks`
+  );
+}
+
+/** Create a task under a goal */
+export type ParticipantTaskPayload = Omit<ParticipantTask, "id" | "participant_id" | "created_at">;
+
+export function createParticipantTask(participantId: string, payload: ParticipantTaskPayload) {
+  return jsonFetch<ParticipantTask>(
+    `/api/coordinator/participants/${encodeURIComponent(participantId)}/tasks`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+}
+
+/** Update a task */
+export function updateParticipantTask(taskId: string, payload: Partial<ParticipantTaskPayload>) {
+  return jsonFetch<ParticipantTask>(`/api/coordinator/tasks/${encodeURIComponent(taskId)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Delete a task */
+export function deleteParticipantTask(taskId: string) {
+  return jsonFetch<void>(`/api/coordinator/tasks/${encodeURIComponent(taskId)}`, {
     method: "DELETE",
   });
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,12 +11,12 @@ import {
   type CoordinatorAlert,
 } from "@/services/coordinatorService";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const SEVERITY_LEVELS = {
   critical: { color: "#DC2626", label: "Critical", bg: "#FEE2E2" },
@@ -148,7 +148,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"
-      style={{ background: "#fff", borderLeft: `1px solid ${BORDER}` }}
+      style={{ background: "var(--cc-bg)", borderLeft: `1px solid ${BORDER}` }}
     >
       {/* Header */}
       <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>

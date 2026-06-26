@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 const SOFT   = "#F7F5FF";
-const PLUM   = "#5533CC";
+const PLUM   = "var(--cc-plum)";
 
 const ROLE_LABEL: Record<string, string> = {
   support_worker:     "Support Worker",
@@ -47,7 +47,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       {/* ── STICKY HEADER ─────────────────────────────── */}
       <header
         className="sticky top-0 z-50 bg-white"
-        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 0 #E2DEF2" }}
+        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 0 #E5E7EB" }}
       >
         {/* Plum accent line */}
         <div style={{ height: 3, background: PLUM }} />
@@ -87,7 +87,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-black"
-                style={{ background: "#EDEAFF", color: PLUM }}
+                style={{ background: "var(--cc-active-bg)", color: PLUM }}
               >
                 {initials}
               </div>

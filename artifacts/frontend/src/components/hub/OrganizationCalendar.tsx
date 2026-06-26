@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import {
   format, parseISO, differenceInDays, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isSameMonth,
@@ -11,11 +11,11 @@ import {
 import { getOrgEvents, createOrgEvent, deleteOrgEvent, type OrgEvent } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
 
 type EventType = "audit" | "training" | "meeting" | "review";
 
@@ -222,7 +222,7 @@ export function OrganizationCalendar() {
             <div>
               <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
               <input
-                className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-[#5533CC] transition-colors"
+                className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3] transition-colors"
                 style={{ borderColor: BORDER }}
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -306,7 +306,7 @@ export function OrganizationCalendar() {
           <div className="flex items-center justify-between mb-2">
             <button
               onClick={() => setCalMonth((m) => subMonths(m, 1))}
-              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F5F3FC]"
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F8F8FE]"
               style={{ color: MUTED }}
             >
               <ChevronLeft size={13} />
@@ -314,7 +314,7 @@ export function OrganizationCalendar() {
             <p className="text-[12px] font-black" style={{ color: TEXT }}>{format(calMonth, "MMMM yyyy")}</p>
             <button
               onClick={() => setCalMonth((m) => addMonths(m, 1))}
-              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F5F3FC]"
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F8F8FE]"
               style={{ color: MUTED }}
             >
               <ChevronRight size={13} />
@@ -341,7 +341,7 @@ export function OrganizationCalendar() {
                   key={key}
                   type="button"
                   onClick={() => setSelectedDay(isSelected ? null : day)}
-                  className="flex flex-col items-center py-0.5 rounded-lg transition-colors hover:bg-[#F5F3FC]"
+                  className="flex flex-col items-center py-0.5 rounded-lg transition-colors hover:bg-[#F8F8FE]"
                   style={{ background: isSelected ? "#EDE9FF" : "transparent", opacity: inMonth ? 1 : 0.3 }}
                 >
                   <span

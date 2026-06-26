@@ -27,7 +27,7 @@ export function DashboardActionItems({ items }: { items: DashboardActionItem[] }
         )}
         {items.map((item) => (
           <Link key={item.id} href={item.action_url || "#"}>
-            <div className="flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]">
+            <div className="flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]">
               <div className="mt-0.5 shrink-0">
                 <AlertTriangle size={16} style={{ color: item.severity === "critical" ? "#DC2626" : PLUM }} />
               </div>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
@@ -25,17 +25,17 @@ import { DndScheduleView }        from "@/components/coordinator/DndScheduleView
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 type ViewMode = "month" | "week" | "schedule" | "list";
 
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
-  scheduled:   { label: "Scheduled", bg: "#EDE9FF", color: "#5533CC" },
+  scheduled:   { label: "Scheduled", bg: "#EDE9FF", color: "#3730A3" },
   in_progress: { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
   clocked_in:  { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
   completed:   { label: "Completed", bg: "#DCFCE7", color: "#166534" },
@@ -115,7 +115,7 @@ function MonthGrid({
               style={{
                 borderBottom: `1px solid ${BORDER}`,
                 borderRight:  `1px solid ${BORDER}`,
-                background:   isSelected ? "#F0ECFF" : "white",
+                background:   isSelected ? "#F0ECFF" : "var(--cc-bg)",
                 opacity:      inMonth ? 1 : 0.38,
               }}
             >
@@ -191,7 +191,7 @@ function WeekGrid({
               <th
                 key={d.toISOString()}
                 className="min-w-[130px] px-2 py-2.5 text-center"
-                style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "white" }}
+                style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "var(--cc-bg)" }}
               >
                 <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
                   {format(d, "EEE")}
@@ -236,7 +236,7 @@ function WeekGrid({
                   <td
                     key={d.toISOString()}
                     className="px-1.5 py-2 align-top"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#FAFAFE" : "white" }}
+                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#FAFAFE" : "var(--cc-bg)" }}
                   >
                     <div className="space-y-1">
                       {dayShifts.map((s) => {
@@ -307,7 +307,7 @@ function DayPanel({
             size="sm"
             onClick={onAssign}
             className="flex items-center gap-1.5 rounded-full text-white text-xs"
-            style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})` }}
+            style={{ background: PLUM }}
           >
             <Plus size={12} /> Assign
           </Button>
@@ -440,36 +440,60 @@ export default function CoordinatorRosteringPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5 pb-12">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Coordinator</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Rostering & Scheduling</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>Manage team shifts, assignments, and schedule visibility.</p>
+          <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Rostering & Scheduling</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setBulkOpen(true)}
             variant="outline"
-            className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-black"
-            style={{ borderColor: PLUM, color: PLUM }}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black"
+            style={{ borderColor: BORDER, color: MUTED }}
           >
-            <LayoutGrid size={15} /> Recurring
+            <LayoutGrid size={14} /> Recurring
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
-            style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})` }}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
+            style={{ background: PLUM }}
           >
-            <Plus size={16} /> Create Shift
+            <Plus size={15} /> Create Shift
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard label="Shifts Today"  value={shiftsToday.length}   sub="across all workers" />
-        <KpiCard label="Active Now"    value={activeShifts.length}  color={activeShifts.length > 0 ? "#1D4ED8" : TEXT} sub="clocked in" />
-        <KpiCard label="Upcoming"      value={scheduledCount}       color={PLUM} sub="scheduled" />
-        <KpiCard label="Team Members"  value={workers.length}       sub={workersQuery.isLoading ? "loading…" : "active workers"} />
+      {/* Inline stat strip instead of 4 identical cards */}
+      <div
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border bg-white px-5 py-4"
+        style={{ borderColor: BORDER }}
+      >
+        <div className="flex items-center gap-2">
+          <CalendarDays size={14} style={{ color: MUTED }} />
+          <span className="text-sm font-black" style={{ color: TEXT }}>{shiftsToday.length}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>today</span>
+        </div>
+        <div className="h-4 w-px" style={{ background: BORDER }} />
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+          <span className="text-sm font-black text-blue-700">{activeShifts.length}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>active now</span>
+        </div>
+        <div className="h-4 w-px" style={{ background: BORDER }} />
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: PLUM }} />
+          <span className="text-sm font-black" style={{ color: PLUM }}>{scheduledCount}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>upcoming</span>
+        </div>
+        <div className="h-4 w-px" style={{ background: BORDER }} />
+        <div className="flex items-center gap-2">
+          <Users2 size={14} style={{ color: MUTED }} />
+          <span className="text-sm font-black" style={{ color: TEXT }}>{workers.length}</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>
+            {workersQuery.isLoading ? "loading…" : "team members"}
+          </span>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
@@ -480,7 +504,7 @@ export default function CoordinatorRosteringPage() {
               type="button"
               onClick={() => setViewMode(mode)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === mode ? PLUM : "white", color: viewMode === mode ? "white" : MUTED }}
+              style={{ background: viewMode === mode ? PLUM : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
             >
               {mode}
             </button>
@@ -680,10 +704,10 @@ export default function CoordinatorRosteringPage() {
                 <button
                   key={w.id}
                   onClick={() => setAvailWorker((prev) => prev?.id === w.id ? null : w)}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F5F3FC]"
+                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F8F8FE]"
                   style={{
                     borderColor: availWorker?.id === w.id ? PLUM : BORDER,
-                    background:  availWorker?.id === w.id ? "#EDE9FF" : "white",
+                    background:  availWorker?.id === w.id ? "#EDE9FF" : "var(--cc-bg)",
                   }}
                 >
                   <div

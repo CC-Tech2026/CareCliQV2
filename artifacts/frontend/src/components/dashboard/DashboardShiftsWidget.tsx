@@ -36,7 +36,7 @@ export function DashboardShiftsWidget({ shifts }: { shifts: DashboardShiftSummar
         )}
         {shifts.map((shift) => (
           <Link key={shift.id} href={`/my-shifts/${shift.id}?focus=safety`}>
-            <div className="flex items-center gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]">
+            <div className="flex items-center gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]">
               <div
                 className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-black text-white"
                 style={{ background: PLUM }}

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * WorkerAvailabilityPanel — CARECLIQV2-235
  * Availability settings and skill management for a worker.
  */
@@ -19,12 +19,12 @@ import {
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -251,7 +251,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               onClick={() => saveMut.mutate()}
               disabled={saveMut.isPending}
               className="w-full rounded-xl py-2.5 text-[12px] font-black text-white"
-              style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})`, opacity: saveMut.isPending ? 0.65 : 1 }}
+              style={{ background: PLUM, opacity: saveMut.isPending ? 0.65 : 1 }}
             >
               {saveMut.isPending ? "Saving…" : "Save Availability"}
             </button>
@@ -293,7 +293,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
-                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#5533CC]"
+                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3]"
                   style={{ borderColor: BORDER }}
                   placeholder="Skill name…"
                 />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import {
   parse, format, parseISO, isAfter, isBefore, isEqual,
   startOfDay, endOfDay, startOfWeek, startOfMonth, isToday, isThisWeek, isThisMonth,
@@ -22,13 +22,13 @@ import { useGetSessions, useGetParticipants } from "@workspace/api-client-react"
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
 // ── Design tokens — aligned with Dashboard ─────────────────────────────────────
-const PLUM        = "#5533CC";
-const CORAL       = "#F03060";
-const T1          = "#1E1640";
-const T2          = "#4A3D5A";
-const T3          = "#7A6A9E";
-const BORDER      = "#E2DEF2";
-const SOFT        = "#F5F3FC";
+const PLUM        = "#3730A3";
+const CORAL       = "#BE185D";
+const T1          = "#111827";
+const T2          = "#374151";
+const T3          = "#6B7280";
+const BORDER      = "#E5E7EB";
+const SOFT        = "#F8F8FE";
 
 // ── Sort options ───────────────────────────────────────────────────────────────
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
@@ -109,12 +109,12 @@ function Field({ icon, children }: { icon?: React.ReactNode; children: React.Rea
 function SkeletonRow() {
   return (
     <div className="px-5 py-4 flex items-center gap-4 animate-pulse">
-      <div className="w-4 h-4 rounded bg-[#E2DEF2]" />
+      <div className="w-4 h-4 rounded bg-[#E5E7EB]" />
       <div className="flex-1 space-y-2">
-        <div className="h-4 w-48 rounded bg-[#E2DEF2]" />
-        <div className="h-3 w-32 rounded bg-[#E2DEF2]" />
+        <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+        <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
       </div>
-      <div className="h-6 w-28 rounded-full bg-[#E2DEF2]" />
+      <div className="h-6 w-28 rounded-full bg-[#E5E7EB]" />
     </div>
   );
 }
@@ -332,8 +332,8 @@ export default function Sessions() {
       <button
         className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-all shrink-0 ${
           flagged
-            ? "bg-[#F03060]/10 border-[#F03060]/30 text-[#F03060]"
-            : "bg-white border-slate-200 text-slate-300 hover:text-[#F03060] hover:border-[#F03060]/30"
+            ? "bg-[#BE185D]/10 border-[#BE185D]/30 text-[#BE185D]"
+            : "bg-white border-slate-200 text-slate-300 hover:text-[#BE185D] hover:border-[#BE185D]/30"
         }`}
         onClick={toggle}
         disabled={loading}
@@ -352,7 +352,7 @@ export default function Sessions() {
     return (
       <div
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
-          isSelected ? "border-l-[#5533CC]" : "border-l-transparent hover:border-l-[#F03060]/30 hover:bg-[#F5F3FC]/50"
+          isSelected ? "border-l-[#3730A3]" : "border-l-transparent hover:border-l-[#BE185D]/30 hover:bg-[#F8F8FE]/50"
         }`}
         style={isSelected ? { background: `${PLUM}06` } : {}}
       >
@@ -368,7 +368,7 @@ export default function Sessions() {
 
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/sessions/${session.id}`)}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-1">
-              <span className="text-[14px] font-bold group-hover:text-[#5533CC] transition-colors truncate" style={{ color: T1 }}>
+              <span className="text-[14px] font-bold group-hover:text-[#3730A3] transition-colors truncate" style={{ color: T1 }}>
                 {session._participantName}
               </span>
               <span className="hidden sm:inline text-slate-300 text-xs">·</span>
@@ -479,8 +479,8 @@ export default function Sessions() {
       {/* Page header — matches Dashboard pattern */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Sessions</h1>
+          <p className="hidden" style={{ color: CORAL }}>Clinical Records</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Sessions</h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
             {isLoading ? "Loading records…" : `${sessions.length} total · ${filtered.length} in current view`}
           </p>
@@ -488,7 +488,7 @@ export default function Sessions() {
         <Link href="/sessions/new">
           <button
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            style={{ background: PLUM }}
           >
             <Plus size={16} strokeWidth={2.5} />
             New Session
@@ -583,7 +583,7 @@ export default function Sessions() {
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F5F3FC]"
+                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F8F8FE]"
                   style={{ color: T3 }}
                 >
                   <X size={12} /> Clear dates
@@ -656,7 +656,7 @@ export default function Sessions() {
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#F5F3FC] disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#F8F8FE] disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -664,7 +664,7 @@ export default function Sessions() {
               </button>
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#F5F3FC]"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#F8F8FE]"
                 style={{ color: T3 }}
               >
                 <X size={12} /> Deselect

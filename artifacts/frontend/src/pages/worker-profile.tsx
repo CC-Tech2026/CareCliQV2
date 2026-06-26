@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Loader2, LockKeyhole, Pencil, Save, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,9 @@ import {
   type UserProfile,
 } from "@/services/userService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const BORDER = "var(--cc-border)";
 
 const ROLE_LABELS: Record<string, string> = {
   support_worker: "Support Worker",
@@ -54,8 +54,8 @@ const CHANNELS = Object.keys(NOTIFICATION_CHANNEL_LABELS) as NotificationChannel
 function ReadOnlyField({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-[#7A6A9E]">{label}</p>
-      <p className="mt-1 text-[15px] font-semibold text-[#1E1640]">{value || "—"}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">{label}</p>
+      <p className="mt-1 text-[15px] font-semibold text-[#111827]">{value || "—"}</p>
     </div>
   );
 }
@@ -228,7 +228,7 @@ export default function WorkerProfile() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" />
+        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
       </div>
     );
   }
@@ -239,13 +239,13 @@ export default function WorkerProfile() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Account
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-            My profile
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            My Profile
           </h1>
-          <p className="mt-2 text-sm text-[#7A6A9E]">
+          <p className="mt-2 text-sm text-[#6B7280]">
             Manage your contact details, password, photo, and notification preferences.
           </p>
         </div>
@@ -291,16 +291,16 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <UserRound className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <UserRound className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Profile details</h2>
-            <p className="text-sm text-[#7A6A9E]">Your identity within your organisation.</p>
+            <h2 className="text-lg font-bold text-[#111827]">Profile details</h2>
+            <p className="text-sm text-[#6B7280]">Your identity within your organisation.</p>
           </div>
         </div>
 
-        <div className="mb-6 rounded-2xl bg-[#F5F3FC] p-4">
+        <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} cropCircle />
         </div>
 
@@ -321,7 +321,7 @@ export default function WorkerProfile() {
                   className="mt-1 rounded-xl"
                 />
                 {profile.pending_email ? (
-                  <p className="mt-1 text-xs text-[#7A6A9E]">
+                  <p className="mt-1 text-xs text-[#6B7280]">
                     Pending verification for {profile.pending_email}
                   </p>
                 ) : null}
@@ -348,11 +348,11 @@ export default function WorkerProfile() {
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-[#7A6A9E]">
+                <p className="mt-1 text-xs text-[#6B7280]">
                   Shown to your coordinator when they view your profile. Does not affect system notifications.
                 </p>
               </div>
-              <p className="md:col-span-2 text-xs text-[#7A6A9E]">
+              <p className="md:col-span-2 text-xs text-[#6B7280]">
                 Saving contact changes requires your current password confirmation.
               </p>
             </>
@@ -375,12 +375,12 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <LockKeyhole className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F8F8FE]">
+            <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Change password</h2>
-            <p className="text-sm text-[#7A6A9E]">Minimum 8 characters with 1 uppercase letter and 1 number.</p>
+            <h2 className="text-lg font-bold text-[#111827]">Change password</h2>
+            <p className="text-sm text-[#6B7280]">Minimum 8 characters with 1 uppercase letter and 1 number.</p>
           </div>
         </div>
 
@@ -411,11 +411,11 @@ export default function WorkerProfile() {
                     <div
                       key={index}
                       className="h-1.5 flex-1 rounded-full"
-                      style={{ background: index < strength ? PLUM : "#E2DEF2" }}
+                      style={{ background: index < strength ? PLUM : "#E5E7EB" }}
                     />
                   ))}
                 </div>
-                <p className="mt-1 text-xs font-medium text-[#7A6A9E]">
+                <p className="mt-1 text-xs font-medium text-[#6B7280]">
                   Strength: {passwordStrengthLabel(strength)}
                 </p>
               </div>
@@ -446,16 +446,16 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#1E1640]">Desktop notifications</h2>
-          <p className="text-sm text-[#7A6A9E]">
+          <h2 className="text-lg font-bold text-[#111827]">Desktop notifications</h2>
+          <p className="text-sm text-[#6B7280]">
             Show system alerts (like Slack) when the tab is in the background or for urgent updates.
           </p>
         </div>
         {!getDesktopNotificationSupport() ? (
-          <p className="text-sm text-[#7A6A9E]">Not supported in this browser.</p>
+          <p className="text-sm text-[#6B7280]">Not supported in this browser.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm font-semibold text-[#1E1640]">
+            <p className="text-sm font-semibold text-[#111827]">
               {desktopPermission === "granted" && desktopEnabled
                 ? "Enabled"
                 : desktopPermission === "denied"
@@ -487,15 +487,15 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#1E1640]">Notification preferences</h2>
-          <p className="text-sm text-[#7A6A9E]">
+          <h2 className="text-lg font-bold text-[#111827]">Notification preferences</h2>
+          <p className="text-sm text-[#6B7280]">
             Saved for this device. Choose how you want to be notified for each event type.
           </p>
         </div>
 
         {notificationPrefs ? (
           <div className="space-y-4">
-            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#7A6A9E]">
+            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
               <span>Event</span>
               {CHANNELS.map((channel) => (
                 <span key={channel} className="text-center">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
@@ -507,10 +507,10 @@ export default function WorkerProfile() {
                 className="grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1.4fr_repeat(3,0.5fr)] md:items-center"
                 style={{ borderColor: BORDER }}
               >
-                <p className="text-sm font-semibold text-[#1E1640]">{NOTIFICATION_EVENT_LABELS[event]}</p>
+                <p className="text-sm font-semibold text-[#111827]">{NOTIFICATION_EVENT_LABELS[event]}</p>
                 {CHANNELS.map((channel) => (
                   <div key={channel} className="flex items-center justify-between md:justify-center gap-3">
-                    <span className="text-xs text-[#7A6A9E] md:hidden">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
+                    <span className="text-xs text-[#6B7280] md:hidden">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
                     <Switch
                       checked={notificationPrefs[event][channel]}
                       disabled={savingPrefs}

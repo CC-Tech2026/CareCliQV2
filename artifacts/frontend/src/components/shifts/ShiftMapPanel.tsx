@@ -129,7 +129,7 @@ export function ShiftMapPanel({
                 )}
               </div>
 
-              <div className="relative aspect-[16/10] w-full bg-[#F5F3FC]">
+              <div className="relative aspect-[16/10] w-full bg-[#F8F8FE]">
                 <iframe
                   title="Shift location map"
                   src={embedMapUrl(resolvedAddress)}

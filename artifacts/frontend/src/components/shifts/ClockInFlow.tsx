@@ -184,7 +184,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
       <Dialog open={open && !scannerOpen} onOpenChange={(next) => !next && onClose()}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-[#1E1640]">Check in to shift</DialogTitle>
+            <DialogTitle className="text-[#111827]">Check in to shift</DialogTitle>
             <DialogDescription>
               Verify your arrival for {shift.participant_name ?? "this participant"} using GPS or the location QR code.
             </DialogDescription>
@@ -199,7 +199,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
               >
                 <MapPin className="h-6 w-6 shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-black text-[#1E1640]">Use GPS</p>
+                  <p className="font-black text-[#111827]">Use GPS</p>
                   <p className="text-xs text-muted-foreground">Verify you are at the participant address</p>
                 </div>
               </button>
@@ -210,7 +210,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
               >
                 <QrCode className="h-6 w-6 shrink-0 text-violet-600" />
                 <div>
-                  <p className="font-black text-[#1E1640]">Scan QR code</p>
+                  <p className="font-black text-[#111827]">Scan QR code</p>
                   <p className="text-xs text-muted-foreground">Scan the code at the participant&apos;s location</p>
                 </div>
               </button>
@@ -262,17 +262,17 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div className="space-y-2">
                     <p>
-                      <span className="font-bold text-[#1E1640]">Date & time: </span>
+                      <span className="font-bold text-[#111827]">Date & time: </span>
                       {nowLabel}
                     </p>
                     <p>
-                      <span className="font-bold text-[#1E1640]">Method: </span>
+                      <span className="font-bold text-[#111827]">Method: </span>
                       {method === "gps" ? "GPS location" : "QR code"}
                     </p>
                     {(yourLocationLabel || resolvingAddress) && (
                       <div>
                         <p>
-                          <span className="font-bold text-[#1E1640]">Your location: </span>
+                          <span className="font-bold text-[#111827]">Your location: </span>
                           {method === "gps" && locationAddress
                             ? locationAddress
                             : yourLocationLabel ?? "Looking up address…"}
@@ -287,7 +287,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                     )}
                     {shift.participant_address && (
                       <p>
-                        <span className="font-bold text-[#1E1640]">Shift address: </span>
+                        <span className="font-bold text-[#111827]">Shift address: </span>
                         {shift.participant_address}
                       </p>
                     )}

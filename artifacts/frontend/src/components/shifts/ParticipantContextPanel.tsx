@@ -125,7 +125,7 @@ export function ParticipantContextPanel({
                 onClick={() => setTab(t.id)}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
-                  activeTab === t.id ? "bg-[#5533CC] text-white" : "bg-[#F0EDFC] text-[#6D4BDA]",
+                  activeTab === t.id ? "bg-[#3730A3] text-white" : "bg-[#F0EDFC] text-[#6D4BDA]",
                 )}
               >
                 {t.label}
@@ -173,7 +173,7 @@ export function ParticipantContextPanel({
               <div className="space-y-2">
                 {hasBehaviour ? (
                   context!.behavioural_notes!.map((note, i) => (
-                    <div key={i} className="rounded-xl border border-[#E2DEF2] bg-[#F8F6FE] px-3 py-3">
+                    <div key={i} className="rounded-xl border border-[#E5E7EB] bg-[#F8F6FE] px-3 py-3">
                       <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                         {note.title}
                       </p>

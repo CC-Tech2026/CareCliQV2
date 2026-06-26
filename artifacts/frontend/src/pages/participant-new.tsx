@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+﻿import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,13 +15,13 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
-const T2     = "#4A3D5A";
+const T2     = "#374151";
 const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BORDER = "var(--cc-border)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const schema = z.object({
   full_name:                  z.string().min(1, "Name is required"),
@@ -110,7 +110,7 @@ export default function ParticipantNew() {
           <UserPlus size={18} style={{ color: PLUM }} />
         </div>
         <div>
-          <h1 className="text-[22px] font-bold" style={{ color: T1 }}>Add Participant</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>Add Participant</h1>
           <p className="text-[13px]" style={{ color: T2 }}>Create a new NDIS participant record</p>
         </div>
       </div>
@@ -272,7 +272,7 @@ export default function ParticipantNew() {
               disabled={createParticipant.isPending}
               data-testid="button-add-participant"
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+              style={{ background: PLUM }}
             >
               {createParticipant.isPending
                 ? <Loader2 size={14} className="animate-spin" />
