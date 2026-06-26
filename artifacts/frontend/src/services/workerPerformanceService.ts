@@ -149,8 +149,25 @@ export function exportShiftPdf(shiftId: string) {
     export_id: string;
     status: string;
     file_url?: string;
+    download_url?: string;
     expires_at?: string;
   }>(`/api/worker/shift-history/${shiftId}/export`, { method: "POST" });
+}
+
+export async function downloadShiftExportFile(exportId: string, filename = "shift-export.pdf") {
+  const { apiFetch } = await import("@/lib/api-fetch");
+  const response = await apiFetch(`/api/worker/shift-history/exports/${exportId}/file`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || payload.message || `Download failed with ${response.status}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export function getFeedbackUnreadCount() {

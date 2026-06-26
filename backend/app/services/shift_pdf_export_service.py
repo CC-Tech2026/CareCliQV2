@@ -10,13 +10,14 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 from ..core.config import settings
-from .email_service import queue_email_job
+from .email_service import queue_email_job, send_email
 from .supabase_client import get_supabase_admin
 from .worker_shift_history_service import get_shift_history_detail
 
 logger = logging.getLogger(__name__)
 
 EXPORT_TTL_DAYS = 30
+SIGNED_URL_SECONDS = 60 * 60 * 24 * 7  # Supabase signed URLs are capped at ~7 days
 
 
 def _is_missing_schema(exc: Exception) -> bool:
@@ -81,6 +82,41 @@ def _get_user_email(user_id: str) -> str | None:
         return None
 
 
+def _signed_export_url(bucket: Any, path: str) -> str | None:
+    try:
+        signed = bucket.create_signed_url(path, SIGNED_URL_SECONDS)
+        if isinstance(signed, dict):
+            return (
+                signed.get("signedURL")
+                or signed.get("signed_url")
+                or signed.get("signedUrl")
+                or (signed.get("data") or {}).get("signedUrl")
+                or (signed.get("data") or {}).get("signedURL")
+            )
+    except Exception as exc:
+        logger.warning("Signed URL generation failed for %s: %s", path, exc)
+    return None
+
+
+def _queue_shift_export_email(
+    *,
+    to_email: str,
+    participant_name: str,
+    shift_date: str,
+    download_page: str,
+) -> None:
+    subject = "Your CareCliQ shift record is ready"
+    text_body = (
+        f"Your shift export for {participant_name} on {shift_date} is ready.\n\n"
+        f"Download: {download_page}\n\n"
+        f"This link is available for {EXPORT_TTL_DAYS} days."
+    )
+    queue_email_job(
+        label=f"shift-export:{to_email}:{shift_date}",
+        send=lambda: send_email(to_email=to_email, subject=subject, text_body=text_body),
+    )
+
+
 def create_shift_export(
     shift_id: str,
     user_id: str,
@@ -132,9 +168,8 @@ def create_shift_export(
             pdf_bytes,
             {"content-type": "application/pdf", "upsert": "true"},
         )
-        file_url = supabase.storage.from_("shift-export-files").create_signed_url(path, 60 * 60 * 24 * EXPORT_TTL_DAYS)
-        if isinstance(file_url, dict):
-            file_url = file_url.get("signedURL") or file_url.get("signedUrl")
+        bucket = supabase.storage.from_("shift-export-files")
+        file_url = _signed_export_url(bucket, path)
     except Exception as exc:
         get_supabase_admin().table("shift_export_requests").update({
             "status": "failed",
@@ -153,27 +188,73 @@ def create_shift_export(
     email = _get_user_email(user_id)
     if email and file_url:
         download_page = f"{settings.frontend_base_url.rstrip('/')}/worker/shift-history?export={export_id}"
-        queue_email_job(
-            to_email=email,
-            subject="Your CareCliQ shift record is ready",
-            body_text=(
-                f"Your shift export for {detail.get('participant_first_name')} "
-                f"on {str(detail.get('shift_date') or '')[:10]} is ready.\n\n"
-                f"Download: {download_page}\n\n"
-                f"This link is available for {EXPORT_TTL_DAYS} days."
-            ),
-        )
-        get_supabase_admin().table("shift_export_requests").update({
-            "emailed_at": datetime.now(timezone.utc).isoformat(),
-        }).eq("id", export_id).execute()
+        try:
+            _queue_shift_export_email(
+                to_email=email,
+                participant_name=str(detail.get("participant_first_name") or "Participant"),
+                shift_date=str(detail.get("shift_date") or "")[:10],
+                download_page=download_page,
+            )
+            get_supabase_admin().table("shift_export_requests").update({
+                "emailed_at": datetime.now(timezone.utc).isoformat(),
+            }).eq("id", export_id).execute()
+        except Exception as exc:
+            logger.warning("Shift export email failed for %s: %s", export_id, exc)
 
     return {
         "export_id": export_id,
         "status": "ready",
         "file_url": file_url,
+        "download_url": f"/api/worker/shift-history/exports/{export_id}/file",
         "expires_at": expires.isoformat(),
         "download_available_days": EXPORT_TTL_DAYS,
     }
+
+
+def stream_export_file(export_id: str, user_id: str) -> tuple[bytes, str]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shift_export_requests")
+            .select("*")
+            .eq("id", export_id)
+            .eq("requested_by", user_id)
+            .limit(1)
+            .execute()
+        )
+        row = (resp.data or [None])[0]
+    except Exception as exc:
+        if _is_missing_schema(exc):
+            raise HTTPException(status_code=503, detail="Export service unavailable.") from exc
+        raise
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Export not found.")
+    if row.get("status") != "ready":
+        raise HTTPException(status_code=404, detail="Export is not ready.")
+
+    expires = row.get("expires_at")
+    if expires:
+        try:
+            exp_dt = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            if exp_dt < datetime.now(timezone.utc):
+                raise HTTPException(status_code=410, detail="Export link has expired.")
+        except HTTPException:
+            raise
+        except ValueError:
+            pass
+
+    file_path = row.get("file_path")
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Export file not found.")
+
+    try:
+        file_bytes = get_supabase_admin().storage.from_("shift-export-files").download(file_path)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Could not download export file.") from exc
+
+    filename = f"shift-{str(row.get('shift_id') or export_id)[:8]}.pdf"
+    return file_bytes, filename
 
 
 def get_export_download(export_id: str, user_id: str) -> dict[str, Any]:
