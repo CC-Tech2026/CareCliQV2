@@ -31,6 +31,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import {
   exportShiftPdf,
+  downloadShiftExportFile,
   getShiftHistory,
   getShiftHistoryDetail,
   getShiftHistoryTrend,
@@ -255,14 +256,26 @@ function ShiftDetailPanel({ shiftId, onClose }: { shiftId: string; onClose: () =
 
   const exportMut = useMutation({
     mutationFn: () => exportShiftPdf(shiftId),
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       toast({
         title: "Export ready",
-        description: res.file_url
-          ? "Your PDF is ready to download."
-          : "Export queued — check your email.",
+        description: "Your PDF is ready to download.",
       });
-      if (res.file_url) window.open(res.file_url, "_blank");
+      if (res.file_url) {
+        window.open(res.file_url, "_blank");
+        return;
+      }
+      if (res.export_id) {
+        try {
+          await downloadShiftExportFile(res.export_id, `shift-${shiftId.slice(0, 8)}.pdf`);
+        } catch (e) {
+          toast({
+            title: "Download failed",
+            description: (e as Error).message,
+            variant: "destructive",
+          });
+        }
+      }
     },
     onError: (e: Error) => toast({ title: "Export failed", description: e.message, variant: "destructive" }),
   });

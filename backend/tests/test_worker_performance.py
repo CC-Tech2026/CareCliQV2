@@ -50,3 +50,45 @@ def test_build_compliance_explanation():
     assert "87%" in text
     assert "13 of 15" in text
     assert "without evidence" in text
+
+
+def test_minimal_shift_pdf_bytes():
+    from backend.app.services.shift_pdf_export_service import _minimal_shift_pdf
+
+    pdf = _minimal_shift_pdf(
+        {
+            "shift_date": "2026-06-26",
+            "participant_first_name": "Olivia",
+            "compliance_score": 100,
+            "compliance_band": "green",
+            "compliance_explanation": "All tasks completed with evidence.",
+            "tasks": [{"label": "Personal Hygiene", "completed": True}],
+        }
+    )
+    assert pdf.startswith(b"%PDF-1.4")
+
+
+def test_queue_shift_export_email_uses_queue_contract(monkeypatch):
+    from backend.app.services import shift_pdf_export_service as export_service
+
+    captured: dict[str, object] = {}
+
+    def fake_queue_email_job(*, label: str, send):
+        captured["label"] = label
+        captured["send"] = send
+        return {"status": "queued"}
+
+    monkeypatch.setattr(export_service, "queue_email_job", fake_queue_email_job)
+    monkeypatch.setattr(export_service, "send_email", lambda **kwargs: captured.setdefault("send_email", kwargs))
+
+    export_service._queue_shift_export_email(
+        to_email="worker@example.com",
+        participant_name="Olivia",
+        shift_date="2026-06-26",
+        download_page="https://app.example/worker/shift-history?export=abc",
+    )
+
+    assert captured["label"] == "shift-export:worker@example.com:2026-06-26"
+    captured["send"]()
+    assert captured["send_email"]["to_email"] == "worker@example.com"
+    assert "Olivia" in captured["send_email"]["text_body"]

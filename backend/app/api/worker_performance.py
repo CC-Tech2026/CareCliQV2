@@ -69,6 +69,22 @@ async def worker_download_export(export_id: str, current_user: dict = Depends(ge
     return shift_pdf_export_service.get_export_download(export_id, get_user_id(current_user))
 
 
+@router.get("/shift-history/exports/{export_id}/file")
+async def worker_download_export_file(export_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    from fastapi.responses import Response
+
+    file_bytes, filename = shift_pdf_export_service.stream_export_file(
+        export_id,
+        get_user_id(current_user),
+    )
+    return Response(
+        content=file_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/shift-history/{shift_id}")
 async def worker_shift_history_detail(shift_id: str, current_user: dict = Depends(get_current_user)):
     _require_worker(current_user)
