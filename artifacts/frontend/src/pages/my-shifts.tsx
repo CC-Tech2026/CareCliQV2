@@ -205,6 +205,15 @@ export default function MyShifts() {
           </p>
         </div>
         <div className="shrink-0 flex gap-2">
+          <Link href="/calendar">
+            <button
+              type="button"
+              className="rounded-full border px-3 py-2 text-xs font-black"
+              style={{ borderColor: BORDER, color: PLUM }}
+            >
+              Calendar
+            </button>
+          </Link>
           <Link href="/worker/messages">
             <button
               type="button"

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle, CircleHelp
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle, CircleHelp, Clock
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
@@ -90,7 +90,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "My Work",
       items: [
-        { href: "/my-shifts",    label: "My Shifts",       icon: CalendarDays },
+        { href: "/my-shifts",    label: "My Shifts", icon: Clock },
+        { href: "/calendar", label: "Schedule", icon: CalendarDays },
+        // { href: "/worker/availability", label: "Availability", icon: CalendarDays },
         { href: "/my-clients",   label: "My Clients",      icon: UserRound },
         // { href: "/tasks",        label: "Tasks",           icon: ClipboardList },
         // { href: "/worker/messages", label: "Messages",     icon: MessageCircle },
