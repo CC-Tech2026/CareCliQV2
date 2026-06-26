@@ -1362,6 +1362,17 @@ def get_shift_detail_for_worker(
             payload["shift_signature"] = signature
     except Exception:
         pass
+    try:
+        from .briefing_service import get_briefing_for_worker, is_briefing_complete_for_shift
+
+        briefing = get_briefing_for_worker(shift_id, worker_id, organization_id)
+        payload["briefing_complete"] = briefing.get("briefing_complete", False)
+        payload["requires_briefing"] = not is_briefing_complete_for_shift(shift, worker_id)
+        payload["special_instructions"] = briefing.get("special_instructions")
+    except Exception as exc:
+        logger.debug("briefing enrichment failed: %s", exc)
+        payload.setdefault("briefing_complete", bool(shift.get("clocked_in_at")))
+        payload.setdefault("requires_briefing", False)
     return payload
 
 
@@ -1546,6 +1557,9 @@ def clock_in_shift(
         raise ShiftAlreadyClockedIn("Shift is already clocked in.")
 
     _ensure_risks_acknowledged_if_required(shift, organization_id)
+    from .briefing_service import ensure_briefing_completed
+
+    ensure_briefing_completed(shift, worker_id)
 
     validate_shift_scheduled_today(str(shift.get("scheduled_start") or ""))
     check_in_meta: dict[str, Any] = {}

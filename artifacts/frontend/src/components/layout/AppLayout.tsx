@@ -496,7 +496,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content canvas */}
       <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
-        <div className="flex-1 flex flex-col bg-cc-surface md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] dark:md:shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden relative">
+        <div className="flex-1 flex flex-col min-h-0 bg-cc-surface md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] dark:md:shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden relative">
 
           {/* Mobile header */}
           <header className="md:hidden h-16 flex items-center justify-between px-5 bg-cc-surface shrink-0 z-10 border-b border-cc-border">

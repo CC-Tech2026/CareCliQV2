@@ -722,6 +722,7 @@ export type LiveShift = {
   session_id?: string | null;
   visit_notes?: string | null;
   coordinator_notes?: string | null;
+  special_instructions?: string | null;
   emergency_flagged?: boolean;
   emergency_flagged_at?: string | null;
   emergency_note?: string | null;
@@ -815,6 +816,17 @@ export function emergencyStopShift(shiftId: string, note?: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: note ?? "Emergency stop triggered by coordinator" }),
     }
+  );
+}
+
+export function updateShiftBriefing(shiftId: string, specialInstructions: string | null) {
+  return jsonFetch<{ shift_id: string; shift: Record<string, unknown> }>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/briefing`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ special_instructions: specialInstructions }),
+    },
   );
 }
 
