@@ -54,6 +54,9 @@ import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
+import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
+import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
+import WorkerAvailabilityPage from "@/pages/worker-availability";
 import WorkerMessages from "@/pages/worker-messages";
 import WorkerNotificationsPage from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
@@ -182,6 +185,18 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/calendar">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleCalendar /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/requests">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleRequests /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/my-shifts/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -207,6 +222,12 @@ function Router() {
           <AppLayout><WorkerMessages /></AppLayout>
         </ProtectedRoute>
       </Route> */}
+
+      <Route path="/worker/availability">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerAvailabilityPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
 
       <Route path="/worker/help">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>

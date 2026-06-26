@@ -1476,6 +1476,32 @@ def _detect_worker_conflicts(
     except Exception:
         pass
 
+    # 2b — Approved time-off (CARECLIQV2-283)
+    try:
+        day_str = shift_start.date().isoformat()
+        to_resp = (
+            supabase.table("worker_schedule_requests")
+            .select("id, worker_time_off_request_details(start_date, end_date)")
+            .eq("user_id", worker_id)
+            .eq("request_type", "time_off")
+            .eq("status", "approved")
+            .execute()
+        )
+        for row in (to_resp.data or []):
+            detail = row.get("worker_time_off_request_details")
+            if isinstance(detail, list):
+                detail = detail[0] if detail else None
+            if not detail:
+                continue
+            if str(detail.get("start_date", "")) <= day_str <= str(detail.get("end_date", "")):
+                conflicts.append({
+                    "type": "approved_time_off",
+                    "severity": "error",
+                    "message": f"Approved time off ({detail['start_date']} – {detail['end_date']})",
+                })
+    except Exception:
+        pass
+
     # 3 — Weekly hours check
     try:
         avail_resp = (
@@ -1525,6 +1551,42 @@ def _detect_worker_conflicts(
                     "type": "approaching_hours",
                     "severity": "info",
                     "message": f"Approaching max hours ({total_hours:.1f}h / {max_hours}h this week)",
+                })
+    except Exception:
+        pass
+
+    # 4 — Max shifts per week soft limit (CARECLIQV2-284)
+    try:
+        prefs_resp = (
+            supabase.table("worker_availability_preferences")
+            .select("max_shifts_per_week")
+            .eq("user_id", worker_id)
+            .limit(1)
+            .execute()
+        )
+        if prefs_resp.data:
+            max_shifts = int(prefs_resp.data[0].get("max_shifts_per_week") or 5)
+            week_start = (shift_start - timedelta(days=shift_start.weekday())).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            week_end = week_start + timedelta(days=7)
+            week_shift_resp = (
+                supabase.table("shifts")
+                .select("id", count="exact")
+                .eq("worker_id", worker_id)
+                .gte("scheduled_start", week_start.isoformat())
+                .lt("scheduled_start", week_end.isoformat())
+                .not_.in_("status", ["cancelled"])
+                .execute()
+            )
+            count = week_shift_resp.count if week_shift_resp.count is not None else len(week_shift_resp.data or [])
+            if exclude_shift_id:
+                pass  # proposed shift may replace excluded
+            if count + 1 > max_shifts:
+                conflicts.append({
+                    "type": "max_shifts",
+                    "severity": "warning",
+                    "message": f"Exceeds worker preference ({count + 1} / {max_shifts} shifts this week)",
                 })
     except Exception:
         pass
@@ -2195,6 +2257,99 @@ async def update_worker_availability(
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Availability update failed: {exc}")
+
+
+# ── Schedule requests (CARECLIQV2-283) ────────────────────────────────────────
+
+class ResolveScheduleRequestBody(BaseModel):
+    status: str  # approved | declined
+    coordinator_notes: Optional[str] = None
+
+
+@router.get("/schedule-requests")
+async def list_coordinator_schedule_requests(
+    status: Optional[str] = Query("pending"),
+    request_type: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Pending schedule requests for coordinator review."""
+    org_id = _require_coordinator(current_user)
+    from ..services import schedule_request_service
+
+    return {
+        "requests": schedule_request_service.list_requests(
+            organization_id=org_id,
+            status=status,
+            request_type=request_type,
+            coordinator=True,
+        )
+    }
+
+
+@router.patch("/schedule-requests/{request_id}")
+async def resolve_coordinator_schedule_request(
+    request_id: str,
+    body: ResolveScheduleRequestBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    from ..services import schedule_request_service
+    from ..services.push_service import send_push_to_user
+
+    result = schedule_request_service.resolve_request(
+        request_id,
+        org_id,
+        get_user_id(current_user),
+        status=body.status,
+        coordinator_notes=body.coordinator_notes,
+    )
+    worker_id = str(result.get("user_id") or "")
+    label = "approved" if body.status == "approved" else "declined"
+    notif_type = f"schedule_request_{label}"
+    schedule_request_service.insert_worker_notification(
+        worker_id,
+        org_id,
+        notif_type,
+        f"Request {label}",
+        body.coordinator_notes or f"Your {result.get('request_type', 'schedule')} request was {label}.",
+    )
+    try:
+        await send_push_to_user(
+            worker_id,
+            title=f"Schedule request {label}",
+            body=body.coordinator_notes or f"Your request was {label}.",
+        )
+    except Exception:
+        pass
+    return result
+
+
+@router.post("/workers/{worker_id}/availability/request-update")
+async def request_worker_availability_update(
+    worker_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Ask worker to refresh stale availability (CARECLIQV2-284)."""
+    org_id = _require_coordinator(current_user)
+    from ..services import schedule_request_service
+    from ..services.push_service import send_push_to_user
+
+    schedule_request_service.insert_worker_notification(
+        worker_id,
+        org_id,
+        "availability_update_requested",
+        "Please update your availability",
+        "Your coordinator has requested you refresh your working availability.",
+    )
+    try:
+        await send_push_to_user(
+            worker_id,
+            title="Update your availability",
+            body="Your coordinator has requested an availability update.",
+        )
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 # ── Worker skills ─────────────────────────────────────────────────────────────

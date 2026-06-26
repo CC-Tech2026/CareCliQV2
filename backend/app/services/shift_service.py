@@ -774,6 +774,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "clocked_in_at": shift.get("clocked_in_at"),
         "clocked_out_at": shift.get("clocked_out_at"),
         "status": status,
+        "confirmation_status": shift.get("confirmation_status") or "confirmed",
         "visual_state": visual_state,
         "coordinator_notes": shift.get("coordinator_notes"),
         "entry_instructions": shift.get("entry_instructions"),

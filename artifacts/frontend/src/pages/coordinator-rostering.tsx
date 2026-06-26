@@ -21,6 +21,7 @@ import {
   type WorkerStats,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
+import { ScheduleRequestQueue } from "@/components/coordinator/ScheduleRequestQueue";
 import { DndScheduleView }        from "@/components/coordinator/DndScheduleView";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
@@ -464,6 +465,8 @@ export default function CoordinatorRosteringPage() {
           </Button>
         </div>
       </div>
+
+      <ScheduleRequestQueue />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard label="Shifts Today"  value={shiftsToday.length}   sub="across all workers" />
