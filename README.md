@@ -1,4 +1,4 @@
-# CarerScribe — AI Companion for NDIS
+# CarerCliQ — AI Companion for NDIS
 
 A production-grade, multi-tenant clinical management platform built for Australian NDIS (National Disability Insurance Scheme) support providers. It combines real-time session documentation, an AI compliance engine, and NDIS funding tracking in a single system.
 
