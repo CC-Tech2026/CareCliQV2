@@ -57,7 +57,17 @@ def compute_shift_validation(tasks: list[dict[str, Any]]) -> dict[str, Any]:
             "marked_na": False,
         })
 
-    if compliance_score < 50:
+    mandatory = [t for t in active if _is_mandatory(t)]
+    mandatory_completed = [t for t in mandatory if t.get("completed")]
+    mandatory_with_evidence = [t for t in mandatory_completed if _has_strong_evidence(t)]
+    mandatory_without_evidence = [t for t in mandatory_completed if not _has_strong_evidence(t)]
+
+    if mandatory:
+        ticket_score = round((len(mandatory_with_evidence) / len(mandatory)) * 100)
+    else:
+        ticket_score = compliance_score
+
+    if ticket_score < 70:
         flagged.append({
             "task_id": None,
             "label": "Overall compliance",
@@ -71,7 +81,54 @@ def compute_shift_validation(tasks: list[dict[str, Any]]) -> dict[str, Any]:
         "tasks_with_evidence": len(with_evidence),
         "tasks_without_evidence": len(without_evidence),
         "tasks_not_completed": len(not_completed),
-        "compliance_score": compliance_score,
-        "low_compliance": compliance_score < 50,
+        "mandatory_total": len(mandatory),
+        "mandatory_completed": len(mandatory_completed),
+        "mandatory_with_evidence": len(mandatory_with_evidence),
+        "mandatory_without_evidence": len(mandatory_without_evidence),
+        "compliance_score": ticket_score,
+        "low_compliance": ticket_score < 70,
         "flagged_tasks": flagged,
     }
+
+
+def compliance_score_band(score: int | float | None) -> str:
+    """Colour band per CARECLIQV2-285: green ≥90, amber 70–89, red <70."""
+    if score is None:
+        return "unknown"
+    value = float(score)
+    if value >= 90:
+        return "green"
+    if value >= 70:
+        return "amber"
+    return "red"
+
+
+def build_compliance_explanation(validation: dict[str, Any]) -> str:
+    """Plain-language compliance breakdown for worker shift history."""
+    score = validation.get("compliance_score")
+    if score is None:
+        return "Compliance score is not available for this shift."
+
+    mandatory_total = int(validation.get("mandatory_total") or 0)
+    with_evidence = int(validation.get("mandatory_with_evidence") or 0)
+    without_evidence = int(validation.get("mandatory_without_evidence") or 0)
+    not_completed = int(validation.get("tasks_not_completed") or 0)
+
+    if mandatory_total:
+        parts = [
+            f"Score: {score}% — {with_evidence} of {mandatory_total} mandatory tasks completed with evidence."
+        ]
+        if without_evidence:
+            parts.append(
+                f"{without_evidence} task{'s' if without_evidence != 1 else ''} "
+                f"completed without evidence (-6pts each)."
+            )
+        if not_completed:
+            parts.append(
+                f"{not_completed} mandatory task{'s' if not_completed != 1 else ''} not completed."
+            )
+        return " ".join(parts)
+
+    total = int(validation.get("tasks_total") or 0)
+    completed = int(validation.get("tasks_completed") or 0)
+    return f"Score: {score}% — {completed} of {total} tasks completed."

@@ -65,6 +65,10 @@ import WorkerSecurity from "@/pages/worker-security";
 import WorkerPrivacy from "@/pages/worker-privacy";
 import WorkerSyncStatus from "@/pages/worker-sync-status";
 import WorkerHelp from "@/pages/worker-help";
+import WorkerShiftHistory from "@/pages/worker-shift-history";
+import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
+import WorkerTraining from "@/pages/worker-training";
+import WorkerFeedback from "@/pages/worker-feedback";
 import AccountSecure from "@/pages/account-secure";
 import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
 import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
@@ -183,6 +187,32 @@ function Router() {
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><MyCompliance /></AppLayout>
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/shift-history">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerShiftHistory /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/performance">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPerformanceDashboard /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/training">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTraining /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/feedback/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><WorkerFeedback /></AppLayout>
+          </ProtectedRoute>
+        )}
       </Route>
 
       <Route path="/calendar">
