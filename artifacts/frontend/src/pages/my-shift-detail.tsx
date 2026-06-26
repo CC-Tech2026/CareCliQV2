@@ -188,6 +188,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   useEffect(() => {
     if (!shift) return;
+    if (
+      shift.requires_briefing
+      && !shift.briefing_complete
+      && shift.visual_state === "scheduled"
+      && !isTutorialDemo
+    ) {
+      window.location.replace(`/my-shifts/${id}/briefing`);
+    }
+  }, [shift, id, isTutorialDemo]);
+
+  useEffect(() => {
+    if (!shift) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("focus") === "safety" || shiftNeedsRiskAck(shift)) {
       setSafetyOpen(true);
@@ -401,6 +413,19 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const handleClockIn = () => {
     if (!shift) return;
+    if (shift.requires_briefing && !shift.briefing_complete) {
+      window.location.href = `/my-shifts/${shift.id}/briefing`;
+      return;
+    }
+    if (shift.requires_safety_ack) {
+      void openSafetyPage(true);
+      toast({
+        title: translate("toast.safetyCardRequired"),
+        description: translate("toast.safetyCardRequiredDesc"),
+        variant: "destructive",
+      });
+      return;
+    }
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
       setSafetyOpen(true);
       toast({

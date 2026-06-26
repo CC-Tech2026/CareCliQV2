@@ -639,8 +639,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </button>
       </aside>
 
-      {/* Main column */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      {/* Main content canvas */}
+      <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
+        <div className="flex-1 flex flex-col min-h-0 bg-cc-surface md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] dark:md:shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden relative">
 
         {/* ── Mobile header ─────────────────────────────────────────────── */}
         <header

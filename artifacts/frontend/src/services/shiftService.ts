@@ -205,6 +205,9 @@ export type WorkerShift = {
   service_category?: string;
   office_contact_number?: string | null;
   shift_signature?: import("@/services/complianceService").ShiftSignature;
+  briefing_complete?: boolean;
+  requires_briefing?: boolean;
+  special_instructions?: string | null;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -283,6 +286,57 @@ export function clockInShift(id: string, body: ClockInRequest) {
 
 export function acknowledgeShiftRisks(id: string) {
   return jsonFetch<WorkerShift>(`/api/worker/shifts/${id}/acknowledge-risks`, { method: "POST" });
+}
+
+export type ShiftBriefingAlert = {
+  id: string;
+  text: string;
+  acknowledged: boolean;
+};
+
+export type ShiftBriefingPayload = {
+  shift_id: string;
+  participant_first_name: string;
+  background_summary: {
+    text: string;
+    updated_at?: string | null;
+    show_updated_badge: boolean;
+  };
+  previous_shift_note: {
+    author_first_name: string;
+    date: string;
+    content: string;
+  } | null;
+  critical_alerts: ShiftBriefingAlert[];
+  emergency_contacts: Array<{ name: string; role: string; phone: string }>;
+  communication_preferences?: string | null;
+  special_instructions?: string | null;
+  briefing_complete: boolean;
+  requires_rebrief: boolean;
+  patient_briefing_version: number;
+  shift_briefing_version: number;
+  all_alerts_acknowledged: boolean;
+  acknowledged_at?: string;
+};
+
+export function getShiftBriefing(shiftId: string) {
+  return jsonFetch<ShiftBriefingPayload>(`/api/worker/shifts/${shiftId}/briefing`);
+}
+
+export function acknowledgeBriefingAlert(shiftId: string, alertId: string) {
+  return jsonFetch<ShiftBriefingPayload>(`/api/worker/shifts/${shiftId}/briefing/acknowledge-alert`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alert_id: alertId }),
+  });
+}
+
+export function completeShiftBriefing(shiftId: string, scrolledToBottom = true) {
+  return jsonFetch<ShiftBriefingPayload>(`/api/worker/shifts/${shiftId}/briefing/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scrolled_to_bottom: scrolledToBottom }),
+  });
 }
 
 export function startShiftSession(id: string) {

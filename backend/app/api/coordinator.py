@@ -879,6 +879,31 @@ async def update_shift_schedule(
     return {"shift_id": shift_id, "shift": updated}
 
 
+class ShiftBriefingUpdateBody(BaseModel):
+    special_instructions: Optional[str] = None
+
+
+@router.patch("/shifts/{shift_id}/briefing")
+async def update_shift_briefing(
+    shift_id: str,
+    body: ShiftBriefingUpdateBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update per-shift special instructions for pre-shift briefing (CARECLIQV2-267)."""
+    org_id = _require_coordinator(current_user)
+    from ..services import briefing_service
+
+    try:
+        updated = briefing_service.update_shift_special_instructions(
+            shift_id,
+            org_id,
+            body.special_instructions,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"shift_id": shift_id, "shift": updated}
+
+
 @router.patch("/shifts/{shift_id}/cancel")
 async def cancel_shift(
     shift_id: str,
@@ -2390,7 +2415,7 @@ async def get_live_shifts(
             .select("id, organization_id, worker_id, participant_id, participant_name, "
                     "shift_type, scheduled_start, scheduled_end, status, "
                     "clocked_in_at, clocked_out_at, duration_minutes, "
-                    "session_id, visit_notes, coordinator_notes, "
+                    "session_id, visit_notes, coordinator_notes, special_instructions, "
                     "emergency_flagged, emergency_flagged_at, emergency_note, "
                     "created_at, updated_at")
             .eq("organization_id", org_id)

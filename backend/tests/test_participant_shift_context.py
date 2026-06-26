@@ -130,11 +130,26 @@ def test_get_shift_context_http_success_for_coordinator():
         "profile": {"preferred_name": "Jamie"},
         "preferences": {"likes_dislikes": "Enjoys puzzles"},
         "context": {"previous_visit_notes": "Hydration prompts worked well."},
+        "background_summary": None,
+        "background_summary_updated_at": None,
+        "briefing_alerts": [],
     }
+    patients_table = MagicMock()
+    supabase = MagicMock()
+    supabase.table.return_value = patients_table
+    patients_table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"background_summary": None, "background_summary_updated_at": None}]
+    )
 
     with patch("backend.app.api.participants._require_participant_access", new=AsyncMock(return_value={"id": "p-1"})), patch(
         "backend.app.core.access.get_user_organization_id", return_value="org-1"
-    ), patch("backend.app.services.shift_service._fetch_participant_context", return_value=expected):
+    ), patch("backend.app.services.supabase_client.get_supabase_admin", return_value=supabase), patch(
+        "backend.app.services.briefing_service.list_participant_briefing_alerts", return_value=[]
+    ), patch("backend.app.services.shift_service._fetch_participant_context", return_value={
+        "profile": {"preferred_name": "Jamie"},
+        "preferences": {"likes_dislikes": "Enjoys puzzles"},
+        "context": {"previous_visit_notes": "Hydration prompts worked well."},
+    }):
         response = client.get("/api/participants/p-1/shift-context")
 
     assert response.status_code == 200
@@ -157,12 +172,18 @@ def test_patch_shift_context_http_updates_and_returns_context():
 
     supabase.table.side_effect = _table
     patients_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{"id": "p-1"}])
+    patients_table.select.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+        data=[{"background_summary": None, "background_summary_updated_at": None}]
+    )
     allergies_table.delete.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
     allergies_table.insert.return_value.execute.return_value = MagicMock(data=[])
 
     expected = {
         "profile": {"preferred_name": "Jamie"},
         "context": {"communication_guidance": "Use short prompts"},
+        "background_summary": None,
+        "background_summary_updated_at": None,
+        "briefing_alerts": [],
     }
 
     payload = {
@@ -179,8 +200,8 @@ def test_patch_shift_context_http_updates_and_returns_context():
     with patch("backend.app.api.participants._require_participant_access", new=AsyncMock(return_value={"id": "p-1"})), patch(
         "backend.app.core.access.get_user_organization_id", return_value="org-1"
     ), patch("backend.app.services.supabase_client.get_supabase_admin", return_value=supabase), patch(
-        "backend.app.services.shift_service._fetch_participant_context", return_value=expected
-    ):
+        "backend.app.services.briefing_service.list_participant_briefing_alerts", return_value=[]
+    ), patch("backend.app.services.shift_service._fetch_participant_context", return_value=expected):
         response = client.patch("/api/participants/p-1/shift-context", json=payload)
 
     assert response.status_code == 200

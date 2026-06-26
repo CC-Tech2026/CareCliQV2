@@ -54,6 +54,7 @@ import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
+import MyShiftBriefing from "@/pages/my-shift-briefing";
 import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
 import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
 import WorkerAvailabilityPage from "@/pages/worker-availability";
@@ -241,6 +242,14 @@ function Router() {
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerScheduleRequests /></AppLayout>
         </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/:id/briefing">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyShiftBriefing /></AppLayout>
+          </ProtectedRoute>
+        )}
       </Route>
 
       <Route path="/my-shifts/:id">

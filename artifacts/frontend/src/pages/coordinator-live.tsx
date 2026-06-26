@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  getLiveShifts, sendShiftMessage, flagShift, emergencyStopShift,
+  getLiveShifts, sendShiftMessage, flagShift, emergencyStopShift, updateShiftBriefing,
   type LiveShift, type ShiftMessage,
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
@@ -197,6 +197,57 @@ function MessageModal({
   );
 }
 
+// ── Per-shift briefing instructions ───────────────────────────────────────────
+function ShiftSpecialInstructionsEditor({
+  shiftId,
+  initialValue,
+}: {
+  shiftId: string;
+  initialValue?: string | null;
+}) {
+  const { toast } = useToast();
+  const [value, setValue] = useState(initialValue ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(initialValue ?? "");
+  }, [initialValue, shiftId]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateShiftBriefing(shiftId, value.trim() || null);
+      toast({ title: "Special instructions saved" });
+    } catch (err) {
+      toast({
+        title: "Save failed",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>
+        Special instructions (this shift)
+      </p>
+      <textarea
+        className="w-full rounded-xl border p-3 text-[13px] min-h-[80px]"
+        style={{ borderColor: BORDER, color: TEXT }}
+        placeholder="e.g. Participant has a medical appointment at 2pm — call coordinator if taxi is late."
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <Button type="button" size="sm" className="mt-2" disabled={saving} onClick={() => void save()}>
+        {saving ? "Saving…" : "Save instructions"}
+      </Button>
+    </div>
+  );
+}
+
 // ── Shift detail modal ─────────────────────────────────────────────────────────
 function ShiftDetailModal({
   shift,
@@ -284,6 +335,7 @@ function ShiftDetailModal({
               </p>
             </div>
           )}
+          <ShiftSpecialInstructionsEditor shiftId={shift.id} initialValue={shift.special_instructions} />
         </div>
       </DialogContent>
     </Dialog>
