@@ -1,4 +1,4 @@
-/**
+﻿/**
  * WorkerAvailabilityPanel — CARECLIQV2-235
  * Availability settings and skill management for a worker.
  */
@@ -19,12 +19,12 @@ import {
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -124,7 +124,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
   });
 
   return (
-    <div className="rounded-2xl border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>
@@ -251,7 +251,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               onClick={() => saveMut.mutate()}
               disabled={saveMut.isPending}
               className="w-full rounded-xl py-2.5 text-[12px] font-black text-white"
-              style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})`, opacity: saveMut.isPending ? 0.65 : 1 }}
+              style={{ background: PLUM, opacity: saveMut.isPending ? 0.65 : 1 }}
             >
               {saveMut.isPending ? "Saving…" : "Save Availability"}
             </button>
@@ -293,7 +293,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
-                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-cc-plum"
+                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3]"
                   style={{ borderColor: BORDER }}
                   placeholder="Skill name…"
                 />

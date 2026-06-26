@@ -19,13 +19,13 @@ import { ArrowLeft, Edit, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM        = "#542269";
+const PLUM        = "#3730A3";
 const CORAL       = "#F1738A";
 const T1          = "#1C1626";
-const T2          = "#4A3D5A";
+const T2          = "#374151";
 const T3          = "#7A6A8A";
 const BORDER      = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 const schema = z.object({
   full_name:          z.string().min(1, "Name is required"),
@@ -314,7 +314,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               type="submit"
               disabled={updateMutation.isPending}
               className="flex items-center justify-center gap-2 h-11 sm:h-10 px-6 rounded-xl text-white text-[13px] font-bold transition-opacity hover:opacity-90 disabled:opacity-40"
-              style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+              style={{ background: PLUM }}
             >
               {updateMutation.isPending ? (
                 <>

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DndScheduleView — CARECLIQV2-235
  * Drag-and-drop week calendar: workers × hourly time slots.
  * Unassigned shifts panel (left) → drag to worker × hour cell.
@@ -34,12 +34,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 6); // 6am–8pm
 const CELL_WIDTH = 80; // px per hour cell
@@ -47,7 +47,7 @@ const ROW_HEIGHT = 56; // px per worker row
 
 const STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
   unassigned: { bg: "#FEF2F2", color: "#DC2626", border: "#FCA5A5" },
-  scheduled:  { bg: "#EDE9FF", color: 'var(--cc-plum)', border: "#C4B5FD" },
+  scheduled:  { bg: "#EDE9FF", color: "#3730A3", border: "#C4B5FD" },
   in_progress:{ bg: "#DBEAFE", color: "#1D4ED8", border: "#93C5FD" },
   clocked_in: { bg: "#DBEAFE", color: "#1D4ED8", border: "#93C5FD" },
   completed:  { bg: "#DCFCE7", color: "#166534", border: "#86EFAC" },
@@ -156,7 +156,7 @@ function DroppableCell({
         minWidth: CELL_WIDTH,
         minHeight: ROW_HEIGHT,
         background: isOver ? "#EDE9FF" : "transparent",
-        borderLeft: '1px solid var(--cc-border)',
+        borderLeft: `1px solid ${BORDER}`,
         transition: "background 0.1s",
         position: "relative",
       }}
@@ -193,7 +193,7 @@ function ConflictModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl border bg-cc-surface shadow-2xl" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-md rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
         <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50">
@@ -268,7 +268,7 @@ function UnassignModal({
   const start = shift.scheduled_start ? parseISO(shift.scheduled_start) : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm rounded-2xl border bg-cc-surface shadow-2xl" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-sm rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
         <div className="px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Remove Worker?</h2>
           <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>
@@ -431,7 +431,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
     <>
       {checkingConflicts && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/10">
-          <div className="flex items-center gap-2 rounded-xl bg-cc-surface px-4 py-3 shadow-xl">
+          <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 shadow-xl">
             <Loader2 size={14} className="animate-spin" style={{ color: PLUM }} />
             <span className="text-[12px] font-bold" style={{ color: TEXT }}>Checking conflicts…</span>
           </div>
@@ -463,7 +463,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
           {/* Unassigned shifts sidebar */}
           <div className="w-52 shrink-0">
             <div
-              className="rounded-2xl border bg-cc-surface p-3"
+              className="rounded-2xl border bg-white p-3"
               style={{ borderColor: BORDER }}
             >
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
@@ -481,19 +481,19 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                   ))}
                 </div>
               )}
-              <p className="mt-3 rounded-lg bg-cc-bg px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
+              <p className="mt-3 rounded-lg bg-[#F8F8FE] px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
                 Drag a shift card onto a worker row to assign.
               </p>
             </div>
           </div>
 
           {/* Worker × time grid */}
-          <div className="flex-1 overflow-auto rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
+          <div className="flex-1 overflow-auto rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
             <table className="border-separate border-spacing-0">
               <thead>
                 <tr>
                   <th
-                    className="sticky left-0 z-20 bg-cc-surface px-3 py-2.5 text-left min-w-[160px]"
+                    className="sticky left-0 z-20 bg-white px-3 py-2.5 text-left min-w-[160px]"
                     style={{ borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}
                   >
                     <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
@@ -507,8 +507,8 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                       className="px-2 py-2 text-center"
                       style={{
                         borderBottom: `1px solid ${BORDER}`,
-                        borderLeft: '1px solid var(--cc-border)',
-                        background: isToday(day) ? SOFT : 'var(--cc-surface)',
+                        borderLeft: `1px solid ${BORDER}`,
+                        background: isToday(day) ? SOFT : "var(--cc-bg)",
                         minWidth: CELL_WIDTH * HOURS.length,
                       }}
                     >
@@ -523,7 +523,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                 </tr>
                 <tr>
                   <th
-                    className="sticky left-0 z-20 bg-cc-surface"
+                    className="sticky left-0 z-20 bg-white"
                     style={{ borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}
                   />
                   {weekDays.map((day) =>
@@ -533,9 +533,9 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                         className="px-0 py-1"
                         style={{
                           borderBottom: `1px solid ${BORDER}`,
-                          borderLeft: '1px solid var(--cc-border)',
+                          borderLeft: `1px solid ${BORDER}`,
                           minWidth: CELL_WIDTH,
-                          background: isToday(day) ? SOFT : 'var(--cc-surface)',
+                          background: isToday(day) ? SOFT : "var(--cc-bg)",
                         }}
                       >
                         <span className="block text-center text-[9px] font-medium" style={{ color: MUTED }}>
@@ -550,7 +550,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                 {workers.slice(0, 20).map((worker) => (
                   <tr key={worker.id}>
                     <td
-                      className="sticky left-0 z-10 bg-cc-surface px-3 py-2"
+                      className="sticky left-0 z-10 bg-white px-3 py-2"
                       style={{ borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}
                     >
                       <div className="flex items-center gap-2">
@@ -601,7 +601,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                                 <button
                                   onClick={() => handleUnassignClick(cellShift)}
                                   className="mr-1 hidden h-4 w-4 shrink-0 items-center justify-center rounded group-hover:flex"
-                                  style={{ background: 'var(--cc-surface)', color: MUTED }}
+                                  style={{ background: "var(--cc-bg)", color: MUTED }}
                                 >
                                   <Minus size={8} />
                                 </button>

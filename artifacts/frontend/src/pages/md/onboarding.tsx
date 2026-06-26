@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+﻿import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, GraduationCap, Users, CheckCircle2, Clock, AlertTriangle,
@@ -26,12 +26,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
 const GREEN  = "#10B981";
 const AMBER  = "#F59E0B";
 
@@ -101,7 +101,7 @@ function KpiCard({
 }) {
   const color = warn ? "#EF4444" : accent ?? PLUM;
   return (
-    <div className="rounded-xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>{label}</span>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: SOFT, color }}>
@@ -187,7 +187,7 @@ function OverviewTab() {
       </div>
 
       {data.new_starter_table.length > 0 && (
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>New Starter Progress</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -324,7 +324,7 @@ function StageSheet({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
-      <div className="h-full w-full max-w-md overflow-y-auto bg-cc-surface shadow-xl flex flex-col" style={{ borderLeft: '1px solid var(--cc-border)' }}>
+      <div className="h-full w-full max-w-md overflow-y-auto bg-white shadow-xl flex flex-col" style={{ borderLeft: `1px solid ${BORDER}` }}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
           <h3 className="text-[15px] font-black" style={{ color: TEXT }}>Edit Stage</h3>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
@@ -370,7 +370,7 @@ function StageSheet({
                     type="checkbox"
                     checked={!!reqs[key]}
                     onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#5533CC]"
+                    className="h-4 w-4 rounded accent-[#3730A3]"
                   />
                   <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
                 </label>
@@ -399,12 +399,12 @@ function StageSheet({
             {resourcesLoaded && allResources.length > 0 && (
               <div className="max-h-44 overflow-y-auto space-y-1.5 rounded-lg border p-2" style={{ borderColor: BORDER }}>
                 {allResources.map((r) => (
-                  <label key={r.id} className="flex items-center gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-cc-bg">
+                  <label key={r.id} className="flex items-center gap-2.5 cursor-pointer rounded-lg px-2 py-1.5 hover:bg-gray-50">
                     <input
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#5533CC] shrink-0"
+                      className="h-4 w-4 rounded accent-[#3730A3] shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
@@ -467,7 +467,7 @@ function SortableStageCard({
     <div
       ref={setNodeRef}
       style={{ ...style, borderColor: BORDER }}
-      className="flex items-center gap-3 rounded-xl border bg-cc-surface px-4 py-3 shadow-sm"
+      className="flex items-center gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm"
     >
       <button
         className="cursor-grab touch-none rounded p-1 hover:bg-gray-100"
@@ -632,7 +632,7 @@ function BuilderTab() {
       </div>
 
       {showNewProgram && (
-        <div className="flex items-center gap-2 rounded-xl border bg-cc-surface p-3" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-2 rounded-xl border bg-white p-3" style={{ borderColor: BORDER }}>
           <input
             autoFocus
             value={newProgramName}
@@ -679,8 +679,8 @@ function BuilderTab() {
               className="rounded-lg border px-4 py-2 text-[12px] font-black transition"
               style={{
                 borderColor: selectedProgram?.id === p.id ? PLUM : BORDER,
-                background: selectedProgram?.id === p.id ? PLUM : 'var(--cc-surface)',
-                color: selectedProgram?.id === p.id ? 'var(--cc-surface)' : TEXT,
+                background: selectedProgram?.id === p.id ? PLUM : "var(--cc-bg)",
+                color: selectedProgram?.id === p.id ? "#fff" : TEXT,
               }}
             >
               {p.name}
@@ -690,14 +690,14 @@ function BuilderTab() {
       )}
 
       {selectedProgram && (
-        <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm space-y-4" style={{ borderColor: BORDER }}>
+        <section className="rounded-2xl border bg-white p-5 shadow-sm space-y-4" style={{ borderColor: BORDER }}>
           <div className="flex items-center justify-between">
             <h3 className="text-[13px] font-black" style={{ color: TEXT }}>
               Stages — {selectedProgram.name}
             </h3>
             <button
               onClick={addStage}
-              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black transition hover:bg-cc-bg"
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black transition hover:bg-gray-50"
               style={{ borderColor: PLUM, color: PLUM }}
             >
               <Plus size={11} strokeWidth={2.5} /> Add Stage
@@ -827,7 +827,7 @@ function ResourcesTab() {
 
       {showUpload && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-xl border bg-cc-surface shadow-xl" style={{ borderColor: BORDER }}>
+          <div className="w-full max-w-md rounded-xl border bg-white shadow-xl" style={{ borderColor: BORDER }}>
             <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
               <h3 className="text-[14px] font-black" style={{ color: TEXT }}>Upload Resource</h3>
               <button onClick={() => { setShowUpload(false); setSelectedFile(null); }} className="rounded-lg p-1 hover:bg-gray-100">
@@ -836,7 +836,7 @@ function ResourcesTab() {
             </div>
             <div className="space-y-4 p-5">
               <div
-                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 cursor-pointer transition hover:bg-cc-bg"
+                className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 cursor-pointer transition hover:bg-gray-50"
                 style={{ borderColor: selectedFile ? PLUM : BORDER }}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -924,7 +924,7 @@ function ResourcesTab() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {resources.map((r) => (
-            <div key={r.id} className="rounded-xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+            <div key={r.id} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg shrink-0" style={{ background: SOFT }}>
                   <ResourceTypeIcon type={r.resource_type} />
@@ -1051,7 +1051,7 @@ function ApprovalsTab() {
       ) : (
         <div className="space-y-4">
           {items.map((item) => (
-            <div key={item.progress_id} className="rounded-xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <div key={item.progress_id} className="rounded-xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full font-black text-[13px] shrink-0" style={{ background: SOFT, color: PLUM }}>
@@ -1089,7 +1089,7 @@ function ApprovalsTab() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => { setRequestChangesId(item.progress_id); setChangesNote(""); }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-black transition hover:bg-cc-bg"
+                    className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-black transition hover:bg-gray-50"
                     style={{ borderColor: CORAL, color: CORAL }}
                   >
                     <Send size={12} /> Request Changes
@@ -1162,7 +1162,7 @@ export default function MDOnboardingPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-cc-bg"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Hub
@@ -1183,7 +1183,7 @@ export default function MDOnboardingPage() {
               onClick={() => setActiveTab(tab.id)}
               className="flex-1 rounded-lg py-2 text-[12px] font-black transition"
               style={{
-                background: activeTab === tab.id ? 'var(--cc-surface)' : 'transparent',
+                background: activeTab === tab.id ? "var(--cc-bg)" : "transparent",
                 color: activeTab === tab.id ? PLUM : MUTED,
                 boxShadow: activeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}

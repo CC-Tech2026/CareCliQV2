@@ -2,22 +2,6 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-/* OpenDyslexic — opt-in via html.font-dyslexic */
-@font-face {
-  font-family: "OpenDyslexic";
-  src: url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "OpenDyslexic";
-  src: url("https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* ── Scrollbar Styling ────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 5px;
@@ -30,12 +14,6 @@
   background: rgba(122, 106, 158, 0.22);
   border-radius: 100px;
   transition: background 0.2s;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(168, 155, 196, 0.35);
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(155, 127, 255, 0.45);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(85, 51, 204, 0.38);
@@ -157,15 +135,6 @@
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
 
-  --color-cc-plum: var(--cc-plum);
-  --color-cc-coral: var(--cc-coral);
-  --color-cc-text: var(--cc-text);
-  --color-cc-muted: var(--cc-muted);
-  --color-cc-border: var(--cc-border);
-  --color-cc-bg: var(--cc-bg);
-  --color-cc-surface: var(--cc-surface);
-  --color-cc-active: var(--cc-active);
-
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -200,36 +169,107 @@
 .brand-blob-b { animation: blob-drift-b 11s ease-in-out infinite; }
 .brand-blob-c { animation: blob-drift-c 7s ease-in-out infinite; }
 
+/* ── CareCliQ design tokens ─────────────────────────────────────────────────
+   These CSS vars are referenced by AppLayout and shared components via
+   inline style={{ color: "var(--cc-plum)" }} etc. They adapt to .dark class.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --cc-plum:       #3730A3;
+  --cc-coral:      #BE185D;
+  --cc-green:      #166534;
+  /* Neutrals */
+  --cc-text:       #111827;
+  --cc-muted:      #6B7280;
+  --cc-border:     #E5E7EB;
+  /* Surfaces */
+  --cc-bg:         #FFFFFF;
+  --cc-surface:    #FFFFFF;
+  --cc-soft:       #F8F8FE;
+  /* Nav state */
+  --cc-active-bg:  #EEF2FF;
+  /* Alert pill */
+  --cc-alert-bg:   #FCE7F3;
+}
+
+.dark {
+  /* Brand — lighter for legibility on dark */
+  --cc-plum:       #818CF8;
+  --cc-coral:      #F472B6;
+  --cc-green:      #4ADE80;
+  /* Neutrals */
+  --cc-text:       #F9FAFB;
+  --cc-muted:      #9CA3AF;
+  --cc-border:     #374151;
+  /* Surfaces */
+  --cc-bg:         #111827;
+  --cc-surface:    #1F2937;
+  --cc-soft:       #1F2937;
+  /* Nav state */
+  --cc-active-bg:  #1E1B4B;
+  /* Alert pill */
+  --cc-alert-bg:   rgba(190, 24, 93, 0.2);
+}
+
+/* ── Dark mode global surface overrides ─────────────────────────────────────
+   Tailwind classes like bg-white, bg-gray-50 etc. are patched here so that
+   page cards / list rows / panels all adapt without requiring per-file changes.
+   Inline style={{ background:"white" }} still needs per-file fixes but these
+   cover the vast majority (97+ files) using Tailwind utility classes.
+   ─────────────────────────────────────────────────────────────────────────── */
+.dark .bg-white       { background-color: var(--cc-surface) !important; }
+.dark .bg-gray-50     { background-color: var(--cc-soft)    !important; }
+.dark .bg-gray-100    { background-color: var(--cc-soft)    !important; }
+.dark .text-gray-900  { color: var(--cc-text)   !important; }
+.dark .text-gray-800  { color: var(--cc-text)   !important; }
+.dark .text-gray-700  { color: var(--cc-muted)  !important; }
+.dark .text-gray-600  { color: var(--cc-muted)  !important; }
+.dark .text-gray-500  { color: var(--cc-muted)  !important; }
+.dark .border-gray-100 { border-color: var(--cc-border) !important; }
+.dark .border-gray-200 { border-color: var(--cc-border) !important; }
+.dark .border-gray-300 { border-color: var(--cc-border) !important; }
+.dark .divide-gray-100 > * + * { border-color: var(--cc-border) !important; }
+.dark .divide-gray-200 > * + * { border-color: var(--cc-border) !important; }
+/* Hover states */
+.dark .hover\:bg-gray-50:hover  { background-color: var(--cc-soft)    !important; }
+.dark .hover\:bg-gray-100:hover { background-color: var(--cc-soft)    !important; }
+/* Tailwind arbitrary text colours — covers text-[#xxxxxx] JIT classes */
+.dark .text-\[#111827\] { color: var(--cc-text)   !important; }
+.dark .text-\[#1F2937\] { color: var(--cc-text)   !important; }
+.dark .text-\[#374151\] { color: var(--cc-text)   !important; }
+.dark .text-\[#4B5563\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#6B7280\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#9CA3AF\] { color: var(--cc-muted)  !important; }
+.dark .text-\[#3730A3\] { color: var(--cc-plum)   !important; }
+.dark .text-\[#BE185D\] { color: var(--cc-coral)  !important; }
+/* Tailwind arbitrary background colours */
+.dark .bg-\[#F8F8FE\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F8F6FE\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#EEF2FF\]  { background-color: var(--cc-active-bg) !important; }
+.dark .bg-\[#F9FAFB\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F3F4F6\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#F5F3FF\]  { background-color: var(--cc-bg)        !important; }
+.dark .bg-\[#F6F4FB\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FBFAFF\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FAFAFF\]  { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[#FCE7F3\]  { background-color: var(--cc-alert-bg)  !important; }
+/* Hover variants */
+.dark .hover\:bg-\[#F6F4FB\]:hover { background-color: var(--cc-soft) !important; }
+/* Semantic status tints — keep recognizable in dark mode */
+.dark .bg-\[#FEF2F2\]  { background-color: rgba(220,38,38,0.15)  !important; }
+.dark .bg-\[#FFF5F5\]  { background-color: rgba(220,38,38,0.12)  !important; }
+.dark .bg-\[#FFF8E1\]  { background-color: rgba(217,119,6,0.15)  !important; }
+.dark .bg-\[#DCFCE7\]  { background-color: rgba(22,163,74,0.15)  !important; }
+.dark .bg-\[#FEF9C3\]  { background-color: rgba(217,119,6,0.12)  !important; }
+/* Tailwind arbitrary border colours */
+.dark .border-\[#E5E7EB\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#D1D5DB\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#EBE5F6\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#C4B8F0\] { border-color: var(--cc-border) !important; }
+.dark .border-\[#EEEAFB\] { border-color: var(--cc-border) !important; }
+
 /* LIGHT MODE */
 :root {
-  --font-scale: 1;
-
-  /* CareCliQ brand — override in .dark / html.high-contrast */
-  --cc-plum: #5533CC;
-  --cc-coral: #F03060;
-  --cc-text: #1E1640;
-  --cc-muted: #7A6A9E;
-  --cc-border: #E2DEF2;
-  --cc-bg: #F5F3FC;
-  --cc-surface: #FFFFFF;
-  --cc-active: #EDEAFF;
-
-  --cc-plum-subtle: color-mix(in srgb, var(--cc-plum) 8%, transparent);
-  --cc-plum-soft: color-mix(in srgb, var(--cc-plum) 6%, transparent);
-  --cc-plum-medium: color-mix(in srgb, var(--cc-plum) 10%, transparent);
-  --cc-plum-ring: color-mix(in srgb, var(--cc-plum) 20%, transparent);
-  --cc-coral-soft: color-mix(in srgb, var(--cc-coral) 6%, transparent);
-  --cc-coral-ring: color-mix(in srgb, var(--cc-coral) 25%, transparent);
-
-  --cc-status-success: #047857;
-  --cc-status-success-bg: #ECFDF5;
-  --cc-status-warning: #92400E;
-  --cc-status-warning-bg: #FFFBEB;
-  --cc-status-critical: #B91C1C;
-  --cc-status-critical-bg: #FEE2E2;
-  --cc-status-info: #1D4ED8;
-  --cc-status-info-bg: #EFF6FF;
-
   --button-outline: rgba(0,0,0, .10);
   --badge-outline: rgba(0,0,0, .05);
 
@@ -341,31 +381,6 @@
 }
 
 .dark {
-  --cc-plum: #9B7FFF;
-  --cc-coral: #FF6B8A;
-  --cc-text: #F0EDFF;
-  --cc-muted: #A89BC4;
-  --cc-border: #3D3560;
-  --cc-bg: #12101F;
-  --cc-surface: #1E1A2E;
-  --cc-active: #2A2445;
-
-  --cc-plum-subtle: color-mix(in srgb, var(--cc-plum) 14%, transparent);
-  --cc-plum-soft: color-mix(in srgb, var(--cc-plum) 10%, transparent);
-  --cc-plum-medium: color-mix(in srgb, var(--cc-plum) 16%, transparent);
-  --cc-plum-ring: color-mix(in srgb, var(--cc-plum) 28%, transparent);
-  --cc-coral-soft: color-mix(in srgb, var(--cc-coral) 10%, transparent);
-  --cc-coral-ring: color-mix(in srgb, var(--cc-coral) 30%, transparent);
-
-  --cc-status-success: #34D399;
-  --cc-status-success-bg: #064E3B;
-  --cc-status-warning: #FBBF24;
-  --cc-status-warning-bg: #78350F;
-  --cc-status-critical: #F87171;
-  --cc-status-critical-bg: #7F1D1D;
-  --cc-status-info: #60A5FA;
-  --cc-status-info-bg: #1E3A5F;
-
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
 
@@ -434,81 +449,8 @@
     @apply border-border;
   }
 
-  /* Scale all rem-based typography (Tailwind + components) */
-  html {
-    font-size: calc(100% * var(--font-scale, 1));
-  }
-
   body {
     @apply font-sans antialiased bg-background text-foreground;
-  }
-
-  html.font-dyslexic body {
-    font-family: "OpenDyslexic", "Comic Sans MS", var(--app-font-sans), sans-serif;
-  }
-
-  /* WCAG 2.1 — visible focus at all times */
-  :focus-visible {
-    outline: 3px solid hsl(var(--ring));
-    outline-offset: 2px;
-  }
-
-  /* High contrast — ≥7:1 text/background (AAA) */
-  html.high-contrast {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
-    --muted-foreground: 0 0% 0%;
-    --border: 0 0% 0%;
-    --primary: 240 100% 25%;
-    --primary-foreground: 0 0% 100%;
-    --ring: 240 100% 25%;
-
-    --cc-plum: #0000AA;
-    --cc-coral: #CC0033;
-    --cc-text: #000000;
-    --cc-muted: #000000;
-    --cc-border: #000000;
-    --cc-bg: #FFFFFF;
-    --cc-surface: #FFFFFF;
-    --cc-active: #E8E8FF;
-
-    --cc-status-success: #004400;
-    --cc-status-success-bg: #E6FFE6;
-    --cc-status-warning: #664400;
-    --cc-status-warning-bg: #FFF8E6;
-    --cc-status-critical: #660000;
-    --cc-status-critical-bg: #FFE6E6;
-    --cc-status-info: #000066;
-    --cc-status-info-bg: #E6E6FF;
-  }
-
-  html.high-contrast.dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 100%;
-    --muted-foreground: 0 0% 100%;
-    --border: 0 0% 100%;
-    --primary: 210 100% 70%;
-    --primary-foreground: 0 0% 0%;
-    --ring: 210 100% 70%;
-
-    --cc-plum: #AAAAFF;
-    --cc-coral: #FF6688;
-    --cc-text: #FFFFFF;
-    --cc-muted: #FFFFFF;
-    --cc-border: #FFFFFF;
-    --cc-bg: #000000;
-    --cc-surface: #000000;
-    --cc-active: #1A1A3A;
-  }
-
-  html.high-contrast button,
-  html.high-contrast [role="button"],
-  html.high-contrast a[href] {
-    border: 2px solid hsl(var(--foreground)) !important;
   }
 }
 
@@ -533,18 +475,6 @@
  * need to be distinguished from eachother visually.
  */
 @layer utilities {
-
-  /* WCAG 2.1 AA — 44×44px minimum touch target */
-  .touch-target {
-    min-height: 2.75rem;
-    min-width: 2.75rem;
-  }
-
-  /* Prevent XL font overflow on narrow screens */
-  .text-safe {
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {
@@ -634,62 +564,22 @@
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
   }
+}
 
-  /* Dark mode — remap Tailwind light tints to CareCliQ theme tokens */
-  .dark :is(.bg-slate-50, .bg-gray-50, .bg-zinc-50, .bg-neutral-50) {
-    background-color: var(--cc-bg);
-  }
-  .dark :is(.bg-slate-100, .bg-gray-100, .bg-zinc-100) {
-    background-color: var(--cc-active);
-  }
-  .dark :is(.border-slate-100, .border-slate-200, .border-gray-200, .border-zinc-200) {
-    border-color: var(--cc-border);
-  }
-  .dark :is(.text-slate-500, .text-slate-600, .text-slate-700, .text-gray-600, .text-gray-700) {
-    color: var(--cc-muted);
-  }
-  .dark :is(.text-slate-900, .text-gray-900) {
-    color: var(--cc-text);
-  }
-  .dark .bg-amber-50 {
-    background-color: var(--cc-status-warning-bg);
-  }
-  .dark :is(.text-amber-700, .text-amber-800, .text-amber-900) {
-    color: var(--cc-status-warning);
-  }
-  .dark .border-amber-200,
-  .dark .border-amber-300 {
-    border-color: var(--cc-status-warning);
-  }
-  .dark .bg-red-50 {
-    background-color: var(--cc-status-critical-bg);
-  }
-  .dark :is(.text-red-600, .text-red-700, .text-red-800) {
-    color: var(--cc-status-critical);
-  }
-  .dark .border-red-100,
-  .dark .border-red-200 {
-    border-color: var(--cc-status-critical);
-  }
-  .dark .bg-emerald-50 {
-    background-color: var(--cc-status-success-bg);
-  }
-  .dark :is(.text-emerald-700, .text-emerald-800, .text-emerald-900) {
-    color: var(--cc-status-success);
-  }
-  .dark .border-emerald-200 {
-    border-color: var(--cc-status-success);
-  }
-  .dark .bg-blue-50 {
-    background-color: var(--cc-status-info-bg);
-  }
-  .dark :is(.text-blue-700, .text-blue-800) {
-    color: var(--cc-status-info);
-  }
-  .dark .border-blue-200 {
-    border-color: var(--cc-status-info);
-  }
-  .dark .hover\:bg-red-50:hover {
-    background-color: var(--cc-status-critical-bg);
-  }
+/* ── iOS Safe Area Utilities ─────────────────────────────────────────────── */
+
+/* Mobile app header: sits flush under notch / Dynamic Island */
+.safe-header-mobile {
+  padding-top: env(safe-area-inset-top);
+  min-height: calc(4rem + env(safe-area-inset-top));
+}
+
+/* Main scrollable content: clears the fixed bottom nav + safe area */
+.safe-scroll-bottom {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+}
+
+/* Bottom navigation bar padding */
+.safe-nav-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

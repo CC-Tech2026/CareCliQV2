@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+﻿import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
@@ -15,11 +15,47 @@ import {
 // ── Palette ───────────────────────────────────────────────────────────────────
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
-const PLUM_SUBTLE = "var(--cc-plum-subtle)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const BLUSH = "#F8C0CE";
-const BORDER = "#D8D0F0";
-const BG = "#F5F3FC";
+const BORDER = "#C7D2FE";
+const BG = "#F8F8FE";
+
+// ── Password Strength Indicator ───────────────────────────────────────────────
+function PasswordStrengthBar({ password }: { password: string }) {
+  const getScore = (pwd: string): number => {
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (pwd.length >= 12) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) score++;
+    return Math.min(score, 4); // Max 4 levels
+  };
+
+  const score = getScore(password);
+  const colors = ["#EF4444", "#F97316", "#FBBF24", "#22C55E"];
+  const labels = ["Weak", "Fair", "Good", "Strong"];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1.5">
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            className="flex-1 h-1.5 rounded-full transition-all duration-300"
+            style={{
+              background: i < score ? colors[score - 1] : "#E5E7EB",
+            }}
+          />
+        ))}
+      </div>
+      {password && (
+        <p className="text-[11px] font-medium" style={{ color: colors[Math.max(score - 1, 0)] }}>
+          {labels[Math.max(score - 1, 0)]}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -44,7 +80,7 @@ interface FormData {
 }
 
 const EMPTY: FormData = {
-  account_type: "",
+  account_type: "small_provider",
   full_name: "",
   email: "",
   password: "",
@@ -107,7 +143,7 @@ function StyledInput({
         style={{
           background: BG,
           border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
-          color: 'var(--cc-text)',
+          color: "var(--cc-text)",
           WebkitAppearance: "none",
         }}
         onFocus={() => setFocused(true)}
@@ -118,7 +154,7 @@ function StyledInput({
           type="button"
           aria-label={showPassword ? "Hide password" : "Show password"}
           onClick={() => setShowPassword((value) => !value)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-cc-muted"
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B7280]"
         >
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -158,7 +194,7 @@ function StyledSelect({
       style={{
         background: BG,
         border: `1.5px solid ${focused ? CORAL : BORDER}`,
-        color: 'var(--cc-text)',
+        color: "var(--cc-text)",
         WebkitAppearance: "none",
       }}
       onFocus={() => setFocused(true)}
@@ -196,7 +232,7 @@ export default function Signup() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
@@ -208,24 +244,7 @@ export default function Signup() {
     }));
   }, []);
 
-  const STEP_LABELS = ["Account Type", "Your Details", "Organisation"];
-
-  const TYPES = [
-    {
-      value: "small_provider" as AccountType,
-      title: "Disability Support Business",
-      sub: "Support Coordinator, Team Leader, Service Manager, Business Owner or Director managing a team",
-      dot: PLUM,
-      badge: "Most common",
-    },
-    {
-      value: "allied_health" as AccountType,
-      title: "Allied Health Professional",
-      sub: "OT, Speech Pathologist, Physiotherapist, Behaviour Support Practitioner",
-      dot: "#9B5DE5",
-      badge: null,
-    },
-  ] as const;
+  const STEP_LABELS = ["Your Details", "Organisation"];
 
   function step1Valid() {
     return (
@@ -237,17 +256,7 @@ export default function Signup() {
   }
 
   function step2Valid() {
-    if (form.account_type === "allied_health") {
-      return (
-        form.ah_profession_type !== "" && form.ah_registration_status !== ""
-      );
-    }
-
-    if (form.account_type === "small_provider") {
-      return form.sp_organisation_name.trim() !== "";
-    }
-
-    return false;
+    return form.sp_organisation_name.trim() !== "";
   }
 
   async function handleSubmit(e?: React.FormEvent) {
@@ -353,7 +362,7 @@ export default function Signup() {
 
   return (
     <div
-      className="h-screen w-screen flex bg-cc-bg overflow-hidden"
+      className="h-screen w-screen flex bg-[#F8F8FE] overflow-hidden"
       style={{ animation: "authPageEnter 0.3s ease-out" }}
     >
       <style
@@ -363,64 +372,97 @@ export default function Signup() {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes stepSlideIn {
+          from { opacity: 0; transform: translateX(16px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .step-content {
+          animation: stepSlideIn 0.28s ease-out;
+        }
       `,
         }}
       />
       {/* LEFT */}
-      <div className="hidden md:flex md:w-1/2 relative h-full overflow-hidden">
+      <div
+        className="hidden md:flex md:w-1/2 relative h-full overflow-hidden flex-col justify-between p-12"
+        style={{ background: "linear-gradient(135deg, #F5F3FF 0%, #FFF9F0 100%)" }}
+      >
+        {/* Subtle radial glow */}
         <div
-          className="absolute inset-0 z-0 pointer-events-none bg-cover bg-center"
-          style={{
-            backgroundImage: `url('/signup_welcome.jpg')`,
-          }}
-        />
-
-        <div
-          className="absolute inset-0 z-0 pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "linear-gradient(135deg, rgba(30,22,64,0.85) 0%, rgba(85,51,204,0.5) 50%, rgba(240,48,96,0.4) 100%)",
+              "radial-gradient(ellipse at 0% 100%, rgba(55,48,163,0.08) 0%, transparent 60%), radial-gradient(ellipse at 100% 0%, rgba(190,24,93,0.06) 0%, transparent 50%)",
           }}
         />
 
-        <div
-          className="absolute inset-0 z-0 opacity-10 pointer-events-none"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        <div className="relative z-10 flex flex-col justify-between h-full">
           <div>
             <img
               src="/carecliQ_logo.png"
               alt="CareCliQ"
-              className="max-w-[250px]"
+              className="max-w-[200px]"
             />
-
-            <p className="mt-3 text-xs font-black tracking-[0.18em] uppercase text-[#FFD2DA]">
+            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "#6B5B95" }}>
               NDIS Compliance Made Easy
             </p>
           </div>
 
           <div>
-            <h1 className="text-5xl font-black text-white leading-tight">
-              Write beautiful notes,
+            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "#2D1B4E" }}>
+              Write better notes,
               <br />
-              <span className="text-[#FFD2DA]">minus the heavy paperwork.</span>
+              <span style={{ color: "#3730A3" }}>faster than ever.</span>
             </h1>
-
-            <p className="mt-5 text-white/90 max-w-md leading-relaxed">
+            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "#5A4A78" }}>
               Manage your participants, support workers, compliance, and NDIS
               documentation — all in one place built for Australian disability
               support businesses.
             </p>
+
+            <div className="mt-10 flex items-center gap-6">
+              <div>
+                <p className="text-2xl font-black" style={{ color: "#2D1B4E" }}>24 hr</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "#6B5B95" }}>NDIS note deadline</p>
+              </div>
+              <div className="h-10 w-px" style={{ background: "rgba(55,48,163,0.12)" }} />
+              <div>
+                <p className="text-2xl font-black" style={{ color: "#2D1B4E" }}>100%</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "#6B5B95" }}>compliance tracked</p>
+              </div>
+              <div className="h-10 w-px" style={{ background: "rgba(55,48,163,0.12)" }} />
+              <div>
+                <p className="text-2xl font-black" style={{ color: "#2D1B4E" }}>AU</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "#6B5B95" }}>NDIS registered</p>
+              </div>
+            </div>
+
+            {/* People / social proof */}
+            <div className="mt-8 flex items-center gap-3">
+              <div className="flex -space-x-2">
+                {[
+                  { initials: "SC", bg: "#3730A3" },
+                  { initials: "OT", bg: "#0D7C66" },
+                  { initials: "TL", bg: "#7B3F9E" },
+                  { initials: "PM", bg: "#1A6FA8" },
+                ].map((a) => (
+                  <div
+                    key={a.initials}
+                    className="h-8 w-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white"
+                    style={{ background: a.bg, borderColor: "#F5F3FF" }}
+                  >
+                    {a.initials}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[13px] font-medium" style={{ color: "#2D1B4E" }}>
+                Joined by 200+ NDIS providers
+              </p>
+            </div>
           </div>
 
-          <div className="text-white/70 text-xs font-bold tracking-wider">
-            © 2026 CARESCRIBE
+          <div className="text-[11px] font-bold tracking-wider" style={{ color: "#6B5B95" }}>
+            © 2026 CareCliQ · Built for Australian disability support
           </div>
         </div>
       </div>
@@ -428,20 +470,20 @@ export default function Signup() {
       {/* RIGHT */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 justify-center mb-5 bg-cc-surface px-4 py-2.5 rounded-2xl border border-cc-border/60">
+          <div className="flex items-center gap-2 justify-center mb-5 bg-white px-4 py-2.5 rounded-2xl border border-[#C7D2FE]/60">
             {STEP_LABELS.map((l, i) => (
               <div key={l} className="flex-1 flex flex-col items-center gap-1">
                 <div
                   className="h-1 w-full rounded-full"
                   style={{
-                    background: i <= step ? PLUM : "#E5E7EB",
+                    background: i + 1 <= step ? PLUM : "#E5E7EB",
                   }}
                 />
 
                 <span
                   className="text-[9px] font-bold uppercase"
                   style={{
-                    color: i <= step ? PLUM : "#9CA3AF",
+                    color: i + 1 <= step ? PLUM : "#9CA3AF",
                   }}
                 >
                   {l.split(" ")[0]}
@@ -450,108 +492,7 @@ export default function Signup() {
             ))}
           </div>
 
-          <div className="w-full min-h-0 pointer-events-auto bg-cc-surface rounded-[2rem] px-5 py-6 sm:p-8 shadow-[0_16px_48px_-12px_rgba(84,34,105,0.08)] border border-[#E8D5E8]/50 overflow-y-auto">
-            {/* STEP 0 */}
-            {step === 0 && (
-              <div className="space-y-4">
-                <div>
-                  <h2
-                    className="text-[22px] font-black"
-                    style={{ color: PLUM }}
-                  >
-                    Create your account
-                  </h2>
-
-                  <p className="text-sm text-[#9B6FAB]">
-                    Choose the option that best describes how you'll use
-                    CareCliQ
-                  </p>
-                </div>
-
-                <div
-                  className="rounded-xl px-4 py-3 text-[12px] leading-relaxed"
-                  style={{
-                    background: PLUM_SUBTLE,
-                    border: `1px solid ${PLUM_RING}`,
-                    color: PLUM,
-                  }}
-                >
-                  <span className="font-bold">Support worker?</span>{" "}
-                  <span style={{ color: 'var(--cc-muted)' }}>
-                    Workers are invited by their organisation — ask your manager
-                    to send you an invite link instead of signing up here.
-                  </span>
-                </div>
-
-                {TYPES.map((t) => {
-                  const sel = form.account_type === t.value;
-
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => updateField("account_type", t.value)}
-                      className="w-full text-left p-4 rounded-2xl border-2 transition-all"
-                      style={{
-                        borderColor: sel ? t.dot : BORDER,
-                        background: sel ? `${t.dot}10` : 'var(--cc-surface)',
-                      }}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
-                          style={{
-                            background: sel ? t.dot : BORDER,
-                          }}
-                        />
-
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-black">{t.title}</p>
-                            {"badge" in t && t.badge && (
-                              <span
-                                className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
-                                style={{
-                                  background: `${t.dot}18`,
-                                  color: t.dot,
-                                }}
-                              >
-                                {t.badge}
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-sm text-cc-muted">{t.sub}</p>
-                        </div>
-
-                        {sel && (
-                          <CheckCircle2
-                            size={18}
-                            className="shrink-0"
-                            style={{
-                              color: t.dot,
-                            }}
-                          />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  disabled={!form.account_type}
-                  className="w-full h-12 rounded-xl text-white font-black disabled:opacity-40"
-                  style={{
-                    background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
-                  }}
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
+          <div className="w-full min-h-0 pointer-events-auto bg-white rounded-[2rem] px-5 py-6 sm:p-8 shadow-[0_16px_48px_-12px_rgba(55,48,163,0.08)] border border-[#E8D5E8]/50 overflow-y-auto">
             {/* STEP 1 */}
             {step === 1 && (
               <form
@@ -562,7 +503,7 @@ export default function Signup() {
                     setStep(2);
                   }
                 }}
-                className="space-y-4"
+                className="space-y-4 step-content"
               >
                 <div>
                   <h2
@@ -572,7 +513,7 @@ export default function Signup() {
                     Create account
                   </h2>
 
-                  <p className="text-sm text-[#9B6FAB]">
+                  <p className="text-sm text-[#6B7280]">
                     You'll use these to sign in
                   </p>
                 </div>
@@ -613,10 +554,27 @@ export default function Signup() {
                     autoComplete="new-password"
                     error={short}
                   />
+                  {form.password && (
+                    <div className="mt-2.5">
+                      <PasswordStrengthBar password={form.password} />
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <Label>Confirm password</Label>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Label>Confirm password</Label>
+                    {form.confirm_password && (
+                      <span
+                        className="text-[11px] font-bold"
+                        style={{
+                          color: mismatch ? "#EF4444" : "#22C55E",
+                        }}
+                      >
+                        {mismatch ? "✗ Doesn't match" : "✓ Matches"}
+                      </span>
+                    )}
+                  </div>
 
                   <StyledInput
                     name="confirm_password"
@@ -631,7 +589,7 @@ export default function Signup() {
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
-                    onClick={() => setStep(0)}
+                    onClick={() => navigate("/login")}
                     className="h-11 px-5 rounded-xl border font-black"
                     style={{
                       borderColor: BORDER,
@@ -646,7 +604,7 @@ export default function Signup() {
                     disabled={!step1Valid()}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
                     style={{
-                      background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                      background: PLUM,
                     }}
                   >
                     Continue
@@ -657,7 +615,7 @@ export default function Signup() {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 step-content">
                 {form.account_type === "allied_health" && (
                   <AlliedHealthFields
                     form={form}
@@ -692,7 +650,7 @@ export default function Signup() {
                     disabled={!step2Valid() || busy}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
                     style={{
-                      background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                      background: PLUM,
                     }}
                   >
                     {busy ? (
@@ -713,7 +671,7 @@ export default function Signup() {
 
             {/* STEP 3 */}
             {step === 3 && (
-              <div className="text-center py-6">
+              <div className="text-center py-6 step-content">
                 <CheckCircle2
                   size={70}
                   style={{
@@ -729,13 +687,14 @@ export default function Signup() {
                   {emailVerify ? "Check your email" : "You're all set!"}
                 </h2>
 
-                <p className="text-[#9B6FAB] mt-2">
+                <p className="text-[#6B7280] mt-2">
                   {emailVerify
                     ? `We sent a verification email to ${form.email}`
                     : "Your account is ready."}
                 </p>
 
                 <button
+                  type="button"
                   onClick={() =>
                     navigate(
                       emailVerify
@@ -747,7 +706,7 @@ export default function Signup() {
                   }
                   className="mt-6 w-full h-11 rounded-xl text-white font-black"
                   style={{
-                    background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                    background: PLUM,
                   }}
                 >
                   {emailVerify
@@ -764,7 +723,7 @@ export default function Signup() {
           {step < 3 && (
             <p
               className="text-center text-[13px] font-medium mt-5 pb-1"
-              style={{ color: 'var(--cc-muted)' }}
+              style={{ color: "var(--cc-muted)" }}
             >
               Already have an account?{" "}
               <button

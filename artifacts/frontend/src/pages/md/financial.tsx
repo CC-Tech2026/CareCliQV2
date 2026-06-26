@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { DollarSign, AlertTriangle, ArrowLeft, TrendingUp, FileText, PieChart } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -7,7 +7,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const CYAN = "#0EA5E9";
 
@@ -40,7 +40,7 @@ function MetricCard({
 }) {
   return (
     <div
-      className="rounded-xl border bg-cc-surface p-4 shadow-sm"
+      className="rounded-xl border bg-white p-4 shadow-sm"
       style={{ borderColor: highlight ? color ?? PLUM : BORDER }}
     >
       <div className="flex items-center justify-between mb-3">
@@ -125,7 +125,7 @@ export default function MDFinancialPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-cc-bg"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Hub
@@ -160,7 +160,7 @@ export default function MDFinancialPage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-[14px] font-black" style={{ color: TEXT }}>Performance vs Target</h2>
@@ -191,7 +191,7 @@ export default function MDFinancialPage() {
               </div>
             </section>
 
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>Cost & Margin Analysis</h2>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl p-4" style={{ background: SOFT }}>
@@ -234,7 +234,7 @@ export default function MDFinancialPage() {
             </section>
 
             {monthly.length > 0 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>Monthly Revenue Breakdown</h2>
                 <div className="space-y-3">
                   {monthly.slice(-6).map((m) => (
@@ -244,7 +244,7 @@ export default function MDFinancialPage() {
               </section>
             )}
 
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <h2 className="mb-2 text-[14px] font-black" style={{ color: TEXT }}>Revenue by Support Category</h2>
               <div className="flex items-center gap-3 rounded-xl p-4" style={{ background: SOFT }}>
                 <PieChart size={24} style={{ color: MUTED }} />

@@ -51,7 +51,7 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
     <div
       className={cn(
         "overflow-hidden rounded-xl border",
-        critical ? "border-red-200 bg-red-50/80" : "border-cc-border bg-cc-bg",
+        critical ? "border-red-200 bg-red-50/80" : "border-[#E5E7EB] bg-[#F8F6FE]",
       )}
     >
       <button
@@ -96,7 +96,7 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
   return (
     <section
       id={sectionId}
-      className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
+      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
       style={{ borderColor: BORDER }}
     >
       <button

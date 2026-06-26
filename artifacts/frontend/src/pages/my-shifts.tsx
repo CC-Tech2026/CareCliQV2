@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, FileText, Bell, Plus } from "lucide-react";
+import { CalendarDays, FileText, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
@@ -25,9 +25,13 @@ import {
   TEXT,
   shiftDurationMinutes,
 } from "@/lib/shift-utils";
-import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const FILTER_IDS = ["today", "upcoming", "completed", "cancelled"] as const;
+const FILTERS: { id: ShiftFilter; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "completed", label: "Completed" },
+  { id: "cancelled", label: "Cancelled" },
+];
 
 function formatGroupLabel(dateKey: string) {
   if (dateKey === "unknown") return "Unscheduled";
@@ -45,37 +49,31 @@ function ShiftFilterTabs({
   filter,
   onChange,
   counts,
-  translate,
 }: {
   filter: ShiftFilter;
   onChange: (next: ShiftFilter) => void;
   counts?: Record<"today" | "upcoming" | "completed" | "cancelled", number>;
-  translate: (key: string) => string;
 }) {
   return (
-    <div className="rounded-full bg-[var(--cc-bg)] p-1">
-      <div className="grid grid-cols-4 gap-1">
-        {FILTER_IDS.map((id) => {
-          const active = filter === id;
-          const count = counts?.[id] ?? 0;
+    <div className="rounded-2xl bg-[#F0EDF8] p-1.5">
+      <div className="flex gap-1 overflow-x-auto scrollbar-none">
+        {FILTERS.map((f) => {
+          const active = filter === f.id;
+          const count = counts?.[f.id as keyof typeof counts] ?? 0;
           return (
             <button
-              key={id}
+              key={f.id}
               type="button"
-              onClick={() => onChange(id)}
-              aria-pressed={active}
-              aria-label={`${translate(`shifts.filter.${id}`)} (${count})`}
+              onClick={() => onChange(f.id)}
               className={cn(
-                "touch-target flex items-center justify-center gap-1.5 rounded-full px-2 py-2.5 text-[11px] font-black transition sm:px-3 sm:text-xs",
-                active ? "bg-[var(--cc-surface)] shadow-sm" : "",
+                "flex flex-1 min-w-[4.5rem] items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-black whitespace-nowrap transition-all",
+                active ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280]",
               )}
-              style={{ color: active ? TEXT : MUTED }}
             >
-              <span className="truncate text-safe">{translate(`shifts.filter.${id}`)}</span>
+              <span>{f.label}</span>
               <span
-                className="grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full px-1 text-[10px] font-black text-white"
-                style={{ background: PLUM }}
-                aria-hidden
+                className="grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full px-1 text-[11px] font-black text-white"
+                style={{ background: active ? PLUM : "#9B8EC4" }}
               >
                 {count}
               </span>
@@ -89,12 +87,12 @@ function ShiftFilterTabs({
 
 function ShiftSkeleton() {
   return (
-    <div className="flex overflow-hidden rounded-2xl border bg-cc-surface p-4 animate-pulse" style={{ borderColor: BORDER }}>
-      <div className="h-11 w-11 rounded-full bg-slate-200" />
-      <div className="ml-3 flex-1 space-y-2">
-        <div className="h-4 w-2/3 rounded bg-slate-200" />
-        <div className="h-3 w-1/2 rounded bg-slate-100" />
-        <div className="h-3 w-3/4 rounded bg-slate-100" />
+    <div className="flex overflow-hidden rounded-2xl border bg-white p-5 animate-pulse" style={{ borderColor: BORDER }}>
+      <div className="size-[3.25rem] shrink-0 rounded-full bg-slate-200" />
+      <div className="ml-3.5 flex-1 space-y-2.5 pt-1">
+        <div className="h-4 w-2/3 rounded-lg bg-slate-200" />
+        <div className="h-3 w-1/2 rounded-lg bg-slate-100" />
+        <div className="h-3 w-3/4 rounded-lg bg-slate-100" />
       </div>
     </div>
   );
@@ -102,7 +100,6 @@ function ShiftSkeleton() {
 
 export default function MyShifts() {
   const { user } = useAuth();
-  const { translate } = useAccessibility();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ShiftFilter>("today");
   const [pendingCount, setPendingCount] = useState(0);
@@ -147,7 +144,6 @@ export default function MyShifts() {
   });
 
   const list = data?.shifts ?? [];
-  const tutorialOpenShiftId = list[0]?.id;
   const filterCounts = countsData?.counts;
 
   const { data: todayData } = useOrgQuery(["worker", "shifts", "today"], {
@@ -194,68 +190,52 @@ export default function MyShifts() {
   }, [filter, list]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 pb-10 text-safe">
-      <header className="flex items-start justify-between gap-3">
+    <div className="mx-auto w-full max-w-4xl space-y-5 pb-6">
+      <header className="flex items-start justify-between gap-3 pt-1">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Support Worker
           </p>
-          <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: TEXT }}>
-            {greetingForHour()}, {firstName}
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            My Shifts
           </h1>
-          <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
             {dateLabel}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-1.5 sm:gap-2">
-          <Link href="/calendar">
-            <button
-              type="button"
-              className="touch-target inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-full border sm:px-3 sm:py-2 text-xs font-black"
-              style={{ borderColor: BORDER, color: PLUM }}
-              aria-label={translate("shifts.calendar")}
-              title={translate("shifts.calendar")}
-            >
-              <CalendarDays size={18} className="shrink-0" aria-hidden />
-              <span className="hidden sm:inline">{translate("shifts.calendar")}</span>
-            </button>
-          </Link>
+        <div className="shrink-0 flex items-start gap-2 pt-1">
           <Link href="/worker/messages">
             <button
               type="button"
-              className="touch-target inline-flex h-11 w-11 sm:h-auto sm:w-auto items-center justify-center gap-1.5 rounded-full sm:px-4 sm:py-2 text-xs font-black text-white shadow-sm transition hover:opacity-90"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-sm hover:opacity-90 transition sm:h-auto sm:w-auto sm:gap-2 sm:px-4 sm:py-2.5 sm:rounded-full"
               style={{ background: PLUM }}
-              aria-label={translate("shifts.messages")}
-              title={translate("shifts.messages")}
+              title="View messages from coordinator"
             >
-              <Bell size={18} className="shrink-0" aria-hidden />
-              <span className="hidden sm:inline">{translate("shifts.messages")}</span>
+              <Bell size={18} />
+              <span className="hidden sm:inline text-xs font-black">Messages</span>
             </button>
           </Link>
-          <Link href="/sessions/new">
+          <Link href="/my-shifts">
             <button
               type="button"
-              className="touch-target inline-flex h-11 w-11 sm:h-auto sm:w-auto shrink-0 items-center justify-center gap-1.5 rounded-full sm:px-4 sm:py-2 text-xs font-black text-white shadow-sm"
+              className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm hover:opacity-90 transition"
               style={{ background: CORAL }}
-              aria-label={translate("shifts.quickStart")}
-              title={translate("shifts.quickStart")}
             >
-              <Plus size={18} className="shrink-0" aria-hidden />
-              <span className="hidden sm:inline">{translate("shifts.quickStart")}</span>
+              + Quick Start
             </button>
           </Link>
         </div>
       </header>
 
-      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+      <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-5 rounded-none sm:mx-0 sm:rounded-xl" />
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label="Shifts today" />
         <StatCard value={String(completedToday)} label="Completed" />
         <StatCard value={hoursScheduled} label="Hrs scheduled" />
       </div>
 
-      <ShiftFilterTabs filter={filter} onChange={setFilter} counts={filterCounts} translate={translate} />
+      <ShiftFilterTabs filter={filter} onChange={setFilter} counts={filterCounts} />
 
       {isLoading && (
         <div className="space-y-3">
@@ -270,20 +250,22 @@ export default function MyShifts() {
 
       {!isLoading && list.length === 0 && (
         <section
-          className="rounded-2xl border bg-cc-surface px-6 py-10 text-center shadow-sm"
+          className="rounded-2xl border bg-white px-6 py-14 text-center shadow-sm"
           style={{ borderColor: BORDER }}
         >
-          <CalendarDays size={36} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F0EDF8]">
+            <CalendarDays size={28} style={{ color: PLUM }} />
+          </div>
           <p className="text-base font-black" style={{ color: TEXT }}>
             No {filter} shifts
           </p>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-            Select a shift and tap Open Shift to review details before you arrive.
+          <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed" style={{ color: MUTED }}>
+            Tap Open Shift on any upcoming card to review details before you arrive.
           </p>
         </section>
       )}
 
-      <div className="space-y-4" data-tutorial="shift-list">
+      <div className="space-y-4">
         {groupedList.map((group) => (
           <div key={group.label ?? "default"} className="space-y-3">
             {group.label && (
@@ -292,29 +274,27 @@ export default function MyShifts() {
               </p>
             )}
             {group.shifts.map((shift: WorkerShift) => (
-              <ShiftListCard
-                key={shift.id}
-                shift={shift}
-                highlightOpen={shift.id === tutorialOpenShiftId}
-              />
+              <ShiftListCard key={shift.id} shift={shift} />
             ))}
           </div>
         ))}
       </div>
 
       {filter === "today" && todayShifts.some((s) => s.status === "completed") && (
-        <section className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <FileText size={20} className="mt-0.5 shrink-0 text-amber-600" />
+        <section className="flex items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <FileText size={18} className="text-amber-600" />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-black" style={{ color: TEXT }}>
-              Notes due within 24 hours
+              Session notes due within 24 hours
             </p>
             <p className="mt-1 text-xs font-medium leading-relaxed text-amber-900/80">
-              NDIS Practice Standard 2.3 requires documentation within 24h of shift completion.
+              NDIS Practice Standard 2.3 requires documentation within 24 hours of shift completion.
             </p>
             <button
               type="button"
-              className="mt-3 rounded-full bg-amber-500 px-4 py-2 text-xs font-black text-white"
+              className="mt-3 flex h-10 items-center rounded-full bg-amber-500 px-5 text-xs font-black text-white hover:bg-amber-600 transition-colors"
             >
               Write Notes
             </button>
@@ -327,11 +307,11 @@ export default function MyShifts() {
 
 function StatCard({ value, label }: { value: string; label: string }) {
   return (
-    <div className="rounded-2xl border bg-cc-surface px-3 py-3 text-center shadow-sm" style={{ borderColor: BORDER }}>
-      <p className="text-xl font-black" style={{ color: PLUM }}>
+    <div className="rounded-2xl border bg-white px-3 py-4 text-center shadow-sm" style={{ borderColor: BORDER }}>
+      <p className="text-2xl font-black" style={{ color: PLUM }}>
         {value}
       </p>
-      <p className="mt-0.5 text-[10px] font-bold leading-tight" style={{ color: MUTED }}>
+      <p className="mt-1 text-xs font-semibold leading-tight" style={{ color: MUTED }}>
         {label}
       </p>
     </div>

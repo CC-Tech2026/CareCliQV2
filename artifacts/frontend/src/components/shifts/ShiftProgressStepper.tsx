@@ -1,16 +1,9 @@
-import { Check, Pause } from "lucide-react";
+﻿import { Check, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
-import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import type { ShiftVisualState } from "@/services/shiftService";
 
-const STEP_KEYS = [
-  "shift.step.review",
-  "shift.step.arrive",
-  "shift.step.active",
-  "shift.step.end",
-  "shift.step.submit",
-] as const;
+const STEPS = ["Review", "Arrive", "Active", "End", "Submit"] as const;
 
 function stepIndex(state: ShiftVisualState): number {
   if (state === "scheduled") return 0;
@@ -21,34 +14,26 @@ function stepIndex(state: ShiftVisualState): number {
 }
 
 export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisualState }) {
-  const { translate } = useAccessibility();
   const current = stepIndex(visualState);
 
   return (
-    <section
-      className="rounded-2xl border bg-[var(--cc-surface)] px-4 py-4 shadow-sm"
-      style={{ borderColor: BORDER }}
-      data-tutorial="shift-progress"
-      aria-label={translate("shift.progress")}
-    >
+    <section className="rounded-2xl border bg-white px-4 py-4 shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
       <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-        {translate("shift.progress")}
+        Shift Progress
       </p>
       <div className="grid grid-cols-5">
-        {STEP_KEYS.map((key, i) => {
-          const label = translate(key);
+        {STEPS.map((label, i) => {
           const done = i < current;
           const active = i === current;
           const connectorDone = i < current;
 
           return (
-            <div key={key} className="flex flex-col items-center">
+            <div key={label} className="flex flex-col items-center">
               <div className="relative flex h-8 w-full items-center justify-center">
                 {i > 0 && (
                   <div
                     className="absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: connectorDone ? PLUM : BORDER }}
-                    aria-hidden
+                    style={{ background: connectorDone ? PLUM : "#E5E7EB" }}
                   />
                 )}
                 <div
@@ -56,27 +41,25 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                     "relative z-10 grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black",
                     done && "bg-emerald-500 text-white",
                     active && !done && "text-white",
-                    !done && !active && "border-2 bg-[var(--cc-surface)]",
+                    !done && !active && "border-2 bg-white",
                   )}
                   style={{
                     background: active && !done ? PLUM : undefined,
-                    borderColor: !done && !active ? BORDER : undefined,
+                    borderColor: !done && !active ? "#E5E7EB" : undefined,
                     color: !done && !active ? MUTED : undefined,
                   }}
-                  aria-current={active ? "step" : undefined}
                 >
-                  {done ? <Check size={14} strokeWidth={3} aria-hidden /> : active ? <Pause size={12} aria-hidden /> : i + 1}
+                  {done ? <Check size={14} strokeWidth={3} /> : active ? <Pause size={12} /> : i + 1}
                 </div>
-                {i < STEP_KEYS.length - 1 && (
+                {i < STEPS.length - 1 && (
                   <div
                     className="absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2"
-                    style={{ background: done ? PLUM : BORDER }}
-                    aria-hidden
+                    style={{ background: done ? PLUM : "#E5E7EB" }}
                   />
                 )}
               </div>
               <span
-                className="mt-1.5 w-full px-0.5 text-center text-[10px] font-bold leading-tight text-safe"
+                className="mt-1.5 w-full px-0.5 text-center text-[10px] font-bold leading-tight"
                 style={{ color: active ? PLUM : done ? TEXT : MUTED }}
               >
                 {label}

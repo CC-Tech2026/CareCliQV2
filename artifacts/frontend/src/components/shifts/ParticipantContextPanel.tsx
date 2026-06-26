@@ -82,7 +82,7 @@ export function ParticipantContextPanel({
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -125,7 +125,7 @@ export function ParticipantContextPanel({
                 onClick={() => setTab(t.id)}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
-                  activeTab === t.id ? "bg-cc-plum text-white" : "bg-[#F0EDFC] text-cc-plum",
+                  activeTab === t.id ? "bg-[#3730A3] text-white" : "bg-[#F0EDFC] text-[#6D4BDA]",
                 )}
               >
                 {t.label}
@@ -173,7 +173,7 @@ export function ParticipantContextPanel({
               <div className="space-y-2">
                 {hasBehaviour ? (
                   context!.behavioural_notes!.map((note, i) => (
-                    <div key={i} className="rounded-xl border border-cc-border bg-cc-bg px-3 py-3">
+                    <div key={i} className="rounded-xl border border-[#E5E7EB] bg-[#F8F6FE] px-3 py-3">
                       <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                         {note.title}
                       </p>
@@ -190,7 +190,7 @@ export function ParticipantContextPanel({
 
             {activeTab === "activities" && (
               hasActivities ? (
-                <div className="rounded-xl bg-cc-bg px-3 py-3">
+                <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Sparkles size={12} aria-hidden />
                     Things {firstName} enjoys
@@ -210,7 +210,7 @@ export function ParticipantContextPanel({
 
             {activeTab === "visits" && (
               hasVisits ? (
-                <div className="rounded-xl bg-cc-bg px-3 py-3">
+                <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Heart size={12} aria-hidden />
                     Notes from previous visits
@@ -251,7 +251,7 @@ export function ParticipantContextPanel({
 
 function EmptyNote({ text }: { text: string }) {
   return (
-    <p className="rounded-xl bg-cc-bg px-3 py-4 text-sm font-medium" style={{ color: MUTED }}>
+    <p className="rounded-xl bg-[#F8F6FE] px-3 py-4 text-sm font-medium" style={{ color: MUTED }}>
       {text}
     </p>
   );
@@ -267,7 +267,7 @@ function InfoBlock({
   body: string;
 }) {
   return (
-    <div className="rounded-xl bg-cc-bg px-3 py-3">
+    <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
       <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
         <Icon size={12} aria-hidden />
         {label}

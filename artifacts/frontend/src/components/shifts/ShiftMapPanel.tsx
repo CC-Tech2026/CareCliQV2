@@ -88,7 +88,7 @@ export function ShiftMapPanel({
 
   return (
     <section
-      className={cn("overflow-hidden rounded-2xl border bg-cc-surface shadow-sm", className)}
+      className={cn("overflow-hidden rounded-2xl border bg-white shadow-sm", className)}
       style={{ borderColor: BORDER }}
     >
       <button
@@ -129,7 +129,7 @@ export function ShiftMapPanel({
                 )}
               </div>
 
-              <div className="relative aspect-[16/10] w-full bg-cc-bg">
+              <div className="relative aspect-[16/10] w-full bg-[#F8F8FE]">
                 <iframe
                   title="Shift location map"
                   src={embedMapUrl(resolvedAddress)}

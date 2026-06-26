@@ -20,9 +20,7 @@ import { cn } from "@/lib/utils";
 import {
   buildRecordsFromShiftTask,
   compressImageFile,
-  dedupeTaskEvidenceRecords,
   deleteTaskEvidence,
-  isSyntheticEvidenceId,
   listTaskEvidence,
   newEvidenceId,
   saveTaskEvidence,
@@ -31,8 +29,6 @@ import {
 import { syncSessionEvidence } from "@/services/taskEvidenceService";
 import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
 import type { ShiftTask } from "@/services/shiftService";
-import { getSessionEvidenceMetadata, type EvidenceMetadata } from "@/services/complianceService";
-import { EvidenceDetailsPanel } from "@/components/shifts/EvidenceDetailsPanel";
 import {
   MUTED,
   PLUM,
@@ -103,7 +99,6 @@ export function ShiftTaskEvidencePanel({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [playingVoice, setPlayingVoice] = useState(false);
-  const [evidenceMetadata, setEvidenceMetadata] = useState<Record<string, EvidenceMetadata>>({});
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -159,18 +154,6 @@ export function ShiftTaskEvidencePanel({
           rows = seeded;
         }
       }
-
-      const deduped = dedupeTaskEvidenceRecords(rows);
-      if (deduped.length !== rows.length) {
-        const keptIds = new Set(deduped.map((row) => row.evidence_id));
-        for (const row of rows) {
-          if (!keptIds.has(row.evidence_id)) {
-            await deleteTaskEvidence(row.evidence_id);
-          }
-        }
-      }
-      rows = deduped;
-
       setRecords(rows);
       const voice = rows.find((r) => r.type === "voice");
       if (voice?.content?.startsWith("data:audio")) {
@@ -231,19 +214,6 @@ export function ShiftTaskEvidencePanel({
     clearSavedStatusTimer();
     void loadRecords();
   }, [task.task_id, task.note, loadRecords, variant]);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    getSessionEvidenceMetadata(sessionId)
-      .then((res) => {
-        const map: Record<string, EvidenceMetadata> = {};
-        for (const item of res.evidence ?? []) {
-          map[item.evidence_id] = item;
-        }
-        setEvidenceMetadata(map);
-      })
-      .catch(() => setEvidenceMetadata({}));
-  }, [sessionId, records]);
 
   useEffect(() => {
     onReadyChange?.(readyToMarkComplete);
@@ -321,25 +291,14 @@ export function ShiftTaskEvidencePanel({
     const trimmed = note.trim();
     if (!trimmed || disabled) return;
 
-    const content = trimmed.slice(0, NOTE_MAX);
-    const duplicate = records.find((row) => row.type === "text" && (row.content ?? "").trim() === content);
-    if (duplicate) {
-      setNote("");
-      return;
-    }
-
-    const textRows = records.filter((row) => row.type === "text");
-    const seededOnly =
-      textRows.length === 1 && isSyntheticEvidenceId(textRows[0].evidence_id);
-
     const record: TaskEvidenceRecord = {
-      evidence_id: seededOnly ? textRows[0].evidence_id : newEvidenceId(),
+      evidence_id: newEvidenceId(),
       task_id: task.task_id,
       goal_id: task.goal_id ?? null,
       session_id: sessionId,
       type: "text",
-      content,
-      created_at: seededOnly ? textRows[0].created_at : new Date().toISOString(),
+      content: trimmed.slice(0, NOTE_MAX),
+      created_at: new Date().toISOString(),
       synced: false,
     };
 
@@ -356,7 +315,6 @@ export function ShiftTaskEvidencePanel({
     note,
     onMarkComplete,
     onTaskPatch,
-    records,
     sessionId,
     task,
     task.goal_id,
@@ -643,26 +601,17 @@ export function ShiftTaskEvidencePanel({
       if (trimmed) {
         await onTaskPatch({ note: trimmed });
         if (variant === "thread" && inputDraft) {
-          const content = trimmed.slice(0, NOTE_MAX);
-          const duplicate = records.find(
-            (row) => row.type === "text" && (row.content ?? "").trim() === content,
-          );
-          if (!duplicate) {
-            const textRows = records.filter((row) => row.type === "text");
-            const seededOnly =
-              textRows.length === 1 && isSyntheticEvidenceId(textRows[0].evidence_id);
-            const record: TaskEvidenceRecord = {
-              evidence_id: seededOnly ? textRows[0].evidence_id : newEvidenceId(),
-              task_id: task.task_id,
-              goal_id: task.goal_id ?? null,
-              session_id: sessionId,
-              type: "text",
-              content,
-              created_at: seededOnly ? textRows[0].created_at : new Date().toISOString(),
-              synced: false,
-            };
-            await appendThreadEvidence(record);
-          }
+          const record: TaskEvidenceRecord = {
+            evidence_id: newEvidenceId(),
+            task_id: task.task_id,
+            goal_id: task.goal_id ?? null,
+            session_id: sessionId,
+            type: "text",
+            content: trimmed.slice(0, NOTE_MAX),
+            created_at: new Date().toISOString(),
+            synced: false,
+          };
+          await appendThreadEvidence(record);
           setNote("");
         } else if (variant === "full" && inputDraft) {
           await persistText(trimmed);
@@ -685,7 +634,6 @@ export function ShiftTaskEvidencePanel({
     onMarkComplete,
     onTaskPatch,
     persistText,
-    records,
     scheduleSavedStatusClear,
     sessionId,
     task,
@@ -704,7 +652,7 @@ export function ShiftTaskEvidencePanel({
 
   if (variant === "thread") {
     return (
-      <div className="border-t border-[#ECE6FB] bg-cc-bg p-3">
+      <div className="border-t border-[#ECE6FB] bg-[#FBFAFF] p-3">
         {task.description && (
           <p className="mb-2 text-xs font-semibold italic leading-relaxed" style={{ color: MUTED }}>
             {task.description}
@@ -712,7 +660,7 @@ export function ShiftTaskEvidencePanel({
         )}
 
         <div
-          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-cc-border p-3"
+          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-[#E5E7EB] p-3"
           style={{
             backgroundImage:
               "radial-gradient(circle at 1px 1px, #E8E4F4 1px, transparent 0)",
@@ -736,7 +684,7 @@ export function ShiftTaskEvidencePanel({
               {records.map((record) => (
                 <div
                   key={record.evidence_id}
-                  className="rounded-lg border border-cc-border bg-cc-surface/90 px-3 py-2 text-xs font-semibold"
+                  className="rounded-lg border border-[#E5E7EB] bg-white/90 px-3 py-2 text-xs font-semibold"
                   style={{ color: TEXT }}
                 >
                   {record.type === "photo" && (
@@ -789,7 +737,7 @@ export function ShiftTaskEvidencePanel({
         )}
 
         {cameraOpen && (
-          <div className="mb-2 space-y-2 rounded-xl border border-cc-border bg-cc-surface p-2">
+          <div className="mb-2 space-y-2 rounded-xl border border-[#E5E7EB] bg-white p-2">
             <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
             <div className="flex gap-2">
               <Button
@@ -822,7 +770,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || photos.length >= MAX_PHOTOS}
             onClick={() => void startCamera()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E5E7EB] bg-white text-[#8B75D9]"
             aria-label="Add photo"
           >
             <Camera size={14} />
@@ -831,7 +779,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || uploadingFile || photos.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E5E7EB] bg-white text-[#8B75D9]"
             aria-label="Attach image"
           >
             <Paperclip size={14} />
@@ -848,7 +796,7 @@ export function ShiftTaskEvidencePanel({
             disabled={disabled}
             maxLength={NOTE_MAX}
             placeholder="Write a progress update..."
-            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
+            className="h-9 min-w-0 flex-1 rounded-full border border-[#E5E7EB] bg-white px-4 text-sm"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -922,8 +870,8 @@ export function ShiftTaskEvidencePanel({
   }
 
   return (
-    <div className="border-t border-cc-border">
-      <div className="space-y-2 border-b border-cc-border px-3 py-3" style={{ background: SOFT }}>
+    <div className="border-t border-[#E5E7EB]">
+      <div className="space-y-2 border-b border-[#E5E7EB] px-3 py-3" style={{ background: SOFT }}>
         <p className="text-sm font-black" style={{ color: TEXT }}>
           {task.label}
         </p>
@@ -949,7 +897,7 @@ export function ShiftTaskEvidencePanel({
           <span>
             {saveState === "saving" && "⟳ Saving…"}
             {saveState === "saved" && "✓ Saved"}
-            {saveState === "offline" && "⚠️ Offline — saved locally"}
+            {saveState === "offline" && "Offline — saved locally"}
           </span>
           {records[0]?.created_at && (
             <span>Captured {format(new Date(records[records.length - 1].created_at), "h:mm a")}</span>
@@ -962,12 +910,12 @@ export function ShiftTaskEvidencePanel({
           </p>
         )}
 
-        <section data-tutorial="task-evidence-actions">
+        <section>
           <p className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: PLUM }}>
             <Camera size={13} /> Photo <span className="text-emerald-600">Strong ✓</span>
           </p>
           {cameraOpen ? (
-            <div className="space-y-2 rounded-xl border border-cc-border p-2">
+            <div className="space-y-2 rounded-xl border border-[#E5E7EB] p-2">
               <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
               <div className="flex gap-2">
                 <Button className="flex-1 rounded-xl font-bold text-white" style={{ background: PLUM }} onClick={() => void capturePhoto()}>
@@ -985,7 +933,7 @@ export function ShiftTaskEvidencePanel({
               onClick={() => void startCamera()}
               className={cn(
                 "flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm font-bold",
-                photos.length ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-[#C4B5FD] bg-cc-surface",
+                photos.length ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-[#C4B5FD] bg-white",
               )}
               style={photos.length ? undefined : { color: PLUM }}
             >
@@ -996,15 +944,20 @@ export function ShiftTaskEvidencePanel({
           {photos.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {photos.map((photo) => (
-                <div key={photo.evidence_id} className="relative space-y-2">
+                <div key={photo.evidence_id} className="relative">
                   <img
                     src={photo.file_url || photo.content}
                     alt="Task evidence"
                     className="h-[150px] w-[150px] rounded-xl border object-cover"
                   />
-                  {evidenceMetadata[photo.evidence_id] && (
-                    <EvidenceDetailsPanel metadata={evidenceMetadata[photo.evidence_id]} />
-                  )}
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow"
+                    onClick={() => void removePhoto(photo.evidence_id)}
+                    aria-label="Remove photo"
+                  >
+                    <Trash2 size={14} className="text-red-600" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -1020,7 +973,7 @@ export function ShiftTaskEvidencePanel({
               type="button"
               disabled={disabled || recording}
               onClick={() => void startRecording()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-cc-border bg-cc-bg py-3.5 text-sm font-bold"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F8F8FE] py-3.5 text-sm font-bold"
               style={{ color: PLUM }}
             >
               <Mic size={18} /> Start Voice Dictation
@@ -1034,6 +987,9 @@ export function ShiftTaskEvidencePanel({
                 <Button variant="outline" size="sm" className="rounded-lg" onClick={togglePlayVoice}>
                   {playingVoice ? <Pause size={14} /> : <Play size={14} />}
                   {playingVoice ? "Pause" : "Play"}
+                </Button>
+                <Button variant="outline" size="sm" className="rounded-lg text-red-600" onClick={() => void removeVoice()}>
+                  <Trash2 size={14} className="mr-1" /> Re-record
                 </Button>
               </div>
             </div>

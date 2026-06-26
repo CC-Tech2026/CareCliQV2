@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ShieldCheck, AlertTriangle, ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -10,7 +10,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const AMBER = "#F59E0B";
 
@@ -82,7 +82,7 @@ export default function MDCompliancePage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-cc-bg"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Hub
@@ -109,7 +109,7 @@ export default function MDCompliancePage() {
           <>
             {/* Score overview */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border bg-cc-surface p-4 shadow-sm lg:col-span-1" style={{ borderColor: BORDER }}>
+              <div className="rounded-xl border bg-white p-4 shadow-sm lg:col-span-1" style={{ borderColor: BORDER }}>
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] mb-2" style={{ color: MUTED }}>Org Compliance</p>
                 <p
                   className="text-4xl font-black"
@@ -127,9 +127,9 @@ export default function MDCompliancePage() {
                 { label: "At Risk", value: data.team_compliance_breakdown.at_risk, color: AMBER },
                 { label: "Non-Compliant", value: data.team_compliance_breakdown.non_compliant, color: "#EF4444" },
               ].map(({ label, value, color }) => (
-                <div key={label} className="rounded-xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+                <div key={label} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] mb-2" style={{ color: MUTED }}>{label}</p>
-                  <p className="text-3xl font-black" style={{ color }}>{value}</p>
+                  <p className="text-xl font-black" style={{ color }}>{value}</p>
                   {totalSessions > 0 && (
                     <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
                       {Math.round((value / totalSessions) * 100)}% of total
@@ -141,7 +141,7 @@ export default function MDCompliancePage() {
 
             {/* 90-day Trend Chart */}
             {chartData.length > 1 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>90-Day Compliance Trend</h2>
                 <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Weekly average compliance score across all sessions</p>
                 <ResponsiveContainer width="100%" height={220}>
@@ -150,7 +150,7 @@ export default function MDCompliancePage() {
                     <XAxis dataKey="week" tick={{ fontSize: 10, fill: MUTED }} />
                     <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
                     <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 2" label={{ value: `Target ${data.compliance_target}%`, position: "right", fontSize: 9, fill: AMBER }} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--cc-border)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Avg Score"]} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Avg Score"]} />
                     <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -159,7 +159,7 @@ export default function MDCompliancePage() {
 
             {/* Common Issues (rule breakdown proxy) */}
             {data.common_issues.length > 0 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Most Common Compliance Issues</h2>
                 <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Aggregated failing rules and recommendations across all sessions</p>
                 <div className="space-y-2">
@@ -187,7 +187,7 @@ export default function MDCompliancePage() {
 
             {/* Worker Rankings */}
             {data.worker_rankings.length > 0 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Worker Compliance Rankings</h2>
                 <div className="space-y-2">
                   {data.worker_rankings.slice(0, 15).map((w, i) => (
@@ -221,7 +221,7 @@ export default function MDCompliancePage() {
             )}
 
             {/* Audit Readiness */}
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Audit Readiness Checklist</h2>
               <div className="space-y-2">
                 <AuditCheckItem

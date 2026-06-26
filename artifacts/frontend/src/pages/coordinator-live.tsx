@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,12 +17,12 @@ import {
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
 
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 const STATUS_RING: Record<LiveShift["live_status"], { ring: string; bg: string; label: string }> = {
   green:  { ring: "#22C55E", bg: "#F0FDF4", label: "On Track"  },
@@ -56,7 +56,7 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
 // ── Task progress bar ──────────────────────────────────────────────────────────
 function TaskBar({ total, completed }: { total: number; completed: number }) {
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E2DEF2";
+  const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E5E7EB";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
@@ -136,7 +136,7 @@ function MessageModal({
               className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
               style={{
                 background: type === t.v ? PLUM : SOFT,
-                color: type === t.v ? 'var(--cc-surface)' : MUTED,
+                color: type === t.v ? "#fff" : MUTED,
               }}
             >
               {t.label}
@@ -147,7 +147,7 @@ function MessageModal({
         {/* Thread */}
         <div
           className="rounded-xl overflow-y-auto flex flex-col gap-2 p-3 mb-3"
-          style={{ maxHeight: 240, background: SOFT, border: '1px solid var(--cc-border)' }}
+          style={{ maxHeight: 240, background: SOFT, border: `1px solid ${BORDER}` }}
         >
           {isLoading && <p className="text-[12px] text-center" style={{ color: MUTED }}>Loading…</p>}
           {!isLoading && messages.length === 0 && (
@@ -160,8 +160,8 @@ function MessageModal({
                 <div
                   className="max-w-[80%] px-3 py-2 rounded-2xl text-[13px]"
                   style={{
-                    background: mine ? PLUM : 'var(--cc-surface)',
-                    color: mine ? 'var(--cc-surface)' : TEXT,
+                    background: mine ? PLUM : "var(--cc-bg)",
+                    color: mine ? "#fff" : TEXT,
                     border: mine ? "none" : `1px solid ${BORDER}`,
                   }}
                 >
@@ -185,7 +185,7 @@ function MessageModal({
           <Button
             size="sm"
             className="rounded-xl"
-            style={{ background: PLUM, color: 'var(--cc-surface)' }}
+            style={{ background: PLUM, color: "#fff" }}
             disabled={!text.trim() || sendMut.isPending}
             onClick={() => sendMut.mutate()}
           >
@@ -223,7 +223,7 @@ function ShiftDetailModal({
           >
             <div
               className="w-12 h-12 rounded-full flex items-center justify-center text-[16px] font-black"
-              style={{ background: s.ring, color: 'var(--cc-surface)' }}
+              style={{ background: s.ring, color: "#fff" }}
             >
               {(shift.worker_name ?? "W")[0]}
             </div>
@@ -235,7 +235,7 @@ function ShiftDetailModal({
             </div>
             <span
               className="ml-auto px-2.5 py-1 rounded-full text-[11px] font-black uppercase"
-              style={{ background: s.ring, color: 'var(--cc-surface)' }}
+              style={{ background: s.ring, color: "#fff" }}
             >
               {s.label}
             </span>
@@ -267,7 +267,7 @@ function ShiftDetailModal({
                 <div
                   key={a.id}
                   className="flex items-start gap-2 rounded-xl px-3 py-2"
-                  style={{ background: 'var(--cc-status-critical-bg)', border: `1px solid #FECACA` }}
+                  style={{ background: "#FEF2F2", border: `1px solid #FECACA` }}
                 >
                   <AlertTriangle size={14} className="mt-0.5 shrink-0" style={{ color: CORAL }} />
                   <p className="text-[12px]" style={{ color: TEXT }}>{a.message}</p>
@@ -310,7 +310,7 @@ function LiveShiftCard({
     <div
       className="rounded-2xl p-4 flex flex-col gap-3 transition-shadow hover:shadow-md cursor-pointer"
       style={{
-        background: 'var(--cc-surface)',
+        background: "var(--cc-bg)",
         border: `2px solid ${s.ring}`,
         boxShadow: `0 2px 12px ${s.ring}22`,
       }}
@@ -338,7 +338,7 @@ function LiveShiftCard({
         <div className="flex flex-col items-end gap-1 shrink-0">
           <span
             className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase"
-            style={{ background: s.ring, color: 'var(--cc-surface)' }}
+            style={{ background: s.ring, color: "#fff" }}
           >
             {s.label}
           </span>
@@ -382,7 +382,7 @@ function LiveShiftCard({
       {shift.alerts.length > 0 && (
         <div
           className="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
-          style={{ background: 'var(--cc-status-critical-bg)' }}
+          style={{ background: "#FEF2F2" }}
         >
           <AlertTriangle size={12} style={{ color: CORAL }} />
           <p className="text-[11px] font-semibold truncate" style={{ color: CORAL }}>
@@ -462,7 +462,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
                 className="flex-1 py-1.5 rounded-xl text-[12px] font-semibold capitalize transition-colors"
                 style={{
                   background: severity === s ? (s === "critical" ? CORAL : "#F59E0B") : SOFT,
-                  color: severity === s ? 'var(--cc-surface)' : MUTED,
+                  color: severity === s ? "#fff" : MUTED,
                 }}
               >
                 {s}
@@ -475,11 +475,11 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
             placeholder="Describe the issue…"
             rows={3}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
-            style={{ border: '1px solid var(--cc-border)', color: TEXT }}
+            style={{ border: `1px solid ${BORDER}`, color: TEXT }}
           />
           <Button
             className="w-full rounded-xl"
-            style={{ background: PLUM, color: 'var(--cc-surface)' }}
+            style={{ background: PLUM, color: "#fff" }}
             disabled={!note.trim() || flagMut.isPending}
             onClick={() => flagMut.mutate()}
           >
@@ -539,7 +539,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
             </Button>
             <Button
               className="flex-1 rounded-xl"
-              style={{ background: CORAL, color: 'var(--cc-surface)' }}
+              style={{ background: CORAL, color: "#fff" }}
               disabled={emergMut.isPending}
               onClick={() => emergMut.mutate()}
             >
@@ -576,7 +576,7 @@ export default function CoordinatorLivePage() {
   const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 
   return (
-    <div className="min-h-screen p-6" style={{ background: 'var(--cc-bg)' }}>
+    <div className="min-h-screen p-6" style={{ background: "var(--cc-soft)" }}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">
@@ -584,7 +584,7 @@ export default function CoordinatorLivePage() {
             <Radio size={20} className="text-white" />
           </div>
           <div>
-            <h1 className="text-[22px] font-black leading-tight" style={{ color: TEXT }}>
+            <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
               Live Monitoring
             </h1>
             <p className="text-[12px]" style={{ color: MUTED }}>
@@ -596,7 +596,7 @@ export default function CoordinatorLivePage() {
           {counts.red > 0 && (
             <span
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-black"
-              style={{ background: 'var(--cc-status-critical-bg)', color: CORAL }}
+              style={{ background: "#FEF2F2", color: CORAL }}
             >
               <AlertTriangle size={13} /> {counts.red} Alert{counts.red !== 1 ? "s" : ""}
             </span>
@@ -625,7 +625,7 @@ export default function CoordinatorLivePage() {
               onClick={() => setFilter(k)}
               className="rounded-2xl p-4 text-left transition-all"
               style={{
-                background: filter === k ? meta.bg : 'var(--cc-surface)',
+                background: filter === k ? meta.bg : "var(--cc-bg)",
                 border: `2px solid ${filter === k ? meta.ring : BORDER}`,
               }}
             >
@@ -648,7 +648,7 @@ export default function CoordinatorLivePage() {
       )}
 
       {!isLoading && filtered.length === 0 && (
-        <div className="rounded-2xl p-12 text-center" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>
+        <div className="rounded-2xl p-12 text-center" style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}` }}>
           <Activity size={36} className="mx-auto mb-3" style={{ color: BORDER }} />
           <p className="font-black text-[16px] mb-1" style={{ color: TEXT }}>
             {filter === "all" ? "No active shifts right now" : `No ${STATUS_RING[filter as "green" | "yellow" | "red"].label.toLowerCase()} shifts`}

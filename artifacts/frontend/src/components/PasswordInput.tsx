@@ -73,7 +73,7 @@ function PasswordToggleButton({
       aria-label={show ? "Hide password" : "Show password"}
       onClick={onToggle}
       className={cn(
-        "absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-cc-muted transition-colors hover:text-cc-plum",
+        "absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#6B7280] transition-colors hover:text-[#3730A3]",
         className,
       )}
     >

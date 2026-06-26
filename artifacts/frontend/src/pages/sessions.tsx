@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+﻿import React, { useState, useMemo } from "react";
 import {
   parse, format, parseISO, isAfter, isBefore, isEqual,
   startOfDay, endOfDay, startOfWeek, startOfMonth, isToday, isThisWeek, isThisMonth,
@@ -22,17 +22,13 @@ import { useGetSessions, useGetParticipants } from "@workspace/api-client-react"
 import type { Session as ApiSession, Participant as ApiParticipant } from "@workspace/api-client-react";
 
 // ── Design tokens — aligned with Dashboard ─────────────────────────────────────
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const PLUM_SUBTLE = "var(--cc-plum-subtle)";
-const PLUM_SOFT = "var(--cc-plum-soft)";
-const PLUM_MEDIUM = "var(--cc-plum-medium)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const T1          = "var(--cc-text)";
-const T2          = "var(--cc-muted)";
-const T3          = "var(--cc-muted)";
-const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const PLUM        = "#3730A3";
+const CORAL       = "#BE185D";
+const T1          = "#111827";
+const T2          = "#374151";
+const T3          = "#6B7280";
+const BORDER      = "#E5E7EB";
+const SOFT        = "#F8F8FE";
 
 // ── Sort options ───────────────────────────────────────────────────────────────
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
@@ -85,7 +81,7 @@ function safeFormat(dateStr: string | null | undefined, fmt: string, fallback = 
 function severityConfig(score: number | null | undefined, status?: string) {
   const s = status?.toLowerCase();
   if (s === "draft" || score == null) {
-    return { label: "Draft", color: T3, bg: PLUM_SUBTLE, bar: 0 };
+    return { label: "Draft", color: T3, bg: `${PLUM}08`, bar: 0 };
   }
   if (s === "in_progress") {
     return { label: "In Progress", color: "#7C3AED", bg: "rgba(124,58,237,0.06)", bar: 0 };
@@ -113,12 +109,12 @@ function Field({ icon, children }: { icon?: React.ReactNode; children: React.Rea
 function SkeletonRow() {
   return (
     <div className="px-5 py-4 flex items-center gap-4 animate-pulse">
-      <div className="w-4 h-4 rounded bg-cc-border" />
+      <div className="w-4 h-4 rounded bg-[#E5E7EB]" />
       <div className="flex-1 space-y-2">
-        <div className="h-4 w-48 rounded bg-cc-border" />
-        <div className="h-3 w-32 rounded bg-cc-border" />
+        <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+        <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
       </div>
-      <div className="h-6 w-28 rounded-full bg-cc-border" />
+      <div className="h-6 w-28 rounded-full bg-[#E5E7EB]" />
     </div>
   );
 }
@@ -134,7 +130,7 @@ function SessionStatCard({
   valueColor?: string;
 }) {
   return (
-    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: T3 }}>{label}</p>
@@ -336,8 +332,8 @@ export default function Sessions() {
       <button
         className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-all shrink-0 ${
           flagged
-            ? "bg-cc-coral/10 border-[#F03060]/30 text-cc-coral"
-            : "bg-cc-surface border-slate-200 text-slate-300 hover:text-cc-coral hover:border-[#F03060]/30"
+            ? "bg-[#BE185D]/10 border-[#BE185D]/30 text-[#BE185D]"
+            : "bg-white border-slate-200 text-slate-300 hover:text-[#BE185D] hover:border-[#BE185D]/30"
         }`}
         onClick={toggle}
         disabled={loading}
@@ -356,9 +352,9 @@ export default function Sessions() {
     return (
       <div
         className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-3.5 transition-colors duration-150 group border-l-[3px] ${
-          isSelected ? "border-l-[#5533CC]" : "border-l-transparent hover:border-l-[#F03060]/30 hover:bg-cc-bg/50"
+          isSelected ? "border-l-[#3730A3]" : "border-l-transparent hover:border-l-[#BE185D]/30 hover:bg-[#F8F8FE]/50"
         }`}
-        style={isSelected ? { background: PLUM_SOFT } : {}}
+        style={isSelected ? { background: `${PLUM}06` } : {}}
       >
         {/* Left Section: Checkbox + Info */}
         <div className="flex items-start gap-3.5 flex-1 min-w-0">
@@ -372,7 +368,7 @@ export default function Sessions() {
 
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/sessions/${session.id}`)}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 mb-1">
-              <span className="text-[14px] font-bold group-hover:text-cc-plum transition-colors truncate" style={{ color: T1 }}>
+              <span className="text-[14px] font-bold group-hover:text-[#3730A3] transition-colors truncate" style={{ color: T1 }}>
                 {session._participantName}
               </span>
               <span className="hidden sm:inline text-slate-300 text-xs">·</span>
@@ -393,7 +389,7 @@ export default function Sessions() {
               {session.tags && session.tags.length > 0 && (
                 <div className="flex gap-1 items-center">
                   <span className="text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wide font-medium border"
-                    style={{ background: PLUM_SUBTLE, borderColor: PLUM_RING, color: PLUM }}>
+                    style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
                     {session.tags[0]}
                   </span>
                   {session.tags.length > 1 && (
@@ -447,7 +443,7 @@ export default function Sessions() {
               <FlagButton sessionId={session.id} flagged={!!(session as unknown as { review_flag?: boolean }).review_flag} qc={qc} toast={toast} />
             )}
             <button
-              className="w-7 h-7 rounded-lg flex items-center justify-center border bg-cc-surface text-slate-400 transition-all hover:text-slate-700 shrink-0"
+              className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-400 transition-all hover:text-slate-700 shrink-0"
               style={{ borderColor: BORDER }}
               onClick={() => navigate(`/sessions/${session.id}`)}
               title="View session detail"
@@ -464,10 +460,12 @@ export default function Sessions() {
   function GroupHeading({ label, count }: { label: string; count: number }) {
     return (
       <div
-        className="px-5 py-2 flex items-center gap-2 sticky top-0 z-10 bg-cc-bg/95 backdrop-blur-sm border-b border-cc-border"
+        className="px-5 py-2 flex items-center gap-2 sticky top-0 z-10"
+        style={{ background: "rgba(246,244,251,0.95)", borderBottom: `1px solid ${BORDER}` }}
       >
-        <span className="text-[10px] font-bold uppercase tracking-widest text-cc-muted">{label}</span>
-        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-cc-active text-cc-plum">
+        <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: T3 }}>{label}</span>
+        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+          style={{ background: `${PLUM}10`, color: PLUM }}>
           {count}
         </span>
       </div>
@@ -481,8 +479,8 @@ export default function Sessions() {
       {/* Page header — matches Dashboard pattern */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Sessions</h1>
+          <p className="hidden" style={{ color: CORAL }}>Clinical Records</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Sessions</h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
             {isLoading ? "Loading records…" : `${sessions.length} total · ${filtered.length} in current view`}
           </p>
@@ -490,7 +488,7 @@ export default function Sessions() {
         <Link href="/sessions/new">
           <button
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            style={{ background: PLUM }}
           >
             <Plus size={16} strokeWidth={2.5} />
             New Session
@@ -507,7 +505,7 @@ export default function Sessions() {
       </div>
 
       {/* Filter + session list — dashboard card style */}
-      <section className="rounded-lg border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
 
         {/* Filter bar */}
         <div className="p-5 border-b space-y-4" style={{ borderColor: BORDER }}>
@@ -520,7 +518,7 @@ export default function Sessions() {
                   placeholder="Search by participant or session type…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-[38px] rounded-lg text-[13px] pl-9 outline-none pr-3 border bg-cc-surface"
+                  className="w-full h-[38px] rounded-lg text-[13px] pl-9 outline-none pr-3 border bg-white"
                   style={{ borderColor: BORDER, color: T1 }}
                 />
               </Field>
@@ -528,7 +526,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-2 w-full">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -542,7 +540,7 @@ export default function Sessions() {
 
             <div className="md:col-span-3 lg:col-span-3 w-full">
               <Select value={participantFilter} onValueChange={setParticipantFilter}>
-                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-cc-surface flex items-center" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white flex items-center" style={{ borderColor: BORDER, color: T2 }}>
                   <div className="flex items-center truncate">
                     <Users size={13} className="mr-1.5 opacity-60 shrink-0" />
                     <SelectValue placeholder="All participants" />
@@ -566,7 +564,7 @@ export default function Sessions() {
               </span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-cc-surface"
+                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -575,7 +573,7 @@ export default function Sessions() {
               <span className="text-[12px]" style={{ color: T3 }}>to</span>
               <input
                 type="date"
-                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-cc-surface"
+                className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
@@ -585,7 +583,7 @@ export default function Sessions() {
               {hasDateFilter && (
                 <button
                   onClick={() => { setDateFrom(""); setDateTo(""); }}
-                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-cc-bg"
+                  className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F8F8FE]"
                   style={{ color: T3 }}
                 >
                   <X size={12} /> Clear dates
@@ -596,7 +594,7 @@ export default function Sessions() {
             <div className="flex items-center gap-2 self-end lg:self-auto w-full sm:w-auto justify-end">
               <ArrowUpDown size={13} style={{ color: T3 }} className="shrink-0" />
               <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
-                <SelectTrigger className="h-[34px] rounded-lg text-[12px] w-full sm:w-48 bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
+                <SelectTrigger className="h-[34px] rounded-lg text-[12px] w-full sm:w-48 bg-white" style={{ borderColor: BORDER, color: T2 }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -614,19 +612,19 @@ export default function Sessions() {
               <span className="text-[11px] font-medium" style={{ color: T3 }}>Filters:</span>
               {search && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
-                  style={{ background: PLUM_SUBTLE, borderColor: PLUM_RING, color: PLUM }}>
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
                   "{search}" <X size={10} className="cursor-pointer" onClick={() => setSearch("")} />
                 </span>
               )}
               {statusFilter !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
-                  style={{ background: PLUM_SUBTLE, borderColor: PLUM_RING, color: PLUM }}>
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
                   {statusFilter} <X size={10} className="cursor-pointer" onClick={() => setStatusFilter("all")} />
                 </span>
               )}
               {participantFilter !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
-                  style={{ background: PLUM_SUBTLE, borderColor: PLUM_RING, color: PLUM }}>
+                  style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
                   {participantMap.get(participantFilter) ?? participantFilter}
                   <X size={10} className="cursor-pointer" onClick={() => setParticipantFilter("all")} />
                 </span>
@@ -643,7 +641,7 @@ export default function Sessions() {
         {someSelected && (
           <div
             className="px-5 py-2.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-            style={{ background: PLUM_SUBTLE, borderColor: BORDER }}
+            style={{ background: `${PLUM}08`, borderColor: BORDER }}
           >
             <span className="text-[13px] font-semibold" style={{ color: PLUM }}>
               {selectedIds.size} session{selectedIds.size !== 1 ? "s" : ""} selected
@@ -658,7 +656,7 @@ export default function Sessions() {
                 data-testid="button-bulk-export-pdf"
                 onClick={handleBulkExport}
                 disabled={isBulkExporting}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-cc-surface text-[12px] font-semibold transition-all hover:bg-cc-bg disabled:opacity-50 shadow-sm"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border bg-white text-[12px] font-semibold transition-all hover:bg-[#F8F8FE] disabled:opacity-50 shadow-sm"
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
@@ -666,7 +664,7 @@ export default function Sessions() {
               </button>
               <button
                 onClick={clearSelection}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-cc-bg"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#F8F8FE]"
                 style={{ color: T3 }}
               >
                 <X size={12} /> Deselect

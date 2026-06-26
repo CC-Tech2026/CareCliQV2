@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { recordShiftViewed } from "@/services/notificationService";
-import { Link, useLocation, useParams } from "wouter";
+import { Link, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
@@ -26,8 +26,6 @@ import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLayout";
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
 import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
-import { ShiftTravelExpenseCard, type MileageDraftState } from "@/components/shifts/ShiftTravelExpenseCard";
-import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpenseCard";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
@@ -43,35 +41,16 @@ import {
   type CachedParticipantContext,
 } from "@/lib/participant-context-cache";
 import { ClockInFlow } from "@/components/shifts/ClockInFlow";
-import { ParticipantSafetyPage } from "@/components/shifts/ParticipantSafetyPage";
-import {
-  cacheSafetyProtocol,
-  loadCachedSafetyProtocol,
-} from "@/lib/participant-safety-cache";
-import type { SafetyProtocol } from "@/services/safetyProtocolService";
-import { getWorkerSafetyProtocol } from "@/services/safetyProtocolService";
 import {
   enqueueClockIn,
   getPendingClockIn,
   listPendingActions,
 } from "@/lib/shift-offline-queue";
 import { syncAllQueuedShiftActions } from "@/lib/sync-pending-shift-actions";
-import { useOfflineSync } from "@/contexts/OfflineSyncContext";
-import { setSyncTaskLabel } from "@/lib/offline-sync-registry";
-import { resetShiftDataUsage } from "@/lib/shift-data-usage";
 import { ShiftCompletionSummary } from "@/components/shifts/ShiftCompletionSummary";
 import { EndShiftValidationModal } from "@/components/shifts/EndShiftValidationModal";
-import { ShiftSignatureModal } from "@/components/shifts/ShiftSignatureModal";
 import { MandatoryTasksAlert } from "@/components/shifts/MandatoryTasksAlert";
 import { StartSessionButton } from "@/components/shifts/StartSessionButton";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -121,29 +100,8 @@ import {
   timerAnchorIso,
 } from "@/lib/shift-utils";
 import { markTaskNa, type NaReason } from "@/lib/shift-validation";
-import {
-  getTutorialScene,
-  isTutorialActive,
-  parseTutorialStepKey,
-} from "@/lib/worker-tutorial-scene";
-import { useWorkerTutorialOptional } from "@/contexts/WorkerTutorialContext";
-import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = { id: string };
-
-const TUTORIAL_VALIDATION_TASKS: ShiftTask[] = [
-  {
-    task_id: "tutorial-task-1",
-    type: "default",
-    label: "Personal hygiene / showering",
-    completed: true,
-    mandatory: true,
-    order: 1,
-    goal_title: "Develop daily living skills",
-    has_photo: true,
-    evidence_status: "with_evidence",
-  },
-];
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
   CORE: "bg-blue-50 text-blue-700 border-blue-200",
@@ -153,11 +111,7 @@ const SERVICE_TAG_STYLES: Record<string, string> = {
 function resolveDisplayVisualState(
   shift: WorkerShift,
   instantSessionActive: boolean,
-  tutorialDemoClockedIn = false,
 ): ShiftVisualState {
-  if (tutorialDemoClockedIn && shift.visual_state === "scheduled") {
-    return "clocked_in";
-  }
   if (instantSessionActive && shift.visual_state === "clocked_in") {
     return "session_active";
   }
@@ -166,16 +120,9 @@ function resolveDisplayVisualState(
 
 export default function MyShiftDetail({ id: idProp }: Props) {
   const params = useParams<{ id: string }>();
-  const [location] = useLocation();
-  const isTutorialPreview = isTutorialActive(location);
-  const tutorialStepKey = parseTutorialStepKey(location);
-  const tutorialScene = getTutorialScene(tutorialStepKey);
-  const isTutorialDemo = isTutorialPreview && tutorialStepKey !== null;
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
-  const tutorial = useWorkerTutorialOptional();
   const { toast } = useToast();
-  const { translate, translateParams } = useAccessibility();
   const orgId = user?.organizationId ?? "__no_org__";
   const [briefingOpen, setBriefingOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
@@ -195,51 +142,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [endShiftOpen, setEndShiftOpen] = useState(false);
   const [clockOutOpen, setClockOutOpen] = useState(false);
   const [validationOpen, setValidationOpen] = useState(false);
-  const [signatureOpen, setSignatureOpen] = useState(false);
   const [mandatoryAlertOpen, setMandatoryAlertOpen] = useState(false);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [forceEndPending, setForceEndPending] = useState(false);
   const [ackConfirmOpen, setAckConfirmOpen] = useState(false);
-  const [tutorialDemoClockedIn, setTutorialDemoClockedIn] = useState(false);
-  const [tutorialSignatureDone, setTutorialSignatureDone] = useState(false);
   const [clockInFlowOpen, setClockInFlowOpen] = useState(false);
-  const [safetyProtocolOpen, setSafetyProtocolOpen] = useState(false);
-  const [safetyProtocolMandatory, setSafetyProtocolMandatory] = useState(false);
-  const [safetyProtocolView, setSafetyProtocolView] = useState<SafetyProtocol | null>(null);
   const [pendingClockInCount, setPendingClockInCount] = useState(0);
   const [offlineSyncing, setOfflineSyncing] = useState(false);
-  const mileageDraftRef = useRef<MileageDraftState>({
-    claimedKm: null,
-    calculatedKm: null,
-    isOverridden: false,
-  });
-  const { setActiveShiftId } = useOfflineSync();
-
-  useEffect(() => {
-    setActiveShiftId(id || null);
-    try {
-      if (id) sessionStorage.setItem("ccq_active_shift_id", id);
-      else sessionStorage.removeItem("ccq_active_shift_id");
-    } catch {
-      /* noop */
-    }
-    return () => setActiveShiftId(null);
-  }, [id, setActiveShiftId]);
-
-  useEffect(() => {
-    if (!isTutorialPreview) return;
-    if (tutorialStepKey === "risk_acknowledgement") {
-      setSafetyOpen(true);
-    }
-    setValidationOpen(Boolean(tutorialScene?.openValidationModal));
-    setSignatureOpen(Boolean(tutorialScene?.openSignatureModal));
-  }, [isTutorialPreview, tutorialStepKey, tutorialScene]);
-
-  useEffect(() => {
-    for (const task of tasks) {
-      setSyncTaskLabel(task.task_id, task.label);
-    }
-  }, [tasks]);
 
   const { data: shift, isLoading, error, refetch } = useOrgQuery(
     ["worker", "shift", id],
@@ -297,18 +206,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         syncedAt,
       });
     }
-    if (shift.safety_protocol && shift.has_safety_content) {
-      void cacheSafetyProtocol(shift.participant_id, shift.safety_protocol);
-    }
-  }, [
-    shift?.participant_id,
-    shift?.profile,
-    shift?.preferences,
-    shift?.context,
-    shift?.context_synced_at,
-    shift?.safety_protocol,
-    shift?.has_safety_content,
-  ]);
+  }, [shift?.participant_id, shift?.profile, shift?.preferences, shift?.context, shift?.context_synced_at]);
 
   useEffect(() => {
     if (!shift?.participant_id) return;
@@ -350,7 +248,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const applyClockInResult = async (updated: WorkerShift) => {
     if (!shift) return;
     setTasks(updated.tasks ?? []);
-    if (shift.participant_id && (updated.profile || updated.context || updated.safety_protocol)) {
+    if (shift.participant_id && (updated.profile || updated.context)) {
       void cacheParticipantContext({
         participantId: shift.participant_id,
         profile: updated.profile ?? shift.profile,
@@ -358,9 +256,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         context: updated.context ?? shift.context,
         syncedAt: updated.context_synced_at || new Date().toISOString(),
       });
-      if (updated.safety_protocol) {
-        void cacheSafetyProtocol(shift.participant_id, updated.safety_protocol);
-      }
     }
     invalidateShifts();
     await refetch();
@@ -368,20 +263,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const performVerifiedClockIn = async (payload: ClockInRequest) => {
     if (!shift) return;
-    const mileage = mileageDraftRef.current;
-    const clockInPayload: ClockInRequest = { ...payload };
-    if (mileage.isOverridden && mileage.claimedKm != null && mileage.claimedKm > 0) {
-      clockInPayload.claimed_km = mileage.claimedKm;
-    }
-    if (isTutorialDemo) {
-      setTutorialDemoClockedIn(true);
-      setClockInFlowOpen(false);
-      toast({
-        title: translate("toast.tutorialCheckIn"),
-        description: translate("toast.tutorialCheckInDesc"),
-      });
-      return;
-    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       await enqueueClockIn({
         shiftId: shift.id,
@@ -389,26 +270,22 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         clientTimestamp: payload.client_timestamp || new Date().toISOString(),
         location: payload.location ?? null,
         qrToken: payload.qr_token ?? null,
-        claimedKm: clockInPayload.claimed_km ?? null,
       });
       await refreshPendingClockIn();
-      window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
-        title: translate("toast.offlineCheckIn"),
-        description: translate("toast.offlineCheckInDesc"),
+        title: "Offline check-in saved",
+        description: "Your check-in will sync when you are back online.",
       });
       return;
     }
     try {
-      const updated = await clockInShift(shift.id, clockInPayload);
+      const updated = await clockInShift(shift.id, payload);
       await applyClockInResult(updated);
       setClockInFlowOpen(false);
       toast({
-        title: translate("toast.clockedIn"),
-        description: translateParams("toast.clockedInDesc", {
-          name: shift.participant_name ?? "participant",
-        }),
+        title: "Clocked in!",
+        description: `Verified arrival for ${shift.participant_name ?? "participant"}.`,
       });
     } catch (err) {
       const apiErr = err as Error & { status?: number };
@@ -421,8 +298,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
       if (isRejection) {
         toast({
-          title: translate("toast.checkInNotAllowed"),
-          description: apiErr.message || translate("common.error"),
+          title: "Check-in not allowed",
+          description: apiErr.message || "This check-in could not be verified.",
           variant: "destructive",
         });
         return;
@@ -434,14 +311,12 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         clientTimestamp: payload.client_timestamp || new Date().toISOString(),
         location: payload.location ?? null,
         qrToken: payload.qr_token ?? null,
-        claimedKm: clockInPayload.claimed_km ?? null,
       });
       await refreshPendingClockIn();
-      window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
-        title: translate("toast.checkInSavedLocal"),
-        description: apiErr.message || translate("toast.checkInSavedLocalDesc"),
+        title: "Check-in saved locally",
+        description: apiErr.message || "Will retry when connection improves.",
         variant: "destructive",
       });
     }
@@ -466,10 +341,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           invalidate();
           await refetch();
           toast({
-            title: translate("toast.pendingSynced"),
-            description: translateParams("toast.pendingSyncedDesc", {
-              count: String(result.synced),
-            }),
+            title: "Pending actions synced",
+            description:
+              result.synced === 1
+                ? "1 queued action uploaded."
+                : `${result.synced} queued actions uploaded.`,
           });
         }
       } finally {
@@ -486,7 +362,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }, [id, clockInFlowOpen, invalidate, refetch, toast]);
 
   const displayVisualState = shift
-    ? resolveDisplayVisualState(shift, instantSessionActive, tutorialDemoClockedIn)
+    ? resolveDisplayVisualState(shift, instantSessionActive)
     : "scheduled";
   const timerActive =
     displayVisualState === "clocked_in" || displayVisualState === "session_active";
@@ -502,13 +378,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     invalidate();
   };
 
-  const closeAckDialog = (open: boolean) => {
-    setAckConfirmOpen(open);
-    if (!open && !shift?.risks_acknowledged) {
-      setAckChecked(false);
-    }
-  };
-
   const handleAcknowledge = async () => {
     if (!shift) return;
     setBusy("ack");
@@ -521,8 +390,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     } catch (err) {
       setAckChecked(false);
       toast({
-        title: translate("toast.ackRisksFailed"),
-        description: (err as Error).message || translate("toast.tryAgain"),
+        title: "Could not acknowledge risks",
+        description: (err as Error).message || "Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -530,44 +399,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     }
   };
 
-  const openSafetyPage = async (mandatory = false) => {
-    if (!shift?.participant_id) return;
-    setSafetyProtocolMandatory(mandatory);
-    setSafetyProtocolOpen(true);
-    try {
-      const fresh = await getWorkerSafetyProtocol(shift.participant_id);
-      setSafetyProtocolView(fresh);
-      if (fresh.has_safety_content) {
-        void cacheSafetyProtocol(shift.participant_id, fresh);
-      }
-      return;
-    } catch {
-      // Fall back to shift payload or offline cache.
-    }
-    if (shift.safety_protocol) {
-      setSafetyProtocolView(shift.safety_protocol);
-      return;
-    }
-    const cached = await loadCachedSafetyProtocol(shift.participant_id);
-    if (cached) setSafetyProtocolView(cached);
-  };
-
   const handleClockIn = () => {
     if (!shift) return;
-    if (shift.requires_safety_ack) {
-      void openSafetyPage(true);
-      toast({
-        title: translate("toast.safetyCardRequired"),
-        description: translate("toast.safetyCardRequiredDesc"),
-        variant: "destructive",
-      });
-      return;
-    }
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
       setSafetyOpen(true);
       toast({
-        title: translate("toast.ackSafetyFirst"),
-        description: translate("toast.ackSafetyFirstDesc"),
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before clocking in.",
         variant: "destructive",
       });
       return;
@@ -590,8 +428,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (shiftNeedsRiskAck(shift)) {
       setSafetyOpen(true);
       toast({
-        title: translate("toast.ackSafetyFirst"),
-        description: translate("toast.ackSafetySession"),
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before starting a session.",
         variant: "destructive",
       });
       return;
@@ -613,12 +451,12 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       invalidateShifts();
       await refetch();
       toast({
-        title: translate("toast.clockedOut"),
-        description: translate("toast.clockedOutDesc"),
+        title: "Clocked out",
+        description: "You left without starting a session.",
       });
     } catch (err) {
       toast({
-        title: translate("toast.clockOutFailed"),
+        title: "Could not clock out",
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -639,18 +477,15 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       setValidationOpen(false);
       setMandatoryAlertOpen(false);
       setForceEndPending(false);
-      resetShiftDataUsage(shift.id);
       invalidateShifts();
       await refetch();
       toast({
-        title: translate("toast.shiftEnded"),
-        description: translateParams("toast.shiftEndedDesc", {
-          name: shift.participant_name ?? "participant",
-        }),
+        title: "Shift ended",
+        description: `Documentation locked for ${shift.participant_name ?? "participant"}.`,
       });
     } catch (err) {
       toast({
-        title: translate("toast.endShiftFailed"),
+        title: "Could not end shift",
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -691,13 +526,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     setTasks(next);
     try {
       await updateShiftTasks(shift.id, next);
-      toast({
-        title: translate("toast.taskMarkedNa"),
-        description: translate("toast.taskMarkedNaDesc"),
-      });
+      toast({ title: "Task marked N/A", description: "Reason recorded for coordinators." });
     } catch (err) {
       toast({
-        title: translate("toast.taskUpdateFailed"),
+        title: "Could not update task",
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -707,13 +539,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const handleValidationEndAnyway = () => {
     setValidationOpen(false);
     setForceEndPending(true);
-    setSignatureOpen(true);
+    setEndShiftOpen(true);
   };
 
   const handleValidationEndShift = () => {
     setValidationOpen(false);
     setForceEndPending(false);
-    setSignatureOpen(true);
+    setEndShiftOpen(true);
   };
 
   const handleBackToMandatoryTasks = () => {
@@ -731,24 +563,15 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const handleEndAnywayFromMandatory = () => {
     setMandatoryAlertOpen(false);
     setForceEndPending(true);
-    setSignatureOpen(true);
-  };
-
-  const handleSignatureComplete = () => {
-    if (isTutorialDemo) {
-      setTutorialSignatureDone(true);
-      setSignatureOpen(false);
-      return;
-    }
     void handleEndShift();
   };
 
   if (!id) {
     return (
-      <div className="space-y-4 py-8 text-safe">
-        <p className="text-sm font-bold text-red-600">{translate("shift.invalidLink")}</p>
+      <div className="space-y-4 py-8">
+        <p className="text-sm font-bold text-red-600">Invalid shift link.</p>
         <Link href="/my-shifts">
-          <Button variant="outline" className="min-h-11 rounded-full">{translate("shift.backToShifts")}</Button>
+          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
         </Link>
       </div>
     );
@@ -756,18 +579,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-sm font-bold text-safe" style={{ color: MUTED }} role="status">
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> {translate("shift.loading")}
+      <div className="flex items-center gap-2 py-12 text-sm font-bold" style={{ color: MUTED }}>
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading shift details…
       </div>
     );
   }
 
   if (error || !shift) {
     return (
-      <div className="space-y-4 py-8 text-safe">
-        <p className="text-sm font-bold text-red-600">{(error as Error)?.message || translate("shift.notFound")}</p>
+      <div className="space-y-4 py-8">
+        <p className="text-sm font-bold text-red-600">{(error as Error)?.message || "Shift not found"}</p>
         <Link href="/my-shifts">
-          <Button variant="outline" className="min-h-11 rounded-full">{translate("shift.backToShifts")}</Button>
+          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
         </Link>
       </div>
     );
@@ -800,10 +623,6 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const contextSyncedAt = shift.context_synced_at ?? offlineContext?.syncedAt ?? null;
   const participantFirstName = (displayProfile?.preferred_name || shift.participant_name || "").split(" ")[0];
   const activeTasksForValidation = resolveActiveShiftTasks(shift.tasks, tasks);
-  const validationTasks =
-    validationOpen && isTutorialDemo && activeTasksForValidation.length === 0
-      ? TUTORIAL_VALIDATION_TASKS
-      : activeTasksForValidation;
   const incompleteMandatory = incompleteMandatoryTasks(activeTasksForValidation);
   const workflow = (
     <ShiftWorkflow
@@ -840,19 +659,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       ackChecked={ackChecked}
       setAckChecked={setAckChecked}
       busy={busy}
-      onRequestAcknowledge={() => {
-        setAckConfirmOpen(true);
-        if (isTutorialPreview && tutorialStepKey === "risk_acknowledgement") {
-          void tutorial?.nextStep();
-        }
-      }}
+      onRequestAcknowledge={() => setAckConfirmOpen(true)}
       onViewSupportInstructions={() => {
         setSupportOpen(true);
         requestAnimationFrame(() => {
           document.getElementById("shift-support-instructions")?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       }}
-      onOpenSafetyPage={() => void openSafetyPage(false)}
       onClockIn={handleClockIn}
       onStartSession={handleStartSession}
       onRequestClockOut={() => setClockOutOpen(true)}
@@ -864,30 +677,17 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       incompleteMandatory={incompleteMandatory}
       onBackToMandatoryTasks={handleBackToMandatoryTasks}
       onEndAnywayFromMandatory={handleEndAnywayFromMandatory}
-      mileageDraftRef={mileageDraftRef}
     />
   );
 
   const dialogs = (
     <>
       {shift && (
-        <ShiftSignatureModal
-          open={signatureOpen}
-          onOpenChange={setSignatureOpen}
-          shiftId={shift.id}
-          busy={busy === "end"}
-          tutorialDemo={isTutorialDemo}
-          onSigned={handleSignatureComplete}
-        />
-      )}
-
-      {shift && (
         <EndShiftValidationModal
           open={validationOpen}
           onOpenChange={setValidationOpen}
-          tasks={validationTasks}
+          tasks={activeTasksForValidation}
           busy={busy === "end"}
-          tutorialDemo={isTutorialDemo}
           onCancel={() => setValidationOpen(false)}
           onAddEvidence={handleValidationAddEvidence}
           onMarkNa={(taskId, reason) => void handleMarkTaskNa(taskId, reason)}
@@ -897,27 +697,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       )}
 
       {shift && (
-        <ParticipantSafetyPage
-          open={safetyProtocolOpen}
-          protocol={safetyProtocolView}
-          participantName={shift.participant_name}
-          mandatory={safetyProtocolMandatory}
-          onClose={() => {
-            setSafetyProtocolOpen(false);
-            setSafetyProtocolMandatory(false);
-          }}
-          onAcknowledged={() => {
-            void refetch();
-          }}
-        />
-      )}
-
-      {shift && (
         <ClockInFlow
           open={clockInFlowOpen}
           shift={shift}
           busy={busy === "clock"}
-          tutorialDemo={isTutorialDemo}
           onClose={() => setClockInFlowOpen(false)}
           onConfirm={handleVerifiedClockIn}
         />
@@ -926,15 +709,15 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{translate("shift.clockOut.title")}</AlertDialogTitle>
+            <AlertDialogTitle>Clock out without session?</AlertDialogTitle>
             <AlertDialogDescription>
-              {translate("shift.clockOut.desc")}
+              You will leave this shift without documenting a session. Use this only if you could not provide support.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{translate("common.cancel")}</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleClockOut()} disabled={busy === "clockout"}>
-              {translate("shift.clockOut.action")}
+              Clock Out
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -947,64 +730,53 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {forceEndPending ? translate("shift.endShift.incompleteTitle") : translate("shift.endShift.title")}
+              {forceEndPending ? "End shift with incomplete tasks?" : "End shift?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {forceEndPending
-                ? translate("shift.endShift.incompleteDesc")
-                : translate("shift.endShift.desc")}
+                ? "Mandatory tasks are not complete. Ending now will flag this shift in your compliance report."
+                : "This completes the shift and locks documentation. You will not be able to edit notes after this."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{translate("common.cancel")}</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-cc-coral hover:opacity-90"
+              className="bg-[#BE185D] hover:bg-[#d92854]"
               onClick={(event) => {
                 event.preventDefault();
                 void handleEndShift();
               }}
               disabled={busy === "end"}
             >
-              {forceEndPending ? translate("shift.endShift.anyway") : translate("shift.endShiftButton")}
+              {forceEndPending ? "End Anyway" : "End Shift"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={ackConfirmOpen} onOpenChange={closeAckDialog}>
-        <DialogContent
-          data-tutorial="risk-ack-dialog"
-          id="risk-ack-dialog"
-          hideCloseButton
-          className={cn("max-w-lg rounded-2xl", isTutorialPreview && "z-[10002]")}
-          overlayClassName={isTutorialPreview ? "z-[10002]" : undefined}
-          data-state={ackConfirmOpen ? "open" : "closed"}
-        >
-          <DialogHeader>
-            <DialogTitle>Acknowledge safety alerts?</DialogTitle>
-            <DialogDescription>
+      <AlertDialog
+        open={ackConfirmOpen}
+        onOpenChange={(open) => {
+          setAckConfirmOpen(open);
+          if (!open && !shift?.risks_acknowledged) setAckChecked(false);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Acknowledge safety alerts?</AlertDialogTitle>
+            <AlertDialogDescription>
               Confirm you have read and understand all safety alerts for {shift?.participant_name ?? "this participant"}.
               This will be logged with your name and timestamp.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => closeAckDialog(false)} disabled={busy === "ack"}>
-              {translate("common.cancel")}
-            </Button>
-            <Button onClick={() => void handleAcknowledge()} disabled={busy === "ack"} className="min-h-11">
-              {busy === "ack" ? translate("shift.acknowledgeSaving") : translate("shift.acknowledgeRisks")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {tutorialSignatureDone && (
-        <div
-          data-tutorial="shift-signature-complete"
-          className="pointer-events-none absolute left-0 top-0 h-[2px] w-[2px] overflow-hidden opacity-0"
-          aria-hidden="true"
-        />
-      )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
+              Acknowledge Risks
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 
@@ -1054,7 +826,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4 pb-10">
+    <div className="mx-auto max-w-lg space-y-4 pb-10">
       <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner
@@ -1067,11 +839,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       <Link href="/my-shifts">
         <button
           type="button"
-          className="touch-target flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
+          className="flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
           style={{ color: PLUM }}
-          aria-label={translate("shift.backToShifts")}
         >
-          <ArrowLeft size={18} aria-hidden /> {translate("shift.backToShifts")}
+          <ArrowLeft size={18} /> My Shifts
         </button>
       </Link>
       <ShiftStageBanner
@@ -1121,7 +892,6 @@ function ShiftWorkflow({
   busy,
   onRequestAcknowledge,
   onViewSupportInstructions,
-  onOpenSafetyPage,
   onClockIn,
   onStartSession,
   onRequestClockOut,
@@ -1133,7 +903,6 @@ function ShiftWorkflow({
   incompleteMandatory,
   onBackToMandatoryTasks,
   onEndAnywayFromMandatory,
-  mileageDraftRef,
 }: {
   shift: WorkerShift;
   displayProfile?: ParticipantProfile;
@@ -1170,7 +939,6 @@ function ShiftWorkflow({
   busy: string | null;
   onRequestAcknowledge: () => void;
   onViewSupportInstructions: () => void;
-  onOpenSafetyPage: () => void;
   onClockIn: () => void;
   onStartSession: () => void;
   onRequestClockOut: () => void;
@@ -1182,9 +950,7 @@ function ShiftWorkflow({
   incompleteMandatory: ShiftTask[];
   onBackToMandatoryTasks: () => void;
   onEndAnywayFromMandatory: () => void;
-  mileageDraftRef: import("react").MutableRefObject<MileageDraftState>;
 }) {
-  const { translate, translateParams } = useAccessibility();
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
   const durationLabel = formatDurationLabel(duration);
@@ -1209,31 +975,23 @@ function ShiftWorkflow({
     : null;
 
   const timerLabel = isSessionActive
-    ? translate("shift.sessionActive")
-    : translate("shift.atLocation");
+    ? "Session active — documenting"
+    : "At location — tap Start Session";
 
-  const timerBg = isSessionActive ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
+  const timerBg = isSessionActive ? "#ECFDF5" : "#FFF7ED";
   const timerText = isSessionActive ? "text-emerald-700" : "text-amber-700";
   const timerDot = isSessionActive ? "bg-emerald-500" : "bg-amber-500";
   const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
 
   return (
-    <div className="relative space-y-4 pb-4 text-safe" data-tutorial="shift-workspace">
-      {(visualState === "clocked_in" || visualState === "session_active") && (
-        <div
-          data-tutorial="clock-in-complete"
-          className="pointer-events-none absolute left-0 top-0 h-[2px] w-[2px] overflow-hidden opacity-0"
-          aria-hidden="true"
-        />
-      )}
+    <div className="space-y-4 pb-4">
       {isCompleted && (
         <ShiftCompletionSummary shift={shift} summary={shift.completion_summary} />
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border-2 bg-[var(--cc-surface)] shadow-sm transition-[border-color] duration-300 ease-in-out"
+        className="overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
-        data-tutorial="shift-header"
       >
         <div className="h-1 transition-[background-color] duration-300 ease-in-out" style={{ background: state.border }} />
         <div className="p-5">
@@ -1254,7 +1012,7 @@ function ShiftWorkflow({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-lg font-black" style={{ color: TEXT }}>
+                <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>
                   {shift.participant_name}
                 </h1>
                 <span className={cn("rounded-md border px-1.5 py-0.5 text-[9px] font-black uppercase", tagStyle)}>
@@ -1264,7 +1022,7 @@ function ShiftWorkflow({
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
-                {durationLabel ? ` — ${durationLabel} ${translate("shift.scheduledDuration")}` : ""}
+                {durationLabel ? ` — ${durationLabel} scheduled` : ""}
               </p>
               {shift.participant_address && (
                 <p className="mt-1 flex items-start gap-1.5 text-sm font-medium" style={{ color: MUTED }}>
@@ -1280,15 +1038,15 @@ function ShiftWorkflow({
               <div className="mt-3 flex gap-2">
                 {directionsUrl && (
                   <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm" className="min-h-10 gap-1.5 rounded-full text-xs font-bold">
-                      <Navigation size={14} aria-hidden /> {translate("shift.directions")}
+                    <Button variant="outline" size="sm" className="gap-1.5 rounded-full text-xs font-bold">
+                      <Navigation size={14} /> Directions
                     </Button>
                   </a>
                 )}
                 {shift.participant_phone && (
                   <a href={`tel:${shift.participant_phone}`}>
-                    <Button variant="outline" size="sm" className="min-h-10 gap-1.5 rounded-full text-xs font-bold">
-                      <Phone size={14} aria-hidden /> {translate("shift.call")}
+                    <Button variant="outline" size="sm" className="gap-1.5 rounded-full text-xs font-bold">
+                      <Phone size={14} /> Call
                     </Button>
                   </a>
                 )}
@@ -1324,31 +1082,20 @@ function ShiftWorkflow({
         />
       )}
 
-      <ShiftTravelExpenseCard
-        shiftId={shift.id}
-        shiftStatus={shift.status}
-        clockedInAt={shift.clocked_in_at}
-        mileageDraftRef={mileageDraftRef}
-      />
-
-      <ShiftTransitExpenseCard shiftId={shift.id} shiftStatus={shift.status} />
-
       {!isCompleted && visualState === "scheduled" && (
         <Button
           type="button"
-          data-tutorial="clock-in"
-          className="touch-target h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
-          style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
+          className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
+          style={{ background: "#F59E0B" }}
           disabled={busy !== null || (needsRiskAck && !ackChecked)}
           onClick={onClockIn}
-          aria-label={translate("shift.clockIn")}
         >
           {busy === "clock" ? (
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
             <>
-              <MapPin size={18} className="mr-2 inline" aria-hidden />
-              {translate("shift.clockIn")}
+              <MapPin size={18} className="mr-2 inline" />
+              Clock In — I&apos;ve Arrived
             </>
           )}
         </Button>
@@ -1365,12 +1112,12 @@ function ShiftWorkflow({
           />
           <button
             type="button"
-            className="touch-target w-full text-center text-xs font-semibold underline-offset-2 hover:underline"
+            className="w-full text-center text-xs font-semibold underline-offset-2 hover:underline"
             style={{ color: MUTED }}
             disabled={busy !== null}
             onClick={onRequestClockOut}
           >
-            {translate("shift.clockOutWithoutSession")}
+            Clock Out Without Session
           </button>
         </div>
       )}
@@ -1381,46 +1128,40 @@ function ShiftWorkflow({
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
-                data-tutorial="session-notes"
-                className="touch-target h-14 rounded-2xl border-2 bg-[var(--cc-surface)] text-base font-black shadow-sm"
+                className="h-14 rounded-2xl border-2 bg-white text-base font-black shadow-sm"
                 style={{ borderColor: PLUM, color: PLUM }}
                 disabled={busy !== null}
                 onClick={onOpenLiveNote}
-                aria-label={translate("shift.notes")}
               >
-                <Mic size={18} className="mr-2 inline" aria-hidden /> {translate("shift.notes")}
+                <Mic size={18} className="mr-2 inline" /> Notes
               </Button>
               <Button
-                className="touch-target h-14 rounded-2xl border-0 text-base font-black text-white"
-                data-tutorial="end-shift"
+                className="h-14 rounded-2xl border-0 text-base font-black text-white"
                 style={{ background: CORAL }}
                 disabled={busy !== null}
                 onClick={onAttemptEndShift}
-                aria-label={translate("shift.endShiftButton")}
               >
                 {busy === "end" ? (
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    <Square size={16} className="mr-2 inline" aria-hidden /> {translate("shift.endShiftButton")}
+                    <Square size={16} className="mr-2 inline" /> End Shift
                   </>
                 )}
               </Button>
             </div>
           ) : (
             <Button
-              className="touch-target h-14 w-full rounded-2xl border-0 text-base font-black text-white"
-              data-tutorial="end-shift"
+              className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"
               style={{ background: CORAL }}
               disabled={busy !== null}
               onClick={onAttemptEndShift}
-              aria-label={translate("shift.endShiftButton")}
             >
               {busy === "end" ? (
-                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  <Square size={16} className="mr-2 inline" aria-hidden /> {translate("shift.endShiftButton")}
+                  <Square size={16} className="mr-2 inline" /> End Shift
                 </>
               )}
             </Button>
@@ -1493,41 +1234,17 @@ function ShiftWorkflow({
         sectionId="shift-support-instructions"
       />
 
-      {(shift.has_safety_content || shift.safety_protocol) && (
-        <section className="rounded-2xl border border-violet-200 bg-violet-50/40 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-black text-violet-900">Safety protocols</p>
-              <p className="text-xs text-violet-700">
-                {shift.requires_safety_ack
-                  ? translate("shift.safetyRequired")
-                  : translate("shift.safetyOffline")}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="font-bold"
-              onClick={onOpenSafetyPage}
-            >
-              View safety page
-            </Button>
-          </div>
-        </section>
-      )}
-
       <PreShiftBriefing shift={shift} open={briefingOpen} onToggle={() => setBriefingOpen(!briefingOpen)} />
 
       {showTasks && activeTasks.length > 0 && (
         <section
           id="shift-task-checklist"
-          data-tutorial="shift-task-checklist"
-          className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
+          className="overflow-hidden rounded-2xl border bg-white shadow-sm"
           style={{ borderColor: BORDER }}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between bg-cc-bg px-4 py-3.5 text-left"
+            className="flex w-full items-center justify-between bg-[#F8F6FE] px-4 py-3.5 text-left"
             onClick={() => setTasksOpen(!tasksOpen)}
           >
             <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
@@ -1544,7 +1261,7 @@ function ShiftWorkflow({
                   "rounded-full border px-2.5 py-1 text-[10px] font-black",
                   feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-cc-border bg-cc-surface text-cc-plum",
+                    : "border-[#E5E7EB] bg-white text-[#6D4BDA]",
                 )}
               >
                 {feedSummary.goalsComplete}/{feedSummary.goalsTotal}
@@ -1572,7 +1289,6 @@ function ShiftWorkflow({
                   </p>
                 </div>
               )}
-              <div data-tutorial="task-evidence">
               <ShiftTaskChecklist
                 shiftId={shift.id}
                 sessionId={shift.session_id}
@@ -1583,7 +1299,6 @@ function ShiftWorkflow({
                 sessionStyle={isSessionActive}
                 focusTaskId={focusTaskId}
               />
-              </div>
 
               {isSessionActive && shift.session_id && activeTasks.length > 0 && (
                 <div className="mt-4">

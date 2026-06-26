@@ -453,13 +453,13 @@ function Router() {
       </Route>
 
       <Route path="/worker/profile">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><WorkerProfile /></AppLayout>
         </ProtectedRoute>
       </Route>
 
       <Route path="/worker/security">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><WorkerSecurity /></AppLayout>
         </ProtectedRoute>
       </Route>

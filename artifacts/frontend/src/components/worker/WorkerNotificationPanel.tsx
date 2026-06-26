@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,13 +8,12 @@ import {
   Search, Filter, Send, ChevronRight, Zap, AlertCircle,
 } from "lucide-react";
 
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 const SEVERITY_LEVELS = {
   urgent: { color: "#DC2626", label: "Urgent", bg: "#FEE2E2" },
@@ -225,7 +224,7 @@ function MessageDetailModal({
         style={{ zIndex: 50 }}
       >
         <div
-          className="bg-cc-surface rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col"
+          className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -296,7 +295,7 @@ function MessageDetailModal({
                     className="w-full px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all flex items-center justify-center gap-2"
                     style={{
                       background: action.variant === "primary" ? PLUM : SOFT,
-                      color: action.variant === "primary" ? 'var(--cc-surface)' : TEXT,
+                      color: action.variant === "primary" ? "#fff" : TEXT,
                     }}
                   >
                     {action.icon}
@@ -322,7 +321,7 @@ function MessageDetailModal({
                   className="w-full p-2.5 rounded border text-[13px] resize-none focus:outline-none focus:ring-2"
                   style={{
                     borderColor: BORDER,
-                    "--tw-ring-color": PLUM_RING,
+                    "--tw-ring-color": `${PLUM}20`,
                   } as any}
                   rows={3}
                 />
@@ -432,7 +431,7 @@ function MessageRow({
 
   return (
     <div
-      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-cc-bg cursor-pointer border-b"
+      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 cursor-pointer border-b"
       style={{ opacity: message.is_read ? 0.6 : 1, borderColor: BORDER }}
       onClick={onSelectMessage}
     >
@@ -449,7 +448,7 @@ function MessageRow({
         <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: message.is_read ? 400 : 600 }}>
           {message.title}
         </p>
-        <p className="text-[12px] text-cc-muted mt-0.5 line-clamp-2 whitespace-pre-wrap">
+        <p className="text-[12px] text-[#6B7280] mt-0.5 line-clamp-2 whitespace-pre-wrap">
           {message.message}
         </p>
         <div className="flex items-center gap-2 mt-2">
@@ -549,7 +548,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed top-0 right-0 h-full w-[420px] max-w-full z-50 flex flex-col shadow-2xl"
-      style={{ background: 'var(--cc-surface)', borderLeft: '1px solid var(--cc-border)' }}
+      style={{ background: "var(--cc-bg)", borderLeft: `1px solid ${BORDER}` }}
     >
       {/* Header */}
       <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
@@ -562,7 +561,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
             {unread > 0 && (
               <span
                 className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center"
-                style={{ background: CORAL, color: 'var(--cc-surface)' }}
+                style={{ background: CORAL, color: "#fff" }}
               >
                 {unread}
               </span>
@@ -597,7 +596,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-              style={{ borderColor: BORDER, "--tw-ring-color": PLUM_RING } as any}
+              style={{ borderColor: BORDER, "--tw-ring-color": `${PLUM}20` } as any}
             />
           </div>
           <button
@@ -655,7 +654,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {!isLoading && error && (
-          <div className="m-4 p-4 rounded-lg" style={{ background: 'var(--cc-status-critical-bg)', borderLeft: `4px solid ${CORAL}` }}>
+          <div className="m-4 p-4 rounded-lg" style={{ background: "#FEE2E2", borderLeft: `4px solid ${CORAL}` }}>
             <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
               Error loading messages
             </p>
@@ -728,7 +727,7 @@ export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
       {unread > 0 && (
         <span
           className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center"
-          style={{ background: CORAL, color: 'var(--cc-surface)' }}
+          style={{ background: CORAL, color: "#fff" }}
         >
           {unread > 99 ? "99+" : unread}
         </span>

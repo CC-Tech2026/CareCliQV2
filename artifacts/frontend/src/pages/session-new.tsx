@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -27,15 +27,12 @@ import { Calendar } from "@/components/ui/calendar";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "var(--cc-plum)";
-const CORAL  = "var(--cc-coral)";
-const PLUM_SUBTLE = "var(--cc-plum-subtle)";
-const PLUM_SOFT = "var(--cc-plum-soft)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const T1     = "var(--cc-text)";
-const T2     = "var(--cc-muted)";
-const T3     = "var(--cc-muted)";
+const CORAL  = "#F1738A";
+const T1     = "#1C1626";
+const T2     = "#374151";
+const T3     = "#7A6A8A";
 const BORDER = "var(--cc-border)";
-const CARD_SHADOW = "0 1px 4px color-mix(in srgb, var(--cc-plum) 6%, transparent), 0 0 0 1px var(--cc-border)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 // ── Quick intents ─────────────────────────────────────────────────────────────
 const QUICK_INTENTS = [
@@ -65,7 +62,7 @@ function FormCard({
   icon, title, children, accent = false,
 }: { icon?: React.ReactNode; title: string; children: React.ReactNode; accent?: boolean }) {
   return (
-    <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
+    <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
       <div
         className="flex items-center gap-2.5 px-6 py-4 border-b"
         style={{ borderColor: "rgba(232,213,232,0.4)" }}
@@ -279,7 +276,7 @@ export default function SessionNew() {
           {/* ── Goals — only after participant selected ── */}
           {selectedParticipantId && (
             <div
-              className="bg-cc-surface rounded-2xl overflow-hidden"
+              className="bg-white rounded-2xl overflow-hidden"
               style={{
                 boxShadow: selectedGoalIds.length === 0
                   ? `0 1px 4px rgba(217,119,6,0.12), 0 0 0 1.5px rgba(245,158,11,0.35)`
@@ -308,7 +305,7 @@ export default function SessionNew() {
                 {participantGoals.length === 0 ? (
                   <div
                     className="flex items-start gap-2.5 rounded-xl px-4 py-3.5"
-                    style={{ background: PLUM_SOFT, border: `1px solid ${PLUM_RING}` }}
+                    style={{ background: `${PLUM}06`, border: `1px solid ${PLUM}18` }}
                   >
                     <AlertCircle size={14} className="shrink-0 mt-0.5" style={{ color: T3 }} />
                     <p className="text-[13px]" style={{ color: T2 }}>
@@ -324,10 +321,10 @@ export default function SessionNew() {
                         className="flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors duration-150"
                         style={{
                           borderColor: selectedGoalIds.includes(goal.id)
-                            ? PLUM_RING
+                            ? `${PLUM}30`
                             : BORDER,
                           background: selectedGoalIds.includes(goal.id)
-                            ? PLUM_SOFT
+                            ? `${PLUM}06`
                             : "transparent",
                         }}
                       >
@@ -458,7 +455,7 @@ export default function SessionNew() {
                 disabled={startDisabled || createSessionMutation.isPending}
                 title={startDisabled ? "Select at least one participant goal before starting." : undefined}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {createSessionMutation.isPending && <Loader2 size={14} className="animate-spin" />}
                 Start Session

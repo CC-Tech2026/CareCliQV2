@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
@@ -56,24 +56,24 @@ export function HubHeader() {
   return (
     <div
       className="relative overflow-hidden rounded-3xl"
-      style={{ background: "linear-gradient(135deg, #5533CC 0%, #3A1FA8 55%, #2A1490 100%)" }}
+      style={{ background: "var(--cc-plum)" }}
     >
       {/* Decorative circles */}
       <span
         className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full opacity-[0.12]"
-        style={{ background: 'var(--cc-surface)' }}
+        style={{ background: "var(--cc-bg)" }}
       />
       <span
         className="pointer-events-none absolute -bottom-10 right-20 h-36 w-36 rounded-full opacity-[0.07]"
-        style={{ background: 'var(--cc-surface)' }}
+        style={{ background: "var(--cc-bg)" }}
       />
       <span
         className="pointer-events-none absolute top-8 right-32 h-16 w-16 rounded-full opacity-[0.08]"
-        style={{ background: 'var(--cc-coral)' }}
+        style={{ background: "#BE185D" }}
       />
       <span
         className="pointer-events-none absolute bottom-6 -left-6 h-24 w-24 rounded-full opacity-[0.08]"
-        style={{ background: 'var(--cc-surface)' }}
+        style={{ background: "var(--cc-bg)" }}
       />
 
       {/* Content */}
@@ -104,8 +104,8 @@ export function HubHeader() {
         {/* CTA */}
         <button
           onClick={() => navigate(cta.href)}
-          className="mt-6 flex items-center gap-2 rounded-full bg-cc-surface px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
-          style={{ color: 'var(--cc-plum)' }}
+          className="mt-6 flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
+          style={{ color: "#3730A3" }}
         >
           {cta.label}
           <ArrowRight size={13} strokeWidth={2.5} />

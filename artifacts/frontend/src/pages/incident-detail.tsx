@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -161,7 +161,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   if (!incident) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-20" style={{ color: "#4A3D5A" }}>
+      <div className="max-w-3xl mx-auto text-center py-20" style={{ color: "var(--cc-text)" }}>
         Incident not found.{" "}
         <button onClick={() => navigate("/incidents")} className="underline" style={{ color: "#F1738A" }}>
           Back to Incidents
@@ -229,13 +229,13 @@ export default function IncidentDetail({ id }: { id: string }) {
       )}
 
       {/* Header card */}
-      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-[20px] font-bold leading-snug" style={{ color: "#1C1626" }}>{incident.title}</h1>
+              <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{incident.title}</h1>
               {incident.participant_name && (
-                <p className="text-[13px] mt-1 flex items-center gap-1.5" style={{ color: "#4A3D5A" }}>
+                <p className="text-[13px] mt-1 flex items-center gap-1.5" style={{ color: "var(--cc-text)" }}>
                   <User size={13} />
                   {incident.participant_name}
                   {incident.participant_ndis && (
@@ -284,7 +284,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                 <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
                   <MapPin size={11} /> Location
                 </p>
-                <p style={{ color: "#4A3D5A" }}>{incident.location}</p>
+                <p style={{ color: "var(--cc-text)" }}>{incident.location}</p>
               </div>
             )}
             {incident.witnesses && (
@@ -292,14 +292,14 @@ export default function IncidentDetail({ id }: { id: string }) {
                 <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
                   <Users size={11} /> Witnesses
                 </p>
-                <p style={{ color: "#4A3D5A" }}>{incident.witnesses}</p>
+                <p style={{ color: "var(--cc-text)" }}>{incident.witnesses}</p>
               </div>
             )}
             {incident.practice_standard && (
               <div className="col-span-2">
                 <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>NDIS Practice Standard</p>
-                <p className="flex items-center gap-1.5" style={{ color: "#4A3D5A" }}>
-                  <Shield size={12} style={{ color: "#542269" }} />
+                <p className="flex items-center gap-1.5" style={{ color: "var(--cc-text)" }}>
+                  <Shield size={12} style={{ color: "#3730A3" }} />
                   {incident.practice_standard}
                 </p>
               </div>
@@ -316,7 +316,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             {incident.resolved_date && (
               <div>
                 <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>Resolved</p>
-                <p style={{ color: "#4A3D5A" }}>{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
+                <p style={{ color: "var(--cc-text)" }}>{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
               </div>
             )}
           </div>
@@ -324,20 +324,20 @@ export default function IncidentDetail({ id }: { id: string }) {
           {/* What happened */}
           <div className="pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>What happened</p>
-            <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "#4A3D5A" }}>{incident.description}</p>
+            <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--cc-text)" }}>{incident.description}</p>
           </div>
 
           {incident.participant_impact && (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Participant Impact</p>
-              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{incident.participant_impact}</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{incident.participant_impact}</p>
             </div>
           )}
 
           {incident.worker_actions && (
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Immediate Actions Taken</p>
-              <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{incident.worker_actions}</p>
+              <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{incident.worker_actions}</p>
             </div>
           )}
 
@@ -387,7 +387,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
       {/* Similar past incidents — CARECLIQV2-32 */}
       {(patternsLoading || showPatternsPanel) && (
-        <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             <div className="flex items-center gap-2">
               <History size={15} style={{ color: "#7A6A8A" }} />
@@ -408,10 +408,10 @@ export default function IncidentDetail({ id }: { id: string }) {
               {patternData.ai_summary && (
                 <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(241,115,138,0.06)", border: "1px solid rgba(241,115,138,0.15)" }}>
                   <div className="flex items-center gap-2">
-                    <Sparkles size={14} style={{ color: "#542269" }} />
-                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#542269" }}>AI Pattern Analysis</p>
+                    <Sparkles size={14} style={{ color: "#3730A3" }} />
+                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#3730A3" }}>AI Pattern Analysis</p>
                   </div>
-                  <div className="space-y-3 text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                  <div className="space-y-3 text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Pattern Recognised</p>
                       <p>{patternData.ai_summary.pattern_recognised}</p>
@@ -450,7 +450,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                         {Math.round(match.similarity_score * 100)}% match
                       </Badge>
                     </div>
-                    <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{match.excerpt}</p>
+                    <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{match.excerpt}</p>
                   </div>
                 ))}
               </div>
@@ -460,7 +460,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       )}
 
       {/* Investigation & corrective actions */}
-      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <ClipboardList size={15} style={{ color: "#7A6A8A" }} />
@@ -469,7 +469,7 @@ export default function IncidentDetail({ id }: { id: string }) {
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "#4A3D5A" }}>Investigation Notes</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>Investigation Notes</Label>
             <Textarea
               rows={5}
               value={investigationNotes}
@@ -480,7 +480,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             />
           </div>
           <div>
-            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "#4A3D5A" }}>Corrective Actions</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>Corrective Actions</Label>
             <Textarea
               rows={3}
               value={correctiveActions}
@@ -500,7 +500,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               }
               disabled={updateMutation.isPending}
               className="rounded-xl h-9 text-[13px] text-white"
-              style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+              style={{ background: "var(--cc-plum)" }}
             >
               {updateMutation.isPending
                 ? <Loader2 size={13} className="animate-spin mr-1.5" />
@@ -512,7 +512,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       </div>
 
       {/* Audit trail */}
-      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <Shield size={14} style={{ color: "#7A6A8A" }} />

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { Clock3 } from "lucide-react";
-import { MUTED, PLUM, STATE_STYLES, TEXT, WIDGET_SCROLL, shiftInitials } from "@/lib/shift-utils";
+import { BORDER, MUTED, PLUM, STATE_STYLES, TEXT, WIDGET_SCROLL, shiftInitials } from "@/lib/shift-utils";
 import type { DashboardShiftSummary } from "@/services/dashboardService";
 
 type Props = {
@@ -29,7 +29,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
   const span = Math.max(dayEnd - dayStart, 60 * 60 * 1000);
 
   return (
-    <section className="rounded-2xl border border-cc-border bg-cc-surface p-5 shadow-sm">
+    <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Clock3 size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
@@ -38,12 +38,12 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
       </div>
 
       {ordered.length === 0 ? (
-        <p className="rounded-xl bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+        <p className="rounded-xl bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
           Your day timeline will appear when shifts are scheduled.
         </p>
       ) : (
         <div className="space-y-4">
-          <div className="relative hidden h-3 overflow-hidden rounded-full bg-cc-active md:block">
+          <div className="relative hidden h-3 overflow-hidden rounded-full bg-[#F0EDF8] md:block">
             {ordered.map((shift) => {
               const start = parseStart(shift.scheduled_start);
               const end = parseStart(shift.scheduled_end || shift.scheduled_start);
@@ -73,8 +73,8 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
               return (
                 <Link key={shift.id} href={`/my-shifts/${shift.id}?focus=safety`}>
                   <div
-                    className="flex items-start gap-3 rounded-xl border border-cc-border p-3 transition hover:bg-cc-bg"
-                    style={{ borderColor: isNext ? PLUM : undefined }}
+                    className="flex items-start gap-3 rounded-xl border p-3 transition hover:bg-[#F8F6FE]"
+                    style={{ borderColor: isNext ? PLUM : "#EEEAFB" }}
                   >
                     <div className="flex flex-col items-center">
                       <div
@@ -84,7 +84,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
                         {shiftInitials(shift.participant_name)}
                       </div>
                       {index < ordered.length - 1 && (
-                        <div className="mt-1 h-8 w-px bg-cc-border" />
+                        <div className="mt-1 h-8 w-px" style={{ background: "#E5E7EB" }} />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">

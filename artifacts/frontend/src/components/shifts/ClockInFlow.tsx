@@ -14,13 +14,11 @@ import { ClockInQrScanner } from "@/components/shifts/ClockInQrScanner";
 import type { ClockInRequest, WorkerShift } from "@/services/shiftService";
 import { reverseGeocode } from "@/lib/reverse-geocode";
 import { cn } from "@/lib/utils";
-import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
   shift: WorkerShift;
   busy?: boolean;
-  tutorialDemo?: boolean;
   onClose: () => void;
   onConfirm: (payload: ClockInRequest) => Promise<void>;
 };
@@ -39,8 +37,7 @@ async function cameraPermissionState(): Promise<PermissionState | "unsupported">
   }
 }
 
-export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfirm }: Props) {
-  const { translate, translateParams } = useAccessibility();
+export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
   const [step, setStep] = useState<Step>("choose");
   const [method, setMethod] = useState<"gps" | "qr" | null>(null);
   const [location, setLocation] = useState<ClockInRequest["location"]>(null);
@@ -70,14 +67,14 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
   const nowLabel = useMemo(() => new Date().toLocaleString(), [step, open]);
 
   const yourLocationLabel = useMemo(() => {
-    if (method === "qr") return translate("clockin.qrVerified");
+    if (method === "qr") return "Verified via location QR code";
     if (location) {
       return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}${
         location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ""
       }`;
     }
     return null;
-  }, [location, method, translate]);
+  }, [location, method]);
 
   const startGps = async () => {
     setMethod("gps");
@@ -185,15 +182,11 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
   return (
     <>
       <Dialog open={open && !scannerOpen} onOpenChange={(next) => !next && onClose()}>
-        <DialogContent className="max-w-md rounded-2xl bg-[var(--cc-surface)] text-cc-text text-safe" data-tutorial="clock-in-modal">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-cc-text">{translate("clockin.title")}</DialogTitle>
+            <DialogTitle className="text-[#111827]">Check in to shift</DialogTitle>
             <DialogDescription>
-              {tutorialDemo
-                ? translate("clockin.tutorial")
-                : translateParams("clockin.verify", {
-                    name: shift.participant_name ?? "this participant",
-                  })}
+              Verify your arrival for {shift.participant_name ?? "this participant"} using GPS or the location QR code.
             </DialogDescription>
           </DialogHeader>
 
@@ -201,50 +194,44 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
             <div className="grid gap-3 py-2">
               <button
                 type="button"
-                className="touch-target flex items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50 p-4 text-left transition hover:border-amber-300"
+                className="flex items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50 p-4 text-left transition hover:border-amber-300"
                 onClick={() => void startGps()}
-                aria-label={translate("clockin.useGps")}
               >
-                <MapPin className="h-6 w-6 shrink-0 text-amber-600" aria-hidden />
+                <MapPin className="h-6 w-6 shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-black text-cc-text">{translate("clockin.useGps")}</p>
-                  <p className="text-xs text-muted-foreground">{translate("clockin.gpsHint")}</p>
+                  <p className="font-black text-[#111827]">Use GPS</p>
+                  <p className="text-xs text-muted-foreground">Verify you are at the participant address</p>
                 </div>
               </button>
               <button
                 type="button"
-                className="touch-target flex items-center gap-3 rounded-xl border-2 border-violet-200 bg-violet-50 p-4 text-left transition hover:border-violet-300"
+                className="flex items-center gap-3 rounded-xl border-2 border-violet-200 bg-violet-50 p-4 text-left transition hover:border-violet-300"
                 onClick={() => void startQr()}
-                aria-label={translate("clockin.scanQr")}
               >
-                <QrCode className="h-6 w-6 shrink-0 text-violet-600" aria-hidden />
+                <QrCode className="h-6 w-6 shrink-0 text-violet-600" />
                 <div>
-                  <p className="font-black text-cc-text">{translate("clockin.scanQr")}</p>
-                  <p className="text-xs text-muted-foreground">{translate("clockin.qrHint")}</p>
+                  <p className="font-black text-[#111827]">Scan QR code</p>
+                  <p className="text-xs text-muted-foreground">Scan the code at the participant&apos;s location</p>
                 </div>
               </button>
 
               {captureError && (
-                <div
-                  data-tutorial="clock-in-error"
-                  className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-                >
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                   {captureError}
                 </div>
               )}
 
               {(manualQrOpen || captureError) && (
                 <div className="space-y-2 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-violet-700">{translate("clockin.manualQr")}</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Enter QR code manually</p>
                   <Input
                     value={manualQrValue}
                     onChange={(e) => setManualQrValue(e.target.value)}
-                    placeholder={translate("clockin.manualQrPlaceholder")}
-                    className="bg-[var(--cc-surface)]"
-                    aria-label={translate("clockin.manualQrPlaceholder")}
+                    placeholder="Paste QR code value"
+                    className="bg-white"
                   />
-                  <Button type="button" variant="outline" className="w-full min-h-11" onClick={submitManualQr}>
-                    {translate("clockin.continueCode")}
+                  <Button type="button" variant="outline" className="w-full" onClick={submitManualQr}>
+                    Continue with code
                   </Button>
                 </div>
               )}
@@ -252,19 +239,19 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
               {!manualQrOpen && !captureError && (
                 <button
                   type="button"
-                  className="touch-target text-center text-xs font-semibold text-violet-700 underline-offset-2 hover:underline"
+                  className="text-center text-xs font-semibold text-violet-700 underline-offset-2 hover:underline"
                   onClick={() => setManualQrOpen(true)}
                 >
-                  {translate("clockin.manualInstead")}
+                  Enter QR code manually instead
                 </button>
               )}
             </div>
           )}
 
           {step === "capturing" && (
-            <div className="grid place-items-center gap-3 py-8" role="status">
-              <Loader2 className="h-8 w-8 animate-spin text-amber-500" aria-hidden />
-              <p className="text-sm font-semibold text-muted-foreground">{translate("clockin.capturing")}</p>
+            <div className="grid place-items-center gap-3 py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+              <p className="text-sm font-semibold text-muted-foreground">Getting your location…</p>
             </div>
           )}
 
@@ -275,17 +262,17 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div className="space-y-2">
                     <p>
-                      <span className="font-bold text-cc-text">Date & time: </span>
+                      <span className="font-bold text-[#111827]">Date & time: </span>
                       {nowLabel}
                     </p>
                     <p>
-                      <span className="font-bold text-cc-text">Method: </span>
+                      <span className="font-bold text-[#111827]">Method: </span>
                       {method === "gps" ? "GPS location" : "QR code"}
                     </p>
                     {(yourLocationLabel || resolvingAddress) && (
                       <div>
                         <p>
-                          <span className="font-bold text-cc-text">Your location: </span>
+                          <span className="font-bold text-[#111827]">Your location: </span>
                           {method === "gps" && locationAddress
                             ? locationAddress
                             : yourLocationLabel ?? "Looking up address…"}
@@ -300,7 +287,7 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
                     )}
                     {shift.participant_address && (
                       <p>
-                        <span className="font-bold text-cc-text">Shift address: </span>
+                        <span className="font-bold text-[#111827]">Shift address: </span>
                         {shift.participant_address}
                       </p>
                     )}
@@ -314,16 +301,15 @@ export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfir
             {step === "confirm" && (
               <>
                 <Button type="button" variant="outline" disabled={busy} onClick={() => setStep("choose")}>
-                  {translate("common.back")}
+                  Back
                 </Button>
                 <Button
                   type="button"
-                  className="min-h-11 bg-gradient-to-r from-amber-500 to-orange-500 font-black text-white"
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 font-black text-white"
                   disabled={busy}
                   onClick={() => void handleConfirm()}
-                  aria-label={translate("clockin.confirm")}
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : translate("clockin.confirm")}
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm check-in"}
                 </Button>
               </>
             )}

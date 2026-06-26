@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import {
   Megaphone,
@@ -14,11 +14,11 @@ import {
 import { getAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
 
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
-const PLUM = "var(--cc-plum)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
 
 type Severity = "critical" | "high" | "medium" | "info" | "positive";
 
@@ -55,7 +55,7 @@ function NewsCard({
 
   return (
     <div
-      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-cc-bg"
+      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-[#FAFAFA]"
       style={{ borderColor: BORDER }}
     >
       <div
@@ -155,7 +155,7 @@ export function NewsFeed() {
   }
 
   return (
-    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div
         className="flex items-center justify-between gap-3 px-6 py-4"

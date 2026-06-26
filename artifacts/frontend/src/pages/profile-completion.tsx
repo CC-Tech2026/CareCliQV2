@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,20 +77,20 @@ export default function ProfileCompletion() {
   }
 
   if (loading) {
-    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-cc-plum" /></div>;
+    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" /></div>;
   }
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-10">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="hidden" style={{ color: CORAL }}>
           {isAllied ? "Allied Health" : "Support Worker"}
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Complete your profile</h1>
-        <p className="mt-2 text-sm text-cc-muted">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Complete your profile</h1>
+        <p className="mt-2 text-sm text-[#6B7280]">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
       </div>
-      <form onSubmit={submit} className="rounded-[1.5rem] border border-cc-border bg-cc-surface p-6 shadow-sm">
-        <div className="mb-6 rounded-2xl bg-cc-bg p-4">
+      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 shadow-sm">
+        <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -117,7 +117,7 @@ export default function ProfileCompletion() {
                 <select
                   value={profile.discipline || ""}
                   onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
-                  className="mt-1 h-10 w-full rounded-xl border border-cc-border bg-cc-surface px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
                 >
                   <option value="">Select discipline</option>
                   <option value="OT">OT</option>
@@ -134,7 +134,7 @@ export default function ProfileCompletion() {
                 <Label>Business / trading name</Label>
                 <Input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} className="mt-1 rounded-xl" />
               </div>
-              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-cc-text">
+              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#111827]">
                 <input
                   type="checkbox"
                   checked={!!profile.professional_indemnity_confirmed}
@@ -145,12 +145,12 @@ export default function ProfileCompletion() {
             </>
           )}
         </div>
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-cc-bg p-4 text-sm text-cc-muted">
+        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm text-[#6B7280]">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-cc-plum" />
+            <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
             <span>Role confirmed as {isAllied ? "Allied Health Professional" : "Support Worker"}.</span>
           </div>
-          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
+          <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: PLUM }}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save profile
           </Button>
