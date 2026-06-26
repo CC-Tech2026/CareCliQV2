@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
@@ -9,17 +9,11 @@ import {
   Sparkles, ExternalLink,
 } from "lucide-react";
 
-const PLUM = "var(--cc-plum)";
+const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
-const PLUM_SUBTLE = "var(--cc-plum-subtle)";
-const PLUM_SOFT = "var(--cc-plum-soft)";
-const PLUM_MEDIUM = "var(--cc-plum-medium)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const CORAL_SOFT = "var(--cc-coral-soft)";
-const CORAL_RING = "var(--cc-coral-ring)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 
 interface ChecklistStep {
   id: string;
@@ -129,19 +123,19 @@ export default function CoordinatorOnboarding() {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-start py-12 px-4"
-      style={{ background: "linear-gradient(160deg, #F5F3FC 0%, #EDE9FF 60%, #FCE9EF 100%)" }}
+      style={{ background: "var(--cc-bg)" }}
     >
       {/* Header */}
       <div className="w-full max-w-2xl mb-8 text-center">
         <div className="flex justify-center mb-4">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm"
-            style={{ background: `linear-gradient(135deg, ${PLUM} 0%, ${CORAL} 100%)` }}
+            style={{ background: PLUM }}
           >
             <Sparkles className="text-white" size={26} />
           </div>
         </div>
-        <h1 className="text-3xl font-black mb-2" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black mb-2" style={{ color: PLUM }}>
           Welcome to CareCliQ{orgName ? `, ${orgName}` : ""}!
         </h1>
         <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: MUTED }}>
@@ -153,7 +147,7 @@ export default function CoordinatorOnboarding() {
       <div className="w-full max-w-2xl mb-6">
         <div
           className="rounded-2xl p-5"
-          style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)', boxShadow: "0 4px 24px -8px rgba(85,51,204,0.1)" }}
+          style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}`, boxShadow: "0 4px 24px -8px rgba(55,48,163,0.1)" }}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold" style={{ color: PLUM }}>
@@ -169,8 +163,8 @@ export default function CoordinatorOnboarding() {
               style={{
                 width: `${progress}%`,
                 background: allDone
-                  ? "linear-gradient(90deg, #16A34A, #22c55e)"
-                  : `linear-gradient(90deg, ${PLUM}, ${CORAL})`,
+                  ? "#16A34A"
+                  : PLUM,
               }}
             />
           </div>
@@ -194,9 +188,9 @@ export default function CoordinatorOnboarding() {
               key={step.id}
               className="rounded-2xl transition-all"
               style={{
-                background: done ? (isAuto ? PLUM_SUBTLE : CORAL_SOFT) : 'var(--cc-surface)',
-                border: `1.5px solid ${done ? (isAuto ? PLUM_RING : CORAL_RING) : BORDER}`,
-                boxShadow: done ? "none" : "0 2px 12px -4px rgba(85,51,204,0.06)",
+                background: done ? (isAuto ? `${PLUM}08` : `${CORAL}06`) : "var(--cc-bg)",
+                border: `1.5px solid ${done ? (isAuto ? `${PLUM}30` : `${CORAL}25`) : BORDER}`,
+                boxShadow: done ? "none" : "0 2px 12px -4px rgba(55,48,163,0.06)",
               }}
             >
               <div className="flex items-start gap-4 p-5">
@@ -227,7 +221,7 @@ export default function CoordinatorOnboarding() {
                     <p
                       className="text-[14px] font-bold"
                       style={{
-                        color: done ? "#1E1640" : "#1E1640",
+                        color: done ? "#111827" : "#111827",
                         textDecoration: done && !isAuto ? "line-through" : "none",
                         opacity: done && !isAuto ? 0.6 : 1,
                       }}
@@ -251,7 +245,7 @@ export default function CoordinatorOnboarding() {
                       type="button"
                       onClick={() => navigate(step.action!.href)}
                       className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 active:scale-95"
-                      style={{ background: PLUM_MEDIUM, color: PLUM }}
+                      style={{ background: `${PLUM}10`, color: PLUM }}
                     >
                       {step.action.label}
                       <ExternalLink size={11} />
@@ -264,7 +258,7 @@ export default function CoordinatorOnboarding() {
                   <button
                     type="button"
                     onClick={() => navigate(step.action!.href)}
-                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-cc-bg"
+                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-slate-50"
                     style={{ color: MUTED }}
                     title={`Go to ${step.action.label}`}
                   >
@@ -283,7 +277,7 @@ export default function CoordinatorOnboarding() {
           type="button"
           onClick={handleGoToDashboard}
           className="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 text-white"
-          style={{ background: `linear-gradient(135deg, ${PLUM} 0%, ${CORAL} 100%)` }}
+          style={{ background: PLUM }}
         >
           {allDone ? "Go to Dashboard" : "Continue to Dashboard"}
           <ArrowRight size={16} />

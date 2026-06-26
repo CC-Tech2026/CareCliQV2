@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
 import { editNdisItemPrice, getNdisItemHistory, type NdisPriceItem } from "@/services/ndisService";
 import { useToast } from "@/hooks/use-toast";
@@ -8,12 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 // Design tokens aligned with billing.tsx
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 interface PriceEditorProps {
   onClose: () => void;
@@ -100,9 +100,9 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl mx-4 rounded-lg bg-cc-surface shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-2xl mx-4 rounded-lg bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: 'var(--cc-surface)' }}>
+        <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <h2 className="text-lg font-black" style={{ color: TEXT }}>Edit NDIS Item Price</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <X className="w-5 h-5" style={{ color: MUTED }} />
@@ -179,7 +179,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           {showHistory && history.length > 0 && (
             <div className="rounded-lg p-4 border" style={{ background: SOFT, borderColor: BORDER }}>
               <p className="text-xs font-bold mb-3" style={{ color: MUTED }}>RECENT VERSIONS (last 5)</p>
-              <div className="divide-y space-y-2" style={{ borderColor: 'var(--cc-border)' }}>
+              <div className="divide-y space-y-2" style={{ borderColor: "#EEEAFB" }}>
                 {history.map((item, idx) => (
                   <div key={idx} className="py-2 text-xs">
                     <div className="flex items-center justify-between">
@@ -205,7 +205,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           <div className="flex gap-3 pt-4 border-t" style={{ borderColor: BORDER }}>
             <button
               onClick={onClose}
-              className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold border transition hover:bg-cc-bg"
+              className="flex-1 rounded-full px-4 py-2.5 text-sm font-bold border transition hover:bg-gray-50"
               style={{ borderColor: BORDER, color: MUTED }}
             >
               Cancel

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Users, UserCheck, AlertTriangle, ArrowLeft, TrendingDown, Star, Shield } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -7,7 +7,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 
 interface StaffMember {
@@ -90,7 +90,7 @@ export default function MDStaffPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-cc-bg"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Hub
@@ -121,7 +121,7 @@ export default function MDStaffPage() {
                 { label: "Retention Rate", value: `${data.staff_retention_rate}%`, icon: UserCheck, color: "#10B981" },
                 { label: "Workers at Risk", value: atRiskCount, icon: TrendingDown, color: atRiskCount > 0 ? "#EF4444" : "#10B981" },
               ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="rounded-xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+                <div key={label} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>{label}</span>
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT, color }}>
@@ -147,7 +147,7 @@ export default function MDStaffPage() {
               </div>
             )}
 
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
                   Staff Directory ({allStaff.length})
@@ -160,7 +160,7 @@ export default function MDStaffPage() {
                       className="rounded-lg px-3 py-1 text-[11px] font-black transition-colors"
                       style={{
                         background: filter === f ? PLUM : SOFT,
-                        color: filter === f ? 'var(--cc-surface)' : MUTED,
+                        color: filter === f ? "#fff" : MUTED,
                       }}
                     >
                       {f === "all" ? `All (${allStaff.length})` : f === "at_risk" ? `At Risk (${atRiskCount})` : `Strong (${strongCount})`}
@@ -228,7 +228,7 @@ export default function MDStaffPage() {
               )}
             </section>
 
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <h2 className="mb-2 text-[14px] font-black" style={{ color: TEXT }}>Hire & Onboard Tracking</h2>
               <div className="rounded-xl p-4 text-center" style={{ background: SOFT }}>
                 <Users size={24} className="mx-auto mb-2" style={{ color: MUTED }} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Target } from "lucide-react";
 import type { GoalDetail } from "@/services/workerService";
 
@@ -6,7 +6,7 @@ const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 
 function Section({
   title,
@@ -18,7 +18,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Icon size={18} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
@@ -37,7 +37,7 @@ function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
   return (
     <div
       className="rounded-lg border p-4 space-y-3"
-      style={{ borderColor: 'var(--cc-border)', background: SOFT }}
+      style={{ borderColor: "#EEEAFB", background: SOFT }}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="font-black leading-snug" style={{ color: TEXT }}>
@@ -46,7 +46,7 @@ function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
         {goal.priority < 99 && (
           <span
             className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black"
-            style={{ background: PLUM, color: 'var(--cc-surface)' }}
+            style={{ background: PLUM, color: "#fff" }}
           >
             Priority {goal.priority}
           </span>

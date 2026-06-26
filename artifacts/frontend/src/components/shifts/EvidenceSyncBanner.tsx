@@ -29,9 +29,9 @@ export function EvidenceSyncBanner({ online, snapshot, onRetry, className }: Pro
         ? `Syncing evidence…${lastSyncedCount > 0 ? ` (${lastSyncedCount} uploaded)` : ""}`
         : "Syncing evidence…";
   } else if (failed > 0) {
-    message = `⚠️ ${failed} upload${failed === 1 ? "" : "s"} failed${lastError ? ` — ${lastError}` : ""}`;
+    message = `${failed} upload${failed === 1 ? "" : "s"} failed${lastError ? ` — ${lastError}` : ""}`;
   } else if (pending > 0) {
-    message = `⚠️ ${pending} evidence item${pending === 1 ? "" : "s"} pending sync`;
+    message = `${pending} evidence item${pending === 1 ? "" : "s"} pending sync`;
   } else if (lastSyncedCount > 0) {
     message = `✓ Synced ${lastSyncedCount} file${lastSyncedCount === 1 ? "" : "s"}`;
   }

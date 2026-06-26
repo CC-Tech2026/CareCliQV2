@@ -27,7 +27,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
   ];
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -62,7 +62,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
           )}
 
           {caseManager?.name && (
-            <div className="rounded-xl border border-cc-border bg-[#F0EDFC] p-3">
+            <div className="rounded-xl border border-[#E5E7EB] bg-[#F0EDFC] p-3">
               <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 <UserCircle size={12} aria-hidden />
                 Case manager
@@ -71,7 +71,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                 {caseManager.phone ? (
                   <a
                     href={`tel:${caseManager.phone}`}
-                    className="underline decoration-cc-plum/30 underline-offset-2"
+                    className="underline decoration-[#3730A3]/30 underline-offset-2"
                   >
                     {caseManager.name} — {caseManager.phone}
                   </a>
@@ -84,13 +84,13 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
 
           <dl className="grid gap-2 sm:grid-cols-2">
             {standardRows.map(({ label, value, href }) => (
-              <div key={label} className="rounded-xl bg-cc-bg p-3">
+              <div key={label} className="rounded-xl bg-[#F8F6FE] p-3">
                 <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                   {label}
                 </dt>
                 <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
                   {href && value ? (
-                    <a href={href} className="underline decoration-cc-plum/30 underline-offset-2">
+                    <a href={href} className="underline decoration-[#3730A3]/30 underline-offset-2">
                       {value}
                     </a>
                   ) : (

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Key Metric Component - Modern, minimal stat display
  * Used for dashboard KPIs with less visual clutter
  */
@@ -29,7 +29,7 @@ export function KeyMetric({ label, value, icon: Icon, trend, href }: KeyMetricPr
         <p className="text-xs font-bold uppercase tracking-wide" style={{ color: DS.TEXT.muted }}>
           {label}
         </p>
-        <p className="mt-1 text-2xl font-black tracking-tight" style={{ color: DS.TEXT.primary }}>
+        <p className="text-2xl font-black tracking-tight" style={{ color: DS.TEXT.primary }}>
           {value}
         </p>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import {
   Users, UserCheck, Activity, ShieldCheck, AlertTriangle,
@@ -13,7 +13,7 @@ import { HubLayout } from "@/components/layout/HubLayout";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT = "var(--cc-soft)";
 const PLUM = "var(--cc-plum)";
 const AMBER = "#F59E0B";
 
@@ -56,7 +56,7 @@ function KpiCard({
 }) {
   const color = warn ? "#EF4444" : accent ?? PLUM;
   return (
-    <div className="rounded-xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>{label}</span>
         <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: SOFT, color }}>
@@ -100,7 +100,7 @@ export default function MDExecutivePage() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => navigate("/hub")}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-cc-bg"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
             <ArrowLeft size={13} strokeWidth={2.5} /> Hub
@@ -147,7 +147,7 @@ export default function MDExecutivePage() {
             </section>
 
             {/* Trend Indicators */}
-            <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+            <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Performance Trends</h2>
               <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Direction indicators vs target thresholds</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -170,7 +170,7 @@ export default function MDExecutivePage() {
 
             {/* 90-day Compliance Chart */}
             {chartData.length > 1 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Compliance Trend — Last 90 Days</h2>
                 <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Weekly average compliance score across all sessions</p>
                 <ResponsiveContainer width="100%" height={220}>
@@ -179,7 +179,7 @@ export default function MDExecutivePage() {
                     <XAxis dataKey="week" tick={{ fontSize: 10, fill: MUTED }} />
                     <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
                     <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 2" label={{ value: `Target ${data.compliance_target}%`, position: "right", fontSize: 9, fill: AMBER }} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--cc-border)', fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Avg Score"]} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Avg Score"]} />
                     <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -188,7 +188,7 @@ export default function MDExecutivePage() {
 
             {/* Org Alerts */}
             {data.org_alerts.length > 0 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Organisation Alerts</h2>
                 <div className="space-y-2">
                   {data.org_alerts.map((alert, i) => {
@@ -209,7 +209,7 @@ export default function MDExecutivePage() {
 
             {/* Worker Rankings */}
             {data.worker_rankings.length > 0 && (
-              <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+              <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Top Worker Performance</h2>
                 <div className="space-y-2">
                   {data.worker_rankings.slice(0, 8).map((w, i) => (

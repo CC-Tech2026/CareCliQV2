@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useLocation } from "wouter";
 import { parseISO, formatDistanceToNow } from "date-fns";
@@ -10,12 +10,12 @@ import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const TEXT = "var(--cc-text)";
-const MUTED = "var(--cc-muted)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const INCIDENT_TYPES: Record<string, string> = {
@@ -47,9 +47,6 @@ interface Incident {
   id: string; title: string; incident_type: string; severity: string;
   status: string; incident_date: string; ndis_pending: boolean;
   overdue: boolean; participant_name?: string;
-  reference_number?: string;
-  worker_status_label?: string;
-  worker_severity_label?: string;
 }
 interface IncidentStats {
   total: number; open: number; ndis_pending: number; overdue: number; critical: number;
@@ -86,17 +83,17 @@ export default function Incidents() {
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             NDIS Practice Standard 2.3
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
             Incident Management
           </h1>
         </div>
         <button
           onClick={() => navigate("/incidents/new")}
           className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-          style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+          style={{ background: PLUM }}
         >
           <Plus size={15} strokeWidth={2.5} />
           Log Incident
@@ -112,7 +109,7 @@ export default function Incidents() {
           { label: "Overdue",      value: stats?.overdue      ?? 0, icon: Clock,         valueColor: "#EA580C" },
           { label: "Critical",     value: stats?.critical     ?? 0, icon: AlertCircle,   valueColor: "#DC2626" },
         ] as const).map(({ label, value, icon: Icon, valueColor }) => (
-          <section key={label} className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <section key={label} className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{label}</p>
@@ -130,7 +127,7 @@ export default function Incidents() {
       {(stats?.ndis_pending ?? 0) > 0 && (
         <div
           className="rounded-lg border px-4 py-3.5 flex items-start gap-3"
-          style={{ background: 'var(--cc-status-critical-bg)', borderColor: "#FECACA", borderLeft: "3px solid #DC2626" }}
+          style={{ background: "#FFF5F5", borderColor: "#FECACA", borderLeft: "3px solid #DC2626" }}
         >
           <Siren size={15} className="shrink-0 mt-0.5 animate-pulse" style={{ color: "#DC2626" }} />
           <p className="text-sm font-medium" style={{ color: "#991B1B" }}>
@@ -171,7 +168,7 @@ export default function Incidents() {
       </div>
 
       {/* ── Incident list ────────────────────────────────────────────────────── */}
-      <section className="rounded-lg border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
 
         {/* list header */}
         <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: BORDER }}>
@@ -206,7 +203,7 @@ export default function Incidents() {
             )}
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: 'var(--cc-border)' }}>
+          <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
             {filtered.map(incident => {
               const sev = getSeverityConfig(incident.severity);
               const st  = getStatusConfig(incident.status);
@@ -214,7 +211,7 @@ export default function Incidents() {
                 <button
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
-                  className="w-full text-left px-6 py-4 flex items-center gap-4 transition hover:bg-cc-bg group"
+                  className="w-full text-left px-6 py-4 flex items-center gap-4 transition hover:bg-[#F8F6FE] group"
                   style={{ borderLeft: `3px solid ${sev.leftBorder}` }}
                 >
                   {/* Severity dot */}
@@ -225,11 +222,10 @@ export default function Incidents() {
 
                   {/* Main text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black truncate transition group-hover:text-cc-plum" style={{ color: TEXT }}>
+                    <p className="text-sm font-black truncate transition group-hover:text-[#3730A3]" style={{ color: TEXT }}>
                       {incident.title}
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>
-                      {incident.reference_number ? `${incident.reference_number} · ` : ""}
                       {incident.participant_name || "No participant linked"}
                       {" · "}
                       {INCIDENT_TYPES[incident.incident_type] ?? incident.incident_type}
@@ -245,7 +241,7 @@ export default function Incidents() {
                       {sev.label}
                     </span>
                     <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${st.bg}`}>
-                      {incident.worker_status_label || st.label}
+                      {st.label}
                     </span>
                     {incident.ndis_pending && (
                       <span className="rounded-full border px-2.5 py-0.5 text-[11px] font-bold bg-red-50 text-red-700 border-red-200">

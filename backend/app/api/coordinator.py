@@ -7,8 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +20,6 @@ from ..services.pattern_detection_service import (
     run_pattern_detection_for_org,
 )
 from ..services import participant_service, session_service, shift_service
-from ..services.compliance_evidence_service import (
-    coordinator_delete_evidence,
-    export_shift_evidence_audit_csv,
-    list_session_evidence_metadata,
-    list_shift_audit_log,
-)
 from ..services.credential_verification_service import (
     get_shift_credential_requirements,
     verify_worker_credentials,
@@ -41,7 +34,6 @@ from ..services.notification_service import (
 )
 from ..services import conversation_service
 from ..services.supabase_client import get_supabase_admin
-from ..services import shift_feedback_service, shift_pdf_export_service, worker_training_service
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
@@ -952,6 +944,7 @@ class AssignShiftBody(BaseModel):
     scheduled_end: Optional[str] = None
     duration_minutes: Optional[int] = None
     shift_type: str = "standard_support"
+    selected_task_ids: Optional[list[str]] = None
 
 
 class CredentialStatus(BaseModel):
@@ -1379,6 +1372,21 @@ async def assign_shift(
         
         shift = result.data[0]
         
+        # Save selected tasks for this shift
+        if body.selected_task_ids:
+            try:
+                shift_task_records = [
+                    {
+                        "shift_id": shift_id,
+                        "task_id": task_id,
+                        "organization_id": org_id,
+                    }
+                    for task_id in body.selected_task_ids
+                ]
+                supabase.table("shift_tasks").insert(shift_task_records).execute()
+            except Exception as task_exc:
+                logger.warning(f"Failed to save shift tasks: {task_exc}")
+        
         # Send notification to worker about new shift
         try:
             await notify_shift_change(
@@ -1502,32 +1510,6 @@ def _detect_worker_conflicts(
     except Exception:
         pass
 
-    # 2b — Approved time-off (CARECLIQV2-283)
-    try:
-        day_str = shift_start.date().isoformat()
-        to_resp = (
-            supabase.table("worker_schedule_requests")
-            .select("id, worker_time_off_request_details(start_date, end_date)")
-            .eq("user_id", worker_id)
-            .eq("request_type", "time_off")
-            .eq("status", "approved")
-            .execute()
-        )
-        for row in (to_resp.data or []):
-            detail = row.get("worker_time_off_request_details")
-            if isinstance(detail, list):
-                detail = detail[0] if detail else None
-            if not detail:
-                continue
-            if str(detail.get("start_date", "")) <= day_str <= str(detail.get("end_date", "")):
-                conflicts.append({
-                    "type": "approved_time_off",
-                    "severity": "error",
-                    "message": f"Approved time off ({detail['start_date']} – {detail['end_date']})",
-                })
-    except Exception:
-        pass
-
     # 3 — Weekly hours check
     try:
         avail_resp = (
@@ -1577,42 +1559,6 @@ def _detect_worker_conflicts(
                     "type": "approaching_hours",
                     "severity": "info",
                     "message": f"Approaching max hours ({total_hours:.1f}h / {max_hours}h this week)",
-                })
-    except Exception:
-        pass
-
-    # 4 — Max shifts per week soft limit (CARECLIQV2-284)
-    try:
-        prefs_resp = (
-            supabase.table("worker_availability_preferences")
-            .select("max_shifts_per_week")
-            .eq("user_id", worker_id)
-            .limit(1)
-            .execute()
-        )
-        if prefs_resp.data:
-            max_shifts = int(prefs_resp.data[0].get("max_shifts_per_week") or 5)
-            week_start = (shift_start - timedelta(days=shift_start.weekday())).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            week_end = week_start + timedelta(days=7)
-            week_shift_resp = (
-                supabase.table("shifts")
-                .select("id", count="exact")
-                .eq("worker_id", worker_id)
-                .gte("scheduled_start", week_start.isoformat())
-                .lt("scheduled_start", week_end.isoformat())
-                .not_.in_("status", ["cancelled"])
-                .execute()
-            )
-            count = week_shift_resp.count if week_shift_resp.count is not None else len(week_shift_resp.data or [])
-            if exclude_shift_id:
-                pass  # proposed shift may replace excluded
-            if count + 1 > max_shifts:
-                conflicts.append({
-                    "type": "max_shifts",
-                    "severity": "warning",
-                    "message": f"Exceeds worker preference ({count + 1} / {max_shifts} shifts this week)",
                 })
     except Exception:
         pass
@@ -2283,99 +2229,6 @@ async def update_worker_availability(
         return {"ok": True}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Availability update failed: {exc}")
-
-
-# ── Schedule requests (CARECLIQV2-283) ────────────────────────────────────────
-
-class ResolveScheduleRequestBody(BaseModel):
-    status: str  # approved | declined
-    coordinator_notes: Optional[str] = None
-
-
-@router.get("/schedule-requests")
-async def list_coordinator_schedule_requests(
-    status: Optional[str] = Query("pending"),
-    request_type: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user),
-):
-    """Pending schedule requests for coordinator review."""
-    org_id = _require_coordinator(current_user)
-    from ..services import schedule_request_service
-
-    return {
-        "requests": schedule_request_service.list_requests(
-            organization_id=org_id,
-            status=status,
-            request_type=request_type,
-            coordinator=True,
-        )
-    }
-
-
-@router.patch("/schedule-requests/{request_id}")
-async def resolve_coordinator_schedule_request(
-    request_id: str,
-    body: ResolveScheduleRequestBody,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    from ..services import schedule_request_service
-    from ..services.push_service import send_push_to_user
-
-    result = schedule_request_service.resolve_request(
-        request_id,
-        org_id,
-        get_user_id(current_user),
-        status=body.status,
-        coordinator_notes=body.coordinator_notes,
-    )
-    worker_id = str(result.get("user_id") or "")
-    label = "approved" if body.status == "approved" else "declined"
-    notif_type = f"schedule_request_{label}"
-    schedule_request_service.insert_worker_notification(
-        worker_id,
-        org_id,
-        notif_type,
-        f"Request {label}",
-        body.coordinator_notes or f"Your {result.get('request_type', 'schedule')} request was {label}.",
-    )
-    try:
-        await send_push_to_user(
-            worker_id,
-            title=f"Schedule request {label}",
-            body=body.coordinator_notes or f"Your request was {label}.",
-        )
-    except Exception:
-        pass
-    return result
-
-
-@router.post("/workers/{worker_id}/availability/request-update")
-async def request_worker_availability_update(
-    worker_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Ask worker to refresh stale availability (CARECLIQV2-284)."""
-    org_id = _require_coordinator(current_user)
-    from ..services import schedule_request_service
-    from ..services.push_service import send_push_to_user
-
-    schedule_request_service.insert_worker_notification(
-        worker_id,
-        org_id,
-        "availability_update_requested",
-        "Please update your availability",
-        "Your coordinator has requested you refresh your working availability.",
-    )
-    try:
-        await send_push_to_user(
-            worker_id,
-            title="Update your availability",
-            body="Your coordinator has requested an availability update.",
-        )
-    except Exception:
-        pass
-    return {"ok": True}
 
 
 # ── Worker skills ─────────────────────────────────────────────────────────────
@@ -3195,310 +3048,289 @@ async def delete_task_template(
         raise HTTPException(status_code=500, detail=f"Task template delete failed: {exc}")
 
 
-class EvidenceDeleteBody(BaseModel):
-    reason: str = Field(min_length=3)
+# ── Participant Task Instances (CARECLIQV2-303/304/305) ─────────────────────
 
-
-@router.get("/sessions/{session_id}/evidence-metadata")
-async def coordinator_list_evidence_metadata(
-    session_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Chain-of-custody metadata for all session evidence (CARECLIQV2-271)."""
-    org_id = _require_coordinator(current_user)
-    items = list_session_evidence_metadata(session_id, org_id)
-    return {"evidence": items}
-
-
-@router.delete("/evidence/{evidence_id}")
-async def coordinator_delete_evidence_item(
-    evidence_id: str,
-    body: EvidenceDeleteBody,
-    current_user: dict = Depends(get_current_user),
-):
-    """Coordinator-only evidence deletion with mandatory reason (CARECLIQV2-271)."""
-    org_id = _require_coordinator(current_user)
-    coordinator_id = get_user_id(current_user)
-    try:
-        return coordinator_delete_evidence(evidence_id, coordinator_id, org_id, body.reason)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.get("/shifts/{shift_id}/evidence-audit")
-async def coordinator_shift_evidence_audit(
-    shift_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Read-only evidence audit log for a shift (CARECLIQV2-271)."""
-    org_id = _require_coordinator(current_user)
-    return {"entries": list_shift_audit_log(shift_id, org_id)}
-
-
-@router.get("/shifts/{shift_id}/evidence-audit.csv")
-async def coordinator_export_evidence_audit_csv(
-    shift_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Export full evidence audit trail for a shift as CSV (CARECLIQV2-271)."""
-    org_id = _require_coordinator(current_user)
-    filename, content = export_shift_evidence_audit_csv(shift_id, org_id)
-    return Response(
-        content=content,
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get("/shifts/{shift_id}/signature")
-async def coordinator_get_shift_signature(
-    shift_id: str,
-    current_user: dict = Depends(get_current_user),
-):
-    """Read-only shift signature for coordinator review (CARECLIQV2-270)."""
-    org_id = _require_coordinator(current_user)
-    from ..services.shift_signature_service import get_shift_signature
-
-    shift = shift_service.get_shift_by_id(shift_id)
-    if not shift or str(shift.get("organization_id")) != str(org_id):
-        raise HTTPException(status_code=404, detail="Shift not found")
-    signature = get_shift_signature(shift_id)
-    if not signature:
-        raise HTTPException(status_code=404, detail="No signature on file for this shift")
-    return signature
-
-
-# ── CARECLIQV2-285/287: Shift feedback & export ────────────────────────────────
-
-class ShiftFeedbackBody(BaseModel):
-    strengths: str = Field(min_length=1)
-    areas_to_improve: str = Field(min_length=1)
-    action_items: str = Field(min_length=1)
-    tag_ids: list[str] = Field(default_factory=list)
-
-
-@router.post("/shifts/{shift_id}/feedback", status_code=201)
-async def coordinator_submit_shift_feedback(
-    shift_id: str,
-    body: ShiftFeedbackBody,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    return await shift_feedback_service.submit_shift_feedback(
-        coordinator_id=get_user_id(current_user),
-        organization_id=org_id,
-        shift_id=shift_id,
-        strengths=body.strengths,
-        areas_to_improve=body.areas_to_improve,
-        action_items=body.action_items,
-        tag_ids=body.tag_ids,
-    )
-
-
-@router.get("/shifts/{shift_id}/feedback")
-async def coordinator_list_shift_feedback(shift_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
-    shift = shift_service.get_shift_by_id(shift_id)
-    if not shift or str(shift.get("organization_id")) != str(org_id):
-        raise HTTPException(status_code=404, detail="Shift not found")
-    return {"feedback": shift_feedback_service.list_feedback_for_shift(shift_id)}
-
-
-@router.get("/feedback/acknowledgement-rate")
-async def coordinator_feedback_ack_rate(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
-    return shift_feedback_service.coordinator_acknowledgement_rate(org_id)
-
-
-@router.get("/feedback/tags")
-async def coordinator_feedback_tags(
-    category: Optional[str] = Query(default=None),
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    shift_feedback_service.ensure_default_tags(org_id)
-    return {"tags": shift_feedback_service.list_feedback_tags(org_id, category)}
-
-
-@router.post("/shifts/{shift_id}/export", status_code=201)
-async def coordinator_export_shift(shift_id: str, current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
-    shift = shift_service.get_shift_by_id(shift_id)
-    if not shift or str(shift.get("organization_id")) != str(org_id):
-        raise HTTPException(status_code=404, detail="Shift not found")
-    return shift_pdf_export_service.get_or_create_auto_export(
-        shift_id,
-        get_user_id(current_user),
-        org_id,
-        is_coordinator=True,
-        worker_id=str(shift.get("worker_id") or ""),
-    )
-
-
-@router.post("/shifts/summaries/backfill")
-async def coordinator_backfill_shift_summaries(
-    limit: int = Query(default=50, ge=1, le=200),
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    return shift_pdf_export_service.backfill_shift_summaries(org_id, limit=limit)
-
-
-# ── CARECLIQV2-289: Training administration ───────────────────────────────────
-
-class TrainingModuleBody(BaseModel):
-    title: str = Field(min_length=1)
+class ParticipantTaskPayload(BaseModel):
+    goal_id: Optional[str] = None
+    name: str
     description: Optional[str] = None
-    linked_credential_type: Optional[str] = None
-    requires_certification: bool = False
+    frequency: Optional[str] = None
+    status: str = "pending"
+    is_mandatory: bool = False
 
 
-class TrainingCompletionReviewBody(BaseModel):
-    approved: bool
-    rejection_reason: Optional[str] = None
-
-
-class TrainingRequestActionBody(BaseModel):
-    approved: bool
-    response: Optional[str] = None
-
-
-class TrainingRecommendBody(BaseModel):
-    worker_id: str
-    title: str = Field(min_length=1)
-    training_module_id: Optional[str] = None
-
-
-@router.post("/training/modules", status_code=201)
-async def coordinator_create_training_module(
-    body: TrainingModuleBody,
+@router.get("/participants/{participant_id}/goals-and-tasks-validation")
+async def check_goals_and_tasks(
+    participant_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    """
+    Check if participant has active goals with associated tasks.
+    Used by shift creation form to validate prerequisites.
+    Returns: { has_valid: bool, active_goals: int, tasks_count: int, message?: str }
+    """
     org_id = _require_coordinator(current_user)
-    payload = {
-        **body.model_dump(),
-        "organization_id": org_id,
-        "created_by": get_user_id(current_user),
-    }
-    result = get_supabase_admin().table("training_modules").insert(payload).execute()
-    return result.data[0] if result.data else payload
+    supabase = get_supabase_admin()
+    try:
+        # Get active goals for participant
+        goals_resp = (
+            supabase.table("ndis_goals")
+            .select("id")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .eq("status", "active")
+            .execute()
+        )
+        goals = goals_resp.data or []
+        active_goals = len(goals)
+        
+        # Get task count for participant
+        tasks_resp = (
+            supabase.table("participant_tasks")
+            .select("id", count="exact")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        tasks_count = tasks_resp.count or 0
+        
+        has_valid = active_goals > 0 and tasks_count > 0
+        message = None
+        if not has_valid:
+            if active_goals == 0:
+                message = "No active NDIS goals found. Please create goals first."
+            elif tasks_count == 0:
+                message = "No tasks found for active goals. Please add tasks first."
+        
+        return {
+            "has_valid": has_valid,
+            "active_goals": active_goals,
+            "tasks_count": tasks_count,
+            "message": message,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Validation check failed: {exc}")
 
 
-@router.post("/training/completions/{completion_id}/review")
-async def coordinator_review_training_completion(
-    completion_id: str,
-    body: TrainingCompletionReviewBody,
+@router.get("/participants/{participant_id}/tasks")
+async def list_participant_tasks(
+    participant_id: str,
+    status: Optional[str] = Query(default=None),
+    goal_id: Optional[str] = Query(default=None),
     current_user: dict = Depends(get_current_user),
 ):
+    """List tasks for a participant, optionally filtered by status or goal."""
     org_id = _require_coordinator(current_user)
-    return await worker_training_service.review_training_completion(
-        completion_id,
-        get_user_id(current_user),
-        org_id,
-        approved=body.approved,
-        rejection_reason=body.rejection_reason,
+    supabase = get_supabase_admin()
+    try:
+        q = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+        )
+        if status:
+            q = q.eq("status", status)
+        if goal_id:
+            q = q.eq("goal_id", goal_id)
+        
+        resp = q.order("created_at", desc=True).execute()
+        tasks = resp.data or []
+        
+        # Format response to include goal_name
+        formatted = []
+        for task in tasks:
+            goal_info = task.get("ndis_goals") or {}
+            formatted.append({
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "completed_at": task.get("completed_at"),
+                "created_at": task.get("created_at"),
+            })
+        
+        return formatted
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task list failed: {exc}")
+
+
+@router.post("/participants/{participant_id}/tasks", status_code=201)
+async def create_participant_task(
+    participant_id: str,
+    body: ParticipantTaskPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a new task instance for a participant under a goal."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Verify goal exists if provided
+    if body.goal_id:
+        goal_resp = (
+            supabase.table("ndis_goals")
+            .select("id")
+            .eq("id", body.goal_id)
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .single()
+            .execute()
+        )
+        if not goal_resp.data:
+            raise HTTPException(
+                status_code=404,
+                detail="Goal not found or does not belong to this participant"
+            )
+    
+    try:
+        payload = {
+            "participant_id": participant_id,
+            "goal_id": body.goal_id,
+            "organization_id": org_id,
+            "created_by": get_user_id(current_user),
+            "name": body.name,
+            "description": body.description,
+            "frequency": body.frequency,
+            "status": body.status,
+            "is_mandatory": body.is_mandatory,
+            "created_at": now,
+            "updated_at": now,
+        }
+        
+        resp = supabase.table("participant_tasks").insert(payload).execute()
+        task = (resp.data or [payload])[0]
+        
+        # Fetch with goal info
+        full_resp = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("id", task.get("id"))
+            .single()
+            .execute()
+        )
+        
+        if full_resp.data:
+            task = full_resp.data
+            goal_info = task.get("ndis_goals") or {}
+            return {
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "created_at": task.get("created_at"),
+            }
+        
+        return task
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task creation failed: {exc}")
+
+
+@router.put("/tasks/{task_id}")
+async def update_participant_task(
+    task_id: str,
+    body: ParticipantTaskPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update a participant task."""
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Verify task exists and belongs to org
+    task_resp = (
+        supabase.table("participant_tasks")
+        .select("id, participant_id")
+        .eq("id", task_id)
+        .eq("organization_id", org_id)
+        .single()
+        .execute()
     )
+    if not task_resp.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    try:
+        update_data = {
+            "name": body.name,
+            "description": body.description,
+            "frequency": body.frequency,
+            "status": body.status,
+            "is_mandatory": body.is_mandatory,
+            "updated_at": now,
+        }
+        
+        # Handle completed_at timestamp when marking complete
+        if body.status == "completed" and update_data.get("completed_at") is None:
+            update_data["completed_at"] = now
+        
+        resp = (
+            supabase.table("participant_tasks")
+            .update(update_data)
+            .eq("id", task_id)
+            .eq("organization_id", org_id)
+            .execute()
+        )
+        
+        task = (resp.data or [update_data])[0]
+        
+        # Fetch with goal info
+        full_resp = (
+            supabase.table("participant_tasks")
+            .select("*, ndis_goals(name)")
+            .eq("id", task_id)
+            .single()
+            .execute()
+        )
+        
+        if full_resp.data:
+            task = full_resp.data
+            goal_info = task.get("ndis_goals") or {}
+            return {
+                "id": task.get("id"),
+                "goal_id": task.get("goal_id"),
+                "goal_name": goal_info.get("name") if isinstance(goal_info, dict) else None,
+                "participant_id": task.get("participant_id"),
+                "name": task.get("name"),
+                "description": task.get("description"),
+                "frequency": task.get("frequency"),
+                "status": task.get("status"),
+                "is_mandatory": task.get("is_mandatory"),
+                "updated_at": task.get("updated_at"),
+            }
+        
+        return task
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task update failed: {exc}")
 
 
-@router.post("/training/requests/{request_id}/action")
-async def coordinator_action_training_request(
-    request_id: str,
-    body: TrainingRequestActionBody,
+@router.delete("/tasks/{task_id}", status_code=204)
+async def delete_participant_task(
+    task_id: str,
     current_user: dict = Depends(get_current_user),
 ):
+    """Delete a participant task."""
     org_id = _require_coordinator(current_user)
-    return await worker_training_service.action_training_request(
-        request_id,
-        get_user_id(current_user),
-        org_id,
-        approved=body.approved,
-        response=body.response,
-    )
-
-
-@router.post("/training/recommend", status_code=201)
-async def coordinator_recommend_training(
-    body: TrainingRecommendBody,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    payload = {
-        "worker_id": body.worker_id,
-        "coordinator_id": get_user_id(current_user),
-        "organization_id": org_id,
-        "title": body.title,
-        "training_module_id": body.training_module_id,
-    }
-    result = get_supabase_admin().table("worker_training_recommendations").insert(payload).execute()
-    return result.data[0] if result.data else payload
-
-
-# ── CARECLIQV2-292: Travel expense approvals ─────────────────────────────────
-
-class TravelRateBody(BaseModel):
-    mileage_rate_cents: int = Field(gt=0, le=500)
-
-
-class TravelSubmissionActionBody(BaseModel):
-    approve: bool = True
-    rejection_reason: Optional[str] = None
-    mark_paid: bool = False
-
-
-@router.get("/travel/submissions")
-async def coordinator_travel_submissions(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
-    from ..services import travel_expense_service
-
-    return {"submissions": travel_expense_service.list_pending_for_coordinator(org_id)}
-
-
-@router.get("/travel/settings")
-async def coordinator_travel_settings(current_user: dict = Depends(get_current_user)):
-    org_id = _require_coordinator(current_user)
-    from ..services import travel_expense_service
-
-    return travel_expense_service.get_org_travel_settings(org_id)
-
-
-@router.post("/travel/submissions/{submission_id}/action")
-async def coordinator_travel_submission_action(
-    submission_id: str,
-    body: TravelSubmissionActionBody,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    from ..services import travel_expense_service
-
-    return travel_expense_service.action_submission(
-        submission_id,
-        get_user_id(current_user),
-        org_id,
-        approve=body.approve,
-        rejection_reason=body.rejection_reason,
-        mark_paid=body.mark_paid,
-    )
-
-
-@router.put("/travel/settings")
-async def coordinator_update_travel_rate(
-    body: TravelRateBody,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _require_coordinator(current_user)
-    record = {
-        "organization_id": org_id,
-        "mileage_rate_cents": body.mileage_rate_cents,
-        "updated_by": get_user_id(current_user),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    get_supabase_admin().table("organization_travel_settings").upsert(
-        record,
-        on_conflict="organization_id",
-    ).execute()
-    get_supabase_admin().table("organization_mileage_rate_history").insert({
-        "organization_id": org_id,
-        "rate_cents": body.mileage_rate_cents,
-        "created_by": get_user_id(current_user),
-    }).execute()
-    return {"mileage_rate_cents": body.mileage_rate_cents, "rate_display": f"${body.mileage_rate_cents / 100:.2f}/km"}
+    supabase = get_supabase_admin()
+    
+    try:
+        # First delete any shift_tasks associations
+        supabase.table("shift_tasks").delete().eq("task_id", task_id).execute()
+        
+        # Then delete the task itself
+        supabase.table("participant_tasks").delete().eq("id", task_id).eq("organization_id", org_id).execute()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Task deletion failed: {exc}")

@@ -1,9 +1,16 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+﻿import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
 import {
   PenLine,
@@ -25,7 +32,15 @@ import {
   ChevronDown,
   Copy,
   Bell,
+  LockKeyhole,
+  MonitorSmartphone,
+  Pencil,
+  QrCode,
+  AlertTriangle,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import QRCode from "react-qr-code";
+import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,6 +52,23 @@ import {
   useSavePractitionerSettings,
 } from "@workspace/api-client-react";
 import { AvatarPicker, AvatarDisplay } from "@/components/AvatarPicker";
+import {
+  disableMfa,
+  getLoginHistory,
+  getMfaStatus,
+  listSessions,
+  listTrustedDevices,
+  logoutOtherSessions,
+  renameSession,
+  renameTrustedDevice,
+  revokeTrustedDevice,
+  startTotpEnrollment,
+  verifyTotpEnrollment,
+  type LoginHistoryEntry,
+  type MfaStatus,
+  type TrustedDevice,
+  type UserSession,
+} from "@/services/securityService";
 
 // ---------------------------------------------------------------------------
 // ABN validation — 11 digits only (optional field)
@@ -49,15 +81,15 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "team" | "notifications";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
 
 const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }>; coordinatorOnly?: boolean }[] = [
-  { id: "account",    label: "Account",          icon: User        },
-  { id: "provider",   label: "Provider",          icon: Building2   },
-  { id: "defaults",   label: "Session Defaults",  icon: Settings2   },
-  { id: "compliance", label: "Compliance",        icon: ShieldCheck },
-  { id: "notifications", label: "Notifications", icon: Bell, coordinatorOnly: true },
-  { id: "team",       label: "Team",              icon: Users2, coordinatorOnly: true },
+  { id: "account",       label: "Account",          icon: User        },
+  { id: "provider",      label: "Provider",          icon: Building2   },
+  { id: "defaults",      label: "Session Defaults",  icon: Settings2   },
+  { id: "compliance",    label: "Compliance",        icon: ShieldCheck },
+  { id: "notifications", label: "Notifications",     icon: Bell, coordinatorOnly: true },
+  { id: "team",          label: "Team",              icon: Users2, coordinatorOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -75,10 +107,10 @@ function SettingRow({
   onCheckedChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-cc-bg transition-colors rounded-xl group">
+    <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-[#F8F6FE] transition-colors rounded-xl group">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold" style={{ color: 'var(--cc-text)' }}>{title}</p>
-        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: 'var(--cc-muted)' }}>{description}</p>
+        <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>{title}</p>
+        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -104,13 +136,13 @@ function Section({
       <div className="flex items-center gap-3.5 pb-1">
         <div
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, rgba(85,51,204,0.12), rgba(85,51,204,0.06))" }}
+          style={{ background: "rgba(55,48,163,0.09)" }}
         >
-          <Icon className="h-[18px] w-[18px]" style={{ color: 'var(--cc-plum)' }} />
+          <Icon className="h-[18px] w-[18px]" style={{ color: "#3730A3" }} />
         </div>
         <div>
-          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: 'var(--cc-text)' }}>{title}</h2>
-          <p className="text-[12px] leading-relaxed" style={{ color: 'var(--cc-muted)' }}>{description}</p>
+          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
+          <p className="text-[12px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
         </div>
       </div>
       {children}
@@ -132,21 +164,21 @@ function PanelCard({
 }) {
   return (
     <div
-      className={cn("bg-cc-surface rounded-2xl overflow-hidden", className)}
+      className={cn("bg-white rounded-2xl overflow-hidden", className)}
       style={{
         border: "1px solid #EBE5F6",
-        boxShadow: "0 2px 12px rgba(85,51,204,0.05), 0 1px 3px rgba(0,0,0,0.03)",
+        boxShadow: "0 2px 12px rgba(55,48,163,0.05), 0 1px 3px rgba(0,0,0,0.03)",
       }}
     >
       {label && (
         <div
           className="px-5 py-3 border-b flex items-center gap-2"
           style={{
-            background: "linear-gradient(to right, rgba(85,51,204,0.05), transparent)",
+            background: "transparent",
             borderColor: "#EBE5F6",
           }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'var(--cc-plum)' }}>{label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#3730A3" }}>{label}</p>
         </div>
       )}
       <div className="p-5">{children}</div>
@@ -164,7 +196,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: 'var(--cc-plum)' },
+  support_coordinator: { bg: "rgba(55,48,163,0.1)",   color: "#3730A3" },
   allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
 };
@@ -289,7 +321,7 @@ function NotificationsSection() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: 'var(--cc-muted)' }}>
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
         <Loader2 size={14} className="animate-spin" /> Loading preferences…
       </div>
     );
@@ -302,25 +334,25 @@ function NotificationsSection() {
       icon={Bell}
     >
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E2DEF2" }}>
+      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E5E7EB" }}>
         <table className="w-full text-[13px]">
           <thead>
-            <tr style={{ background: 'var(--cc-bg)' }}>
-              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: 'var(--cc-muted)' }}>Event</th>
+            <tr style={{ background: "var(--cc-soft)" }}>
+              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: "var(--cc-muted)" }}>Event</th>
               {NOTIF_CHANNELS.map((ch) => (
-                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: 'var(--cc-muted)' }}>
+                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: "var(--cc-muted)" }}>
                   {CHANNEL_LABELS[ch]}
-                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-cc-bg text-cc-muted">always</span>}
+                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {NOTIF_EVENTS.map((ev, i) => (
-              <tr key={ev.key} className={i % 2 === 0 ? "bg-cc-surface" : "bg-cc-bg"}>
+              <tr key={ev.key} style={{ background: i % 2 === 0 ? "var(--cc-surface)" : "var(--cc-soft)" }}>
                 <td className="px-4 py-3">
-                  <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>{ev.label}</p>
-                  <p className="text-[11px]" style={{ color: 'var(--cc-muted)' }}>{ev.description}</p>
+                  <p className="font-semibold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
+                  <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
                 </td>
                 {NOTIF_CHANNELS.map((ch) => (
                   <td key={ch} className="px-4 py-3 text-center">
@@ -329,7 +361,7 @@ function NotificationsSection() {
                       checked={prefs.events[ev.key]?.[ch] ?? false}
                       disabled={ch === "in_app"}
                       onChange={() => toggleEvent(ev.key, ch)}
-                      className="w-4 h-4 accent-[#5533CC] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                      className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
                     />
                   </td>
                 ))}
@@ -342,18 +374,18 @@ function NotificationsSection() {
       {/* Mobile Card View (sm, md only) */}
       <div className="md:hidden space-y-3">
         {NOTIF_EVENTS.map((ev) => (
-          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: 'var(--cc-surface)' }}>
+          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: "var(--cc-bg)" }}>
             {/* Event name & description */}
             <div className="mb-3">
-              <p className="text-[13px] font-bold" style={{ color: 'var(--cc-text)' }}>{ev.label}</p>
-              <p className="text-[12px] mt-1" style={{ color: 'var(--cc-muted)' }}>{ev.description}</p>
+              <p className="text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
+              <p className="text-[12px] mt-1" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
             </div>
 
             {/* Channel toggles */}
             <div className="space-y-2.5">
               {NOTIF_CHANNELS.map((ch) => (
                 <div key={ch} className="flex items-center justify-between gap-2">
-                  <label className="text-[12px] font-semibold" style={{ color: "#4A3D5A" }}>
+                  <label className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
                     {CHANNEL_LABELS[ch]}
                     {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1.5 py-0.5 bg-gray-200 text-gray-500">always on</span>}
                   </label>
@@ -362,7 +394,7 @@ function NotificationsSection() {
                     checked={prefs.events[ev.key]?.[ch] ?? false}
                     disabled={ch === "in_app"}
                     onChange={() => toggleEvent(ev.key, ch)}
-                    className="w-4 h-4 accent-[#5533CC] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                    className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
                   />
                 </div>
               ))}
@@ -372,34 +404,34 @@ function NotificationsSection() {
       </div>
 
       {/* Quiet hours */}
-      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: 'var(--cc-bg)', border: "1px solid #E2DEF2" }}>
+      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid #E5E7EB" }}>
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-bold text-[14px]" style={{ color: 'var(--cc-text)' }}>Quiet Hours</p>
-            <p className="text-[12px]" style={{ color: 'var(--cc-muted)' }}>Suppress non-critical notifications during these hours</p>
+            <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>Quiet Hours</p>
+            <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>Suppress non-critical notifications during these hours</p>
           </div>
           <Switch checked={prefs.quiet_hours_enabled} onCheckedChange={(v) => setPrefs((p) => ({ ...p, quiet_hours_enabled: v }))} />
         </div>
         {prefs.quiet_hours_enabled && (
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: 'var(--cc-muted)' }}>From</label>
+              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
               <input
                 type="time"
                 value={prefs.quiet_from}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
-                style={{ border: "1px solid #E2DEF2" }}
+                style={{ border: "1px solid #E5E7EB" }}
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold" style={{ color: 'var(--cc-muted)' }}>To</label>
+              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
               <input
                 type="time"
                 value={prefs.quiet_to}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
-                style={{ border: "1px solid #E2DEF2" }}
+                style={{ border: "1px solid #E5E7EB" }}
               />
             </div>
           </div>
@@ -410,13 +442,390 @@ function NotificationsSection() {
       <div className="flex justify-end pt-2">
         <Button
           className="rounded-2xl px-8"
-          style={{ background: 'var(--cc-plum)', color: 'var(--cc-surface)' }}
+          style={{ background: "var(--cc-plum)", color: "#fff" }}
           disabled={saving}
           onClick={save}
         >
           {saving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving…</> : "Save Preferences"}
         </Button>
       </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Security Section — available to all roles
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SecuritySection() {
+  const { toast } = useToast();
+  const { requireReAuth, modal } = useReAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
+  const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
+
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollSecret, setEnrollSecret] = useState<string | null>(null);
+  const [enrollOtpAuthUrl, setEnrollOtpAuthUrl] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [enrollCode, setEnrollCode] = useState("");
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableBusy, setDisableBusy] = useState(false);
+
+  const [logoutOthersPassword, setLogoutOthersPassword] = useState("");
+  const [logoutOthersBusy, setLogoutOthersBusy] = useState(false);
+
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameKind, setRenameKind] = useState<"device" | "session" | null>(null);
+
+  const loadSecurityData = useCallback(async () => {
+    const [status, devices, activeSessions, history] = await Promise.all([
+      getMfaStatus(),
+      listTrustedDevices(),
+      listSessions(),
+      getLoginHistory(),
+    ]);
+    setMfaStatus(status);
+    setTrustedDevices(devices);
+    setSessions(activeSessions);
+    setLoginHistory(history);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    loadSecurityData()
+      .catch(() => {
+        if (!active) return;
+        toast({ title: "Could not load security settings", variant: "destructive" });
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadSecurityData, toast]);
+
+  async function handleStartEnrollment() {
+    setEnrollBusy(true);
+    try {
+      const payload = await startTotpEnrollment();
+      setEnrollSecret(payload.secret);
+      setEnrollOtpAuthUrl(payload.otpauth_url);
+      setEnrolling(true);
+      setEnrollCode("");
+      setRecoveryCodes(null);
+    } catch (error) {
+      toast({ title: "Could not start 2FA setup", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  async function handleVerifyEnrollment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!enrollCode.trim()) return;
+    setEnrollBusy(true);
+    try {
+      const result = await verifyTotpEnrollment(enrollCode.trim());
+      setRecoveryCodes(result.recovery_codes);
+      setMfaStatus({ enabled: true, method: "totp", phone: null });
+      setEnrolling(false);
+      setEnrollSecret(null);
+      setEnrollCode("");
+      toast({ title: "Two-factor authentication enabled", description: "Save your recovery codes in a secure place." });
+    } catch (error) {
+      toast({ title: "Verification failed", description: error instanceof Error ? error.message : "Check the code and try again.", variant: "destructive" });
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  async function handleDisableMfa(event: React.FormEvent) {
+    event.preventDefault();
+    if (!disablePassword) return;
+    setDisableBusy(true);
+    try {
+      await requireReAuth(async () => {
+        await disableMfa(disablePassword);
+        return true;
+      });
+      setMfaStatus({ enabled: false, method: null, phone: null });
+      setDisablePassword("");
+      toast({ title: "Two-factor authentication disabled" });
+    } catch { /* requireReAuth handles cancellation */ } finally {
+      setDisableBusy(false);
+    }
+  }
+
+  async function handleRevokeDevice(deviceId: string) {
+    try {
+      await requireReAuth(async () => {
+        await revokeTrustedDevice(deviceId);
+        await loadSecurityData();
+        return true;
+      });
+      toast({ title: "Trusted device removed" });
+    } catch { /* noop */ }
+  }
+
+  async function handleLogoutOthers(event: React.FormEvent) {
+    event.preventDefault();
+    if (!logoutOthersPassword) return;
+    setLogoutOthersBusy(true);
+    try {
+      await logoutOtherSessions(logoutOthersPassword);
+      setLogoutOthersPassword("");
+      await loadSecurityData();
+      toast({ title: "Other sessions signed out" });
+    } catch (error) {
+      toast({ title: "Could not sign out other devices", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    } finally {
+      setLogoutOthersBusy(false);
+    }
+  }
+
+  async function submitRename() {
+    if (!renamingId || !renameKind || !renameValue.trim()) return;
+    try {
+      if (renameKind === "device") {
+        await renameTrustedDevice(renamingId, renameValue.trim());
+      } else {
+        await renameSession(renamingId, renameValue.trim());
+      }
+      setRenamingId(null);
+      setRenameKind(null);
+      setRenameValue("");
+      await loadSecurityData();
+      toast({ title: "Name updated" });
+    } catch (error) {
+      toast({ title: "Could not rename", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
+        <Loader2 size={14} className="animate-spin" /> Loading security settings…
+      </div>
+    );
+  }
+
+  return (
+    <Section
+      title="Security"
+      description="Two-factor authentication, trusted devices, active sessions, and sign-in history."
+      icon={LockKeyhole}
+    >
+      {modal}
+
+      {/* QR code dialog */}
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Scan QR code</DialogTitle>
+            <DialogDescription>Open your authenticator app and scan this code to add CareCliQ.</DialogDescription>
+          </DialogHeader>
+          {enrollOtpAuthUrl && (
+            <div className="flex justify-center rounded-xl bg-white p-5 ring-1 ring-[#E5E7EB]">
+              <QRCode value={enrollOtpAuthUrl} size={200} bgColor="#FFFFFF" fgColor="#111827" />
+            </div>
+          )}
+          <p className="text-center text-xs" style={{ color: "var(--cc-muted)" }}>Or enter the secret key manually if scanning is not available.</p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename dialog */}
+      <Dialog open={!!renamingId} onOpenChange={(open) => { if (!open) { setRenamingId(null); setRenameKind(null); setRenameValue(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename {renameKind}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="rounded-xl" autoFocus />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setRenamingId(null); setRenameKind(null); setRenameValue(""); }}>Cancel</Button>
+              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-plum)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Two-factor authentication */}
+      <PanelCard label="Two-Factor Authentication">
+        {recoveryCodes && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-bold text-amber-900">Save your recovery codes</p>
+            <p className="mt-1 text-sm text-amber-800">Each code can be used once if you lose access to your authenticator app.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
+              {recoveryCodes.map((code) => (
+                <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">{code}</div>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="mt-3 rounded-xl gap-2"
+              onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); toast({ title: "Recovery codes copied" }); }}>
+              <Copy className="h-3.5 w-3.5" /> Copy codes
+            </Button>
+          </div>
+        )}
+
+        {!mfaStatus?.enabled ? (
+          enrolling && enrollSecret ? (
+            <form onSubmit={handleVerifyEnrollment} className="space-y-4">
+              <div className="rounded-xl bg-[#F8F8FE] p-4">
+                <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>Set up your authenticator app</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>Scan the QR code or add a manual entry in Google Authenticator, Authy, or 1Password.</p>
+                <div className="mt-3 flex items-stretch gap-2">
+                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">{enrollSecret}</code>
+                  <button type="button" onClick={() => setQrOpen(true)} aria-label="Show QR code" title="Show QR code"
+                    className="flex min-w-[48px] items-center justify-center rounded-xl border bg-white px-3 hover:bg-[#EEF2FF]" style={{ borderColor: "var(--cc-border)" }}>
+                    <QrCode className="h-5 w-5 text-[#3730A3]" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-totp-code">Enter the 6-digit code</Label>
+                <Input id="sec-totp-code" value={enrollCode} onChange={(e) => setEnrollCode(e.target.value)}
+                  inputMode="numeric" autoComplete="one-time-code" className="rounded-xl max-w-[200px] tracking-widest" placeholder="000000" />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setEnrolling(false); setEnrollSecret(null); setEnrollOtpAuthUrl(null); setQrOpen(false); setEnrollCode(""); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={enrollBusy || !enrollCode.trim()} className="rounded-xl" style={{ background: "var(--cc-plum)" }}>
+                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify and enable"}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Add an extra layer of protection with an authenticator app (Google Authenticator, Authy, 1Password).</p>
+              <Button type="button" onClick={() => void handleStartEnrollment()} disabled={enrollBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-plum)" }}>
+                {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                Enable authenticator app
+              </Button>
+            </div>
+          )
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#166534" }}>
+              <Check className="h-4 w-4" /> Two-factor authentication is active
+            </div>
+            <form onSubmit={handleDisableMfa} className="max-w-md space-y-3 border-t pt-4" style={{ borderColor: "var(--cc-border)" }}>
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>To disable 2FA, confirm your current password.</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-disable-mfa">Current password</Label>
+                <PasswordInput id="sec-disable-mfa" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="rounded-xl max-w-sm" />
+              </div>
+              <Button type="submit" variant="outline" disabled={disableBusy || !disablePassword} className="rounded-xl border-red-200 text-red-700 hover:bg-red-50">
+                {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disable two-factor authentication"}
+              </Button>
+            </form>
+          </div>
+        )}
+      </PanelCard>
+
+      {/* Trusted devices */}
+      <PanelCard label="Trusted Devices">
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Devices that can skip 2FA verification for 30 days.</p>
+        {trustedDevices.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No trusted devices.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {trustedDevices.map((device) => (
+              <div key={device.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {device.device_name}
+                    {device.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">This device</span>}
+                  </p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {device.os_name} · trusted until {formatDistanceToNow(new Date(device.trusted_until), { addSuffix: true })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" className="rounded-lg h-8"
+                    onClick={() => { setRenamingId(device.id); setRenameKind("device"); setRenameValue(device.device_name); }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="rounded-lg h-8 border-red-200 text-red-700 hover:bg-red-50"
+                    onClick={() => void handleRevokeDevice(device.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </PanelCard>
+
+      {/* Active sessions */}
+      <PanelCard label="Active Sessions">
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Devices currently signed in to your account.</p>
+        {sessions.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No active sessions found.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {sessions.map((session) => (
+              <div key={session.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {session.device_name}
+                    {session.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">Current</span>}
+                  </p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {session.city || "Unknown location"}{session.country ? `, ${session.country}` : ""} · active {formatDistanceToNow(new Date(session.last_active_at), { addSuffix: true })}
+                  </p>
+                </div>
+                <Button type="button" size="sm" variant="outline" className="rounded-lg h-8"
+                  onClick={() => { setRenamingId(session.id); setRenameKind("session"); setRenameValue(session.device_name); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={handleLogoutOthers} className="mt-4 border-t pt-4 max-w-md space-y-3" style={{ borderColor: "var(--cc-border)" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>Sign out all other devices</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="sec-logout-others">Confirm your password</Label>
+            <PasswordInput id="sec-logout-others" value={logoutOthersPassword} onChange={(e) => setLogoutOthersPassword(e.target.value)} className="rounded-xl max-w-sm" />
+          </div>
+          <Button type="submit" variant="outline" disabled={logoutOthersBusy || !logoutOthersPassword} className="rounded-xl">
+            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign out other sessions"}
+          </Button>
+        </form>
+      </PanelCard>
+
+      {/* Recent sign-ins */}
+      <PanelCard label="Recent Sign-ins">
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Review recent account access activity.</p>
+        {loginHistory.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No sign-in history yet.</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {loginHistory.slice(0, 10).map((entry) => (
+              <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 py-3"
+                style={{ borderColor: entry.is_suspicious ? "rgba(190,24,93,0.2)" : undefined }}>
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>{entry.device_name}</p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {entry.location_label} · {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+                {entry.is_suspicious ? (
+                  <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">
+                    <AlertTriangle className="h-3 w-3" /> Unusual sign-in
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </PanelCard>
     </Section>
   );
 }
@@ -855,19 +1264,19 @@ export default function Settings() {
       <div
         className="rounded-2xl px-6 py-4 flex items-center gap-4"
         style={{
-          background: "linear-gradient(135deg, rgba(85,51,204,0.07) 0%, rgba(240,48,96,0.03) 100%)",
-          border: "1px solid rgba(85,51,204,0.1)",
+          background: "rgba(55,48,163,0.06)",
+          border: "1px solid rgba(55,48,163,0.1)",
         }}
       >
         <div
           className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ background: "rgba(85,51,204,0.1)" }}
+          style={{ background: "rgba(55,48,163,0.1)" }}
         >
-          <Settings2 className="h-5 w-5" style={{ color: 'var(--cc-plum)' }} />
+          <Settings2 className="h-5 w-5" style={{ color: "#3730A3" }} />
         </div>
         <div>
-          <h1 className="text-[18px] font-bold tracking-tight" style={{ color: 'var(--cc-text)' }}>Workspace Settings</h1>
-          <p className="text-[12px] mt-0.5" style={{ color: 'var(--cc-muted)' }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>Workspace Settings</h1>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-muted)" }}>
             Manage your account, provider details, session defaults and compliance rules
           </p>
         </div>
@@ -881,11 +1290,11 @@ export default function Settings() {
             onClick={() => setActiveSection(id)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
             style={{
-              background: activeSection === id ? "#5533CC" : "rgba(85,51,204,0.06)",
-              color: activeSection === id ? "white" : "#4A3D5A",
+              background: activeSection === id ? "#3730A3" : "rgba(55,48,163,0.06)",
+              color: activeSection === id ? "white" : "#374151",
             }}
           >
-            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#7A6A9E" }} />
+            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#6B7280" }} />
             {label}
           </button>
         ))}
@@ -898,12 +1307,12 @@ export default function Settings() {
         <div
           className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
           style={{
-            background: 'var(--cc-surface)',
+            background: "var(--cc-bg)",
             border: "1px solid #EBE5F6",
-            boxShadow: "0 2px 12px rgba(85,51,204,0.05)",
+            boxShadow: "0 2px 12px rgba(55,48,163,0.05)",
           }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: 'var(--cc-muted)' }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "var(--cc-muted)" }}>
             Navigation
           </p>
           {visibleNavItems.map(({ id, label, icon: Icon }) => (
@@ -912,13 +1321,13 @@ export default function Settings() {
               onClick={() => setActiveSection(id)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-150 text-left"
               style={{
-                background: activeSection === id ? "#5533CC" : "transparent",
-                color: activeSection === id ? "white" : "#4A3D5A",
+                background: activeSection === id ? "#3730A3" : "transparent",
+                color: activeSection === id ? "white" : "#374151",
               }}
             >
               <Icon
                 className="h-4 w-4 shrink-0"
-                style={{ color: activeSection === id ? "white" : "#7A6A9E" }}
+                style={{ color: activeSection === id ? "white" : "#6B7280" }}
               />
               {label}
             </button>
@@ -958,7 +1367,7 @@ export default function Settings() {
                           <Trash2 className="h-3 w-3" /> Remove
                         </Button>
                       </div>
-                      <div className="bg-cc-surface rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
+                      <div className="bg-white rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
                         <img src={savedSignature} alt="Saved signature" className="max-h-full max-w-full object-contain" />
                       </div>
                     </div>
@@ -979,8 +1388,8 @@ export default function Settings() {
                         Draw your signature using your mouse, stylus, or finger on a touchscreen.
                       </p>
                       <div
-                        className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-cc-surface transition-colors")}
-                        style={{ borderColor: hasDrawing ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
+                        className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors")}
+                        style={{ borderColor: hasDrawing ? "rgba(55,48,163,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
                       >
                         <canvas
                           ref={canvasRef}
@@ -1013,8 +1422,8 @@ export default function Settings() {
                         Upload a PNG or JPG of your handwritten signature. Scan on a white background for best results. Max 2 MB.
                       </p>
                       <div
-                        className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-cc-surface hover:bg-[#F6F4FB]"
-                        style={{ borderColor: uploadPreview ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)" }}
+                        className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white hover:bg-[#F6F4FB]"
+                        style={{ borderColor: uploadPreview ? "rgba(55,48,163,0.35)" : "rgba(232,213,232,0.7)" }}
                         onClick={() => fileInputRef.current?.click()}
                       >
                         {uploadPreview ? (
@@ -1057,7 +1466,7 @@ export default function Settings() {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Full Name</Label>
+                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Full Name</Label>
                       <Input
                         id="pract-name"
                         value={practName}
@@ -1067,7 +1476,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Credentials</Label>
+                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Credentials</Label>
                       <Input
                         id="pract-credentials"
                         value={practCredentials}
@@ -1099,7 +1508,7 @@ export default function Settings() {
                       sizePx={56}
                       fallback={
                         <div className="h-14 w-14 rounded-full flex items-center justify-center border-2 border-dashed"
-                          style={{ background: "rgba(84,34,105,0.06)", borderColor: "rgba(84,34,105,0.2)", color: "rgba(84,34,105,0.3)" }}>
+                          style={{ background: "rgba(55,48,163,0.06)", borderColor: "rgba(55,48,163,0.2)", color: "rgba(55,48,163,0.3)" }}>
                           <User className="h-6 w-6" />
                         </div>
                       }
@@ -1133,7 +1542,7 @@ export default function Settings() {
               ) : (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Business Name</Label>
+                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Business Name</Label>
                     <Input
                       id="business-name"
                       value={businessName}
@@ -1143,7 +1552,7 @@ export default function Settings() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
                       ABN <span className="font-normal" style={{ color: "#7A6A8A" }}>(Australian Business Number)</span>
                     </Label>
                     <Input
@@ -1190,7 +1599,7 @@ export default function Settings() {
                 <LoadingRow />
               ) : (
                 <div className="space-y-1.5">
-                  <Label htmlFor="default-duration" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                  <Label htmlFor="default-duration" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
                     Default Duration <span className="font-normal" style={{ color: "#7A6A8A" }}>(minutes)</span>
                   </Label>
                   <Input
@@ -1279,7 +1688,7 @@ export default function Settings() {
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
-                  <p className="text-[12px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                  <p className="text-[12px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     When a session's type matches one of the names below, the compliance engine will warn if no body examination markers have been recorded.
                     Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults — leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
                   </p>
@@ -1291,13 +1700,13 @@ export default function Settings() {
                         <span
                           key={i}
                           className="inline-flex items-center gap-1 rounded-full text-[12px] font-medium px-2.5 py-1"
-                          style={{ background: "rgba(84,34,105,0.08)", color: "#542269", border: "1px solid rgba(84,34,105,0.2)" }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3", border: "1px solid rgba(55,48,163,0.2)" }}
                         >
                           {type}
                           <button
                             type="button"
                             onClick={() => handleRemoveSessionType(i)}
-                            className="ml-0.5 hover:text-red-500 transition-colors" style={{ color: "rgba(84,34,105,0.5)" }}
+                            className="ml-0.5 hover:text-red-500 transition-colors" style={{ color: "rgba(55,48,163,0.5)" }}
                             aria-label={`Remove ${type}`}
                           >
                             <X className="h-3 w-3" />
@@ -1306,7 +1715,8 @@ export default function Settings() {
                       ))}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed text-cc-muted bg-cc-bg border-cc-border">
+                    <div className="flex items-center gap-2 text-[12px] rounded-xl px-3 py-2.5 border border-dashed"
+                      style={{ color: "#7A6A8A", background: "rgba(246,244,251,0.8)", borderColor: "rgba(232,213,232,0.7)" }}>
                       <Info className="h-3.5 w-3.5 shrink-0" />
                       <span>No custom types saved — the built-in defaults (physiotherapy, OT, therapy, rehab…) are used.</span>
                     </div>
@@ -1343,7 +1753,7 @@ export default function Settings() {
                       variant="ghost"
                       size="sm"
                       className="text-[12px] gap-1 hover:text-[#1C1626]"
-                      style={{ color: "#4A3D5A" }}
+                      style={{ color: "var(--cc-text)" }}
                       onClick={handleResetToDefaults}
                     >
                       <RotateCcw className="h-3 w-3" /> Reset to defaults
@@ -1365,18 +1775,18 @@ export default function Settings() {
                 <div
                   className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
                   style={{
-                    background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
-                    border: "1px solid rgba(85,51,204,0.12)",
-                    borderLeft: "3px solid #5533CC",
+                    background: "rgba(55,48,163,0.04)",
+                    border: "1px solid rgba(55,48,163,0.12)",
+                    borderLeft: "3px solid #3730A3",
                   }}
                 >
-                  <p className="font-bold text-[13px]" style={{ color: 'var(--cc-text)' }}>How compliance requirements work</p>
-                  <p style={{ color: "#4A3D5A" }}>
+                  <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How compliance requirements work</p>
+                  <p style={{ color: "var(--cc-text)" }}>
                     These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
                     Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session
                     review modal opens, so practitioners are prompted to complete the missing documentation immediately.
                   </p>
-                  <p style={{ color: "#4A3D5A" }}>
+                  <p style={{ color: "var(--cc-text)" }}>
                     The built-in engine always runs regardless of these toggles and tracks participant linkage, duration, activities, clinical notes,
                     photo evidence, and goal linkage.
                   </p>
@@ -1386,8 +1796,7 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Team section (support coordinator only) ─────────────────────── */}
-        {/* ── Notifications section (coordinator only) ── */}
+        {/* ── Notifications section (coordinator only) ─────────────────────── */}
         {activeSection === "notifications" && isCoordinator && (
           <NotificationsSection />
         )}
@@ -1417,17 +1826,17 @@ export default function Settings() {
                         {/* Avatar */}
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                          style={{ background: "rgba(85,51,204,0.08)", color: 'var(--cc-plum)' }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3" }}
                         >
                           {(m.full_name || m.email || "?")[0].toUpperCase()}
                         </div>
 
                         {/* Name + email */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--cc-text)' }}>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>
                             {m.full_name || "(No name)"}
                           </p>
-                          <p className="text-[11px] truncate" style={{ color: 'var(--cc-muted)' }}>{m.email}</p>
+                          <p className="text-[11px] truncate" style={{ color: "var(--cc-muted)" }}>{m.email}</p>
                         </div>
 
                         {/* Role selector — prevent changing own role */}
@@ -1452,7 +1861,7 @@ export default function Settings() {
                         )}
 
                         {/* Joined date */}
-                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: 'var(--cc-muted)' }}>
+                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </span>
 
@@ -1489,8 +1898,8 @@ export default function Settings() {
                     return (
                       <div key={inv.id} className="flex items-center gap-3 py-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--cc-text)' }}>{inv.email}</p>
-                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#7A6A9E" }}>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{inv.email}</p>
+                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#6B7280" }}>
                             {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                           </p>
                         </div>
@@ -1506,7 +1915,7 @@ export default function Settings() {
                           onClick={() => copyInviteLink(inv)}
                           title="Copy invite link"
                           className="p-1.5 rounded-lg transition-colors hover:bg-[#F0EDF9] shrink-0"
-                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#7A6A9E" }}
+                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#6B7280" }}
                         >
                           {copiedToken === inv.id ? <Check size={13} /> : <Copy size={13} />}
                         </button>
@@ -1538,19 +1947,19 @@ export default function Settings() {
             <div
               className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
               style={{
-                background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
-                border: "1px solid rgba(85,51,204,0.12)",
-                borderLeft: "3px solid #5533CC",
+                background: "rgba(55,48,163,0.04)",
+                border: "1px solid rgba(55,48,163,0.12)",
+                borderLeft: "3px solid #3730A3",
               }}
             >
-              <p className="font-bold text-[13px]" style={{ color: 'var(--cc-text)' }}>How staff invitations work</p>
-              <p style={{ color: "#4A3D5A" }}>
+              <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How staff invitations work</p>
+              <p style={{ color: "var(--cc-text)" }}>
                 Inviting a staff member generates a secure token link (7-day expiry). The invitee
                 clicks the link, sets their password, and is immediately added to your organisation
                 with the role you selected. Their access is scoped to only the participants and sessions
                 your org allocates to them.
               </p>
-              <p style={{ color: "#4A3D5A" }}>
+              <p style={{ color: "var(--cc-text)" }}>
                 Email delivery is not yet configured — copy and share the link manually. Pending invitations
                 can be revoked at any time before they are accepted.
               </p>

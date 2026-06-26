@@ -1,11 +1,10 @@
-/**
+﻿/**
  * Private dev / QA console — not linked in nav.
  * Route: /dev/progress-test (bookmark + password only)
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
-import { EvidenceDetailsPanel } from "@/components/shifts/EvidenceDetailsPanel";
-import type { EvidenceMetadata } from "@/services/complianceService";
+import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import type { ShiftTask } from "@/services/shiftService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -30,8 +29,8 @@ import {
 const PLUM = "var(--cc-plum)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
-const APP_BG = "#F5F3FC";
-const ACTIVE = "#EDEAFF";
+const APP_BG = "#F8F8FE";
+const ACTIVE = "var(--cc-active-bg)";
 const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;
 
@@ -58,10 +57,7 @@ type TicketId =
   | "CARECLIQV2-34"
   | "CARECLIQV2-90"
   | "CARECLIQV2-75"
-  | "CARECLIQV2-217"
-  | "CARECLIQV2-271"
-  | "CARECLIQV2-270"
-  | "CARECLIQV2-269";
+  | "CARECLIQV2-217";
 
 type TicketDef = {
   id: TicketId;
@@ -155,27 +151,6 @@ const TICKETS: TicketDef[] = [
     description:
       "Task states: not started → in progress → evidence required → complete (gray/amber/orange/green).",
     keywords: "task checklist mandatory optional evidence visual",
-  },
-  {
-    id: "CARECLIQV2-271",
-    title: "Evidence audit trail & compliance",
-    description:
-      "Chain-of-custody metadata, coordinator delete with reason, shift audit log + CSV export, worker Evidence details panel.",
-    keywords: "evidence metadata audit coordinator delete csv hash retention compliance 271",
-  },
-  {
-    id: "CARECLIQV2-270",
-    title: "Digital signature & shift certification",
-    description:
-      "Worker signs shift before end; immutable shift_signatures record; coordinator read-only signature GET.",
-    keywords: "signature sign shift certification end shift 270",
-  },
-  {
-    id: "CARECLIQV2-269",
-    title: "Privacy & data protection (GDPR)",
-    description:
-      "Worker privacy page: data categories, export request, deletion request, analytics opt-out.",
-    keywords: "privacy gdpr export deletion analytics worker 269",
   },
 ];
 
@@ -464,7 +439,7 @@ function PatternsStatusNote({ run, list }: { run: ApiResult | null; list: ApiRes
   return (
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
-      style={{ borderColor: BORDER, background: "#FAFAFF", color: TEXT }}
+      style={{ borderColor: BORDER, background: "var(--cc-soft)", color: TEXT }}
     >
       <p className="font-semibold">How to read this (CARECLIQV2-34)</p>
       {patterns.length === 0 ? (
@@ -518,7 +493,7 @@ function BudgetRulesStatusNote({
     <div
       className="rounded-xl border px-4 py-3 text-xs leading-relaxed space-y-2"
       style={{
-        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E2DEF2",
+        borderColor: exceeded ? "#FECACA" : warning ? "#FDE68A" : hasPlan ? "#BBF7D0" : "#E5E7EB",
         background: exceeded ? "#FEF2F2" : warning ? "#FFFBEB" : hasPlan ? "#F0FDF4" : "#F8F7FC",
         color: TEXT,
       }}
@@ -700,390 +675,6 @@ function SessionField({ ctx, showDemoFill = true }: { ctx: TestContext; showDemo
           Use James Chen draft session
         </Button>
       )}
-    </div>
-  );
-}
-
-function ShiftField({ ctx, showDemoFill = true }: { ctx: TestContext; showDemoFill?: boolean }) {
-  return (
-    <div className="space-y-3">
-      <div>
-        <Label className="text-xs text-muted-foreground">Shift UUID</Label>
-        <Input value={ctx.shiftId} onChange={(e) => ctx.setShiftId(e.target.value)} className="mt-1" />
-      </div>
-      {showDemoFill && (
-        <Button type="button" variant="outline" size="sm" onClick={() => ctx.setShiftId(DEMO_JAMES_SHIFT)}>
-          Use James Chen demo shift
-        </Button>
-      )}
-    </div>
-  );
-}
-
-function extractEvidenceRows(data: unknown): EvidenceMetadata[] {
-  if (!data || typeof data !== "object") return [];
-  const evidence = (data as { evidence?: unknown }).evidence;
-  if (!Array.isArray(evidence)) return [];
-  return evidence.filter((row): row is EvidenceMetadata => typeof row === "object" && row !== null);
-}
-
-function RoleNote({ role, required }: { role: string; required: "worker" | "coordinator" | "any" }) {
-  const ok =
-    required === "any" ||
-    (required === "coordinator" && role === "support_coordinator") ||
-    (required === "worker" && role === "support_worker");
-  if (ok) return null;
-  return (
-    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-      Logged in as <strong>{role || "unknown"}</strong>. This section needs a{" "}
-      <strong>{required === "coordinator" ? "support coordinator" : "support worker"}</strong> account.
-    </p>
-  );
-}
-
-function EvidenceAuditConsole({ ctx }: { ctx: TestContext }) {
-  const role = ctx.user?.role ?? "";
-  const isCoordinator = role === "support_coordinator";
-  const isWorker = role === "support_worker";
-  const [workerMeta, setWorkerMeta] = useState<ApiResult | null>(null);
-  const [coordMeta, setCoordMeta] = useState<ApiResult | null>(null);
-  const [evidenceId, setEvidenceId] = useState("");
-  const [deleteReason, setDeleteReason] = useState("QA test — duplicate or invalid evidence");
-  const [deleteResult, setDeleteResult] = useState<ApiResult | null>(null);
-  const [auditResult, setAuditResult] = useState<ApiResult | null>(null);
-  const [csvMessage, setCsvMessage] = useState<string | null>(null);
-
-  const workerRows = extractEvidenceRows(workerMeta?.data);
-  const coordRows = extractEvidenceRows(coordMeta?.data);
-  const displayRows = coordRows.length ? coordRows : workerRows;
-
-  useEffect(() => {
-    const first = displayRows.find((row) => !row.is_deleted)?.evidence_id;
-    if (first && !evidenceId) setEvidenceId(first);
-  }, [displayRows, evidenceId]);
-
-  const downloadAuditCsv = async () => {
-    if (!ctx.shiftId) return;
-    setCsvMessage(null);
-    try {
-      const res = await apiFetch(`/api/coordinator/shifts/${ctx.shiftId}/evidence-audit.csv`);
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setCsvMessage(
-          `CSV download failed (${res.status}): ${String((data as { detail?: string }).detail ?? res.statusText)}`,
-        );
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `evidence-audit-${ctx.shiftId.slice(0, 8)}.csv`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      setCsvMessage("CSV downloaded — open in Excel or a text editor.");
-    } catch (err) {
-      setCsvMessage(String(err));
-    }
-  };
-
-  return (
-    <div className="space-y-5">
-      <ul className="list-decimal pl-5 space-y-1 text-sm" style={{ color: MUTED }}>
-        <li>Run migration <code className="text-xs">058_compliance_privacy_signature.sql</code> (or 049 + 058).</li>
-        <li>Worker: start session → upload photo on a task → sync evidence.</li>
-        <li>Worker: GET metadata below → expand <strong>Evidence details</strong> (hash, retention, device).</li>
-        <li>Coordinator: GET metadata → DELETE with reason → GET audit log → download CSV.</li>
-        <li>Refresh task thread on My Shift — note should appear once (dedupe fix).</li>
-      </ul>
-
-      <SessionField ctx={ctx} />
-      <ShiftField ctx={ctx} />
-
-      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "#FAFAFF" }}>
-        <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
-          Worker APIs
-        </p>
-        <RoleNote role={role} required="worker" />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!ctx.sessionId || !isWorker || ctx.busy === "ev271worker"}
-            onClick={() =>
-              ctx.run("ev271worker", async () => {
-                const r = await callApi(`/api/worker/sessions/${ctx.sessionId}/evidence-metadata`);
-                setWorkerMeta(r);
-              })
-            }
-          >
-            {ctx.busy === "ev271worker" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            GET worker evidence-metadata
-          </Button>
-          {ctx.shiftId && (
-            <Link href={`/my-shifts/${ctx.shiftId}`}>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                Open My Shift (upload evidence) <ExternalLink className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
-          )}
-        </div>
-        <ResultBox title="Worker evidence metadata" result={workerMeta} />
-      </div>
-
-      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: 'var(--cc-bg)' }}>
-        <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
-          Coordinator APIs
-        </p>
-        <RoleNote role={role} required="coordinator" />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!ctx.sessionId || !isCoordinator || ctx.busy === "ev271coordmeta"}
-            onClick={() =>
-              ctx.run("ev271coordmeta", async () => {
-                const r = await callApi(`/api/coordinator/sessions/${ctx.sessionId}/evidence-metadata`);
-                setCoordMeta(r);
-              })
-            }
-          >
-            {ctx.busy === "ev271coordmeta" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            GET coordinator evidence-metadata
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!ctx.shiftId || !isCoordinator || ctx.busy === "ev271audit"}
-            onClick={() =>
-              ctx.run("ev271audit", async () => {
-                const r = await callApi(`/api/coordinator/shifts/${ctx.shiftId}/evidence-audit`);
-                setAuditResult(r);
-              })
-            }
-          >
-            {ctx.busy === "ev271audit" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            GET evidence-audit
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!ctx.shiftId || !isCoordinator || ctx.busy === "ev271csv"}
-            onClick={() => void ctx.run("ev271csv", downloadAuditCsv)}
-          >
-            {ctx.busy === "ev271csv" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Download audit CSV
-          </Button>
-        </div>
-        <ResultBox title="Coordinator evidence metadata" result={coordMeta} />
-        <ResultBox title="Shift evidence audit log" result={auditResult} />
-        {csvMessage && (
-          <p className="text-xs rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
-            {csvMessage}
-          </p>
-        )}
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label className="text-xs text-muted-foreground">Evidence ID to delete</Label>
-            <Input value={evidenceId} onChange={(e) => setEvidenceId(e.target.value)} className="mt-1 font-mono text-xs" />
-            {displayRows.length > 0 && (
-              <select
-                className="mt-2 w-full rounded-lg border px-2 py-1.5 text-xs"
-                value={evidenceId}
-                onChange={(e) => setEvidenceId(e.target.value)}
-              >
-                <option value="">— pick from metadata —</option>
-                {displayRows.map((row) => (
-                  <option key={row.evidence_id} value={row.evidence_id}>
-                    {row.evidence_id}
-                    {row.is_deleted ? " (deleted)" : ""} · {row.evidence_type ?? "file"}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Deletion reason (required)</Label>
-            <Input value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} className="mt-1" />
-          </div>
-        </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          disabled={!evidenceId || deleteReason.trim().length < 3 || !isCoordinator || ctx.busy === "ev271delete"}
-          onClick={() =>
-            ctx.run("ev271delete", async () => {
-              if (!window.confirm(`Soft-delete evidence ${evidenceId}?`)) return;
-              const r = await callApi(`/api/coordinator/evidence/${evidenceId}`, {
-                method: "DELETE",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reason: deleteReason.trim() }),
-              });
-              setDeleteResult(r);
-            })
-          }
-        >
-          {ctx.busy === "ev271delete" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          DELETE coordinator evidence
-        </Button>
-        <ResultBox title="Delete evidence" result={deleteResult} />
-      </div>
-
-      {displayRows.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
-            Evidence details UI preview
-          </p>
-          {displayRows.slice(0, 4).map((row) => (
-            <div key={row.evidence_id} className="space-y-1">
-              <p className="text-[11px] font-mono font-semibold" style={{ color: MUTED }}>
-                {row.evidence_id}
-                {row.is_deleted ? " · deleted" : ""}
-              </p>
-              <EvidenceDetailsPanel metadata={row} defaultOpen={displayRows.length === 1} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ShiftSignatureConsole({ ctx }: { ctx: TestContext }) {
-  const role = ctx.user?.role ?? "";
-  const isCoordinator = role === "support_coordinator";
-  const [signatureResult, setSignatureResult] = useState<ApiResult | null>(null);
-
-  const signature =
-    signatureResult?.ok && signatureResult.data && typeof signatureResult.data === "object"
-      ? (signatureResult.data as {
-          signer_name?: string;
-          signed_at?: string;
-          signature_png_url?: string;
-        })
-      : null;
-
-  return (
-    <div className="space-y-4">
-      <ol className="list-decimal pl-5 space-y-1 text-sm" style={{ color: MUTED }}>
-        <li>Worker: open My Shift → complete tasks → End shift → sign in modal.</li>
-        <li>Coordinator: GET signature below after worker signs.</li>
-        <li>End shift without signature should return an error from the API.</li>
-      </ol>
-      <ShiftField ctx={ctx} />
-      <div className="flex flex-wrap gap-2">
-        <Link href={`/my-shifts/${ctx.shiftId || DEMO_JAMES_SHIFT}`}>
-          <Button size="sm" className="gap-1.5 text-white" style={{ background: PLUM }}>
-            Open My Shift (sign flow)
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!ctx.shiftId || !isCoordinator || ctx.busy === "sig270get"}
-          onClick={() =>
-            ctx.run("sig270get", async () => {
-              const r = await callApi(`/api/coordinator/shifts/${ctx.shiftId}/signature`);
-              setSignatureResult(r);
-            })
-          }
-        >
-          {ctx.busy === "sig270get" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          GET coordinator shift signature
-        </Button>
-      </div>
-      <RoleNote role={role} required="coordinator" />
-      <ResultBox title="Shift signature" result={signatureResult} />
-      {signature?.signature_png_url && (
-        <div className="rounded-xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
-          <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>
-            Signature preview
-          </p>
-          <img
-            src={signature.signature_png_url}
-            alt="Shift signature"
-            className="max-h-32 rounded-lg border bg-cc-surface"
-          />
-          <p className="mt-2 text-xs" style={{ color: TEXT }}>
-            Signed by {signature.signer_name ?? "worker"} ·{" "}
-            {signature.signed_at ? new Date(signature.signed_at).toLocaleString() : "—"}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PrivacyConsole({ ctx }: { ctx: TestContext }) {
-  const role = ctx.user?.role ?? "";
-  const isWorker = role === "support_worker";
-  const [overviewResult, setOverviewResult] = useState<ApiResult | null>(null);
-  const [exportResult, setExportResult] = useState<ApiResult | null>(null);
-  const [policyResult, setPolicyResult] = useState<ApiResult | null>(null);
-
-  return (
-    <div className="space-y-4">
-      <ol className="list-decimal pl-5 space-y-1 text-sm" style={{ color: MUTED }}>
-        <li>Worker: open Your data &amp; privacy page.</li>
-        <li>GET overview — data categories + policy version.</li>
-        <li>POST export — request personal data export.</li>
-        <li>Toggle analytics opt-out on the privacy page.</li>
-      </ol>
-      <RoleNote role={role} required="worker" />
-      <div className="flex flex-wrap gap-2">
-        <Link href="/worker/privacy">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            Open privacy page <ExternalLink className="h-3.5 w-3.5" />
-          </Button>
-        </Link>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!isWorker || ctx.busy === "priv269overview"}
-          onClick={() =>
-            ctx.run("priv269overview", async () => {
-              const r = await callApi("/api/worker/privacy");
-              setOverviewResult(r);
-            })
-          }
-        >
-          {ctx.busy === "priv269overview" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          GET privacy overview
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!isWorker || ctx.busy === "priv269export"}
-          onClick={() =>
-            ctx.run("priv269export", async () => {
-              const r = await callApi("/api/worker/privacy/export", { method: "POST" });
-              setExportResult(r);
-            })
-          }
-        >
-          {ctx.busy === "priv269export" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          POST data export
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!isWorker || ctx.busy === "priv269policy"}
-          onClick={() =>
-            ctx.run("priv269policy", async () => {
-              const r = await callApi("/api/worker/privacy/policy/versions");
-              setPolicyResult(r);
-            })
-          }
-        >
-          {ctx.busy === "priv269policy" && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-          GET policy versions
-        </Button>
-      </div>
-      <ResultBox title="Privacy overview" result={overviewResult} />
-      <ResultBox title="Data export request" result={exportResult} />
-      <ResultBox title="Policy versions" result={policyResult} />
     </div>
   );
 }
@@ -1724,30 +1315,6 @@ function TicketTestPanel({ ticketId, ctx }: { ticketId: TicketId; ctx: TestConte
         </div>
       );
 
-    case "CARECLIQV2-271":
-      return (
-        <div className="space-y-4">
-          <TicketHeader ticket={ticket} />
-          <EvidenceAuditConsole ctx={ctx} />
-        </div>
-      );
-
-    case "CARECLIQV2-270":
-      return (
-        <div className="space-y-4">
-          <TicketHeader ticket={ticket} />
-          <ShiftSignatureConsole ctx={ctx} />
-        </div>
-      );
-
-    case "CARECLIQV2-269":
-      return (
-        <div className="space-y-4">
-          <TicketHeader ticket={ticket} />
-          <PrivacyConsole ctx={ctx} />
-        </div>
-      );
-
     default:
       return null;
   }
@@ -1788,7 +1355,7 @@ function DevConsolePasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: APP_BG }}>
-      <div className="w-full max-w-md rounded-2xl border bg-cc-surface p-8 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: ACTIVE, color: PLUM }}>
             <Lock className="h-6 w-6" />
@@ -1953,7 +1520,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
     <div className="min-h-screen flex flex-col" style={{ background: APP_BG, color: TEXT }}>
       {/* Top bar */}
       <header
-        className="sticky top-0 z-10 border-b bg-cc-surface/95 backdrop-blur px-4 py-3 md:px-6"
+        className="sticky top-0 z-10 border-b bg-white/95 backdrop-blur px-4 py-3 md:px-6"
         style={{ borderColor: BORDER }}
       >
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1980,7 +1547,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
       <div className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-6 flex flex-col lg:flex-row gap-6">
         {/* Left — ticket list */}
         <aside className="w-full lg:w-72 shrink-0">
-          <div className="rounded-2xl border bg-cc-surface overflow-hidden sticky top-20" style={{ borderColor: BORDER }}>
+          <div className="rounded-2xl border bg-white overflow-hidden sticky top-20" style={{ borderColor: BORDER }}>
             <div
               className="px-4 py-3 border-b text-xs font-bold uppercase tracking-wider"
               style={{ borderColor: BORDER, color: MUTED }}
@@ -2052,7 +1619,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
 
         {/* Right — selected test */}
         <main className="flex-1 min-w-0">
-          <div className="rounded-2xl border bg-cc-surface p-6 min-h-[420px]" style={{ borderColor: BORDER }}>
+          <div className="rounded-2xl border bg-white p-6 min-h-[420px]" style={{ borderColor: BORDER }}>
             {!selectedId ? (
               <div
                 className="h-full flex flex-col items-center justify-center text-center py-16"

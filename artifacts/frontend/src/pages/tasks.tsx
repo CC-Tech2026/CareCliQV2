@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+﻿import { Link } from "wouter";
 import { useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { ClipboardList, Loader2, CalendarDays } from "lucide-react";
@@ -28,10 +28,10 @@ export default function Tasks() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 pb-10">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+        <p className="hidden" style={{ color: CORAL }}>
           Support Worker
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
           Tasks
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>

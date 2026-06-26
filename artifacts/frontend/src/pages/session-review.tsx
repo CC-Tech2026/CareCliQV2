@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,16 +19,13 @@ import {
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
 
-const PLUM = "var(--cc-plum)";
-const CORAL = "var(--cc-coral)";
-const PLUM_SUBTLE = "var(--cc-plum-subtle)";
-const PLUM_SOFT = "var(--cc-plum-soft)";
-const PLUM_RING = "var(--cc-plum-ring)";
-const T1     = "var(--cc-text)";
-const T2     = "var(--cc-muted)";
-const T3     = "#7A6A9E";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const T1     = "#111827";
+const T2     = "#374151";
+const T3     = "#6B7280";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-bg)";
+const SOFT   = "var(--cc-soft)";
 
 function safeDate(v?: string | null, fmt = "d MMM yyyy") {
   if (!v) return "—";
@@ -37,7 +34,7 @@ function safeDate(v?: string | null, fmt = "d MMM yyyy") {
 }
 
 function complianceTone(score?: number | null) {
-  if (score == null) return { label: "Draft", color: T3, bg: PLUM_SUBTLE };
+  if (score == null) return { label: "Draft", color: T3, bg: `${PLUM}0A` };
   if (score >= 85) return { label: `Compliant · ${score}%`, color: "#16A34A", bg: "rgba(22,163,74,0.07)" };
   if (score >= 60) return { label: `At Risk · ${score}%`,   color: "#D97706", bg: "rgba(245,158,11,0.07)" };
   return              { label: `Non-Compliant · ${score}%`, color: "#DC2626", bg: "rgba(239,68,68,0.07)" };
@@ -106,7 +103,7 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-xl border bg-cc-surface shadow-xl" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-md rounded-xl border bg-white shadow-xl" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
           <h3 className="text-base font-black" style={{ color: T1 }}>Send Back to Worker</h3>
           <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
@@ -127,7 +124,7 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
           />
         </div>
         <div className="flex justify-end gap-2 border-t px-5 py-3" style={{ borderColor: BORDER }}>
-          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-bold transition hover:bg-cc-bg" style={{ borderColor: BORDER, color: T2 }}>
+          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-bold transition hover:bg-gray-50" style={{ borderColor: BORDER, color: T2 }}>
             Cancel
           </button>
           <button
@@ -208,7 +205,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   return (
     <>
       <div
-        className={`rounded-xl border bg-cc-surface shadow-sm transition-all ${selected ? "border-cc-plum" : ""}`}
+        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#3730A3]" : ""}`}
         style={{ borderColor: selected ? PLUM : BORDER }}
       >
         {/* ── Card header ── */}
@@ -219,7 +216,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Flag size={13} className="text-cc-coral shrink-0" />
+              <Flag size={13} className="text-[#BE185D] shrink-0" />
               <span className="text-[13px] font-black" style={{ color: T1 }}>
                 {session.participant_name || "Participant"}
               </span>
@@ -236,7 +233,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
 
             {session.review_note && (
               <div className="mt-2 flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs font-medium"
-                style={{ background: 'var(--cc-status-warning-bg)', color: "#92400E" }}>
+                style={{ background: "#FFF8E1", color: "#92400E" }}>
                 <MessageSquare size={12} className="shrink-0 mt-0.5" />
                 <span>{session.review_note}</span>
               </div>
@@ -255,7 +252,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
             </button>
             <button
               onClick={() => setSendBackOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-black transition hover:bg-cc-bg"
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-black transition hover:bg-gray-50"
               style={{ borderColor: CORAL, color: CORAL }}
             >
               <Send size={12} />
@@ -263,7 +260,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
             </button>
             <button
               onClick={() => setExpanded((v) => !v)}
-              className="rounded-lg border p-1.5 transition hover:bg-cc-bg"
+              className="rounded-lg border p-1.5 transition hover:bg-gray-50"
               style={{ borderColor: BORDER, color: T3 }}
             >
               {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -321,7 +318,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
               </button>
               {showAi && aiData && (
                 <div className="mt-2 rounded-lg border px-4 py-3 space-y-2"
-                  style={{ borderColor: PLUM_RING, background: PLUM_SOFT }}>
+                  style={{ borderColor: `${PLUM}30`, background: `${PLUM}06` }}>
                   {aiData.explanation && (
                     <p className="text-xs font-medium" style={{ color: T2 }}>{aiData.explanation}</p>
                   )}
@@ -412,10 +409,10 @@ export default function SessionReview() {
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Quality & Safety
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
             Session Review Queue
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
@@ -430,7 +427,7 @@ export default function SessionReview() {
             onClick={handleBulkApprove}
             disabled={bulkApproving}
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, #059669, #047857)` }}
+            style={{ background: "#059669" }}
           >
             {bulkApproving
               ? <Loader2 size={16} className="animate-spin" />
@@ -442,7 +439,7 @@ export default function SessionReview() {
 
       {/* Toolbar */}
       {sessions.length > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border bg-cc-surface px-4 py-2.5 shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="flex items-center gap-3 rounded-lg border bg-white px-4 py-2.5 shadow-sm" style={{ borderColor: BORDER }}>
           <Checkbox
             checked={allSelected}
             onCheckedChange={toggleAll}
@@ -458,12 +455,12 @@ export default function SessionReview() {
       {isLoading && (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="rounded-xl border bg-cc-surface p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
+            <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
               <div className="flex gap-3">
-                <div className="h-4 w-4 rounded bg-cc-border" />
+                <div className="h-4 w-4 rounded bg-[#E5E7EB]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 rounded bg-cc-border" />
-                  <div className="h-3 w-32 rounded bg-cc-border" />
+                  <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+                  <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
                 </div>
               </div>
             </div>
@@ -473,7 +470,7 @@ export default function SessionReview() {
 
       {/* Empty state */}
       {!isLoading && sessions.length === 0 && (
-        <div className="flex flex-col items-center justify-center rounded-xl border bg-cc-surface py-20 text-center shadow-sm" style={{ borderColor: BORDER }}>
+        <div className="flex flex-col items-center justify-center rounded-xl border bg-white py-20 text-center shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: SOFT }}>
             <CheckCircle2 size={32} style={{ color: PLUM }} />
           </div>

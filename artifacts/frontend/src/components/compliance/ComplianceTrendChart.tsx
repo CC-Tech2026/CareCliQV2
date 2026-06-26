@@ -1,4 +1,4 @@
-import { format, parseISO } from "date-fns";
+﻿import { format, parseISO } from "date-fns";
 import {
   CartesianGrid,
   Line,
@@ -44,10 +44,10 @@ export function ComplianceTrendChart({
   }));
 
   return (
-    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black" style={{ color: 'var(--cc-text)' }}>Compliance History</h3>
+          <h3 className="text-sm font-black" style={{ color: "var(--cc-text)" }}>Compliance History</h3>
           <p className="text-xs font-medium" style={{ color: MUTED }}>
             Daily average score over the last {days} days
           </p>
@@ -62,7 +62,7 @@ export function ComplianceTrendChart({
                 className="rounded-full px-3 py-1 text-xs font-bold transition"
                 style={{
                   background: days === option ? PLUM : "transparent",
-                  color: days === option ? 'var(--cc-surface)' : MUTED,
+                  color: days === option ? "#fff" : MUTED,
                 }}
               >
                 {option}d
@@ -74,7 +74,7 @@ export function ComplianceTrendChart({
 
       <div className="h-52 w-full">
         {chartData.every((point) => point.score == null) ? (
-          <div className="flex h-full items-center justify-center rounded-lg bg-cc-bg text-sm font-medium" style={{ color: MUTED }}>
+          <div className="flex h-full items-center justify-center rounded-lg bg-[#F8F6FE] text-sm font-medium" style={{ color: MUTED }}>
             No scored sessions in this period yet.
           </div>
         ) : (
@@ -103,7 +103,7 @@ export function ComplianceTrendChart({
                 }}
                 contentStyle={{
                   borderRadius: 12,
-                  border: '1px solid var(--cc-border)',
+                  border: `1px solid ${BORDER}`,
                   fontSize: 12,
                 }}
               />

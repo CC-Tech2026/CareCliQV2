@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -128,8 +128,8 @@ function HighlightedNoteEditor({
           ..._NOTE_EDITOR_STYLE,
           position: "relative",
           background: "transparent",
-          caretColor: "#1E1640",
-          color: "#4A3D5A",
+          caretColor: "#111827",
+          color: "var(--cc-text)",
           zIndex: 1,
           outline: "none",
           resize: "vertical",
@@ -680,7 +680,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-xl font-black tracking-tight">
               {session.participants?.full_name || "Session Record"}
             </h1>
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>
@@ -688,7 +688,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               {statusCfg.label}
             </span>
           </div>
-          <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "#4A3D5A" }}>
+          <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "var(--cc-text)" }}>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-slate-400" />
               {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : "No Date Listed"}
@@ -734,7 +734,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             disabled={isExportingPDF}
             title="Export NDIS audit report as PDF"
             className="gap-1.5 rounded-xl"
-            style={{ color: "#542269", borderColor: "rgba(84,34,105,0.20)" }}
+            style={{ color: "#3730A3", borderColor: "rgba(55,48,163,0.20)" }}
           >
             {isExportingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             <span className="sr-only sm:not-sr-only sm:ml-0.5 text-xs">
@@ -752,7 +752,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </Button>
           <Button
             className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+            style={{ background: "var(--cc-plum)" }}
             onClick={handleAIAnalysis}
             disabled={isAISaving || hasBlockers}
             title={hasBlockers ? "Fix critical issues before running AI analysis" : undefined}
@@ -768,7 +768,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Left column — notes + transcription + structural outputs */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
@@ -863,7 +863,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </div>
                 </div>
               ) : (
-                <div className="max-w-none text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                <div className="max-w-none text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                   {notes ? (
                     <div className="whitespace-pre-wrap">{notes}</div>
                   ) : (
@@ -875,7 +875,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {(session.original_language_input || session.translated_english_note) && (
-            <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                 <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Translation Audit Trail</p>
               </div>
@@ -902,7 +902,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             const filledSections = sections.filter((sec) => sec.value && sec.value.trim());
             if (filledSections.length === 0) return null;
             return (
-              <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <Shield className="h-4 w-4" style={{ color: "#7A6A8A" }} />
                   <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Structured Clinical Notes</p>
@@ -914,7 +914,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         <Icon className="h-3.5 w-3.5" />
                         {label}
                       </p>
-                      <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "#4A3D5A" }}>
+                      <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "var(--cc-text)" }}>
                         {value}
                       </p>
                     </div>
@@ -925,33 +925,33 @@ export default function SessionDetail({ id }: { id?: string }) {
           })()}
 
           {session.transcription && (
-            <div className="rounded-2xl overflow-hidden" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)" }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: "var(--cc-soft)", border: "1px solid rgba(232,213,232,0.5)" }}>
               <div className="px-5 py-3 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
-                <p className="text-[13px] font-medium" style={{ color: "#4A3D5A" }}>Audio Transcription</p>
+                <p className="text-[13px] font-medium" style={{ color: "var(--cc-text)" }}>Audio Transcription</p>
               </div>
               <div className="p-5">
-                <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "#4A3D5A" }}>{session.transcription}</p>
+                <p className="text-[13px] whitespace-pre-wrap leading-relaxed" style={{ color: "var(--cc-text)" }}>{session.transcription}</p>
               </div>
             </div>
           )}
 
           {/* AI Insights panel */}
           {aiInsights && (
-            <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(84,34,105,0.03)", border: "1px solid rgba(84,34,105,0.12)" }}>
-              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
-                <Brain className="h-4 w-4" style={{ color: "#542269" }} />
-                <p className="text-[14px] font-semibold" style={{ color: "#542269" }}>AI Clinical Insights</p>
+            <div className="rounded-2xl overflow-hidden" style={{ background: "rgba(55,48,163,0.03)", border: "1px solid rgba(55,48,163,0.12)" }}>
+              <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(55,48,163,0.10)" }}>
+                <Brain className="h-4 w-4" style={{ color: "#3730A3" }} />
+                <p className="text-[14px] font-semibold" style={{ color: "#3730A3" }}>AI Clinical Insights</p>
               </div>
               <div className="p-5 space-y-4">
                 {aiInsights.summary && (
-                  <p className="text-[13px] leading-relaxed" style={{ color: "#4A3D5A" }}>{aiInsights.summary}</p>
+                  <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{aiInsights.summary}</p>
                 )}
                 {Array.isArray(aiInsights.key_observations) && aiInsights.key_observations.length > 0 && (
                   <div>
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#7A6A8A" }}>Key Observations</p>
                     <ul className="space-y-1">
                       {aiInsights.key_observations.map((obs: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#F1738A" }}>•</span>{obs}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "#F1738A" }}>•</span>{obs}</li>
                       ))}
                     </ul>
                   </div>
@@ -961,7 +961,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#7A6A8A" }}>Next Session</p>
                     <ul className="space-y-1">
                       {aiInsights.next_session_recommendations.map((rec: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#542269" }}>→</span>{rec}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "#3730A3" }}>→</span>{rec}</li>
                       ))}
                     </ul>
                   </div>
@@ -977,11 +977,11 @@ export default function SessionDetail({ id }: { id?: string }) {
                   </div>
                 )}
                 {Array.isArray(aiInsights.ai_recommendations) && aiInsights.ai_recommendations.length > 0 && (
-                  <div className="pt-3 border-t" style={{ borderColor: "rgba(84,34,105,0.10)" }}>
-                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#542269" }}>AI Recommendations</p>
+                  <div className="pt-3 border-t" style={{ borderColor: "rgba(55,48,163,0.10)" }}>
+                    <p className="text-[11px] uppercase tracking-widest font-semibold mb-1.5" style={{ color: "#3730A3" }}>AI Recommendations</p>
                     <ul className="space-y-1">
                       {aiInsights.ai_recommendations.map((r: string, i: number) => (
-                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "#4A3D5A" }}><span style={{ color: "#542269" }}>→</span>{r}</li>
+                        <li key={i} className="text-[13px] flex gap-2" style={{ color: "var(--cc-text)" }}><span style={{ color: "#3730A3" }}>→</span>{r}</li>
                       ))}
                     </ul>
                   </div>
@@ -998,12 +998,12 @@ export default function SessionDetail({ id }: { id?: string }) {
                 )}
                 {aiInsights.progress_trend && (
                   <div className="flex items-center gap-2 text-[12px]">
-                    <TrendingUp className="h-3.5 w-3.5" style={{ color: "#542269" }} />
+                    <TrendingUp className="h-3.5 w-3.5" style={{ color: "#3730A3" }} />
                     <span style={{ color: "#7A6A8A" }}>Progress trend:</span>
                     <span className={`font-semibold capitalize ${
                       aiInsights.progress_trend === "improving" ? "text-emerald-600" :
                       aiInsights.progress_trend === "declining" ? "text-red-600" : ""
-                    }`} style={!["improving","declining"].includes(aiInsights.progress_trend) ? { color: "#4A3D5A" } : {}}>
+                    }`} style={!["improving","declining"].includes(aiInsights.progress_trend) ? { color: "var(--cc-text)" } : {}}>
                       {aiInsights.progress_trend}
                     </span>
                   </div>
@@ -1017,7 +1017,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             const markers = (session as ExtendedSession).body_markers;
             if (!markers || markers.length === 0) return null;
             return (
-              <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+              <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                   <Activity className="h-4 w-4" style={{ color: "#7A6A8A" }} />
                   <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Physical Examination</p>
@@ -1038,8 +1038,8 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div className="space-y-6">
 
           {/* Compliance Score Card */}
-          <div className="rounded-2xl overflow-hidden bg-cc-surface" style={{
-            boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)",
+          <div className="rounded-2xl overflow-hidden bg-white" style={{
+            boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)",
             ...(session.compliance_score
               ? claimStatus === "compliant"
                 ? { borderLeft: "3px solid #10b981" }
@@ -1113,7 +1113,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         {warnFailures.map(r => {
                           const acked = acknowledgedWarnRules.has(r.rule);
                           return (
-                            <label key={r.rule} className={`flex items-start gap-2.5 text-xs cursor-pointer rounded-lg px-2 py-1.5 transition-colors ${acked ? "bg-amber-100/60" : "bg-cc-surface/60"}`}>
+                            <label key={r.rule} className={`flex items-start gap-2.5 text-xs cursor-pointer rounded-lg px-2 py-1.5 transition-colors ${acked ? "bg-amber-100/60" : "bg-white/60"}`}>
                               <input
                                 type="checkbox"
                                 checked={acked}
@@ -1206,7 +1206,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       ) : explanation ? (
                         <div className="space-y-2 leading-relaxed">
                           <p>{explanation.explanation}</p>
-                          <div className="bg-cc-surface/80 p-2 rounded-lg border border-amber-200/40 font-medium">
+                          <div className="bg-white/80 p-2 rounded-lg border border-amber-200/40 font-medium">
                             <span className="text-amber-700 font-bold">Actionable Fix:</span> {explanation.fix_suggestion}
                           </div>
                         </div>
@@ -1247,7 +1247,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                         <div className="space-y-2">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Per-Rule Fixes</p>
                           {improveNoteMutation.data.rule_suggestions.map((s, i) => (
-                            <div key={i} className="bg-cc-surface/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
+                            <div key={i} className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 space-y-1.5">
                               <p className="font-semibold text-purple-800 capitalize">{s.rule.replace(/_/g, " ")}</p>
                               <p className="text-slate-500 text-[11px]">{s.issue}</p>
                               <div className="flex items-start gap-2">
@@ -1274,7 +1274,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       {improveNoteMutation.data.improved_note && (
                         <div className="space-y-1.5">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-400">Full Rewrite</p>
-                          <div className="bg-cc-surface/80 border border-purple-100/60 rounded-lg p-2.5 text-slate-700 leading-relaxed max-h-40 overflow-y-auto">
+                          <div className="bg-white/80 border border-purple-100/60 rounded-lg p-2.5 text-slate-700 leading-relaxed max-h-40 overflow-y-auto">
                             {improveNoteMutation.data.improved_note}
                           </div>
                           <Button
@@ -1299,7 +1299,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Goals Worked On & Tags */}
-          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <Target className="h-4 w-4 text-slate-500" />
               <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>NDIS Core Mapping</p>
@@ -1387,7 +1387,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Funding Support Category & Billing Metrics */}
-          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <DollarSign className="h-4 w-4 text-slate-500" />
               <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Billing Accounts</p>
@@ -1407,7 +1407,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           </div>
 
           {/* Media Attachments & Session Evidence */}
-          <div className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 border-b flex items-center justify-between" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
                 <ImageIcon className="h-4 w-4 text-slate-500" /> Evidence Uploads
@@ -1423,7 +1423,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               />
               <Button 
                 variant="outline" 
-                className="w-full border-dashed h-20 flex flex-col justify-center items-center gap-1 rounded-xl hover:bg-cc-bg/80 transition-colors"
+                className="w-full border-dashed h-20 flex flex-col justify-center items-center gap-1 rounded-xl hover:bg-slate-50/80 transition-colors"
                 disabled={isUploading}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -1444,7 +1444,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                       href={attachment.public_url || attachment.file_path || "#"}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-cc-bg"
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 hover:bg-slate-50"
                     >
                       <FileText className="h-3.5 w-3.5 text-slate-400" />
                       <span className="truncate">{attachment.file_name}</span>

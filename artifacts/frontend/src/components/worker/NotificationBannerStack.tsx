@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+﻿import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -18,21 +18,21 @@ import { resolveNotificationPath } from "@/lib/worker-notification-presenter";
 const BANNER_STYLES = {
   red: {
     accent: "#DC2626",
-    bg: "linear-gradient(135deg, #FEF2F2 0%, #FFF5F5 100%)",
+    bg: "#FEF2F2",
     border: "#FECACA",
     text: "#991B1B",
     muted: "#B91C1C",
   },
   orange: {
     accent: "#EA580C",
-    bg: "linear-gradient(135deg, #FFF7ED 0%, #FFFBEB 100%)",
+    bg: "#FFF7ED",
     border: "#FDBA74",
     text: "#9A3412",
     muted: "#C2410C",
   },
   yellow: {
     accent: "#CA8A04",
-    bg: "linear-gradient(135deg, #FEFCE8 0%, #FFFBEB 100%)",
+    bg: "#FEFCE8",
     border: "#FDE047",
     text: "#854D0E",
     muted: "#A16207",
@@ -214,14 +214,14 @@ export function NotificationBannerStack() {
     <section
       className="border-b px-5 py-4 md:px-8"
       style={{
-        background: "linear-gradient(180deg,rgb(255, 255, 255) 0%,rgb(255, 255, 255) 100%)",
-        borderColor: 'var(--cc-border)',
+        background: "var(--cc-bg)",
+        borderColor: "var(--cc-border)",
       }}
       aria-label="Important alerts"
     >
       {/* <p
         className="mb-3 text-[10px] font-black uppercase tracking-[0.18em]"
-        style={{ color: 'var(--cc-muted)' }}
+        style={{ color: "var(--cc-muted)" }}
       >
         Requires your attention
       </p> */}

@@ -24,8 +24,8 @@ export function ReAuthModal({ open, busy, error, onCancel, onSubmit }: Props) {
     <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="rounded-2xl sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-cc-text">
-            <ShieldCheck size={18} className="text-cc-plum" />
+          <DialogTitle className="flex items-center gap-2 text-[#111827]">
+            <ShieldCheck size={18} className="text-[#3730A3]" />
             Confirm your identity
           </DialogTitle>
           <DialogDescription>
