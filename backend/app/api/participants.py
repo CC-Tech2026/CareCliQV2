@@ -395,8 +395,9 @@ async def create_participant_plan(
         "plan_start": str(body.plan_start),
         "plan_end": str(body.plan_end),
         "total_funding": body.total_funding,
-        "status": body.status,
     }
+    if body.status:
+        plan_data["status"] = body.status
 
     try:
         plan = await funding_service.create_or_update_plan(
@@ -420,6 +421,18 @@ async def create_participant_plan(
                         category,
                         amount,
                     )
+
+        from ..services.supabase_client import get_supabase_admin
+
+        supabase = get_supabase_admin()
+        patient_update: dict[str, object] = {
+            "plan_start_date": str(body.plan_start),
+            "plan_end_date": str(body.plan_end),
+            "total_budget": body.total_funding,
+        }
+        plan_status = body.status or plan.get("status") or "active"
+        patient_update["plan_status"] = plan_status
+        supabase.table("patients").update(patient_update).eq("id", participant_id).execute()
 
         return await funding_service.get_budget_summary(
             participant_id,
@@ -699,6 +712,49 @@ async def update_shift_context(
 
     from ..services.shift_service import _fetch_participant_context
     return _fetch_participant_context(participant_id, org_id)
+
+
+# ── Safety protocols (coordinator authoring) ───────────────────────────────────
+
+from ..schemas.safety_protocol import SafetyProtocolUpdate
+from ..services import safety_protocol_service
+
+
+@router.get("/{participant_id}/safety-protocol")
+async def get_safety_protocol(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    return safety_protocol_service.get_protocol(participant_id, org_id)
+
+
+@router.put("/{participant_id}/safety-protocol")
+async def update_safety_protocol(
+    participant_id: str,
+    body: SafetyProtocolUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    try:
+        return safety_protocol_service.upsert_protocol(
+            participant_id,
+            org_id,
+            body,
+            updated_by=current_user.get("sub"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 class CheckInCodeCreate(BaseModel):

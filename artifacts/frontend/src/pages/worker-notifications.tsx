@@ -35,7 +35,7 @@ function NotificationRow({
   const unread = !item.read_at && !item.dismissed_at;
   return (
     <div
-      className="rounded-2xl border bg-white p-4"
+      className="rounded-2xl border bg-cc-surface p-4"
       style={{
         borderColor: unread ? PLUM : BORDER,
         borderLeftWidth: unread ? 4 : 1,
@@ -112,7 +112,7 @@ export default function WorkerNotificationsPage() {
       )}
 
       {!isLoading && notifications.length === 0 && (
-        <div className="rounded-2xl border bg-white px-6 py-10 text-center" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-cc-surface px-6 py-10 text-center" style={{ borderColor: BORDER }}>
           <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: TEXT }}>
             No notifications yet

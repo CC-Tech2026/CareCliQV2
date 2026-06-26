@@ -44,7 +44,7 @@ const NDIS_REPORTABLE_TYPES = new Set(["abuse_neglect", "restrictive_practice"])
 
 function FormCard({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-2xl overflow-hidden ${className ?? ""}`} style={{ boxShadow: CARD_SHADOW }}>
+    <div className={`bg-cc-surface rounded-2xl overflow-hidden ${className ?? ""}`} style={{ boxShadow: CARD_SHADOW }}>
       <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
         <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{title}</p>
       </div>

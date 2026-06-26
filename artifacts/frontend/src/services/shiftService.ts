@@ -185,6 +185,11 @@ export type WorkerShift = {
   risks_acknowledged_at?: string | null;
   risks_acknowledged_by?: string | null;
   risks_acknowledged_by_name?: string | null;
+  requires_safety_ack?: boolean;
+  acknowledged_version?: number | null;
+  has_safety_content?: boolean;
+  content_version?: number;
+  safety_protocol?: import("@/services/safetyProtocolService").SafetyProtocol;
   profile?: ParticipantProfile;
   preferences?: ParticipantPreferences;
   context?: ParticipantContext;
@@ -199,6 +204,7 @@ export type WorkerShift = {
   session_started_at?: string | null;
   service_category?: string;
   office_contact_number?: string | null;
+  shift_signature?: import("@/services/complianceService").ShiftSignature;
 };
 
 export type ShiftFilter = "today" | "upcoming" | "completed" | "cancelled" | "past" | "all";
@@ -264,6 +270,7 @@ export type ClockInRequest = {
   location?: { lat: number; lng: number; accuracy?: number } | null;
   qr_token?: string | null;
   client_timestamp?: string;
+  claimed_km?: number;
 };
 
 export function clockInShift(id: string, body: ClockInRequest) {

@@ -42,7 +42,7 @@ type FormValues = z.infer<typeof schema>;
 
 function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
+    <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
       <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
         <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{title}</p>
       </div>

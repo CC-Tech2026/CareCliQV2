@@ -261,6 +261,39 @@ async def get_plan_for_participant(
         return None
 
 
+async def get_latest_plan_for_participant(
+    participant_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Get the most recent NDIS plan regardless of status."""
+
+    try:
+        supabase = get_supabase_admin()
+
+        result = (
+            supabase.table("ndis_plans")
+            .select("*, plan_budgets(*)")
+            .eq("patient_id", participant_id)
+            .order("plan_start", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        rows = _safe_rows(result.data)
+
+        if not rows:
+            return None
+
+        return _normalize_plan(rows[0])
+
+    except Exception as e:
+        logger.warning(
+            "Could not fetch latest NDIS plan for %s: %s",
+            participant_id,
+            e,
+        )
+        return None
+
+
 async def get_all_plans_for_participant(
     participant_id: str,
 ) -> List[Dict[str, Any]]:
@@ -298,14 +331,14 @@ async def create_or_update_plan(
 
     supabase = get_supabase_admin()
 
-    payload = dict(plan_data)
+    payload = {k: v for k, v in dict(plan_data).items() if v is not None}
     payload["patient_id"] = participant_id
 
     for field in ("plan_start", "plan_end"):
         if payload.get(field):
             payload[field] = str(payload[field])[:10]
 
-    existing = await get_plan_for_participant(participant_id)
+    existing = await get_latest_plan_for_participant(participant_id)
 
     if existing:
         result = (
@@ -316,6 +349,17 @@ async def create_or_update_plan(
         )
     else:
         payload.setdefault("status", "active")
+
+        patient_resp = (
+            supabase.table("patients")
+            .select("organization_id")
+            .eq("id", participant_id)
+            .maybe_single()
+            .execute()
+        )
+        patient_row = patient_resp.data if patient_resp else None
+        if isinstance(patient_row, dict) and patient_row.get("organization_id"):
+            payload["organization_id"] = patient_row["organization_id"]
 
         result = supabase.table("ndis_plans").insert(payload).execute()
 
@@ -469,6 +513,9 @@ async def get_budget_summary(
     """Get participant budget summary."""
 
     plan = await get_plan_for_participant(participant_id)
+
+    if not plan:
+        plan = await get_latest_plan_for_participant(participant_id)
 
     if not plan:
         return {

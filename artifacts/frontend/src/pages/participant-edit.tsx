@@ -45,7 +45,7 @@ type FormValues = z.infer<typeof schema>;
 // Updated FormCard: Changed to single column flow on mobile, 2 columns on tablet/desktop
 function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
+    <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
       <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
         <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: T3 }}>{title}</p>
       </div>
@@ -237,7 +237,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Biological Sex</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
-                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-white" data-testid="select-biological-sex" style={{ borderColor: BORDER }}>
+                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-biological-sex" style={{ borderColor: BORDER }}>
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
@@ -259,12 +259,13 @@ export default function ParticipantEdit({ id }: { id: string }) {
                 <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
-                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-white" data-testid="select-plan-status" style={{ borderColor: BORDER }}>
+                    <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-plan-status" style={{ borderColor: BORDER }}>
                       <SelectValue />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="review">Review</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                     <SelectItem value="expired">Expired</SelectItem>

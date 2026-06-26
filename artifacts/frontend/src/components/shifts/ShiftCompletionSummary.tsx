@@ -1,6 +1,11 @@
-import { CheckCircle2, FileText } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, FileText, PenLine, Share2 } from "lucide-react";
 import type { ShiftCompletionSummary as Summary, WorkerShift } from "@/services/shiftService";
+import type { ShiftSignature } from "@/services/complianceService";
+import { Button } from "@/components/ui/button";
+import { ShiftShareSheet } from "@/components/shifts/ShiftShareSheet";
 import { BORDER, MUTED, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
+
 
 type Props = {
   shift: WorkerShift;
@@ -8,6 +13,7 @@ type Props = {
 };
 
 export function ShiftCompletionSummary({ shift, summary }: Props) {
+  const [shareOpen, setShareOpen] = useState(false);
   const elapsed =
     shift.clocked_in_at && shift.clocked_out_at
       ? formatElapsedTimer(shift.clocked_in_at, new Date(shift.clocked_out_at).getTime())
@@ -22,7 +28,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
 
       <dl className="grid gap-3 sm:grid-cols-2">
         {elapsed && (
-          <div className="rounded-xl bg-white p-3">
+          <div className="rounded-xl bg-cc-surface p-3">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
               Time on site
             </dt>
@@ -33,7 +39,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
         )}
         {summary && (
           <>
-            <div className="rounded-xl bg-white p-3">
+            <div className="rounded-xl bg-cc-surface p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 Tasks completed
               </dt>
@@ -46,7 +52,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
                 )}
               </dd>
             </div>
-            <div className="rounded-xl bg-white p-3">
+            <div className="rounded-xl bg-cc-surface p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 Progress notes
               </dt>
@@ -58,7 +64,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
           </>
         )}
         {shift.risks_acknowledged_at && (
-          <div className="rounded-xl bg-white p-3 sm:col-span-2">
+          <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
               Safety acknowledgement
             </dt>
@@ -68,11 +74,43 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
             </dd>
           </div>
         )}
+        {(shift.shift_signature as ShiftSignature | undefined) && (
+          <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
+            <dt className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
+              <PenLine size={12} /> Digital signature
+            </dt>
+            <dd>
+              {(shift.shift_signature as ShiftSignature).signature_png_url && (
+                <img
+                  src={(shift.shift_signature as ShiftSignature).signature_png_url}
+                  alt="Shift signature"
+                  className="mb-2 max-h-16 rounded border border-slate-200 bg-cc-surface p-1"
+                />
+              )}
+              <p className="text-sm font-bold" style={{ color: TEXT }}>
+                Signed by {(shift.shift_signature as ShiftSignature).signer_name ?? "worker"} on{" "}
+                {new Date((shift.shift_signature as ShiftSignature).signed_at).toLocaleString()}
+              </p>
+            </dd>
+          </div>
+        )}
       </dl>
 
       <p className="mt-4 text-xs font-semibold" style={{ color: MUTED }}>
         This shift is read-only. Contact your coordinator if you need to amend documentation.
       </p>
+
+      <Button
+        type="button"
+        className="mt-4 min-h-[44px] w-full gap-2 font-black text-white sm:w-auto"
+        style={{ background: PLUM }}
+        onClick={() => setShareOpen(true)}
+      >
+        <Share2 size={16} />
+        Download or share summary
+      </Button>
+
+      <ShiftShareSheet shiftId={shift.id} open={shareOpen} onOpenChange={setShareOpen} />
     </section>
   );
 }

@@ -49,7 +49,7 @@ export default function Tasks() {
 
       {!isLoading && activeShifts.length === 0 && (
         <section
-          className="rounded-2xl border bg-white p-8 text-center shadow-sm"
+          className="rounded-2xl border bg-cc-surface p-8 text-center shadow-sm"
           style={{ borderColor: BORDER }}
         >
           <ClipboardList size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
@@ -68,7 +68,7 @@ export default function Tasks() {
       {activeShifts.map((shift) => (
         <section
           key={shift.id}
-          className="rounded-2xl border bg-white p-5 shadow-sm space-y-4"
+          className="rounded-2xl border bg-cc-surface p-5 shadow-sm space-y-4"
           style={{ borderColor: BORDER }}
         >
           <div>

@@ -1,5 +1,6 @@
 import { AlertTriangle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { CORAL, PLUM } from "@/lib/shift-utils";
 import type { ShiftTask } from "@/services/shiftService";
 
@@ -11,11 +12,13 @@ type Props = {
 };
 
 export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }: Props) {
+  const { translate } = useAccessibility();
+
   return (
     <section className="overflow-hidden rounded-2xl border-2 border-red-200 bg-red-50/60 p-4 shadow-sm">
       <p className="flex items-center gap-2 text-sm font-black text-red-700">
         <AlertTriangle size={18} className="shrink-0" />
-        Mandatory Tasks Incomplete
+        {translate("tasks.mandatoryIncomplete")}
       </p>
 
       <ul className="mt-3 space-y-2">
@@ -32,21 +35,21 @@ export function MandatoryTasksAlert({ tasks, onBackToTasks, onEndAnyway, busy }:
 
       <div className="mt-4 flex gap-2">
         <Button
-          className="h-12 flex-1 rounded-2xl border-0 text-sm font-black text-white"
+          className="touch-target h-12 flex-1 rounded-2xl border-0 text-sm font-black text-white"
           style={{ background: PLUM }}
           disabled={busy}
           onClick={onBackToTasks}
         >
-          Back to Tasks
+          {translate("tasks.backToTasks")}
         </Button>
         <Button
           variant="outline"
-          className="h-12 shrink-0 rounded-2xl border-2 px-4 text-sm font-black"
+          className="touch-target h-12 shrink-0 rounded-2xl border-2 px-4 text-sm font-black"
           style={{ borderColor: CORAL, color: CORAL }}
           disabled={busy}
           onClick={onEndAnyway}
         >
-          End Anyway
+          {translate("validation.endAnyway")}
         </Button>
       </div>
     </section>

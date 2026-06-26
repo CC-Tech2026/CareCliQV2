@@ -280,7 +280,7 @@ function ModePills({ st, onMode }: ModePillsProps) {
                   "text-xs px-2.5 py-0.5 rounded-full border transition-all duration-150 font-medium",
                   isActive
                     ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                    : "bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600",
+                    : "bg-cc-surface text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600",
                   isProcessing && "opacity-60 cursor-not-allowed",
                 )}
               >

@@ -23,6 +23,12 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from .shift_service import _session_owned_by_worker
+from .compliance_evidence_service import (
+    compute_retention_until,
+    parse_device_type,
+    resolve_shift_date,
+    resolve_shift_id_for_session,
+)
 from .object_storage import upload_evidence_bytes
 from .supabase_client import get_supabase_admin
 
@@ -133,6 +139,8 @@ def _log_evidence_access(
     purpose: Optional[str] = None,
     error_code: Optional[str] = None,
     error_message: Optional[str] = None,
+    shift_id: Optional[str] = None,
+    notes: Optional[str] = None,
 ) -> None:
     """
     Log evidence access to immutable audit trail (evidence_access_audit_log).
@@ -164,6 +172,10 @@ def _log_evidence_access(
             row["error_code"] = error_code
         if error_message:
             row["error_message"] = error_message
+        if shift_id:
+            row["shift_id"] = shift_id
+        if notes:
+            row["notes"] = notes
         
         get_supabase_admin().table("evidence_access_audit_log").insert(row).execute()
     except Exception as exc:
@@ -232,6 +244,10 @@ def upload_session_evidence_media(
         return {"success": True, "uploaded_evidence": [], "session_id": session_id}
 
     org_id = str(session.get("organization_id") or organization_id)
+    shift_id = resolve_shift_id_for_session(session_id)
+    shift_date = resolve_shift_date(shift_id)
+    retention_until = compute_retention_until(shift_date, org_id)
+    device_type = parse_device_type(user_agent)
 
     existing = session.get("task_evidence") or []
     if not isinstance(existing, list):
@@ -286,7 +302,7 @@ def upload_session_evidence_media(
             "session_id": session_id,
             "organization_id": org_id,
             "uploaded_by": uploaded_by,  # From JWT, never client-supplied
-            "uploaded_at": server_timestamp,  # Server timestamp, immutable
+            "uploaded_at": server_timestamp.isoformat(),  # Server timestamp, immutable
             "file_hash": file_hash,  # SHA-256, computed on raw bytes
             "file_hash_algorithm": "sha256",
             "file_size_bytes": len(raw_bytes),
@@ -301,6 +317,9 @@ def upload_session_evidence_media(
             "goal_id": _coerce_uuid(item.get("goal_id")),
             "duration_seconds": item.get("duration_seconds"),
             "is_finalized": True,
+            "device_type": device_type,
+            "retention_until": retention_until.isoformat(),
+            "shift_id": shift_id,
         }
         
         try:
@@ -324,9 +343,10 @@ def upload_session_evidence_media(
             action="upload",
             ip_address=ip_address,
             user_agent=user_agent,
-            file_hash_match=True,  # By definition, just verified on upload
+            file_hash_match=True,
             file_hash_stored=file_hash,
-            purpose="evidence_upload"
+            purpose="evidence_upload",
+            shift_id=shift_id,
         )
 
         # Keep sessions.task_evidence JSONB in sync (backward compatibility)
