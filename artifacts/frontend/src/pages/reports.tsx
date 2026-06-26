@@ -26,13 +26,15 @@ import {
 } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
-const CORAL  = "#F1738A";
-const T1     = "#1C1626";
-const T2     = "#4A3D5A";
-const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD   = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const PLUM_SUBTLE = "var(--cc-plum-subtle)";
+const PLUM_MEDIUM = "var(--cc-plum-medium)";
+const T1     = "var(--cc-text)";
+const T2     = "var(--cc-muted)";
+const T3     = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const CARD   = "0 1px 4px color-mix(in srgb, var(--cc-plum) 6%, transparent), 0 0 0 1px var(--cc-border)";
 const BG     = "#F7F5FC";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -87,7 +89,7 @@ function SeverityBadge({ sev }: { sev: string }) {
 
 function Card({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("bg-white rounded-2xl overflow-hidden", className)}
+    <div className={cn("bg-cc-surface rounded-2xl overflow-hidden", className)}
       style={{ boxShadow: CARD }}>{children}</div>
   );
 }
@@ -118,7 +120,7 @@ function StatCard({ label, value, icon: Icon, color }: { label: string; value: s
 function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-      <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: `${PLUM}0D` }}>
+      <div className="h-12 w-12 rounded-2xl flex items-center justify-center" style={{ background: PLUM_SUBTLE }}>
         <Icon size={22} style={{ color: PLUM }} />
       </div>
       <p className="text-[14px] font-bold" style={{ color: T1 }}>{title}</p>
@@ -182,7 +184,7 @@ function ClinicalReportGenerator() {
             <select
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+              className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm"
               style={{ borderColor: BORDER, color: T1 }}
             >
               <option value="">Select participant</option>
@@ -196,7 +198,7 @@ function ClinicalReportGenerator() {
             <select
               value={reportType}
               onChange={(event) => setReportType(event.target.value)}
-              className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
+              className="h-10 w-full rounded-xl border bg-cc-surface px-3 text-sm"
               style={{ borderColor: BORDER, color: T1 }}
             >
               <option value="functional_capacity_assessment">Functional Capacity Assessment</option>
@@ -296,7 +298,7 @@ function HubSection() {
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {missingNotes.slice(0, 6).map((s: any) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
-                    <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-cc-bg cursor-pointer transition-colors">
                       <div className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${CORAL}12` }}>
                         <FileText size={13} style={{ color: CORAL }} />
                       </div>
@@ -352,7 +354,7 @@ function HubSection() {
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {recentActivity.map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
-                  <div className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
+                  <div className="flex items-center gap-4 px-5 py-3 hover:bg-cc-bg cursor-pointer transition-colors group">
                     <div className="shrink-0 text-center w-10">
                       <p className="text-[11px] font-bold uppercase" style={{ color: T3 }}>{format(parseISO(s.session_date), "MMM")}</p>
                       <p className="text-[18px] font-black leading-none" style={{ color: T2 }}>{format(parseISO(s.session_date), "d")}</p>
@@ -406,7 +408,7 @@ function SessionReportsSection() {
           {[["all","All"],["compliant","Compliant"],["at_risk","At Risk"],["non_compliant","Non-Compliant"],["draft","Draft"]].map(([v, l]) => (
             <button key={v} onClick={() => setFilter(v)}
               className="px-3 h-9 rounded-xl text-[12px] font-semibold border transition-all"
-              style={{ background: filter === v ? PLUM : "white", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
+              style={{ background: filter === v ? PLUM : 'var(--cc-surface)', color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
               {l}
             </button>
           ))}
@@ -421,7 +423,7 @@ function SessionReportsSection() {
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
-                  <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
+                  <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-cc-bg cursor-pointer transition-colors group">
                     <div className="shrink-0 w-20 text-center hidden sm:block">
                       <p className="text-[11px] font-bold" style={{ color: T3 }}>{format(parseISO(s.session_date), "dd MMM yyyy")}</p>
                     </div>
@@ -477,7 +479,7 @@ function IncidentReportsSection() {
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
         <Button onClick={() => navigate("/incidents/new")} size="sm" className="shrink-0"
-          style={{ background: PLUM, color: "white" }}>
+          style={{ background: PLUM, color: 'var(--cc-surface)' }}>
           <Plus size={14} className="mr-1.5" />New Incident
         </Button>
       </div>
@@ -490,7 +492,7 @@ function IncidentReportsSection() {
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((inc: any) => (
                 <Link key={inc.id} href={`/incidents/${inc.id}`}>
-                  <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
+                  <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-cc-bg cursor-pointer transition-colors group">
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{inc.title ?? "Incident Report"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
@@ -544,8 +546,8 @@ function ParticipantNotesSection() {
           </div>
           <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: BORDER }}>
             {filteredParts.map((p: any) => (
-              <button key={p.id} onClick={() => setSelected(p.id)} className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
-                style={{ background: selected === p.id ? `${PLUM}08` : undefined }}>
+              <button key={p.id} onClick={() => setSelected(p.id)} className="w-full text-left px-4 py-3 hover:bg-cc-bg transition-colors"
+                style={{ background: selected === p.id ? PLUM_SUBTLE : undefined }}>
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-black"
                     style={{ background: selected === p.id ? PLUM : T3 }}>
@@ -576,7 +578,7 @@ function ParticipantNotesSection() {
                 : <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: BORDER }}>
                     {partSessions.map((s: any) => (
                       <Link key={s.id} href={`/sessions/${s.id}`}>
-                        <div className="px-5 py-4 hover:bg-slate-50 cursor-pointer transition-colors group">
+                        <div className="px-5 py-4 hover:bg-cc-bg cursor-pointer transition-colors group">
                           <div className="flex items-center justify-between mb-2">
                             <p className="text-[12px] font-bold uppercase tracking-wide" style={{ color: T3 }}>
                               {format(parseISO(s.session_date), "EEEE, MMM d, yyyy")}
@@ -713,7 +715,7 @@ function ComplianceReportsSection() {
               : <div className="divide-y" style={{ borderColor: BORDER }}>
                   {sessions.slice(0, 8).map((s: any) => (
                     <Link key={s.session_id} href={`/sessions/${s.session_id}`}>
-                      <div className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
+                      <div className="flex items-center gap-4 px-5 py-3 hover:bg-cc-bg cursor-pointer transition-colors group">
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name}</p>
                           <p className="text-[11px]" style={{ color: T3 }}>
@@ -890,7 +892,7 @@ function AIInsightsSection() {
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {highRisk.map((p: any) => (
                   <Link key={p.id} href="/patients">
-                    <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors group">
+                    <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-cc-bg cursor-pointer transition-colors group">
                       <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-white text-[11px] font-black"
                         style={{ background: p.risk_level === "high" ? "#DC2626" : "#D97706" }}>
                         {(p.full_name ?? "?").slice(0, 2).toUpperCase()}
@@ -913,7 +915,7 @@ function AIInsightsSection() {
               </div>
               {nonCompliant.slice(0, 4).map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
-                  <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 cursor-pointer transition-colors group border-t" style={{ borderColor: BORDER }}>
+                  <div className="flex items-center gap-3 px-5 py-3 hover:bg-cc-bg cursor-pointer transition-colors group border-t" style={{ borderColor: BORDER }}>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "—"}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>{format(parseISO(s.session_date), "MMM d")}</p>
@@ -951,7 +953,7 @@ const BADGE_COLORS: Record<string, [string, string]> = {
   Compliance:  ["#16A34A", "rgba(22,163,74,0.1)"],
   Onboarding:  ["#2563EB", "rgba(37,99,235,0.1)"],
   Review:      ["#7C3AED", "rgba(124,58,237,0.1)"],
-  Daily:       [T3,        `${PLUM}10`],
+  Daily:       [T3,        PLUM_MEDIUM],
 };
 
 function TemplatesSection() {
@@ -972,7 +974,7 @@ function TemplatesSection() {
             <Card key={t.id} className="flex flex-col hover:shadow-md transition-shadow">
               <div className="p-5 flex-1">
                 <div className="flex items-start justify-between mb-3">
-                  <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: `${PLUM}0D` }}>
+                  <div className="h-9 w-9 rounded-xl flex items-center justify-center" style={{ background: PLUM_SUBTLE }}>
                     <Icon size={17} style={{ color: PLUM }} />
                   </div>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: bg, color: col }}>{t.badge}</span>
@@ -1165,14 +1167,14 @@ export default function Reports() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Vertical sidebar nav — desktop */}
           <aside className="hidden lg:block w-56 shrink-0">
-            <nav className="bg-white rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD }}>
+            <nav className="bg-cc-surface rounded-2xl overflow-hidden sticky top-6" style={{ boxShadow: CARD }}>
               {TABS.map(t => {
                 const Icon = t.icon;
                 const active = activeTab === t.id;
                 return (
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className={cn("w-full flex items-center gap-3 px-4 py-3 text-left text-[12px] font-semibold transition-all",
-                      active ? "bg-violet-50" : "hover:bg-slate-50"
+                      active ? "bg-violet-50" : "hover:bg-cc-bg"
                     )}
                     style={{ color: active ? PLUM : T2, borderRight: active ? `2px solid ${PLUM}` : "2px solid transparent" }}>
                     <Icon size={15} style={{ color: active ? PLUM : T3 }} />
@@ -1193,7 +1195,7 @@ export default function Reports() {
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all border"
                     style={{
-                      background: active ? PLUM : "white",
+                      background: active ? PLUM : 'var(--cc-surface)',
                       color: active ? "white" : T2,
                       borderColor: active ? PLUM : BORDER,
                     }}>

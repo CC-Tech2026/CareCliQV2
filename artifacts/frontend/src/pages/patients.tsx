@@ -200,23 +200,23 @@ function money(value?: number | string | null) {
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
-    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-    inactive: "bg-slate-100 text-slate-600 border-slate-200",
-    expired: "bg-red-50 text-red-700 border-red-200",
-    review: "bg-sky-50 text-sky-700 border-sky-200",
-    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    draft: "bg-slate-100 text-slate-600 border-slate-200",
-    cancelled: "bg-red-50 text-red-700 border-red-200",
+    active: "bg-[var(--cc-status-success-bg)] text-[var(--cc-status-success)] border-cc-border",
+    pending: "bg-[var(--cc-status-warning-bg)] text-[var(--cc-status-warning)] border-cc-border",
+    inactive: "bg-cc-bg text-cc-muted border-cc-border",
+    expired: "bg-[var(--cc-status-critical-bg)] text-[var(--cc-status-critical)] border-cc-border",
+    review: "bg-[var(--cc-status-info-bg)] text-[var(--cc-status-info)] border-cc-border",
+    completed: "bg-[var(--cc-status-success-bg)] text-[var(--cc-status-success)] border-cc-border",
+    draft: "bg-cc-bg text-cc-muted border-cc-border",
+    cancelled: "bg-[var(--cc-status-critical-bg)] text-[var(--cc-status-critical)] border-cc-border",
   };
-  return map[status] ?? "bg-slate-100 text-slate-600 border-slate-200";
+  return map[status] ?? "bg-cc-bg text-cc-muted border-cc-border";
 }
 
 function complianceTone(score?: number | null) {
-  if (score == null) return "bg-slate-100 text-slate-600 border-slate-200";
-  if (score >= 85) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (score >= 60) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-red-50 text-red-700 border-red-200";
+  if (score == null) return "bg-cc-bg text-cc-muted border-cc-border";
+  if (score >= 85) return "bg-[var(--cc-status-success-bg)] text-[var(--cc-status-success)] border-cc-border";
+  if (score >= 60) return "bg-[var(--cc-status-warning-bg)] text-[var(--cc-status-warning)] border-cc-border";
+  return "bg-[var(--cc-status-critical-bg)] text-[var(--cc-status-critical)] border-cc-border";
 }
 
 function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
@@ -880,13 +880,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
       label: "Budget Remaining",
       value: money(remainingBudget),
       icon: DollarSign,
-      tone: "bg-purple-50 text-[#542269] border-purple-100",
+      tone: "bg-cc-active text-cc-text border-cc-border",
     },
     {
       label: "Sessions",
       value: String(sessions.length),
       icon: CalendarDays,
-      tone: "bg-sky-50 text-sky-700 border-sky-100",
+      tone: "bg-[var(--cc-status-info-bg)] text-[var(--cc-status-info)] border-cc-border",
     },
     {
       label: "Compliance",
@@ -917,7 +917,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     <div className="flex flex-col min-h-full">
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-0">
+      <div className="sticky top-0 z-10 bg-cc-surface border-b border-cc-border px-5 pt-5 pb-0">
 
         {/* Avatar + name + action buttons */}
         <div className="flex items-center gap-3 pb-4">
@@ -925,10 +925,10 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-[#F03060] leading-none mb-0.5">
+            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-cc-coral leading-none mb-0.5">
               Participant Profile
             </p>
-            <h3 className="text-[16px] font-black text-[#1E1640] leading-tight truncate">
+            <h3 className="text-[16px] font-black text-cc-text leading-tight truncate">
               {participant.full_name}
             </h3>
           </div>
@@ -944,7 +944,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         </div>
 
         {/* NDIS number + plan dates */}
-        <p className="text-[11px] text-[#7A6A9E] ml-[52px] -mt-2 mb-3 leading-relaxed">
+        <p className="text-[11px] text-cc-muted ml-[52px] -mt-2 mb-3 leading-relaxed">
           NDIS {participant.ndis_number || "not recorded"}
           {participant.plan_start_date && participant.plan_end_date ? (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
@@ -980,8 +980,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
                   active
-                    ? "border-[#5533CC] text-[#5533CC]"
-                    : "border-transparent text-[#7A6A9E] hover:text-[#1E1640] hover:border-[#E2DEF2]"
+                    ? "border-cc-plum text-cc-plum"
+                    : "border-transparent text-cc-muted hover:text-cc-text hover:border-cc-border"
                 }`}
               >
                 <Icon size={13} strokeWidth={active ? 2.5 : 2} />
@@ -997,10 +997,10 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <section className="rounded-2xl border border-cc-border bg-cc-bg p-4">
             <div className="mb-3 flex items-center gap-2">
-              <ClipboardList className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">Personal Details</h4>
+              <ClipboardList className="h-3.5 w-3.5 text-cc-plum" />
+              <h4 className="text-[13px] font-black text-cc-text">Personal Details</h4>
             </div>
             <dl className="grid grid-cols-2 gap-2">
               {[
@@ -1015,9 +1015,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 ["Plan status",       participant.plan_status || "Not set"],
                 ["Total budget",      money(totalBudget || budget?.total_funding)],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                  <dt className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{label}</dt>
-                  <dd className="text-[12px] font-bold text-[#1E1640] truncate" title={String(value)}>{value}</dd>
+                <div key={label} className="rounded-lg bg-cc-surface border border-cc-border px-3 py-2">
+                  <dt className="text-[9px] font-black uppercase tracking-wider text-cc-muted leading-none mb-1">{label}</dt>
+                  <dd className="text-[12px] font-bold text-cc-text truncate" title={String(value)}>{value}</dd>
                 </div>
               ))}
             </dl>
@@ -1026,10 +1026,10 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* NDIS PLAN TAB */}
         {activeTab === "plan" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <section className="rounded-2xl border border-cc-border bg-cc-bg p-4">
             <div className="mb-3 flex items-center gap-2">
-              <DollarSign className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Funding</h4>
+              <DollarSign className="h-3.5 w-3.5 text-cc-plum" />
+              <h4 className="text-[13px] font-black text-cc-text">NDIS Funding</h4>
             </div>
             {budgetQuery.isLoading ? (
               <Skeleton className="h-24 w-full rounded-xl" />
@@ -1041,9 +1041,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               <div className="space-y-3">
                 {/* Plan meta */}
                 {budget?.plan_number && (
-                  <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] mb-1">Plan Number</p>
-                    <p className="text-[12px] font-bold text-[#1E1640]">{budget.plan_number}</p>
+                  <div className="rounded-lg bg-cc-surface border border-cc-border px-3 py-2">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-cc-muted mb-1">Plan Number</p>
+                    <p className="text-[12px] font-bold text-cc-text">{budget.plan_number}</p>
                   </div>
                 )}
                 {/* Total / Used / Remaining */}
@@ -1053,22 +1053,22 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     ["Used",      money(usedBudget)],
                     ["Remaining", money(remainingBudget)],
                   ].map(([lbl, val]) => (
-                    <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-[#7A6A9E] leading-none mb-1">{lbl}</p>
-                      <p className="text-[12px] font-black text-[#1E1640] truncate">{val}</p>
+                    <div key={lbl} className="rounded-lg bg-cc-surface border border-cc-border px-3 py-2">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-cc-muted leading-none mb-1">{lbl}</p>
+                      <p className="text-[12px] font-black text-cc-text truncate">{val}</p>
                     </div>
                   ))}
                 </div>
                 {/* Budget utilisation bar */}
                 {totalBudget > 0 && (
-                  <div className="rounded-xl border border-purple-100/60 bg-white p-3">
+                  <div className="rounded-xl border border-cc-border bg-cc-surface p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-[#1E1640]">Overall utilisation</span>
-                      <span className="text-[11px] font-black text-[#7A6A9E]">
+                      <span className="text-[12px] font-bold text-cc-text">Overall utilisation</span>
+                      <span className="text-[11px] font-black text-cc-muted">
                         {Math.round((usedBudget / totalBudget) * 100)}%
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
+                    <div className="h-2 rounded-full bg-cc-active overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6] transition-all"
                         style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
@@ -1079,20 +1079,20 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {/* Category breakdown */}
                 {(budget?.budgets ?? []).length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#7A6A9E]">By Support Category</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-cc-muted">By Support Category</p>
                     {(budget?.budgets ?? []).map((item) => (
-                      <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
+                      <div key={item.category || item.category_label} className="rounded-xl border border-cc-border bg-cc-surface p-3">
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="text-[12px] font-bold text-[#1E1640] truncate">{item.category_label || item.category}</span>
-                          <span className="text-[11px] font-black text-[#7A6A9E] shrink-0">{item.percent_used ?? 0}%</span>
+                          <span className="text-[12px] font-bold text-cc-text truncate">{item.category_label || item.category}</span>
+                          <span className="text-[11px] font-black text-cc-muted shrink-0">{item.percent_used ?? 0}%</span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-cc-active overflow-hidden">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-[#5533CC] to-[#8B5CF6]"
                             style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
                           />
                         </div>
-                        <p className="mt-1.5 text-[10px] font-medium text-[#7A6A9E]">
+                        <p className="mt-1.5 text-[10px] font-medium text-cc-muted">
                           {money(item.used)} used · {money(item.remaining)} left of {money(item.allocated)}
                         </p>
                       </div>
@@ -1106,32 +1106,32 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* GOALS TAB */}
         {activeTab === "goals" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <section className="rounded-2xl border border-cc-border bg-cc-bg p-4">
             <div className="mb-3 flex items-center gap-2">
-              <Target className="h-3.5 w-3.5 text-[#5533CC]" />
-              <h4 className="text-[13px] font-black text-[#1E1640]">NDIS Goals</h4>
+              <Target className="h-3.5 w-3.5 text-cc-plum" />
+              <h4 className="text-[13px] font-black text-cc-text">NDIS Goals</h4>
               {goals.length > 0 && (
-                <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+                <span className="ml-auto rounded-full bg-cc-active px-2.5 py-0.5 text-[10px] font-black text-cc-plum">
                   {goals.length}
                 </span>
               )}
             </div>
             {goals.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <Target className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No goals recorded</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
+              <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
+                <Target className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-cc-text">No goals recorded</p>
+                <p className="text-[11px] text-cc-muted mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {goals.map((goal, index) => (
-                  <div key={String(goal.id || index)} className="rounded-xl bg-white border border-purple-100/60 px-4 py-3 flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-[#EEEAFB] flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-[10px] font-black text-[#5533CC]">{index + 1}</span>
+                  <div key={String(goal.id || index)} className="rounded-xl bg-cc-surface border border-cc-border px-4 py-3 flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-cc-active flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-[10px] font-black text-cc-plum">{index + 1}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-bold text-[#1E1640] leading-snug">{normalizeGoalTitle(goal, index)}</p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#7A6A9E] mt-1 capitalize">
+                      <p className="text-[13px] font-bold text-cc-text leading-snug">{normalizeGoalTitle(goal, index)}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-cc-muted mt-1 capitalize">
                         {String(goal.status || "active")}
                         {goal.category ? ` · ${String(goal.category)}` : ""}
                       </p>
@@ -1148,13 +1148,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* SESSIONS TAB */}
         {activeTab === "sessions" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <section className="rounded-2xl border border-cc-border bg-cc-bg p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CalendarDays className="h-3.5 w-3.5 text-[#5533CC]" />
-                <h4 className="text-[13px] font-black text-[#1E1640]">Session History</h4>
+                <CalendarDays className="h-3.5 w-3.5 text-cc-plum" />
+                <h4 className="text-[13px] font-black text-cc-text">Session History</h4>
               </div>
-              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#5533CC]">
+              <span className="rounded-full bg-cc-active px-2.5 py-0.5 text-[10px] font-black text-cc-plum">
                 {sessions.length}
               </span>
             </div>
@@ -1163,22 +1163,22 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
               </div>
             ) : sessions.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <CalendarDays className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No sessions yet</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Sessions with this participant will appear here.</p>
+              <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
+                <CalendarDays className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-cc-text">No sessions yet</p>
+                <p className="text-[11px] text-cc-muted mt-1">Sessions with this participant will appear here.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {sessions.map((session) => (
                   <Link key={session.id} href={`/sessions/${session.id}`}>
-                    <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                    <div className="rounded-xl bg-cc-surface border border-cc-border px-3 py-3 hover:border-cc-plum/30 hover:bg-cc-bg transition-colors cursor-pointer">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                          <p className="text-[13px] font-bold text-cc-text capitalize truncate">
                             {(session.session_type || "session").replace(/_/g, " ")}
                           </p>
-                          <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                          <p className="text-[11px] text-cc-muted mt-0.5">
                             {safeFormat(session.session_date)} · {session.duration_minutes || 0} min
                           </p>
                         </div>
@@ -1194,7 +1194,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                         </div>
                       </div>
                       {(session.translated_english_note || session.compliance_input_text || session.notes) && (
-                        <p className="mt-1.5 text-[11px] text-[#7A6A9E] line-clamp-2 leading-relaxed">
+                        <p className="mt-1.5 text-[11px] text-cc-muted line-clamp-2 leading-relaxed">
                           {session.translated_english_note || session.compliance_input_text || session.notes}
                         </p>
                       )}
@@ -1219,11 +1219,11 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* COMPLIANCE TAB */}
         {activeTab === "compliance" && (
-          <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
+          <section className="rounded-2xl border border-cc-border bg-cc-bg p-4">
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-[#5533CC]" />
-                <h4 className="text-[13px] font-black text-[#1E1640]">Compliance Audit History</h4>
+                <ShieldCheck className="h-3.5 w-3.5 text-cc-plum" />
+                <h4 className="text-[13px] font-black text-cc-text">Compliance Audit History</h4>
               </div>
               {complianceHistory.length > 0 && averageCompliance != null && (
                 <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
@@ -1236,10 +1236,10 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {Array(4).fill(0).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
               </div>
             ) : complianceHistory.length === 0 ? (
-              <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
-                <ShieldCheck className="h-8 w-8 text-[#7A6A9E] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#1E1640]">No compliance audits yet</p>
-                <p className="text-[11px] text-[#7A6A9E] mt-1">Audits run automatically when sessions are saved with AI.</p>
+              <div className="rounded-xl bg-cc-surface border border-cc-border p-6 text-center">
+                <ShieldCheck className="h-8 w-8 text-cc-muted opacity-30 mx-auto mb-2" />
+                <p className="text-[13px] font-semibold text-cc-text">No compliance audits yet</p>
+                <p className="text-[11px] text-cc-muted mt-1">Audits run automatically when sessions are saved with AI.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1248,13 +1248,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   const auditDate = item.latest_audit?.checked_at ?? item.latest_audit?.created_at;
                   return (
                     <Link key={item.session_id} href={`/sessions/${item.session_id}`}>
-                      <div className="rounded-xl bg-white border border-purple-100/60 px-3 py-3 hover:border-[#5533CC]/30 hover:bg-[#F5F3FC] transition-colors cursor-pointer">
+                      <div className="rounded-xl bg-cc-surface border border-cc-border px-3 py-3 hover:border-cc-plum/30 hover:bg-cc-bg transition-colors cursor-pointer">
                         <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-bold text-[#1E1640] capitalize truncate">
+                            <p className="text-[13px] font-bold text-cc-text capitalize truncate">
                               {(item.session_type || "session").replace(/_/g, " ")}
                             </p>
-                            <p className="text-[11px] text-[#7A6A9E] mt-0.5">
+                            <p className="text-[11px] text-cc-muted mt-0.5">
                               Session {safeFormat(item.session_date)}
                               {auditDate ? ` · Audited ${safeFormat(auditDate, "MMM d")}` : ""}
                             </p>
@@ -1264,7 +1264,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                           </span>
                         </div>
                         {item.latest_audit?.status && (
-                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-[#7A6A9E]">
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider capitalize text-cc-muted">
                             {item.latest_audit.status.replace(/_/g, " ")}
                           </p>
                         )}
@@ -1305,7 +1305,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   <div key={key} className="space-y-1.5">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
                     <textarea
-                      className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
+                      className="w-full rounded-xl border border-orange-200 bg-cc-surface px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
                       placeholder={placeholder}
                       value={restrictedDraft?.[key] ?? ""}
                       onChange={(e) => setRestrictedDraft((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
@@ -1379,13 +1379,13 @@ export default function Patients() {
       {/* Left panel — participant list */}
       {/* Hidden on mobile/tablet when detail is open; always shown on lg+ */}
       <div
-        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[320px] shrink-0 flex-col bg-white rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "hidden lg:flex" : "flex"} w-full lg:w-[300px] xl:w-[320px] shrink-0 flex-col bg-cc-surface rounded-2xl overflow-hidden shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
       >
-        <div className="p-4 border-b border-purple-100/50 space-y-4">
+        <div className="p-4 border-b border-cc-border space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[16px] text-[#1C1626]">Participants</h2>
+            <h2 className="font-semibold text-[16px] text-cc-text">Participants</h2>
             <Link href="/participants/new">
-              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl border-purple-100/50">
+              <Button size="sm" variant="outline" className="h-8 gap-1 rounded-xl border-cc-border">
                 <UserPlus className="h-3.5 w-3.5" />
                 <span>Add</span>
               </Button>
@@ -1393,17 +1393,17 @@ export default function Patients() {
           </div>
           <div className="space-y-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-[#7A6A8A]" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-cc-muted" />
               <Input
                 placeholder="Search name or NDIS..."
-                className="pl-9 rounded-xl bg-[#F6F4FB] border-purple-100/50"
+                className="pl-9 rounded-xl bg-cc-bg border-cc-border text-cc-text placeholder:text-cc-muted"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 data-testid="input-search-participants"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 rounded-xl bg-[#F6F4FB] border-purple-100/50">
+              <SelectTrigger className="h-9 rounded-xl bg-cc-bg border-cc-border text-cc-text">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -1431,10 +1431,10 @@ export default function Patients() {
           ) : filteredParticipants.length === 0 ? (
             <div className="flex flex-col items-center py-12 gap-3">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-purple-900/10">
-                <Users className="h-5 w-5 text-[#542269] opacity-50" />
+                <Users className="h-5 w-5 text-cc-text opacity-50" />
               </div>
-              <p className="text-[13px] font-medium text-[#4A3D5A]">No participants found</p>
-              <p className="text-[12px] text-center leading-relaxed text-[#7A6A8A]">
+              <p className="text-[13px] font-medium text-cc-text">No participants found</p>
+              <p className="text-[12px] text-center leading-relaxed text-cc-muted">
                 Try adjusting your search or add a new participant
               </p>
             </div>
@@ -1456,26 +1456,26 @@ export default function Patients() {
                   }}
                   data-testid={`button-participant-${p.id}`}
                   className={`w-full text-left p-3 rounded-xl transition-all duration-150 flex items-center gap-3 border ${
-                    isSelected ? "bg-purple-900/10 border-purple-900/20" : "bg-transparent border-transparent hover:bg-[#F6F4FB]"
+                    isSelected ? "bg-cc-active border-cc-border" : "bg-transparent border-transparent hover:bg-cc-bg"
                   }`}
                 >
                   <div
                     className={`w-9 h-9 rounded-xl flex items-center justify-center text-[12px] font-bold shrink-0 ${
-                      isSelected ? "bg-gradient-to-br from-[#F1738A] to-[#542269] text-white" : "bg-purple-900/10 text-[#542269]"
+                      isSelected ? "bg-gradient-to-br from-cc-coral to-cc-plum text-white" : "bg-cc-active text-cc-text"
                     }`}
                   >
                     {initials}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-[13px] font-semibold truncate flex-1 min-w-0 ${isSelected ? "text-[#542269]" : "text-[#1C1626]"}`}>
+                      <span className="text-[13px] font-semibold truncate flex-1 min-w-0 text-cc-text">
                         {p.full_name}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 capitalize ${statusBadge(p.plan_status)}`}>
                         {p.plan_status}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono block text-[#7A6A8A]">
+                    <span className="text-[11px] font-mono block text-cc-muted">
                       {p.ndis_number}
                     </span>
                   </div>
@@ -1488,12 +1488,12 @@ export default function Patients() {
 
       {/* Right panel — participant detail workspace view */}
       <div
-        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col bg-white rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
+        className={`${showMobileDetail ? "flex" : "hidden lg:flex"} flex-1 min-w-0 flex-col bg-cc-surface rounded-2xl overflow-y-auto shadow-[0_1px_4px_rgba(84,34,105,0.06),0_0_0_1px_rgba(232,213,232,0.5)]`}
       >
         {selectedId ? (
           <>
             <button
-              className="lg:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-purple-100/50 hover:bg-gray-50 shrink-0 transition-colors text-[#542269]"
+              className="lg:hidden flex items-center gap-2 text-[13px] font-medium px-4 py-3 border-b border-cc-border hover:bg-cc-bg shrink-0 transition-colors text-cc-text"
               onClick={() => setShowMobileDetail(false)}
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1508,11 +1508,11 @@ export default function Patients() {
         ) : (
           <div className="h-full flex flex-col items-center justify-center gap-4 px-8 text-center">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-purple-900/10">
-              <Users className="h-7 w-7 text-[#542269] opacity-40" />
+              <Users className="h-7 w-7 text-cc-text opacity-40" />
             </div>
             <div>
-              <p className="text-[15px] font-semibold text-[#4A3D5A]">Select a participant</p>
-              <p className="text-[13px] mt-1.5 leading-relaxed text-[#7A6A8A]">
+              <p className="text-[15px] font-semibold text-cc-text">Select a participant</p>
+              <p className="text-[13px] mt-1.5 leading-relaxed text-cc-muted">
                 Choose someone from the list to view their clinical profile, NDIS plan, and session history.
               </p>
             </div>

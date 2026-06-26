@@ -69,9 +69,13 @@ import WorkerShiftHistory from "@/pages/worker-shift-history";
 import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
 import WorkerTraining from "@/pages/worker-training";
 import WorkerFeedback from "@/pages/worker-feedback";
+import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
+import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
+import WorkerAccessibility from "@/pages/worker-accessibility";
 import AccountSecure from "@/pages/account-secure";
 import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
 import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
+import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -195,6 +199,18 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/worker/travel">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTravelExpenses /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/accessibility">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerAccessibility /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/worker/performance">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerPerformanceDashboard /></AppLayout>
@@ -245,13 +261,13 @@ function Router() {
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
-      </Route>
+      </Route> */}
 
       <Route path="/worker/messages">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerMessages /></AppLayout>
         </ProtectedRoute>
-      </Route> */}
+      </Route>
 
       <Route path="/worker/availability">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -310,6 +326,12 @@ function Router() {
       <Route path="/coordinator/live">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><CoordinatorLivePage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/travel">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorTravelExpenses /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -471,15 +493,17 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <OfflineSyncProvider>
-            <WorkerTutorialProvider>
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AuthSessionGuards />
-                <Router />
-              </WouterRouter>
-            </WorkerTutorialProvider>
-          </OfflineSyncProvider>
-          <Toaster />
+          <AccessibilityProvider>
+            <OfflineSyncProvider>
+              <WorkerTutorialProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AuthSessionGuards />
+                  <Router />
+                </WouterRouter>
+              </WorkerTutorialProvider>
+            </OfflineSyncProvider>
+            <Toaster />
+          </AccessibilityProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -98,13 +98,49 @@ async def worker_shift_history_detail(shift_id: str, current_user: dict = Depend
     return detail
 
 
-@router.post("/shift-history/{shift_id}/export", status_code=201)
-async def worker_export_shift(shift_id: str, current_user: dict = Depends(get_current_user)):
+class ShareShiftExportBody(BaseModel):
+    email_self: bool = False
+    email_coordinator: bool = False
+    additional_recipients: list[str] = Field(default_factory=list)
+
+
+@router.post("/shift-history/{shift_id}/share")
+async def worker_share_shift_export(
+    shift_id: str,
+    body: ShareShiftExportBody,
+    current_user: dict = Depends(get_current_user),
+):
     _require_worker(current_user)
-    return shift_pdf_export_service.create_shift_export(
+    return shift_pdf_export_service.share_shift_export(
         shift_id,
         get_user_id(current_user),
         get_user_organization_id(current_user),
+        email_self=body.email_self,
+        email_coordinator=body.email_coordinator,
+        additional_recipients=body.additional_recipients,
+    )
+
+
+@router.post("/shift-history/{shift_id}/export", status_code=201)
+async def worker_export_shift(shift_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    return shift_pdf_export_service.get_or_create_auto_export(
+        shift_id,
+        get_user_id(current_user),
+        get_user_organization_id(current_user),
+    )
+
+
+@router.post("/shift-history/backfill-summaries")
+async def worker_backfill_shift_summaries(
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
+):
+    """Retroactive PDF generation for completed shifts missing summaries (CARECLIQV2-294)."""
+    _require_worker(current_user)
+    return shift_pdf_export_service.backfill_shift_summaries(
+        get_user_organization_id(current_user),
+        limit=limit,
     )
 
 

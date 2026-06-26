@@ -405,11 +405,11 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
 
   return (
     <aside
-      className="flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
+      className="flex h-full flex-col overflow-hidden rounded-lg border bg-cc-surface shadow-sm"
       style={{ borderColor: BORDER }}
       data-tutorial="live-progress-note"
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: 'var(--cc-border)' }}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
@@ -418,8 +418,8 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E2DEF2" : "#A7F3D0",
-                background: ended ? "#F5F3FC" : "#ECFDF5",
+                borderColor: ended ? "var(--cc-border)" : "#A7F3D0",
+                background: ended ? "var(--cc-bg)" : "#ECFDF5",
                 color: ended ? MUTED : "#047857",
               }}
             >
@@ -446,7 +446,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 transition hover:bg-[#F5F3FC]"
+              className="rounded-full p-2 transition hover:bg-cc-bg"
               style={{ color: MUTED }}
               aria-label="Close session composer"
             >
@@ -456,7 +456,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
         </div>
       </div>
 
-      <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: 'var(--cc-border)' }}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
             <Languages size={15} />
@@ -466,7 +466,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             disabled={ended}
-            className="h-10 w-full rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
+            className="h-10 w-full rounded-full border bg-cc-bg px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
             style={{ borderColor: BORDER, color: TEXT }}
           >
             {INPUT_LANGUAGES.map((item) => (
@@ -478,10 +478,10 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-cc-bg p-4">
         <div className="mx-auto max-w-3xl space-y-3">
           <div
-            className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm"
+            className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-cc-surface px-3 py-1 text-xs font-bold shadow-sm"
             style={{ borderColor: BORDER, color: MUTED }}
           >
             {isListening && (
@@ -497,7 +497,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
 
           {isListening && livePreview && (
             <div
-              className="rounded-lg border bg-white px-3 py-2 text-sm italic"
+              className="rounded-lg border bg-cc-surface px-3 py-2 text-sm italic"
               style={{ borderColor: "#DCD6F1", color: MUTED }}
               aria-live="polite"
             >
@@ -530,10 +530,10 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
       </div>
 
       {!ended && (
-        <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
+        <div className="shrink-0 border-t bg-cc-surface p-3" style={{ borderColor: 'var(--cc-border)' }}>
           <div className="flex items-center gap-3">
             <div
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm"
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-cc-surface px-3 py-2 shadow-sm"
               style={{ borderColor: BORDER }}
             >
               <input
@@ -564,7 +564,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-bg"
                 style={{ color: PLUM }}
                 aria-label="Attach file"
               >
@@ -573,7 +573,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F5F3FC]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-bg"
                 style={{ color: PLUM }}
                 aria-label="Capture photo"
               >

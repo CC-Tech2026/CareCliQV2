@@ -14,10 +14,10 @@ import {
   type ScheduleRequest,
 } from "@/services/scheduleRequestService";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 export function ScheduleRequestQueue() {
   const { toast } = useToast();
@@ -49,7 +49,7 @@ export function ScheduleRequestQueue() {
   if (!requests.length) return null;
 
   return (
-    <div className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
       <div className="mb-3 flex items-center gap-2">
         <Inbox size={16} style={{ color: PLUM }} />
         <h3 className="text-sm font-black" style={{ color: TEXT }}>

@@ -9,11 +9,17 @@ import {
   Sparkles, ExternalLink,
 } from "lucide-react";
 
-const PLUM  = "#5533CC";
-const CORAL = "#F03060";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const PLUM_SUBTLE = "var(--cc-plum-subtle)";
+const PLUM_SOFT = "var(--cc-plum-soft)";
+const PLUM_MEDIUM = "var(--cc-plum-medium)";
+const PLUM_RING = "var(--cc-plum-ring)";
+const CORAL_SOFT = "var(--cc-coral-soft)";
+const CORAL_RING = "var(--cc-coral-ring)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 interface ChecklistStep {
   id: string;
@@ -147,7 +153,7 @@ export default function CoordinatorOnboarding() {
       <div className="w-full max-w-2xl mb-6">
         <div
           className="rounded-2xl p-5"
-          style={{ background: "white", border: `1px solid ${BORDER}`, boxShadow: "0 4px 24px -8px rgba(85,51,204,0.1)" }}
+          style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)', boxShadow: "0 4px 24px -8px rgba(85,51,204,0.1)" }}
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold" style={{ color: PLUM }}>
@@ -188,8 +194,8 @@ export default function CoordinatorOnboarding() {
               key={step.id}
               className="rounded-2xl transition-all"
               style={{
-                background: done ? (isAuto ? `${PLUM}08` : `${CORAL}06`) : "white",
-                border: `1.5px solid ${done ? (isAuto ? `${PLUM}30` : `${CORAL}25`) : BORDER}`,
+                background: done ? (isAuto ? PLUM_SUBTLE : CORAL_SOFT) : 'var(--cc-surface)',
+                border: `1.5px solid ${done ? (isAuto ? PLUM_RING : CORAL_RING) : BORDER}`,
                 boxShadow: done ? "none" : "0 2px 12px -4px rgba(85,51,204,0.06)",
               }}
             >
@@ -245,7 +251,7 @@ export default function CoordinatorOnboarding() {
                       type="button"
                       onClick={() => navigate(step.action!.href)}
                       className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 active:scale-95"
-                      style={{ background: `${PLUM}10`, color: PLUM }}
+                      style={{ background: PLUM_MEDIUM, color: PLUM }}
                     >
                       {step.action.label}
                       <ExternalLink size={11} />
@@ -258,7 +264,7 @@ export default function CoordinatorOnboarding() {
                   <button
                     type="button"
                     onClick={() => navigate(step.action!.href)}
-                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-slate-50"
+                    className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-cc-bg"
                     style={{ color: MUTED }}
                     title={`Go to ${step.action.label}`}
                   >

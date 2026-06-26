@@ -81,7 +81,7 @@ export function ClockInQrScanner({ open, onClose, onScan, onError }: Props) {
     <div className="fixed inset-0 z-[100] flex flex-col bg-black p-4">
       <div className="mb-3 flex items-center justify-between text-white">
         <h2 className="text-sm font-black uppercase tracking-wide">Scan location QR</h2>
-        <Button type="button" variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={onClose}>
+        <Button type="button" variant="ghost" size="icon" className="text-white hover:bg-cc-bg/10" onClick={onClose}>
           <X className="h-5 w-5" />
         </Button>
       </div>

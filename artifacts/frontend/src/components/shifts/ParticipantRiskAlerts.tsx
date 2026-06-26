@@ -62,8 +62,8 @@ export function ParticipantRiskAlertCard({
       className={cn(
         "rounded-xl border px-3 py-3",
         isCritical
-          ? "border-red-300 bg-white text-red-900"
-          : "border-orange-300 bg-white text-orange-900",
+          ? "border-red-300 bg-cc-surface text-red-900"
+          : "border-orange-300 bg-cc-surface text-orange-900",
         compact && "px-2.5 py-2",
       )}
     >
@@ -199,7 +199,7 @@ export function ParticipantRiskAcknowledgementSection({
         htmlFor="ack-risks"
         id="tutorial-risk-ack-checkbox"
         data-tutorial="risk-ack-checkbox"
-        className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 border-red-300 bg-white p-3 shadow-sm"
+        className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 border-red-300 bg-cc-surface p-3 shadow-sm"
       >
         <input
           id="ack-risks"

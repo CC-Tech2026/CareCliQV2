@@ -4,16 +4,14 @@ import { Check, Loader2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileDataWarningModal } from "@/components/offline/MobileDataWarningModal";
 import { useOfflineSync } from "@/contexts/OfflineSyncContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { formatBytes } from "@/lib/format-bytes";
 import { setMobileUploadConsent } from "@/lib/mobile-data-guard";
 import { getShiftDataUsageBytes } from "@/lib/shift-data-usage";
-import { PLUM, MUTED, TEXT } from "@/lib/shift-utils";
-
-const PLUM_LOCAL = PLUM;
-const TEXT_LOCAL = TEXT;
-const MUTED_LOCAL = MUTED;
+import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 
 export default function WorkerSyncStatusPage() {
+  const { translate } = useAccessibility();
   const {
     online,
     syncing,
@@ -63,25 +61,25 @@ export default function WorkerSyncStatusPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-10">
+    <div className="mx-auto max-w-2xl space-y-6 pb-10 text-safe">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM_LOCAL }}>
-          Sync status
+        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
+          {translate("sync.page.eyebrow")}
         </p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT_LOCAL }}>
-          Pending uploads
+        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
+          {translate("sync.page.title")}
         </h1>
-        <p className="mt-2 text-sm" style={{ color: MUTED_LOCAL }}>
-          Compliance items cannot be deleted. They will sync automatically when you are back online.
+        <p className="mt-2 text-sm" style={{ color: MUTED }}>
+          {translate("sync.page.hint")}
         </p>
       </div>
 
       {activeShiftId && (
-        <div className="rounded-2xl border border-[#E2DEF2] bg-white p-4">
-          <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED_LOCAL }}>
-            Mobile data this shift
+        <div className="rounded-2xl border border-cc-border bg-[var(--cc-surface)] p-4">
+          <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
+            {translate("sync.page.mobileData")}
           </p>
-          <p className="mt-1 text-2xl font-black" style={{ color: PLUM_LOCAL }}>
+          <p className="mt-1 text-2xl font-black" style={{ color: PLUM }}>
             {formatBytes(dataUsage)}
           </p>
         </div>
@@ -89,8 +87,11 @@ export default function WorkerSyncStatusPage() {
 
       <div className="space-y-3">
         {queueItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#E2DEF2] bg-white p-8 text-center text-sm" style={{ color: MUTED_LOCAL }}>
-            No pending items — everything is synced.
+          <div
+            className="rounded-2xl border border-dashed border-cc-border bg-[var(--cc-surface)] p-8 text-center text-sm"
+            style={{ color: MUTED }}
+          >
+            {translate("sync.page.empty")}
           </div>
         ) : (
           queueItems.map((item) => {
@@ -99,18 +100,22 @@ export default function WorkerSyncStatusPage() {
             return (
               <div
                 key={item.id}
-                className="flex items-start justify-between gap-3 rounded-2xl border border-[#E2DEF2] bg-white p-4"
+                className="flex items-start justify-between gap-3 rounded-2xl border border-cc-border bg-[var(--cc-surface)] p-4"
               >
                 <div className="min-w-0">
-                  <p className="text-sm font-black" style={{ color: TEXT_LOCAL }}>
-                    {item.label} — {item.detail} — queued {queuedLabel}
+                  <p className="text-sm font-black text-safe" style={{ color: TEXT }}>
+                    {item.label} — {item.detail} — {translate("sync.page.queued")} {queuedLabel}
                   </p>
                   {result && !result.ok && (
                     <p className="mt-1 text-xs text-red-600">{result.error}</p>
                   )}
                 </div>
-                {result?.ok && <Check className="h-5 w-5 shrink-0 text-emerald-600" aria-label="Synced" />}
-                {result && !result.ok && <X className="h-5 w-5 shrink-0 text-red-500" aria-label="Failed" />}
+                {result?.ok && (
+                  <Check className="h-5 w-5 shrink-0 text-emerald-600" aria-label={translate("sync.page.synced")} />
+                )}
+                {result && !result.ok && (
+                  <X className="h-5 w-5 shrink-0 text-red-500" aria-label={translate("sync.page.failed")} />
+                )}
               </div>
             );
           })
@@ -118,13 +123,14 @@ export default function WorkerSyncStatusPage() {
       </div>
 
       <Button
-        className="w-full gap-2 rounded-xl"
+        className="w-full min-h-11 gap-2 rounded-xl"
         disabled={!online || syncing || queueItems.length === 0}
         onClick={() => void handleRetry()}
-        style={{ background: PLUM_LOCAL }}
+        style={{ background: PLUM }}
+        aria-label={translate("sync.page.retry")}
       >
-        {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        Retry sync
+        {syncing ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
+        {translate("sync.page.retry")}
       </Button>
 
       <MobileDataWarningModal

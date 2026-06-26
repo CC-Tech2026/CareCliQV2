@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { WorkerOnboardingChecklist } from "@/components/onboarding/WorkerOnboardingChecklist";
 import { useAuth } from "@/contexts/AuthContext";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import {
   completeMyOnboarding,
   getMyOnboarding,
@@ -13,8 +14,6 @@ import {
   type ChecklistItem,
 } from "@/services/onboardingService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
 
 export default function WorkerOnboarding() {
   const [, navigate] = useLocation();
@@ -83,7 +82,7 @@ export default function WorkerOnboarding() {
   }
 
   if (loading) {
-    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" /></div>;
+    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-cc-plum" /></div>;
   }
 
   return (
@@ -92,33 +91,33 @@ export default function WorkerOnboarding() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
           <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>First-login checklist</h1>
-          <p className="mt-2 text-sm text-[#7A6A9E]">Finish these steps now or continue from your dashboard later.</p>
+          <p className="mt-2 text-sm text-cc-muted">Finish these steps now or continue from your dashboard later.</p>
         </div>
         <WorkerOnboardingChecklist items={items} onToggle={toggleItem} />
-        <div className="rounded-2xl border border-[#E2DEF2] bg-white p-5">
-          <div className="mb-4 flex items-center gap-2 text-[#1E1640]">
-            <UserRound className="h-5 w-5 text-[#5533CC]" />
+        <div className="rounded-2xl border border-cc-border bg-cc-surface p-5">
+          <div className="mb-4 flex items-center gap-2 text-cc-text">
+            <UserRound className="h-5 w-5 text-cc-plum" />
             <h2 className="font-black">Profile photo</h2>
           </div>
           <ProfilePhotoUpload currentUrl={user?.profile_photo_url} />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Link href="/credentials" className="rounded-2xl border border-[#E2DEF2] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <CheckCircle2 className="h-5 w-5 text-[#5533CC]" />
-            <p className="mt-3 text-sm font-black text-[#1E1640]">Add credential wallet items</p>
-            <p className="mt-1 text-xs text-[#7A6A9E]">Upload NDIS screening, first aid, CPR, police check, and other required documents.</p>
+          <Link href="/credentials" className="rounded-2xl border border-cc-border bg-cc-surface p-5 transition hover:bg-cc-bg">
+            <CheckCircle2 className="h-5 w-5 text-cc-plum" />
+            <p className="mt-3 text-sm font-black text-cc-text">Add credential wallet items</p>
+            <p className="mt-1 text-xs text-cc-muted">Upload NDIS screening, first aid, CPR, police check, and other required documents.</p>
           </Link>
-          <Link href="/my-clients" className="rounded-2xl border border-[#E2DEF2] bg-white p-5 transition hover:bg-[#F8F6FE]">
-            <BookOpen className="h-5 w-5 text-[#5533CC]" />
-            <p className="mt-3 text-sm font-black text-[#1E1640]">Review assigned clients</p>
-            <p className="mt-1 text-xs text-[#7A6A9E]">Client records are scoped to your assignments only.</p>
+          <Link href="/my-clients" className="rounded-2xl border border-cc-border bg-cc-surface p-5 transition hover:bg-cc-bg">
+            <BookOpen className="h-5 w-5 text-cc-plum" />
+            <p className="mt-3 text-sm font-black text-cc-text">Review assigned clients</p>
+            <p className="mt-1 text-xs text-cc-muted">Client records are scoped to your assignments only.</p>
           </Link>
         </div>
       </div>
-      <aside className="h-fit rounded-[1.5rem] border border-[#E2DEF2] bg-white p-6 shadow-sm">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#7A6A9E]">Progress</p>
+      <aside className="h-fit rounded-[1.5rem] border border-cc-border bg-cc-surface p-6 shadow-sm">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-cc-muted">Progress</p>
         <p className="mt-2 text-4xl font-black" style={{ color: PLUM }}>{completeCount}/{items.length}</p>
-        <p className="mt-2 text-sm text-[#7A6A9E]">Coordinator can see this onboarding status on the Team page.</p>
+        <p className="mt-2 text-sm text-cc-muted">Coordinator can see this onboarding status on the Team page.</p>
         <Button
           onClick={complete}
           disabled={!allComplete || saving}

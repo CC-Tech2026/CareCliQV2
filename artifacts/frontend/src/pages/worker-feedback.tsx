@@ -5,11 +5,8 @@ import { useRoute } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
 import { acknowledgeFeedback, getFeedbackDetail } from "@/services/workerPerformanceService";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
 
 export default function WorkerFeedbackPage() {
   const [, params] = useRoute("/worker/feedback/:id");
@@ -47,7 +44,7 @@ export default function WorkerFeedbackPage() {
       <header className="flex items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-2xl"
-          style={{ background: "#EDEAFF" }}
+          style={{ background: 'var(--cc-active)' }}
         >
           <MessageSquare size={24} style={{ color: PLUM }} />
         </div>

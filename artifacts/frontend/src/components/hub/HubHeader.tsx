@@ -61,19 +61,19 @@ export function HubHeader() {
       {/* Decorative circles */}
       <span
         className="pointer-events-none absolute -top-16 -right-16 h-56 w-56 rounded-full opacity-[0.12]"
-        style={{ background: "#fff" }}
+        style={{ background: 'var(--cc-surface)' }}
       />
       <span
         className="pointer-events-none absolute -bottom-10 right-20 h-36 w-36 rounded-full opacity-[0.07]"
-        style={{ background: "#fff" }}
+        style={{ background: 'var(--cc-surface)' }}
       />
       <span
         className="pointer-events-none absolute top-8 right-32 h-16 w-16 rounded-full opacity-[0.08]"
-        style={{ background: "#F03060" }}
+        style={{ background: 'var(--cc-coral)' }}
       />
       <span
         className="pointer-events-none absolute bottom-6 -left-6 h-24 w-24 rounded-full opacity-[0.08]"
-        style={{ background: "#fff" }}
+        style={{ background: 'var(--cc-surface)' }}
       />
 
       {/* Content */}
@@ -104,8 +104,8 @@ export function HubHeader() {
         {/* CTA */}
         <button
           onClick={() => navigate(cta.href)}
-          className="mt-6 flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
-          style={{ color: "#5533CC" }}
+          className="mt-6 flex items-center gap-2 rounded-full bg-cc-surface px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
+          style={{ color: 'var(--cc-plum)' }}
         >
           {cta.label}
           <ArrowRight size={13} strokeWidth={2.5} />

@@ -188,7 +188,7 @@ export function WorkerIncidentReportForm({
   return (
     <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/40 p-3">
       <Select value={reportType} onValueChange={setReportType}>
-        <SelectTrigger className="bg-white">
+        <SelectTrigger className="bg-cc-surface">
           <SelectValue placeholder="Incident type" />
         </SelectTrigger>
         <SelectContent>
@@ -202,7 +202,7 @@ export function WorkerIncidentReportForm({
 
       {reportType === "participant_behaviour" && (
         <Select value={behaviourSubtype || undefined} onValueChange={applyBehaviourSubtype}>
-          <SelectTrigger className="bg-white">
+          <SelectTrigger className="bg-cc-surface">
             <SelectValue placeholder="Behaviour sub-type" />
           </SelectTrigger>
           <SelectContent>
@@ -216,7 +216,7 @@ export function WorkerIncidentReportForm({
       )}
 
       <Select value={severity} onValueChange={setSeverity}>
-        <SelectTrigger className="bg-white">
+        <SelectTrigger className="bg-cc-surface">
           <SelectValue placeholder="Severity" />
         </SelectTrigger>
         <SelectContent>
@@ -232,7 +232,7 @@ export function WorkerIncidentReportForm({
         type="datetime-local"
         value={incidentTime}
         onChange={(e) => setIncidentTime(e.target.value)}
-        className="bg-white"
+        className="bg-cc-surface"
       />
 
       <div>
@@ -240,7 +240,7 @@ export function WorkerIncidentReportForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe what happened (min 20 characters)…"
-          className="min-h-[100px] bg-white"
+          className="min-h-[100px] bg-cc-surface"
           spellCheck
         />
         <p
@@ -256,11 +256,11 @@ export function WorkerIncidentReportForm({
         value={workerActions}
         onChange={(e) => setWorkerActions(e.target.value)}
         placeholder="Actions you took (optional)"
-        className="min-h-[60px] bg-white"
+        className="min-h-[60px] bg-cc-surface"
         spellCheck
       />
 
-      <fieldset className="space-y-2 rounded-lg border bg-white p-3">
+      <fieldset className="space-y-2 rounded-lg border bg-cc-surface p-3">
         <legend className="px-1 text-xs font-bold">Was the participant present?</legend>
         <div className="flex gap-4 text-sm font-semibold">
           {(["yes", "no"] as const).map((value) => (
@@ -283,7 +283,7 @@ export function WorkerIncidentReportForm({
             value={participantHarmed || undefined}
             onValueChange={(v) => setParticipantHarmed(v as typeof participantHarmed)}
           >
-            <SelectTrigger className="bg-white">
+            <SelectTrigger className="bg-cc-surface">
               <SelectValue placeholder="Was participant harmed?" />
             </SelectTrigger>
             <SelectContent>
@@ -311,7 +311,7 @@ export function WorkerIncidentReportForm({
         {photos.length < 3 && (
           <button
             type="button"
-            className="grid h-16 w-16 place-items-center rounded-lg border border-dashed bg-white"
+            className="grid h-16 w-16 place-items-center rounded-lg border border-dashed bg-cc-surface"
             onClick={() => photoInputRef.current?.click()}
           >
             <Camera size={18} />

@@ -138,7 +138,7 @@ export function ParticipantSafetyPage({
           )}
 
           {(protocol?.scenarios ?? []).map((scenario, i) => (
-            <section key={i} className="rounded-xl border bg-white p-4 shadow-sm">
+            <section key={i} className="rounded-xl border bg-cc-surface p-4 shadow-sm">
               <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">If</p>
               <p className="mt-1 text-sm font-semibold">{scenario.trigger}</p>
               <div className="my-2 flex items-center gap-1 text-violet-600">
@@ -150,7 +150,7 @@ export function ParticipantSafetyPage({
           ))}
 
           {(protocol?.deescalation_techniques ?? []).map((tech, i) => (
-            <section key={i} className="rounded-xl border bg-white p-4 shadow-sm">
+            <section key={i} className="rounded-xl border bg-cc-surface p-4 shadow-sm">
               <h4 className="text-sm font-black">{tech.title}</h4>
               <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
                 {tech.steps.map((step, si) => (
@@ -180,7 +180,7 @@ export function ParticipantSafetyPage({
               </p>
               <ul className="mt-3 space-y-2">
                 {contacts.map((contact) => (
-                  <li key={`${contact.role}-${contact.phone}`} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
+                  <li key={`${contact.role}-${contact.phone}`} className="flex items-center justify-between gap-3 rounded-lg bg-cc-surface px-3 py-2">
                     <div>
                       <p className="text-sm font-bold">{contact.label}</p>
                       <p className="text-xs text-muted-foreground capitalize">

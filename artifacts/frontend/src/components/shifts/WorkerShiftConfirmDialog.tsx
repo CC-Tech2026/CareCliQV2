@@ -10,12 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatShiftBlockTime } from "@/components/shifts/ShiftCalendarDetailSheet";
 import type { CalendarShift } from "@/services/workerCalendarService";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
 
 type Props = {
   shift: CalendarShift | null;
@@ -39,7 +35,7 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
           <DialogHeader className="space-y-3 text-center sm:text-center">
             <div
               className="mx-auto flex h-12 w-12 items-center justify-center rounded-full"
-              style={{ background: "#F0ECFF" }}
+              style={{ background: 'var(--cc-active)' }}
             >
               <CalendarDays size={22} style={{ color: PLUM }} />
             </div>

@@ -28,6 +28,7 @@ async function processPendingAction(action: PendingAction): Promise<void> {
       location: action.location ?? undefined,
       qr_token: action.qrToken ?? undefined,
       client_timestamp: action.clientTimestamp,
+      claimed_km: action.claimedKm ?? undefined,
     });
     return;
   }

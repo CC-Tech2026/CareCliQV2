@@ -117,7 +117,7 @@ export function DuringShiftAccordion({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -214,7 +214,7 @@ export function DuringShiftAccordion({
                 </button>
               </div>
               <Select value={messagePriority} onValueChange={(v) => setMessagePriority(v as typeof messagePriority)}>
-                <SelectTrigger className="bg-white">
+                <SelectTrigger className="bg-cc-surface">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,7 +227,7 @@ export function DuringShiftAccordion({
                 value={officeMessage}
                 onChange={(e) => setOfficeMessage(e.target.value)}
                 placeholder="Write your message to the office…"
-                className="min-h-[80px] bg-white"
+                className="min-h-[80px] bg-cc-surface"
               />
               <div className="flex flex-wrap gap-2">
                 {messagePhotoPreviews.map((src, i) => (
@@ -244,7 +244,7 @@ export function DuringShiftAccordion({
                 ))}
                 <button
                   type="button"
-                  className="grid h-14 w-14 place-items-center rounded-lg border border-dashed bg-white"
+                  className="grid h-14 w-14 place-items-center rounded-lg border border-dashed bg-cc-surface"
                   onClick={() => messagePhotoInputRef.current?.click()}
                 >
                   <Camera size={16} style={{ color: PLUM }} />
@@ -270,13 +270,13 @@ export function DuringShiftAccordion({
           )}
 
           {messageHistory.length > 0 && (
-            <div className="rounded-xl border bg-[#F8F6FE] p-3" style={{ borderColor: BORDER }}>
+            <div className="rounded-xl border bg-cc-bg p-3" style={{ borderColor: BORDER }}>
               <p className="mb-2 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 Office messages
               </p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs">
                 {messageHistory.map((msg) => (
-                  <li key={msg.id} className="rounded-lg bg-white px-2 py-1.5">
+                  <li key={msg.id} className="rounded-lg bg-cc-surface px-2 py-1.5">
                     <span className="font-bold capitalize">{msg.priority}</span>
                     <span className="mx-1 text-muted-foreground">·</span>
                     <span>{new Date(msg.created_at).toLocaleString()}</span>
@@ -292,7 +292,7 @@ export function DuringShiftAccordion({
               <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">This shift</p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
-                  <li key={item.id} className="rounded-lg bg-white px-2 py-1.5">
+                  <li key={item.id} className="rounded-lg bg-cc-surface px-2 py-1.5">
                     <span className="font-bold">{item.reference_number || item.title || item.incident_type}</span>
                     {item.incident_date && (
                       <span className="ml-1 text-muted-foreground">

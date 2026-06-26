@@ -22,6 +22,7 @@ import {
   passwordStrengthScore,
   validatePasswordPolicy,
 } from "@/lib/password-strength";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import {
   changePassword,
   getMe,
@@ -31,6 +32,7 @@ import {
   PREFERRED_CONTACT_LABELS,
   saveNotificationPreferences,
   updateContact,
+  updateMe,
   type NotificationChannel,
   type NotificationEvent,
   type NotificationPreferences,
@@ -38,9 +40,6 @@ import {
   type UserProfile,
 } from "@/services/userService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#E2DEF2";
 
 const ROLE_LABELS: Record<string, string> = {
   support_worker: "Support Worker",
@@ -54,8 +53,8 @@ const CHANNELS = Object.keys(NOTIFICATION_CHANNEL_LABELS) as NotificationChannel
 function ReadOnlyField({ label, value }: { label: string; value?: string | null }) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-[#7A6A9E]">{label}</p>
-      <p className="mt-1 text-[15px] font-semibold text-[#1E1640]">{value || "—"}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-cc-muted">{label}</p>
+      <p className="mt-1 text-[15px] font-semibold text-cc-text">{value || "—"}</p>
     </div>
   );
 }
@@ -72,6 +71,8 @@ export default function WorkerProfile() {
   const [savingContact, setSavingContact] = useState(false);
   const [draftEmail, setDraftEmail] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
+  const [draftAddress, setDraftAddress] = useState("");
+  const [draftSuburb, setDraftSuburb] = useState("");
   const [draftPreferredContact, setDraftPreferredContact] = useState<PreferredContactMethod>("in_app_message");
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -113,6 +114,8 @@ export default function WorkerProfile() {
         setProfile(me);
         setDraftEmail(me.email || "");
         setDraftPhone(me.phone || "");
+        setDraftAddress(me.address || "");
+        setDraftSuburb(me.suburb || "");
         setDraftPreferredContact(me.preferred_contact_method || "in_app_message");
         setNotificationPrefs(prefs.preferences);
       })
@@ -146,7 +149,16 @@ export default function WorkerProfile() {
         }),
       );
       if (!result) return;
-      setProfile(result.profile);
+      const addressChanged =
+        draftAddress.trim() !== (profile.address || "") || draftSuburb.trim() !== (profile.suburb || "");
+      let updatedProfile = result.profile;
+      if (addressChanged) {
+        updatedProfile = await updateMe({
+          address: draftAddress.trim(),
+          suburb: draftSuburb.trim(),
+        });
+      }
+      setProfile(updatedProfile);
       updateUser({
         full_name: result.profile.full_name,
         profile_photo_url: result.profile.profile_photo_url,
@@ -228,7 +240,7 @@ export default function WorkerProfile() {
   if (loading || !profile) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" />
+        <Loader2 className="h-7 w-7 animate-spin text-cc-plum" />
       </div>
     );
   }
@@ -245,7 +257,7 @@ export default function WorkerProfile() {
           <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
             My profile
           </h1>
-          <p className="mt-2 text-sm text-[#7A6A9E]">
+          <p className="mt-2 text-sm text-cc-muted">
             Manage your contact details, password, photo, and notification preferences.
           </p>
         </div>
@@ -268,6 +280,8 @@ export default function WorkerProfile() {
                 setEditMode(false);
                 setDraftEmail(profile.email || "");
                 setDraftPhone(profile.phone || "");
+                setDraftAddress(profile.address || "");
+                setDraftSuburb(profile.suburb || "");
                 setDraftPreferredContact(profile.preferred_contact_method || "in_app_message");
               }}
               className="rounded-xl gap-2"
@@ -289,18 +303,18 @@ export default function WorkerProfile() {
         )}
       </div>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <UserRound className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cc-bg">
+            <UserRound className="h-5 w-5 text-cc-plum" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Profile details</h2>
-            <p className="text-sm text-[#7A6A9E]">Your identity within your organisation.</p>
+            <h2 className="text-lg font-bold text-cc-text">Profile details</h2>
+            <p className="text-sm text-cc-muted">Your identity within your organisation.</p>
           </div>
         </div>
 
-        <div className="mb-6 rounded-2xl bg-[#F5F3FC] p-4">
+        <div className="mb-6 rounded-2xl bg-cc-bg p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} cropCircle />
         </div>
 
@@ -321,7 +335,7 @@ export default function WorkerProfile() {
                   className="mt-1 rounded-xl"
                 />
                 {profile.pending_email ? (
-                  <p className="mt-1 text-xs text-[#7A6A9E]">
+                  <p className="mt-1 text-xs text-cc-muted">
                     Pending verification for {profile.pending_email}
                   </p>
                 ) : null}
@@ -336,23 +350,42 @@ export default function WorkerProfile() {
                 />
               </div>
               <div className="md:col-span-2">
+                <Label htmlFor="profile-address">Home address</Label>
+                <Input
+                  id="profile-address"
+                  value={draftAddress}
+                  onChange={(e) => setDraftAddress(e.target.value)}
+                  placeholder="Street address for mileage calculations"
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label htmlFor="profile-suburb">Suburb</Label>
+                <Input
+                  id="profile-suburb"
+                  value={draftSuburb}
+                  onChange={(e) => setDraftSuburb(e.target.value)}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div className="md:col-span-2">
                 <Label htmlFor="preferred-contact">Preferred contact method</Label>
                 <select
                   id="preferred-contact"
                   value={draftPreferredContact}
                   onChange={(e) => setDraftPreferredContact(e.target.value as PreferredContactMethod)}
-                  className="mt-1 h-11 w-full rounded-xl border bg-white px-3 text-sm"
+                  className="mt-1 h-11 w-full rounded-xl border bg-cc-surface px-3 text-sm"
                   style={{ borderColor: BORDER }}
                 >
                   {Object.entries(PREFERRED_CONTACT_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-[#7A6A9E]">
+                <p className="mt-1 text-xs text-cc-muted">
                   Shown to your coordinator when they view your profile. Does not affect system notifications.
                 </p>
               </div>
-              <p className="md:col-span-2 text-xs text-[#7A6A9E]">
+              <p className="md:col-span-2 text-xs text-cc-muted">
                 Saving contact changes requires your current password confirmation.
               </p>
             </>
@@ -360,6 +393,8 @@ export default function WorkerProfile() {
             <>
               <ReadOnlyField label="Email" value={profile.email} />
               <ReadOnlyField label="Mobile" value={profile.phone} />
+              <ReadOnlyField label="Home address" value={profile.address} />
+              <ReadOnlyField label="Suburb" value={profile.suburb} />
               <ReadOnlyField
                 label="Preferred contact method"
                 value={
@@ -373,14 +408,14 @@ export default function WorkerProfile() {
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F5F3FC]">
-            <LockKeyhole className="h-5 w-5 text-[#5533CC]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cc-bg">
+            <LockKeyhole className="h-5 w-5 text-cc-plum" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Change password</h2>
-            <p className="text-sm text-[#7A6A9E]">Minimum 8 characters with 1 uppercase letter and 1 number.</p>
+            <h2 className="text-lg font-bold text-cc-text">Change password</h2>
+            <p className="text-sm text-cc-muted">Minimum 8 characters with 1 uppercase letter and 1 number.</p>
           </div>
         </div>
 
@@ -415,7 +450,7 @@ export default function WorkerProfile() {
                     />
                   ))}
                 </div>
-                <p className="mt-1 text-xs font-medium text-[#7A6A9E]">
+                <p className="mt-1 text-xs font-medium text-cc-muted">
                   Strength: {passwordStrengthLabel(strength)}
                 </p>
               </div>
@@ -444,18 +479,18 @@ export default function WorkerProfile() {
         </form>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#1E1640]">Desktop notifications</h2>
-          <p className="text-sm text-[#7A6A9E]">
+          <h2 className="text-lg font-bold text-cc-text">Desktop notifications</h2>
+          <p className="text-sm text-cc-muted">
             Show system alerts (like Slack) when the tab is in the background or for urgent updates.
           </p>
         </div>
         {!getDesktopNotificationSupport() ? (
-          <p className="text-sm text-[#7A6A9E]">Not supported in this browser.</p>
+          <p className="text-sm text-cc-muted">Not supported in this browser.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm font-semibold text-[#1E1640]">
+            <p className="text-sm font-semibold text-cc-text">
               {desktopPermission === "granted" && desktopEnabled
                 ? "Enabled"
                 : desktopPermission === "denied"
@@ -485,17 +520,17 @@ export default function WorkerProfile() {
         )}
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#1E1640]">Notification preferences</h2>
-          <p className="text-sm text-[#7A6A9E]">
+          <h2 className="text-lg font-bold text-cc-text">Notification preferences</h2>
+          <p className="text-sm text-cc-muted">
             Saved for this device. Choose how you want to be notified for each event type.
           </p>
         </div>
 
         {notificationPrefs ? (
           <div className="space-y-4">
-            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#7A6A9E]">
+            <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-cc-muted">
               <span>Event</span>
               {CHANNELS.map((channel) => (
                 <span key={channel} className="text-center">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
@@ -507,10 +542,10 @@ export default function WorkerProfile() {
                 className="grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1.4fr_repeat(3,0.5fr)] md:items-center"
                 style={{ borderColor: BORDER }}
               >
-                <p className="text-sm font-semibold text-[#1E1640]">{NOTIFICATION_EVENT_LABELS[event]}</p>
+                <p className="text-sm font-semibold text-cc-text">{NOTIFICATION_EVENT_LABELS[event]}</p>
                 {CHANNELS.map((channel) => (
                   <div key={channel} className="flex items-center justify-between md:justify-center gap-3">
-                    <span className="text-xs text-[#7A6A9E] md:hidden">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
+                    <span className="text-xs text-cc-muted md:hidden">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
                     <Switch
                       checked={notificationPrefs[event][channel]}
                       disabled={savingPrefs}

@@ -3,12 +3,12 @@ import { Cake, Award, Sparkles, Heart, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { getStaffCommunity, type CommunityItem } from "@/services/hubService";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const SOFT   = "#F5F3FC";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const SOFT = "var(--cc-bg)";
 
 type CommunityType = "birthday" | "anniversary" | "new_starter" | "shoutout";
 
@@ -89,7 +89,7 @@ export function StaffCommunity() {
   const displayItems = items ?? [];
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>

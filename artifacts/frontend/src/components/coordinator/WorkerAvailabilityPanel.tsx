@@ -19,12 +19,12 @@ import {
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -124,7 +124,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
   });
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>
@@ -293,7 +293,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
-                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#5533CC]"
+                  className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-cc-plum"
                   style={{ borderColor: BORDER }}
                   placeholder="Skill name…"
                 />

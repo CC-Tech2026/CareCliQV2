@@ -5,11 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 
 export type ComplianceRuleResult = {
   rule: string;
@@ -71,14 +67,14 @@ export function ComplianceDetailCard({
 
   return (
     <TooltipProvider delayDuration={200}>
-      <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border border-cc-border bg-cc-surface p-6 shadow-sm">
         <div className={`flex gap-5 ${compact ? "flex-col sm:flex-row" : "flex-col lg:flex-row lg:items-start"}`}>
           <div className="flex items-center gap-4">
             <div
               className="relative grid h-28 w-28 shrink-0 place-items-center rounded-full"
-              style={{ background: `conic-gradient(${ringColor} ${pct * 3.6}deg, #EEEAFB 0deg)` }}
+              style={{ background: `conic-gradient(${ringColor} ${pct * 3.6}deg, var(--cc-border) 0deg)` }}
             >
-              <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
+              <div className="grid h-20 w-20 place-items-center rounded-full bg-cc-surface">
                 <span className="text-2xl font-black" style={{ color: ringColor }}>{Math.round(pct)}%</span>
               </div>
             </div>
@@ -87,23 +83,23 @@ export function ComplianceDetailCard({
               <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
                 {passedCount}/{rules.length || 12} rules passing
               </p>
-              <span className="mt-3 inline-flex rounded-full border border-[#EEEAFB] bg-[#F8F6FE] px-3 py-1 text-xs font-bold capitalize">
+              <span className="mt-3 inline-flex rounded-full border border-cc-border bg-cc-bg px-3 py-1 text-xs font-bold capitalize" style={{ color: TEXT }}>
                 {status.replace("_", " ")}
               </span>
             </div>
           </div>
 
           {!compact && failedRules.length > 0 && (
-            <div className="flex-1 rounded-xl border border-red-100 bg-red-50/70 p-4">
-              <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-red-700">
+            <div className="flex-1 rounded-xl border border-[var(--cc-status-critical-bg)] bg-[var(--cc-status-critical-bg)]/30 p-4">
+              <p className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[var(--cc-status-critical)]">
                 <AlertTriangle className="h-4 w-4" />
                 Red flags
               </p>
               <div className="space-y-2">
                 {failedRules.map((rule) => (
-                  <div key={`${rule.rule}-${rule.label}`} className="rounded-lg border border-red-100 bg-white px-3 py-2">
-                    <p className="text-sm font-black text-red-800">{rule.label}</p>
-                    {rule.message && <p className="mt-1 text-xs font-medium text-red-700">{rule.message}</p>}
+                  <div key={`${rule.rule}-${rule.label}`} className="rounded-lg border border-cc-border bg-cc-surface px-3 py-2">
+                    <p className="text-sm font-black text-[var(--cc-status-critical)]">{rule.label}</p>
+                    {rule.message && <p className="mt-1 text-xs font-medium text-[var(--cc-status-critical)]">{rule.message}</p>}
                     {rule.explanation && (
                       <p className="mt-1 text-xs leading-relaxed text-red-600">{rule.explanation}</p>
                     )}
@@ -123,8 +119,7 @@ export function ComplianceDetailCard({
             {rules.map((rule) => (
               <div
                 key={rule.rule}
-                className="flex items-start gap-2 rounded-lg border px-3 py-2"
-                style={{ borderColor: "#EEEAFB", background: "#FCFBFF" }}
+                className="flex items-start gap-2 rounded-lg border border-cc-border bg-cc-bg px-3 py-2"
               >
                 {statusIcon(rule.status)}
                 <div className="min-w-0 flex-1">
@@ -133,11 +128,11 @@ export function ComplianceDetailCard({
                     {rule.explanation && (
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button type="button" className="shrink-0 text-[#9A8DBF] hover:text-[#5533CC]">
+                          <button type="button" className="shrink-0 text-cc-muted hover:text-cc-plum">
                             <HelpCircle className="h-3.5 w-3.5" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="max-w-xs bg-[#1E1640] text-white">
+                        <TooltipContent side="top" className="max-w-xs bg-cc-text text-cc-surface">
                           <p className="text-xs leading-relaxed">{rule.explanation}</p>
                         </TooltipContent>
                       </Tooltip>

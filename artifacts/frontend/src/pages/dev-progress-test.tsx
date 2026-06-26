@@ -27,12 +27,12 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
 const APP_BG = "#F5F3FC";
 const ACTIVE = "#EDEAFF";
-const BORDER = "#E2DEF2";
+const BORDER = "var(--cc-border)";
 const TICKETS_PER_PAGE = 5;
 
 const DEV_CONSOLE_PASSWORD = (
@@ -831,7 +831,7 @@ function EvidenceAuditConsole({ ctx }: { ctx: TestContext }) {
         <ResultBox title="Worker evidence metadata" result={workerMeta} />
       </div>
 
-      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: "#FFF8FA" }}>
+      <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: 'var(--cc-bg)' }}>
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           Coordinator APIs
         </p>
@@ -997,14 +997,14 @@ function ShiftSignatureConsole({ ctx }: { ctx: TestContext }) {
       <RoleNote role={role} required="coordinator" />
       <ResultBox title="Shift signature" result={signatureResult} />
       {signature?.signature_png_url && (
-        <div className="rounded-xl border bg-white p-4" style={{ borderColor: BORDER }}>
+        <div className="rounded-xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
           <p className="text-xs font-bold mb-2" style={{ color: MUTED }}>
             Signature preview
           </p>
           <img
             src={signature.signature_png_url}
             alt="Shift signature"
-            className="max-h-32 rounded-lg border bg-white"
+            className="max-h-32 rounded-lg border bg-cc-surface"
           />
           <p className="mt-2 text-xs" style={{ color: TEXT }}>
             Signed by {signature.signer_name ?? "worker"} ·{" "}
@@ -1788,7 +1788,7 @@ function DevConsolePasswordGate({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6" style={{ background: APP_BG }}>
-      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="w-full max-w-md rounded-2xl border bg-cc-surface p-8 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-3 mb-6">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: ACTIVE, color: PLUM }}>
             <Lock className="h-6 w-6" />
@@ -1953,7 +1953,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
     <div className="min-h-screen flex flex-col" style={{ background: APP_BG, color: TEXT }}>
       {/* Top bar */}
       <header
-        className="sticky top-0 z-10 border-b bg-white/95 backdrop-blur px-4 py-3 md:px-6"
+        className="sticky top-0 z-10 border-b bg-cc-surface/95 backdrop-blur px-4 py-3 md:px-6"
         style={{ borderColor: BORDER }}
       >
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1980,7 +1980,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
       <div className="flex-1 max-w-6xl mx-auto w-full p-4 md:p-6 flex flex-col lg:flex-row gap-6">
         {/* Left — ticket list */}
         <aside className="w-full lg:w-72 shrink-0">
-          <div className="rounded-2xl border bg-white overflow-hidden sticky top-20" style={{ borderColor: BORDER }}>
+          <div className="rounded-2xl border bg-cc-surface overflow-hidden sticky top-20" style={{ borderColor: BORDER }}>
             <div
               className="px-4 py-3 border-b text-xs font-bold uppercase tracking-wider"
               style={{ borderColor: BORDER, color: MUTED }}
@@ -2052,7 +2052,7 @@ function DevProgressTestContent({ onLock }: { onLock: () => void }) {
 
         {/* Right — selected test */}
         <main className="flex-1 min-w-0">
-          <div className="rounded-2xl border bg-white p-6 min-h-[420px]" style={{ borderColor: BORDER }}>
+          <div className="rounded-2xl border bg-cc-surface p-6 min-h-[420px]" style={{ borderColor: BORDER }}>
             {!selectedId ? (
               <div
                 className="h-full flex flex-col items-center justify-center text-center py-16"

@@ -229,7 +229,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       )}
 
       {/* Header card */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
@@ -387,7 +387,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
       {/* Similar past incidents — CARECLIQV2-32 */}
       {(patternsLoading || showPatternsPanel) && (
-        <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             <div className="flex items-center gap-2">
               <History size={15} style={{ color: "#7A6A8A" }} />
@@ -460,7 +460,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       )}
 
       {/* Investigation & corrective actions */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <ClipboardList size={15} style={{ color: "#7A6A8A" }} />
@@ -512,7 +512,7 @@ export default function IncidentDetail({ id }: { id: string }) {
       </div>
 
       {/* Audit trail */}
-      <div className="bg-white rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+      <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <Shield size={14} style={{ color: "#7A6A8A" }} />

@@ -26,17 +26,17 @@ import { DndScheduleView }        from "@/components/coordinator/DndScheduleView
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 type ViewMode = "month" | "week" | "schedule" | "list";
 
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
-  scheduled:   { label: "Scheduled", bg: "#EDE9FF", color: "#5533CC" },
+  scheduled:   { label: "Scheduled", bg: "#EDE9FF", color: 'var(--cc-plum)' },
   in_progress: { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
   clocked_in:  { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
   completed:   { label: "Completed", bg: "#DCFCE7", color: "#166534" },
@@ -91,7 +91,7 @@ function MonthGrid({
   }, [shifts]);
 
   return (
-    <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
           <div key={d} className="py-2.5 text-center text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
@@ -112,11 +112,11 @@ function MonthGrid({
             <div
               key={key}
               onClick={() => onSelectDay(day)}
-              className="min-h-[88px] cursor-pointer p-1.5 transition-colors hover:bg-[#F8F6FE]"
+              className="min-h-[88px] cursor-pointer p-1.5 transition-colors hover:bg-cc-bg"
               style={{
                 borderBottom: `1px solid ${BORDER}`,
                 borderRight:  `1px solid ${BORDER}`,
-                background:   isSelected ? "#F0ECFF" : "white",
+                background:   isSelected ? "#F0ECFF" : 'var(--cc-surface)',
                 opacity:      inMonth ? 1 : 0.38,
               }}
             >
@@ -178,12 +178,12 @@ function WeekGrid({
   const rows = activeWorkers.length > 0 ? activeWorkers : workers.slice(0, 10);
 
   return (
-    <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface overflow-auto" style={{ borderColor: BORDER }}>
       <table className="w-full border-separate border-spacing-0">
         <thead>
           <tr>
             <th
-              className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[160px]"
+              className="sticky left-0 z-10 bg-cc-surface px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[160px]"
               style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
             >
               Worker
@@ -192,7 +192,7 @@ function WeekGrid({
               <th
                 key={d.toISOString()}
                 className="min-w-[130px] px-2 py-2.5 text-center"
-                style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "white" }}
+                style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : 'var(--cc-surface)' }}
               >
                 <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
                   {format(d, "EEE")}
@@ -210,7 +210,7 @@ function WeekGrid({
         <tbody>
           {rows.map((worker) => (
             <tr key={worker.id}>
-              <td className="sticky left-0 z-10 bg-white px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <td className="sticky left-0 z-10 bg-cc-surface px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
                 <div className="flex items-center gap-2.5">
                   <div
                     className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white"
@@ -237,7 +237,7 @@ function WeekGrid({
                   <td
                     key={d.toISOString()}
                     className="px-1.5 py-2 align-top"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#FAFAFE" : "white" }}
+                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#FAFAFE" : 'var(--cc-surface)' }}
                   >
                     <div className="space-y-1">
                       {dayShifts.map((s) => {
@@ -294,7 +294,7 @@ function DayPanel({
   );
 
   return (
-    <div className="flex flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
+    <div className="flex flex-col rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{format(day, "EEEE")}</p>
@@ -363,7 +363,7 @@ function DayPanel({
 
 function KpiCard({ label, value, sub, color = TEXT }: { label: string; value: string | number; sub?: string; color?: string }) {
   return (
-    <div className="rounded-xl border bg-white px-4 py-4" style={{ borderColor: BORDER }}>
+    <div className="rounded-xl border bg-cc-surface px-4 py-4" style={{ borderColor: BORDER }}>
       <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{label}</p>
       <p className="mt-1.5 text-2xl font-black leading-none" style={{ color }}>{value}</p>
       {sub && <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{sub}</p>}
@@ -475,7 +475,7 @@ export default function CoordinatorRosteringPage() {
         <KpiCard label="Team Members"  value={workers.length}       sub={workersQuery.isLoading ? "loading…" : "active workers"} />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border bg-cc-surface px-4 py-3" style={{ borderColor: BORDER }}>
         <div className="flex overflow-hidden rounded-xl border" style={{ borderColor: BORDER }}>
           {(["month", "week", "schedule", "list"] as ViewMode[]).map((mode) => (
             <button
@@ -483,7 +483,7 @@ export default function CoordinatorRosteringPage() {
               type="button"
               onClick={() => setViewMode(mode)}
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
-              style={{ background: viewMode === mode ? PLUM : "white", color: viewMode === mode ? "white" : MUTED }}
+              style={{ background: viewMode === mode ? PLUM : 'var(--cc-surface)', color: viewMode === mode ? "white" : MUTED }}
             >
               {mode}
             </button>
@@ -494,7 +494,7 @@ export default function CoordinatorRosteringPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrev}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER }}
             >
               <ChevronLeft size={15} />
@@ -502,14 +502,14 @@ export default function CoordinatorRosteringPage() {
             <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
             <button
               onClick={handleNext}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER }}
             >
               <ChevronRight size={15} />
             </button>
             <button
               onClick={handleToday}
-              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER, color: PLUM }}
             >
               Today
@@ -564,7 +564,7 @@ export default function CoordinatorRosteringPage() {
       )}
 
       {viewMode === "list" && (
-        <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+        <div className="rounded-2xl border bg-cc-surface overflow-hidden" style={{ borderColor: BORDER }}>
           <div
             className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest"
             style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, background: SOFT }}
@@ -586,7 +586,7 @@ export default function CoordinatorRosteringPage() {
               return (
                 <div
                   key={shift.id}
-                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-[#F8F6FE] transition-colors"
+                  className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-cc-bg transition-colors"
                   style={{ borderBottom: `1px solid ${BORDER}` }}
                 >
                   <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || "Participant"}</p>
@@ -628,10 +628,10 @@ export default function CoordinatorRosteringPage() {
       {viewMode === "schedule" && (
         <div className="space-y-4">
           {/* Period nav for schedule view */}
-          <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
+          <div className="flex items-center gap-2 rounded-2xl border bg-cc-surface px-4 py-3" style={{ borderColor: BORDER }}>
             <button
               onClick={handlePrev}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER }}
             >
               <ChevronLeft size={15} />
@@ -641,14 +641,14 @@ export default function CoordinatorRosteringPage() {
             </span>
             <button
               onClick={handleNext}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER }}
             >
               <ChevronRight size={15} />
             </button>
             <button
               onClick={handleToday}
-              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
+              className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-cc-bg"
               style={{ borderColor: BORDER, color: PLUM }}
             >
               Today
@@ -674,7 +674,7 @@ export default function CoordinatorRosteringPage() {
           />
 
           {/* Worker settings list */}
-          <div className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
+          <div className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
             <p className="mb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
               Worker Availability & Skills
             </p>
@@ -683,10 +683,10 @@ export default function CoordinatorRosteringPage() {
                 <button
                   key={w.id}
                   onClick={() => setAvailWorker((prev) => prev?.id === w.id ? null : w)}
-                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-[#F5F3FC]"
+                  className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:bg-cc-bg"
                   style={{
                     borderColor: availWorker?.id === w.id ? PLUM : BORDER,
-                    background:  availWorker?.id === w.id ? "#EDE9FF" : "white",
+                    background:  availWorker?.id === w.id ? "#EDE9FF" : 'var(--cc-surface)',
                   }}
                 >
                   <div

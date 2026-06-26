@@ -21,8 +21,9 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM  = "#542269";
-const CORAL = "#F1738A";
+const PLUM  = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const PLUM_SOFT = "var(--cc-plum-soft)";
 const T1    = "#1C1626";
 const T2    = "#4A3D5A";
 const T3    = "#7A6A8A";
@@ -198,7 +199,7 @@ export default function Compliance() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 shrink-0">
 
         {/* Gauge Card Metrics */}
-        <div className="bg-white rounded-2xl p-5 flex flex-col items-center justify-between min-h-[196px] text-center"
+        <div className="bg-cc-surface rounded-2xl p-5 flex flex-col items-center justify-between min-h-[196px] text-center"
           style={{ boxShadow: CARD_SHADOW }}>
           <p className="text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: T3 }}>
             Overall Score
@@ -232,7 +233,7 @@ export default function Compliance() {
 
         {/* Three Stat Cards & Dynamic Compliance Warning Bar */}
         <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
+          <div className="bg-cc-surface rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#16A34A" }}>
               <FileCheck2 size={13} /> Compliant
             </p>
@@ -244,7 +245,7 @@ export default function Compliance() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
+          <div className="bg-cc-surface rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#D97706" }}>
               <AlertTriangle size={13} /> At Risk
             </p>
@@ -256,7 +257,7 @@ export default function Compliance() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
+          <div className="bg-cc-surface rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
             <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: "#DC2626" }}>
               <XCircle size={13} /> Non-Compliant
             </p>
@@ -270,7 +271,7 @@ export default function Compliance() {
 
           {/* Guidelines info text footer bar */}
           <div className="sm:col-span-3 rounded-2xl px-4 py-3.5 flex items-start gap-3"
-            style={{ background: `${PLUM}05`, border: `1px solid rgba(84,34,105,0.08)` }}>
+            style={{ background: PLUM_SOFT, border: `1px solid rgba(84,34,105,0.08)` }}>
             <Info size={15} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
             <p className="text-[12px] leading-relaxed font-medium" style={{ color: T2 }}>
               NDIS audit readiness requires an operational threshold score of 85%+. Sessions designated as at-risk are subject to external system rejections during regular automated processing routines.
@@ -283,7 +284,7 @@ export default function Compliance() {
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 shrink-0">
 
         {/* Documentation Failures & Progress Tracks */}
-        <div className="bg-white rounded-2xl p-5 flex flex-col" style={{ boxShadow: CARD_SHADOW }}>
+        <div className="bg-cc-surface rounded-2xl p-5 flex flex-col" style={{ boxShadow: CARD_SHADOW }}>
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 size={15} style={{ color: T3 }} />
             <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>Most Common Issues</h2>
@@ -326,7 +327,7 @@ export default function Compliance() {
         </div>
 
         {/* Financial Risk Auditing */}
-        <div className="bg-white rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
+        <div className="bg-cc-surface rounded-2xl p-5 flex flex-col justify-between" style={{ boxShadow: CARD_SHADOW }}>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <DollarSign size={15} style={{ color: T3 }} />
@@ -405,7 +406,7 @@ export default function Compliance() {
       </div>
 
       {/* AI Detected Patterns — CARECLIQV2-34 */}
-      <div className="bg-white rounded-2xl p-5 shrink-0" style={{ boxShadow: CARD_SHADOW }}>
+      <div className="bg-cc-surface rounded-2xl p-5 shrink-0" style={{ boxShadow: CARD_SHADOW }}>
         <div className="flex items-center gap-2 mb-1">
           <Sparkles size={15} style={{ color: PLUM }} />
           <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>AI Detected Patterns</h2>
@@ -478,7 +479,7 @@ export default function Compliance() {
       </div>
 
       {/* ── Audit Table Records Panel ── */}
-      <div className="bg-white rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0 border" style={{ boxShadow: CARD_SHADOW, borderColor: BORDER }}>
+      <div className="bg-cc-surface rounded-2xl overflow-hidden flex flex-col flex-1 min-h-0 border" style={{ boxShadow: CARD_SHADOW, borderColor: BORDER }}>
 
         {/* Structured Header Controls */}
         <div className="flex items-center justify-between gap-4 flex-wrap px-5 py-3.5 border-b shrink-0 bg-slate-50/40"
@@ -492,7 +493,7 @@ export default function Compliance() {
           <div className="flex items-center gap-2">
             <Filter size={13} style={{ color: T3 }} />
             <Select value={statusFilter} onValueChange={v => setStatusFilter(v as ClaimStatus)}>
-              <SelectTrigger className="h-9 w-44 text-[13px] rounded-xl font-medium shadow-sm bg-white" style={{ borderColor: BORDER, color: T2 }}>
+              <SelectTrigger className="h-9 w-44 text-[13px] rounded-xl font-medium shadow-sm bg-cc-surface" style={{ borderColor: BORDER, color: T2 }}>
                 <SelectValue placeholder="Filter profile type" />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -611,7 +612,7 @@ export default function Compliance() {
                     try { dateStr = format(parseISO(String(item.session_date)), "MMM d, yyyy"); } catch {}
                   }
                   return (
-                    <div key={String(item.session_id)} className="rounded-xl p-4 border transition-colors hover:bg-[#F6F4FB]" style={{ borderColor: "rgba(232,213,232,0.5)", background: "#fff" }}>
+                    <div key={String(item.session_id)} className="rounded-xl p-4 border transition-colors hover:bg-[#F6F4FB]" style={{ borderColor: "rgba(232,213,232,0.5)", background: 'var(--cc-surface)' }}>
                       {/* Header: Date + Status */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div>

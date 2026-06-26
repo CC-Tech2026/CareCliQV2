@@ -35,7 +35,7 @@ function ConversationList({
 }) {
   if (!conversations.length) {
     return (
-      <div className="rounded-2xl border bg-white px-6 py-10 text-center" style={{ borderColor: BORDER }}>
+      <div className="rounded-2xl border bg-cc-surface px-6 py-10 text-center" style={{ borderColor: BORDER }}>
         <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
         <p className="text-sm font-bold" style={{ color: TEXT }}>No conversations yet</p>
       </div>
@@ -50,7 +50,7 @@ function ConversationList({
           type="button"
           onClick={() => onSelect(c.id)}
           className={cn(
-            "w-full rounded-2xl border bg-white p-4 text-left transition",
+            "w-full rounded-2xl border bg-cc-surface p-4 text-left transition",
             selectedId === c.id && "ring-2",
           )}
           style={{
@@ -105,7 +105,7 @@ function ThreadView({
   const readOnly = conversation.status === "read_only";
 
   return (
-    <div className="flex h-[min(70vh,640px)] flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
+    <div className="flex h-[min(70vh,640px)] flex-col rounded-2xl border bg-cc-surface" style={{ borderColor: BORDER }}>
       <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
         <p className="text-sm font-black" style={{ color: TEXT }}>
           {conversation.participant_name ?? "Shift conversation"}
@@ -125,7 +125,7 @@ function ThreadView({
                 className="max-w-[85%] rounded-2xl px-3 py-2 text-sm"
                 style={{
                   background: mine ? PLUM : "#F5F3FC",
-                  color: mine ? "#fff" : TEXT,
+                  color: mine ? 'var(--cc-surface)' : TEXT,
                 }}
               >
                 {m.body}
@@ -240,7 +240,7 @@ export default function WorkerMessages() {
           />
         ) : (
           <div
-            className="flex h-64 items-center justify-center rounded-2xl border bg-white"
+            className="flex h-64 items-center justify-center rounded-2xl border bg-cc-surface"
             style={{ borderColor: BORDER }}
           >
             <MessageCircle size={28} style={{ color: MUTED }} />

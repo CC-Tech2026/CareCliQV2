@@ -17,6 +17,7 @@ export type PendingClockInAction = {
   location?: { lat: number; lng: number; accuracy?: number } | null;
   qrToken?: string | null;
   clientTimestamp: string;
+  claimedKm?: number | null;
   retryCount: number;
   createdAt: string;
 };
@@ -66,6 +67,7 @@ export async function enqueueClockIn(input: {
   clientTimestamp: string;
   location?: { lat: number; lng: number; accuracy?: number } | null;
   qrToken?: string | null;
+  claimedKm?: number | null;
 }): Promise<PendingClockInAction> {
   const action: PendingClockInAction = {
     id: newActionId(),
@@ -75,6 +77,7 @@ export async function enqueueClockIn(input: {
     location: input.location ?? null,
     qrToken: input.qrToken ?? null,
     clientTimestamp: input.clientTimestamp,
+    claimedKm: input.claimedKm ?? null,
     retryCount: 0,
     createdAt: new Date().toISOString(),
   };

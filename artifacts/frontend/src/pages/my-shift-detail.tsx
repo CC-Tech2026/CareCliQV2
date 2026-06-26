@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { recordShiftViewed } from "@/services/notificationService";
 import { Link, useLocation, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
@@ -26,6 +26,8 @@ import { PreShiftBriefing } from "@/components/shifts/PreShiftBriefing";
 import { ShiftSessionSplitLayout } from "@/components/shifts/ShiftSessionSplitLayout";
 import { LiveProgressNotePanel } from "@/components/shifts/LiveProgressNotePanel";
 import { ShiftMapPanel } from "@/components/shifts/ShiftMapPanel";
+import { ShiftTravelExpenseCard, type MileageDraftState } from "@/components/shifts/ShiftTravelExpenseCard";
+import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpenseCard";
 import { ShiftStageBanner } from "@/components/shifts/ShiftStageBanner";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
 import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
@@ -125,6 +127,7 @@ import {
   parseTutorialStepKey,
 } from "@/lib/worker-tutorial-scene";
 import { useWorkerTutorialOptional } from "@/contexts/WorkerTutorialContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = { id: string };
 
@@ -172,6 +175,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const { user } = useAuth();
   const tutorial = useWorkerTutorialOptional();
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const orgId = user?.organizationId ?? "__no_org__";
   const [briefingOpen, setBriefingOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
@@ -204,6 +208,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const [safetyProtocolView, setSafetyProtocolView] = useState<SafetyProtocol | null>(null);
   const [pendingClockInCount, setPendingClockInCount] = useState(0);
   const [offlineSyncing, setOfflineSyncing] = useState(false);
+  const mileageDraftRef = useRef<MileageDraftState>({
+    claimedKm: null,
+    calculatedKm: null,
+    isOverridden: false,
+  });
   const { setActiveShiftId } = useOfflineSync();
 
   useEffect(() => {
@@ -359,12 +368,17 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const performVerifiedClockIn = async (payload: ClockInRequest) => {
     if (!shift) return;
+    const mileage = mileageDraftRef.current;
+    const clockInPayload: ClockInRequest = { ...payload };
+    if (mileage.isOverridden && mileage.claimedKm != null && mileage.claimedKm > 0) {
+      clockInPayload.claimed_km = mileage.claimedKm;
+    }
     if (isTutorialDemo) {
       setTutorialDemoClockedIn(true);
       setClockInFlowOpen(false);
       toast({
-        title: "Tutorial check-in",
-        description: "Check-in preview complete — continue the walkthrough.",
+        title: translate("toast.tutorialCheckIn"),
+        description: translate("toast.tutorialCheckInDesc"),
       });
       return;
     }
@@ -375,23 +389,26 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         clientTimestamp: payload.client_timestamp || new Date().toISOString(),
         location: payload.location ?? null,
         qrToken: payload.qr_token ?? null,
+        claimedKm: clockInPayload.claimed_km ?? null,
       });
       await refreshPendingClockIn();
       window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
-        title: "Offline check-in saved",
-        description: "Your check-in will sync when you are back online.",
+        title: translate("toast.offlineCheckIn"),
+        description: translate("toast.offlineCheckInDesc"),
       });
       return;
     }
     try {
-      const updated = await clockInShift(shift.id, payload);
+      const updated = await clockInShift(shift.id, clockInPayload);
       await applyClockInResult(updated);
       setClockInFlowOpen(false);
       toast({
-        title: "Clocked in!",
-        description: `Verified arrival for ${shift.participant_name ?? "participant"}.`,
+        title: translate("toast.clockedIn"),
+        description: translateParams("toast.clockedInDesc", {
+          name: shift.participant_name ?? "participant",
+        }),
       });
     } catch (err) {
       const apiErr = err as Error & { status?: number };
@@ -404,8 +421,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
       if (isRejection) {
         toast({
-          title: "Check-in not allowed",
-          description: apiErr.message || "This check-in could not be verified.",
+          title: translate("toast.checkInNotAllowed"),
+          description: apiErr.message || translate("common.error"),
           variant: "destructive",
         });
         return;
@@ -417,13 +434,14 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         clientTimestamp: payload.client_timestamp || new Date().toISOString(),
         location: payload.location ?? null,
         qrToken: payload.qr_token ?? null,
+        claimedKm: clockInPayload.claimed_km ?? null,
       });
       await refreshPendingClockIn();
       window.dispatchEvent(new CustomEvent("offline-sync-updated"));
       setClockInFlowOpen(false);
       toast({
-        title: "Check-in saved locally",
-        description: apiErr.message || "Will retry when connection improves.",
+        title: translate("toast.checkInSavedLocal"),
+        description: apiErr.message || translate("toast.checkInSavedLocalDesc"),
         variant: "destructive",
       });
     }
@@ -448,11 +466,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           invalidate();
           await refetch();
           toast({
-            title: "Pending actions synced",
-            description:
-              result.synced === 1
-                ? "1 queued action uploaded."
-                : `${result.synced} queued actions uploaded.`,
+            title: translate("toast.pendingSynced"),
+            description: translateParams("toast.pendingSyncedDesc", {
+              count: String(result.synced),
+            }),
           });
         }
       } finally {
@@ -504,8 +521,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     } catch (err) {
       setAckChecked(false);
       toast({
-        title: "Could not acknowledge risks",
-        description: (err as Error).message || "Please try again.",
+        title: translate("toast.ackRisksFailed"),
+        description: (err as Error).message || translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -540,8 +557,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (shift.requires_safety_ack) {
       void openSafetyPage(true);
       toast({
-        title: "Safety card required",
-        description: "Read and acknowledge the participant safety card before clocking in.",
+        title: translate("toast.safetyCardRequired"),
+        description: translate("toast.safetyCardRequiredDesc"),
         variant: "destructive",
       });
       return;
@@ -549,8 +566,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
       setSafetyOpen(true);
       toast({
-        title: "Acknowledge safety alerts first",
-        description: "Review and acknowledge participant risks before clocking in.",
+        title: translate("toast.ackSafetyFirst"),
+        description: translate("toast.ackSafetyFirstDesc"),
         variant: "destructive",
       });
       return;
@@ -573,8 +590,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (shiftNeedsRiskAck(shift)) {
       setSafetyOpen(true);
       toast({
-        title: "Acknowledge safety alerts first",
-        description: "Review and acknowledge participant risks before starting a session.",
+        title: translate("toast.ackSafetyFirst"),
+        description: translate("toast.ackSafetySession"),
         variant: "destructive",
       });
       return;
@@ -596,12 +613,12 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       invalidateShifts();
       await refetch();
       toast({
-        title: "Clocked out",
-        description: "You left without starting a session.",
+        title: translate("toast.clockedOut"),
+        description: translate("toast.clockedOutDesc"),
       });
     } catch (err) {
       toast({
-        title: "Could not clock out",
+        title: translate("toast.clockOutFailed"),
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -626,12 +643,14 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       invalidateShifts();
       await refetch();
       toast({
-        title: "Shift ended",
-        description: `Documentation locked for ${shift.participant_name ?? "participant"}.`,
+        title: translate("toast.shiftEnded"),
+        description: translateParams("toast.shiftEndedDesc", {
+          name: shift.participant_name ?? "participant",
+        }),
       });
     } catch (err) {
       toast({
-        title: "Could not end shift",
+        title: translate("toast.endShiftFailed"),
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -672,10 +691,13 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     setTasks(next);
     try {
       await updateShiftTasks(shift.id, next);
-      toast({ title: "Task marked N/A", description: "Reason recorded for coordinators." });
+      toast({
+        title: translate("toast.taskMarkedNa"),
+        description: translate("toast.taskMarkedNaDesc"),
+      });
     } catch (err) {
       toast({
-        title: "Could not update task",
+        title: translate("toast.taskUpdateFailed"),
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -723,10 +745,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   if (!id) {
     return (
-      <div className="space-y-4 py-8">
-        <p className="text-sm font-bold text-red-600">Invalid shift link.</p>
+      <div className="space-y-4 py-8 text-safe">
+        <p className="text-sm font-bold text-red-600">{translate("shift.invalidLink")}</p>
         <Link href="/my-shifts">
-          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
+          <Button variant="outline" className="min-h-11 rounded-full">{translate("shift.backToShifts")}</Button>
         </Link>
       </div>
     );
@@ -734,18 +756,18 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 py-12 text-sm font-bold" style={{ color: MUTED }}>
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading shift details…
+      <div className="flex items-center gap-2 py-12 text-sm font-bold text-safe" style={{ color: MUTED }} role="status">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> {translate("shift.loading")}
       </div>
     );
   }
 
   if (error || !shift) {
     return (
-      <div className="space-y-4 py-8">
-        <p className="text-sm font-bold text-red-600">{(error as Error)?.message || "Shift not found"}</p>
+      <div className="space-y-4 py-8 text-safe">
+        <p className="text-sm font-bold text-red-600">{(error as Error)?.message || translate("shift.notFound")}</p>
         <Link href="/my-shifts">
-          <Button variant="outline" className="rounded-full">Back to My Shifts</Button>
+          <Button variant="outline" className="min-h-11 rounded-full">{translate("shift.backToShifts")}</Button>
         </Link>
       </div>
     );
@@ -842,6 +864,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       incompleteMandatory={incompleteMandatory}
       onBackToMandatoryTasks={handleBackToMandatoryTasks}
       onEndAnywayFromMandatory={handleEndAnywayFromMandatory}
+      mileageDraftRef={mileageDraftRef}
     />
   );
 
@@ -903,15 +926,15 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       <AlertDialog open={clockOutOpen} onOpenChange={setClockOutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clock out without session?</AlertDialogTitle>
+            <AlertDialogTitle>{translate("shift.clockOut.title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              You will leave this shift without documenting a session. Use this only if you could not provide support.
+              {translate("shift.clockOut.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translate("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => void handleClockOut()} disabled={busy === "clockout"}>
-              Clock Out
+              {translate("shift.clockOut.action")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -924,25 +947,25 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {forceEndPending ? "End shift with incomplete tasks?" : "End shift?"}
+              {forceEndPending ? translate("shift.endShift.incompleteTitle") : translate("shift.endShift.title")}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {forceEndPending
-                ? "Mandatory tasks are not complete. Ending now will flag this shift in your compliance report."
-                : "This completes the shift and locks documentation. You will not be able to edit notes after this."}
+                ? translate("shift.endShift.incompleteDesc")
+                : translate("shift.endShift.desc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{translate("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-[#F03060] hover:bg-[#d92854]"
+              className="bg-cc-coral hover:opacity-90"
               onClick={(event) => {
                 event.preventDefault();
                 void handleEndShift();
               }}
               disabled={busy === "end"}
             >
-              {forceEndPending ? "End Anyway" : "End Shift"}
+              {forceEndPending ? translate("shift.endShift.anyway") : translate("shift.endShiftButton")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -966,10 +989,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => closeAckDialog(false)} disabled={busy === "ack"}>
-              Cancel
+              {translate("common.cancel")}
             </Button>
-            <Button onClick={() => void handleAcknowledge()} disabled={busy === "ack"}>
-              {busy === "ack" ? "Saving…" : "Acknowledge Risks"}
+            <Button onClick={() => void handleAcknowledge()} disabled={busy === "ack"} className="min-h-11">
+              {busy === "ack" ? translate("shift.acknowledgeSaving") : translate("shift.acknowledgeRisks")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1044,10 +1067,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       <Link href="/my-shifts">
         <button
           type="button"
-          className="flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
+          className="touch-target flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
           style={{ color: PLUM }}
+          aria-label={translate("shift.backToShifts")}
         >
-          <ArrowLeft size={18} /> My Shifts
+          <ArrowLeft size={18} aria-hidden /> {translate("shift.backToShifts")}
         </button>
       </Link>
       <ShiftStageBanner
@@ -1109,6 +1133,7 @@ function ShiftWorkflow({
   incompleteMandatory,
   onBackToMandatoryTasks,
   onEndAnywayFromMandatory,
+  mileageDraftRef,
 }: {
   shift: WorkerShift;
   displayProfile?: ParticipantProfile;
@@ -1157,7 +1182,9 @@ function ShiftWorkflow({
   incompleteMandatory: ShiftTask[];
   onBackToMandatoryTasks: () => void;
   onEndAnywayFromMandatory: () => void;
+  mileageDraftRef: import("react").MutableRefObject<MileageDraftState>;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const state = STATE_STYLES[visualState] ?? STATE_STYLES.scheduled;
   const duration = shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes);
   const durationLabel = formatDurationLabel(duration);
@@ -1182,16 +1209,16 @@ function ShiftWorkflow({
     : null;
 
   const timerLabel = isSessionActive
-    ? "Session active — documenting"
-    : "At location — tap Start Session";
+    ? translate("shift.sessionActive")
+    : translate("shift.atLocation");
 
-  const timerBg = isSessionActive ? "#ECFDF5" : "#FFF7ED";
+  const timerBg = isSessionActive ? "var(--cc-status-success-bg)" : "var(--cc-status-warning-bg)";
   const timerText = isSessionActive ? "text-emerald-700" : "text-amber-700";
   const timerDot = isSessionActive ? "bg-emerald-500" : "bg-amber-500";
   const timerMono = isSessionActive ? "text-emerald-600" : "text-amber-600";
 
   return (
-    <div className="relative space-y-4 pb-4" data-tutorial="shift-workspace">
+    <div className="relative space-y-4 pb-4 text-safe" data-tutorial="shift-workspace">
       {(visualState === "clocked_in" || visualState === "session_active") && (
         <div
           data-tutorial="clock-in-complete"
@@ -1204,7 +1231,7 @@ function ShiftWorkflow({
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-[border-color] duration-300 ease-in-out"
+        className="overflow-hidden rounded-2xl border-2 bg-[var(--cc-surface)] shadow-sm transition-[border-color] duration-300 ease-in-out"
         style={{ borderColor: state.border }}
         data-tutorial="shift-header"
       >
@@ -1237,7 +1264,7 @@ function ShiftWorkflow({
               </div>
               <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
-                {durationLabel ? ` — ${durationLabel} scheduled` : ""}
+                {durationLabel ? ` — ${durationLabel} ${translate("shift.scheduledDuration")}` : ""}
               </p>
               {shift.participant_address && (
                 <p className="mt-1 flex items-start gap-1.5 text-sm font-medium" style={{ color: MUTED }}>
@@ -1253,15 +1280,15 @@ function ShiftWorkflow({
               <div className="mt-3 flex gap-2">
                 {directionsUrl && (
                   <a href={directionsUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" size="sm" className="gap-1.5 rounded-full text-xs font-bold">
-                      <Navigation size={14} /> Directions
+                    <Button variant="outline" size="sm" className="min-h-10 gap-1.5 rounded-full text-xs font-bold">
+                      <Navigation size={14} aria-hidden /> {translate("shift.directions")}
                     </Button>
                   </a>
                 )}
                 {shift.participant_phone && (
                   <a href={`tel:${shift.participant_phone}`}>
-                    <Button variant="outline" size="sm" className="gap-1.5 rounded-full text-xs font-bold">
-                      <Phone size={14} /> Call
+                    <Button variant="outline" size="sm" className="min-h-10 gap-1.5 rounded-full text-xs font-bold">
+                      <Phone size={14} aria-hidden /> {translate("shift.call")}
                     </Button>
                   </a>
                 )}
@@ -1297,21 +1324,31 @@ function ShiftWorkflow({
         />
       )}
 
+      <ShiftTravelExpenseCard
+        shiftId={shift.id}
+        shiftStatus={shift.status}
+        clockedInAt={shift.clocked_in_at}
+        mileageDraftRef={mileageDraftRef}
+      />
+
+      <ShiftTransitExpenseCard shiftId={shift.id} shiftStatus={shift.status} />
+
       {!isCompleted && visualState === "scheduled" && (
         <Button
           type="button"
           data-tutorial="clock-in"
-          className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
+          className="touch-target h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)" }}
           disabled={busy !== null || (needsRiskAck && !ackChecked)}
           onClick={onClockIn}
+          aria-label={translate("shift.clockIn")}
         >
           {busy === "clock" ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
           ) : (
             <>
-              <MapPin size={18} className="mr-2 inline" />
-              Clock In — I&apos;ve Arrived
+              <MapPin size={18} className="mr-2 inline" aria-hidden />
+              {translate("shift.clockIn")}
             </>
           )}
         </Button>
@@ -1328,12 +1365,12 @@ function ShiftWorkflow({
           />
           <button
             type="button"
-            className="w-full text-center text-xs font-semibold underline-offset-2 hover:underline"
+            className="touch-target w-full text-center text-xs font-semibold underline-offset-2 hover:underline"
             style={{ color: MUTED }}
             disabled={busy !== null}
             onClick={onRequestClockOut}
           >
-            Clock Out Without Session
+            {translate("shift.clockOutWithoutSession")}
           </button>
         </div>
       )}
@@ -1345,42 +1382,45 @@ function ShiftWorkflow({
               <Button
                 variant="outline"
                 data-tutorial="session-notes"
-                className="h-14 rounded-2xl border-2 bg-white text-base font-black shadow-sm"
+                className="touch-target h-14 rounded-2xl border-2 bg-[var(--cc-surface)] text-base font-black shadow-sm"
                 style={{ borderColor: PLUM, color: PLUM }}
                 disabled={busy !== null}
                 onClick={onOpenLiveNote}
+                aria-label={translate("shift.notes")}
               >
-                <Mic size={18} className="mr-2 inline" /> Notes
+                <Mic size={18} className="mr-2 inline" aria-hidden /> {translate("shift.notes")}
               </Button>
               <Button
-                className="h-14 rounded-2xl border-0 text-base font-black text-white"
+                className="touch-target h-14 rounded-2xl border-0 text-base font-black text-white"
                 data-tutorial="end-shift"
                 style={{ background: CORAL }}
                 disabled={busy !== null}
                 onClick={onAttemptEndShift}
+                aria-label={translate("shift.endShiftButton")}
               >
                 {busy === "end" ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                 ) : (
                   <>
-                    <Square size={16} className="mr-2 inline" /> End Shift
+                    <Square size={16} className="mr-2 inline" aria-hidden /> {translate("shift.endShiftButton")}
                   </>
                 )}
               </Button>
             </div>
           ) : (
             <Button
-              className="h-14 w-full rounded-2xl border-0 text-base font-black text-white"
+              className="touch-target h-14 w-full rounded-2xl border-0 text-base font-black text-white"
               data-tutorial="end-shift"
               style={{ background: CORAL }}
               disabled={busy !== null}
               onClick={onAttemptEndShift}
+              aria-label={translate("shift.endShiftButton")}
             >
               {busy === "end" ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
               ) : (
                 <>
-                  <Square size={16} className="mr-2 inline" /> End Shift
+                  <Square size={16} className="mr-2 inline" aria-hidden /> {translate("shift.endShiftButton")}
                 </>
               )}
             </Button>
@@ -1460,8 +1500,8 @@ function ShiftWorkflow({
               <p className="text-sm font-black text-violet-900">Safety protocols</p>
               <p className="text-xs text-violet-700">
                 {shift.requires_safety_ack
-                  ? "Acknowledgement required before clock-in"
-                  : "Available offline during your shift"}
+                  ? translate("shift.safetyRequired")
+                  : translate("shift.safetyOffline")}
               </p>
             </div>
             <Button
@@ -1482,12 +1522,12 @@ function ShiftWorkflow({
         <section
           id="shift-task-checklist"
           data-tutorial="shift-task-checklist"
-          className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+          className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
           style={{ borderColor: BORDER }}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between bg-[#F8F6FE] px-4 py-3.5 text-left"
+            className="flex w-full items-center justify-between bg-cc-bg px-4 py-3.5 text-left"
             onClick={() => setTasksOpen(!tasksOpen)}
           >
             <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
@@ -1504,7 +1544,7 @@ function ShiftWorkflow({
                   "rounded-full border px-2.5 py-1 text-[10px] font-black",
                   feedSummary.goalsComplete === feedSummary.goalsTotal && feedSummary.goalsTotal > 0
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-[#E2DEF2] bg-white text-[#6D4BDA]",
+                    : "border-cc-border bg-cc-surface text-cc-plum",
                 )}
               >
                 {feedSummary.goalsComplete}/{feedSummary.goalsTotal}

@@ -15,17 +15,17 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
     <Dialog open={open}>
       <DialogContent className="rounded-2xl sm:max-w-md" hideCloseButton>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-[#1E1640]">
-            <Clock size={18} className="text-[#F03060]" />
+          <DialogTitle className="flex items-center gap-2 text-cc-text">
+            <Clock size={18} className="text-cc-coral" />
             You'll be logged out in 2 minutes
           </DialogTitle>
           <DialogDescription>
             You have been inactive. CareCliQ will sign you out to protect participant records.
           </DialogDescription>
         </DialogHeader>
-        <div className="rounded-2xl bg-[#F5F3FC] px-5 py-4 text-center">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#7A6A9E]">Signing out in</p>
-          <p className="mt-1 text-4xl font-black text-[#5533CC]">{minutes}:{seconds}</p>
+        <div className="rounded-2xl bg-cc-bg px-5 py-4 text-center">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-cc-muted">Signing out in</p>
+          <p className="mt-1 text-4xl font-black text-cc-plum">{minutes}:{seconds}</p>
         </div>
         <DialogFooter>
           <Button onClick={onStaySignedIn} className="w-full rounded-xl">

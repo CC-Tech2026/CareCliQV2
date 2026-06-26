@@ -7,10 +7,10 @@ import {
   submitCoordinatorShiftFeedback,
 } from "@/services/workerPerformanceService";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 type Props = {
   shiftId: string;
@@ -55,7 +55,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
   };
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="space-y-4 rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <h3 className="text-sm font-black" style={{ color: TEXT }}>Structured shift feedback</h3>
       <p className="text-xs font-medium" style={{ color: MUTED }}>
         All three sections are required — this keeps feedback specific and actionable.
@@ -95,7 +95,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
                   className="rounded-full px-3 py-1 text-xs font-bold"
                   style={{
                     background: active ? PLUM : "#F8F6FE",
-                    color: active ? "#fff" : MUTED,
+                    color: active ? 'var(--cc-surface)' : MUTED,
                   }}
                 >
                   {tag.label}
@@ -112,7 +112,7 @@ export function CoordinatorShiftFeedbackForm({ shiftId, onSuccess, onCancel }: P
             type="button"
             onClick={onCancel}
             className="flex-1 rounded-full py-2.5 text-sm font-black"
-            style={{ background: "#F0EDF8", color: MUTED }}
+            style={{ background: 'var(--cc-active)', color: MUTED }}
           >
             Cancel
           </button>

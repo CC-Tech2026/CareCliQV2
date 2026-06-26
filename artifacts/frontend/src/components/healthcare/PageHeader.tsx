@@ -51,13 +51,7 @@ export function PageHeader({
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-start gap-4 flex-1">
           {Icon && (
-            <div
-              className="mt-1 p-2.5 rounded-lg"
-              style={{
-                background: DS.BRAND.primary + "10",
-                color: DS.BRAND.primary,
-              }}
-            >
+            <div className="mt-1 rounded-lg bg-cc-active p-2.5" style={{ color: DS.BRAND.primary }}>
               <Icon size={24} />
             </div>
           )}
@@ -99,15 +93,11 @@ export function PageHeader({
             className={`px-4 py-2.5 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex items-center gap-2 ${
               action.variant === "primary"
                 ? "text-white hover:opacity-90"
-                : "border hover:bg-slate-50"
+                : "border border-cc-border hover:bg-cc-bg"
             }`}
             style={{
-              backgroundColor:
-                action.variant === "primary" ? DS.BRAND.primary : "white",
-              borderColor:
-                action.variant === "secondary" ? DS.BORDER.light : undefined,
-              color:
-                action.variant === "secondary" ? TEXT.primary : undefined,
+              backgroundColor: action.variant === "primary" ? DS.BRAND.primary : DS.BACKGROUND.card,
+              color: action.variant === "secondary" ? TEXT.primary : undefined,
             }}
           >
             {action.icon}

@@ -13,12 +13,12 @@ import {
 } from "@/services/coordinatorService";
 import { Button } from "@/components/ui/button";
 
-const PLUM  = "#5533CC";
-const CORAL = "#F03060";
-const TEXT  = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT  = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 function complianceColour(score?: number | null) {
   if (score == null) return MUTED;
@@ -126,7 +126,7 @@ export default function AuditPack() {
             colour: "#D97706",
           },
         ].map(({ icon: Icon, label, value, colour }) => (
-          <section key={label} className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+          <section key={label} className="rounded-2xl bg-cc-surface p-5" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <Icon size={20} style={{ color: colour }} />
             <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{value}</p>
             <p className="text-sm font-bold" style={{ color: MUTED }}>{label}</p>
@@ -158,7 +158,7 @@ export default function AuditPack() {
             onClick={() => setActiveTab(t.key)}
             className="flex-1 rounded-lg py-2 text-xs font-bold transition-colors"
             style={{
-              background: activeTab === t.key ? "#fff" : "transparent",
+              background: activeTab === t.key ? 'var(--cc-surface)' : 'transparent',
               color: activeTab === t.key ? PLUM : MUTED,
               boxShadow: activeTab === t.key ? "0 1px 3px rgba(85,51,204,0.12)" : "none",
             }}
@@ -170,7 +170,7 @@ export default function AuditPack() {
 
       {/* ── Summary tab ── */}
       {activeTab === "summary" && (
-        <section className="rounded-2xl bg-white p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl bg-cc-surface p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>Restrictive Practice Flags</h2>
           {(compliance.error || flags.error) && <p className="text-sm text-red-600">Audit data could not be loaded.</p>}
           {(flags.data || []).length === 0 ? (
@@ -178,7 +178,7 @@ export default function AuditPack() {
           ) : (
             <div className="space-y-2">
               {(flags.data || []).map((flag, index) => (
-                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EEEAFB" }}>
+                <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: 'var(--cc-border)' }}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || "Participant"}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
@@ -197,7 +197,7 @@ export default function AuditPack() {
 
       {/* ── Worker performance tab ── */}
       {activeTab === "workers" && (
-        <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>Worker Compliance Performance</h2>
           </div>
@@ -237,7 +237,7 @@ export default function AuditPack() {
 
       {/* ── Flagged sessions tab ── */}
       {activeTab === "flagged" && (
-        <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
+        <section className="rounded-2xl bg-cc-surface overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
             <h2 className="text-sm font-black" style={{ color: TEXT }}>Sessions Flagged for Review</h2>
           </div>

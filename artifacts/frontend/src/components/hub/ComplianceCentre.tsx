@@ -3,11 +3,11 @@ import { AlertTriangle, CheckCircle2, Clock, Info, ShieldAlert } from "lucide-re
 import { format, parseISO } from "date-fns";
 import { getHubComplianceAlerts, type HubComplianceAlert } from "@/services/hubService";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
+const PLUM = "var(--cc-plum)";
 
 type Severity = "critical" | "high" | "medium" | "info" | "positive";
 
@@ -92,7 +92,7 @@ export function ComplianceCentre() {
   const high     = displayAlerts.filter((a) => a.severity === "high").length;
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>

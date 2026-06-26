@@ -704,7 +704,7 @@ export function ShiftTaskEvidencePanel({
 
   if (variant === "thread") {
     return (
-      <div className="border-t border-[#ECE6FB] bg-[#FBFAFF] p-3">
+      <div className="border-t border-[#ECE6FB] bg-cc-bg p-3">
         {task.description && (
           <p className="mb-2 text-xs font-semibold italic leading-relaxed" style={{ color: MUTED }}>
             {task.description}
@@ -712,7 +712,7 @@ export function ShiftTaskEvidencePanel({
         )}
 
         <div
-          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-[#E2DEF2] p-3"
+          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-cc-border p-3"
           style={{
             backgroundImage:
               "radial-gradient(circle at 1px 1px, #E8E4F4 1px, transparent 0)",
@@ -736,7 +736,7 @@ export function ShiftTaskEvidencePanel({
               {records.map((record) => (
                 <div
                   key={record.evidence_id}
-                  className="rounded-lg border border-[#E2DEF2] bg-white/90 px-3 py-2 text-xs font-semibold"
+                  className="rounded-lg border border-cc-border bg-cc-surface/90 px-3 py-2 text-xs font-semibold"
                   style={{ color: TEXT }}
                 >
                   {record.type === "photo" && (
@@ -789,7 +789,7 @@ export function ShiftTaskEvidencePanel({
         )}
 
         {cameraOpen && (
-          <div className="mb-2 space-y-2 rounded-xl border border-[#E2DEF2] bg-white p-2">
+          <div className="mb-2 space-y-2 rounded-xl border border-cc-border bg-cc-surface p-2">
             <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
             <div className="flex gap-2">
               <Button
@@ -822,7 +822,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || photos.length >= MAX_PHOTOS}
             onClick={() => void startCamera()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
             aria-label="Add photo"
           >
             <Camera size={14} />
@@ -831,7 +831,7 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || uploadingFile || photos.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E2DEF2] bg-white text-[#8B75D9]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
             aria-label="Attach image"
           >
             <Paperclip size={14} />
@@ -848,7 +848,7 @@ export function ShiftTaskEvidencePanel({
             disabled={disabled}
             maxLength={NOTE_MAX}
             placeholder="Write a progress update..."
-            className="h-9 min-w-0 flex-1 rounded-full border border-[#E2DEF2] bg-white px-4 text-sm"
+            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -922,8 +922,8 @@ export function ShiftTaskEvidencePanel({
   }
 
   return (
-    <div className="border-t border-[#E2DEF2]">
-      <div className="space-y-2 border-b border-[#E2DEF2] px-3 py-3" style={{ background: SOFT }}>
+    <div className="border-t border-cc-border">
+      <div className="space-y-2 border-b border-cc-border px-3 py-3" style={{ background: SOFT }}>
         <p className="text-sm font-black" style={{ color: TEXT }}>
           {task.label}
         </p>
@@ -967,7 +967,7 @@ export function ShiftTaskEvidencePanel({
             <Camera size={13} /> Photo <span className="text-emerald-600">Strong ✓</span>
           </p>
           {cameraOpen ? (
-            <div className="space-y-2 rounded-xl border border-[#E2DEF2] p-2">
+            <div className="space-y-2 rounded-xl border border-cc-border p-2">
               <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
               <div className="flex gap-2">
                 <Button className="flex-1 rounded-xl font-bold text-white" style={{ background: PLUM }} onClick={() => void capturePhoto()}>
@@ -985,7 +985,7 @@ export function ShiftTaskEvidencePanel({
               onClick={() => void startCamera()}
               className={cn(
                 "flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed py-4 text-sm font-bold",
-                photos.length ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-[#C4B5FD] bg-white",
+                photos.length ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-[#C4B5FD] bg-cc-surface",
               )}
               style={photos.length ? undefined : { color: PLUM }}
             >
@@ -1020,7 +1020,7 @@ export function ShiftTaskEvidencePanel({
               type="button"
               disabled={disabled || recording}
               onClick={() => void startRecording()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E2DEF2] bg-[#F5F3FC] py-3.5 text-sm font-bold"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-cc-border bg-cc-bg py-3.5 text-sm font-bold"
               style={{ color: PLUM }}
             >
               <Mic size={18} /> Start Voice Dictation

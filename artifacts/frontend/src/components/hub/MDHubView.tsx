@@ -6,11 +6,11 @@ import {
 import { apiFetch } from "@/lib/api-fetch";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
+const PLUM = "var(--cc-plum)";
 const AMBER  = "#F59E0B";
 
 interface MDData {
@@ -101,7 +101,7 @@ function Panel({
   noPad?: boolean;
 }) {
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <div
         className="flex items-center justify-between gap-4 px-6 py-4"
         style={{ borderBottom: `1px solid ${BORDER}` }}
@@ -256,7 +256,7 @@ export function MDHubView() {
               <XAxis dataKey="week" tick={{ fontSize: 10, fill: MUTED }} />
               <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
               <Tooltip
-                contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }}
+                contentStyle={{ borderRadius: 8, border: '1px solid var(--cc-border)', fontSize: 12 }}
                 formatter={(val: number) => [`${val}%`, "Avg Score"]}
               />
               <ReferenceLine

@@ -14,11 +14,11 @@ import {
 import { getAnnouncements, createAnnouncement, deleteAnnouncement, type Announcement } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
+const PLUM = "var(--cc-plum)";
 
 type Severity = "critical" | "high" | "medium" | "info" | "positive";
 
@@ -55,7 +55,7 @@ function NewsCard({
 
   return (
     <div
-      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-[#FAFAFA]"
+      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-cc-bg"
       style={{ borderColor: BORDER }}
     >
       <div
@@ -155,7 +155,7 @@ export function NewsFeed() {
   }
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div
         className="flex items-center justify-between gap-3 px-6 py-4"

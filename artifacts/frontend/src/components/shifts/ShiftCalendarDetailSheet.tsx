@@ -11,10 +11,6 @@ import { formatShiftTimeRange } from "@/lib/shift-utils";
 import type { CalendarShift } from "@/services/workerCalendarService";
 import { Link } from "wouter";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
 
 type Props = {
   shift: CalendarShift | null;
@@ -65,7 +61,7 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
             Status: {shift.calendar_status}
           </div>
           {shift.coordinator_notes && (
-            <div className="rounded-xl border bg-[#F8F6FE] p-3 text-sm" style={{ borderColor: BORDER }}>
+            <div className="rounded-xl border bg-cc-bg p-3 text-sm" style={{ borderColor: BORDER }}>
               <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
                 Coordinator notes
               </p>

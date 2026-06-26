@@ -258,10 +258,10 @@ export function InviteModal({
       >
         <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg text-[#1E1640]">
+          <DialogTitle className="flex items-center gap-2 text-lg text-cc-text">
             <UserPlus
               size={18}
-              className="text-[#5533CC]"
+              className="text-cc-plum"
             />
 
             {result
@@ -337,7 +337,7 @@ export function InviteModal({
 
               {selectedRole && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
-                  <p className="text-xs font-medium text-[#1E1640]">
+                  <p className="text-xs font-medium text-cc-text">
                     {selectedRole.label}
                   </p>
 
@@ -345,7 +345,7 @@ export function InviteModal({
                     {selectedRole.desc}
                   </p>
 
-                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#5533CC]">
+                  <div className="mt-3 flex items-start gap-2 text-[11px] text-cc-plum">
                     <ShieldCheck
                       size={13}
                       className="mt-0.5 shrink-0"

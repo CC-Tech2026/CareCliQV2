@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import {
   getPrivacyOverview,
   listPrivacyPolicyVersions,
@@ -14,9 +15,6 @@ import {
   type PrivacyOverview,
 } from "@/services/complianceService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BORDER = "#E2DEF2";
 
 export default function WorkerPrivacy() {
   const { toast } = useToast();
@@ -106,7 +104,7 @@ export default function WorkerPrivacy() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" />
+        <Loader2 className="h-7 w-7 animate-spin text-cc-plum" />
       </div>
     );
   }
@@ -120,29 +118,29 @@ export default function WorkerPrivacy() {
         <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
           Your data &amp; privacy
         </h1>
-        <p className="mt-2 text-sm text-[#7A6A9E]">
+        <p className="mt-2 text-sm text-cc-muted">
           Transparency and control over your personal data, in line with the Australian Privacy Act 1988.
         </p>
       </div>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-[#1E1640]">
-          <Shield className="h-5 w-5 text-[#5533CC]" /> What data we hold about you
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-cc-text">
+          <Shield className="h-5 w-5 text-cc-plum" /> What data we hold about you
         </h2>
         <div className="space-y-3">
           {(overview?.data_categories ?? []).map((cat) => (
             <div key={cat.id} className="rounded-xl border px-4 py-3" style={{ borderColor: BORDER }}>
-              <p className="font-bold text-[#1E1640]">{cat.title}</p>
-              <p className="mt-1 text-sm text-[#7A6A9E]">{cat.description}</p>
-              <p className="mt-2 text-xs font-semibold text-[#5533CC]">Retention: {cat.retention}</p>
+              <p className="font-bold text-cc-text">{cat.title}</p>
+              <p className="mt-1 text-sm text-cc-muted">{cat.description}</p>
+              <p className="mt-2 text-xs font-semibold text-cc-plum">Retention: {cat.retention}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-        <h2 className="mb-2 text-lg font-bold text-[#1E1640]">Download personal data</h2>
-        <p className="mb-4 text-sm text-[#7A6A9E]">
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+        <h2 className="mb-2 text-lg font-bold text-cc-text">Download personal data</h2>
+        <p className="mb-4 text-sm text-cc-muted">
           Request a human-readable JSON export of your data. You will receive an email with a secure download link that expires after 48 hours.
         </p>
         <Button
@@ -157,25 +155,25 @@ export default function WorkerPrivacy() {
         </Button>
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-        <h2 className="mb-2 text-lg font-bold text-[#1E1640]">Privacy policy</h2>
-        <p className="text-sm leading-relaxed text-[#1E1640]">
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
+        <h2 className="mb-2 text-lg font-bold text-cc-text">Privacy policy</h2>
+        <p className="text-sm leading-relaxed text-cc-text">
           {overview?.privacy_policy.summary_text}
         </p>
         {overview?.privacy_policy.published_at && (
-          <p className="mt-2 text-xs text-[#7A6A9E]">
+          <p className="mt-2 text-xs text-cc-muted">
             Last updated: {new Date(overview.privacy_policy.published_at).toLocaleDateString()} · Version {overview.privacy_policy.version}
           </p>
         )}
         <button
           type="button"
-          className="mt-3 flex items-center gap-1 text-sm font-bold text-[#5533CC]"
+          className="mt-3 flex items-center gap-1 text-sm font-bold text-cc-plum"
           onClick={() => setPolicyOpen(!policyOpen)}
         >
           Version history <ChevronDown className={policyOpen ? "rotate-180" : ""} size={16} />
         </button>
         {policyOpen && (
-          <ul className="mt-2 space-y-1 text-sm text-[#7A6A9E]">
+          <ul className="mt-2 space-y-1 text-sm text-cc-muted">
             {versions.map((v) => (
               <li key={v.version}>
                 v{v.version} · {v.published_at ? new Date(v.published_at).toLocaleDateString() : "—"}
@@ -186,11 +184,11 @@ export default function WorkerPrivacy() {
         )}
       </section>
 
-      <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-[1.5rem] border bg-cc-surface p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-[#1E1640]">Analytics opt-out</h2>
-            <p className="text-sm text-[#7A6A9E]">Disable product analytics tracking for your account.</p>
+            <h2 className="text-lg font-bold text-cc-text">Analytics opt-out</h2>
+            <p className="text-sm text-cc-muted">Disable product analytics tracking for your account.</p>
           </div>
           <Switch
             checked={overview?.analytics_opt_out ?? false}

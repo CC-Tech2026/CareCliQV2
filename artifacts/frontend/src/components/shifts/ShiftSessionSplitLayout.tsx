@@ -35,7 +35,7 @@ export function ShiftSessionSplitLayout({ left, right, className }: Props) {
 
       <ResizableHandle
         withHandle
-        className="bg-[#E2DEF2] data-[panel-group-direction=horizontal]:mx-1.5 data-[panel-group-direction=vertical]:my-1.5"
+        className="bg-[var(--cc-border)] data-[panel-group-direction=horizontal]:mx-1.5 data-[panel-group-direction=vertical]:my-1.5"
       />
 
       <ResizablePanel

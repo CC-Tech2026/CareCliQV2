@@ -23,19 +23,19 @@ import {
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 const STATUS_META: Record<GoalStatus, { label: string; color: string; bg: string }> = {
   progressing: { label: "Progressing",  color: "#059669", bg: "#ECFDF5" },
   achieved:    { label: "Achieved",     color: "#7C3AED", bg: "#F5F3FF" },
   stalled:     { label: "Stalled",      color: "#D97706", bg: "#FFFBEB" },
   blocked:     { label: "Blocked",      color: "#DC2626", bg: "#FEF2F2" },
-  general:     { label: "Active",       color: "#5533CC", bg: "#F5F3FC" },
+  general:     { label: "Active",       color: 'var(--cc-plum)', bg: "#F5F3FC" },
 };
 function statusMeta(s?: GoalStatus) {
   return STATUS_META[s ?? "general"] ?? STATUS_META.general;
@@ -107,7 +107,7 @@ function ScheduleReviewPanel({ group, open, onClose }: { group: ParticipantGoalG
       <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="h-9 rounded-xl text-[13px]" />
       <div className="flex gap-2">
         <Button size="sm" variant="outline" className="rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
-        <Button size="sm" className="rounded-xl text-xs" style={{ background: PLUM, color: "#fff" }} disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+        <Button size="sm" className="rounded-xl text-xs" style={{ background: PLUM, color: 'var(--cc-surface)' }} disabled={mutation.isPending} onClick={() => mutation.mutate()}>
           {mutation.isPending ? "Saving…" : "Save Date"}
         </Button>
       </div>
@@ -119,8 +119,8 @@ function ParticipantCard({ group }: { group: ParticipantGoalGroup }) {
   const [open, setOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   return (
-    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between px-5 py-4 transition-colors hover:bg-[#F5F3FC]">
+    <div className="rounded-2xl border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center justify-between px-5 py-4 transition-colors hover:bg-cc-bg">
         <div className="flex items-center gap-3 text-left min-w-0">
           <div className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-black shrink-0" style={{ background: SOFT, color: PLUM }}>
             {group.participant_name[0]}
@@ -195,7 +195,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(30,22,64,0.35)" }}>
-      <div className="w-full max-w-lg rounded-3xl p-6 space-y-4 overflow-y-auto bg-white" style={{ maxHeight: "90vh" }}>
+      <div className="w-full max-w-lg rounded-3xl p-6 space-y-4 overflow-y-auto bg-cc-surface" style={{ maxHeight: "90vh" }}>
         <div className="flex items-center justify-between">
           <h2 className="font-black text-[16px]" style={{ color: TEXT }}>{isEdit ? "Edit Goal" : "New NDIS Goal"}</h2>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X size={16} style={{ color: MUTED }} /></button>
@@ -204,7 +204,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
           <div className="space-y-1">
             <Label className="text-xs font-semibold" style={{ color: MUTED }}>Participant *</Label>
             <select value={form.participant_id} onChange={(e) => set("participant_id", e.target.value)}
-              className="w-full h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+              className="w-full h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: '1px solid var(--cc-border)', color: TEXT }}>
               <option value="">Select participant…</option>
               {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
             </select>
@@ -222,7 +222,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
               return (
                 <button key={area} type="button" onClick={() => set("goal_area", area)}
                   className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                  style={{ background: form.goal_area === area ? m.color : m.bg, color: form.goal_area === area ? "#fff" : m.color }}>
+                  style={{ background: form.goal_area === area ? m.color : m.bg, color: form.goal_area === area ? 'var(--cc-surface)' : m.color }}>
                   {m.label}
                 </button>
               );
@@ -233,13 +233,13 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
           <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
           <textarea value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} rows={2}
             placeholder="What does this goal involve?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
-            style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+            style={{ border: '1px solid var(--cc-border)', color: TEXT }} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs font-semibold" style={{ color: MUTED }}>Success Criteria</Label>
           <textarea value={form.success_criteria ?? ""} onChange={(e) => set("success_criteria", e.target.value)} rows={2}
             placeholder="How will we know this goal is achieved?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
-            style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+            style={{ border: '1px solid var(--cc-border)', color: TEXT }} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs font-semibold" style={{ color: MUTED }}>Target Date</Label>
@@ -247,7 +247,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
         </div>
         <div className="flex gap-2 pt-2">
           <Button variant="outline" className="flex-1 rounded-xl" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
-          <Button className="flex-1 rounded-xl" style={{ background: PLUM, color: "#fff" }}
+          <Button className="flex-1 rounded-xl" style={{ background: PLUM, color: 'var(--cc-surface)' }}
             disabled={!form.name.trim() || (!isEdit && !form.participant_id) || mut.isPending} onClick={() => mut.mutate()}>
             {mut.isPending ? "Saving…" : isEdit ? "Update Goal" : "Create Goal"}
           </Button>
@@ -263,17 +263,17 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
   const { data, isLoading } = useOrgQuery<GoalProgressResponse>(["goal-progress", goal.id, orgId], { queryFn: () => getGoalProgress(goal.id) });
   const pct = data ? (data.sessions_count > 0 ? Math.round((data.evidence_count / data.sessions_count) * 100) : 0) : 0;
   return (
-    <div className="rounded-2xl p-5 space-y-4 mt-3" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+    <div className="rounded-2xl p-5 space-y-4 mt-3" style={{ background: SOFT, border: '1px solid var(--cc-border)' }}>
       <div className="flex items-center justify-between">
         <p className="font-black text-[13px]" style={{ color: TEXT }}>Progress — Last 30 Days</p>
-        <button onClick={onClose} className="p-1 rounded-full hover:bg-white"><X size={14} style={{ color: MUTED }} /></button>
+        <button onClick={onClose} className="p-1 rounded-full hover:bg-cc-bg"><X size={14} style={{ color: MUTED }} /></button>
       </div>
       {isLoading && <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading…</div>}
       {data && (
         <>
           <div className="grid grid-cols-3 gap-2">
             {[["Sessions", data.sessions_count], ["With Evidence", data.evidence_count], ["Evidence Rate", `${pct}%`]].map(([l, v]) => (
-              <div key={String(l)} className="rounded-xl p-3 bg-white text-center" style={{ border: `1px solid ${BORDER}` }}>
+              <div key={String(l)} className="rounded-xl p-3 bg-cc-surface text-center" style={{ border: '1px solid var(--cc-border)' }}>
                 <p className="text-[18px] font-black" style={{ color: PLUM }}>{v}</p>
                 <p className="text-[10px] font-semibold" style={{ color: MUTED }}>{l}</p>
               </div>
@@ -291,7 +291,7 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
             <div className="space-y-2">
               <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Recent Sessions</p>
               {data.sessions.map((s: { id: string; session_date: string; status: string; compliance_score?: number; notes?: string }) => (
-                <div key={s.id} className="flex items-center justify-between rounded-xl px-3 py-2 bg-white text-[12px]" style={{ border: `1px solid ${BORDER}` }}>
+                <div key={s.id} className="flex items-center justify-between rounded-xl px-3 py-2 bg-cc-surface text-[12px]" style={{ border: '1px solid var(--cc-border)' }}>
                   <span style={{ color: TEXT }}>{s.session_date}</span>
                   <div className="flex items-center gap-2">
                     {s.notes && <span style={{ color: "#059669" }}>✓ Notes</span>}
@@ -315,7 +315,7 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
   const areaM = GOAL_AREA_META[goal.goal_area];
   const statusM = GOAL_STATUS_META[goal.status];
   return (
-    <div className="rounded-2xl p-4 space-y-3 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+    <div className="rounded-2xl p-4 space-y-3 bg-cc-surface" style={{ border: '1px solid var(--cc-border)' }}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-1.5 mb-1">
@@ -386,7 +386,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
   const set = (k: keyof TemplateFormState, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
-    <div className="rounded-2xl p-4 space-y-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+    <div className="rounded-2xl p-4 space-y-4" style={{ background: SOFT, border: '1px solid var(--cc-border)' }}>
       <div className="flex items-center justify-between">
         <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? "Edit Template" : "New Task Template"}</p>
         <button onClick={onClose}><X size={14} style={{ color: MUTED }} /></button>
@@ -398,7 +398,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
       <div className="space-y-1">
         <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
         <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} placeholder="Optional detail…"
-          className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "#fff" }} />
+          className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none" style={{ border: '1px solid var(--cc-border)', color: TEXT, background: 'var(--cc-surface)' }} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs font-semibold" style={{ color: MUTED }}>Evidence Required</Label>
@@ -406,7 +406,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
           {EVIDENCE_OPTS.map((o) => (
             <button key={o.v} type="button" onClick={() => set("evidence_required", o.v)}
               className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
-              style={{ background: form.evidence_required === o.v ? PLUM : "#fff", color: form.evidence_required === o.v ? "#fff" : MUTED, border: `1px solid ${form.evidence_required === o.v ? PLUM : BORDER}` }}>
+              style={{ background: form.evidence_required === o.v ? PLUM : 'var(--cc-surface)', color: form.evidence_required === o.v ? 'var(--cc-surface)' : MUTED, border: `1px solid ${form.evidence_required === o.v ? PLUM : BORDER}` }}>
               {o.label}
             </button>
           ))}
@@ -432,7 +432,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
                 <button key={g.id} type="button"
                   onClick={() => setLinkedGoalIds(linked ? linkedGoalIds.filter((id) => id !== g.id) : [...linkedGoalIds, g.id])}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                  style={{ background: linked ? PLUM : "#fff", color: linked ? "#fff" : MUTED, border: `1px solid ${linked ? PLUM : BORDER}` }}>
+                  style={{ background: linked ? PLUM : 'var(--cc-surface)', color: linked ? 'var(--cc-surface)' : MUTED, border: `1px solid ${linked ? PLUM : BORDER}` }}>
                   {linked && <CheckSquare size={10} />}{g.name}
                 </button>
               );
@@ -442,7 +442,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
       )}
       <div className="flex gap-2">
         <Button variant="outline" size="sm" className="flex-1 rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
-        <Button size="sm" className="flex-1 rounded-xl text-xs" style={{ background: PLUM, color: "#fff" }} disabled={!form.name.trim() || mut.isPending} onClick={() => mut.mutate()}>
+        <Button size="sm" className="flex-1 rounded-xl text-xs" style={{ background: PLUM, color: 'var(--cc-surface)' }} disabled={!form.name.trim() || mut.isPending} onClick={() => mut.mutate()}>
           {mut.isPending ? "Saving…" : templateId ? "Update" : "Create"}
         </Button>
       </div>
@@ -474,12 +474,12 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
       <div className="flex items-center gap-3 flex-wrap">
         <Label className="text-xs font-semibold shrink-0" style={{ color: MUTED }}>Participant</Label>
         <select value={selectedPid} onChange={(e) => { setSelectedPid(e.target.value); setFormOpen(false); }}
-          className="h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, minWidth: 200 }}>
+          className="h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: '1px solid var(--cc-border)', color: TEXT, minWidth: 200 }}>
           <option value="">Select participant…</option>
           {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
         </select>
         {selectedPid && (
-          <Button size="sm" className="rounded-xl gap-1.5 ml-auto" style={{ background: PLUM, color: "#fff" }}
+          <Button size="sm" className="rounded-xl gap-1.5 ml-auto" style={{ background: PLUM, color: 'var(--cc-surface)' }}
             onClick={() => { setEditTemplate(null); setLinkedGoalIds([]); setFormOpen(true); }}>
             <Plus size={14} /> New Template
           </Button>
@@ -507,7 +507,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
           <div className="space-y-2">
             <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Default Tasks ({templatesData.default_tasks.length})</p>
             {templatesData.default_tasks.map((t: import('@/services/coordinatorService').TaskTemplate) => (
-              <div key={t.id} className="flex items-start gap-3 rounded-xl p-3 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+              <div key={t.id} className="flex items-start gap-3 rounded-xl p-3 bg-cc-surface" style={{ border: '1px solid var(--cc-border)' }}>
                 <ClipboardList size={14} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
                 <div className="flex-1">
                   <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{t.name}</p>
@@ -523,12 +523,12 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
               {templatesData.custom_tasks.map((t: import('@/services/coordinatorService').TaskTemplate) => {
                 const evid = EVIDENCE_OPTS.find((o) => o.v === t.evidence_required);
                 return (
-                  <div key={t.id} className="flex items-start gap-3 rounded-xl p-3 bg-white" style={{ border: `1px solid ${BORDER}` }}>
+                  <div key={t.id} className="flex items-start gap-3 rounded-xl p-3 bg-cc-surface" style={{ border: '1px solid var(--cc-border)' }}>
                     <ClipboardList size={14} className="mt-0.5 shrink-0" style={{ color: PLUM }} />
                     <div className="flex-1 space-y-1">
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{t.name}</p>
-                        {t.is_mandatory && <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: "#FEF2F2", color: CORAL }}>Mandatory</span>}
+                        {t.is_mandatory && <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: 'var(--cc-status-critical-bg)', color: CORAL }}>Mandatory</span>}
                         {evid && evid.v !== "optional" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>{evid.label}</span>}
                         {t.estimated_duration_minutes && <span className="text-[10px] font-semibold" style={{ color: MUTED }}>~{t.estimated_duration_minutes} min</span>}
                       </div>
@@ -619,7 +619,7 @@ export default function CoordinatorGoals() {
           <p className="mt-1 text-sm" style={{ color: MUTED }}>Manage NDIS goals, track progress and configure task templates.</p>
         </div>
         {tab === "goals" && (
-          <Button className="rounded-2xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
+          <Button className="rounded-2xl gap-2" style={{ background: PLUM, color: 'var(--cc-surface)' }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
             <Plus size={16} /> New Goal
           </Button>
         )}
@@ -632,7 +632,7 @@ export default function CoordinatorGoals() {
           ["Completed",      (ndisGoals as NdisGoal[]).filter((g) => g.status === "completed").length],
           ["Need Attention", stalledCount + blockedCount],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
+          <div key={String(label)} className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-xs font-bold uppercase" style={{ color: MUTED }}>{label}</p>
             <p className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{value}</p>
           </div>
@@ -640,11 +640,11 @@ export default function CoordinatorGoals() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: SOFT, border: '1px solid var(--cc-border)' }}>
         {TABS.map((t) => (
           <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); }}
             className="flex-1 py-2 rounded-xl text-[13px] font-bold transition-all"
-            style={{ background: tab === t.id ? "#fff" : "transparent", color: tab === t.id ? PLUM : MUTED,
+            style={{ background: tab === t.id ? 'var(--cc-surface)' : 'transparent', color: tab === t.id ? PLUM : MUTED,
               boxShadow: tab === t.id ? "0 2px 8px rgba(85,51,204,0.08)" : "none" }}>
             {t.label}
           </button>
@@ -664,13 +664,13 @@ export default function CoordinatorGoals() {
             {(["all", "active", "completed", "archived"] as const).map((s) => (
               <button key={s} onClick={() => setGoalStatusFilter(s)}
                 className="rounded-full border px-3 py-1.5 text-xs font-bold capitalize transition-colors"
-                style={goalStatusFilter === s ? { background: PLUM, color: "#fff", borderColor: PLUM } : { background: "#fff", color: MUTED, borderColor: BORDER }}>
+                style={goalStatusFilter === s ? { background: PLUM, color: 'var(--cc-surface)', borderColor: PLUM } : { background: 'var(--cc-surface)', color: MUTED, borderColor: BORDER }}>
                 {s === "all" ? "All Status" : s}
               </button>
             ))}
             {legacyData.length > 0 && (
               <select value={goalParticipant} onChange={(e) => setGoalParticipant(e.target.value)}
-                className="ml-auto h-8 rounded-xl px-3 text-[12px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+                className="ml-auto h-8 rounded-xl px-3 text-[12px] outline-none" style={{ border: '1px solid var(--cc-border)', color: TEXT }}>
                 <option value="">All Participants</option>
                 {legacyData.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
               </select>
@@ -678,7 +678,7 @@ export default function CoordinatorGoals() {
           </div>
           {goalsLoading && <div className="flex items-center gap-2 py-8 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading goals…</div>}
           {!goalsLoading && filteredNdis.length === 0 && (
-            <div className="rounded-2xl border bg-white px-6 py-12 text-center" style={{ borderColor: BORDER }}>
+            <div className="rounded-2xl border bg-cc-surface px-6 py-12 text-center" style={{ borderColor: BORDER }}>
               <Target className="mx-auto h-10 w-10" style={{ color: BORDER }} />
               <p className="mt-3 font-black" style={{ color: TEXT }}>No goals found</p>
               <p className="mt-1 text-sm" style={{ color: MUTED }}>Click "New Goal" to create one</p>
@@ -705,14 +705,14 @@ export default function CoordinatorGoals() {
             ] as { key: FilterKey; label: string }[]).map(({ key, label }) => (
               <button key={key} onClick={() => setFilter(key)}
                 className="rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
-                style={filter === key ? { background: PLUM, color: "#fff", borderColor: PLUM } : { background: "#fff", color: MUTED, borderColor: BORDER }}>
+                style={filter === key ? { background: PLUM, color: 'var(--cc-surface)', borderColor: PLUM } : { background: 'var(--cc-surface)', color: MUTED, borderColor: BORDER }}>
                 {label}
               </button>
             ))}
           </div>
           {legacyLoading && <div className="flex items-center gap-2 py-8 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
           {!legacyLoading && filteredLegacy.length === 0 && (
-            <div className="rounded-2xl border bg-white px-6 py-12 text-center" style={{ borderColor: BORDER }}>
+            <div className="rounded-2xl border bg-cc-surface px-6 py-12 text-center" style={{ borderColor: BORDER }}>
               <Target className="mx-auto h-10 w-10" style={{ color: BORDER }} />
               <p className="mt-3 font-black" style={{ color: TEXT }}>No participants found</p>
             </div>

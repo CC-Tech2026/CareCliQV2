@@ -5,9 +5,17 @@ export type ComplianceBand = "green" | "amber" | "red" | "unknown";
 export type ShiftHistoryRow = {
   id: string;
   shift_date?: string;
+  scheduled_start?: string;
+  scheduled_end?: string;
+  clocked_in_at?: string;
+  clocked_out_at?: string;
   participant_id?: string;
   participant_name?: string;
   participant_first_name?: string;
+  worker_id?: string;
+  worker_name?: string;
+  coordinator_id?: string;
+  coordinator_email?: string | null;
   duration_minutes?: number | null;
   compliance_score?: number | null;
   compliance_band: ComplianceBand;
@@ -150,8 +158,28 @@ export function exportShiftPdf(shiftId: string) {
     status: string;
     file_url?: string;
     download_url?: string;
-    expires_at?: string;
+    expires_at?: string | null;
+    auto_generated?: boolean;
   }>(`/api/worker/shift-history/${shiftId}/export`, { method: "POST" });
+}
+
+export function shareShiftSummary(
+  shiftId: string,
+  payload: {
+    email_self?: boolean;
+    email_coordinator?: boolean;
+    additional_recipients?: string[];
+  },
+) {
+  return jsonFetch<{
+    export_id: string;
+    recipients: string[];
+    subject: string;
+    coordinator_emails?: string[];
+  }>(
+    `/api/worker/shift-history/${shiftId}/share`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
 }
 
 export async function downloadShiftExportFile(exportId: string, filename = "shift-export.pdf") {

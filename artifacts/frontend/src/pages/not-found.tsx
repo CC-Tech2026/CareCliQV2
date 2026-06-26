@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center" style={{ background: "#F6F4FB" }}>
       <div
-        className="w-full max-w-md mx-4 bg-white rounded-2xl p-8 text-center"
+        className="w-full max-w-md mx-4 bg-cc-surface rounded-2xl p-8 text-center"
         style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}
       >
         <div

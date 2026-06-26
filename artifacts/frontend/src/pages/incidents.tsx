@@ -10,12 +10,12 @@ import { AlertTriangle, Plus, Clock, Activity, ClipboardList, Siren, AlertCircle
 import { getIncidentStats, listIncidents } from "@/services/incidentService";
 
 // ── Design tokens — aligned with Dashboard ────────────────────────────────────
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-bg)";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const INCIDENT_TYPES: Record<string, string> = {
@@ -112,7 +112,7 @@ export default function Incidents() {
           { label: "Overdue",      value: stats?.overdue      ?? 0, icon: Clock,         valueColor: "#EA580C" },
           { label: "Critical",     value: stats?.critical     ?? 0, icon: AlertCircle,   valueColor: "#DC2626" },
         ] as const).map(({ label, value, icon: Icon, valueColor }) => (
-          <section key={label} className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+          <section key={label} className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{label}</p>
@@ -130,7 +130,7 @@ export default function Incidents() {
       {(stats?.ndis_pending ?? 0) > 0 && (
         <div
           className="rounded-lg border px-4 py-3.5 flex items-start gap-3"
-          style={{ background: "#FFF5F5", borderColor: "#FECACA", borderLeft: "3px solid #DC2626" }}
+          style={{ background: 'var(--cc-status-critical-bg)', borderColor: "#FECACA", borderLeft: "3px solid #DC2626" }}
         >
           <Siren size={15} className="shrink-0 mt-0.5 animate-pulse" style={{ color: "#DC2626" }} />
           <p className="text-sm font-medium" style={{ color: "#991B1B" }}>
@@ -171,7 +171,7 @@ export default function Incidents() {
       </div>
 
       {/* ── Incident list ────────────────────────────────────────────────────── */}
-      <section className="rounded-lg border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-lg border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
 
         {/* list header */}
         <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: BORDER }}>
@@ -206,7 +206,7 @@ export default function Incidents() {
             )}
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
+          <div className="divide-y" style={{ borderColor: 'var(--cc-border)' }}>
             {filtered.map(incident => {
               const sev = getSeverityConfig(incident.severity);
               const st  = getStatusConfig(incident.status);
@@ -214,7 +214,7 @@ export default function Incidents() {
                 <button
                   key={incident.id}
                   onClick={() => navigate(`/incidents/${incident.id}`)}
-                  className="w-full text-left px-6 py-4 flex items-center gap-4 transition hover:bg-[#F8F6FE] group"
+                  className="w-full text-left px-6 py-4 flex items-center gap-4 transition hover:bg-cc-bg group"
                   style={{ borderLeft: `3px solid ${sev.leftBorder}` }}
                 >
                   {/* Severity dot */}
@@ -225,7 +225,7 @@ export default function Incidents() {
 
                   {/* Main text */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black truncate transition group-hover:text-[#5533CC]" style={{ color: TEXT }}>
+                    <p className="text-sm font-black truncate transition group-hover:text-cc-plum" style={{ color: TEXT }}>
                       {incident.title}
                     </p>
                     <p className="text-xs font-medium mt-0.5 truncate" style={{ color: MUTED }}>

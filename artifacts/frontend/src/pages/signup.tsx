@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const PLUM_SUBTLE = "var(--cc-plum-subtle)";
+const PLUM_RING = "var(--cc-plum-ring)";
 const BLUSH = "#F8C0CE";
 const BORDER = "#D8D0F0";
 const BG = "#F5F3FC";
@@ -105,7 +107,7 @@ function StyledInput({
         style={{
           background: BG,
           border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
-          color: "#1E1640",
+          color: 'var(--cc-text)',
           WebkitAppearance: "none",
         }}
         onFocus={() => setFocused(true)}
@@ -116,7 +118,7 @@ function StyledInput({
           type="button"
           aria-label={showPassword ? "Hide password" : "Show password"}
           onClick={() => setShowPassword((value) => !value)}
-          className="absolute right-4 top-1/2 -translate-y-1/2 text-[#7A6A9E]"
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-cc-muted"
         >
           {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
@@ -156,7 +158,7 @@ function StyledSelect({
       style={{
         background: BG,
         border: `1.5px solid ${focused ? CORAL : BORDER}`,
-        color: "#1E1640",
+        color: 'var(--cc-text)',
         WebkitAppearance: "none",
       }}
       onFocus={() => setFocused(true)}
@@ -351,7 +353,7 @@ export default function Signup() {
 
   return (
     <div
-      className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden"
+      className="h-screen w-screen flex bg-cc-bg overflow-hidden"
       style={{ animation: "authPageEnter 0.3s ease-out" }}
     >
       <style
@@ -426,7 +428,7 @@ export default function Signup() {
       {/* RIGHT */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 justify-center mb-5 bg-white px-4 py-2.5 rounded-2xl border border-[#D8D0F0]/60">
+          <div className="flex items-center gap-2 justify-center mb-5 bg-cc-surface px-4 py-2.5 rounded-2xl border border-cc-border/60">
             {STEP_LABELS.map((l, i) => (
               <div key={l} className="flex-1 flex flex-col items-center gap-1">
                 <div
@@ -448,7 +450,7 @@ export default function Signup() {
             ))}
           </div>
 
-          <div className="w-full min-h-0 pointer-events-auto bg-white rounded-[2rem] px-5 py-6 sm:p-8 shadow-[0_16px_48px_-12px_rgba(84,34,105,0.08)] border border-[#E8D5E8]/50 overflow-y-auto">
+          <div className="w-full min-h-0 pointer-events-auto bg-cc-surface rounded-[2rem] px-5 py-6 sm:p-8 shadow-[0_16px_48px_-12px_rgba(84,34,105,0.08)] border border-[#E8D5E8]/50 overflow-y-auto">
             {/* STEP 0 */}
             {step === 0 && (
               <div className="space-y-4">
@@ -469,13 +471,13 @@ export default function Signup() {
                 <div
                   className="rounded-xl px-4 py-3 text-[12px] leading-relaxed"
                   style={{
-                    background: `${PLUM}08`,
-                    border: `1px solid ${PLUM}20`,
+                    background: PLUM_SUBTLE,
+                    border: `1px solid ${PLUM_RING}`,
                     color: PLUM,
                   }}
                 >
                   <span className="font-bold">Support worker?</span>{" "}
-                  <span style={{ color: "#7A6A9E" }}>
+                  <span style={{ color: 'var(--cc-muted)' }}>
                     Workers are invited by their organisation — ask your manager
                     to send you an invite link instead of signing up here.
                   </span>
@@ -492,7 +494,7 @@ export default function Signup() {
                       className="w-full text-left p-4 rounded-2xl border-2 transition-all"
                       style={{
                         borderColor: sel ? t.dot : BORDER,
-                        background: sel ? `${t.dot}10` : "white",
+                        background: sel ? `${t.dot}10` : 'var(--cc-surface)',
                       }}
                     >
                       <div className="flex items-start gap-3">
@@ -519,7 +521,7 @@ export default function Signup() {
                             )}
                           </div>
 
-                          <p className="text-sm text-[#7A6A9E]">{t.sub}</p>
+                          <p className="text-sm text-cc-muted">{t.sub}</p>
                         </div>
 
                         {sel && (
@@ -762,7 +764,7 @@ export default function Signup() {
           {step < 3 && (
             <p
               className="text-center text-[13px] font-medium mt-5 pb-1"
-              style={{ color: "#7A6A9E" }}
+              style={{ color: 'var(--cc-muted)' }}
             >
               Already have an account?{" "}
               <button

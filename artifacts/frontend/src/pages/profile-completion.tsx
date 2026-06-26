@@ -9,8 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getMe, updateMe, type UserProfile } from "@/services/userService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
 
 export default function ProfileCompletion() {
   const [, navigate] = useLocation();
@@ -77,7 +77,7 @@ export default function ProfileCompletion() {
   }
 
   if (loading) {
-    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#5533CC]" /></div>;
+    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-cc-plum" /></div>;
   }
 
   return (
@@ -87,10 +87,10 @@ export default function ProfileCompletion() {
           {isAllied ? "Allied Health" : "Support Worker"}
         </p>
         <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Complete your profile</h1>
-        <p className="mt-2 text-sm text-[#7A6A9E]">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
+        <p className="mt-2 text-sm text-cc-muted">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
       </div>
-      <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E2DEF2] bg-white p-6 shadow-sm">
-        <div className="mb-6 rounded-2xl bg-[#F5F3FC] p-4">
+      <form onSubmit={submit} className="rounded-[1.5rem] border border-cc-border bg-cc-surface p-6 shadow-sm">
+        <div className="mb-6 rounded-2xl bg-cc-bg p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
@@ -117,7 +117,7 @@ export default function ProfileCompletion() {
                 <select
                   value={profile.discipline || ""}
                   onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
-                  className="mt-1 h-10 w-full rounded-xl border border-[#E2DEF2] bg-white px-3 text-sm"
+                  className="mt-1 h-10 w-full rounded-xl border border-cc-border bg-cc-surface px-3 text-sm"
                 >
                   <option value="">Select discipline</option>
                   <option value="OT">OT</option>
@@ -134,7 +134,7 @@ export default function ProfileCompletion() {
                 <Label>Business / trading name</Label>
                 <Input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} className="mt-1 rounded-xl" />
               </div>
-              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#1E1640]">
+              <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-cc-text">
                 <input
                   type="checkbox"
                   checked={!!profile.professional_indemnity_confirmed}
@@ -145,9 +145,9 @@ export default function ProfileCompletion() {
             </>
           )}
         </div>
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F5F3FC] p-4 text-sm text-[#7A6A9E]">
+        <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-cc-bg p-4 text-sm text-cc-muted">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-[#5533CC]" />
+            <ShieldCheck className="h-5 w-5 text-cc-plum" />
             <span>Role confirmed as {isAllied ? "Allied Health Professional" : "Support Worker"}.</span>
           </div>
           <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>

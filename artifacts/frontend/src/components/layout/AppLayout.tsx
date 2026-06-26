@@ -5,7 +5,8 @@ import {
   LayoutDashboard, Users, UserRound, CalendarDays,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, Search, Bell, FileCheck2, BadgeCheck, Wrench, Target, ClipboardCheck, ClipboardList,
-  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle, CircleHelp, Clock
+  BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio, MessageCircle, CircleHelp, Clock,
+  Car, Accessibility,
 } from "lucide-react";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
@@ -18,18 +19,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
+import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { WORKER_BOTTOM_NAV_KEYS, WORKER_GROUP_KEYS, WORKER_NAV_KEYS } from "@/lib/i18n/translations";
 import { OfflineConnectivityBanner } from "@/components/offline/OfflineConnectivityBanner";
 import { SyncStatusIndicator } from "@/components/offline/SyncStatusIndicator";
 import { useOfflineSyncOptional } from "@/contexts/OfflineSyncContext";
 import { WorkerTutorialLauncher } from "@/components/help/WorkerTutorialLauncher";
 
-// ── Design Tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const MUTED  = "#7A6A9E";
-const TEXT   = "#1E1640";
-const APP_BG = "#F5F3FC";
-const ACTIVE = "#EDEAFF";
+// ── Design Tokens (CSS variables — theme/high-contrast aware) ───────────────
+const ACTIVE = "var(--cc-active)";
+const APP_BG = SOFT;
 
 type NavRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 type NavIconProps = { size?: number; strokeWidth?: number; className?: string };
@@ -75,6 +75,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/coordinator/rostering", label: "Rostering",       icon: CalendarDays },
         { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
+        { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
         { href: "/billing",     label: "Invoices",     icon: CreditCard },
         { href: "/credentials", label: "Credentials",  icon: BadgeCheck },
         { href: "/toolkit",     label: "Toolkit",       icon: Wrench },
@@ -105,6 +106,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/my-compliance", label: "My Compliance",  icon: ShieldCheck },
         { href: "/worker/performance", label: "Performance", icon: BarChart2 },
         { href: "/worker/shift-history", label: "Shift History", icon: FileBarChart2 },
+        { href: "/worker/travel", label: "Travel Expenses", icon: Car },
         { href: "/worker/training", label: "Training", icon: GraduationCap },
         { href: "/incidents",     label: "Incidents",       icon: AlertTriangle },
       ],
@@ -121,6 +123,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       group: "Account",
       items: [
         { href: "/worker/profile", label: "My Profile",      icon: UserRound },
+        { href: "/worker/accessibility", label: "Accessibility", icon: Accessibility },
         { href: "/worker/security", label: "Security",       icon: LockKeyhole },
       ],
     },
@@ -222,15 +225,42 @@ function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
 }
 
+function resolveNavLabel(
+  item: NavItem,
+  role: NavRole,
+  translate: (key: string) => string,
+): string {
+  if (role === "support_worker") {
+    const key = WORKER_NAV_KEYS[item.href];
+    if (key) return translate(key);
+  }
+  return item.label;
+}
+
+function resolveGroupLabel(
+  group: string | undefined,
+  role: NavRole,
+  translate: (key: string) => string,
+): string | undefined {
+  if (!group) return undefined;
+  if (role === "support_worker") {
+    const key = WORKER_GROUP_KEYS[group];
+    if (key) return translate(key);
+  }
+  return group;
+}
+
 // ── Sidebar contents ──────────────────────────────────────────────────────────
 function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, displayName, displayRole, initials,
   onNav, onToggle, onLogout,
+  translate,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; displayName: string; displayRole: string; initials: string;
   onNav?: () => void; onToggle: () => void; onLogout: () => void;
+  translate: (key: string) => string;
 }) {
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
@@ -292,12 +322,12 @@ function SidebarContents({
                 className="mb-1 px-1 text-[10px] font-black uppercase tracking-[0.2em]"
                 style={{ color: MUTED }}
               >
-                {section.group}
+                {resolveGroupLabel(section.group, role, translate)}
               </p>
             )}
             {/* Thin divider — shown when compact and not first section */}
             {section.group && compact && si > 0 && (
-              <div className="h-px mx-1 mb-2" style={{ background: "#E2DEF2" }} />
+              <div className="h-px mx-1 mb-2" style={{ background: BORDER }} />
             )}
 
             <div className="space-y-0.5">
@@ -306,10 +336,16 @@ function SidebarContents({
                 const Icon = item.icon;
                 const hasAlert = alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance");
                 return (
-                  <Link key={item.href} href={item.href} onClick={onNav} title={compact ? item.label : undefined}>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNav}
+                    title={compact ? resolveNavLabel(item, role, translate) : undefined}
+                    aria-label={resolveNavLabel(item, role, translate)}
+                  >
                     <div
                       className={cn(
-                        "flex items-center rounded-2xl text-[14px] transition-all w-full cursor-pointer",
+                        "flex items-center rounded-2xl text-[14px] transition-all w-full cursor-pointer touch-target",
                         compact ? "h-11 justify-center px-0" : "gap-3.5 px-4 py-3",
                       )}
                       style={{
@@ -318,10 +354,14 @@ function SidebarContents({
                         fontWeight: active ? 700 : 500,
                       }}
                     >
-                      <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                      {!compact && <span className="flex-1 truncate">{item.label}</span>}
+                      <Icon size={20} strokeWidth={active ? 2.5 : 2} aria-hidden />
+                      {!compact && (
+                        <span className="flex-1 truncate text-safe">
+                          {resolveNavLabel(item, role, translate)}
+                        </span>
+                      )}
                       {!compact && hasAlert && (
-                        <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-[#F03060] text-white text-[10px] font-black flex items-center justify-center">
+                        <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-cc-coral text-white text-[10px] font-black flex items-center justify-center">
                           {alertCount}
                         </span>
                       )}
@@ -335,7 +375,7 @@ function SidebarContents({
 
         {/* Settings — always at the bottom of the nav list */}
         {!compact && (
-          <div className="pt-1 border-t" style={{ borderColor: "#E2DEF2" }}>
+          <div className="pt-1 border-t" style={{ borderColor: BORDER }}>
             <Link href="/settings" onClick={onNav}>
               <div
                 className="flex items-center gap-3.5 rounded-2xl text-[14px] transition-all w-full cursor-pointer px-4 py-3"
@@ -393,7 +433,8 @@ function SidebarContents({
             <button
               onClick={onLogout}
               title="Sign out"
-              className="shrink-0 p-2 rounded-full hover:bg-black/5 transition-colors"
+              aria-label="Sign out"
+              className="touch-target shrink-0 p-2 rounded-full hover:bg-black/5 transition-colors"
               style={{ color: MUTED }}
             >
               <LogOut size={16} strokeWidth={2} />
@@ -408,6 +449,7 @@ function SidebarContents({
 // ── App layout ────────────────────────────────────────────────────────────────
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const { translate } = useAccessibility();
   const [searchQuery, setSearchQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -438,11 +480,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sharedProps = {
     location, collapsed, alertCount, displayName, displayRole, initials,
-    onToggle: toggleCollapse, onLogout: logout,
+    onToggle: toggleCollapse, onLogout: logout, translate,
   };
 
   return (
-    <div className="flex h-screen w-full selection:bg-pink-100" style={{ background: APP_BG, color: TEXT }}>
+    <div className="flex h-screen w-full selection:bg-cc-active" style={{ background: APP_BG, color: TEXT }}>
 
       {/* Desktop sidebar */}
       <aside
@@ -454,16 +496,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content canvas */}
       <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
-        <div className="flex-1 flex flex-col bg-white md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] overflow-hidden relative">
+        <div className="flex-1 flex flex-col bg-cc-surface md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] dark:md:shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden relative">
 
           {/* Mobile header */}
-          <header className="md:hidden h-16 flex items-center justify-between px-5 bg-white shrink-0 z-10 border-b border-black/5">
+          <header className="md:hidden h-16 flex items-center justify-between px-5 bg-cc-surface shrink-0 z-10 border-b border-cc-border">
             <Link href="/dashboard" className="flex items-center focus:outline-none py-1 active:opacity-75 transition-opacity">
               <CareCliQLogoSm />
             </Link>
             <div className="flex items-center gap-2">
               {isWorker && offlineSync && <SyncStatusIndicator />}
-              <button onClick={() => setDrawerOpen(true)} className="p-2.5 rounded-full transition-colors active:bg-black/5" style={{ color: TEXT }}>
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="touch-target p-2.5 rounded-full transition-colors active:bg-black/5"
+                style={{ color: TEXT }}
+                aria-label="Open navigation menu"
+              >
                 <Menu size={22} />
               </button>
             </div>
@@ -471,17 +518,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop topbar capsule */}
           <header className="hidden md:flex h-24 items-center px-8 shrink-0 z-10 w-full select-none">
-            <div className="flex items-center gap-4 bg-white border border-[#EBE8F5] p-2 pl-4 pr-4 rounded-[2.5rem] shadow-[0_4px_20px_rgba(122,106,158,0.06)] w-full h-16">
+            <div className="flex items-center gap-4 bg-cc-surface border border-cc-border p-2 pl-4 pr-4 rounded-[2.5rem] shadow-[0_4px_20px_rgba(122,106,158,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.25)] w-full h-16">
 
               {/* Search */}
               <div className="relative flex-1">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#7A6A9E]/60" />
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-cc-muted/60" aria-hidden />
                 <input
                   type="text"
                   placeholder={isWorker ? "Search your clients, sessions, or notes..." : "Search records, team files, or logs..."}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-11 pl-11 pr-4 rounded-full bg-white text-[13px] font-medium placeholder:text-[#7A6A9E]/40 border border-[#E2DEF2] focus:outline-none focus:border-[#5533CC] transition-all"
+                  className="w-full h-11 pl-11 pr-4 rounded-full bg-[var(--cc-surface)] text-[13px] font-medium placeholder:text-cc-muted/40 border border-cc-border focus:outline-none focus:border-cc-plum transition-all"
+                  aria-label="Search"
                 />
               </div>
 
@@ -490,11 +538,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
               {/* Bell — coordinator gets NotificationBell, workers get WorkerNotificationBell */}
               {!isWorker ? (
-                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0">
+                <div className="relative touch-target rounded-full bg-[var(--cc-surface)] border border-cc-border flex items-center justify-center hover:bg-cc-bg transition-colors shrink-0">
                   <NotificationBell onClick={() => setNotifOpen(true)} />
                 </div>
               ) : (
-                <div className="relative w-11 h-11 rounded-full bg-white border border-[#E2DEF2] flex items-center justify-center hover:bg-[#F5F3FC] transition-colors shrink-0" data-tutorial="worker-notifications">
+                <div className="relative touch-target rounded-full bg-[var(--cc-surface)] border border-cc-border flex items-center justify-center hover:bg-cc-bg transition-colors shrink-0" data-tutorial="worker-notifications">
                   <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
                 </div>
               )}
@@ -502,24 +550,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {/* Quick link */}
               {isWorker ? (
                 <Link href="/my-clients" className="shrink-0">
-                  <button className="h-11 px-5 rounded-full text-[13px] font-bold bg-white border border-[#E2DEF2] text-[#1E1640] hover:bg-[#F5F3FC] transition-all whitespace-nowrap">
-                    My Clients
+                  <button className="min-h-11 px-5 rounded-full text-[13px] font-bold bg-[var(--cc-surface)] border border-cc-border text-cc-text hover:bg-cc-bg transition-all whitespace-nowrap">
+                    {translate("dashboard.myClients")}
                   </button>
                 </Link>
               ) : (
                 <Link href="/patients" className="shrink-0">
-                  <button className="h-11 px-5 rounded-full text-[13px] font-bold bg-white border border-[#E2DEF2] text-[#1E1640] hover:bg-[#F5F3FC] transition-all whitespace-nowrap">
+                  <button className="min-h-11 px-5 rounded-full text-[13px] font-bold bg-[var(--cc-surface)] border border-cc-border text-cc-text hover:bg-cc-bg transition-all whitespace-nowrap">
                     Manage Participants
                   </button>
                 </Link>
               )}
 
-              <div className="h-6 w-[1px] bg-[#E2DEF2] mx-1 shrink-0" />
+              <div className="h-6 w-[1px] bg-cc-border mx-1 shrink-0" />
 
               {/* Alert action badge */}
               {alertCount > 0 && (
                 <Link href={topbarAlertHref} className="shrink-0">
-                  <button className="flex items-center gap-1.5 px-4 h-11 rounded-full text-[13px] font-bold transition-all hover:opacity-90 whitespace-nowrap" style={{ background: "#FFE8EE", color: CORAL }}>
+                  <button className="flex items-center gap-1.5 px-4 h-11 rounded-full text-[13px] font-bold transition-all hover:opacity-90 whitespace-nowrap bg-[var(--cc-status-critical-bg)] text-[var(--cc-status-critical)]">
                     <AlertTriangle size={14} strokeWidth={2.5} />
                     <span>{alertCount} Action Item{alertCount !== 1 ? "s" : ""}</span>
                   </button>
@@ -573,23 +621,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile bottom tabs */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-white/90 backdrop-blur-md"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-center bg-cc-surface/90 backdrop-blur-md border-t border-cc-border"
         style={{ boxShadow: "0 -8px 30px rgba(0,0,0,0.04)", paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {(ROLE_BOTTOM_NAV[userRole as NavRole] ?? ROLE_BOTTOM_NAV.support_worker).map((item) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
+          const label =
+            isWorker && WORKER_BOTTOM_NAV_KEYS[item.href]
+              ? translate(WORKER_BOTTOM_NAV_KEYS[item.href])
+              : item.label;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors relative"
+              className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors relative touch-target"
               style={{ color: active ? PLUM : MUTED }}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
             >
               {active && <div className="absolute top-0 w-10 h-[3px] rounded-b-full" style={{ background: PLUM }} />}
-              <Icon size={22} strokeWidth={active ? 2.5 : 2} className={cn("mt-1", active && "animate-in zoom-in-90 duration-200")} />
-              <span className={cn("text-[11px] leading-none", active ? "font-bold" : "font-medium")}>
-                {item.label}
+              <Icon size={22} strokeWidth={active ? 2.5 : 2} className={cn("mt-1", active && "animate-in zoom-in-90 duration-200")} aria-hidden />
+              <span className={cn("text-[11px] leading-none text-safe", active ? "font-bold" : "font-medium")}>
+                {label}
               </span>
             </Link>
           );
@@ -608,7 +662,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile drawer */}
       <aside
         className={cn(
-          "md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-white flex flex-col transition-transform duration-300 ease-out",
+          "md:hidden fixed inset-y-0 left-0 z-50 w-72 bg-cc-surface flex flex-col transition-transform duration-300 ease-out border-r border-cc-border",
           drawerOpen ? "translate-x-0" : "-translate-x-full",
         )}
         style={{ boxShadow: "10px 0 40px rgba(0,0,0,0.08)" }}
