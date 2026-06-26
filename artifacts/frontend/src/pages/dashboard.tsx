@@ -40,6 +40,7 @@ import {
 } from "@/services/dashboardService";
 import { getWorkerComplianceDetail } from "@/services/workerService";
 import { getCoordinatorFlaggedSessions, getCoordinatorCredentialAlerts } from "@/services/coordinatorService";
+import { getCoordinatorAckRate } from "@/services/workerPerformanceService";
 
 // Design system tokens (replaces hardcoded colors)
 const TEXT = DS.TEXT.primary;
@@ -612,6 +613,10 @@ function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
 }
 
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
+  const ackQuery = useOrgQuery(["coordinator", "feedback-ack-rate"], {
+    queryFn: getCoordinatorAckRate,
+    staleTime: 60_000,
+  });
   const teamParticipants = data.team_participants ?? data.participants ?? 0;
   const sessionsThisWeek = data.sessions_this_week ?? data.todays_sessions.length;
   const incidentsThisMonth = data.incidents_this_month ?? data.incident_alerts.length;
@@ -705,6 +710,21 @@ function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
           </p>
         </div>
       </div>
+
+      {ackQuery.data && ackQuery.data.total > 0 && (
+        <div
+          className="rounded-lg border px-4 py-3 text-sm font-bold"
+          style={{ borderColor: BORDER, background: SOFT, color: TEXT }}
+        >
+          Feedback acknowledgement rate:{" "}
+          <span style={{ color: PLUM }}>
+            {ackQuery.data.rate_percent ?? 0}%
+          </span>
+          <span className="font-medium" style={{ color: MUTED }}>
+            {" "}({ackQuery.data.acknowledged} of {ackQuery.data.total} items acknowledged)
+          </span>
+        </div>
+      )}
 
       {/* Action Cards */}
       <CoordinatorQuickActionCards data={data} />

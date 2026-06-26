@@ -41,6 +41,7 @@ from ..services.notification_service import (
 )
 from ..services import conversation_service
 from ..services.supabase_client import get_supabase_admin
+from ..services import shift_feedback_service, shift_pdf_export_service, worker_training_service
 
 
 router = APIRouter(prefix="/coordinator", tags=["coordinator"])
@@ -3240,3 +3241,159 @@ async def coordinator_get_shift_signature(
     if not signature:
         raise HTTPException(status_code=404, detail="No signature on file for this shift")
     return signature
+
+
+# ── CARECLIQV2-285/287: Shift feedback & export ────────────────────────────────
+
+class ShiftFeedbackBody(BaseModel):
+    strengths: str = Field(min_length=1)
+    areas_to_improve: str = Field(min_length=1)
+    action_items: str = Field(min_length=1)
+    tag_ids: list[str] = Field(default_factory=list)
+
+
+@router.post("/shifts/{shift_id}/feedback", status_code=201)
+async def coordinator_submit_shift_feedback(
+    shift_id: str,
+    body: ShiftFeedbackBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return await shift_feedback_service.submit_shift_feedback(
+        coordinator_id=get_user_id(current_user),
+        organization_id=org_id,
+        shift_id=shift_id,
+        strengths=body.strengths,
+        areas_to_improve=body.areas_to_improve,
+        action_items=body.action_items,
+        tag_ids=body.tag_ids,
+    )
+
+
+@router.get("/shifts/{shift_id}/feedback")
+async def coordinator_list_shift_feedback(shift_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return {"feedback": shift_feedback_service.list_feedback_for_shift(shift_id)}
+
+
+@router.get("/feedback/acknowledgement-rate")
+async def coordinator_feedback_ack_rate(current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    return shift_feedback_service.coordinator_acknowledgement_rate(org_id)
+
+
+@router.get("/feedback/tags")
+async def coordinator_feedback_tags(
+    category: Optional[str] = Query(default=None),
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    shift_feedback_service.ensure_default_tags(org_id)
+    return {"tags": shift_feedback_service.list_feedback_tags(org_id, category)}
+
+
+@router.post("/shifts/{shift_id}/export", status_code=201)
+async def coordinator_export_shift(shift_id: str, current_user: dict = Depends(get_current_user)):
+    org_id = _require_coordinator(current_user)
+    shift = shift_service.get_shift_by_id(shift_id)
+    if not shift or str(shift.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return shift_pdf_export_service.create_shift_export(
+        shift_id,
+        get_user_id(current_user),
+        org_id,
+        is_coordinator=True,
+        worker_id=str(shift.get("worker_id") or ""),
+    )
+
+
+# ── CARECLIQV2-289: Training administration ───────────────────────────────────
+
+class TrainingModuleBody(BaseModel):
+    title: str = Field(min_length=1)
+    description: Optional[str] = None
+    linked_credential_type: Optional[str] = None
+    requires_certification: bool = False
+
+
+class TrainingCompletionReviewBody(BaseModel):
+    approved: bool
+    rejection_reason: Optional[str] = None
+
+
+class TrainingRequestActionBody(BaseModel):
+    approved: bool
+    response: Optional[str] = None
+
+
+class TrainingRecommendBody(BaseModel):
+    worker_id: str
+    title: str = Field(min_length=1)
+    training_module_id: Optional[str] = None
+
+
+@router.post("/training/modules", status_code=201)
+async def coordinator_create_training_module(
+    body: TrainingModuleBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    payload = {
+        **body.model_dump(),
+        "organization_id": org_id,
+        "created_by": get_user_id(current_user),
+    }
+    result = get_supabase_admin().table("training_modules").insert(payload).execute()
+    return result.data[0] if result.data else payload
+
+
+@router.post("/training/completions/{completion_id}/review")
+async def coordinator_review_training_completion(
+    completion_id: str,
+    body: TrainingCompletionReviewBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return await worker_training_service.review_training_completion(
+        completion_id,
+        get_user_id(current_user),
+        org_id,
+        approved=body.approved,
+        rejection_reason=body.rejection_reason,
+    )
+
+
+@router.post("/training/requests/{request_id}/action")
+async def coordinator_action_training_request(
+    request_id: str,
+    body: TrainingRequestActionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    return await worker_training_service.action_training_request(
+        request_id,
+        get_user_id(current_user),
+        org_id,
+        approved=body.approved,
+        response=body.response,
+    )
+
+
+@router.post("/training/recommend", status_code=201)
+async def coordinator_recommend_training(
+    body: TrainingRecommendBody,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = _require_coordinator(current_user)
+    payload = {
+        "worker_id": body.worker_id,
+        "coordinator_id": get_user_id(current_user),
+        "organization_id": org_id,
+        "title": body.title,
+        "training_module_id": body.training_module_id,
+    }
+    result = get_supabase_admin().table("worker_training_recommendations").insert(payload).execute()
+    return result.data[0] if result.data else payload

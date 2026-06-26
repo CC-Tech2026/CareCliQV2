@@ -103,6 +103,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       group: "Safety",
       items: [
         { href: "/my-compliance", label: "My Compliance",  icon: ShieldCheck },
+        { href: "/worker/performance", label: "Performance", icon: BarChart2 },
+        { href: "/worker/shift-history", label: "Shift History", icon: FileBarChart2 },
+        { href: "/worker/training", label: "Training", icon: GraduationCap },
         { href: "/incidents",     label: "Incidents",       icon: AlertTriangle },
       ],
     },
