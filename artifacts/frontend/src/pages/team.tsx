@@ -4,7 +4,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   Mail, UserPlus, Users, ShieldCheck, AlertTriangle, Clock,
   FileText, CheckCircle2, XCircle, ToggleLeft, ToggleRight,
-  UserCheck, UserX, Loader2, ChevronRight, Link2,
+  UserCheck, UserX, Loader2, ChevronRight, Link2, Plus,
 } from "lucide-react";
 import { useGetParticipants } from "@workspace/api-client-react";
 import {
