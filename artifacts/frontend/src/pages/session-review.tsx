@@ -106,7 +106,7 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
       <div className="w-full max-w-md rounded-xl border bg-white shadow-xl" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
           <h3 className="text-base font-black" style={{ color: T1 }}>Send Back to Worker</h3>
-          <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <button onClick={onClose} title="Close" className="rounded-lg p-1 hover:bg-gray-100">
             <X size={16} style={{ color: T3 }} />
           </button>
         </div>
@@ -405,7 +405,7 @@ export default function SessionReview() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>

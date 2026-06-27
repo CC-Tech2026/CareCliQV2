@@ -176,7 +176,7 @@ export default function Toolkit() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Clinical" : "Support Worker"}

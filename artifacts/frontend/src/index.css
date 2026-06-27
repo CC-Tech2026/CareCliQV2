@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap');
 
 /* ── Scrollbar Styling ────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
@@ -132,6 +133,7 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
   --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
 
@@ -139,6 +141,14 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /* ── CareCliQ Design System Colors ── */
+  --color-cc-plum: var(--cc-plum);
+  --color-cc-coral: var(--cc-coral);
+  --color-cc-text: var(--cc-text);
+  --color-cc-muted: var(--cc-muted);
+  --color-cc-border: var(--cc-border);
+  --color-cc-soft: var(--cc-soft);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -174,22 +184,31 @@
    inline style={{ color: "var(--cc-plum)" }} etc. They adapt to .dark class.
    ─────────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Brand */
-  --cc-plum:       #3730A3;
-  --cc-coral:      #BE185D;
-  --cc-green:      #166534;
-  /* Neutrals */
+  /* ── Core brand ── */
+  --cc-plum:       #3730A3;   /* deep indigo — primary actions, active states    */
+  --cc-coral:      #BE185D;   /* deep rose   — incidents, destructive, alerts    */
+  --cc-green:      #166534;   /* forest green — compliance success, health +ve   */
+  /* ── Extended status ── */
+  --cc-amber:      #B45309;   /* amber-700   — warnings, shift-related actions   */
+  --cc-amber-tint: #FFFBEB;
+  --cc-sky:        #0369A1;   /* sky-700     — informational states              */
+  --cc-sky-tint:   #F0F9FF;
+  /* ── Neutrals ── */
   --cc-text:       #111827;
   --cc-muted:      #6B7280;
   --cc-border:     #E5E7EB;
-  /* Surfaces */
+  /* ── Surfaces ── */
   --cc-bg:         #FFFFFF;
   --cc-surface:    #FFFFFF;
   --cc-soft:       #F8F8FE;
-  /* Nav state */
+  /* ── Nav state ── */
   --cc-active-bg:  #EEF2FF;
-  /* Alert pill */
+  /* ── Alert pill ── */
   --cc-alert-bg:   #FCE7F3;
+  /* ── Shadow language (plum-tinted, for modals/overlays only — no card shadows) ── */
+  --cc-shadow-sm:  0 2px 8px rgba(55,48,163,0.06), 0 1px 3px rgba(55,48,163,0.04);
+  --cc-shadow-md:  0 4px 16px rgba(55,48,163,0.09), 0 2px 6px rgba(55,48,163,0.04);
+  --cc-shadow-lg:  0 20px 60px rgba(55,48,163,0.13), 0 8px 24px rgba(55,48,163,0.06);
 }
 
 .dark {
@@ -197,6 +216,11 @@
   --cc-plum:       #818CF8;
   --cc-coral:      #F472B6;
   --cc-green:      #4ADE80;
+  /* Extended status — lighter for dark bg */
+  --cc-amber:      #FCD34D;
+  --cc-amber-tint: rgba(180, 83, 9, 0.15);
+  --cc-sky:        #38BDF8;
+  --cc-sky-tint:   rgba(3, 105, 161, 0.15);
   /* Neutrals */
   --cc-text:       #F9FAFB;
   --cc-muted:      #9CA3AF;
@@ -209,6 +233,10 @@
   --cc-active-bg:  #1E1B4B;
   /* Alert pill */
   --cc-alert-bg:   rgba(190, 24, 93, 0.2);
+  /* Shadows — subtler on dark */
+  --cc-shadow-sm:  0 2px 8px rgba(0,0,0,0.25);
+  --cc-shadow-md:  0 4px 16px rgba(0,0,0,0.3);
+  --cc-shadow-lg:  0 20px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
 }
 
 /* ── Dark mode global surface overrides ─────────────────────────────────────
@@ -335,6 +363,7 @@
   --chart-5: 25  90%  58%;  /* amber  */
 
   --app-font-sans: 'Inter', sans-serif;
+  --app-font-display: 'Plus Jakarta Sans', 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
   --radius: .5rem; /* 8px */

@@ -118,7 +118,7 @@ export function ShiftAssignmentModal({
   const assignMut = useMutation({
     mutationFn: () =>
       assignShift({
-        worker_id:       selectedWorkerId,
+        worker_id:       selectedWorkerId || undefined,
         participant_id:  selectedParticipantId,
         scheduled_start: scheduledStart,
         scheduled_end:   scheduledEnd || undefined,
@@ -127,7 +127,12 @@ export function ShiftAssignmentModal({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
-      toast({ title: "Shift assigned", description: "Worker has been notified of the new shift." });
+      toast({
+        title: selectedWorkerId ? "Shift assigned" : "Shift created",
+        description: selectedWorkerId
+          ? "Worker has been notified of the new shift."
+          : "Unassigned shift added to the roster.",
+      });
       resetForm();
       onOpenChange(false);
     },
@@ -170,10 +175,9 @@ export function ShiftAssignmentModal({
   const hasGoalsTasksError = !goalsTasksCheckQuery.isLoading && selectedParticipantId && !goalsTasksValid;
 
   const canSubmit = Boolean(
-    selectedWorkerId &&
     selectedParticipantId &&
     scheduledStart &&
-    !hasBlock &&
+    (!selectedWorkerId || !hasBlock) &&
     goalsTasksValid &&
     !assignMut.isPending
   );
@@ -193,9 +197,9 @@ export function ShiftAssignmentModal({
       >
         {/* Header */}
         <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Assign Shift</h2>
+          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Create Shift</h2>
           <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
-            Create and assign a new shift for a support worker.
+            Schedule a new shift. Assign a worker now or leave unassigned for later.
           </p>
         </div>
 
@@ -203,7 +207,10 @@ export function ShiftAssignmentModal({
         <div className="max-h-[68vh] overflow-y-auto px-6 py-5 space-y-5">
           {/* Worker */}
           <div className="space-y-2">
-            <label className="text-[12px] font-black" style={{ color: TEXT }}>Support Worker</label>
+            <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
+              Support Worker
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>optional</span>
+            </label>
             {worker ? (
               <div
                 className="flex items-center justify-between rounded-xl border px-4 py-3"
@@ -230,11 +237,20 @@ export function ShiftAssignmentModal({
                 <ShieldCheck size={16} style={{ color: "#16A34A" }} />
               </div>
             ) : (
-              <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
+              <Select
+                value={selectedWorkerId || "__unassigned__"}
+                onValueChange={(val) => setSelectedWorkerId(val === "__unassigned__" ? "" : val)}
+              >
                 <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                  <SelectValue placeholder="Select a worker…" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__unassigned__">
+                    <span className="flex items-center gap-2" style={{ color: MUTED }}>
+                      <User2 size={12} />
+                      Unassigned
+                    </span>
+                  </SelectItem>
                   {workers.map((w) => (
                     <SelectItem key={w.id} value={w.id}>
                       <span className="flex items-center gap-2">
@@ -448,21 +464,26 @@ export function ShiftAssignmentModal({
           )}
 
           {/* Summary */}
-          {selectedWorkerData && selectedParticipant && scheduledStart && !hasGoalsTasksError && (
+          {selectedParticipant && scheduledStart && !hasGoalsTasksError && (
             <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
               <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>Shift Summary</p>
               <div className="space-y-1.5 text-[12px]">
-                {[
-                  ["Worker",      selectedWorkerData.full_name],
+                {([
+                  ["Worker",      selectedWorkerData?.full_name ?? "Unassigned"],
                   ["Participant", selectedParticipant.full_name],
                   ["Type",        SHIFT_TYPE_LABELS[shiftType] || shiftType],
                   ["Start",       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
                   ...(scheduledEnd ? [["End", format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
                   ...(selectedTaskIds.length > 0 ? [["Tasks", `${selectedTaskIds.length} selected`] as [string, string]] : []),
-                ].map(([label, value]) => (
+                ] as [string, string][]).map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between gap-4">
                     <span style={{ color: MUTED }}>{label}</span>
-                    <span className="font-bold text-right" style={{ color: TEXT }}>{value}</span>
+                    <span
+                      className="font-bold text-right"
+                      style={{ color: label === "Worker" && !selectedWorkerData ? MUTED : TEXT }}
+                    >
+                      {value}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -490,13 +511,15 @@ export function ShiftAssignmentModal({
             style={{ background: canSubmit ? PLUM : MUTED }}
           >
             {assignMut.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Assigning…</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {selectedWorkerId ? "Assigning…" : "Creating…"}</>
             ) : hasGoalsTasksError ? (
               <><AlertTriangle size={14} /> Set Up Goals First</>
             ) : hasBlock ? (
               <><AlertTriangle size={14} /> Credentials Required</>
-            ) : (
+            ) : selectedWorkerId ? (
               <><CalendarClock size={14} /> Assign Shift</>
+            ) : (
+              <><CalendarClock size={14} /> Create Unassigned Shift</>
             )}
           </Button>
         </div>

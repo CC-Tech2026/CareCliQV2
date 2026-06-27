@@ -439,7 +439,7 @@ export default function CoordinatorRosteringPage() {
     : `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), "d MMM yyyy")}`;
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-5 pb-12">
+    <div className="space-y-5 pb-12">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
@@ -514,6 +514,7 @@ export default function CoordinatorRosteringPage() {
         {viewMode !== "list" && viewMode !== "schedule" && (
           <div className="flex items-center gap-2">
             <button
+              title="Previous period"
               onClick={handlePrev}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
@@ -522,6 +523,7 @@ export default function CoordinatorRosteringPage() {
             </button>
             <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
             <button
+              title="Next period"
               onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
@@ -651,17 +653,17 @@ export default function CoordinatorRosteringPage() {
           {/* Period nav for schedule view */}
           <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
             <button
+              title="Previous week"
               onClick={handlePrev}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
             >
               <ChevronLeft size={15} />
             </button>
-            <span className="min-w-[180px] text-center text-[13px] font-black" style={{ color: PLUM }}>
+            <span>
               {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
             </span>
-            <button
-              onClick={handleNext}
+            <button title="Next week" onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
             >

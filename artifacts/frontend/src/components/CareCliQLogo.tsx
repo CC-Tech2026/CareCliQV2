@@ -18,12 +18,7 @@ export function CareCliQLogo({ compact = false, className = "" }: CareCliQLogoPr
       {!compact && (
         <span
           className="font-black text-[18px] tracking-tight leading-none"
-          style={{
-            background: "linear-gradient(135deg, #EC4899 0%, #9333EA 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
+          style={{ color: "var(--cc-plum)", fontFamily: "var(--app-font-display)" }}
         >
           CareCliQ
         </span>

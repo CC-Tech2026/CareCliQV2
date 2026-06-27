@@ -178,9 +178,9 @@ const BLANK_GOAL: NdisGoalPayload = {
   description: "", target_date: null, success_criteria: "", related_task_ids: [], status: "active",
 };
 
-function GoalFormModal({ goal, participants, onClose, onSaved }: {
+function GoalFormModal({ goal, participants, onClose, onSaved, isModal = true, selectedParticipantId }: {
   goal: Partial<NdisGoal> | null; participants: ParticipantGoalGroup[];
-  onClose: () => void; onSaved: () => void;
+  onClose: () => void; onSaved: () => void; isModal?: boolean; selectedParticipantId?: string;
 }) {
   const { toast } = useToast();
   const isEdit = !!goal?.id;
@@ -188,7 +188,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
     goal ? { participant_id: goal.participant_id ?? "", name: goal.name ?? "", goal_area: goal.goal_area ?? "daily_living",
       description: goal.description ?? "", target_date: goal.target_date ?? null,
       success_criteria: goal.success_criteria ?? "", related_task_ids: goal.related_task_ids ?? [], status: goal.status ?? "active",
-    } : { ...BLANK_GOAL }
+    } : { ...BLANK_GOAL, participant_id: selectedParticipantId ?? "" }
   );
   const mut = useMutation({
     mutationFn: () => isEdit ? updateNdisGoal(goal!.id!, form) : createNdisGoal(form),
@@ -197,68 +197,86 @@ function GoalFormModal({ goal, participants, onClose, onSaved }: {
   });
   const set = (k: keyof NdisGoalPayload, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,24,39,0.35)" }}>
-      <div className="w-full max-w-lg rounded-3xl p-6 space-y-4 overflow-y-auto bg-white" style={{ maxHeight: "90vh" }}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-black text-[16px]" style={{ color: TEXT }}>{isEdit ? "Edit Goal" : "New NDIS Goal"}</h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X size={16} style={{ color: MUTED }} /></button>
-        </div>
-        {!isEdit && (
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold" style={{ color: MUTED }}>Participant *</Label>
-            <select value={form.participant_id} onChange={(e) => set("participant_id", e.target.value)}
-              className="w-full h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option value="">Select participant…</option>
-              {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
-            </select>
-          </div>
-        )}
+  const content = (
+    <>
+      <div className="flex items-center justify-between">
+        <h2 className="font-black text-[16px]" style={{ color: TEXT }}>{isEdit ? "Edit Goal" : "New NDIS Goal"}</h2>
+        {isModal && <button onClick={onClose} title="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={16} style={{ color: MUTED }} /></button>}
+      </div>
+      {!isEdit && !selectedParticipantId && (
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Name *</Label>
-          <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Increase community participation" className="rounded-xl h-9 text-[13px]" />
+          <Label className="text-xs font-semibold" style={{ color: MUTED }} htmlFor="participant-select">Participant *</Label>
+          <select id="participant-select" title="Participant" value={form.participant_id} onChange={(e) => set("participant_id", e.target.value)}
+            className="w-full h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
+            <option value="">Select participant…</option>
+            {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
+          </select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Area</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {(Object.keys(GOAL_AREA_META) as NdisGoal["goal_area"][]).map((area) => {
-              const m = GOAL_AREA_META[area];
-              return (
-                <button key={area} type="button" onClick={() => set("goal_area", area)}
-                  className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
-                  style={{ background: form.goal_area === area ? m.color : m.bg, color: form.goal_area === area ? "#fff" : m.color }}>
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
+      )}
+      {!isEdit && selectedParticipantId && (
+        <div className="space-y-1 pb-2 border-b" style={{ borderColor: BORDER }}>
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>Participant</p>
+          <p className="font-semibold text-[13px]" style={{ color: TEXT }}>
+            {participants.find((p) => p.participant_id === selectedParticipantId)?.participant_name}
+          </p>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
-          <textarea value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} rows={2}
-            placeholder="What does this goal involve?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
-            style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Success Criteria</Label>
-          <textarea value={form.success_criteria ?? ""} onChange={(e) => set("success_criteria", e.target.value)} rows={2}
-            placeholder="How will we know this goal is achieved?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
-            style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Target Date</Label>
-          <Input type="date" value={form.target_date ?? ""} onChange={(e) => set("target_date", e.target.value || null)} className="rounded-xl h-9 text-[13px]" />
-        </div>
-        <div className="flex gap-2 pt-2">
-          <Button variant="outline" className="flex-1 rounded-xl" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
-          <Button className="flex-1 rounded-xl" style={{ background: PLUM, color: "#fff" }}
-            disabled={!form.name.trim() || (!isEdit && !form.participant_id) || mut.isPending} onClick={() => mut.mutate()}>
-            {mut.isPending ? "Saving…" : isEdit ? "Update Goal" : "Create Goal"}
-          </Button>
+      )}
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Name *</Label>
+        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Increase community participation" className="rounded-xl h-9 text-[13px]" />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Area</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {(Object.keys(GOAL_AREA_META) as NdisGoal["goal_area"][]).map((area) => {
+            const m = GOAL_AREA_META[area];
+            return (
+              <button key={area} type="button" onClick={() => set("goal_area", area)}
+                className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                style={{ background: form.goal_area === area ? m.color : m.bg, color: form.goal_area === area ? "#fff" : m.color }}>
+                {m.label}
+              </button>
+            );
+          })}
         </div>
       </div>
-    </div>
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
+        <textarea value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} rows={2}
+          placeholder="What does this goal involve?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
+          style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Success Criteria</Label>
+        <textarea value={form.success_criteria ?? ""} onChange={(e) => set("success_criteria", e.target.value)} rows={2}
+          placeholder="How will we know this goal is achieved?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
+          style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Target Date</Label>
+        <Input type="date" value={form.target_date ?? ""} onChange={(e) => set("target_date", e.target.value || null)} className="rounded-xl h-9 text-[13px]" />
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Button variant="outline" className="flex-1 rounded-xl" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
+        <Button className="flex-1 rounded-xl" style={{ background: PLUM, color: "#fff" }}
+          disabled={!form.name.trim() || (!isEdit && !form.participant_id) || mut.isPending} onClick={() => mut.mutate()}>
+          {mut.isPending ? "Saving…" : isEdit ? "Update Goal" : "Create Goal"}
+        </Button>
+      </div>
+    </>
   );
+
+  if (isModal) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(17,24,39,0.35)" }}>
+        <div className="w-full max-w-lg rounded-3xl p-6 space-y-4 overflow-y-auto bg-white" style={{ maxHeight: "90vh" }}>
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return <div className="rounded-2xl p-6 space-y-4 h-full overflow-y-auto" style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}` }}>{content}</div>;
 }
 
 function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => void }) {
@@ -270,7 +288,7 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
     <div className="rounded-2xl p-5 space-y-4 mt-3" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between">
         <p className="font-black text-[13px]" style={{ color: TEXT }}>Progress — Last 30 Days</p>
-        <button onClick={onClose} className="p-1 rounded-full hover:bg-white"><X size={14} style={{ color: MUTED }} /></button>
+        <button onClick={onClose} title="Close" className="p-1 rounded-full hover:bg-white"><X size={14} style={{ color: MUTED }} /></button>
       </div>
       {isLoading && <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading…</div>}
       {data && (
@@ -393,7 +411,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
     <div className="rounded-2xl p-4 space-y-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between">
         <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? "Edit Template" : "New Task Template"}</p>
-        <button onClick={onClose}><X size={14} style={{ color: MUTED }} /></button>
+        <button onClick={onClose} title="Close"><X size={14} style={{ color: MUTED }} /></button>
       </div>
       <div className="space-y-1">
         <Label className="text-xs font-semibold" style={{ color: MUTED }}>Task Name *</Label>
@@ -477,7 +495,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <Label className="text-xs font-semibold shrink-0" style={{ color: MUTED }}>Participant</Label>
-        <select value={selectedPid} onChange={(e) => { setSelectedPid(e.target.value); setFormOpen(false); }}
+        <select value={selectedPid} onChange={(e) => { setSelectedPid(e.target.value); setFormOpen(false); }} title="Participant"
           className="h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, minWidth: 200 }}>
           <option value="">Select participant…</option>
           {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
@@ -539,10 +557,10 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
                       {t.description && <p className="text-[11px]" style={{ color: MUTED }}>{t.description}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => { setEditTemplate(t); setLinkedGoalIds(t.linked_goal_ids ?? []); setFormOpen(true); }}>
+                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title="Edit" onClick={() => { setEditTemplate(t); setLinkedGoalIds(t.linked_goal_ids ?? []); setFormOpen(true); }}>
                         <Edit2 size={12} style={{ color: MUTED }} />
                       </button>
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => deleteMut.mutate(t.id)}>
+                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title="Delete" onClick={() => deleteMut.mutate(t.id)}>
                         <Trash2 size={12} style={{ color: CORAL }} />
                       </button>
                     </div>
@@ -565,7 +583,7 @@ export default function CoordinatorGoals() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<"planning" | "tasks" | "overview" | "templates">("planning");
+  const [tab, setTab] = useState<"planning" | "tasks" | "overview">("planning");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [goalStatusFilter, setGoalStatusFilter] = useState<"all" | NdisGoal["status"]>("active");
@@ -575,7 +593,10 @@ export default function CoordinatorGoals() {
   
   // For new Task Management tab
   const [selectedParticipantIdForTasks, setSelectedParticipantIdForTasks] = useState("");
-
+  const [taskGoalFormOpen, setTaskGoalFormOpen] = useState(false);
+  
+  // For Plan Overview tab
+  const [overviewParticipant, setOverviewParticipant] = useState("");
   // Legacy data
   const { data: legacyData = [], isLoading: legacyLoading } = useOrgQuery<ParticipantGoalGroup[]>(["coordinator-goals", orgId], { queryFn: getCoordinatorGoals });
 
@@ -639,25 +660,24 @@ export default function CoordinatorGoals() {
     { id: "planning",  label: "Goals & Planning"   },
     { id: "tasks",     label: "Task Management"    },
     { id: "overview",  label: "Plan Overview"      },
-    { id: "templates", label: "Task Templates"     },
   ] as const;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
-      <div className="flex items-start justify-between flex-wrap gap-3">
+    <div className="space-y-6 pb-10">
+      <div className="flex items-start justify-between flex-wrap gap-3 px-4 sm:px-6 lg:px-8">
         <div>
           <p className="hidden" style={{ color: CORAL }}>Coordinator</p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Goals & Planning</h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>Create NDIS goals, manage tasks, and configure templates.</p>
         </div>
-        {tab === "planning" && selectedParticipantIdForTasks && (
+        {tab === "planning" && goalParticipant && (
           <Button className="rounded-2xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
             <Plus size={16} /> New Goal
           </Button>
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-4 px-4 sm:px-6 lg:px-8">
         {[
           ["Participants",    legacyData.length],
           ["Active Goals",   (ndisGoals as NdisGoal[]).filter((g) => g.status === "active").length],
@@ -672,9 +692,9 @@ export default function CoordinatorGoals() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-2xl" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
+      <div className="flex gap-1 p-1 rounded-2xl mx-4 sm:mx-6 lg:mx-8" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); setGoalParticipant(""); }}
+          <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); setFilter("all"); }}
             className="flex-1 py-2 rounded-xl text-[13px] font-bold transition-all"
             style={{ background: tab === t.id ? "var(--cc-bg)" : "transparent", color: tab === t.id ? PLUM : MUTED,
               boxShadow: tab === t.id ? "0 2px 8px rgba(55,48,163,0.08)" : "none" }}>
@@ -683,144 +703,266 @@ export default function CoordinatorGoals() {
         ))}
       </div>
 
-      {/* GOALS & PLANNING TAB - with A-Z filter */}
+      {/* GOALS & PLANNING TAB - 2-column layout */}
       {tab === "planning" && (
-        <div className="space-y-6">
-          <ParticipantAZFilter
-            participants={participantListForFilter}
-            selectedParticipantId={goalParticipant}
-            onParticipantSelect={setGoalParticipant}
-            showActiveGoalsBadge={true}
-            isLoading={legacyLoading}
-          />
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
+            <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
+              {/* LEFT: Participant filter and goal list */}
+              <div className="flex flex-col overflow-hidden">
+              <ParticipantAZFilter
+                participants={participantListForFilter}
+                selectedParticipantId={goalParticipant}
+                onParticipantSelect={setGoalParticipant}
+                showActiveGoalsBadge={true}
+                isLoading={legacyLoading}
+              />
 
-          {/* Goal details for selected participant */}
-          {goalParticipant && (
-            <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: BORDER, background: SOFT }}>
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
-                  Goals for {legacyData.find((p) => p.participant_id === goalParticipant)?.participant_name}
-                </h3>
-                <Button
-                  size="sm"
-                  className="rounded-xl gap-1.5"
-                  style={{ background: PLUM, color: "#fff" }}
-                  onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}
-                >
-                  <Plus size={14} /> Add Goal
-                </Button>
-              </div>
+              {/* Goal details for selected participant - scrollable */}
+              {goalParticipant && (
+                <div className="flex-1 overflow-y-auto">
+                  <div className="rounded-2xl border p-6 space-y-4 mt-4" style={{ borderColor: BORDER, background: SOFT }}>
+                    <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
+                      Goals for {legacyData.find((p) => p.participant_id === goalParticipant)?.participant_name}
+                    </h3>
 
-              {goalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+                    {goalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
 
-              {!goalsLoading && (
-                <>
-                  {filteredNdis.length === 0 ? (
-                    <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
-                      <Target size={24} style={{ color: BORDER, margin: "0 auto" }} />
-                      <p className="mt-2 font-bold" style={{ color: TEXT }}>No goals yet</p>
-                      <p className="text-sm mt-1" style={{ color: MUTED }}>Click "Add Goal" to create the first NDIS goal</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {filteredNdis.map((goal) => (
-                        <NdisGoalCard
-                          key={goal.id}
-                          goal={goal}
-                          onEdit={(g) => { setEditGoal(g); setGoalFormOpen(true); }}
-                          onArchive={(id) => archiveMut.mutate(id)}
-                          onComplete={(id) => completeMut.mutate(id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
+                    {!goalsLoading && (
+                      <>
+                        {filteredNdis.length === 0 ? (
+                          <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
+                            <Target size={24} style={{ color: BORDER, margin: "0 auto" }} />
+                            <p className="mt-2 font-bold" style={{ color: TEXT }}>No goals yet</p>
+                            <p className="text-sm mt-1" style={{ color: MUTED }}>Click the plus icon to create the first NDIS goal</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {filteredNdis.map((goal) => (
+                              <NdisGoalCard
+                                key={goal.id}
+                                goal={goal}
+                                onEdit={(g) => { setEditGoal(g); setGoalFormOpen(true); }}
+                                onArchive={(id) => archiveMut.mutate(id)}
+                                onComplete={(id) => completeMut.mutate(id)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          )}
+
+            {/* RIGHT: Goal form side panel */}
+            {goalParticipant && (
+              <div className="flex flex-col overflow-hidden">
+                {goalFormOpen ? (
+                  <GoalFormModal
+                    goal={editGoal}
+                    participants={legacyData}
+                    isModal={false}
+                    selectedParticipantId={goalParticipant}
+                    onClose={() => { setGoalFormOpen(false); setEditGoal(null); }}
+                    onSaved={() => { qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); }}
+                  />
+                ) : (
+                  <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
+                    <Button className="w-full rounded-xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
+                      <Plus size={16} /> New Goal
+                    </Button>
+                    <div className="text-center flex-1 flex items-center justify-center">
+                      <div>
+                        <p className="font-bold text-sm" style={{ color: TEXT }}>Create or edit goals</p>
+                        <p className="text-xs mt-1" style={{ color: MUTED }}>Select a goal from the left or create a new one</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!goalParticipant && (
+              <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                <div>
+                  <Target size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                  <p className="font-bold mt-3" style={{ color: TEXT }}>Start planning goals</p>
+                  <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant from the left to get started</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
         </div>
       )}
 
-      {/* TASK MANAGEMENT TAB */}
+      {/* TASK MANAGEMENT TAB - 2 column layout */}
       {tab === "tasks" && (
-        <div className="space-y-6">
-          <ParticipantAZFilter
-            participants={participantListForFilter}
-            selectedParticipantId={selectedParticipantIdForTasks}
-            onParticipantSelect={setSelectedParticipantIdForTasks}
-            showActiveGoalsBadge={true}
-            isLoading={legacyLoading}
-          />
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
+            <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
+            {/* LEFT: Participant filter only */}
+            <div className="flex flex-col overflow-hidden">
+              <ParticipantAZFilter
+                participants={participantListForFilter}
+                selectedParticipantId={selectedParticipantIdForTasks}
+                onParticipantSelect={setSelectedParticipantIdForTasks}
+                showActiveGoalsBadge={true}
+                isLoading={legacyLoading}
+              />
+            </div>
 
-          {selectedParticipantIdForTasks && (
-            <div className="rounded-2xl border p-6 space-y-4" style={{ borderColor: BORDER, background: SOFT }}>
-              <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
-                Manage Tasks for {legacyData.find((p) => p.participant_id === selectedParticipantIdForTasks)?.participant_name}
-              </h3>
+            {/* RIGHT: Goals with tasks panel */}
+            <div className="flex flex-col overflow-hidden">
+              {selectedParticipantIdForTasks ? (
+                <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col overflow-hidden" style={{ borderColor: BORDER, background: SOFT }}>
+                  {taskGoalFormOpen ? (
+                    <>
+                      <button onClick={() => setTaskGoalFormOpen(false)} className="text-xs font-bold text-left mb-2" style={{ color: PLUM }}>← Back to tasks</button>
+                      <GoalFormModal
+                        goal={null}
+                        participants={legacyData}
+                        isModal={false}
+                        selectedParticipantId={selectedParticipantIdForTasks}
+                        onClose={() => setTaskGoalFormOpen(false)}
+                        onSaved={() => { 
+                          setTaskGoalFormOpen(false); 
+                          qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); 
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between shrink-0">
+                        <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
+                          Manage Tasks
+                        </h3>
+                        <Button 
+                          size="sm"
+                          className="rounded-xl gap-1.5"
+                          style={{ background: PLUM, color: "#fff" }}
+                          onClick={() => setTaskGoalFormOpen(true)}
+                        >
+                          <Plus size={14} /> Goal
+                        </Button>
+                      </div>
 
-              {participantGoalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+                      {participantGoalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
 
-              {!participantGoalsLoading && participantGoals.length === 0 ? (
-                <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
-                  <Target size={24} style={{ color: BORDER, margin: "0 auto" }} />
-                  <p className="mt-2 font-bold" style={{ color: TEXT }}>No goals created yet</p>
-                  <p className="text-sm mt-1" style={{ color: MUTED }}>Create NDIS goals first in the Goals & Planning tab</p>
+                      {!participantGoalsLoading && participantGoals.filter((g) => g.status === "active").length === 0 ? (
+                        <div className="rounded-xl border p-6 text-center flex-1 flex items-center justify-center" style={{ borderColor: BORDER, background: "#fff" }}>
+                          <div>
+                            <Target size={28} style={{ color: BORDER, margin: "0 auto" }} />
+                            <p className="mt-3 font-bold" style={{ color: TEXT }}>No active goals yet</p>
+                            <p className="text-sm mt-2" style={{ color: MUTED }}>Create goals first in the Goals & Planning tab, then come back here to assign tasks</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 overflow-y-auto space-y-4">
+                          {participantGoals.filter((g) => g.status === "active").map((goal) => (
+                            <TaskManagementPanel
+                              key={goal.id}
+                              goal={goal}
+                              tasks={tasks}
+                              onTasksChanged={() => {
+                                qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForTasks, orgId] });
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {participantGoals.filter((g) => g.status === "active").map((goal) => (
-                    <TaskManagementPanel
-                      key={goal.id}
-                      goal={goal}
-                      tasks={tasks}
-                      onTasksChanged={() => {
-                        qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForTasks, orgId] });
-                      }}
-                    />
-                  ))}
+                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div>
+                    <ClipboardList size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                    <p className="font-bold mt-3" style={{ color: TEXT }}>Manage participant tasks</p>
+                    <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant from the left to see their goals and tasks</p>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Plan Overview */}
-      {tab === "overview" && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-1.5">
-            {([
-              { key: "all",        label: "All" },
-              { key: "stalled",    label: `Stalled (${stalledCount})` },
-              { key: "blocked",    label: `Blocked (${blockedCount})` },
-              { key: "no_session", label: "No Recent Session" },
-            ] as { key: FilterKey; label: string }[]).map(({ key, label }) => (
-              <button key={key} onClick={() => setFilter(key)}
-                className="rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
-                style={filter === key ? { background: PLUM, color: "#fff", borderColor: PLUM } : { background: "var(--cc-bg)", color: MUTED, borderColor: BORDER }}>
-                {label}
-              </button>
-            ))}
           </div>
-          {legacyLoading && <div className="flex items-center gap-2 py-8 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
-          {!legacyLoading && filteredLegacy.length === 0 && (
-            <div className="rounded-2xl border bg-white px-6 py-12 text-center" style={{ borderColor: BORDER }}>
-              <Target className="mx-auto h-10 w-10" style={{ color: BORDER }} />
-              <p className="mt-3 font-black" style={{ color: TEXT }}>No participants found</p>
-            </div>
-          )}
-          {filteredLegacy.map((group) => <ParticipantCard key={group.participant_id} group={group} />)}
+        </div>
         </div>
       )}
 
-      {/* Task Templates */}
-      {tab === "templates" && <TaskTemplatesTab participants={legacyData} />}
+      {/* PLAN OVERVIEW TAB - 2 column layout */}
+      {tab === "overview" && (
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
+            <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
+            {/* LEFT: Filters and participant list */}
+            <div className="flex flex-col overflow-hidden">
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {([
+                  { key: "all",        label: "All" },
+                  { key: "stalled",    label: `Stalled (${stalledCount})` },
+                  { key: "blocked",    label: `Blocked (${blockedCount})` },
+                  { key: "no_session", label: "No Session" },
+                ] as { key: FilterKey; label: string }[]).map(({ key, label }) => (
+                  <button key={key} onClick={() => setFilter(key)}
+                    className="rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
+                    style={filter === key ? { background: PLUM, color: "#fff", borderColor: PLUM } : { background: "var(--cc-bg)", color: MUTED, borderColor: BORDER }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-      {goalFormOpen && (
-        <GoalFormModal goal={editGoal} participants={legacyData}
-          onClose={() => { setGoalFormOpen(false); setEditGoal(null); }}
-          onSaved={() => { qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); qc.invalidateQueries({ queryKey: ["participant-goals", selectedParticipantIdForTasks, orgId] }); }}
-        />
+              <div className="flex-1 overflow-y-auto">
+                {legacyLoading && <div className="flex items-center gap-2 py-4 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+                {!legacyLoading && filteredLegacy.length === 0 && (
+                  <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
+                    <Target size={20} style={{ color: BORDER, margin: "0 auto" }} />
+                    <p className="mt-2 font-bold text-sm" style={{ color: TEXT }}>No participants found</p>
+                  </div>
+                )}
+                {filteredLegacy.map((group) => (
+                  <button key={group.participant_id} onClick={() => setOverviewParticipant(group.participant_id)}
+                    className="w-full text-left mb-2 rounded-xl p-3 transition-all hover:bg-gray-50"
+                    style={{
+                      background: overviewParticipant === group.participant_id ? "var(--cc-bg)" : "#fff",
+                      border: `1px solid ${overviewParticipant === group.participant_id ? PLUM : BORDER}`,
+                    }}>
+                    <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{group.participant_name}</p>
+                    <p className="text-[11px] mt-1" style={{ color: MUTED }}>{group.goals.length} goals</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT: Participant details */}
+            {overviewParticipant && (
+              <div className="flex flex-col overflow-hidden">
+                <div className="rounded-2xl border p-6 space-y-4 h-full overflow-y-auto" style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}` }}>
+                  <div>
+                    <p className="font-bold text-[15px]" style={{ color: TEXT }}>
+                      {legacyData.find((p) => p.participant_id === overviewParticipant)?.participant_name}
+                    </p>
+                  </div>
+                  {legacyData.find((g) => g.participant_id === overviewParticipant) && (
+                    <ParticipantCard group={legacyData.find((g) => g.participant_id === overviewParticipant)!} />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!overviewParticipant && (
+              <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                <div>
+                  <BarChart2 size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                  <p className="font-bold mt-3" style={{ color: TEXT }}>View plan overview</p>
+                  <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant from the left to see details</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        </div>
       )}
     </div>
   );

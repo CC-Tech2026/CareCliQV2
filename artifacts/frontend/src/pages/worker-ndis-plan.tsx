@@ -26,7 +26,7 @@ export default function WorkerNdisPlan() {
   const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], { queryFn: getMyClients });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>Support Worker</p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>NDIS Plan</h1>

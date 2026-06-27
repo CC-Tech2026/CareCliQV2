@@ -190,7 +190,7 @@ export default function MyShifts() {
   }, [filter, list]);
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5 pb-6">
+    <div className="space-y-5 pb-6">
       <header className="flex items-start justify-between gap-3 pt-1">
         <div>
           <p className="hidden" style={{ color: CORAL }}>

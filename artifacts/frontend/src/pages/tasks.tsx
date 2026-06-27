@@ -26,7 +26,7 @@ export default function Tasks() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
           Support Worker

@@ -851,7 +851,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-10">
+    <div className="space-y-4 pb-10">
       <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
       {showEvidenceBanner && (
         <EvidenceSyncBanner

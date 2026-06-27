@@ -560,7 +560,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   if (!session) return <div className="p-8 text-slate-500 text-center font-medium">Session record not found.</div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12 px-4 pt-4">
+    <div className="space-y-6 pb-12">
 
       {/* Blocking save warning dialog */}
       <AlertDialog open={showSaveWarning} onOpenChange={setShowSaveWarning}>
@@ -1416,6 +1416,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             <div className="p-5 space-y-4">
               <input 
                 type="file" 
+                title="Upload evidence"
                 accept="image/*" 
                 className="hidden" 
                 ref={fileInputRef} 
