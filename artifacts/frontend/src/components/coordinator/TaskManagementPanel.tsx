@@ -48,8 +48,8 @@ function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
         goal_id: goal.id,
         goal_name: goal.name,
         name: form.name,
-        description: form.description || null,
-        frequency: form.frequency || null,
+        description: form.description || undefined,
+        frequency: form.frequency || undefined,
         status: form.status,
       };
       return task
