@@ -261,40 +261,6 @@
 /* Hover states */
 .dark .hover\:bg-gray-50:hover  { background-color: var(--cc-soft)    !important; }
 .dark .hover\:bg-gray-100:hover { background-color: var(--cc-soft)    !important; }
-/* Tailwind arbitrary text colours — covers text-[#xxxxxx] JIT classes */
-.dark .text-\[#111827\] { color: var(--cc-text)   !important; }
-.dark .text-\[#1F2937\] { color: var(--cc-text)   !important; }
-.dark .text-\[#374151\] { color: var(--cc-text)   !important; }
-.dark .text-\[#4B5563\] { color: var(--cc-muted)  !important; }
-.dark .text-\[#6B7280\] { color: var(--cc-muted)  !important; }
-.dark .text-\[#9CA3AF\] { color: var(--cc-muted)  !important; }
-.dark .text-\[#3730A3\] { color: var(--cc-plum)   !important; }
-.dark .text-\[#BE185D\] { color: var(--cc-coral)  !important; }
-/* Tailwind arbitrary background colours */
-.dark .bg-\[#F8F8FE\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#F8F6FE\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#EEF2FF\]  { background-color: var(--cc-active-bg) !important; }
-.dark .bg-\[#F9FAFB\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#F3F4F6\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#F5F3FF\]  { background-color: var(--cc-bg)        !important; }
-.dark .bg-\[#F6F4FB\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#FBFAFF\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#FAFAFF\]  { background-color: var(--cc-soft)      !important; }
-.dark .bg-\[#FCE7F3\]  { background-color: var(--cc-alert-bg)  !important; }
-/* Hover variants */
-.dark .hover\:bg-\[#F6F4FB\]:hover { background-color: var(--cc-soft) !important; }
-/* Semantic status tints — keep recognizable in dark mode */
-.dark .bg-\[#FEF2F2\]  { background-color: rgba(220,38,38,0.15)  !important; }
-.dark .bg-\[#FFF5F5\]  { background-color: rgba(220,38,38,0.12)  !important; }
-.dark .bg-\[#FFF8E1\]  { background-color: rgba(217,119,6,0.15)  !important; }
-.dark .bg-\[#DCFCE7\]  { background-color: rgba(22,163,74,0.15)  !important; }
-.dark .bg-\[#FEF9C3\]  { background-color: rgba(217,119,6,0.12)  !important; }
-/* Tailwind arbitrary border colours */
-.dark .border-\[#E5E7EB\] { border-color: var(--cc-border) !important; }
-.dark .border-\[#D1D5DB\] { border-color: var(--cc-border) !important; }
-.dark .border-\[#EBE5F6\] { border-color: var(--cc-border) !important; }
-.dark .border-\[#C4B8F0\] { border-color: var(--cc-border) !important; }
-.dark .border-\[#EEEAFB\] { border-color: var(--cc-border) !important; }
 
 /* LIGHT MODE */
 :root {
