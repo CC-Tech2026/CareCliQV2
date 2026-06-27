@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service
+from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
+from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
+from ..services import shift_signature_service
+from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
 from ..services.notification_service import notify_office_worker_message
 from ..services.supabase_client import get_supabase_admin
@@ -92,6 +95,14 @@ class EndShiftBody(BaseModel):
     force: bool = False
 
 
+class ShiftSignatureBody(BaseModel):
+    confirm_tasks_accurate: bool
+    confirm_safety_followed: bool
+    confirm_no_unreported_incidents: bool
+    signature_svg: str = Field(min_length=1)
+    signature_png_data_url: str = Field(min_length=1)
+
+
 class ClockInLocationBody(BaseModel):
     lat: float
     lng: float
@@ -103,6 +114,7 @@ class ClockInBody(BaseModel):
     location: Optional[ClockInLocationBody] = None
     qr_token: Optional[str] = None
     client_timestamp: Optional[str] = None
+    claimed_km: Optional[float] = Field(default=None, gt=0, le=2000)
 
 
 class TaskEvidenceItem(BaseModel):
@@ -717,6 +729,13 @@ async def worker_clock_in(
             "verified": shift.get("clock_in_verified"),
         },
     )
+    await travel_expense_service.auto_save_mileage_on_clock_in(
+        shift_id=shift_id,
+        worker_id=worker_id,
+        organization_id=org_id,
+        participant_address=shift.get("participant_address"),
+        claimed_km_override=body.claimed_km,
+    )
     return shift
 
 
@@ -802,6 +821,73 @@ async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(g
     return shift
 
 
+from ..schemas.safety_protocol import SafetyProtocolAcknowledge
+from ..services import safety_protocol_service
+
+
+async def _worker_can_access_participant(
+    participant_id: str,
+    current_user: dict,
+) -> bool:
+    participant = await participant_service.get_participant_by_id(participant_id, current_user)
+    if participant:
+        return True
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    return shift_service.worker_has_shift_for_participant(
+        participant_id,
+        str(worker_id or ""),
+        str(org_id or ""),
+    )
+
+
+@router.get("/participants/{participant_id}/safety-protocol")
+async def worker_get_safety_protocol(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Participant safety protocols for worker (read-only)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    protocol = safety_protocol_service.get_protocol(participant_id, str(org_id or ""))
+    return safety_protocol_service.enrich_protocol_for_worker(protocol, worker_id=worker_id)
+
+
+@router.post("/participants/{participant_id}/safety-protocol/acknowledge")
+async def worker_acknowledge_safety_protocol(
+    participant_id: str,
+    body: SafetyProtocolAcknowledge,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log mandatory safety card acknowledgement."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    try:
+        result = safety_protocol_service.acknowledge_protocol(
+            worker_id=worker_id,
+            participant_id=participant_id,
+            organization_id=str(org_id or ""),
+            content_version=body.content_version,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    await audit_service.log_action(
+        action_type="worker.safety_protocol.acknowledged",
+        entity_type="participant",
+        entity_id=participant_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"content_version": body.content_version},
+    )
+    return result
+
+
 @router.post("/shifts/{shift_id}/start-session")
 async def worker_start_session(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Start an active session from a clocked-in shift (CARECLIQV2-116 comment 10051)."""
@@ -855,6 +941,7 @@ async def worker_clock_out(shift_id: str, current_user: dict = Depends(get_curre
 @router.post("/shifts/{shift_id}/end-shift")
 async def worker_end_shift(
     shift_id: str,
+    background_tasks: BackgroundTasks,
     body: EndShiftBody = EndShiftBody(),
     current_user: dict = Depends(get_current_user),
 ):
@@ -876,6 +963,17 @@ async def worker_end_shift(
         organization_id=org_id,
         after_state={"session_id": shift.get("session_id")},
     )
+
+    async def _auto_summary_and_notify() -> None:
+        from ..services import shift_pdf_export_service
+
+        try:
+            shift_pdf_export_service.run_auto_shift_summary_export(shift_id, worker_id, org_id)
+            await shift_pdf_export_service.notify_shift_summary_ready(worker_id, shift_id)
+        except Exception as exc:
+            logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
+
+    background_tasks.add_task(_auto_summary_and_notify)
     return shift
 
 
@@ -883,6 +981,7 @@ async def worker_end_shift(
 async def worker_upload_session_evidence(
     session_id: str,
     body: UploadEvidenceBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Upload task evidence media to object storage (CARECLIQV2-230)."""
@@ -892,6 +991,8 @@ async def worker_upload_session_evidence(
 
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
 
     try:
         result = evidence_upload_service.upload_session_evidence_media(
@@ -901,8 +1002,8 @@ async def worker_upload_session_evidence(
             evidence_items=[item.model_dump() for item in body.evidence],
             files=body.files,
             uploaded_by=worker_id,
-            ip_address=None,  # Request object not available in this context
-            user_agent=None,
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
     except ValueError as exc:
         msg = str(exc)
@@ -1001,6 +1102,7 @@ async def worker_delete_session_note(
 async def worker_sync_task_evidence(
     session_id: str,
     body: TaskEvidenceSyncBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Sync task-specific evidence captured during a shift session (CARECLIQV2-228)."""
@@ -1008,7 +1110,14 @@ async def worker_sync_task_evidence(
     worker_id = get_user_id(current_user)
     org_id = get_user_organization_id(current_user)
     evidence = [item.model_dump() for item in body.evidence]
-    result = shift_service.sync_session_task_evidence(session_id, worker_id, org_id, evidence)
+    result = shift_service.sync_session_task_evidence(
+        session_id,
+        worker_id,
+        org_id,
+        evidence,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     await audit_service.log_action(
@@ -1255,3 +1364,102 @@ async def reply_to_message(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to send reply: {exc}")
+
+
+@router.post("/shifts/{shift_id}/sign")
+async def worker_sign_shift(
+    shift_id: str,
+    body: ShiftSignatureBody,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit digital signature before ending shift (CARECLIQV2-270)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    device_id = request.headers.get("x-device-id")
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    try:
+        result = shift_signature_service.submit_shift_signature(
+            shift_id,
+            worker_id,
+            org_id,
+            confirm_tasks_accurate=body.confirm_tasks_accurate,
+            confirm_safety_followed=body.confirm_safety_followed,
+            confirm_no_unreported_incidents=body.confirm_no_unreported_incidents,
+            signature_svg=body.signature_svg,
+            signature_png_data_url=body.signature_png_data_url,
+            device_id=device_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.signed",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return result
+
+
+@router.get("/sessions/{session_id}/evidence-metadata")
+async def worker_list_evidence_metadata(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Chain-of-custody metadata for session evidence (CARECLIQV2-271)."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_id = get_user_id(current_user)
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, worker_id, support_worker_id, owner_user_id, created_by, organization_id")
+            .eq("id", session_id)
+            .maybe_single()
+            .execute()
+        )
+        session = resp.data if resp else None
+    except Exception:
+        session = None
+    if not session or str(session.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    owner_ids = {
+        str(session.get("worker_id") or ""),
+        str(session.get("support_worker_id") or ""),
+        str(session.get("owner_user_id") or ""),
+        str(session.get("created_by") or ""),
+    }
+    if worker_id not in owner_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    items = list_session_evidence_metadata(session_id, org_id)
+    return {"evidence": [i for i in items if str(i.get("uploaded_by")) == str(worker_id)]}
+
+
+@router.get("/evidence/{evidence_id}/download")
+async def worker_download_evidence(
+    evidence_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download evidence with integrity verification (CARECLIQV2-271)."""
+    _require_worker(current_user)
+    user_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    meta = get_evidence_metadata(evidence_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    if str(meta.get("uploaded_by")) != str(user_id):
+        raise HTTPException(status_code=403, detail="You can only download your own evidence uploads")
+    file_bytes, metadata = await verify_and_download_evidence(
+        evidence_id, request, user_id, org_id
+    )
+    from fastapi.responses import Response
+
+    mime = metadata.get("mime_type") or "application/octet-stream"
+    return Response(content=file_bytes, media_type=mime)

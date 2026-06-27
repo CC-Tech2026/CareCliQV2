@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { BORDER, MUTED, PLUM, TEXT, formatShiftTimeRange, shiftInitials } from "@/lib/shift-utils";
+import { BORDER, MUTED, PLUM, SOFT, TEXT, formatShiftTimeRange, shiftInitials } from "@/lib/shift-utils";
 import {
   getWorkerLandingTravelTime,
   type DashboardShiftSummary,
@@ -74,11 +74,11 @@ export function NextShiftCard({ shift }: Props) {
 
   if (!shift) {
     return (
-      <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+      <section className="rounded-2xl border border-cc-border bg-cc-surface p-5 shadow-sm">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
           Next Shift
         </h2>
-        <p className="mt-3 rounded-xl bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+        <p className="mt-3 rounded-xl bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
           No upcoming shifts scheduled.
         </p>
       </section>
@@ -92,11 +92,8 @@ export function NextShiftCard({ shift }: Props) {
       : null);
 
   return (
-    <section
-      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
-      style={{ borderColor: BORDER }}
-    >
-      <div className="border-b px-5 py-4" style={{ borderColor: "#EEEAFB", background: "#F8F6FE" }}>
+    <section className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
+      <div className="border-b border-cc-border px-5 py-4" style={{ background: SOFT }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
           Next Shift
         </p>
@@ -135,7 +132,7 @@ export function NextShiftCard({ shift }: Props) {
             </span>
           )}
           {!loadingTravel && travel?.available && travel.duration_text && (
-            <span className="rounded-full bg-[#F0EDF8] px-3 py-1 text-xs font-black" style={{ color: PLUM }}>
+            <span className="rounded-full bg-cc-active px-3 py-1 text-xs font-black" style={{ color: PLUM }}>
               {travel.duration_text} drive
               {travel.distance_text ? ` · ${travel.distance_text}` : ""}
             </span>
@@ -157,7 +154,7 @@ export function NextShiftCard({ shift }: Props) {
             </a>
           )}
           <Link href={`/my-shifts/${shift.id}?focus=safety`} className="flex-1">
-            <Button variant="outline" className="w-full font-black">
+            <Button variant="outline" className="w-full border-cc-border font-black">
               Open Shift
             </Button>
           </Link>

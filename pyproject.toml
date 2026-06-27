@@ -20,6 +20,7 @@ dependencies = [
     "pyotp>=2.9.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "reportlab>=4.2.0",
 ]
 
 [project.optional-dependencies]

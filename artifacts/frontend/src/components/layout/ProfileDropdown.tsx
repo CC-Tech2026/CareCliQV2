@@ -5,8 +5,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { LogOut, Settings, User, ShieldCheck, LockKeyhole } from "lucide-react";
+import { LogOut, Settings, User, LockKeyhole, Shield } from "lucide-react";
 import { DESIGN_SYSTEM as DS } from "@/lib/design-system";
+import { ProfileThemeToggle } from "@/components/layout/ProfileThemeToggle";
 
 interface ProfileDropdownProps {
   displayName: string;
@@ -47,7 +48,7 @@ export function ProfileDropdown({
       {/* Profile Button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-3 px-3 py-2 rounded-full transition-all hover:bg-black/5 active:scale-95"
+        className="flex items-center gap-3 px-3 py-2 rounded-full transition-all hover:bg-cc-bg active:scale-95"
         title={displayName}
       >
         <div className="text-right hidden sm:block">
@@ -90,6 +91,8 @@ export function ProfileDropdown({
             </p>
           </div>
 
+          <ProfileThemeToggle />
+
           {/* Menu Items */}
           <div className="py-2">
             {/* My Profile */}
@@ -97,7 +100,7 @@ export function ProfileDropdown({
               <Link href="/worker/profile">
                 <button
                   onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-black/5"
+                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-cc-bg"
                   style={{ color: DS.TEXT.primary }}
                 >
                   <User size={16} strokeWidth={2} />
@@ -106,11 +109,25 @@ export function ProfileDropdown({
               </Link>
             )}
 
+            {/* Your data & privacy */}
+            {isWorker && (
+              <Link href="/worker/privacy">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-cc-bg"
+                  style={{ color: DS.TEXT.primary }}
+                >
+                  <Shield size={16} strokeWidth={2} />
+                  <span>Your data &amp; privacy</span>
+                </button>
+              </Link>
+            )}
+
             {/* Settings */}
             <Link href="/settings">
               <button
                 onClick={() => setOpen(false)}
-                className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-black/5"
+                className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-cc-bg"
                 style={{ color: DS.TEXT.primary }}
               >
                 <Settings size={16} strokeWidth={2} />
@@ -123,7 +140,7 @@ export function ProfileDropdown({
               <Link href="/worker/security">
                 <button
                   onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-black/5"
+                  className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-cc-bg"
                   style={{ color: DS.TEXT.primary }}
                 >
                   <LockKeyhole size={16} strokeWidth={2} />
@@ -141,7 +158,7 @@ export function ProfileDropdown({
                 setOpen(false);
                 onLogout();
               }}
-              className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-red-50"
+              className="w-full flex items-center gap-3 px-6 py-3 text-sm font-medium transition-colors hover:bg-[var(--cc-status-critical-bg)]"
               style={{ color: DS.STATUS.critical }}
             >
               <LogOut size={16} strokeWidth={2} />

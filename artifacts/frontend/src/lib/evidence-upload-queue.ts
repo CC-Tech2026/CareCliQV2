@@ -8,6 +8,7 @@ import {
   listUnsyncedEvidence,
   saveTaskEvidence,
 } from "@/lib/task-evidence-storage";
+import { addShiftDataUsage } from "@/lib/shift-data-usage";
 import { syncSessionEvidence, uploadSessionEvidenceMedia } from "@/services/taskEvidenceService";
 
 export type EvidenceUploadStatus = "pending" | "uploading" | "uploaded" | "failed";
@@ -196,6 +197,17 @@ export async function syncEvidenceUploadQueue(
         try {
           const response = await uploadSessionEvidenceMedia(sessionId, batch, files);
           await applyUploadResponse(batch, response);
+          const batchBytes = batch.reduce((sum, row) => {
+            const content = row.content ?? "";
+            if (content.startsWith("data:")) return sum + Math.round((content.length * 3) / 4);
+            return sum + new Blob([content]).size;
+          }, 0);
+          try {
+            const shiftKey = sessionStorage.getItem("ccq_active_shift_id");
+            if (shiftKey) addShiftDataUsage(shiftKey, batchBytes);
+          } catch {
+            /* noop */
+          }
           syncedCount += batch.length;
           notify(sessionId, {
             pending: Math.max(0, mediaPending.length - (i + batch.length)),

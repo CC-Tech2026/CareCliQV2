@@ -66,7 +66,7 @@ export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
   const isImage = isImageName(fileName) || type === "photo";
 
   return (
-    <li className="flex gap-2 rounded-lg bg-[#F8F6FE] px-2.5 py-2">
+    <li className="flex gap-2 rounded-lg bg-cc-bg px-2.5 py-2">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold" style={{ color: TEXT }}>

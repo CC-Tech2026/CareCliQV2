@@ -47,7 +47,7 @@ def _status_for(expiry_date: str | None, current: str = "pending_review") -> str
     today = date.today()
     if expiry < today:
         return "expired"
-    if (expiry - today).days <= 30:
+    if (expiry - today).days <= 60:
         return "expiring"
     return "valid"
 

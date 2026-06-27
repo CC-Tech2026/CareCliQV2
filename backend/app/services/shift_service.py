@@ -377,7 +377,7 @@ def build_structured_health_alerts(
             add(_make_risk_alert(
                 "bsp",
                 title="Behaviour Support Plan (BSP)",
-                description=body[:280],
+                description=body,
                 instructions=body,
                 severity="important",
             ))
@@ -509,9 +509,24 @@ def build_participant_risks(shift: dict[str, Any], organization_id: str) -> list
 
 def _ensure_risks_acknowledged_if_required(shift: dict[str, Any], organization_id: str) -> None:
     if shift.get("risks_acknowledged_at"):
-        return
-    if build_participant_risks(shift, organization_id):
+        pass
+    elif build_participant_risks(shift, organization_id):
         raise ValueError("Acknowledge risks before continuing.")
+
+    participant_id = str(shift.get("participant_id") or "")
+    worker_id = str(shift.get("worker_id") or "")
+    if participant_id and worker_id:
+        from .safety_protocol_service import build_worker_safety_status
+
+        status = build_worker_safety_status(
+            participant_id=participant_id,
+            organization_id=organization_id,
+            worker_id=worker_id,
+        )
+        if status.get("requires_safety_ack"):
+            raise ValueError(
+                "Read and acknowledge the participant safety card before clocking in."
+            )
 
 
 def _resolve_worker_display_name(worker_id: str) -> Optional[str]:
@@ -759,6 +774,7 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "clocked_in_at": shift.get("clocked_in_at"),
         "clocked_out_at": shift.get("clocked_out_at"),
         "status": status,
+        "confirmation_status": shift.get("confirmation_status") or "confirmed",
         "visual_state": visual_state,
         "coordinator_notes": shift.get("coordinator_notes"),
         "entry_instructions": shift.get("entry_instructions"),
@@ -786,6 +802,65 @@ def _shift_card_payload(shift: dict, session: Optional[dict] = None) -> dict[str
         "office_contact_number": _org_contact_number(str(shift.get("organization_id") or "")),
     }
     _attach_risk_acknowledgement_metadata(payload, shift)
+    return payload
+
+
+def _build_completion_summary(shift: dict[str, Any], session: Optional[dict[str, Any]]) -> dict[str, Any]:
+    tasks = shift.get("tasks") or []
+    mandatory = [
+        t
+        for t in tasks
+        if t.get("mandatory") or (t.get("type") == "default" and int(t.get("order") or 0) <= 4)
+    ]
+    session_id = shift.get("session_id") or (session or {}).get("id")
+    return {
+        "tasks_completed": sum(1 for t in tasks if t.get("completed")),
+        "tasks_total": len(tasks),
+        "mandatory_completed": sum(1 for t in mandatory if t.get("completed")),
+        "mandatory_total": len(mandatory),
+        "session_id": session_id,
+        "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+    }
+
+
+def _enrich_worker_shift_card(
+    payload: dict[str, Any],
+    shift: dict[str, Any],
+    organization_id: str,
+    session: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Hydrate list/detail cards with participant risks, goals, and completion metadata."""
+    participant_id = str(shift.get("participant_id") or "")
+    risks = build_participant_risks(shift, organization_id)
+    payload["health_alerts"] = risks
+    payload["has_risk_alerts"] = bool(risks) or bool(shift.get("allergies")) or bool(shift.get("health_flags"))
+
+    if not (payload.get("allergies") or "").strip():
+        allergy_lines = [
+            str(alert.get("description") or alert.get("title") or "").strip()
+            for alert in risks
+            if str(alert.get("type") or "").lower() == "allergy"
+        ]
+        allergy_lines = [line for line in allergy_lines if line]
+        if allergy_lines:
+            payload["allergies"] = "; ".join(dict.fromkeys(allergy_lines))
+
+    if participant_id:
+        active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
+        if active_goals:
+            payload["active_goals"] = active_goals
+
+    if payload.get("status") == "completed" or payload.get("visual_state") == "completed":
+        payload["completion_summary"] = _build_completion_summary(shift, session)
+        try:
+            from .shift_signature_service import get_shift_signature
+
+            signature = get_shift_signature(str(shift.get("id") or ""))
+            if signature:
+                payload["shift_signature"] = signature
+        except Exception:
+            pass
+
     return payload
 
 
@@ -1074,7 +1149,7 @@ def _get_session_for_shift(shift: dict) -> Optional[dict[str, Any]]:
         resp = (
             get_supabase_admin()
             .table("sessions")
-            .select("id, status, session_date, duration_minutes, start_time")
+            .select("id, status, session_date, duration_minutes, start_time, notes, compliance_input_text")
             .eq("id", str(session_id))
             .limit(1)
             .execute()
@@ -1234,7 +1309,8 @@ def list_shifts_for_worker(
     cards: list[dict[str, Any]] = []
     for shift in filtered:
         session = _get_session_for_shift(shift)
-        cards.append(_shift_card_payload(shift, session))
+        card = _shift_card_payload(shift, session)
+        cards.append(_enrich_worker_shift_card(card, shift, organization_id, session))
     return cards
 
 
@@ -1259,12 +1335,33 @@ def get_shift_detail_for_worker(
     payload["support_instructions"] = build_support_instructions(shift, payload)
     payload["health_alerts"] = build_participant_risks(shift, organization_id)
     payload["has_risk_alerts"] = bool(payload["health_alerts"])
+    if participant_id and worker_id:
+        from .safety_protocol_service import build_worker_safety_status, get_protocol
+
+        safety_status = build_worker_safety_status(
+            participant_id=participant_id,
+            organization_id=organization_id,
+            worker_id=worker_id,
+        )
+        payload.update(safety_status)
+        if safety_status.get("has_safety_content"):
+            protocol = get_protocol(participant_id, organization_id)
+            protocol = {**protocol, **safety_status}
+            payload["safety_protocol"] = protocol
     active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
     if active_goals:
         payload["active_goals"] = active_goals
     primary_contact = (payload.get("profile") or {}).get("emergency_contact")
     if primary_contact:
         payload["primary_contact"] = primary_contact
+    try:
+        from .shift_signature_service import get_shift_signature
+
+        signature = get_shift_signature(shift_id)
+        if signature:
+            payload["shift_signature"] = signature
+    except Exception:
+        pass
     return payload
 
 
@@ -1766,6 +1863,35 @@ def _participant_exists_in_org(participant_id: str, org_id: str) -> bool:
         raise
 
 
+def worker_has_shift_for_participant(
+    participant_id: str,
+    worker_id: str,
+    organization_id: str,
+) -> bool:
+    """True when the worker has at least one shift for this participant in-org."""
+    if not participant_id or not worker_id or not organization_id:
+        return False
+    if not _participant_exists_in_org(participant_id, organization_id):
+        return False
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("shifts")
+            .select("id")
+            .eq("participant_id", participant_id)
+            .eq("worker_id", worker_id)
+            .eq("organization_id", organization_id)
+            .limit(1)
+            .execute()
+        )
+        return bool(resp.data)
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return False
+        logger.debug("worker_has_shift_for_participant failed: %s", exc)
+        return False
+
+
 def start_shift_session(
     shift_id: str,
     worker_id: str,
@@ -2059,6 +2185,10 @@ def end_shift(
     if not shift.get("clocked_in_at"):
         raise ValueError("Clock in before ending the shift.")
 
+    from .shift_signature_service import require_signature_for_shift
+
+    require_signature_for_shift(shift_id)
+
     tasks = shift.get("tasks") or []
     validation = compute_shift_validation(tasks)
     if force:
@@ -2111,20 +2241,22 @@ def end_shift(
 
     session = _get_session_for_shift(updated)
     payload = _shift_card_payload(updated, session)
-    mandatory = [t for t in tasks if t.get("mandatory") or (t.get("type") == "default" and int(t.get("order") or 0) <= 4)]
     payload["completion_summary"] = {
-        "tasks_completed": sum(1 for t in tasks if t.get("completed")),
-        "tasks_total": len(tasks),
-        "mandatory_completed": sum(1 for t in mandatory if t.get("completed")),
-        "mandatory_total": len(mandatory),
-        "session_id": session_id,
-        "notes_submitted": bool((session or {}).get("compliance_input_text") or (session or {}).get("notes")),
+        **_build_completion_summary(updated, session),
         "validation": validation,
     }
     try:
         from .conversation_service import set_conversation_read_only_for_shift
 
         set_conversation_read_only_for_shift(shift_id)
+    except Exception:
+        pass
+    try:
+        from .shift_signature_service import get_shift_signature
+
+        sig = get_shift_signature(shift_id)
+        if sig:
+            payload["shift_signature"] = sig
     except Exception:
         pass
     return payload
@@ -2215,8 +2347,13 @@ def sync_session_task_evidence(
     worker_id: str,
     organization_id: str,
     evidence_items: list[dict[str, Any]],
+    *,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Merge task evidence into sessions.task_evidence (CARECLIQV2-228)."""
+    from .compliance_evidence_service import record_text_evidence_metadata
+
     try:
         resp = (
             get_supabase_admin()
@@ -2259,6 +2396,18 @@ def sync_session_task_evidence(
                 stored["content"] = ""
         by_id[eid] = stored
         synced_ids.append(eid)
+        if etype == "text":
+            record_text_evidence_metadata(
+                evidence_id=eid,
+                session_id=session_id,
+                organization_id=organization_id,
+                uploaded_by=worker_id,
+                content=str(item.get("content") or ""),
+                task_id=str(item.get("task_id") or "") or None,
+                goal_id=item.get("goal_id"),
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
     merged = list(by_id.values())
     now = _now_iso()

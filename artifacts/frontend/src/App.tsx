@@ -54,12 +54,28 @@ import DevProgressTestPage from "@/pages/dev-progress-test";
 import SessionLive from "@/pages/session-live";
 import MyShifts from "@/pages/my-shifts";
 import MyShiftDetail from "@/pages/my-shift-detail";
+import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
+import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
+import WorkerAvailabilityPage from "@/pages/worker-availability";
 import WorkerMessages from "@/pages/worker-messages";
 import WorkerNotificationsPage from "@/pages/worker-notifications";
 import Tasks from "@/pages/tasks";
 import WorkerProfile from "@/pages/worker-profile";
 import WorkerSecurity from "@/pages/worker-security";
+import WorkerPrivacy from "@/pages/worker-privacy";
+import WorkerSyncStatus from "@/pages/worker-sync-status";
+import WorkerHelp from "@/pages/worker-help";
+import WorkerShiftHistory from "@/pages/worker-shift-history";
+import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
+import WorkerTraining from "@/pages/worker-training";
+import WorkerFeedback from "@/pages/worker-feedback";
+import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
+import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
+import WorkerAccessibility from "@/pages/worker-accessibility";
 import AccountSecure from "@/pages/account-secure";
+import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
+import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
+import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -177,6 +193,56 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/worker/shift-history">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerShiftHistory /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/travel">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTravelExpenses /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/accessibility">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerAccessibility /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/performance">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPerformanceDashboard /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/training">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTraining /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/feedback/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><WorkerFeedback /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/calendar">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleCalendar /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/requests">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleRequests /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/my-shifts/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -191,15 +257,33 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/tasks">
+      {/* <Route path="/tasks">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
-      </Route>
+      </Route> */}
 
       <Route path="/worker/messages">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerMessages /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/availability">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerAvailabilityPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/help">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerHelp /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/sync-status">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerSyncStatus /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -242,6 +326,12 @@ function Router() {
       <Route path="/coordinator/live">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><CoordinatorLivePage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/travel">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorTravelExpenses /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -374,6 +464,12 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/worker/privacy">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPrivacy /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
@@ -397,11 +493,17 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AuthSessionGuards />
-            <Router />
-          </WouterRouter>
-          <Toaster />
+          <AccessibilityProvider>
+            <OfflineSyncProvider>
+              <WorkerTutorialProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AuthSessionGuards />
+                  <Router />
+                </WouterRouter>
+              </WorkerTutorialProvider>
+            </OfflineSyncProvider>
+            <Toaster />
+          </AccessibilityProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

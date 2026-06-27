@@ -11,6 +11,14 @@ import pytest
 from backend.app.services import shift_service
 
 
+_MOCK_SAFETY_CLEAR = {
+    "requires_safety_ack": False,
+    "has_safety_content": False,
+    "acknowledged_version": None,
+    "content_version": 0,
+}
+
+
 def _shift_window_start(minutes_from_now: float = 5) -> str:
     return (datetime.now(timezone.utc) + timedelta(minutes=minutes_from_now)).isoformat()
 
@@ -252,8 +260,9 @@ def test_clock_in_initialises_default_tasks(mock_admin, _mock_ack_guard, _mock_v
     table.update.assert_called()
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_clock_in_rejects_without_verification_method(mock_get):
+def test_clock_in_rejects_without_verification_method(mock_get, _mock_risks):
     mock_get.return_value = _sample_shift()
     with pytest.raises(ValueError, match="Verified check-in required"):
         shift_service.clock_in_shift("shift-1", "worker-1", "org-1")
@@ -314,12 +323,13 @@ def test_delete_custom_shift_task_rejects_default(mock_get):
         )
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.link_shift_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_start_shift_session_uses_shift_ownership_not_assignment(
-    mock_get, mock_admin, mock_link, mock_get_session,
+    mock_get, mock_admin, mock_link, mock_get_session, _mock_risks,
 ):
     shift = _sample_shift(
         status="in_progress",
@@ -346,12 +356,13 @@ def test_start_shift_session_uses_shift_ownership_not_assignment(
     mock_link.assert_called_once_with("shift-1", "sess-1")
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.link_shift_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
 def test_start_shift_session_replaces_completed_session(
-    mock_get, mock_admin, mock_link, mock_get_session,
+    mock_get, mock_admin, mock_link, mock_get_session, _mock_risks,
 ):
     """Stale completed session link must not block a new live session."""
     shift = _sample_shift(
@@ -384,9 +395,10 @@ def test_start_shift_session_replaces_completed_session(
     mock_link.assert_called_once_with("shift-1", "sess-new")
 
 
+@patch("backend.app.services.shift_service._ensure_risks_acknowledged_if_required")
 @patch("backend.app.services.shift_service.get_shift_for_session")
 @patch("backend.app.services.shift_service.get_supabase_admin")
-def test_start_session_by_id_updates_start_time(mock_admin, mock_get_shift):
+def test_start_session_by_id_updates_start_time(mock_admin, mock_get_shift, _mock_risks):
     session = {
         "id": "sess-1",
         "status": "draft",
@@ -446,10 +458,11 @@ def test_update_shift_tasks_rejects_mandatory_without_evidence(mock_get):
         shift_service.update_shift_tasks("shift-1", "worker-1", "org-1", tasks)
 
 
+@patch("backend.app.services.shift_signature_service.require_signature_for_shift")
 @patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.get_supabase_admin")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_end_shift_completes_shift(mock_get, mock_admin, mock_session):
+def test_end_shift_completes_shift(mock_get, mock_admin, mock_session, _mock_signature):
     tasks = copy.deepcopy(shift_service.DEFAULT_SHIFT_TASKS)
     for task in tasks:
         if task.get("mandatory") or int(task.get("order") or 0) <= 4:
@@ -537,10 +550,16 @@ def test_get_support_instructions_for_worker():
     assert payload["support_instructions"][0]["category"] == "Transfers"
 
 
+@patch(
+    "backend.app.services.safety_protocol_service.build_worker_safety_status",
+    return_value=_MOCK_SAFETY_CLEAR,
+)
 @patch("backend.app.services.shift_service._fetch_participant_context")
 @patch("backend.app.services.shift_service._get_session_for_shift")
 @patch("backend.app.services.shift_service.get_shift_by_id")
-def test_get_shift_detail_rebuilds_support_instructions(mock_get, mock_session, mock_ctx):
+def test_get_shift_detail_rebuilds_support_instructions(
+    mock_get, mock_session, mock_ctx, _mock_safety,
+):
     shift = _sample_shift(
         visit_notes="Prompt medications at 9am.",
         access_instructions="Ramp on left.",

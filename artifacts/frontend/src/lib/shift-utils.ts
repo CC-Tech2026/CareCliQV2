@@ -1,12 +1,18 @@
 import { format, formatDistanceToNow, parseISO, differenceInMinutes } from "date-fns";
 import type { ShiftTask, ShiftVisualState } from "@/services/shiftService";
+import { CC, CC_STATUS } from "@/lib/brand-tokens";
 
-export const PLUM = "#5533CC";
-export const CORAL = "#F03060";
-export const TEXT = "#1E1640";
-export const MUTED = "#7A6A9E";
-export const BORDER = "#E2DEF2";
-export const SOFT = "#F5F3FC";
+export const PLUM = CC.plum;
+export const PLUM_SUBTLE = CC.plumSubtle;
+export const PLUM_SOFT = CC.plumSoft;
+export const PLUM_MEDIUM = CC.plumMedium;
+export const PLUM_RING = CC.plumRing;
+export const CORAL = CC.coral;
+export const CORAL_SOFT = CC.coralSoft;
+export const TEXT = CC.text;
+export const MUTED = CC.muted;
+export const BORDER = CC.border;
+export const SOFT = CC.bg;
 
 /** Scrollable body for dashboard widgets with long lists */
 export const WIDGET_SCROLL = "max-h-72 overflow-y-auto overscroll-y-contain pr-1";
@@ -16,28 +22,28 @@ export const STATE_STYLES: Record<
   { border: string; badge: string; label: string; avatar: string }
 > = {
   scheduled: {
-    border: "#3B82F6",
-    badge: "bg-blue-50 text-blue-700 border-blue-200",
+    border: CC_STATUS.info,
+    badge: "bg-[var(--cc-status-info-bg)] text-[var(--cc-status-info)] border-[var(--cc-border)]",
     label: "Scheduled",
-    avatar: PLUM,
+    avatar: CC.plum,
   },
   clocked_in: {
-    border: "#F59E0B",
-    badge: "bg-amber-50 text-amber-700 border-amber-200",
+    border: CC_STATUS.warning,
+    badge: "bg-[var(--cc-status-warning-bg)] text-[var(--cc-status-warning)] border-[var(--cc-border)]",
     label: "Clocked In",
-    avatar: "#F59E0B",
+    avatar: CC_STATUS.warning,
   },
   session_active: {
-    border: "#10B981",
-    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    border: CC_STATUS.success,
+    badge: "bg-[var(--cc-status-success-bg)] text-[var(--cc-status-success)] border-[var(--cc-border)]",
     label: "Session Active",
-    avatar: "#10B981",
+    avatar: CC_STATUS.success,
   },
   completed: {
-    border: "#9CA3AF",
-    badge: "bg-slate-50 text-slate-600 border-slate-200",
+    border: CC.muted,
+    badge: "bg-[var(--cc-bg)] text-[var(--cc-muted)] border-[var(--cc-border)]",
     label: "Completed",
-    avatar: "#9CA3AF",
+    avatar: CC.muted,
   },
 };
 

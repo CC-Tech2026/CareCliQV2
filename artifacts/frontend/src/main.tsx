@@ -5,6 +5,7 @@ import { initTheme } from "@/lib/theme";
 
 import App from "./App";
 import "./index.css";
+import "./styles/worker-tutorial-driver.css";
 
 // Apply stored theme before first paint to prevent flash
 initTheme();
