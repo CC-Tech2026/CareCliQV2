@@ -49,7 +49,7 @@ function roleLabel(role?: string) {
   return (role || "member").replace(/_/g, " ");
 }
 
-type Tab = "overview" | "management";
+type Tab = "overview" | "management" | "shifts";
 
 export default function Team() {
   const { toast } = useToast();
@@ -63,7 +63,8 @@ export default function Team() {
   const [deactivateTarget, setDeactivateTarget] = useState<WorkerStats | null>(null);
   const [assignWorker, setAssignWorker] = useState<WorkerStats | null>(null);
   const [assignPatientId, setAssignPatientId] = useState("");
-  const [shiftAssignmentOpen, setShiftAssignmentOpen] = useState(false);
+  const [selectedWorkerForShift, setSelectedWorkerForShift] = useState<WorkerStats | null>(null);
+  const [shiftFormOpen, setShiftFormOpen] = useState(false);
 
   const { user, isAuthenticated } = useAuth();
 
@@ -149,13 +150,15 @@ export default function Team() {
           <p className="mt-1 text-sm" style={{ color: MUTED }}>{workers.length} team member{workers.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            onClick={() => setShiftAssignmentOpen(true)}
-            className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
-            style={{ background: PLUM }}
-          >
-            <Clock size={16} /> Assign Shift
-          </Button>
+          {tab !== "shifts" && (
+            <Button
+              onClick={() => setTab("shifts")}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
+              style={{ background: PLUM }}
+            >
+              <Clock size={16} /> Assign Shift
+            </Button>
+          )}
           <Button
             onClick={() => setInviteOpen(true)}
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
@@ -168,10 +171,10 @@ export default function Team() {
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
-        {(["overview", "management"] as Tab[]).map((t) => (
+        {(["overview", "management", "shifts"] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setSelectedWorkerForShift(null); setShiftFormOpen(false); }}
             className="flex-1 rounded-lg py-2 text-sm font-bold capitalize transition-colors"
             style={{
               background: tab === t ? "var(--cc-bg)" : "transparent",
@@ -179,7 +182,7 @@ export default function Team() {
               boxShadow: tab === t ? "0 1px 3px rgba(55,48,163,0.12)" : "none",
             }}
           >
-            {t}
+            {t === "shifts" ? "Shift Assignments" : t}
           </button>
         ))}
       </div>
@@ -531,12 +534,98 @@ export default function Team() {
         </section>
       )}
 
-      {/* Shift Assignment Modal */}
-      <ShiftAssignmentModal
-        open={shiftAssignmentOpen}
-        onOpenChange={setShiftAssignmentOpen}
-        workers={workers}
-      />
+      {/* ── SHIFT ASSIGNMENTS TAB ───────────────────────────────── */}
+      {tab === "shifts" && (
+        <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
+          <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
+            {/* LEFT: Worker list */}
+            <div className="flex flex-col overflow-hidden">
+              <div className="mb-4">
+                <label className="text-xs font-semibold uppercase" style={{ color: MUTED }}>Select Worker</label>
+                <p className="text-[10px] mt-1" style={{ color: MUTED }}>Choose a worker to assign shifts</p>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-2 border rounded-xl p-3" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
+                {workers.map((w) => (
+                  <button
+                    key={w.id}
+                    onClick={() => { setSelectedWorkerForShift(w); setShiftFormOpen(false); }}
+                    className="w-full text-left rounded-lg p-3 transition-all"
+                    style={{
+                      background: selectedWorkerForShift?.id === w.id ? PLUM : "transparent",
+                      color: selectedWorkerForShift?.id === w.id ? "#fff" : TEXT,
+                      border: `1px solid ${selectedWorkerForShift?.id === w.id ? PLUM : BORDER}`,
+                    }}
+                  >
+                    <p className="font-semibold text-[13px]">{w.full_name}</p>
+                    <p className="text-[11px] mt-1" style={{ color: selectedWorkerForShift?.id === w.id ? "rgba(255,255,255,0.8)" : MUTED }}>
+                      {w.total_sessions} sessions
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* RIGHT: Shift assignment form */}
+            <div className="flex flex-col overflow-hidden">
+              {selectedWorkerForShift ? (
+                <div className="rounded-2xl border p-6 space-y-4 h-full overflow-y-auto flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="flex items-center justify-between shrink-0">
+                    <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
+                      Assign Shift — {selectedWorkerForShift.full_name}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedWorkerForShift(null)}
+                      className="p-1 rounded hover:bg-gray-200 transition"
+                      style={{ color: MUTED }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {!shiftFormOpen ? (
+                    <div className="text-center flex-1 flex items-center justify-center">
+                      <div>
+                        <p className="font-bold text-sm" style={{ color: TEXT }}>Create or manage shifts</p>
+                        <p className="text-xs mt-1 mb-4" style={{ color: MUTED }}>Click the button below to assign shifts to this worker</p>
+                        <Button
+                          className="rounded-xl gap-2"
+                          style={{ background: PLUM, color: "#fff" }}
+                          onClick={() => setShiftFormOpen(true)}
+                        >
+                          <Plus size={16} /> Create Shift
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setShiftFormOpen(false)}
+                        className="text-xs font-bold mb-2"
+                        style={{ color: PLUM }}
+                      >
+                        ← Back to options
+                      </button>
+                      <ShiftAssignmentModal
+                        open={true}
+                        onOpenChange={() => setShiftFormOpen(false)}
+                        workers={[selectedWorkerForShift]}
+                      />
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div>
+                    <Clock size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                    <p className="font-bold mt-3" style={{ color: TEXT }}>Assign shifts</p>
+                    <p className="text-sm mt-1" style={{ color: MUTED }}>Select a worker from the left to get started</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

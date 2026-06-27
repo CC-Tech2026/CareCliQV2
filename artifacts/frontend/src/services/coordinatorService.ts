@@ -857,6 +857,19 @@ export type TaskTemplate = {
   is_active?: boolean;
   sort_order?: number;
   created_at?: string;
+  // Shift-based fields
+  primary_shift_type?: string | null;
+  additional_shift_types?: string[];
+  recurrence_type?: string;
+  recurrence_frequency?: string | null;
+  recurrence_weekdays?: number[];
+  due_window_start?: string | null;
+  due_window_end?: string | null;
+  category?: string | null;
+  priority?: string;
+  assigned_worker_id?: string | null;
+  linked_goal_id?: string | null;
+  status?: string;
 };
 
 export type TaskTemplatesResponse = {

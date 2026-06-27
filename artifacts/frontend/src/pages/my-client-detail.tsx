@@ -874,7 +874,6 @@ function InlineSessionComposer({
                     }}
                     className="min-h-11 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                     style={{ color: TEXT }}
-                    placeholder="Message"
                   />
                   <button
                     type="button"

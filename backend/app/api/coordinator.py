@@ -1212,6 +1212,107 @@ async def delete_shift_credential_requirement(
     return None
 
 
+# ── Helper: Auto-generate task instances from templates ─────────────────────
+async def _generate_tasks_from_templates(
+    supabase,
+    participant_id: str,
+    shift_id: str,
+    shift_type: str,
+    shift_date: date,
+    org_id: str,
+):
+    """
+    Auto-generate task instances for a shift by finding matching active templates.
+    
+    Matches templates by:
+    - participant_id
+    - primary_shift_type or additional_shift_types
+    - recurrence rules (one_off, recurring, specific_weekdays)
+    
+    Returns count of task instances created.
+    """
+    try:
+        # Get active task templates for this participant
+        templates_resp = (
+            supabase.table("participant_task_templates")
+            .select("*")
+            .eq("participant_id", participant_id)
+            .eq("organization_id", org_id)
+            .eq("status", "active")
+            .execute()
+        )
+        templates = templates_resp.data or []
+        
+        if not templates:
+            return 0
+        
+        # Filter templates that match this shift type
+        matching_templates = []
+        for template in templates:
+            primary = template.get("primary_shift_type") or ""
+            additional = template.get("additional_shift_types") or []
+            
+            if primary.lower() == shift_type.lower() or shift_type.lower() in [s.lower() for s in additional]:
+                matching_templates.append(template)
+        
+        if not matching_templates:
+            return 0
+        
+        # Check recurrence rules for each matching template
+        tasks_to_create = []
+        now = datetime.now(timezone.utc).isoformat()
+        
+        for template in matching_templates:
+            recurrence_type = template.get("recurrence_type") or "one_off"
+            recurrence_weekdays = template.get("recurrence_weekdays") or []
+            
+            # Check if task should be created for this shift date
+            should_create = False
+            
+            if recurrence_type == "one_off":
+                should_create = True
+            elif recurrence_type == "recurring":
+                # Always recurring (daily or weekly handled by recurrence_frequency)
+                should_create = True
+            elif recurrence_type == "specific_weekdays":
+                # Only create if today is one of the specified weekdays
+                weekday = shift_date.weekday()  # 0=Monday, 6=Sunday
+                # Convert to 0=Sunday format for compatibility
+                iso_weekday = (weekday + 1) % 7
+                should_create = iso_weekday in recurrence_weekdays
+            
+            if should_create:
+                tasks_to_create.append({
+                    "participant_id": participant_id,
+                    "organization_id": org_id,
+                    "shift_id": shift_id,
+                    "name": template.get("name"),
+                    "description": template.get("description"),
+                    "goal_id": template.get("linked_goal_id"),
+                    "status": "pending",
+                    "is_mandatory": template.get("is_mandatory", False),
+                    "created_at": now,
+                    "updated_at": now,
+                })
+        
+        # Create all generated task instances
+        if tasks_to_create:
+            try:
+                result = supabase.table("participant_tasks").insert(tasks_to_create).execute()
+                created_count = len(result.data or [])
+                logger.info(f"Auto-generated {created_count} tasks for shift {shift_id}")
+                return created_count
+            except Exception as create_exc:
+                logger.warning(f"Failed to auto-generate tasks for shift {shift_id}: {create_exc}")
+                return 0
+        
+        return 0
+    
+    except Exception as exc:
+        logger.warning(f"Task generation failed: {exc}")
+        return 0
+
+
 @router.post("/shifts")
 async def assign_shift(
     body: AssignShiftBody,
@@ -1346,6 +1447,21 @@ async def assign_shift(
             )
         
         shift = result.data[0]
+        
+        # Auto-generate task instances from matching templates
+        try:
+            shift_date = scheduled_start.date()
+            tasks_generated = await _generate_tasks_from_templates(
+                supabase,
+                body.participant_id,
+                shift_id,
+                shift_type,
+                shift_date,
+                org_id,
+            )
+            logger.info(f"Shift {shift_id}: generated {tasks_generated} task instances from templates")
+        except Exception as gen_exc:
+            logger.warning(f"Task auto-generation for shift {shift_id} failed: {gen_exc}")
         
         # Save selected tasks for this shift
         if body.selected_task_ids:
@@ -2913,6 +3029,19 @@ class TaskTemplateBody(BaseModel):
     is_mandatory: bool = False
     estimated_duration_minutes: Optional[int] = None
     sort_order: int = 0
+    # Shift-based fields
+    primary_shift_type: Optional[str] = None  # e.g., 'morning', 'afternoon', 'evening', 'flexible'
+    additional_shift_types: Optional[list[str]] = None
+    recurrence_type: str = "one_off"  # 'one_off', 'recurring', 'specific_weekdays'
+    recurrence_frequency: Optional[str] = None  # 'daily', 'weekly'
+    recurrence_weekdays: Optional[list[int]] = None  # [0-6] where 0=Sunday
+    due_window_start: Optional[str] = None  # HH:MM format
+    due_window_end: Optional[str] = None  # HH:MM format
+    category: Optional[str] = None  # 'personal_care', 'meal_prep', 'medication', 'community_access', 'documentation', 'other'
+    priority: str = "medium"  # 'low', 'medium', 'high'
+    assigned_worker_id: Optional[str] = None
+    linked_goal_id: Optional[str] = None
+    status: str = "active"  # 'active', 'paused', 'archived'
 
 
 @router.get("/participants/{participant_id}/task-templates")
@@ -2974,6 +3103,19 @@ async def create_task_template(
         "is_active": True,
         "created_at": now,
         "updated_at": now,
+        # Shift-based fields
+        "primary_shift_type": body.primary_shift_type,
+        "additional_shift_types": body.additional_shift_types or [],
+        "recurrence_type": body.recurrence_type,
+        "recurrence_frequency": body.recurrence_frequency,
+        "recurrence_weekdays": body.recurrence_weekdays or [],
+        "due_window_start": body.due_window_start,
+        "due_window_end": body.due_window_end,
+        "category": body.category,
+        "priority": body.priority,
+        "assigned_worker_id": body.assigned_worker_id,
+        "linked_goal_id": body.linked_goal_id,
+        "status": body.status,
     }
     try:
         resp = supabase.table("participant_task_templates").insert(payload).execute()
@@ -3001,6 +3143,19 @@ async def update_task_template(
         "estimated_duration_minutes": body.estimated_duration_minutes,
         "sort_order": body.sort_order,
         "updated_at": now,
+        # Shift-based fields
+        "primary_shift_type": body.primary_shift_type,
+        "additional_shift_types": body.additional_shift_types or [],
+        "recurrence_type": body.recurrence_type,
+        "recurrence_frequency": body.recurrence_frequency,
+        "recurrence_weekdays": body.recurrence_weekdays or [],
+        "due_window_start": body.due_window_start,
+        "due_window_end": body.due_window_end,
+        "category": body.category,
+        "priority": body.priority,
+        "assigned_worker_id": body.assigned_worker_id,
+        "linked_goal_id": body.linked_goal_id,
+        "status": body.status,
     }
     try:
         resp = supabase.table("participant_task_templates").update(update).eq("id", template_id).eq("organization_id", org_id).execute()

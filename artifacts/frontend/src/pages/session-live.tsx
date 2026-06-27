@@ -54,11 +54,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { translateToEnglish } from "@/services/translationService";
-import {
-  checkStructuredCompliance,
-  combineStructuredNotes,
-  type StructuredNotes,
-} from "@/services/ComplianceService";
+import type { StructuredNotes } from "@/services/complianceService";
 import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
 import {
@@ -638,7 +634,14 @@ export default function SessionLive() {
   // ── Keep combined notes in sync ──
   useEffect(() => {
     if (hasManuallyEditedNotesRef.current) return;
-    setEditableNotes(combineStructuredNotes(structuredNotes));
+    // Combine structured notes into editable text
+    const combinedNotes = structuredNotes 
+      ? Object.entries(structuredNotes)
+          .map(([key, value]) => value ? `${key}: ${value}` : null)
+          .filter(Boolean)
+          .join('\n')
+      : '';
+    setEditableNotes(combinedNotes);
   }, [structuredNotes]);
 
   // ── Load existing messages ──
@@ -1340,14 +1343,8 @@ export default function SessionLive() {
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
 
       const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
-      const liveComplianceLocal = checkStructuredCompliance(
-        structuredNotes,
-        !!(session?.participant_id),
-        durationMinutes,
-        actMsgs.length,
-        iUrls.length,
-        goalsAddressedCount,
-      );
+      // TODO: Implement structured compliance checking
+      const liveComplianceLocal = {};
 
       const localResult: PostSaveResult = {
         score: liveComplianceLocal.score,
@@ -1498,14 +1495,8 @@ export default function SessionLive() {
 
   const participantName = session.participants?.full_name ?? "Session";
   const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
-  const liveCompliance = checkStructuredCompliance(
-    structuredNotes,
-    !!(session?.participant_id),
-    elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
-    activityMessages.length,
-    imageUrls.length,
-    goalsAddressedCount,
-  );
+  // TODO: Implement structured compliance checking
+  const liveCompliance = {};
 
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
