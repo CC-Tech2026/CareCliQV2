@@ -730,6 +730,7 @@ function InlineSessionComposer({
                 Input language
               </label>
               <select
+                title="Input language"
                 value={language}
                 onChange={(event) => onLanguageChange(event.target.value)}
                 className="h-10 rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none"
@@ -784,6 +785,8 @@ function InlineSessionComposer({
                     Generated compliant note
                   </div>
                   <textarea
+                    title="Generated compliant note"
+                    placeholder="AI-generated note will appear here..."
                     value={generated}
                     onChange={(event) => onGeneratedChange(event.target.value)}
                     className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
@@ -851,6 +854,7 @@ function InlineSessionComposer({
               <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm" style={{ borderColor: BORDER }}>
                   <input
+                    title="Attach file"
                     ref={fileInputRef}
                     type="file"
                     accept="image/*,.pdf,.doc,.docx"
@@ -858,6 +862,8 @@ function InlineSessionComposer({
                     onChange={(event) => onAttach(event.target.files?.[0] ?? null)}
                   />
                   <input
+                    title="Message input"
+                    placeholder="Type a message..."
                     value={inputValue}
                     onChange={(event) => onInputChange(event.target.value)}
                     onKeyDown={(event) => {
@@ -1297,6 +1303,7 @@ function IncidentReportModal({
             <div>
               <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Type *</p>
               <select
+                title="Incident type"
                 value={form.incident_type}
                 onChange={(event) => setField("incident_type", event.target.value)}
                 className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
@@ -1308,6 +1315,7 @@ function IncidentReportModal({
             <div>
               <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Severity *</p>
               <select
+                title="Incident severity"
                 value={form.severity}
                 onChange={(event) => setField("severity", event.target.value)}
                 className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
@@ -1962,7 +1970,7 @@ export default function MyClientDetail({ id }: { id: string }) {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 pb-10">
+    <div className="space-y-5 pb-10">
       {/* Page header — name + action row */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
         <div>

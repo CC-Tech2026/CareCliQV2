@@ -180,6 +180,7 @@ function ClinicalReportGenerator() {
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Participant</p>
             <select
+              title="Participant"
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
               className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
@@ -194,6 +195,7 @@ function ClinicalReportGenerator() {
           <div>
             <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Report type</p>
             <select
+              title="Report type"
               value={reportType}
               onChange={(event) => setReportType(event.target.value)}
               className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
@@ -1149,8 +1151,7 @@ export default function Reports() {
   const activeTab_ = TABS.find(t => t.id === activeTab)!;
 
   return (
-    <div className="w-full min-h-full" style={{ background: BG }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="space-y-6 pb-10">
 
         {/* Page header */}
         <div className="mb-6">
@@ -1211,7 +1212,6 @@ export default function Reports() {
             {SECTION_MAP[activeTab]}
           </main>
         </div>
-      </div>
     </div>
   );
 }

@@ -524,6 +524,8 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            title="Incident note"
+            placeholder="Add optional details about this incident..."
             rows={3}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid #FECACA`, color: TEXT }}
@@ -576,7 +578,7 @@ export default function CoordinatorLivePage() {
   const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 
   return (
-    <div className="min-h-screen p-6" style={{ background: "var(--cc-soft)" }}>
+    <div className="pb-10">
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div className="flex items-center gap-3">

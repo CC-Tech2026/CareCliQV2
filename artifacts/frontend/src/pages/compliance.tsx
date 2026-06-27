@@ -179,7 +179,7 @@ export default function Compliance() {
   const circ = 2 * Math.PI * 60;
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto p-4 md:p-8 selection:bg-[#3730A3]/10 h-full">
+    <div className="flex flex-col gap-6 pb-10 selection:bg-[#3730A3]/10">
 
       {/* ── Header Area ── */}
       <div className="border-b pb-4" style={{ borderColor: BORDER }}>

@@ -140,7 +140,7 @@ export default function SessionNew() {
   const startDisabled = !!selectedParticipantId && selectedGoalIds.length === 0;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="space-y-6 pb-10">
 
       {/* ── Header ── */}
       <div>

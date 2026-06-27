@@ -78,7 +78,7 @@ export default function Incidents() {
   }), [incidents, filterSeverity, filterStatus, search]);
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

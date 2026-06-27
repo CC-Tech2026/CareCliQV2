@@ -101,7 +101,7 @@ export default function MyClients() {
   const needsReviewCount  = data.filter((c) => c.compliance_status !== "compliant").length;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 pb-24 md:pb-10">
+    <div className="space-y-4 pb-24 md:pb-10">
 
       {/* Header */}
       <div className="flex items-center justify-between">

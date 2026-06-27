@@ -252,6 +252,8 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           <textarea
+            title="Custom message"
+            placeholder="Enter your custom message here..."
             className="mt-1 w-full rounded-xl border border-[#E5E7EB] p-3 text-sm"
             rows={3}
             value={customMessage}
@@ -420,7 +422,7 @@ export default function Credentials() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       {modal}
       {showBulkReminders && (
         <BulkRemindersPanel onClose={() => setShowBulkReminders(false)} />
@@ -478,6 +480,7 @@ export default function Credentials() {
             <div>
               <Label>Shift type</Label>
               <select
+                title="Shift type"
                 value={ruleShiftType}
                 onChange={(event) => setRuleShiftType(event.target.value)}
                 className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
@@ -490,6 +493,7 @@ export default function Credentials() {
             <div>
               <Label>Required credential</Label>
               <select
+                title="Required credential"
                 value={ruleCredentialType}
                 onChange={(event) => setRuleCredentialType(event.target.value)}
                 className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
@@ -553,6 +557,7 @@ export default function Credentials() {
             <div>
               <Label>Type</Label>
               <select
+                title="Credential type"
                 value={form.credential_type}
                 onChange={(event) => setForm({ ...form, credential_type: event.target.value })}
                 className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"

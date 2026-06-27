@@ -151,7 +151,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6 pb-10">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-48 w-full rounded-2xl" />
@@ -181,7 +181,7 @@ export default function IncidentDetail({ id }: { id: string }) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="space-y-6 pb-10">
       {modal}
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-[13px]">

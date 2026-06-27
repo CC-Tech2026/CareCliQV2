@@ -81,7 +81,7 @@ export default function ProfileCompletion() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
           {isAllied ? "Allied Health" : "Support Worker"}
@@ -115,6 +115,7 @@ export default function ProfileCompletion() {
               <div>
                 <Label>Discipline</Label>
                 <select
+                  title="Discipline"
                   value={profile.discipline || ""}
                   onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
                   className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"

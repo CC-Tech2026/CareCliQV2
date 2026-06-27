@@ -374,7 +374,7 @@ function SidebarContents({
       {/* Logo row */}
       <div
         className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
-        style={{ borderBottom: `1px solid ${BORDER}` }}
+        style={{ borderBottom: `1px solid ${BORDER}`, borderTop: "3px solid var(--cc-plum)" }}
       >
         <Link
           href="/dashboard"
@@ -395,7 +395,8 @@ function SidebarContents({
         {sections.map((section, si) => (
           <div key={si} className={si > 0 ? "mt-5" : ""}>
             {section.group && !compact && (
-              <p className="mb-1.5 px-3 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+              <p className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.14em] flex items-center gap-2" style={{ color: MUTED }}>
+                <span className="w-px h-3 rounded-full shrink-0" style={{ background: BORDER }} />
                 {section.group}
               </p>
             )}
@@ -419,32 +420,30 @@ function SidebarContents({
                   >
                     <div
                       className={cn(
-                        "flex items-center rounded-lg text-[13px] transition-all cursor-pointer",
-                        compact ? "h-10 justify-center" : "gap-3 px-3 py-2.5",
+                        "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
+                        compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
                       )}
                       style={{
                         background: active
-                          ? ACTIVE
+                          ? PLUM
                           : isIncident && !compact
-                            ? "rgba(190,24,93,0.04)"
+                            ? "rgba(190,24,93,0.06)"
                             : "transparent",
-                        color: active ? PLUM : isIncident ? CORAL : MUTED,
+                        color: active ? "#fff" : isIncident ? CORAL : MUTED,
                         fontWeight: active ? 700 : isIncident ? 600 : 500,
-                        /* Left accent bar — inset shadow avoids layout shift */
-                        boxShadow: !compact && active
-                          ? "inset 3px 0 0 var(--cc-plum)"
-                          : !compact && isIncident
-                            ? "inset 3px 0 0 var(--cc-coral)"
-                            : "none",
                       }}
                     >
                       <Icon
-                        size={17}
+                        size={18}
                         strokeWidth={active ? 2.5 : isIncident ? 2.5 : 2}
+                        style={{ color: active ? "#fff" : isIncident ? CORAL : MUTED }}
                       />
                       {!compact && <span className="flex-1 truncate">{item.label}</span>}
                       {!compact && hasAlert && (
-                        <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full text-white text-[10px] font-black flex items-center justify-center" style={{ background: CORAL }}>
+                        <span
+                          className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center"
+                          style={{ background: active ? "rgba(255,255,255,0.25)" : CORAL, color: "#fff" }}
+                        >
                           {alertCount}
                         </span>
                       )}
@@ -461,17 +460,17 @@ function SidebarContents({
           <Link href="/settings" onClick={onNav} title={compact ? "Settings" : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
             <div
               className={cn(
-                "flex items-center rounded-lg text-[13px] transition-all cursor-pointer",
-                compact ? "h-10 justify-center" : "gap-3 px-3 py-2.5",
+                "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
+                compact ? "h-10 w-10 justify-center" : "gap-3 px-3 py-2.5",
               )}
               style={{
-                background: isActive(location, "/settings") ? ACTIVE : "transparent",
-                color: isActive(location, "/settings") ? PLUM : MUTED,
+                background: isActive(location, "/settings") ? PLUM : "transparent",
+                color: isActive(location, "/settings") ? "#fff" : MUTED,
                 fontWeight: isActive(location, "/settings") ? 700 : 500,
-                boxShadow: !compact && isActive(location, "/settings") ? "inset 3px 0 0 var(--cc-plum)" : "none",
               }}
             >
-              <Settings size={17} strokeWidth={isActive(location, "/settings") ? 2.5 : 2} />
+              <Settings size={18} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
+                style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
               {!compact && <span>Settings</span>}
             </div>
           </Link>
@@ -483,14 +482,14 @@ function SidebarContents({
         <div className="px-3 pb-2 shrink-0">
           <Link href="/incident-new" onClick={onNav}>
             <div
-              className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-[13px] font-bold transition-all cursor-pointer hover:opacity-90"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-black transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
               style={{
-                background: "rgba(190,24,93,0.08)",
+                background: "rgba(190,24,93,0.09)",
                 color: CORAL,
-                border: "1px solid rgba(190,24,93,0.15)",
+                border: "1.5px solid rgba(190,24,93,0.18)",
               }}
             >
-              <Plus size={15} strokeWidth={2.5} />
+              <AlertTriangle size={14} strokeWidth={2.5} />
               <span>Report Incident</span>
             </div>
           </Link>
@@ -502,8 +501,8 @@ function SidebarContents({
         {compact ? (
           <div className="relative mx-auto w-fit">
             <div
-              className="h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-bold"
-              style={{ background: ACTIVE, color: PLUM }}
+              className="h-10 w-10 rounded-full flex items-center justify-center text-[12px] font-black"
+              style={{ background: PLUM, color: "#fff" }}
               title={displayName}
             >
               {initials}
@@ -523,8 +522,8 @@ function SidebarContents({
             {/* Avatar with compliance status ring */}
             <div className="relative shrink-0">
               <div
-                className="h-8 w-8 rounded-full flex items-center justify-center text-[12px] font-bold"
-                style={{ background: ACTIVE, color: PLUM }}
+                className="h-9 w-9 rounded-full flex items-center justify-center text-[12px] font-black"
+                style={{ background: PLUM, color: "#fff" }}
               >
                 {initials}
               </div>
@@ -680,63 +679,53 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
             <button
               onClick={() => setDrawerOpen(true)}
+              aria-label="Open navigation menu"
               className="h-9 w-9 rounded-xl flex items-center justify-center transition-colors active:bg-black/5"
               style={{ color: TEXT }}
             >
-              <Menu size={20} />
+              <Menu size={20} aria-hidden="true" />
             </button>
           </div>
         </header>
 
         {/* ── Desktop topbar ─────────────────────────────────────────────── */}
-        {/*
-          Layout is items-stretch so tab items fill the full h-14 height
-          and their border-bottom-2 pins visually to the bar's bottom edge.
-        */}
         <header
-          className="hidden md:flex h-14 items-stretch shrink-0 select-none"
+          className="hidden md:flex h-14 items-center shrink-0 select-none"
           style={{
             borderBottom: `1px solid ${BORDER}`,
+            borderTop: "3px solid var(--cc-plum)",
             background: "var(--cc-bg)",
           }}
         >
-          {/* ── Left zone — role pill only; sidebar always holds the logo ── */}
+          {/* ── Left zone — role pill ── */}
           <div className="flex items-center px-4 shrink-0">
             <div
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-[0.14em] select-none"
-              style={{ background: ACTIVE, color: PLUM, border: "1px solid rgba(55,48,163,0.12)" }}
+              style={{ background: PLUM, color: "#fff" }}
             >
+              <span className="w-1.5 h-1.5 rounded-full bg-white opacity-70 shrink-0" />
               {rolePill}
             </div>
           </div>
 
-          {/* ── Center zone: tabs (collapsed) or page label (expanded) ── */}
+          {/* ── Center zone: pill tabs (collapsed) or page label (expanded) ── */}
           {collapsed ? (
-            /* Quick-nav tabs — fill full bar height for underline effect */
-            <div className="flex items-stretch flex-1 overflow-x-auto scrollbar-none">
+            <div className="flex items-center flex-1 gap-0.5 overflow-x-auto scrollbar-none px-1">
               {topbarQuicknav.map((item) => {
                 const active = isActive(location, item.href);
                 const Icon = item.icon;
                 return (
                   <Link key={item.href} href={item.href}>
                     <div
-                      className="flex items-center gap-1.5 px-3 h-full border-b-2 text-[12.5px] whitespace-nowrap transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
                       style={{
-                        borderBottomColor: active ? "var(--cc-plum)" : "transparent",
-                        color: active ? PLUM : MUTED,
+                        background: active ? PLUM : "transparent",
+                        color: active ? "#fff" : MUTED,
                         fontWeight: active ? 700 : 500,
                       }}
                     >
-                      <Icon
-                        size={14}
-                        strokeWidth={active ? 2.5 : 2}
-                        style={{
-                          color: active ? PLUM : MUTED,
-                          transition: "color 0.15s",
-                        }}
-                      />
+                      <Icon size={13} strokeWidth={active ? 2.5 : 2} style={{ color: active ? "#fff" : MUTED }} />
                       <span>{item.label}</span>
-                      {/* Alert dot on compliance items */}
                       {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
                         <span
                           className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center text-white"
@@ -749,27 +738,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
-              {/* Settings tab at end */}
-              <div className="h-full w-px mx-1 self-center" style={{ background: BORDER, height: 20 }} />
+              <div className="w-px h-4 mx-1 shrink-0" style={{ background: BORDER }} />
               <Link href="/settings">
                 <div
-                  className="flex items-center gap-1.5 px-3 h-full border-b-2 text-[12.5px] whitespace-nowrap transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] whitespace-nowrap transition-all cursor-pointer"
                   style={{
-                    borderBottomColor: isActive(location, "/settings") ? "var(--cc-plum)" : "transparent",
-                    color: isActive(location, "/settings") ? PLUM : MUTED,
+                    background: isActive(location, "/settings") ? PLUM : "transparent",
+                    color: isActive(location, "/settings") ? "#fff" : MUTED,
                     fontWeight: isActive(location, "/settings") ? 700 : 500,
                   }}
                 >
-                  <Settings size={14} strokeWidth={isActive(location, "/settings") ? 2.5 : 2} />
+                  <Settings size={13} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
+                    style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
                   <span>Settings</span>
                 </div>
               </Link>
             </div>
           ) : (
-            /* Expanded: page label + spacer */
-            <div className="flex items-center flex-1 px-2">
+            /* Expanded: page title */
+            <div className="flex items-center flex-1 px-3">
               {pageLabel && (
-                <p className="text-[13px] font-bold" style={{ color: TEXT }}>
+                <p
+                  className="text-[15px] font-black tracking-tight"
+                  style={{ color: TEXT, fontFamily: "var(--app-font-display)" }}
+                >
                   {pageLabel}
                 </p>
               )}
@@ -798,15 +790,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Notification bell */}
-            <div
-              className="relative h-8 w-8 rounded-lg border flex items-center justify-center hover:bg-[var(--cc-soft)] transition-colors cursor-pointer"
+            <button
+              type="button"
+              aria-label="Open notifications"
+              className="relative h-8 w-8 rounded-xl border flex items-center justify-center hover:bg-[var(--cc-soft)] transition-colors"
               style={{ borderColor: BORDER }}
             >
               {!isWorker
                 ? <NotificationBell onClick={() => setNotifOpen(true)} />
                 : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
               }
-            </div>
+            </button>
 
             {/* Theme toggle */}
             <button
@@ -814,7 +808,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               onClick={toggleTheme}
               title={theme === "dark" ? "Light mode" : "Dark mode"}
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="h-8 w-8 rounded-lg border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
+              className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
               style={{ borderColor: BORDER, color: MUTED }}
             >
               {theme === "dark" ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}

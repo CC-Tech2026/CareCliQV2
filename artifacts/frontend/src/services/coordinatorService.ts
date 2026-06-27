@@ -332,7 +332,7 @@ export type CredentialStatus = {
 };
 
 export type AssignShiftPayload = {
-  worker_id: string;
+  worker_id?: string;
   participant_id: string;
   scheduled_start: string;
   scheduled_end?: string;

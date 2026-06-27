@@ -257,7 +257,7 @@ export default function WorkerSecurity() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       {modal}
 
       <div>

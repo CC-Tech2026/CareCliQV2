@@ -358,6 +358,7 @@ function NotificationsSection() {
                   <td key={ch} className="px-4 py-3 text-center">
                     <input
                       type="checkbox"
+                      title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
                       checked={prefs.events[ev.key]?.[ch] ?? false}
                       disabled={ch === "in_app"}
                       onChange={() => toggleEvent(ev.key, ch)}
@@ -391,6 +392,7 @@ function NotificationsSection() {
                   </label>
                   <input
                     type="checkbox"
+                    title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
                     checked={prefs.events[ev.key]?.[ch] ?? false}
                     disabled={ch === "in_app"}
                     onChange={() => toggleEvent(ev.key, ch)}
@@ -418,6 +420,7 @@ function NotificationsSection() {
               <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
               <input
                 type="time"
+                title="Quiet hours start time"
                 value={prefs.quiet_from}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
@@ -428,6 +431,7 @@ function NotificationsSection() {
               <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
               <input
                 type="time"
+                title="Quiet hours end time"
                 value={prefs.quiet_to}
                 onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
                 className="h-9 rounded-xl px-3 text-[13px] outline-none"
@@ -1436,7 +1440,7 @@ export default function Settings() {
                           </>
                         )}
                       </div>
-                      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
+                      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" title="Upload profile photo (PNG or JPG, max 2 MB)" className="hidden" onChange={handleFileChange} />
                       <div className="flex gap-2">
                         {uploadPreview && (
                           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setUploadPreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
@@ -1842,6 +1846,7 @@ export default function Settings() {
                         {/* Role selector — prevent changing own role */}
                         {m.user_id !== user?.id ? (
                           <select
+                            title="User role"
                             value={m.role}
                             onChange={(e) => handleChangeRole(m.id, e.target.value)}
                             className="text-[11px] font-semibold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer shrink-0"
