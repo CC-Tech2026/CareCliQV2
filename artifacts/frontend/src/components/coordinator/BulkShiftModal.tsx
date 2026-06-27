@@ -122,7 +122,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
             <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Recurring Shifts</h2>
             <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>Create bulk recurring shifts for a participant.</p>
           </div>
-          <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100">
+          <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100" title="Close modal" aria-label="Close modal">
             <X size={16} style={{ color: MUTED }} />
           </button>
         </div>
@@ -265,6 +265,8 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
+                    title="Shift start time"
+                    placeholder="HH:MM"
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
@@ -275,6 +277,8 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
+                    title="Shift end time"
+                    placeholder="HH:MM"
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
@@ -289,6 +293,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
+                    title="Date to start shift series"
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none"
                     style={{ borderColor: BORDER }}
                   />
@@ -301,6 +306,8 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     max={26}
                     value={weeks}
                     onChange={(e) => setWeeks(Math.max(1, parseInt(e.target.value) || 1))}
+                    title="Number of weeks to repeat shifts"
+                    placeholder="1-26 weeks"
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none"
                     style={{ borderColor: BORDER }}
                   />

@@ -1755,6 +1755,8 @@ export default function SessionLive() {
             <button
               onClick={() => setBodyMapOpen(false)}
               className="text-[#6B7280] hover:text-[#3730A3]"
+              title="Close body map"
+              aria-label="Close body map"
             >
               <X className="h-4 w-4" />
             </button>
@@ -1873,6 +1875,8 @@ export default function SessionLive() {
         capture="environment"
         className="hidden"
         onChange={handlePhotoUpload}
+        title="Upload photo from camera"
+        aria-label="Upload photo from camera"
       />
       <input
         ref={fileAttachRef}
@@ -1880,6 +1884,8 @@ export default function SessionLive() {
         accept=".pdf,.doc,.docx,.txt,image/*"
         className="hidden"
         onChange={handleFileAttach}
+        title="Attach file"
+        aria-label="Attach file"
       />
 
       {/* ── Activity sheet ── */}
@@ -1897,6 +1903,8 @@ export default function SessionLive() {
               <button
                 onClick={() => setShowActivitySheet(false)}
                 className="text-[#6B7280] hover:text-[#3730A3]"
+                title="Close activity sheet"
+                aria-label="Close activity sheet"
               >
                 <X className="h-4 w-4" />
               </button>
