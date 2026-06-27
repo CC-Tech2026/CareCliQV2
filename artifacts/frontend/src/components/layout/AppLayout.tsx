@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search, Plus,
+  Sun, Moon, Search,
 } from "lucide-react";
 import { getStoredTheme, applyTheme, type Theme } from "@/lib/theme";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -23,7 +23,6 @@ import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 // ── Design tokens (CSS vars — dark mode ready) ────────────────────────────────
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
-const GREEN  = "var(--cc-green)";
 const MUTED  = "var(--cc-muted)";
 const TEXT   = "var(--cc-text)";
 const BORDER = "var(--cc-border)";
@@ -161,7 +160,8 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
     { href: "/patients",              label: "Participants", icon: UserRound      },
     { href: "/sessions",              label: "Shifts",      icon: CalendarDays    },
     { href: "/compliance",            label: "Compliance",  icon: ShieldCheck     },
-    { href: "/coordinator/rostering", label: "Rostering",   icon: Radio           },
+    { href: "/coordinator/rostering", label: "Rostering",   icon: CalendarDays    },
+    { href: "/coordinator/live",      label: "Live",        icon: Radio           },
     { href: "/incidents",             label: "Incidents",   icon: AlertTriangle   },
   ],
   support_worker: [
@@ -267,16 +267,10 @@ function getPageLabel(location: string): string {
 }
 
 function isActive(location: string, href: string) {
-  return (
-    location === href ||
-    location.startsWith(href + "/") ||
-    (href === "/patients"      && (location.startsWith("/patients") || location.startsWith("/participants"))) ||
-    (href === "/my-clients"    && location.startsWith("/my-clients")) ||
-    (href === "/my-shifts"     && location.startsWith("/my-shifts")) ||
-    (href === "/tasks"         && location.startsWith("/tasks")) ||
-    (href === "/worker/profile"  && location.startsWith("/worker/profile")) ||
-    (href === "/worker/security" && location.startsWith("/worker/security"))
-  );
+  // /patients also matches the legacy /participants route — kept as an explicit
+  // alias since it doesn't fit the plain prefix check below.
+  if (href === "/patients" && location.startsWith("/participants")) return true;
+  return location === href || location.startsWith(href + "/");
 }
 
 function getInitials(name: string) {
@@ -407,7 +401,7 @@ function SidebarContents({
               {section.items.map((item) => {
                 const active = isActive(location, item.href);
                 const Icon = item.icon;
-                const isCompliance = item.href === "/compliance" || item.href === "/my-compliance";
+                const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
                 const isIncident   = item.href === "/incidents";
                 const hasAlert     = alertCount > 0 && isCompliance;
                 return (
@@ -558,7 +552,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [workerNotifOpen, setWorkerNotifOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "true"; }
+    catch { return false; }
+  });
 
   const { settings } = useSettings();
   const { user, logout } = useAuth();
@@ -570,7 +567,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
   const userRole    = user?.role as NavRole | undefined;
   const isWorker    = userRole === "support_worker";
-  const topbarAlertHref = isWorker ? "/my-compliance" : "/compliance";
+  const topbarAlertHref =
+    userRole === "support_worker"    ? "/my-compliance" :
+    userRole === "managing_director" ? "/md/compliance"  :
+    "/compliance";
 
   const [theme, setTheme] = useState<Theme>(getStoredTheme);
   useEffect(() => { applyTheme(theme); }, [theme]);
