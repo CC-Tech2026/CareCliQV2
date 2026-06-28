@@ -844,9 +844,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <WorkerNotificationPanel onClose={() => setWorkerNotifOpen(false)} />
           </>
         )}
-        </div>
       </div>
-      
+
 
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
       <nav

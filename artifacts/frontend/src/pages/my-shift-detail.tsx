@@ -166,7 +166,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     shiftId: id,
     orgId,
     shift,
-    onTasksUpdated: setTasks,
+    onTasksUpdated: (tasks) => setTasks(tasks ?? []),
     onSessionStarted: () => setNotePanelOpen(true),
   });
 

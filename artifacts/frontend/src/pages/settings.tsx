@@ -83,7 +83,7 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }>; coordinatorOnly?: boolean }[] = [
+const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
   { id: "account",       label: "Account",          icon: User        },
   { id: "provider",      label: "Provider",          icon: Building2   },
   { id: "defaults",      label: "Session Defaults",  icon: Settings2   },
@@ -128,7 +128,7 @@ function Section({
 }: {
   title: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   children: React.ReactNode;
 }) {
   return (

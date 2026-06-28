@@ -27,7 +27,7 @@ type OfflineSyncContextValue = {
   queueItems: SyncQueueItem[];
   lastResults: SyncItemResult[];
   refresh: () => Promise<void>;
-  retryAll: () => Promise<void>;
+  retryAll: () => Promise<{ results: SyncItemResult[]; synced: number; failed: number } | undefined>;
   activeShiftId: string | null;
   setActiveShiftId: (shiftId: string | null) => void;
 };

@@ -1,5 +1,12 @@
 import { jsonFetch } from "@/services/http";
 
+export type StructuredNotes = {
+  activitiesPerformed: string;
+  outcomes: string;
+  participantResponse: string;
+  progressTowardGoals: string;
+};
+
 export type EvidenceMetadata = {
   evidence_id: string;
   session_id: string;
