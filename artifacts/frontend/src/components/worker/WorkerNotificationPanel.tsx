@@ -578,6 +578,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
               </button>
             )}
             <button
+              aria-label="Close notifications"
               className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
               onClick={onClose}
             >
