@@ -788,17 +788,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
             {/* Notification bell */}
-            <button
-              type="button"
-              aria-label="Open notifications"
-              className="relative h-8 w-8 rounded-xl border flex items-center justify-center hover:bg-[var(--cc-soft)] transition-colors"
+            <div
+              className="relative h-8 w-8 rounded-xl border flex items-center justify-center"
               style={{ borderColor: BORDER }}
             >
               {!isWorker
                 ? <NotificationBell onClick={() => setNotifOpen(true)} />
                 : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
               }
-            </button>
+            </div>
 
             {/* Theme toggle */}
             <button
