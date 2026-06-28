@@ -364,7 +364,6 @@ function SidebarContents({
 
   return (
     <div className="flex flex-col h-full select-none overflow-hidden">
-
       {/* Logo row */}
       <div
         className={cn("flex items-center shrink-0 h-14", compact ? "justify-center px-2" : "px-3")}
@@ -595,8 +594,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const rolePill = displayRole.split(" ").slice(0, 2).join(" ");
 
   return (
-    <div className="flex w-full overflow-hidden" style={{ height: "100dvh", color: TEXT, background: "var(--cc-bg)" }}>
-
+    <div className="flex w-full overflow-hidden h-dvh" style={{ color: TEXT, background: "var(--cc-bg)" }}>
       {/* Desktop sidebar */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
@@ -847,7 +845,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <WorkerNotificationPanel onClose={() => setWorkerNotifOpen(false)} />
           </>
         )}
+        </div>
       </div>
+      
 
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
       <nav
