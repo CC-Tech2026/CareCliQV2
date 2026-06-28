@@ -344,8 +344,7 @@ function GlobalSearch({ sections }: { sections: NavSection[] }) {
         </div>
       )}
     </div>
-  );
-}
+  )};
 
 // ── Sidebar contents ──────────────────────────────────────────────────────────
 function SidebarContents({
@@ -542,8 +541,7 @@ function SidebarContents({
         )}
       </div>
     </div>
-  );
-}
+  )};
 
 // ── App layout ────────────────────────────────────────────────────────────────
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -844,13 +842,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch safe-nav-bottom"
         style={{ borderTop: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
       >
-        {(ROLE_BOTTOM_NAV[userRole as NavRole] ?? ROLE_BOTTOM_NAV.support_worker).map((item) => {
+        {(ROLE_BOTTOM_NAV[userRole as NavRole] ?? ROLE_BOTTOM_NAV.support_worker).map((item: { href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>; label: string }) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
           return (
