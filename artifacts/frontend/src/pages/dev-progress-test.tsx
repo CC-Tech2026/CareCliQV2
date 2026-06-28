@@ -620,6 +620,7 @@ function ParticipantFields({
         <Loader2 className="h-5 w-5 animate-spin" style={{ color: PLUM }} />
       ) : (
         <select
+          aria-label="Select participant"
           className="w-full rounded-lg border px-3 py-2 text-sm"
           value={ctx.participantId}
           onChange={(e) => ctx.setParticipantId(e.target.value)}
@@ -1239,8 +1240,9 @@ function TicketTestPanel({ ticketId, ctx }: { ticketId: TicketId; ctx: TestConte
           <TicketHeader ticket={ticket} />
           <SessionField ctx={ctx} />
           <div>
-            <Label className="text-xs text-muted-foreground">Note text for assess-note</Label>
+            <Label htmlFor="dev-note-text" className="text-xs text-muted-foreground">Note text for assess-note</Label>
             <textarea
+              id="dev-note-text"
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm min-h-[100px]"
               value={ctx.noteText}
               onChange={(e) => ctx.setNoteText(e.target.value)}
