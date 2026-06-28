@@ -53,13 +53,12 @@ export async function applySupabaseSession(session: StoredSupabaseSession): Prom
 
 async function refreshSupabaseSessionViaApi(refreshToken: string): Promise<boolean> {
   try {
-    const data = await apiFetch<{ supabase_session: StoredSupabaseSession }>(
-      "/api/auth/supabase-refresh",
-      {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      },
-    );
+    const res = await apiFetch("/api/auth/supabase-refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json() as { supabase_session?: StoredSupabaseSession };
     if (!data.supabase_session) return false;
     persistSupabaseSession(data.supabase_session, getRememberDevicePreference());
     return applySupabaseSession(data.supabase_session);

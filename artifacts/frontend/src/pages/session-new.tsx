@@ -129,7 +129,7 @@ export default function SessionNew() {
         },
       },
       {
-        onSuccess: (res) => {
+        onSuccess: (res: any) => {
           toast({ title: "Session Ready", description: startNow ? "Session opened for review" : "Session saved" });
           setLocation(`/sessions/${res.id}`);
         },
@@ -175,7 +175,7 @@ export default function SessionNew() {
                         <SelectValue placeholder="Select participant…" />
                       </SelectTrigger>
                       <SelectContent>
-                        {participants?.map(p => (
+                        {participants?.map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
                         ))}
                       </SelectContent>

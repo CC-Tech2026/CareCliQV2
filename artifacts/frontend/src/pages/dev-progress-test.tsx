@@ -478,11 +478,11 @@ function BudgetRulesStatusNote({
       ? extractBudgetRules(complianceRun?.data)
       : extractBudgetRules(sessionCompliance?.data);
 
-  const hasPlan =
-    budgetSummary?.ok &&
+  const hasPlan: boolean =
+    !!(budgetSummary?.ok &&
     budgetSummary.data &&
     typeof budgetSummary.data === "object" &&
-    (budgetSummary.data as { has_plan?: boolean }).has_plan === true;
+    (budgetSummary.data as { has_plan?: boolean }).has_plan === true);
 
   const exceeded = budgetRules.some((r) => r.rule === "budget_exceeded");
   const warning = budgetRules.some((r) => r.rule === "budget_warning");
@@ -519,7 +519,7 @@ function BudgetRulesStatusNote({
           exhausted.
         </p>
       )}
-      {hasPlan && budgetRules.length === 0 && (complianceRun?.ok || sessionCompliance?.ok) && (
+      {hasPlan && budgetRules.length === 0 && Boolean(complianceRun?.ok || sessionCompliance?.ok) && (
         <p>No budget rules fired — plan budget is healthy for this session category.</p>
       )}
       <p style={{ color: MUTED }}>

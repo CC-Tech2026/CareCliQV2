@@ -1265,7 +1265,7 @@ export default function Patients() {
   const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
 
   const filteredParticipants = (participants ?? [])
-    .filter((p) => {
+    .filter((p: any) => {
       const q = search.toLowerCase();
       const matchesSearch = !q
         || p.full_name.toLowerCase().includes(q)
@@ -1274,14 +1274,14 @@ export default function Patients() {
       const matchesLetter = !letterFilter || p.full_name.toUpperCase().startsWith(letterFilter);
       return matchesSearch && matchesStatus && matchesLetter;
     })
-    .sort((a, b) => {
+    .sort((a: any, b: any) => {
       const cmp = a.full_name.localeCompare(b.full_name);
       return sortOrder === "asc" ? cmp : -cmp;
     });
 
   // Which letters actually have participants
   const activeLetters = new Set(
-    (participants ?? []).map((p) => p.full_name[0]?.toUpperCase()).filter(Boolean)
+    (participants ?? []).map((p: any) => p.full_name[0]?.toUpperCase()).filter(Boolean)
   );
 
   return (
@@ -1422,7 +1422,7 @@ export default function Patients() {
               </p>
             </div>
           ) : (
-            filteredParticipants.map((p) => {
+            filteredParticipants.map((p: any) => {
               const inits = p.full_name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
               const isSelected = selectedId === p.id;
               return (

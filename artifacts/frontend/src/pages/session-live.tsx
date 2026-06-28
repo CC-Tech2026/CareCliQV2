@@ -468,7 +468,7 @@ export default function SessionLive() {
         if (gObj.id && gObj.title) goalMap[String(gObj.id)] = String(gObj.title);
       }
     }
-    return addressed.map((gid) => goalMap[gid] ?? gid);
+    return addressed.map((gid: string) => goalMap[gid] ?? gid);
   })();
 
   const { settings } = useSettings();
@@ -868,7 +868,7 @@ export default function SessionLive() {
       const addressed = session.goals_addressed ?? [];
       if (addressed.length > 0 && resolvedGoalTitles.length > 0) {
         setGoals(
-          addressed.map((gid, i) => ({
+          addressed.map((gid: string, i: number) => ({
             id: gid,
             name: resolvedGoalTitles[i] ?? gid,
             status: "not_started" as const,
@@ -876,7 +876,7 @@ export default function SessionLive() {
         );
       } else if (addressed.length > 0) {
         setGoals(
-          addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })),
+          addressed.map((gid: string) => ({ id: gid, name: gid, status: "not_started" as const })),
         );
       }
     }
@@ -1344,7 +1344,7 @@ export default function SessionLive() {
 
       const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
       // TODO: Implement structured compliance checking
-      const liveComplianceLocal = {};
+      const liveComplianceLocal: { score: number; checks: Array<{ label: string; pass: boolean; note: string }>; blocking: boolean } = { score: 0, checks: [], blocking: false };
 
       const localResult: PostSaveResult = {
         score: liveComplianceLocal.score,
@@ -1496,7 +1496,7 @@ export default function SessionLive() {
   const participantName = session.participants?.full_name ?? "Session";
   const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
   // TODO: Implement structured compliance checking
-  const liveCompliance = {};
+  const liveCompliance: { score: number; checks: Array<{ label: string; pass: boolean; note: string }>; blocking: boolean } = { score: 0, checks: [], blocking: false };
 
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
@@ -2103,7 +2103,7 @@ export default function SessionLive() {
                     },
                   ] as const
                 ).map(({ key, label, placeholder, required }) => (
-                  <div key={key}>
+                  <div key={String(key)}>
                     <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "var(--cc-text)" }}>
                       {label}
                       {required && <span className="text-red-400 ml-0.5">*</span>}

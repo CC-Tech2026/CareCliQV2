@@ -230,7 +230,7 @@ export default function WorkerTrainingPage() {
                     <AlertCircle size={16} className="text-red-600" />
                   )}
                   <span className="text-xs font-black uppercase" style={{ color: MUTED }}>{status}</span>
-                  {req.urgent && (
+                  {!!req.urgent && (
                     <span className="rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: 'var(--cc-status-critical-bg)', color: CORAL }}>
                       Urgent
                     </span>
@@ -238,7 +238,7 @@ export default function WorkerTrainingPage() {
                 </div>
                 <p className="mt-2 text-sm font-bold" style={{ color: TEXT }}>{String(req.request_text)}</p>
                 <p className="mt-1 text-xs" style={{ color: MUTED }}>{String(req.reason)}</p>
-                {req.coordinator_response && (
+                {!!req.coordinator_response && (
                   <p className="mt-2 rounded-lg bg-cc-bg p-2 text-xs font-medium" style={{ color: TEXT }}>
                     {String(req.coordinator_response)}
                   </p>

@@ -87,7 +87,7 @@ export async function enqueueClockIn(input: {
 
 export async function getPendingClockIn(shiftId: string): Promise<PendingClockInAction | null> {
   const actions = await listPendingActions();
-  return actions.find((a) => a.type === "clock_in" && a.shiftId === shiftId) ?? null;
+  return (actions.find((a) => a.type === "clock_in" && a.shiftId === shiftId) ?? null) as PendingClockInAction | null;
 }
 
 export async function enqueueStartSession(input: {
@@ -126,7 +126,7 @@ export async function listPendingActions(): Promise<PendingAction[]> {
 
 export async function getPendingStartSession(shiftId: string): Promise<PendingStartSessionAction | null> {
   const actions = await listPendingActions();
-  return actions.find((a) => a.type === "start_session" && a.shiftId === shiftId) ?? null;
+  return (actions.find((a) => a.type === "start_session" && a.shiftId === shiftId) ?? null) as PendingStartSessionAction | null;
 }
 
 export async function removePendingAction(id: string): Promise<void> {

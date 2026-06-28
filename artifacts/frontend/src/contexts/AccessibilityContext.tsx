@@ -132,10 +132,10 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       prefs,
       language,
       loading,
-      setFontSize: async (font_size) => persist({ font_size }),
+      setFontSize: async (font_size) => { await persist({ font_size }); },
       setThemeMode,
-      setHighContrast: async (high_contrast) => persist({ high_contrast }),
-      setDyslexiaFont: async (dyslexia_font) => persist({ dyslexia_font }),
+      setHighContrast: async (high_contrast) => { await persist({ high_contrast }); },
+      setDyslexiaFont: async (dyslexia_font) => { await persist({ dyslexia_font }); },
       setLanguage: async (lang) => {
         await updatePreferredLanguage(lang);
         setLanguageState(lang);

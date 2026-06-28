@@ -7,7 +7,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { formatShiftTimeRange } from "@/lib/shift-utils";
+import { BORDER, TEXT, MUTED, PLUM, formatShiftTimeRange } from "@/lib/shift-utils";
 import type { CalendarShift } from "@/services/workerCalendarService";
 import { Link } from "wouter";
 

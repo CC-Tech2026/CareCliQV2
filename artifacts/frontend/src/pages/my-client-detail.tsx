@@ -170,7 +170,7 @@ function restrictivePracticeWarning(text: string) {
   return "";
 }
 
-function Section({ title, icon: Icon, children }: { title: string; icon: ComponentType<{ size?: number }>; children: ReactNode }) {
+function Section({ title, icon: Icon, children }: { title: string; icon: ComponentType<{ size?: number; style?: React.CSSProperties }>; children: ReactNode }) {
   return (
     <section>
       <div className="mb-3 flex items-center gap-2 border-b pb-2.5" style={{ borderColor: BORDER }}>
@@ -1235,7 +1235,7 @@ function IncidentReportModal({
             <Siren size={12} />
             View Incidents
           </button>
-        ) as unknown as import("react").ReactElement,
+        ) as any,
       });
       onClose();
     } catch (err: unknown) {
@@ -1550,7 +1550,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
               <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${SEVERITY_ROW_CLASSES[sev] ?? SEVERITY_ROW_CLASSES.medium}`}>
                 {sev}
               </span>
-              {inc.ndis_pending && (
+              {!!inc.ndis_pending && (
                 <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
                   NDIS Alert
                 </span>
@@ -1734,9 +1734,9 @@ export default function MyClientDetail({ id }: { id: string }) {
         setGoalNotes((n) => ({
           ...n,
           [goal.id]: {
+            ...(n[goal.id] || {}),
             goal_id: goal.id,
             goal_title: goal.title || goal.description || "",
-            ...(n[goal.id] || {}),
           },
         }));
       }

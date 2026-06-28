@@ -1312,7 +1312,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                     <Target className="h-3 w-3" /> Goals Worked On
                   </p>
-                  {(session as ExtendedSession).goal_progress_notes!.map((gnote, i) => (
+                  {(session as ExtendedSession).goal_progress_notes!.map((gnote: any, i: number) => (
                     <div key={gnote.goal_id || i} className="rounded-xl border border-indigo-100/60 bg-indigo-50/40 overflow-hidden">
                       <div className="px-4 py-2.5 bg-indigo-50 border-b border-indigo-100/60">
                         <p className="text-sm font-bold text-indigo-900">{gnote.goal_title || `Goal ${i + 1}`}</p>

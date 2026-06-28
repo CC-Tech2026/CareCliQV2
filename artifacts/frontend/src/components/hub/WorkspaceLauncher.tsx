@@ -28,7 +28,7 @@ interface WorkspaceDef {
   shortLabel: string;
   subtitle: string;
   href: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   allowedRoles: string[];
   accentColor: string;
 }

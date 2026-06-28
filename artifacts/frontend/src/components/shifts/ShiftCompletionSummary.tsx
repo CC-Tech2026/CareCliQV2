@@ -4,7 +4,7 @@ import type { ShiftCompletionSummary as Summary, WorkerShift } from "@/services/
 import type { ShiftSignature } from "@/services/complianceService";
 import { Button } from "@/components/ui/button";
 import { ShiftShareSheet } from "@/components/shifts/ShiftShareSheet";
-import { BORDER, MUTED, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
+import { BORDER, MUTED, PLUM, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
 
 
 type Props = {

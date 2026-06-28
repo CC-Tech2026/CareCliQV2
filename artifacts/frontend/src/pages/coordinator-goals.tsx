@@ -375,15 +375,23 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
   );
 }
 
-// ── Task Templates tab ────────────────────────────────────────────────────────
+// ── Task Management tab ───────────────────────────────────────────────────────
+
+const SHIFT_TYPE_OPTS = [
+  { v: "morning",   label: "Morning"   },
+  { v: "afternoon", label: "Afternoon" },
+  { v: "evening",   label: "Evening"   },
+  { v: "anytime",   label: "Anytime"   },
+] as const;
 
 type TemplateFormState = {
   name: string; description: string;
   evidence_required: (typeof EVIDENCE_OPTS)[number]["v"];
   is_mandatory: boolean; estimated_duration_minutes: string;
+  shift_type: string;
 };
 
-const BLANK_TEMPLATE: TemplateFormState = { name: "", description: "", evidence_required: "optional", is_mandatory: false, estimated_duration_minutes: "" };
+const BLANK_TEMPLATE: TemplateFormState = { name: "", description: "", evidence_required: "optional", is_mandatory: false, estimated_duration_minutes: "", shift_type: "anytime" };
 
 function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoalIds, setLinkedGoalIds, onClose, onSaved }: {
   participantId: string; initial: TemplateFormState; templateId?: string;
@@ -399,10 +407,11 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
         evidence_required: form.evidence_required, is_mandatory: form.is_mandatory,
         estimated_duration_minutes: form.estimated_duration_minutes ? parseInt(form.estimated_duration_minutes) : null,
         linked_goal_ids: linkedGoalIds, sort_order: 0,
+        primary_shift_type: form.shift_type || null,
       };
       return templateId ? updateTaskTemplate(templateId, payload) : createTaskTemplate(participantId, payload);
     },
-    onSuccess: () => { toast({ title: templateId ? "Template updated" : "Template created" }); onSaved(); onClose(); },
+    onSuccess: () => { toast({ title: templateId ? "Task updated" : "Task created" }); onSaved(); onClose(); },
     onError: () => toast({ variant: "destructive", title: "Save failed" }),
   });
   const set = (k: keyof TemplateFormState, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
@@ -410,16 +419,38 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
   return (
     <div className="rounded-2xl p-4 space-y-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between">
-        <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? "Edit Template" : "New Task Template"}</p>
+        <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? "Edit Task" : "New Task"}</p>
         <button onClick={onClose} title="Close"><X size={14} style={{ color: MUTED }} /></button>
       </div>
+
+      {/* Shift type — first so it frames everything else */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Applies to Shift</Label>
+        <div className="flex gap-1.5">
+          {SHIFT_TYPE_OPTS.map((o) => (
+            <button key={o.v} type="button" onClick={() => set("shift_type", o.v)}
+              className="flex-1 py-1.5 rounded-xl text-[11px] font-semibold transition-all"
+              style={{
+                background: form.shift_type === o.v ? PLUM : "var(--cc-bg)",
+                color: form.shift_type === o.v ? "#fff" : MUTED,
+                border: `1px solid ${form.shift_type === o.v ? PLUM : BORDER}`,
+              }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {form.shift_type === "anytime" && (
+          <p className="text-[11px]" style={{ color: MUTED }}>Auto-attaches to any shift type for this participant.</p>
+        )}
+      </div>
+
       <div className="space-y-1">
         <Label className="text-xs font-semibold" style={{ color: MUTED }}>Task Name *</Label>
-        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Meal preparation" className="rounded-xl h-9 text-[13px]" />
+        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Prompt independent dressing" className="rounded-xl h-9 text-[13px]" />
       </div>
       <div className="space-y-1">
         <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
-        <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} placeholder="Optional detail…"
+        <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} placeholder="Optional detail or instructions for the worker…"
           className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "var(--cc-bg)" }} />
       </div>
       <div className="space-y-1">
@@ -487,7 +518,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
 
   const deleteMut = useMutation({
     mutationFn: deleteTaskTemplate,
-    onSuccess: () => { toast({ title: "Template removed" }); qc.invalidateQueries({ queryKey: ["task-templates", selectedPid, orgId] }); },
+    onSuccess: () => { toast({ title: "Task removed" }); qc.invalidateQueries({ queryKey: ["task-templates", selectedPid, orgId] }); },
     onError: () => toast({ variant: "destructive", title: "Delete failed" }),
   });
 
@@ -503,7 +534,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
         {selectedPid && (
           <Button size="sm" className="rounded-xl gap-1.5 ml-auto" style={{ background: PLUM, color: "#fff" }}
             onClick={() => { setEditTemplate(null); setLinkedGoalIds([]); setFormOpen(true); }}>
-            <Plus size={14} /> New Template
+            <Plus size={14} /> New Task
           </Button>
         )}
       </div>
@@ -512,7 +543,8 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
         <TaskTemplateForm
           participantId={selectedPid}
           initial={editTemplate ? { name: editTemplate.name, description: editTemplate.description ?? "", evidence_required: editTemplate.evidence_required,
-            is_mandatory: editTemplate.is_mandatory, estimated_duration_minutes: String(editTemplate.estimated_duration_minutes ?? "") } : BLANK_TEMPLATE}
+            is_mandatory: editTemplate.is_mandatory, estimated_duration_minutes: String(editTemplate.estimated_duration_minutes ?? ""),
+            shift_type: editTemplate.primary_shift_type ?? "anytime" } : BLANK_TEMPLATE}
           templateId={editTemplate?.id}
           goals={goals as NdisGoal[]}
           linkedGoalIds={linkedGoalIds}
@@ -522,7 +554,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
         />
       )}
 
-      {isLoading && <div className="flex items-center gap-2 py-6 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading templates…</div>}
+      {isLoading && <div className="flex items-center gap-2 py-6 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading tasks…</div>}
 
       {templatesData && (
         <>
@@ -541,7 +573,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
           </div>
           {templatesData.custom_tasks.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Custom Templates ({templatesData.custom_tasks.length})</p>
+              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Custom Tasks ({templatesData.custom_tasks.length})</p>
               {templatesData.custom_tasks.map((t: import('@/services/coordinatorService').TaskTemplate) => {
                 const evid = EVIDENCE_OPTS.find((o) => o.v === t.evidence_required);
                 return (
@@ -550,8 +582,11 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
                     <div className="flex-1 space-y-1">
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{t.name}</p>
+                        {t.primary_shift_type && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize" style={{ background: SOFT, color: PLUM }}>{t.primary_shift_type}</span>
+                        )}
                         {t.is_mandatory && <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: "#FEF2F2", color: CORAL }}>Mandatory</span>}
-                        {evid && evid.v !== "optional" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>{evid.label}</span>}
+                        {evid && evid.v !== "optional" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{evid.label}</span>}
                         {t.estimated_duration_minutes && <span className="text-[10px] font-semibold" style={{ color: MUTED }}>~{t.estimated_duration_minutes} min</span>}
                       </div>
                       {t.description && <p className="text-[11px]" style={{ color: MUTED }}>{t.description}</p>}
@@ -668,7 +703,7 @@ export default function CoordinatorGoals() {
         <div>
           <p className="hidden" style={{ color: CORAL }}>Coordinator</p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Goals & Planning</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>Create NDIS goals, manage tasks, and configure templates.</p>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>Create NDIS goals, manage tasks, and track progress toward participant outcomes.</p>
         </div>
         {tab === "planning" && goalParticipant && (
           <Button className="rounded-2xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
