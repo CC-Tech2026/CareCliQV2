@@ -5,7 +5,7 @@ import type { ShiftSignature } from "@/services/complianceService";
 import { Button } from "@/components/ui/button";
 import { ShiftShareSheet } from "@/components/shifts/ShiftShareSheet";
 import { BORDER, MUTED, PLUM, TEXT, formatElapsedTimer } from "@/lib/shift-utils";
-
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   shift: WorkerShift;
@@ -13,6 +13,7 @@ type Props = {
 };
 
 export function ShiftCompletionSummary({ shift, summary }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [shareOpen, setShareOpen] = useState(false);
   const elapsed =
     shift.clocked_in_at && shift.clocked_out_at
@@ -23,14 +24,14 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
     <section className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-slate-50 p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2 text-slate-700">
         <CheckCircle2 size={22} className="text-slate-500" />
-        <h2 className="text-lg font-black">Shift completed</h2>
+        <h2 className="text-lg font-black">{translate("shift.completion.title")}</h2>
       </div>
 
       <dl className="grid gap-3 sm:grid-cols-2">
         {elapsed && (
           <div className="rounded-xl bg-cc-surface p-3">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-              Time on site
+              {translate("shift.completion.timeOnSite")}
             </dt>
             <dd className="mt-1 font-mono text-sm font-black" style={{ color: TEXT }}>
               {elapsed}
@@ -41,24 +42,29 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
           <>
             <div className="rounded-xl bg-cc-surface p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                Tasks completed
+                {translate("shift.completion.tasksCompleted")}
               </dt>
               <dd className="mt-1 text-sm font-black" style={{ color: TEXT }}>
                 {summary.tasks_completed}/{summary.tasks_total}
                 {summary.mandatory_total > 0 && (
                   <span className="ml-1 text-xs font-bold text-emerald-600">
-                    ({summary.mandatory_completed}/{summary.mandatory_total} mandatory)
+                    {translateParams("shift.completion.mandatoryCount", {
+                      completed: String(summary.mandatory_completed),
+                      total: String(summary.mandatory_total),
+                    })}
                   </span>
                 )}
               </dd>
             </div>
             <div className="rounded-xl bg-cc-surface p-3">
               <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                Progress notes
+                {translate("shift.completion.progressNotes")}
               </dt>
               <dd className="mt-1 flex items-center gap-1.5 text-sm font-bold" style={{ color: TEXT }}>
                 <FileText size={14} />
-                {summary.notes_submitted ? "Submitted" : "Not submitted"}
+                {summary.notes_submitted
+                  ? translate("shift.completion.submitted")
+                  : translate("shift.completion.notSubmitted")}
               </dd>
             </div>
           </>
@@ -66,7 +72,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
         {shift.risks_acknowledged_at && (
           <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
             <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-              Safety acknowledgement
+              {translate("shift.completion.safetyAck")}
             </dt>
             <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
               {new Date(shift.risks_acknowledged_at).toLocaleString()}
@@ -77,19 +83,21 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
         {(shift.shift_signature as ShiftSignature | undefined) && (
           <div className="rounded-xl bg-cc-surface p-3 sm:col-span-2">
             <dt className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-              <PenLine size={12} /> Digital signature
+              <PenLine size={12} /> {translate("shift.completion.digitalSignature")}
             </dt>
             <dd>
               {(shift.shift_signature as ShiftSignature).signature_png_url && (
                 <img
                   src={(shift.shift_signature as ShiftSignature).signature_png_url}
-                  alt="Shift signature"
+                  alt={translate("shift.completion.signatureAlt")}
                   className="mb-2 max-h-16 rounded border border-slate-200 bg-cc-surface p-1"
                 />
               )}
               <p className="text-sm font-bold" style={{ color: TEXT }}>
-                Signed by {(shift.shift_signature as ShiftSignature).signer_name ?? "worker"} on{" "}
-                {new Date((shift.shift_signature as ShiftSignature).signed_at).toLocaleString()}
+                {translateParams("shift.completion.signedBy", {
+                  name: (shift.shift_signature as ShiftSignature).signer_name ?? translate("shift.completion.workerFallback"),
+                  date: new Date((shift.shift_signature as ShiftSignature).signed_at).toLocaleString(),
+                })}
               </p>
             </dd>
           </div>
@@ -97,7 +105,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
       </dl>
 
       <p className="mt-4 text-xs font-semibold" style={{ color: MUTED }}>
-        This shift is read-only. Contact your coordinator if you need to amend documentation.
+        {translate("shift.completion.readOnly")}
       </p>
 
       <Button
@@ -107,7 +115,7 @@ export function ShiftCompletionSummary({ shift, summary }: Props) {
         onClick={() => setShareOpen(true)}
       >
         <Share2 size={16} />
-        Download or share summary
+        {translate("shift.completion.downloadShare")}
       </Button>
 
       <ShiftShareSheet shiftId={shift.id} open={shareOpen} onOpenChange={setShareOpen} />

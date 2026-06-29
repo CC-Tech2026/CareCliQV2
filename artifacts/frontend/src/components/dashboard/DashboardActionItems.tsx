@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { AlertTriangle, ClipboardList } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { BORDER, MUTED, PLUM, TEXT, WIDGET_SCROLL } from "@/lib/shift-utils";
 import type { DashboardActionItem } from "@/services/dashboardService";
 
@@ -11,23 +12,25 @@ const SEVERITY_STYLES: Record<string, string> = {
 };
 
 export function DashboardActionItems({ items }: { items: DashboardActionItem[] }) {
+  const { translate } = useAccessibility();
+
   return (
-    <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <ClipboardList size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          Action Items
+          {translate("dashboard.actionItems.title")}
         </h2>
       </div>
       <div className={`space-y-3 ${WIDGET_SCROLL}`}>
         {items.length === 0 && (
-          <p className="rounded-xl bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-            No pending tasks right now.
+          <p className="rounded-xl bg-cc-soft px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            {translate("dashboard.actionItems.empty")}
           </p>
         )}
         {items.map((item) => (
           <Link key={item.id} href={item.action_url || "#"}>
-            <div className="flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]">
+            <div className="flex items-start gap-3 rounded-xl border border-transparent p-3 transition hover:border-cc-plum/40 hover:bg-cc-soft">
               <div className="mt-0.5 shrink-0">
                 <AlertTriangle size={16} style={{ color: item.severity === "critical" ? "#DC2626" : PLUM }} />
               </div>

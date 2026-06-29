@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   AlertTriangle, ArrowRight,
 } from "lucide-react";
@@ -131,6 +132,7 @@ function LinkBtn({ onClick, children }: { onClick: () => void; children: React.R
 
 /* ── Main component ────────────────────────────────────────── */
 export function MDHubView() {
+  const { translate, translateParams } = useAccessibility();
   const [, navigate] = useLocation();
   const [data,    setData]    = useState<MDData | null>(null);
   const [trend,   setTrend]   = useState<TrendPoint[]>([]);
@@ -169,8 +171,8 @@ export function MDHubView() {
     return (
       <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
         <AlertTriangle size={26} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-        <p className="text-[14px] font-black" style={{ color: TEXT }}>Could not load executive dashboard</p>
-        <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Check your connection and try again.</p>
+        <p className="text-[14px] font-black" style={{ color: TEXT }}>{translate("hub.mdHub.loadFailed")}</p>
+        <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{translate("hub.mdHub.retryHint")}</p>
       </div>
     );
   }
@@ -186,43 +188,43 @@ export function MDHubView() {
 
       {/* ── Primary stat strip ───────────────────────── */}
       <Panel
-        title="Executive Metrics"
-        sub="Live organisational snapshot"
-        action={<LinkBtn onClick={() => navigate("/md/executive")}>Full report</LinkBtn>}
+        title={translate("hub.mdHub.executiveMetrics")}
+        sub={translate("hub.mdHub.liveSnapshot")}
+        action={<LinkBtn onClick={() => navigate("/md/executive")}>{translate("hub.mdHub.fullReport")}</LinkBtn>}
         noPad
       >
         <div className="flex flex-wrap divide-y sm:divide-y-0" style={{ borderTop: `0` }}>
           <StatItem
-            label="Participants"
+            label={translate("hub.mdHub.participants")}
             value={data.active_participants}
           />
           <StatItem
-            label="Active Staff"
+            label={translate("hub.mdHub.activeStaff")}
             value={data.active_staff}
-            sub={`${data.staff_retention_rate}% retention`}
+            sub={translateParams("hub.mdHub.retention", { rate: String(data.staff_retention_rate) })}
           />
           <StatItem
-            label="Sessions This Week"
+            label={translate("hub.mdHub.sessionsWeek")}
             value={data.sessions_this_week}
           />
           <StatItem
-            label="Compliance Score"
+            label={translate("hub.mdHub.complianceScore")}
             value={`${data.compliance_score}%`}
-            sub={complianceWarn ? `Below ${data.compliance_target}% target` : `On target`}
+            sub={complianceWarn ? translateParams("hub.mdHub.belowTarget", { target: String(data.compliance_target) }) : translate("hub.mdHub.onTarget")}
             warn={complianceWarn}
           />
           <StatItem
-            label="Incidents"
+            label={translate("hub.mdHub.incidents")}
             value={data.incidents_this_month}
-            sub="This month"
+            sub={translate("hub.mdHub.thisMonth")}
             warn={data.incidents_this_month > 0}
           />
           <StatItem
-            label="Goal Achievement"
+            label={translate("hub.mdHub.goalAchievement")}
             value={`${data.goal_achievement_rate}%`}
           />
           <StatItem
-            label="Staff at Risk"
+            label={translate("hub.mdHub.staffAtRisk")}
             value={data.workers_at_risk.length}
             warn={data.workers_at_risk.length > 0}
             last
@@ -233,9 +235,9 @@ export function MDHubView() {
       {/* ── Org alerts ──────────────────────────────── */}
       {data.org_alerts.length > 0 && (
         <Panel
-          title="Organisation Alerts"
-          sub="Items requiring executive attention"
-          action={<LinkBtn onClick={() => navigate("/md/compliance")}>View compliance</LinkBtn>}
+          title={translate("hub.mdHub.orgAlerts")}
+          sub={translate("hub.mdHub.alertsSub")}
+          action={<LinkBtn onClick={() => navigate("/md/compliance")}>{translate("hub.mdHub.viewCompliance")}</LinkBtn>}
         >
           <div className="space-y-2">
             {data.org_alerts.map((alert, i) => <AlertRow key={i} alert={alert} />)}
@@ -246,9 +248,9 @@ export function MDHubView() {
       {/* ── Compliance trend chart ───────────────────── */}
       {chartData.length > 1 && (
         <Panel
-          title="Compliance Trend"
-          sub="Weekly average score — last 90 days"
-          action={<LinkBtn onClick={() => navigate("/md/compliance")}>Full report</LinkBtn>}
+          title={translate("hub.mdHub.complianceTrend")}
+          sub={translate("hub.mdHub.trendSub")}
+          action={<LinkBtn onClick={() => navigate("/md/compliance")}>{translate("hub.mdHub.fullReport")}</LinkBtn>}
         >
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
@@ -257,14 +259,14 @@ export function MDHubView() {
               <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
               <Tooltip
                 contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }}
-                formatter={(val: number) => [`${val}%`, "Avg Score"]}
+                formatter={(val: number) => [`${val}%`, translate("hub.mdHub.avgScore")]}
               />
               <ReferenceLine
                 y={data.compliance_target}
                 stroke={AMBER}
                 strokeDasharray="4 3"
                 strokeWidth={1.5}
-                label={{ value: `Target ${data.compliance_target}%`, fontSize: 10, fill: AMBER, position: "insideTopRight" }}
+                label={{ value: translateParams("hub.mdHub.target", { target: String(data.compliance_target) }), fontSize: 10, fill: AMBER, position: "insideTopRight" }}
               />
               <Line
                 type="monotone"
@@ -287,6 +289,7 @@ export function MDHubView() {
 
 /* ── Financial strip ───────────────────────────────────────── */
 function FinancialSummaryStrip({ onNavigate }: { onNavigate: () => void }) {
+  const { translate, translateParams } = useAccessibility();
   const [rev, setRev] = useState<{
     total_billed_cents?: number;
     total_paid_cents?: number;
@@ -307,22 +310,22 @@ function FinancialSummaryStrip({ onNavigate }: { onNavigate: () => void }) {
 
   return (
     <Panel
-      title="Financial Summary"
-      sub="Revenue & invoicing at a glance"
-      action={<LinkBtn onClick={onNavigate}>Full report</LinkBtn>}
+      title={translate("hub.mdHub.financialSummary")}
+      sub={translate("hub.mdHub.financialSub")}
+      action={<LinkBtn onClick={onNavigate}>{translate("hub.mdHub.fullReport")}</LinkBtn>}
       noPad
     >
       <div className="flex">
         <StatItem
-          label="Total Revenue"
+          label={translate("hub.mdHub.totalRevenue")}
           value={`$${totalRev.toLocaleString("en-AU", { maximumFractionDigits: 0 })}`}
         />
         <StatItem
-          label="Total Invoices"
+          label={translate("hub.mdHub.totalInvoices")}
           value={totalInvoices}
         />
         <StatItem
-          label="vs Target"
+          label={translate("hub.mdHub.vsTarget")}
           value={`${pct}%`}
           warn={pct > 0 && pct < 90}
           last

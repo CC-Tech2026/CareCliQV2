@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { ParticipantProfile } from "@/services/shiftService";
 import { emergencyContactDisplay, formatDobWithAge } from "@/lib/participant-display";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   profile?: ParticipantProfile;
@@ -12,18 +13,19 @@ type Props = {
 };
 
 export function ParticipantProfileCard({ profile, fallbackName, open = true, onToggle }: Props) {
+  const { translate } = useAccessibility();
   const name = profile?.preferred_name || fallbackName;
   const emergency = emergencyContactDisplay(profile?.emergency_contact);
   const caseManager = profile?.case_manager;
   if (!name && !fallbackName) return null;
 
   const standardRows: Array<{ label: string; value?: string | null; href?: string }> = [
-    { label: "Preferred name", value: name },
-    { label: "Date of birth", value: formatDobWithAge(profile?.date_of_birth) },
-    { label: "NDIS number", value: profile?.ndis_number },
-    { label: "Phone", value: profile?.phone, href: profile?.phone ? `tel:${profile.phone}` : undefined },
-    { label: "Email", value: profile?.email, href: profile?.email ? `mailto:${profile.email}` : undefined },
-    { label: "Primary disability", value: profile?.primary_disability },
+    { label: translate("shift.participant.preferredName"), value: name },
+    { label: translate("shift.participant.dob"), value: formatDobWithAge(profile?.date_of_birth) },
+    { label: translate("shift.participant.ndis"), value: profile?.ndis_number },
+    { label: translate("shift.participant.phone"), value: profile?.phone, href: profile?.phone ? `tel:${profile.phone}` : undefined },
+    { label: translate("shift.participant.email"), value: profile?.email, href: profile?.email ? `mailto:${profile.email}` : undefined },
+    { label: translate("shift.participant.disability"), value: profile?.primary_disability },
   ];
 
   return (
@@ -36,7 +38,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <User size={16} style={{ color: PLUM }} aria-hidden />
-          Participant Profile
+          {translate("shift.participant.profile")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} aria-hidden />
       </button>
@@ -47,7 +49,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
             <div className="rounded-xl border-2 border-rose-200 bg-rose-50 p-3">
               <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700">
                 <Phone size={12} aria-hidden />
-                Emergency contact
+                {translate("shift.participant.emergency")}
               </dt>
               <dd className="mt-1 text-sm font-bold text-rose-900">
                 {emergency.phone ? (
@@ -65,7 +67,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
             <div className="rounded-xl border border-[#E5E7EB] bg-[#F0EDFC] p-3">
               <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 <UserCircle size={12} aria-hidden />
-                Case manager
+                {translate("shift.participant.caseManager")}
               </dt>
               <dd className="mt-1 text-sm font-bold" style={{ color: TEXT }}>
                 {caseManager.phone ? (
@@ -94,7 +96,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
                       {value}
                     </a>
                   ) : (
-                    value || "Not recorded"
+                    value || translate("shift.participant.notRecorded")
                   )}
                 </dd>
               </div>

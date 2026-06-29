@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   className?: string;
@@ -6,6 +7,8 @@ type Props = {
 
 /** CARECLIQV2-272 — persistent yellow banner below top nav while offline. */
 export function OfflineConnectivityBanner({ className }: Props) {
+  const { translate } = useAccessibility();
+
   return (
     <div
       className={cn(
@@ -15,7 +18,7 @@ export function OfflineConnectivityBanner({ className }: Props) {
       role="status"
       aria-live="polite"
     >
-      You&apos;re offline. Changes will sync when connection is restored.
+      {translate("offline.connectivity.banner")}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { BORDER, MUTED, PLUM, SOFT, TEXT, formatShiftTimeRange, shiftInitials } from "@/lib/shift-utils";
 import {
   getWorkerLandingTravelTime,
@@ -16,6 +17,7 @@ type Props = {
 const TRAVEL_REFRESH_MS = 60_000;
 
 export function NextShiftCard({ shift }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [travel, setTravel] = useState<TravelTimeEstimate | null>(null);
   const [geoDenied, setGeoDenied] = useState(false);
   const [loadingTravel, setLoadingTravel] = useState(false);
@@ -76,10 +78,10 @@ export function NextShiftCard({ shift }: Props) {
     return (
       <section className="rounded-2xl border border-cc-border bg-cc-surface p-5 shadow-sm">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          Next Shift
+          {translate("dashboard.nextShift.title")}
         </h2>
         <p className="mt-3 rounded-xl bg-cc-bg px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-          No upcoming shifts scheduled.
+          {translate("dashboard.nextShift.empty")}
         </p>
       </section>
     );
@@ -95,7 +97,7 @@ export function NextShiftCard({ shift }: Props) {
     <section className="overflow-hidden rounded-2xl border border-cc-border bg-cc-surface shadow-sm">
       <div className="border-b border-cc-border px-5 py-4" style={{ background: SOFT }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
-          Next Shift
+          {translate("dashboard.nextShift.title")}
         </p>
         <div className="mt-3 flex items-center gap-3">
           <div
@@ -128,18 +130,18 @@ export function NextShiftCard({ shift }: Props) {
         <div className="flex flex-wrap items-center gap-3">
           {loadingTravel && (
             <span className="text-xs font-bold" style={{ color: MUTED }}>
-              Calculating travel time...
+              {translate("dashboard.nextShift.calculating")}
             </span>
           )}
           {!loadingTravel && travel?.available && travel.duration_text && (
             <span className="rounded-full bg-cc-active px-3 py-1 text-xs font-black" style={{ color: PLUM }}>
-              {travel.duration_text} drive
+              {translateParams("dashboard.nextShift.drive", { duration: travel.duration_text })}
               {travel.distance_text ? ` · ${travel.distance_text}` : ""}
             </span>
           )}
           {!loadingTravel && !travel?.available && geoDenied && (
             <span className="text-xs font-medium" style={{ color: MUTED }}>
-              Enable location for travel time estimates.
+              {translate("dashboard.nextShift.enableLocation")}
             </span>
           )}
         </div>
@@ -149,13 +151,13 @@ export function NextShiftCard({ shift }: Props) {
             <a href={navigationUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
               <Button className="w-full gap-2 font-black" style={{ background: PLUM }}>
                 <Navigation size={16} />
-                Start Navigation
+                {translate("dashboard.nextShift.startNavigation")}
               </Button>
             </a>
           )}
           <Link href={`/my-shifts/${shift.id}?focus=safety`} className="flex-1">
             <Button variant="outline" className="w-full border-cc-border font-black">
-              Open Shift
+              {translate("dashboard.nextShift.openShift")}
             </Button>
           </Link>
         </div>

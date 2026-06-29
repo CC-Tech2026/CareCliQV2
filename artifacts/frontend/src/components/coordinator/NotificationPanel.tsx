@@ -2,6 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   Bell, X, CheckCheck, AlertTriangle, Calendar, CheckCircle2,
   MessageSquare, Clock, Search, Filter,
@@ -18,22 +19,22 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-const SEVERITY_LEVELS = {
-  critical: { color: "#DC2626", label: "Critical", bg: "#FEE2E2" },
-  high: { color: "#F97316", label: "High", bg: "#FFF7ED" },
-  medium: { color: "#3B82F6", label: "Medium", bg: "#EFF6FF" },
-  low: { color: "#10B981", label: "Low", bg: "#F0FDF4" },
+const SEVERITY_LEVELS: Record<string, { color: string; labelKey: string; bg: string }> = {
+  critical: { color: "#DC2626", labelKey: "coordinator.notifications.severity.critical", bg: "#FEE2E2" },
+  high: { color: "#F97316", labelKey: "coordinator.notifications.severity.high", bg: "#FFF7ED" },
+  medium: { color: "#3B82F6", labelKey: "coordinator.notifications.severity.medium", bg: "#EFF6FF" },
+  low: { color: "#10B981", labelKey: "coordinator.notifications.severity.low", bg: "#F0FDF4" },
 };
 
-function relativeTime(iso?: string) {
+function relativeTime(iso: string | undefined, translate: (k: string) => string, translateParams: (k: string, p: Record<string, string>) => string) {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return translate("coordinator.notifications.time.justNow");
+  if (mins < 60) return translateParams("coordinator.notifications.time.minsAgo", { mins: String(mins) });
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  if (hrs < 24) return translateParams("coordinator.notifications.time.hrsAgo", { hrs: String(hrs) });
+  return translateParams("coordinator.notifications.time.daysAgo", { days: String(Math.floor(hrs / 24)) });
 }
 
 const ALERT_META: Record<string, { icon: React.ReactNode; color: string; bg: string; severity: string }> = {
@@ -59,6 +60,7 @@ function AlertRow({
   alert: CoordinatorAlert;
   onRead: (id: string) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const meta = alertMeta(alert.alert_type);
 
   return (
@@ -78,7 +80,7 @@ function AlertRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <p className="text-[13px] leading-snug" style={{ color: TEXT, fontWeight: alert.is_read ? 400 : 600 }}>
-          {alert.message ?? "Notification"}
+          {alert.message ?? translate("coordinator.notifications.default")}
         </p>
         <div className="flex items-center gap-2 mt-0.5">
           <span
@@ -88,7 +90,7 @@ function AlertRow({
             {(alert.alert_type ?? "alert").replace(/_/g, " ")}
           </span>
           <span className="text-[10px]" style={{ color: MUTED }}>
-            {relativeTime(alert.created_at)}
+            {relativeTime(alert.created_at, translate, translateParams)}
           </span>
         </div>
       </div>
@@ -103,6 +105,7 @@ function AlertRow({
 
 // ── Main panel with filters and search ──────────────────────────────────────────
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -155,7 +158,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
             <Bell size={18} style={{ color: PLUM }} />
-            <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Notifications</h2>
+            <h2 className="text-[15px] font-black" style={{ color: TEXT }}>{translate("coordinator.notifications.title")}</h2>
             {unread > 0 && (
               <span
                 className="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center"
@@ -172,11 +175,11 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
                 style={{ color: MUTED }}
                 onClick={() => readAllMut.mutate()}
               >
-                <CheckCheck size={13} /> Mark all read
+                <CheckCheck size={13} /> {translate("coordinator.notifications.markAllRead")}
               </button>
             )}
             <button
-              aria-label="Close notifications"
+              aria-label={translate("coordinator.notifications.close")}
               className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
               onClick={onClose}
             >
@@ -191,7 +194,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
             <Search size={14} className="absolute left-3 top-2.5" style={{ color: MUTED }} />
             <input
               type="text"
-              placeholder="Search notifications..."
+              placeholder={translate("coordinator.notifications.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
@@ -202,7 +205,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
             className="p-2 rounded-lg border transition-colors"
             style={{ borderColor: BORDER, background: showFilters ? SOFT : "transparent" }}
             onClick={() => setShowFilters(!showFilters)}
-            title="Filter by severity"
+            title={translate("coordinator.notifications.filterSeverity")}
           >
             <Filter size={14} style={{ color: PLUM }} />
           </button>
@@ -237,7 +240,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
                   ...(severityFilter === level && { "--tw-ring-color": config.color, "--tw-ring-width": "2px" } as any),
                 }}
               >
-                {config.label}
+                {translate(config.labelKey)}
               </button>
             ))}
           </div>
@@ -256,7 +259,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Bell size={32} style={{ color: BORDER }} />
             <p className="text-[13px] font-semibold" style={{ color: MUTED }}>
-              {alerts.length === 0 ? "All caught up" : "No notifications match your filters"}
+              {alerts.length === 0 ? translate("coordinator.notifications.allCaughtUp") : translate("coordinator.notifications.noMatch")}
             </p>
           </div>
         )}
@@ -276,6 +279,7 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
 
 // ── Bell icon with badge (used in AppLayout header) ───────────────────────────
 export function NotificationBell({ onClick }: { onClick: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -287,7 +291,7 @@ export function NotificationBell({ onClick }: { onClick: () => void }) {
     <button
       className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
       onClick={onClick}
-      title="Notifications"
+      title={translate("coordinator.notifications.title")}
     >
       <Bell size={20} style={{ color: MUTED }} />
       {unread > 0 && (

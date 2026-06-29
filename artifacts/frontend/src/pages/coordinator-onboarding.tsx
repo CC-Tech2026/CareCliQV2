@@ -1,6 +1,7 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -13,59 +14,44 @@ const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT = "var(--cc-soft)";
 
 interface ChecklistStep {
   id: string;
   icon: React.ElementType;
-  title: string;
-  description: string;
-  action?: { label: string; href: string };
+  actionHref?: string;
   autoComplete?: boolean;
 }
 
-const STEPS: ChecklistStep[] = [
+const STEP_DEFS: ChecklistStep[] = [
   {
     id: "org_created",
     icon: Building2,
-    title: "Organisation account created",
-    description: "Your organisation is set up and ready. You are the owner with full access to all features.",
     autoComplete: true,
   },
   {
     id: "invite_workers",
     icon: UserPlus,
-    title: "Invite your support workers",
-    description: "Send invitations to your team. Workers will receive an email to create their password and join your organisation.",
-    action: { label: "Go to Team Settings", href: "/settings" },
+    actionHref: "/settings",
   },
   {
     id: "add_participants",
     icon: Users,
-    title: "Add your first participant",
-    description: "Create participant profiles with NDIS numbers, plan details, and support goals.",
-    action: { label: "Add Participant", href: "/patients" },
+    actionHref: "/patients",
   },
   {
     id: "assign_participants",
     icon: Link2,
-    title: "Assign participants to workers",
-    description: "Link each participant to the support worker responsible for their care. Workers will only see their assigned participants.",
-    action: { label: "Manage Participants", href: "/patients" },
+    actionHref: "/patients",
   },
   {
     id: "create_session",
     icon: ClipboardList,
-    title: "Create your first session",
-    description: "Schedule a support session, link it to a participant, and start capturing NDIS-compliant notes.",
-    action: { label: "New Session", href: "/sessions/new" },
+    actionHref: "/sessions/new",
   },
   {
     id: "begin_documentation",
     icon: FileText,
-    title: "Begin documentation",
-    description: "Use AI-assisted note writing, live session capture, and automatic compliance checking to stay audit-ready.",
-    action: { label: "View Sessions", href: "/sessions" },
+    actionHref: "/sessions",
   },
 ];
 
@@ -73,6 +59,7 @@ export default function CoordinatorOnboarding() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
 
   const STORAGE_KEY = `carescribe_onboarding_${user?.id ?? "anon"}`;
 
@@ -86,6 +73,19 @@ export default function CoordinatorOnboarding() {
   });
 
   const [orgName, setOrgName] = useState<string>("");
+
+  const steps = useMemo(
+    () =>
+      STEP_DEFS.map((step) => ({
+        ...step,
+        title: translate(`coordinator.onboarding.step.${step.id}.title`),
+        description: translate(`coordinator.onboarding.step.${step.id}.description`),
+        actionLabel: step.actionHref
+          ? translate(`coordinator.onboarding.step.${step.id}.action`)
+          : undefined,
+      })),
+    [translate],
+  );
 
   useEffect(() => {
     apiFetch("/api/settings/organisation")
@@ -106,19 +106,23 @@ export default function CoordinatorOnboarding() {
   };
 
   const completedCount = completed.size;
-  const totalCount = STEPS.length;
+  const totalCount = steps.length;
   const progress = Math.round((completedCount / totalCount) * 100);
   const allDone = completedCount === totalCount;
 
   function handleGoToDashboard() {
     if (!allDone) {
       toast({
-        title: "You can always come back",
-        description: "Your progress is saved. Complete the checklist whenever you're ready.",
+        title: translate("coordinator.onboarding.toast.comeBackTitle"),
+        description: translate("coordinator.onboarding.toast.comeBackDesc"),
       });
     }
     navigate("/dashboard");
   }
+
+  const welcomeTitle = orgName
+    ? translateParams("coordinator.onboarding.welcomeWithOrg", { orgName })
+    : translate("coordinator.onboarding.welcome");
 
   return (
     <div
@@ -136,10 +140,10 @@ export default function CoordinatorOnboarding() {
           </div>
         </div>
         <h1 className="text-xl font-black mb-2" style={{ color: PLUM }}>
-          Welcome to CareCliQ{orgName ? `, ${orgName}` : ""}!
+          {welcomeTitle}
         </h1>
         <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: MUTED }}>
-          Follow the steps below to get your organisation set up. You can complete these now or come back anytime.
+          {translate("coordinator.onboarding.subtitle")}
         </p>
       </div>
 
@@ -151,10 +155,13 @@ export default function CoordinatorOnboarding() {
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold" style={{ color: PLUM }}>
-              Setup Progress
+              {translate("coordinator.onboarding.setupProgress")}
             </span>
             <span className="text-sm font-bold" style={{ color: allDone ? "#16A34A" : MUTED }}>
-              {completedCount}/{totalCount} complete
+              {translateParams("coordinator.onboarding.progressCount", {
+                completed: String(completedCount),
+                total: String(totalCount),
+              })}
             </span>
           </div>
           <div className="h-2 rounded-full overflow-hidden" style={{ background: BORDER }}>
@@ -170,7 +177,7 @@ export default function CoordinatorOnboarding() {
           </div>
           {allDone && (
             <p className="text-xs font-semibold mt-2 text-center" style={{ color: "#16A34A" }}>
-              All done! Your organisation is fully set up.
+              {translate("coordinator.onboarding.allDone")}
             </p>
           )}
         </div>
@@ -178,7 +185,7 @@ export default function CoordinatorOnboarding() {
 
       {/* Checklist */}
       <div className="w-full max-w-2xl space-y-3 mb-8">
-        {STEPS.map((step, idx) => {
+        {steps.map((step, idx) => {
           const Icon = step.icon;
           const done = completed.has(step.id);
           const isAuto = step.autoComplete;
@@ -200,7 +207,7 @@ export default function CoordinatorOnboarding() {
                   onClick={() => toggleStep(step.id)}
                   disabled={isAuto}
                   className="shrink-0 mt-0.5 transition-transform active:scale-90"
-                  aria-label={done ? "Mark incomplete" : "Mark complete"}
+                  aria-label={done ? translate("coordinator.onboarding.markIncomplete") : translate("coordinator.onboarding.markComplete")}
                 >
                   {done ? (
                     <CheckCircle2 size={24} style={{ color: isAuto ? PLUM : CORAL }} />
@@ -233,34 +240,34 @@ export default function CoordinatorOnboarding() {
                         className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide"
                         style={{ background: `${PLUM}15`, color: PLUM }}
                       >
-                        Done
+                        {translate("coordinator.onboarding.done")}
                       </span>
                     )}
                   </div>
                   <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
                     {step.description}
                   </p>
-                  {step.action && !done && (
+                  {step.actionHref && step.actionLabel && !done && (
                     <button
                       type="button"
-                      onClick={() => navigate(step.action!.href)}
+                      onClick={() => navigate(step.actionHref!)}
                       className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 active:scale-95"
                       style={{ background: `${PLUM}10`, color: PLUM }}
                     >
-                      {step.action.label}
+                      {step.actionLabel}
                       <ExternalLink size={11} />
                     </button>
                   )}
                 </div>
 
                 {/* Right chevron */}
-                {step.action && (
+                {step.actionHref && step.actionLabel && (
                   <button
                     type="button"
-                    onClick={() => navigate(step.action!.href)}
+                    onClick={() => navigate(step.actionHref!)}
                     className="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:bg-slate-50"
                     style={{ color: MUTED }}
-                    title={`Go to ${step.action.label}`}
+                    title={translateParams("coordinator.onboarding.goToAction", { label: step.actionLabel })}
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -279,20 +286,20 @@ export default function CoordinatorOnboarding() {
           className="flex-1 h-12 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 text-white"
           style={{ background: PLUM }}
         >
-          {allDone ? "Go to Dashboard" : "Continue to Dashboard"}
+          {allDone ? translate("coordinator.onboarding.goToDashboard") : translate("coordinator.onboarding.continueToDashboard")}
           <ArrowRight size={16} />
         </button>
       </div>
 
       <p className="mt-6 text-xs text-center" style={{ color: MUTED }}>
-        Your progress is saved automatically.{" "}
+        {translate("coordinator.onboarding.progressSaved")}{" "}
         <button
           type="button"
           className="underline underline-offset-2 font-medium"
           onClick={() => navigate("/settings")}
           style={{ color: PLUM }}
         >
-          View organisation settings
+          {translate("coordinator.onboarding.viewSettings")}
         </button>
       </p>
     </div>

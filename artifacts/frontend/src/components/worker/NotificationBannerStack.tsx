@@ -13,6 +13,7 @@ import {
 } from "@/services/notificationService";
 import { isActiveBanner, shouldDismissBannerOnView } from "@/lib/notification-display";
 import { resolveNotificationPath } from "@/lib/worker-notification-presenter";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 /** Sticky banner stack — see notification-display.ts (A ticket strict, B view = dismiss). */
 const BANNER_STYLES = {
@@ -44,7 +45,9 @@ function BannerItem({
   onDismiss,
   onAck,
   onViewDetails,
+  translate,
 }: {
+  translate: (key: string) => string;
   notification: UserNotification;
   onDismiss: () => void;
   onAck: () => void;
@@ -95,7 +98,7 @@ function BannerItem({
                   navigate(path);
                 }}
               >
-                View details
+{translate("worker.notification.viewDetails")}
                 <ChevronRight size={14} />
               </button>
             )}
@@ -112,7 +115,7 @@ function BannerItem({
                   onAck();
                 }}
               >
-                Acknowledged
+{translate("worker.notification.acknowledged")}
               </button>
             ) : (
               <button
@@ -123,7 +126,7 @@ function BannerItem({
                   e.stopPropagation();
                   onDismiss();
                 }}
-                aria-label="Dismiss notification"
+aria-label={translate("worker.notification.dismiss")}
               >
                 <X size={16} style={{ color: style.text }} />
               </button>
@@ -136,6 +139,7 @@ function BannerItem({
 }
 
 export function NotificationBannerStack() {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -217,7 +221,7 @@ export function NotificationBannerStack() {
         background: "var(--cc-bg)",
         borderColor: "var(--cc-border)",
       }}
-      aria-label="Important alerts"
+aria-label={translate("worker.notification.alerts")}
     >
       {/* <p
         className="mb-3 text-[10px] font-black uppercase tracking-[0.18em]"
@@ -232,6 +236,7 @@ export function NotificationBannerStack() {
             notification={n}
             onDismiss={() => dismissBanner(n.id)}
             onAck={() => ackBanner(n.id)}
+            translate={translate}
             onViewDetails={() => dismissBanner(n.id)}
           />
         ))}

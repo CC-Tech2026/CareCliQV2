@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
   disableMfa,
@@ -48,17 +49,9 @@ const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const BORDER = "var(--cc-border)";
 
-function formatWhen(value?: string | null) {
-  if (!value) return "—";
-  try {
-    return formatDistanceToNow(new Date(value), { addSuffix: true });
-  } catch {
-    return value;
-  }
-}
-
 export default function WorkerSecurity() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
 
   const [loading, setLoading] = useState(true);
@@ -85,6 +78,15 @@ export default function WorkerSecurity() {
   const [renameValue, setRenameValue] = useState("");
   const [renameKind, setRenameKind] = useState<"device" | "session" | null>(null);
 
+  function formatWhen(value?: string | null) {
+    if (!value) return translate("common.emDash");
+    try {
+      return formatDistanceToNow(new Date(value), { addSuffix: true });
+    } catch {
+      return value;
+    }
+  }
+
   const loadSecurityData = useCallback(async () => {
     const [status, devices, activeSessions, history] = await Promise.all([
       getMfaStatus(),
@@ -104,8 +106,8 @@ export default function WorkerSecurity() {
       .catch((error) => {
         if (!active) return;
         toast({
-          title: "Could not load security settings",
-          description: error instanceof Error ? error.message : "Please try again.",
+          title: translate("security.loadFailed"),
+          description: error instanceof Error ? error.message : translate("toast.tryAgain"),
           variant: "destructive",
         });
       })
@@ -115,7 +117,7 @@ export default function WorkerSecurity() {
     return () => {
       active = false;
     };
-  }, [loadSecurityData, toast]);
+  }, [loadSecurityData, toast, translate]);
 
   async function handleStartEnrollment() {
     setEnrollBusy(true);
@@ -128,8 +130,8 @@ export default function WorkerSecurity() {
       setRecoveryCodes(null);
     } catch (error) {
       toast({
-        title: "Could not start 2FA setup",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("security.start2faFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -149,13 +151,13 @@ export default function WorkerSecurity() {
       setEnrollSecret(null);
       setEnrollCode("");
       toast({
-        title: "Two-factor authentication enabled",
-        description: "Save your recovery codes in a secure place.",
+        title: translate("security.twoFactorEnabled"),
+        description: translate("security.twoFactorEnabledHint"),
       });
     } catch (error) {
       toast({
-        title: "Verification failed",
-        description: error instanceof Error ? error.message : "Check the code and try again.",
+        title: translate("security.verifyFailed"),
+        description: error instanceof Error ? error.message : translate("security.verifyFailedHint"),
         variant: "destructive",
       });
     } finally {
@@ -172,11 +174,11 @@ export default function WorkerSecurity() {
       setDisablePassword("");
       setMfaStatus({ enabled: false, method: null, phone: null });
       setRecoveryCodes(null);
-      toast({ title: "Two-factor authentication disabled" });
+      toast({ title: translate("security.twoFactorDisabled") });
     } catch (error) {
       toast({
-        title: "Could not disable 2FA",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("security.disable2faFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -193,13 +195,15 @@ export default function WorkerSecurity() {
       setLogoutOthersPassword("");
       await loadSecurityData();
       toast({
-        title: "Other sessions signed out",
-        description: `${result.revoked_sessions} session(s) were revoked.`,
+        title: translate("security.signOutOthersSuccess"),
+        description: translateParams("security.signOutOthersSuccessDesc", {
+          count: String(result.revoked_sessions),
+        }),
       });
     } catch (error) {
       toast({
-        title: "Could not sign out other devices",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("security.signOutOthersFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -214,7 +218,7 @@ export default function WorkerSecurity() {
         await loadSecurityData();
         return true;
       });
-      toast({ title: "Trusted device removed" });
+      toast({ title: translate("security.deviceRemoved") });
     } catch {
       // requireReAuth handles cancellation
     }
@@ -232,11 +236,11 @@ export default function WorkerSecurity() {
       setRenameKind(null);
       setRenameValue("");
       await loadSecurityData();
-      toast({ title: "Name updated" });
+      toast({ title: translate("security.nameUpdated") });
     } catch (error) {
       toast({
-        title: "Could not rename",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("security.renameFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     }
@@ -245,13 +249,14 @@ export default function WorkerSecurity() {
   function copyRecoveryCodes() {
     if (!recoveryCodes?.length) return;
     void navigator.clipboard.writeText(recoveryCodes.join("\n"));
-    toast({ title: "Recovery codes copied" });
+    toast({ title: translate("security.codesCopied") });
   }
 
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
   }
@@ -262,13 +267,13 @@ export default function WorkerSecurity() {
 
       <div>
         <p className="hidden" style={{ color: CORAL }}>
-          Account
+          {translate("profile.account")}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          Security
+          {translate("security.title")}
         </h1>
         <p className="mt-2 text-sm text-[#6B7280]">
-          Manage two-factor authentication, trusted devices, active sessions, and sign-in history.
+          {translate("security.subtitle")}
         </p>
       </div>
 
@@ -278,20 +283,20 @@ export default function WorkerSecurity() {
             <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Two-factor authentication</h2>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("security.twoFactor")}</h2>
             <p className="text-sm text-[#6B7280]">
               {mfaStatus?.enabled
-                ? "Authenticator app verification is active on your account."
-                : "Add an extra layer of protection with an authenticator app."}
+                ? translate("security.twoFactorActive")
+                : translate("security.twoFactorInactive")}
             </p>
           </div>
         </div>
 
         {recoveryCodes ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-bold text-amber-900">Save these recovery codes</p>
+            <p className="text-sm font-bold text-amber-900">{translate("security.recoveryCodes")}</p>
             <p className="mt-1 text-sm text-amber-800">
-              Each code can be used once if you lose access to your authenticator app.
+              {translate("security.recoveryCodesHint")}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
               {recoveryCodes.map((code) => (
@@ -302,7 +307,7 @@ export default function WorkerSecurity() {
             </div>
             <Button type="button" variant="outline" onClick={copyRecoveryCodes} className="mt-4 rounded-xl gap-2">
               <Copy className="h-4 w-4" />
-              Copy codes
+              {translate("security.copyCodes")}
             </Button>
           </div>
         ) : null}
@@ -311,9 +316,9 @@ export default function WorkerSecurity() {
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
               <div className="rounded-2xl bg-[#F8F8FE] p-4">
-                <p className="text-sm font-semibold text-[#111827]">Set up your authenticator app</p>
+                <p className="text-sm font-semibold text-[#111827]">{translate("security.setupAuthenticator")}</p>
                 <p className="mt-1 text-sm text-[#6B7280]">
-                  Scan the QR code or add a manual entry in Google Authenticator, Authy, or 1Password.
+                  {translate("security.setupAuthenticatorHint")}
                 </p>
                 <div className="mt-3 flex items-stretch gap-2">
                   <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">
@@ -322,8 +327,8 @@ export default function WorkerSecurity() {
                   <button
                     type="button"
                     onClick={() => setQrOpen(true)}
-                    aria-label="Show QR code for authenticator app"
-                    title="Show QR code"
+                    aria-label={translate("security.showQrAria")}
+                    title={translate("security.showQrTitle")}
                     className="flex min-w-[52px] items-center justify-center rounded-xl border bg-white px-3 transition-colors hover:bg-[#EEF2FF]"
                     style={{ borderColor: BORDER }}
                   >
@@ -332,7 +337,7 @@ export default function WorkerSecurity() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="totp-code">Enter the 6-digit code</Label>
+                <Label htmlFor="totp-code">{translate("security.totpCode")}</Label>
                 <Input
                   id="totp-code"
                   value={enrollCode}
@@ -340,7 +345,7 @@ export default function WorkerSecurity() {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   className="mt-1 rounded-xl tracking-widest"
-                  placeholder="000000"
+                  placeholder={translate("security.totpPlaceholder")}
                 />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -356,7 +361,7 @@ export default function WorkerSecurity() {
                   }}
                   className="rounded-xl"
                 >
-                  Cancel
+                  {translate("common.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -364,7 +369,7 @@ export default function WorkerSecurity() {
                   className="rounded-xl"
                   style={{ background: PLUM }}
                 >
-                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify and enable"}
+                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
                 </Button>
               </div>
             </form>
@@ -377,16 +382,16 @@ export default function WorkerSecurity() {
               style={{ background: PLUM }}
             >
               {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
-              Enable authenticator app
+              {translate("security.enableAuthenticator")}
             </Button>
           )
         ) : (
           <form onSubmit={handleDisableMfa} className="max-w-md space-y-3">
             <p className="text-sm text-[#6B7280]">
-              To turn off two-factor authentication, confirm your current password.
+              {translate("security.disableTwoFactorHint")}
             </p>
             <div>
-              <Label htmlFor="disable-mfa-password">Current password</Label>
+              <Label htmlFor="disable-mfa-password">{translate("profile.currentPassword")}</Label>
               <PasswordInput
                 id="disable-mfa-password"
                 value={disablePassword}
@@ -400,7 +405,7 @@ export default function WorkerSecurity() {
               disabled={disableBusy || !disablePassword}
               className="rounded-xl border-red-200 text-red-700 hover:bg-red-50"
             >
-              {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disable two-factor authentication"}
+              {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.disableTwoFactor")}
             </Button>
           </form>
         )}
@@ -412,13 +417,13 @@ export default function WorkerSecurity() {
             <MonitorSmartphone className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Trusted devices</h2>
-            <p className="text-sm text-[#6B7280]">Devices that can skip 2FA for 30 days.</p>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("security.trustedDevices")}</h2>
+            <p className="text-sm text-[#6B7280]">{translate("security.trustedDevicesHint")}</p>
           </div>
         </div>
 
         {trustedDevices.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">No trusted devices yet.</p>
+          <p className="text-sm text-[#6B7280]">{translate("security.noTrustedDevices")}</p>
         ) : (
           <div className="space-y-3">
             {trustedDevices.map((device) => (
@@ -432,12 +437,15 @@ export default function WorkerSecurity() {
                     {device.device_name}
                     {device.is_current ? (
                       <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
-                        This device
+                        {translate("security.thisDevice")}
                       </span>
                     ) : null}
                   </p>
                   <p className="text-sm text-[#6B7280]">
-                    {device.os_name} · trusted until {formatWhen(device.trusted_until)}
+                    {translateParams("security.trustedUntil", {
+                      os: device.os_name,
+                      when: formatWhen(device.trusted_until),
+                    })}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -476,8 +484,8 @@ export default function WorkerSecurity() {
             <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Active sessions</h2>
-            <p className="text-sm text-[#6B7280]">Devices currently signed in to your account.</p>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("security.activeSessions")}</h2>
+            <p className="text-sm text-[#6B7280]">{translate("security.sessionsHint")}</p>
           </div>
         </div>
 
@@ -493,12 +501,16 @@ export default function WorkerSecurity() {
                   {session.device_name}
                   {session.is_current ? (
                     <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">
-                      Current session
+                      {translate("security.currentSession")}
                     </span>
                   ) : null}
                 </p>
                 <p className="text-sm text-[#6B7280]">
-                  {session.city || "Unknown city"}, {session.country || "Unknown"} · active {formatWhen(session.last_active_at)}
+                  {translateParams("security.sessionLocation", {
+                    city: session.city || translate("security.unknownCity"),
+                    country: session.country || translate("security.unknownCountry"),
+                    when: formatWhen(session.last_active_at),
+                  })}
                 </p>
               </div>
               <Button
@@ -519,9 +531,9 @@ export default function WorkerSecurity() {
         </div>
 
         <form onSubmit={handleLogoutOthers} className="mt-6 max-w-md space-y-3 border-t pt-6" style={{ borderColor: BORDER }}>
-          <p className="text-sm font-semibold text-[#111827]">Sign out all other devices</p>
+          <p className="text-sm font-semibold text-[#111827]">{translate("security.signOutAllOthers")}</p>
           <div>
-            <Label htmlFor="logout-others-password">Confirm your password</Label>
+            <Label htmlFor="logout-others-password">{translate("security.confirmPassword")}</Label>
             <PasswordInput
               id="logout-others-password"
               value={logoutOthersPassword}
@@ -535,7 +547,7 @@ export default function WorkerSecurity() {
             disabled={logoutOthersBusy || !logoutOthersPassword}
             className="rounded-xl"
           >
-            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign out other sessions"}
+            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.signOutOthers")}
           </Button>
         </form>
       </section>
@@ -546,13 +558,13 @@ export default function WorkerSecurity() {
             <AlertTriangle className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Recent sign-ins</h2>
-            <p className="text-sm text-[#6B7280]">Review recent account access activity.</p>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("security.recentSignIns")}</h2>
+            <p className="text-sm text-[#6B7280]">{translate("security.recentSignInsHint")}</p>
           </div>
         </div>
 
         {loginHistory.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">No sign-in history yet.</p>
+          <p className="text-sm text-[#6B7280]">{translate("security.noSignInHistory")}</p>
         ) : (
           <div className="space-y-3">
             {loginHistory.map((entry) => (
@@ -565,7 +577,7 @@ export default function WorkerSecurity() {
                   <p className="font-semibold text-[#111827]">{entry.device_name}</p>
                   {entry.is_suspicious ? (
                     <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                      Unusual sign-in
+                      {translate("security.unusualSignIn")}
                     </span>
                   ) : null}
                 </div>
@@ -581,9 +593,9 @@ export default function WorkerSecurity() {
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-sm rounded-[1.5rem] border-0 p-6">
           <DialogHeader>
-            <DialogTitle className="text-[#111827]">Scan QR code</DialogTitle>
+            <DialogTitle className="text-[#111827]">{translate("security.scanQr")}</DialogTitle>
             <DialogDescription className="text-[#6B7280]">
-              Open your authenticator app and scan this code to add CareCliQ.
+              {translate("security.qrDescription")}
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-center rounded-2xl bg-white p-5 ring-1 ring-[#E5E7EB]">
@@ -592,7 +604,7 @@ export default function WorkerSecurity() {
             ) : null}
           </div>
           <p className="text-center text-xs text-[#6B7280]">
-            Or enter the secret key manually if scanning is not available.
+            {translate("security.qrManualHint")}
           </p>
         </DialogContent>
       </Dialog>
@@ -601,8 +613,8 @@ export default function WorkerSecurity() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#111827]">Rename device</h3>
-              <button type="button" onClick={() => setRenamingId(null)} aria-label="Close">
+              <h3 className="text-lg font-bold text-[#111827]">{translate("security.renameDevice")}</h3>
+              <button type="button" onClick={() => setRenamingId(null)} aria-label={translate("common.close")}>
                 <X className="h-5 w-5 text-[#6B7280]" />
               </button>
             </div>
@@ -614,10 +626,10 @@ export default function WorkerSecurity() {
             />
             <div className="mt-4 flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setRenamingId(null)} className="rounded-xl">
-                Cancel
+                {translate("common.cancel")}
               </Button>
               <Button type="button" onClick={() => void submitRename()} className="rounded-xl" style={{ background: PLUM }}>
-                Save
+                {translate("common.save")}
               </Button>
             </div>
           </div>

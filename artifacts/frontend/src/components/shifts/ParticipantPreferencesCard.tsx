@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { ParticipantPreferences } from "@/services/shiftService";
 import { isLongPreferenceContent } from "@/lib/participant-display";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   preferences?: ParticipantPreferences;
@@ -20,17 +21,29 @@ type Props = {
   onToggle?: () => void;
 };
 
-const SECTIONS: Array<{ key: keyof ParticipantPreferences; label: string; icon: LucideIcon }> = [
-  { key: "communication_style", label: "Communication style", icon: MessageCircle },
-  { key: "likes_dislikes", label: "Likes / dislikes", icon: ThumbsUp },
-  { key: "routines", label: "Routines", icon: Clock },
-  { key: "sensory_preferences", label: "Sensory preferences", icon: Ear },
-  { key: "cultural_preferences", label: "Cultural preferences", icon: Globe },
-  { key: "behaviour_support", label: "Behaviour support plan", icon: Heart },
-  { key: "health_flags", label: "Health flags", icon: Heart },
+const SECTION_KEYS: Array<{ key: keyof ParticipantPreferences; labelKey: string; icon: LucideIcon }> = [
+  { key: "communication_style", labelKey: "shift.participant.pref.communication", icon: MessageCircle },
+  { key: "likes_dislikes", labelKey: "shift.participant.pref.likes", icon: ThumbsUp },
+  { key: "routines", labelKey: "shift.participant.pref.routines", icon: Clock },
+  { key: "sensory_preferences", labelKey: "shift.participant.pref.sensory", icon: Ear },
+  { key: "cultural_preferences", labelKey: "shift.participant.pref.cultural", icon: Globe },
+  { key: "behaviour_support", labelKey: "shift.participant.pref.behaviour", icon: Heart },
+  { key: "health_flags", labelKey: "shift.participant.pref.health", icon: Heart },
 ];
 
-function PreferenceSection({ label, icon: Icon, body }: { label: string; icon: LucideIcon; body: string }) {
+function PreferenceSection({
+  label,
+  icon: Icon,
+  body,
+  notRecorded,
+  prefAria,
+}: {
+  label: string;
+  icon: LucideIcon;
+  body: string;
+  notRecorded: string;
+  prefAria: string;
+}) {
   const [sectionOpen, setSectionOpen] = useState(true);
   const long = isLongPreferenceContent(body);
   const labelId = useId();
@@ -52,7 +65,7 @@ function PreferenceSection({ label, icon: Icon, body }: { label: string; icon: L
           onClick={() => setSectionOpen(!sectionOpen)}
           aria-expanded={sectionOpen}
           aria-controls={bodyId}
-          aria-label={`${label} preferences`}
+          aria-label={prefAria}
         >
           {header}
           <ChevronDown size={14} className={cn("transition", sectionOpen && "rotate-180")} style={{ color: MUTED }} aria-hidden />
@@ -68,7 +81,7 @@ function PreferenceSection({ label, icon: Icon, body }: { label: string; icon: L
           className="whitespace-pre-wrap px-3 pb-3 text-sm font-medium leading-relaxed"
           style={{ color: TEXT }}
         >
-          {body || <span style={{ color: MUTED }}>Not recorded</span>}
+          {body || <span style={{ color: MUTED }}>{notRecorded}</span>}
         </p>
       )}
     </div>
@@ -76,11 +89,16 @@ function PreferenceSection({ label, icon: Icon, body }: { label: string; icon: L
 }
 
 export function ParticipantPreferencesCard({ preferences, open = true, onToggle }: Props) {
-  const blocks = SECTIONS.map(({ key, label, icon }) => ({
-    label,
-    icon,
-    body: preferences?.[key]?.trim() || "",
-  }));
+  const { translate, translateParams } = useAccessibility();
+  const blocks = SECTION_KEYS.map(({ key, labelKey, icon }) => {
+    const label = translate(labelKey);
+    return {
+      label,
+      icon,
+      body: preferences?.[key]?.trim() || "",
+      prefAria: translateParams("shift.participant.prefAria", { label }),
+    };
+  });
 
   return (
     <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
@@ -92,7 +110,7 @@ export function ParticipantPreferencesCard({ preferences, open = true, onToggle 
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <Heart size={16} style={{ color: PLUM }} aria-hidden />
-          Participant Preferences
+          {translate("shift.participant.preferences")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} aria-hidden />
       </button>
@@ -100,7 +118,14 @@ export function ParticipantPreferencesCard({ preferences, open = true, onToggle 
       {open && (
         <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: BORDER }}>
           {blocks.map((block) => (
-            <PreferenceSection key={block.label} label={block.label} icon={block.icon} body={block.body} />
+            <PreferenceSection
+              key={block.label}
+              label={block.label}
+              icon={block.icon}
+              body={block.body}
+              notRecorded={translate("shift.participant.notRecorded")}
+              prefAria={block.prefAria}
+            />
           ))}
         </div>
       )}

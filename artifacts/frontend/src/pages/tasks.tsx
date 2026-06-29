@@ -5,6 +5,7 @@ import { ClipboardList, Loader2, CalendarDays } from "lucide-react";
 import { ShiftTaskChecklist } from "@/components/shifts/ShiftTaskChecklist";
 import { getWorkerShifts, type WorkerShift } from "@/services/shiftService";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -13,6 +14,7 @@ const MUTED = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 
 export default function Tasks() {
+  const { translate } = useAccessibility();
   const { data, isLoading, error } = useOrgQuery(["worker", "shifts", "all"], {
     queryFn: () => getWorkerShifts("all"),
   });
@@ -29,19 +31,19 @@ export default function Tasks() {
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
-          Support Worker
+          {translate("common.supportWorker")}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          Tasks
+          {translate("tasks.page.title")}
         </h1>
         <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-          Track shift tasks after clock-in. Check off items, add notes, and create custom tasks.
+          {translate("tasks.page.subtitle")}
         </p>
       </div>
 
       {isLoading && (
         <div className="flex items-center gap-2 text-sm font-bold" style={{ color: MUTED }}>
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading active shift tasks…
+          <Loader2 className="h-4 w-4 animate-spin" /> {translate("tasks.page.loading")}
         </div>
       )}
 
@@ -53,13 +55,13 @@ export default function Tasks() {
           style={{ borderColor: BORDER }}
         >
           <ClipboardList size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
-          <p className="text-base font-black" style={{ color: TEXT }}>No active shift tasks</p>
+          <p className="text-base font-black" style={{ color: TEXT }}>{translate("tasks.page.empty")}</p>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
-            Clock in to a shift from My Shifts to start your task checklist.
+            {translate("tasks.page.emptyHint")}
           </p>
           <Link href="/my-shifts">
             <Button className="mt-4 rounded-full font-bold gap-2" style={{ background: PLUM }}>
-              <CalendarDays size={16} /> Go to My Shifts
+              <CalendarDays size={16} /> {translate("tasks.page.goToShifts")}
             </Button>
           </Link>
         </section>
@@ -73,10 +75,10 @@ export default function Tasks() {
         >
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
-              Active shift
+              {translate("tasks.page.activeShift")}
             </p>
             <h2 className="text-lg font-black" style={{ color: TEXT }}>
-              {shift.participant_name || "Participant"}
+              {shift.participant_name || translate("tasks.page.participantFallback")}
             </h2>
           </div>
           <ShiftTaskChecklist

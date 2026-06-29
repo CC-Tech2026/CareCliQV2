@@ -45,6 +45,7 @@ import {
 } from "@/services/workerService";
 import { ActiveGoalsPanel } from "@/components/ActiveGoalsPanel";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -80,34 +81,34 @@ type LiveSpeechWindow = Window & {
   webkitSpeechRecognition?: new () => LiveSpeechRecognition;
 };
 
-const INPUT_LANGUAGES = [
-  { value: "auto", label: "Auto detect" },
-  { value: "en", label: "English" },
-  { value: "es", label: "Spanish" },
-  { value: "fr", label: "French" },
-  { value: "ar", label: "Arabic" },
-  { value: "sw", label: "Swahili" },
-  { value: "zh", label: "Chinese" },
-  { value: "hi", label: "Hindi" },
-  { value: "pt", label: "Portuguese" },
-  { value: "de", label: "German" },
-  { value: "it", label: "Italian" },
-  { value: "ja", label: "Japanese" },
-  { value: "ko", label: "Korean" },
-  { value: "vi", label: "Vietnamese" },
-  { value: "tl", label: "Tagalog" },
-  { value: "ur", label: "Urdu" },
-  { value: "fa", label: "Persian" },
-  { value: "ru", label: "Russian" },
-  { value: "uk", label: "Ukrainian" },
-  { value: "nl", label: "Dutch" },
-  { value: "tr", label: "Turkish" },
-  { value: "id", label: "Indonesian" },
-  { value: "ms", label: "Malay" },
-  { value: "th", label: "Thai" },
-  { value: "pl", label: "Polish" },
-  { value: "ro", label: "Romanian" },
-  { value: "el", label: "Greek" },
+const INPUT_LANGUAGE_OPTIONS = [
+  { value: "auto", labelKey: "client.lang.auto" },
+  { value: "en", labelKey: "client.lang.en" },
+  { value: "es", labelKey: "client.lang.es" },
+  { value: "fr", labelKey: "client.lang.fr" },
+  { value: "ar", labelKey: "client.lang.ar" },
+  { value: "sw", labelKey: "client.lang.sw" },
+  { value: "zh", labelKey: "client.lang.zh" },
+  { value: "hi", labelKey: "client.lang.hi" },
+  { value: "pt", labelKey: "client.lang.pt" },
+  { value: "de", labelKey: "client.lang.de" },
+  { value: "it", labelKey: "client.lang.it" },
+  { value: "ja", labelKey: "client.lang.ja" },
+  { value: "ko", labelKey: "client.lang.ko" },
+  { value: "vi", labelKey: "client.lang.vi" },
+  { value: "tl", labelKey: "client.lang.tl" },
+  { value: "ur", labelKey: "client.lang.ur" },
+  { value: "fa", labelKey: "client.lang.fa" },
+  { value: "ru", labelKey: "client.lang.ru" },
+  { value: "uk", labelKey: "client.lang.uk" },
+  { value: "nl", labelKey: "client.lang.nl" },
+  { value: "tr", labelKey: "client.lang.tr" },
+  { value: "id", labelKey: "client.lang.id" },
+  { value: "ms", labelKey: "client.lang.ms" },
+  { value: "th", labelKey: "client.lang.th" },
+  { value: "pl", labelKey: "client.lang.pl" },
+  { value: "ro", labelKey: "client.lang.ro" },
+  { value: "el", labelKey: "client.lang.el" },
 ] as const;
 
 const SPEECH_LANGUAGE_CODES: Record<string, string> = {
@@ -139,8 +140,8 @@ const SPEECH_LANGUAGE_CODES: Record<string, string> = {
   el: "el-GR",
 };
 
-function safeDate(value?: string | null) {
-  if (!value) return "Not recorded";
+function safeDate(value?: string | null, notRecorded = "Not recorded") {
+  if (!value) return notRecorded;
   try {
     return format(parseISO(value), "MMM d, yyyy");
   } catch {
@@ -159,13 +160,13 @@ function statusClass(status?: string) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function restrictivePracticeWarning(text: string) {
+function restrictivePracticeWarningKey(text: string): string {
   const normalized = text.toLowerCase();
   if (/\b(lock|locked|locking)\b.*\b(door|room|outside|inside)\b/.test(normalized)) {
-    return "Possible restrictive practice language detected: locked door or room restriction.";
+    return "client.restrictivePractice.lockedDoor";
   }
   if (/\b(restrain|restrained|restraint|seclusion|chemical restraint|blocked exit)\b/.test(normalized)) {
-    return "Possible restrictive practice language detected. Review before saving.";
+    return "client.restrictivePractice.general";
   }
   return "";
 }
@@ -190,8 +191,8 @@ function activeGoals(goals?: Array<Record<string, unknown>>) {
   });
 }
 
-function goalLabel(goal: Record<string, unknown>, index: number) {
-  return String(goal.title || goal.name || goal.description || `Goal ${index + 1}`);
+function goalLabel(goal: Record<string, unknown>, index: number, fallback: string) {
+  return String(goal.title || goal.name || goal.description || fallback);
 }
 
 function ProminentAlertCard({
@@ -215,6 +216,8 @@ function ProminentAlertCard({
 }
 
 function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
+  const { translate, translateParams } = useAccessibility();
+  const notRecorded = translate("client.notRecorded");
   const planEnd = client.plan_end_date ? parseISO(client.plan_end_date) : null;
   const daysLeft = planEnd
     ? Math.ceil((planEnd.getTime() - Date.now()) / 86_400_000)
@@ -236,13 +239,15 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
             {client.full_name}
           </h2>
           <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
-            {client.ndis_number ? `NDIS #${client.ndis_number}` : "NDIS number not recorded"}
-            {client.date_of_birth ? ` · DOB ${safeDate(client.date_of_birth)}` : ""}
+            {client.ndis_number
+              ? translateParams("client.ndisNumber", { number: client.ndis_number })
+              : translate("client.ndisNumberMissing")}
+            {client.date_of_birth ? ` · ${translateParams("client.dob", { date: safeDate(client.date_of_birth, notRecorded) })}` : ""}
           </p>
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {client.plan_status && (
               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold capitalize text-emerald-700">
-                Plan {client.plan_status}
+                {translateParams("client.planStatus", { status: client.plan_status })}
               </span>
             )}
             {daysLeft !== null && (
@@ -254,7 +259,9 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
                   color: expiryUrgency === "critical" ? "#DC2626" : expiryUrgency === "warn" ? "#92400E" : MUTED,
                 }}
               >
-                {daysLeft > 0 ? `Plan expires in ${daysLeft}d` : "Plan expired"}
+                {daysLeft > 0
+                  ? translateParams("client.planExpiresIn", { days: daysLeft })
+                  : translate("client.planExpired")}
               </span>
             )}
           </div>
@@ -268,9 +275,9 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
       >
         {(
           [
-            ["Plan Start", client.plan_start_date ? safeDate(client.plan_start_date) : null],
-            ["Plan End", client.plan_end_date ? safeDate(client.plan_end_date) : null],
-            ["Plan Management", (client as Record<string, unknown>).plan_management_type as string | null ?? null],
+            [translate("client.planStart"), client.plan_start_date ? safeDate(client.plan_start_date, notRecorded) : null],
+            [translate("client.planEnd"), client.plan_end_date ? safeDate(client.plan_end_date, notRecorded) : null],
+            [translate("client.planManagement"), (client as Record<string, unknown>).plan_management_type as string | null ?? null],
           ] as [string, string | null][]
         ).map(([label, value]) =>
           value ? (
@@ -290,21 +297,22 @@ function ParticipantProfileHeader({ client }: { client: ClientSummary }) {
 }
 
 function SessionConfidenceCard({ client }: { client: ClientSummary }) {
+  const { translate, translateParams } = useAccessibility();
   const goals = activeGoals(client.goals);
   const items: Array<{ label: string; ready: boolean }> = [
-    { label: "NDIS goals reviewed", ready: goals.length > 0 },
-    { label: "Allergies checked", ready: Boolean(client.allergies?.trim()) },
-    { label: "Support preferences reviewed", ready: Boolean(client.communication_preferences?.trim()) },
+    { label: translate("client.confidence.ndisGoalsReviewed"), ready: goals.length > 0 },
+    { label: translate("client.confidence.allergiesChecked"), ready: Boolean(client.allergies?.trim()) },
+    { label: translate("client.confidence.supportPreferencesReviewed"), ready: Boolean(client.communication_preferences?.trim()) },
     {
-      label: "Behaviour support reviewed",
+      label: translate("client.confidence.behaviourSupportReviewed"),
       ready: Boolean(client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim()),
     },
   ];
   const readyCount = items.filter((item) => item.ready).length;
   return (
-    <Section title="Session Confidence" icon={ListChecks}>
+    <Section title={translate("client.section.sessionConfidence")} icon={ListChecks}>
       <p className="mb-3 text-sm font-medium" style={{ color: MUTED }}>
-        {readyCount} of {items.length} key participant details on file. Review before you begin.
+        {translateParams("client.confidence.summary", { ready: readyCount, total: items.length })}
       </p>
       <ul className="space-y-2">
         {items.map((item) => (
@@ -315,7 +323,7 @@ function SessionConfidenceCard({ client }: { client: ClientSummary }) {
               <Circle size={18} className="shrink-0" style={{ color: BORDER }} />
             )}
             <span>{item.label}</span>
-            {!item.ready && <span className="text-xs font-bold" style={{ color: MUTED }}>· Not recorded</span>}
+            {!item.ready && <span className="text-xs font-bold" style={{ color: MUTED }}>· {translate("client.notRecorded")}</span>}
           </li>
         ))}
       </ul>
@@ -324,18 +332,19 @@ function SessionConfidenceCard({ client }: { client: ClientSummary }) {
 }
 
 function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; columns?: 1 | 2 }) {
+  const { translate } = useAccessibility();
   const goals = activeGoals(client.goals);
 
   const medicalCard = client.primary_disability?.trim() ? (
-    <ProminentAlertCard title="Medical Alerts" icon={ShieldAlert} text={client.primary_disability} />
+    <ProminentAlertCard title={translate("client.section.medicalAlerts")} icon={ShieldAlert} text={client.primary_disability} />
   ) : null;
 
   const allergiesCard = client.allergies?.trim() ? (
-    <ProminentAlertCard title="Allergies" icon={AlertTriangle} text={client.allergies} />
+    <ProminentAlertCard title={translate("client.section.allergies")} icon={AlertTriangle} text={client.allergies} />
   ) : null;
 
   const preferencesCard = client.communication_preferences?.trim() ? (
-    <Section title="Support Preferences & Sensitivities" icon={MessageCircle}>
+    <Section title={translate("client.section.supportPreferences")} icon={MessageCircle}>
       <p className="whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
         {client.communication_preferences}
       </p>
@@ -343,11 +352,11 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
   ) : null;
 
   const behaviourCard = client.behaviour_support_plan?.trim() || client.restricted_behavioural_notes?.trim() ? (
-    <Section title="Behaviour Support" icon={ShieldCheck}>
+    <Section title={translate("client.section.behaviourSupport")} icon={ShieldCheck}>
       <div className="space-y-3">
         {client.behaviour_support_plan?.trim() && (
           <div className="rounded-lg bg-[#F8F6FE] p-3">
-            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behaviour Support Plan</p>
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>{translate("client.section.behaviourSupportPlan")}</p>
             <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
               {client.behaviour_support_plan}
             </p>
@@ -355,7 +364,7 @@ function ParticipantReadiness({ client, columns = 1 }: { client: ClientSummary; 
         )}
         {client.restricted_behavioural_notes?.trim() && (
           <div className="rounded-lg bg-[#F8F6FE] p-3">
-            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>Behavioural Notes</p>
+            <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>{translate("client.section.behaviouralNotes")}</p>
             <p className="mt-1 whitespace-pre-wrap text-sm font-medium leading-6" style={{ color: TEXT }}>
               {client.restricted_behavioural_notes}
             </p>
@@ -420,6 +429,7 @@ function SplitSessionLayout({
   left: ReactNode;
   right: ReactNode;
 }) {
+  const { translate } = useAccessibility();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   function startDrag(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -457,7 +467,7 @@ function SplitSessionLayout({
         onPointerDown={startDrag}
         className="hidden cursor-col-resize items-center justify-center rounded-full border bg-white shadow-sm transition hover:bg-[#F8F6FE] xl:flex"
         style={{ borderColor: BORDER, color: MUTED }}
-        aria-label="Resize client overview and live session panels"
+        aria-label={translate("client.aria.resizePanels")}
       >
         <GripVertical size={18} />
       </button>
@@ -481,10 +491,11 @@ function GoalSelector({
   onToggle: (goal: GoalDetail) => void;
   onNoteChange: (goalId: string, field: keyof GoalProgressNote, value: string) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   if (goals.length === 0) {
     return (
       <p className="text-sm font-medium py-4" style={{ color: MUTED }}>
-        No active goals found for this participant. You can still save the session.
+        {translate("client.goals.noActive")}
       </p>
     );
   }
@@ -492,7 +503,7 @@ function GoalSelector({
     <div className="space-y-3">
       {goals.map((goal, index) => {
         const isSelected = selected.has(goal.id);
-        const title = goal.title || goal.description || `Goal ${index + 1}`;
+        const title = goal.title || goal.description || translateParams("client.goalFallback", { number: index + 1 });
         const note = notes[goal.id];
         return (
           <div key={goal.id} className="rounded-lg border" style={{ borderColor: isSelected ? PLUM : "#EEEAFB" }}>
@@ -524,7 +535,11 @@ function GoalSelector({
                 {(["evidence_provided", "outcome", "observation"] as const).map((field) => (
                   <div key={field}>
                     <label className="block text-[11px] font-black uppercase tracking-wider mb-1" style={{ color: MUTED }}>
-                      {field === "evidence_provided" ? "Evidence Provided" : field === "outcome" ? "Outcome" : "Observation"}
+                      {field === "evidence_provided"
+                        ? translate("client.goal.evidenceProvided")
+                        : field === "outcome"
+                        ? translate("client.goal.outcome")
+                        : translate("client.goal.observation")}
                     </label>
                     <textarea
                       value={note?.[field] || ""}
@@ -534,10 +549,10 @@ function GoalSelector({
                       style={{ borderColor: "var(--cc-border)", color: TEXT }}
                       placeholder={
                         field === "evidence_provided"
-                          ? "What did you do to support this goal?"
+                          ? translate("client.goal.placeholder.evidence")
                           : field === "outcome"
-                          ? "What result was observed?"
-                          : "Describe the participant's response or behaviour."
+                          ? translate("client.goal.placeholder.outcome")
+                          : translate("client.goal.placeholder.observation")
                       }
                     />
                   </div>
@@ -634,19 +649,20 @@ function InlineSessionComposer({
   onChoiceAndControlChange?: (value: string) => void;
   onRecommendationsChange?: (value: string) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [composerStep, setComposerStep] = useState<ComposerStep>("record");
   const canSave = ended && Boolean((generated || draft).trim()) && !isSaving;
-  const warning = restrictivePracticeWarning(draft);
+  const warningKey = restrictivePracticeWarningKey(draft);
   const activeGoals = goals.filter((g) => {
     const s = String(g.status || "active").toLowerCase();
     return s !== "completed" && s !== "achieved" && s !== "archived";
   });
 
   const STEPS: Array<{ key: ComposerStep; label: string }> = [
-    { key: "record", label: "Notes" },
-    { key: "goals", label: "Goals Worked On" },
-    { key: "choice", label: "Choice & Control" },
+    { key: "record", label: translate("client.step.notes") },
+    { key: "goals", label: translate("client.step.goalsWorkedOn") },
+    { key: "choice", label: translate("client.step.choiceControl") },
   ];
   return (
     <section
@@ -671,7 +687,7 @@ function InlineSessionComposer({
                 color: ended ? MUTED : "#047857",
               }}
             >
-              {ended ? "Ended" : "In progress"}
+              {ended ? translate("client.session.ended") : translate("client.session.inProgress")}
             </span>
           </div>
           <h2 className="mt-1 text-lg font-black" style={{ color: TEXT }}>{clientName}</h2>
@@ -685,7 +701,7 @@ function InlineSessionComposer({
               style={{ background: PLUM }}
             >
               <StopCircle size={15} />
-              End Session
+              {translate("client.session.endSession")}
             </button>
           )}
           <button
@@ -693,7 +709,7 @@ function InlineSessionComposer({
             onClick={onClose}
             className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
             style={{ color: MUTED }}
-            aria-label="Close session composer"
+            aria-label={translate("client.session.closeComposer")}
           >
             <X size={18} />
           </button>
@@ -727,17 +743,17 @@ function InlineSessionComposer({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                 <Languages size={15} />
-                Input language
+                {translate("client.session.inputLanguage")}
               </label>
               <select
-                title="Input language"
+                title={translate("client.session.inputLanguage")}
                 value={language}
                 onChange={(event) => onLanguageChange(event.target.value)}
                 className="h-10 rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
-                {INPUT_LANGUAGES.map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
+                {INPUT_LANGUAGE_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{translate(item.labelKey)}</option>
                 ))}
               </select>
             </div>
@@ -754,7 +770,13 @@ function InlineSessionComposer({
                     <span className="h-2.5 w-1 animate-pulse rounded-full [animation-delay:360ms]" style={{ background: PLUM }} />
                   </span>
                 )}
-                <span>{isListening ? "Listening..." : ended ? "Session ended — review before saving" : "Ready to listen"}</span>
+                <span>
+                  {isListening
+                    ? translate("client.session.listening")
+                    : ended
+                    ? translate("client.session.endedReview")
+                    : translate("client.session.readyToListen")}
+                </span>
               </div>
 
               <div
@@ -766,15 +788,17 @@ function InlineSessionComposer({
                   <p className="whitespace-pre-wrap">{draft}</p>
                 ) : (
                   <p style={{ color: MUTED }}>
-                    {isListening ? "Listening..." : "Spoken or sent notes will appear here."}
+                    {isListening
+                      ? translate("client.session.listening")
+                      : translate("client.session.spokenNotesPlaceholder")}
                   </p>
                 )}
               </div>
 
-              {warning && (
+              {warningKey && (
                 <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
                   <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                  {warning}
+                  {translate(warningKey)}
                 </div>
               )}
 
@@ -782,11 +806,11 @@ function InlineSessionComposer({
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                     <Sparkles size={14} />
-                    Generated compliant note
+                    {translate("client.session.generatedNote")}
                   </div>
                   <textarea
-                    title="Generated compliant note"
-                    placeholder="AI-generated note will appear here..."
+                    title={translate("client.session.generatedNote")}
+                    placeholder={translate("client.session.generatedNotePlaceholder")}
                     value={generated}
                     onChange={(event) => onGeneratedChange(event.target.value)}
                     className="min-h-28 w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
@@ -813,8 +837,12 @@ function InlineSessionComposer({
                     style={{ borderColor: "#C4B8E8", color: PLUM, background: "var(--cc-soft)" }}
                   >
                     <Languages size={13} />
-                    Translated from{" "}
-                    {INPUT_LANGUAGES.find((l) => l.value === translatedFromLang)?.label ?? translatedFromLang.toUpperCase()}
+                    {translateParams("client.session.translatedFrom", {
+                      language:
+                        INPUT_LANGUAGE_OPTIONS.find((l) => l.value === translatedFromLang)
+                          ? translate(INPUT_LANGUAGE_OPTIONS.find((l) => l.value === translatedFromLang)!.labelKey)
+                          : translatedFromLang.toUpperCase(),
+                    })}
                   </div>
                 )}
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -826,7 +854,7 @@ function InlineSessionComposer({
                     style={{ borderColor: PLUM, color: PLUM }}
                   >
                     {isTranslating ? <Loader2 size={15} className="animate-spin" /> : <Languages size={15} />}
-                    Translate
+                    {translate("client.session.translate")}
                   </button>
                   <button
                     type="button"
@@ -836,7 +864,7 @@ function InlineSessionComposer({
                     style={{ borderColor: PLUM, color: PLUM }}
                   >
                     {isGenerating ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-                    Clinical Rewrite
+                    {translate("client.session.clinicalRewrite")}
                   </button>
                   <button
                     type="button"
@@ -846,7 +874,7 @@ function InlineSessionComposer({
                     style={{ background: PLUM }}
                   >
                     {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                    Save Draft
+                    {translate("client.session.saveDraft")}
                   </button>
                 </div>
               </div>
@@ -854,7 +882,7 @@ function InlineSessionComposer({
               <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm" style={{ borderColor: BORDER }}>
                   <input
-                    title="Attach file"
+                    title={translate("client.session.attachFile")}
                     ref={fileInputRef}
                     type="file"
                     accept="image/*,.pdf,.doc,.docx"
@@ -862,8 +890,8 @@ function InlineSessionComposer({
                     onChange={(event) => onAttach(event.target.files?.[0] ?? null)}
                   />
                   <input
-                    title="Message input"
-                    placeholder="Type a message..."
+                    title={translate("client.session.messageInput")}
+                    placeholder={translate("client.session.messagePlaceholder")}
                     value={inputValue}
                     onChange={(event) => onInputChange(event.target.value)}
                     onKeyDown={(event) => {
@@ -880,7 +908,7 @@ function InlineSessionComposer({
                     onClick={() => fileInputRef.current?.click()}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                     style={{ color: PLUM }}
-                    aria-label="Attach file"
+                    aria-label={translate("client.session.attachFile")}
                   >
                     <Paperclip size={22} />
                   </button>
@@ -889,7 +917,7 @@ function InlineSessionComposer({
                     onClick={() => fileInputRef.current?.click()}
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
                     style={{ color: PLUM }}
-                    aria-label="Add photo evidence"
+                    aria-label={translate("client.session.addPhotoEvidence")}
                   >
                     <Camera size={22} />
                   </button>
@@ -899,7 +927,7 @@ function InlineSessionComposer({
                   onClick={onToggleDictation}
                   className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition hover:scale-[1.02]"
                   style={{ background: isListening ? CORAL : PLUM }}
-                  aria-label={isListening ? "Stop voice dictation" : "Start voice dictation"}
+                  aria-label={isListening ? translate("client.session.stopDictation") : translate("client.session.startDictation")}
                 >
                   {isListening ? <MicOff size={28} /> : <Mic size={30} />}
                 </button>
@@ -922,8 +950,8 @@ function InlineSessionComposer({
             <div className="mx-auto max-w-3xl space-y-4">
               <p className="text-sm font-medium" style={{ color: MUTED }}>
                 {ended
-                  ? "Document which goals were addressed and summarise the session outcome before saving."
-                  : "Select the goals you worked on during this session and document the evidence, outcome, and observation for each."}
+                  ? translate("client.session.goalsPromptEnded")
+                  : translate("client.session.goalsPromptActive")}
               </p>
 
               {ended && (
@@ -935,7 +963,7 @@ function InlineSessionComposer({
                     <div>
                       <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                         <Target size={12} />
-                        Goals Addressed This Session
+                        {translate("client.session.goalsAddressed")}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {composerGoals.map((goal, idx) => {
@@ -960,7 +988,7 @@ function InlineSessionComposer({
                                 color: selected ? PLUM : MUTED,
                               }}
                             >
-                              {goalLabel(goal, idx)}
+                              {goalLabel(goal, idx, translateParams("client.goalFallback", { number: idx + 1 }))}
                             </button>
                           );
                         })}
@@ -971,12 +999,12 @@ function InlineSessionComposer({
                   <div>
                     <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                       <CheckCircle2 size={12} />
-                      Session Outcome <span className="text-red-400">*</span>
+                      {translate("client.session.sessionOutcome")} <span className="text-red-400">*</span>
                     </label>
                     <textarea
                       value={outcome ?? ""}
                       onChange={(event) => onOutcomeChange?.(event.target.value)}
-                      placeholder="What was achieved? Describe measurable progress and participant response..."
+                      placeholder={translate("client.session.sessionOutcomePlaceholder")}
                       rows={2}
                       className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
@@ -986,12 +1014,12 @@ function InlineSessionComposer({
                   <div>
                     <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                       <MessageCircle size={12} />
-                      Participant Choice &amp; Control <span className="text-red-400">*</span>
+                      {translate("client.session.participantChoiceControl")} <span className="text-red-400">*</span>
                     </label>
                     <textarea
                       value={choiceAndControl ?? ""}
                       onChange={(event) => onChoiceAndControlChange?.(event.target.value)}
-                      placeholder="How did the participant direct this session? What choices did they make regarding their supports?"
+                      placeholder={translate("client.session.participantChoicePlaceholder")}
                       rows={2}
                       className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
@@ -1001,12 +1029,12 @@ function InlineSessionComposer({
                   <div>
                     <label className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                       <Sparkles size={12} />
-                      Recommendations
+                      {translate("client.session.recommendations")}
                     </label>
                     <textarea
                       value={recommendations ?? ""}
                       onChange={(event) => onRecommendationsChange?.(event.target.value)}
-                      placeholder="Recommendations for coordinator or next session (optional)..."
+                      placeholder={translate("client.session.recommendationsPlaceholder")}
                       rows={2}
                       className="w-full rounded-lg border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                       style={{ borderColor: BORDER, color: TEXT }}
@@ -1019,13 +1047,13 @@ function InlineSessionComposer({
                 <div>
                   {!ended && (
                     <p className="mb-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
-                      Goal Evidence
+                      {translate("client.session.goalEvidence")}
                     </p>
                   )}
                   {ended && (
                     <p className="mb-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
                       <ListChecks size={12} />
-                      Per-Goal Evidence (optional)
+                      {translate("client.session.perGoalEvidence")}
                     </p>
                   )}
                   <GoalSelector
@@ -1047,7 +1075,7 @@ function InlineSessionComposer({
               className="text-sm font-black px-4 py-2 rounded-full border"
               style={{ borderColor: BORDER, color: MUTED }}
             >
-              ← Back
+              {translate("client.session.back")}
             </button>
             <div className="flex gap-3">
               {ended ? (
@@ -1059,7 +1087,7 @@ function InlineSessionComposer({
                   style={{ background: PLUM }}
                 >
                   {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                  Save Draft
+                  {translate("client.session.saveDraft")}
                 </button>
               ) : (
                 <button
@@ -1068,7 +1096,7 @@ function InlineSessionComposer({
                   className="text-sm font-black px-4 py-2 rounded-full text-white"
                   style={{ background: PLUM }}
                 >
-                  Next: Choice & Control →
+                  {translate("client.session.nextChoiceControl")}
                 </button>
               )}
             </div>
@@ -1082,12 +1110,12 @@ function InlineSessionComposer({
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="mx-auto max-w-3xl space-y-4">
               <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
-                <p className="text-xs font-black uppercase tracking-wider mb-1" style={{ color: PLUM }}>NDIS Practice Standard</p>
-                <p className="text-sm font-bold" style={{ color: TEXT }}>Choice and Control · Person-Centred Supports</p>
+                <p className="text-xs font-black uppercase tracking-wider mb-1" style={{ color: PLUM }}>{translate("client.session.ndisPracticeStandard")}</p>
+                <p className="text-sm font-bold" style={{ color: TEXT }}>{translate("client.session.choiceControlStandard")}</p>
               </div>
               <div>
                 <label className="block text-[11px] font-black uppercase tracking-wider mb-2" style={{ color: MUTED }}>
-                  Participant Choice & Control
+                  {translate("client.session.participantChoiceControl")}
                 </label>
                 <textarea
                   value={choiceControl}
@@ -1095,18 +1123,18 @@ function InlineSessionComposer({
                   rows={5}
                   className="w-full rounded-lg border bg-white p-4 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
                   style={{ borderColor: BORDER, color: TEXT }}
-                  placeholder="Describe how the participant exercised choice during the session. e.g., Participant chose the location for today's community outing."
+                  placeholder={translate("client.session.choiceControlPlaceholder")}
                 />
               </div>
             </div>
           </div>
           <div className="shrink-0 border-t bg-white p-3 flex items-center justify-between gap-3" style={{ borderColor: "#EEEAFB" }}>
             <button type="button" onClick={() => setComposerStep("goals")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
-              ← Back
+              {translate("client.session.back")}
             </button>
             <div className="flex gap-3">
               <button type="button" onClick={() => setComposerStep("record")} className="text-sm font-black px-4 py-2 rounded-full border" style={{ borderColor: BORDER, color: MUTED }}>
-                Back to Notes
+                {translate("client.session.backToNotes")}
               </button>
               <button
                 type="button"
@@ -1116,7 +1144,7 @@ function InlineSessionComposer({
                 style={{ background: PLUM }}
               >
                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                Save Draft
+                {translate("client.session.saveDraft")}
               </button>
             </div>
           </div>
@@ -1126,25 +1154,33 @@ function InlineSessionComposer({
   );
 }
 
-const INCIDENT_TYPES_LIST = [
-  { value: "injury", label: "Injury" },
-  { value: "medication_error", label: "Medication Error" },
-  { value: "behaviour_of_concern", label: "Behaviour of Concern" },
-  { value: "property_damage", label: "Property Damage" },
-  { value: "abuse_neglect", label: "Abuse / Neglect" },
-  { value: "restrictive_practice", label: "Restrictive Practice" },
-  { value: "environmental", label: "Environmental Hazard" },
-  { value: "elopement", label: "Elopement" },
-  { value: "near_miss", label: "Near Miss" },
-  { value: "other", label: "Other" },
+const INCIDENT_TYPE_OPTIONS = [
+  { value: "injury", labelKey: "client.incidentType.injury" },
+  { value: "medication_error", labelKey: "client.incidentType.medicationError" },
+  { value: "behaviour_of_concern", labelKey: "client.incidentType.behaviourOfConcern" },
+  { value: "property_damage", labelKey: "client.incidentType.propertyDamage" },
+  { value: "abuse_neglect", labelKey: "client.incidentType.abuseNeglect" },
+  { value: "restrictive_practice", labelKey: "client.incidentType.restrictivePractice" },
+  { value: "environmental", labelKey: "client.incidentType.environmental" },
+  { value: "elopement", labelKey: "client.incidentType.elopement" },
+  { value: "near_miss", labelKey: "client.incidentType.nearMiss" },
+  { value: "other", labelKey: "client.incidentType.other" },
 ] as const;
 
-const INCIDENT_SEVERITIES_LIST = [
-  { value: "low", label: "Low — minimal impact" },
-  { value: "medium", label: "Medium — some impact" },
-  { value: "high", label: "High — significant impact" },
-  { value: "critical", label: "Critical — life-threatening" },
+const INCIDENT_SEVERITY_OPTIONS = [
+  { value: "low", labelKey: "client.incidentSeverity.low" },
+  { value: "medium", labelKey: "client.incidentSeverity.medium" },
+  { value: "high", labelKey: "client.incidentSeverity.high" },
+  { value: "critical", labelKey: "client.incidentSeverity.critical" },
 ] as const;
+
+const INCIDENT_CRITERIA_KEYS: Record<string, string> = {
+  factual_completeness: "client.incident.criteria.factualCompleteness",
+  clinical_language: "client.incident.criteria.clinicalLanguage",
+  action_documented: "client.incident.criteria.actionDocumented",
+  ndis_standard_alignment: "client.incident.criteria.ndisStandardAlignment",
+  follow_up_indicators: "client.incident.criteria.followUpIndicators",
+};
 
 function IncidentReportModal({
   participantId,
@@ -1155,6 +1191,7 @@ function IncidentReportModal({
   participantName: string;
   onClose: () => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [saving, setSaving] = useState(false);
@@ -1183,7 +1220,7 @@ function IncidentReportModal({
 
   async function handleComply() {
     if (!form.description.trim()) {
-      toast({ title: "Add a description first", variant: "destructive" });
+      toast({ title: translate("client.incident.addDescriptionFirst"), variant: "destructive" });
       return;
     }
     setComply({ loading: true, result: null });
@@ -1191,7 +1228,7 @@ function IncidentReportModal({
       const result = await complyIncident({
         incident_type: form.incident_type,
         severity: form.severity,
-        title: form.title.trim() || "Incident",
+        title: form.title.trim() || translate("client.incident"),
         description: form.description,
         worker_actions: form.worker_actions,
         participant_name: participantName,
@@ -1199,17 +1236,17 @@ function IncidentReportModal({
       setComply({ loading: false, result });
     } catch {
       setComply({ loading: false, result: null });
-      toast({ title: "Compliance check failed", description: "Please try again.", variant: "destructive" });
+      toast({ title: translate("client.incident.complianceCheckFailed"), description: translate("client.incident.pleaseTryAgain"), variant: "destructive" });
     }
   }
 
   async function handleSubmit() {
     if (!form.title.trim()) {
-      toast({ title: "Incident title is required", variant: "destructive" });
+      toast({ title: translate("client.incident.titleRequired"), variant: "destructive" });
       return;
     }
     if (!form.description.trim()) {
-      toast({ title: "Description is required", variant: "destructive" });
+      toast({ title: translate("client.incident.descriptionRequired"), variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -1225,29 +1262,29 @@ function IncidentReportModal({
         incident_date: new Date().toISOString(),
       });
       toast({
-        title: "Incident logged",
-        description: "The incident has been recorded against this participant.",
+        title: translate("client.incident.logged"),
+        description: translate("client.incident.loggedDesc"),
         action: (
           <button
             onClick={() => { onClose(); navigate("/incidents"); }}
             className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
           >
             <Siren size={12} />
-            View Incidents
+            {translate("client.incident.viewIncidents")}
           </button>
         ) as any,
       });
       onClose();
     } catch (err: unknown) {
       const apiErr = err as Error & { status?: number };
-      let title = "Incident not saved";
-      let description = "An unexpected error occurred. Please try again.";
+      let title = translate("client.incident.notSaved");
+      let description = translate("client.incident.unexpectedError");
       if (apiErr.status === 403) {
-        description = "You don't have permission to report incidents for this participant. Check your allocation.";
+        description = translate("client.incident.noPermission");
       } else if (apiErr.status === 404) {
-        description = "Participant not found — please refresh the page and try again.";
+        description = translate("client.incident.participantNotFound");
       } else if (apiErr.status === 422) {
-        description = "The report could not be processed. Please write the incident in English and try again.";
+        description = translate("client.incident.processFailed");
       } else if (apiErr.message && !apiErr.message.includes("status")) {
         description = apiErr.message;
       }
@@ -1272,8 +1309,8 @@ function IncidentReportModal({
               <Siren size={18} className="text-red-600" />
             </div>
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Practice Standard 2.3</p>
-              <h2 className="text-base font-black" style={{ color: TEXT }}>Report Incident — {participantName}</h2>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.ndisStandard")}</p>
+              <h2 className="text-base font-black" style={{ color: TEXT }}>{translateParams("client.incident.reportTitle", { name: participantName })}</h2>
             </div>
           </div>
           <button
@@ -1281,7 +1318,7 @@ function IncidentReportModal({
             onClick={onClose}
             className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
             style={{ color: MUTED }}
-            aria-label="Close incident form"
+            aria-label={translate("client.incident.closeForm")}
           >
             <X size={18} />
           </button>
@@ -1292,45 +1329,45 @@ function IncidentReportModal({
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-red-600" />
               <p className="text-sm font-bold text-red-800">
-                NDIS Reportable — notify the NDIS Quality &amp; Safeguards Commission.
-                {form.severity === "critical" && " Critical incidents must be reported within 24 hours."}
+                {translate("client.incident.ndisReportable")}
+                {form.severity === "critical" && translate("client.incident.critical24h")}
               </p>
             </div>
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Type *</p>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.type")}</p>
               <select
-                title="Incident type"
+                title={translate("client.incident.typeTitle")}
                 value={form.incident_type}
                 onChange={(event) => setField("incident_type", event.target.value)}
                 className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
-                {INCIDENT_TYPES_LIST.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {INCIDENT_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{translate(t.labelKey)}</option>)}
               </select>
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Severity *</p>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.severity")}</p>
               <select
-                title="Incident severity"
+                title={translate("client.incident.severityTitle")}
                 value={form.severity}
                 onChange={(event) => setField("severity", event.target.value)}
                 className="h-10 w-full rounded-xl border bg-[#F8F6FE] px-3 text-sm font-bold outline-none"
                 style={{ borderColor: BORDER, color: TEXT }}
               >
-                {INCIDENT_SEVERITIES_LIST.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {INCIDENT_SEVERITY_OPTIONS.map((s) => <option key={s.value} value={s.value}>{translate(s.labelKey)}</option>)}
               </select>
             </div>
           </div>
 
           <div>
-            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Incident Title *</p>
+            <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.incidentTitle")}</p>
             <input
               value={form.title}
               onChange={(event) => setField("title", event.target.value)}
-              placeholder="Brief description of what occurred..."
+              placeholder={translate("client.incident.titlePlaceholder")}
               className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
             />
@@ -1338,7 +1375,7 @@ function IncidentReportModal({
 
           <div>
             <div className="mb-1.5 flex items-center justify-between">
-              <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>What happened? *</p>
+              <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.whatHappened")}</p>
               <button
                 type="button"
                 onClick={handleComply}
@@ -1349,13 +1386,13 @@ function IncidentReportModal({
                 {comply.loading
                   ? <Loader2 size={11} className="animate-spin" />
                   : <Sparkles size={11} />}
-                {comply.loading ? "Checking…" : "Check NDIS Compliance"}
+                {comply.loading ? translate("client.incident.checking") : translate("client.incident.checkCompliance")}
               </button>
             </div>
             <textarea
               value={form.description}
               onChange={(event) => { setField("description", event.target.value); setComply({ loading: false, result: null }); }}
-              placeholder="Describe the incident in full — who, what, when, where, how..."
+              placeholder={translate("client.incident.descriptionPlaceholder")}
               rows={4}
               className="w-full rounded-xl border bg-white p-3 text-sm font-medium leading-6 outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
@@ -1365,17 +1402,11 @@ function IncidentReportModal({
           {comply.result && (() => {
             const r = comply.result;
             const scoreColor = r.compliance_score >= 75 ? "#10B981" : r.compliance_score >= 50 ? "#F59E0B" : "#EF4444";
-            const criteriaLabels: Record<string, string> = {
-              factual_completeness: "Factual completeness",
-              clinical_language: "Clinical language",
-              action_documented: "Actions documented",
-              ndis_standard_alignment: "Practice Standard alignment",
-              follow_up_indicators: "Follow-up clarity",
-            };
+            const criteriaLabels = INCIDENT_CRITERIA_KEYS;
             return (
               <div className="space-y-3 rounded-xl border bg-[#F8F6FE] p-4" style={{ borderColor: "#DDD8F5" }}>
                 <div className="flex items-center justify-between">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>NDIS Compliance Score</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.complianceScore")}</p>
                   <span className="text-sm font-black" style={{ color: scoreColor }}>{r.compliance_score}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-white/70">
@@ -1388,7 +1419,7 @@ function IncidentReportModal({
                   </span>
                   {r.ndis_reportable && (
                     <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold text-red-700">
-                      NDIS Reportable · notify within {r.notification_hours}h
+                      {translateParams("client.incident.ndisReportableNotify", { hours: r.notification_hours })}
                     </span>
                   )}
                 </div>
@@ -1399,7 +1430,7 @@ function IncidentReportModal({
                     return (
                       <div key={key}>
                         <div className="mb-0.5 flex justify-between">
-                          <span className="text-[10px] font-bold" style={{ color: MUTED }}>{criteriaLabels[key] ?? key}</span>
+                          <span className="text-[10px] font-bold" style={{ color: MUTED }}>{translate(criteriaLabels[key] ?? key)}</span>
                           <span className="text-[10px] font-black" style={{ color: c }}>{val}%</span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white">
@@ -1423,14 +1454,14 @@ function IncidentReportModal({
 
                 {r.reporting_requirements && (
                   <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700 mb-0.5">Reporting Requirement</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-700 mb-0.5">{translate("client.incident.reportingRequirement")}</p>
                     <p className="text-xs font-medium text-red-800">{r.reporting_requirements}</p>
                   </div>
                 )}
 
                 {r.suggested_follow_up && (
                   <div className="rounded-lg bg-white px-3 py-2" style={{ border: `1px solid ${BORDER}` }}>
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-0.5" style={{ color: MUTED }}>Suggested Next Steps</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] mb-0.5" style={{ color: MUTED }}>{translate("client.incident.suggestedNextSteps")}</p>
                     <p className="text-xs font-medium" style={{ color: TEXT }}>{r.suggested_follow_up}</p>
                   </div>
                 )}
@@ -1444,13 +1475,13 @@ function IncidentReportModal({
                       worker_actions: r.compliant_worker_actions || prev.worker_actions,
                     }));
                     setComply({ loading: false, result: null });
-                    toast({ title: "NDIS-compliant text applied", description: "Review it before submitting." });
+                    toast({ title: translate("client.incident.compliantTextApplied"), description: translate("client.incident.reviewBeforeSubmit") });
                   }}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border py-2 text-sm font-black transition hover:bg-white"
                   style={{ borderColor: "#C4B8F0", color: PLUM, background: "rgba(255,255,255,0.5)" }}
                 >
                   <Sparkles size={13} />
-                  Apply NDIS-Compliant Text to Report
+                  {translate("client.incident.applyCompliantText")}
                 </button>
               </div>
             );
@@ -1458,21 +1489,21 @@ function IncidentReportModal({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Location</p>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.location")}</p>
               <input
                 value={form.location}
                 onChange={(event) => setField("location", event.target.value)}
-                placeholder="Where did it occur?"
+                placeholder={translate("client.incident.locationPlaceholder")}
                 className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
             </div>
             <div>
-              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>Immediate Actions</p>
+              <p className="mb-1.5 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>{translate("client.incident.immediateActions")}</p>
               <input
                 value={form.worker_actions}
                 onChange={(event) => setField("worker_actions", event.target.value)}
-                placeholder="First aid, supervisor notified..."
+                placeholder={translate("client.incident.immediateActionsPlaceholder")}
                 className="h-10 w-full rounded-xl border bg-white px-3 text-sm font-medium outline-none focus:border-[#3730A3]"
                 style={{ borderColor: BORDER, color: TEXT }}
               />
@@ -1487,7 +1518,7 @@ function IncidentReportModal({
             className="rounded-full border px-5 py-2.5 text-sm font-black transition hover:bg-[#F8F6FE]"
             style={{ borderColor: BORDER, color: MUTED }}
           >
-            Cancel
+            {translate("common.cancel")}
           </button>
           <button
             type="button"
@@ -1497,7 +1528,7 @@ function IncidentReportModal({
             style={{ background: PLUM }}
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Siren size={15} />}
-            Log Incident
+            {translate("client.incident.logIncident")}
           </button>
         </div>
       </div>
@@ -1513,6 +1544,7 @@ const SEVERITY_ROW_CLASSES: Record<string, string> = {
 };
 
 function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<string, unknown>> }) {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const recent = incidents.slice(0, 3);
   return (
@@ -1520,7 +1552,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
       <div className="flex shrink-0 items-center justify-between border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Siren size={14} className="text-red-600" />
-          <p className="text-sm font-black" style={{ color: TEXT }}>Reported Incidents</p>
+          <p className="text-sm font-black" style={{ color: TEXT }}>{translate("client.incidents.reported")}</p>
           <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "#FEF2F2", color: "#DC2626" }}>
             {incidents.length}
           </span>
@@ -1530,7 +1562,7 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
           className="text-xs font-black underline underline-offset-2 transition hover:opacity-70"
           style={{ color: PLUM }}
         >
-          View all
+          {translate("client.viewAll")}
         </button>
       </div>
       <div className="divide-y" style={{ borderColor: "#EEEAFB" }}>
@@ -1544,15 +1576,15 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
               className="flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-[#F8F6FE]"
             >
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{String(inc.title || "Incident")}</p>
+                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{String(inc.title || translate("client.incident"))}</p>
                 {incDate && <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>{incDate}</p>}
               </div>
               <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${SEVERITY_ROW_CLASSES[sev] ?? SEVERITY_ROW_CLASSES.medium}`}>
-                {sev}
+                {translate(`client.severity.${sev}` as "client.severity.low")}
               </span>
               {!!inc.ndis_pending && (
                 <span className="shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
-                  NDIS Alert
+                  {translate("client.incidents.ndisAlert")}
                 </span>
               )}
             </button>
@@ -1564,8 +1596,10 @@ function ParticipantIncidentPanel({ incidents }: { incidents: Array<Record<strin
 }
 
 function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
+  const { translate, translateParams } = useAccessibility();
+  const notRecorded = translate("client.notRecorded");
   if (rows.length === 0) {
-    return <p className="py-2 text-sm font-medium" style={{ color: MUTED }}>No records found.</p>;
+    return <p className="py-2 text-sm font-medium" style={{ color: MUTED }}>{translate("client.sessions.noRecords")}</p>;
   }
   return (
     <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
@@ -1579,11 +1613,11 @@ function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
             <div key={session.id} className="flex items-start gap-4 px-5 py-4">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black capitalize" style={{ color: TEXT }}>
-                  {(session.session_type || "Session").replace(/_/g, " ")}
+                  {(session.session_type || translate("client.sessions.fallback")).replace(/_/g, " ")}
                 </p>
                 <p className="mt-0.5 text-xs font-medium" style={{ color: MUTED }}>
-                  {safeDate(session.session_date)}
-                  {session.duration_minutes ? ` · ${session.duration_minutes} min` : ""}
+                  {safeDate(session.session_date, notRecorded)}
+                  {session.duration_minutes ? ` ${translateParams("client.sessions.durationMin", { minutes: session.duration_minutes })}` : ""}
                 </p>
                 {session.legal_record_text && (
                   <p className="mt-2 text-sm leading-relaxed line-clamp-2" style={{ color: MUTED }}>
@@ -1603,6 +1637,7 @@ function SessionRows({ rows }: { rows: WorkerClientDetail["sessions"] }) {
 }
 
 export default function MyClientDetail({ id }: { id: string }) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [noteText, setNoteText] = useState("");
@@ -1674,10 +1709,10 @@ export default function MyClientDetail({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
-      toast({ title: "Draft saved", description: "The session draft is saved against this client." });
+      toast({ title: translate("client.draftSaved"), description: translate("client.draftSavedDesc") });
     },
     onError: (error) => {
-      setComposerError(error instanceof Error ? error.message : "Could not save the draft.");
+      setComposerError(error instanceof Error ? error.message : translate("client.draftSaveFailed"));
     },
   });
 
@@ -1780,7 +1815,7 @@ export default function MyClientDetail({ id }: { id: string }) {
     if (!file) return;
     setSessionAttachmentName(file.name);
     setSessionDraft((current) => {
-      const attachmentLine = `[Attachment selected: ${file.name}]`;
+      const attachmentLine = translateParams("client.attachmentSelected", { name: file.name });
       if (current.includes(attachmentLine)) return current;
       return [current.trim(), attachmentLine].filter(Boolean).join("\n\n");
     });
@@ -1798,7 +1833,7 @@ export default function MyClientDetail({ id }: { id: string }) {
     const speechWindow = window as unknown as LiveSpeechWindow;
     const SpeechRecognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setComposerError("Voice dictation is not supported in this browser. Use Chrome or Edge, or type the note.");
+      setComposerError(translate("client.voiceNotSupported"));
       return;
     }
 
@@ -1842,7 +1877,7 @@ export default function MyClientDetail({ id }: { id: string }) {
       dictationBaseRef.current = "";
       dictationFinalRef.current = "";
       setIsListening(false);
-      setComposerError("Voice dictation stopped. Please try again or type the note.");
+      setComposerError(translate("client.voiceStopped"));
     };
 
     recognition.start();
@@ -1859,7 +1894,7 @@ export default function MyClientDetail({ id }: { id: string }) {
 
   async function translateNote() {
     if (!sessionEnded) {
-      setComposerError("End the session before translating.");
+      setComposerError(translate("client.endBeforeTranslate"));
       return;
     }
     if (!sessionDraft.trim() || isTranslating) return;
@@ -1879,7 +1914,7 @@ export default function MyClientDetail({ id }: { id: string }) {
         const body = await response.json().catch(() => ({}));
         throw new Error(
           body.detail ||
-            "Translation service is currently unavailable. You can still save your original note."
+            translate("client.translationUnavailable")
         );
       }
       const data = await response.json();
@@ -1892,7 +1927,7 @@ export default function MyClientDetail({ id }: { id: string }) {
       setComposerError(
         error instanceof Error
           ? error.message
-          : "Translation service is currently unavailable. You can still save your original note."
+          : translate("client.translationUnavailable")
       );
     } finally {
       setIsTranslating(false);
@@ -1901,7 +1936,7 @@ export default function MyClientDetail({ id }: { id: string }) {
 
   async function generateCompliantNote() {
     if (!sessionEnded) {
-      setComposerError("End the session before generating the compliant note.");
+      setComposerError(translate("client.endBeforeGenerate"));
       return;
     }
     const baseText = generatedNote.trim() || sessionDraft.trim();
@@ -1924,7 +1959,7 @@ export default function MyClientDetail({ id }: { id: string }) {
         const body = await response.json().catch(() => ({}));
         throw new Error(
           body.detail ||
-            "Clinical rewrite service is currently unavailable. You can still save your original note."
+            translate("client.rewriteUnavailable")
         );
       }
       const data = await response.json();
@@ -1948,24 +1983,24 @@ export default function MyClientDetail({ id }: { id: string }) {
       setComposerError(
         error instanceof Error
           ? error.message
-          : "Clinical rewrite service is currently unavailable. You can still save your original note."
+          : translate("client.rewriteUnavailable")
       );
     } finally {
       setIsGenerating(false);
     }
   }
 
-  if (detailQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading client...</div>;
+  if (detailQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>{translate("client.loading")}</div>;
   if (detailQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(detailQuery.error as Error).message}</div>;
 
   const detail = detailQuery.data as WorkerClientDetail;
   const client = detail.participant;
   const tabs: Array<{ key: TabKey; label: string }> = [
-    { key: "overview", label: "Overview" },
-    { key: "plan", label: "Plan & Goals" },
-    { key: "sessions", label: "Sessions" },
-    { key: "notes", label: "Notes" },
-    { key: "compliance", label: "Compliance" },
+    { key: "overview", label: translate("client.tab.overview") },
+    { key: "plan", label: translate("client.tab.planGoals") },
+    { key: "sessions", label: translate("client.tab.sessions") },
+    { key: "notes", label: translate("client.tab.notes") },
+    { key: "compliance", label: translate("client.tab.compliance") },
   ];
 
   return (
@@ -1986,7 +2021,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             style={{ background: PLUM }}
           >
             {saveSessionDraft.isPending ? <Loader2 size={15} className="animate-spin" /> : <Mic size={15} />}
-            Start Session
+            {translate("client.startSession")}
           </button>
           <button
             onClick={() => setActiveTab("notes")}
@@ -1994,7 +2029,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             style={{ borderColor: BORDER, color: PLUM }}
           >
             <Plus size={15} />
-            Note
+            {translate("client.note")}
           </button>
           <button
             onClick={() => setIncidentModalOpen(true)}
@@ -2002,7 +2037,7 @@ export default function MyClientDetail({ id }: { id: string }) {
             style={{ borderColor: "#FECACA", color: "#DC2626" }}
           >
             <Siren size={15} />
-            Incident
+            {translate("client.incident")}
           </button>
         </div>
       </div>
@@ -2094,22 +2129,22 @@ export default function MyClientDetail({ id }: { id: string }) {
 
       {activeTab === "plan" && (
         <div className="space-y-6">
-          {planQuery.isLoading && <p className="text-sm font-medium" style={{ color: MUTED }}>Loading plan...</p>}
+          {planQuery.isLoading && <p className="text-sm font-medium" style={{ color: MUTED }}>{translate("client.loadingPlan")}</p>}
           {(planQuery.data?.goals || client.goals || []).length === 0 && !planQuery.isLoading && (
-            <p className="text-sm font-medium" style={{ color: MUTED }}>No goals recorded for this participant yet.</p>
+            <p className="text-sm font-medium" style={{ color: MUTED }}>{translate("client.noGoalsYet")}</p>
           )}
           {(planQuery.data?.goals || client.goals || []).length > 0 && (
             <div className="rounded-xl border bg-white" style={{ borderColor: BORDER }}>
               <div className="flex items-center gap-2 border-b px-5 py-3.5" style={{ borderColor: BORDER }}>
                 <Target size={14} style={{ color: MUTED }} />
                 <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>
-                  NDIS Goals · {(planQuery.data?.goals || client.goals || []).length} recorded
+                  {translateParams("client.ndisGoalsRecorded", { count: (planQuery.data?.goals || client.goals || []).length })}
                 </p>
               </div>
               <div className="divide-y" style={{ borderColor: BORDER }}>
                 {(planQuery.data?.goals || client.goals || []).map((goal, index) => {
                   const g = goal as Record<string, unknown>;
-                  const title = String(g.title || g.name || `Goal ${index + 1}`);
+                  const title = String(g.title || g.name || translateParams("client.goalFallback", { number: index + 1 }));
                   const description = String(g.description || g.instructions || g.goal_instructions || "");
                   const status = String(g.status || "active");
                   const category = String(g.category || g.support_category || "");
@@ -2156,20 +2191,20 @@ export default function MyClientDetail({ id }: { id: string }) {
       )}
 
       {activeTab === "sessions" && (
-        <Section title="Assigned Sessions For This Worker" icon={CalendarDays}>
+        <Section title={translate("client.section.assignedSessions")} icon={CalendarDays}>
           <SessionRows rows={detail.sessions} />
         </Section>
       )}
 
       {activeTab === "notes" && (
         <div className="space-y-6">
-          <Section title="New Note" icon={FileText}>
+          <Section title={translate("client.newNote")} icon={FileText}>
             <textarea
               value={noteText}
               onChange={(event) => setNoteText(event.target.value)}
               className="min-h-32 w-full rounded-lg border bg-white p-4 text-sm font-medium outline-none focus:border-[#3730A3]"
               style={{ borderColor: BORDER, color: TEXT }}
-              placeholder="Write a worker-owned progress note..."
+              placeholder={translate("client.notePlaceholder")}
             />
             {createNote.error && <p className="mt-3 text-sm font-bold text-red-600">{(createNote.error as Error).message}</p>}
             <button
@@ -2179,17 +2214,17 @@ export default function MyClientDetail({ id }: { id: string }) {
               style={{ background: PLUM }}
             >
               {createNote.isPending && <Loader2 size={16} className="animate-spin" />}
-              Save Note
+              {translate("client.saveNote")}
             </button>
           </Section>
-          <Section title="My Notes" icon={FileText}>
+          <Section title={translate("client.myNotes")} icon={FileText}>
             <SessionRows rows={detail.notes} />
           </Section>
         </div>
       )}
 
       {activeTab === "compliance" && (
-        <Section title="My Compliance For This Client" icon={ShieldCheck}>
+        <Section title={translate("client.section.compliance")} icon={ShieldCheck}>
           <SessionRows rows={detail.compliance} />
         </Section>
       )}

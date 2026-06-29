@@ -101,8 +101,22 @@ const BACK_ZONES: ZoneDef[] = [
 
 export const ALL_ZONES: ZoneDef[] = [...FRONT_ZONES, ...BACK_ZONES];
 
-export function getZoneLabel(zoneId: string): string {
+export function getZoneLabel(zoneId: string, translate?: (key: string) => string): string {
+  if (translate) {
+    const key = `clinical.bodyMap.zone.${zoneId}`;
+    const translated = translate(key);
+    if (translated !== key) return translated;
+  }
   return ALL_ZONES.find((z) => z.id === zoneId)?.label ?? zoneId.replace(/_/g, " ");
+}
+
+export function getMarkerColorLabel(color: MarkerColor, translate?: (key: string) => string): string {
+  const key = `clinical.bodyMap.marker.${color === "yellow" ? "discomfort" : color === "green" ? "resolved" : color}`;
+  if (translate) {
+    const translated = translate(key);
+    if (translated !== key) return translated;
+  }
+  return MARKER_COLORS[color].label;
 }
 
 export const ZONE_CENTROIDS: Record<string, [number, number]> = Object.fromEntries(

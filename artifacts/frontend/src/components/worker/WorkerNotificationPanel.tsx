@@ -2,6 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { jsonFetch } from "@/services/http";
 import {
   Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
@@ -16,10 +17,10 @@ const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
 const SEVERITY_LEVELS = {
-  urgent: { color: "#DC2626", label: "Urgent", bg: "#FEE2E2" },
-  high: { color: "#F97316", label: "High", bg: "#FFF7ED" },
-  medium: { color: "#3B82F6", label: "Medium", bg: "#EFF6FF" },
-  low: { color: "#10B981", label: "Low", bg: "#F0FDF4" },
+  urgent: { color: "#DC2626", key: "notifications.panel.urgent", bg: "#FEE2E2" },
+  high: { color: "#F97316", key: "notifications.panel.high", bg: "#FFF7ED" },
+  medium: { color: "#3B82F6", key: "notifications.panel.medium", bg: "#EFF6FF" },
+  low: { color: "#10B981", key: "notifications.panel.low", bg: "#F0FDF4" },
 };
 
 export interface MessageAction {
@@ -94,14 +95,14 @@ async function replyToMessage(messageId: string, replyText: string): Promise<voi
   }
 }
 
-function generateMessageActions(message: WorkerMessage): MessageAction[] {
+function generateMessageActions(message: WorkerMessage, translate: (key: string) => string): MessageAction[] {
   const actions: MessageAction[] = [];
 
   if (message.alert_type === "credential_expiry") {
     actions.push({
       id: "update-credential",
       type: "link",
-      label: "Update Credential",
+      label: translate("notifications.panel.updateCredential"),
       icon: <CheckCircle2 size={16} />,
       href: "/settings?tab=credentials",
       variant: "primary",
@@ -110,7 +111,7 @@ function generateMessageActions(message: WorkerMessage): MessageAction[] {
     actions.push({
       id: "add-credential",
       type: "link",
-      label: "Add Credential Now",
+      label: translate("notifications.panel.addCredential"),
       icon: <Zap size={16} />,
       href: "/settings?tab=credentials",
       variant: "primary",
@@ -119,7 +120,7 @@ function generateMessageActions(message: WorkerMessage): MessageAction[] {
     actions.push({
       id: "reply",
       type: "reply",
-      label: "Reply to Coordinator",
+      label: translate("notifications.panel.replyCoordinator"),
       icon: <Send size={16} />,
       variant: "primary",
     });
@@ -128,15 +129,18 @@ function generateMessageActions(message: WorkerMessage): MessageAction[] {
   return actions;
 }
 
-function relativeTime(iso?: string) {
-  if (!iso) return "";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+function useRelativeTime() {
+  const { translate, translateParams } = useAccessibility();
+  return (iso?: string) => {
+    if (!iso) return "";
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return translate("messages.justNow");
+    if (mins < 60) return translateParams("messages.minutesAgo", { count: String(mins) });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return translateParams("messages.hoursAgo", { count: String(hrs) });
+    return translateParams("messages.daysAgo", { count: String(Math.floor(hrs / 24)) });
+  };
 }
 
 function getSeverityMeta(severity: string) {
@@ -158,12 +162,14 @@ function MessageDetailModal({
   onRead: () => void;
   onRefresh?: () => void;
 }) {
+  const { translate } = useAccessibility();
+  const relativeTime = useRelativeTime();
   const meta = getSeverityMeta(message.severity);
   const [replyText, setReplyText] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [replySent, setReplySent] = useState(false);
   
-  const actions = generateMessageActions(message);
+  const actions = generateMessageActions(message, translate);
   const qc = useQueryClient();
   
   const icon =
@@ -251,7 +257,7 @@ function MessageDetailModal({
             <button
               onClick={onClose}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Close"
+              title={translate("notifications.panel.close")}
             >
               <X size={18} style={{ color: MUTED }} />
             </button>
@@ -265,13 +271,13 @@ function MessageDetailModal({
                 className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase"
                 style={{ background: meta.bg, color: meta.color }}
               >
-                {meta.label}
+                {translate(meta.key)}
               </span>
               <span
                 className="inline-block px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase"
                 style={{ background: SOFT, color: PLUM }}
               >
-                {message.alert_type === "coordinator_message" ? "Coordinator" : message.alert_type}
+                {message.alert_type === "coordinator_message" ? translate("messages.coordinator") : message.alert_type}
               </span>
             </div>
 
@@ -312,12 +318,12 @@ function MessageDetailModal({
                 style={{ background: SOFT, borderColor: BORDER }}
               >
                 <p className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>
-                  Reply to Coordinator
+                  {translate("notifications.panel.replyTitle")}
                 </p>
                 <textarea
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your message..."
+                  placeholder={translate("notifications.panel.replyPlaceholder")}
                   className="w-full p-2.5 rounded border text-[13px] resize-none focus:outline-none focus:ring-2"
                   style={{
                     borderColor: BORDER,
@@ -331,7 +337,7 @@ function MessageDetailModal({
                     className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors"
                     style={{ background: BORDER, color: TEXT }}
                   >
-                    Cancel
+                    {translate("common.cancel")}
                   </button>
                   <button
                     onClick={handleSendReply}
@@ -339,7 +345,7 @@ function MessageDetailModal({
                     className="flex-1 px-3 py-2 rounded text-[12px] font-semibold transition-colors text-white disabled:opacity-50"
                     style={{ background: PLUM }}
                   >
-                    {replySent ? "✓ Sent" : "Send Reply"}
+                    {replySent ? translate("notifications.panel.sent") : translate("notifications.panel.sendReply")}
                   </button>
                 </div>
               </div>
@@ -351,23 +357,23 @@ function MessageDetailModal({
               style={{ background: SOFT, borderLeft: `3px solid ${meta.color}` }}
             >
               <p className="text-[11px] font-semibold" style={{ color: MUTED }}>
-                Message Details
+                {translate("notifications.panel.details")}
               </p>
               <div className="mt-2 space-y-1 text-[12px]" style={{ color: TEXT }}>
                 <div className="flex justify-between">
-                  <span>Status:</span>
+                  <span>{translate("notifications.panel.status")}</span>
                   <span className="font-semibold">
-                    {message.is_read ? "✓ Read" : "● Unread"}
+                    {message.is_read ? translate("notifications.panel.read") : translate("notifications.panel.unread")}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Received:</span>
+                  <span>{translate("notifications.panel.received")}</span>
                   <span className="font-semibold">
                     {new Date(message.created_at).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>ID:</span>
+                  <span>{translate("notifications.panel.messageId")}</span>
                   <span
                     className="font-mono text-[10px] truncate"
                     title={message.id}
@@ -392,7 +398,7 @@ function MessageDetailModal({
                 color: TEXT,
               }}
             >
-              Close
+              {translate("notifications.panel.close")}
             </button>
             {!message.is_read && !isReplying && (
               <button
@@ -400,7 +406,7 @@ function MessageDetailModal({
                 className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors text-white"
                 style={{ background: PLUM }}
               >
-                Mark as Read
+                {translate("notifications.panel.markRead")}
               </button>
             )}
           </div>
@@ -419,6 +425,8 @@ function MessageRow({
   onRead: (id: string) => void;
   onSelectMessage: () => void;
 }) {
+  const { translate } = useAccessibility();
+  const relativeTime = useRelativeTime();
   const meta = getSeverityMeta(message.severity);
   const icon =
     message.severity === "urgent" ? (
@@ -456,13 +464,13 @@ function MessageRow({
             className="text-[10px] font-semibold uppercase"
             style={{ color: meta.color }}
           >
-            {meta.label}
+            {translate(meta.key)}
           </span>
           <span className="text-[10px]" style={{ color: MUTED }}>
             {relativeTime(message.created_at)}
           </span>
           <span className="text-[10px] ml-auto" style={{ color: MUTED }}>
-            Click to view
+            {translate("notifications.panel.clickToView")}
           </span>
         </div>
       </div>
@@ -477,6 +485,7 @@ function MessageRow({
 
 // ── Main panel with filters and search ──────────────────────────────────────────
 export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -556,7 +565,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
           <div className="flex items-center gap-2.5">
             <Bell size={18} style={{ color: PLUM }} />
             <h2 className="text-[15px] font-black" style={{ color: TEXT }}>
-              Messages
+              {translate("notifications.panel.title")}
             </h2>
             {unread > 0 && (
               <span
@@ -574,11 +583,11 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
                 style={{ color: MUTED }}
                 onClick={() => readAllMut.mutate()}
               >
-                <CheckCheck size={13} /> Mark all read
+                <CheckCheck size={13} /> {translate("notifications.panel.markAllRead")}
               </button>
             )}
             <button
-              aria-label="Close notifications"
+              aria-label={translate("notifications.panel.closeAria")}
               className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
               onClick={onClose}
             >
@@ -593,7 +602,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
             <Search size={14} className="absolute left-3 top-2.5" style={{ color: MUTED }} />
             <input
               type="text"
-              placeholder="Search messages..."
+              placeholder={translate("notifications.panel.search")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
@@ -604,7 +613,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
             className="p-2 rounded-lg border transition-colors"
             style={{ borderColor: BORDER, background: showFilters ? SOFT : "transparent" }}
             onClick={() => setShowFilters(!showFilters)}
-            title="Filter by severity"
+            title={translate("notifications.panel.filterBySeverity")}
           >
             <Filter size={14} style={{ color: PLUM }} />
           </button>
@@ -624,7 +633,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
                 ...(severityFilter === null && { "--tw-ring-color": PLUM, "--tw-ring-width": "2px" } as any),
               }}
             >
-              All
+              {translate("notifications.panel.all")}
             </button>
             {Object.entries(SEVERITY_LEVELS).map(([level, config]) => (
               <button
@@ -639,7 +648,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
                   ...(severityFilter === level && { "--tw-ring-color": config.color, "--tw-ring-width": "2px" } as any),
                 }}
               >
-                {config.label}
+                {translate(config.key)}
               </button>
             ))}
           </div>
@@ -657,7 +666,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
         {!isLoading && error && (
           <div className="m-4 p-4 rounded-lg" style={{ background: "#FEE2E2", borderLeft: `4px solid ${CORAL}` }}>
             <p className="text-[12px] font-semibold" style={{ color: TEXT }}>
-              Error loading messages
+              {translate("notifications.panel.errorLoading")}
             </p>
             <p className="text-[11px] mt-1" style={{ color: MUTED }}>
               {error instanceof Error ? error.message : String(error)}
@@ -669,7 +678,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Bell size={32} style={{ color: BORDER }} />
             <p className="text-[13px] font-semibold" style={{ color: MUTED }}>
-              {messages.length === 0 ? "No messages yet" : "No messages match your filters"}
+              {messages.length === 0 ? translate("notifications.panel.empty") : translate("notifications.panel.noMatch")}
             </p>
           </div>
         )}
@@ -703,6 +712,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
 
 // ── Bell icon with badge (for header) ──────────────────────────────────────────
 export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -722,7 +732,7 @@ export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
     <button
       className="relative p-2 rounded-full hover:bg-black/5 transition-colors"
       onClick={onClick}
-      title="Messages from your coordinator"
+      title={translate("notifications.panel.bellTitle")}
     >
       <Bell size={20} style={{ color: MUTED }} />
       {unread > 0 && (

@@ -1,9 +1,13 @@
 export type TutorialStepKey =
   | "shift_list"
   | "open_shift"
+  | "pre_shift_briefing"
+  | "pre_shift_briefing_complete"
   | "shift_overview"
   | "risk_acknowledgement"
   | "risk_acknowledgement_modal"
+  | "travel_mileage"
+  | "travel_transit"
   | "clock_in"
   | "clock_in_modal"
   | "start_session"
@@ -12,8 +16,7 @@ export type TutorialStepKey =
   | "session_notes"
   | "end_shift"
   | "end_shift_review"
-  | "shift_signature"
-  | "notifications";
+  | "shift_signature";
 
 export type TutorialStep = {
   key: TutorialStepKey;
@@ -28,6 +31,8 @@ export type TutorialStep = {
   showNext?: boolean;
   /** Show the popover Skip button (default true). */
   showSkip?: boolean;
+  /** Route to the dedicated pre-shift briefing page instead of shift detail. */
+  onBriefingPage?: boolean;
 };
 
 export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
@@ -42,13 +47,38 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     key: "open_shift",
-    title: "Open a shift",
-    body: "Tap a shift card to expand details, then use Start Session or open the shift workspace from the actions inside.",
-    target: "[data-tutorial='shift-card-open']",
+    title: "Start a shift",
+    body: "Tap Start Session on a today's shift. You'll go straight to the pre-shift briefing before clock-in.",
+    target: "[data-tutorial='start-session']",
     fallbackTarget: "[data-tutorial='shift-list']",
     popoverSide: "bottom",
     popoverAlign: "start",
+    showNext: false,
     showSkip: false,
+  },
+  {
+    key: "pre_shift_briefing",
+    title: "Pre-shift briefing",
+    body: "Review participant background, critical alerts, and shift instructions on this page before you return to clock in.",
+    target: "[data-tutorial='briefing-page']",
+    fallbackTarget: "[data-tutorial='briefing-complete']",
+    requiresShift: true,
+    onBriefingPage: true,
+    popoverSide: "bottom",
+    showNext: true,
+    showSkip: true,
+  },
+  {
+    key: "pre_shift_briefing_complete",
+    title: "Complete the briefing",
+    body: "Acknowledge any critical alerts, scroll through all sections, then tap Ready to start.",
+    target: "[data-tutorial='briefing-complete']",
+    fallbackTarget: "[data-tutorial='briefing-page']",
+    requiresShift: true,
+    onBriefingPage: true,
+    popoverSide: "top",
+    showNext: false,
+    showSkip: true,
   },
   {
     key: "shift_overview",
@@ -82,15 +112,37 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     showSkip: false,
   },
   {
+    key: "travel_mileage",
+    title: "Travel mileage",
+    body: "Before clock-in, review the estimated distance from your home address. You can adjust the km if needed — it saves automatically when you clock in.",
+    target: "[data-tutorial='shift-travel-mileage']",
+    fallbackTarget: "[data-tutorial='shift-header']",
+    requiresShift: true,
+    popoverSide: "top",
+    showNext: true,
+    showSkip: true,
+  },
+  {
+    key: "travel_transit",
+    title: "Public transit",
+    body: "If you used bus, train, or other public transport, enter the transit type and amount here. Receipts over $10 may be required.",
+    target: "[data-tutorial='shift-travel-transit']",
+    fallbackTarget: "[data-tutorial='shift-travel-mileage']",
+    requiresShift: true,
+    popoverSide: "top",
+    showNext: true,
+    showSkip: true,
+  },
+  {
     key: "clock_in",
     title: "Clock in on arrival",
-    body: "When you reach the participant, tap Clock In. This opens a check-in dialog to confirm your location.",
+    body: "When you reach the participant, tap Clock In. This opens a check-in dialog to confirm your location. Use Skip if you want to read the full shift details first.",
     target: "[data-tutorial='clock-in']",
     fallbackTarget: "[data-tutorial='shift-header']",
     requiresShift: true,
     popoverSide: "top",
     showNext: false,
-    showSkip: false,
+    showSkip: true,
   },
   {
     key: "clock_in_modal",
@@ -100,7 +152,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     requiresShift: true,
     popoverSide: "right",
     showNext: true,
-    showSkip: false,
+    showSkip: true,
   },
   {
     key: "start_session",
@@ -116,20 +168,24 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
   {
     key: "task_evidence",
     title: "Goal-linked tasks",
-    body: "Complete checklist items for each NDIS goal. Tap a task row to expand it and record what you did.",
-    target: "[data-tutorial='task-evidence']",
-    fallbackTarget: "[data-tutorial='shift-task-checklist']",
+    body: "Each NDIS goal has linked tasks. Review the checklist — one task will open so you can see what to document.",
+    target: "[data-tutorial='shift-task-checklist']",
+    fallbackTarget: "[data-tutorial='task-evidence']",
     requiresShift: true,
     popoverSide: "right",
+    showNext: true,
+    showSkip: true,
   },
   {
     key: "evidence_attach",
     title: "Attach evidence",
-    body: "Use photo, voice, file, or notes to document the task. Strong evidence helps your compliance score.",
-    target: "[data-tutorial='task-evidence-actions']",
-    fallbackTarget: "[data-tutorial='task-evidence']",
+    body: "Type a progress note (at least 20 characters) or attach photo/voice. Tap Next when you are done.",
+    target: "[data-tutorial='task-evidence-panel']",
+    fallbackTarget: "[data-tutorial='task-evidence-actions']",
     requiresShift: true,
     popoverSide: "left",
+    showNext: true,
+    showSkip: true,
   },
   {
     key: "session_notes",
@@ -150,7 +206,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     requiresShift: true,
     popoverSide: "top",
     popoverAlign: "center",
-    showNext: false,
+    showNext: true,
     showSkip: true,
   },
   {
@@ -173,25 +229,13 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     showNext: true,
     showSkip: true,
   },
-  {
-    key: "notifications",
-    title: "Coordinator messages",
-    body: "Coordinator updates and alerts appear in Notifications. Check here during your shift for important messages.",
-    target: "[data-tutorial='worker-notifications']",
-    popoverSide: "bottom",
-    popoverAlign: "end",
-    showSkip: false,
-  },
 ];
 
 export function tutorialStepRoute(step: TutorialStep, shiftId: string | null): string {
   const params = new URLSearchParams({ tutorial: "1", step: step.key });
-  if (step.key === "notifications") {
-    if (shiftId) return `/my-shifts/${shiftId}?${params}`;
-    return `/my-shifts?${params}`;
-  }
   if (!step.requiresShift) return `/my-shifts?${params}`;
   if (!shiftId) return `/my-shifts?${params}`;
+  if (step.onBriefingPage) return `/my-shifts/${shiftId}/briefing?${params}`;
   return `/my-shifts/${shiftId}?${params}`;
 }
 
@@ -251,8 +295,10 @@ export function tutorialRouteMatches(
   if (!step.requiresShift) {
     return path === "/my-shifts" || path.endsWith("/my-shifts");
   }
-  if (step.key === "notifications") return true;
   if (!shiftId) return path === "/my-shifts" || path.endsWith("/my-shifts");
+  if (step.onBriefingPage) {
+    return path === `/my-shifts/${shiftId}/briefing` || path.endsWith(`/my-shifts/${shiftId}/briefing`);
+  }
   return path === `/my-shifts/${shiftId}` || path.endsWith(`/my-shifts/${shiftId}`);
 }
 

@@ -2,11 +2,11 @@
 import { useLocation } from "wouter";
 import { CheckCircle2, Loader2, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { secureAccount } from "@/services/securityService";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
-const BORDER = "#C7D2FE";
 
 function readSecureToken(): string {
   return new URLSearchParams(window.location.search).get("token") || "";
@@ -15,6 +15,7 @@ function readSecureToken(): string {
 export default function AccountSecure() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const token = useMemo(readSecureToken, []);
   const [busy, setBusy] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -22,8 +23,8 @@ export default function AccountSecure() {
   async function handleSecureAccount() {
     if (!token) {
       toast({
-        title: "Invalid link",
-        description: "This secure link is missing or expired.",
+        title: translate("accountSecure.toast.invalidLink"),
+        description: translate("accountSecure.toast.invalidLinkDesc"),
         variant: "destructive",
       });
       return;
@@ -32,11 +33,11 @@ export default function AccountSecure() {
     try {
       const result = await secureAccount(token);
       setComplete(true);
-      toast({ title: "Account secured", description: result.message });
+      toast({ title: translate("accountSecure.successTitle"), description: result.message });
     } catch (error) {
       toast({
-        title: "Could not secure account",
-        description: error instanceof Error ? error.message : "This link may have expired.",
+        title: translate("accountSecure.toast.failedTitle"),
+        description: error instanceof Error ? error.message : translate("accountSecure.toast.failedDesc"),
         variant: "destructive",
       });
     } finally {
@@ -50,7 +51,9 @@ export default function AccountSecure() {
         <div className="flex items-center gap-3">
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-9 w-auto object-contain" />
           <div className="h-4 w-[1px] bg-gray-200" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">Security</span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#6B7280]">
+            {translate("accountSecure.brandSecurity")}
+          </span>
         </div>
 
         <div className="w-full max-w-sm mx-auto my-auto py-8">
@@ -58,10 +61,10 @@ export default function AccountSecure() {
             <div className="text-center">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
               <h1 className="mt-4 text-2xl font-black" style={{ color: PLUM }}>
-                Account secured
+                {translate("accountSecure.successTitle")}
               </h1>
               <p className="mt-2 text-sm text-[#6B7280]">
-                All active sessions were signed out. Sign in again with your password and enable two-factor authentication if you have not already.
+                {translate("accountSecure.successDesc")}
               </p>
               <button
                 type="button"
@@ -69,7 +72,7 @@ export default function AccountSecure() {
                 className="mt-6 h-12 w-full rounded-2xl text-white text-[15px] font-black"
                 style={{ background: PLUM }}
               >
-                Go to sign in
+                {translate("accountSecure.goToSignIn")}
               </button>
             </div>
           ) : (
@@ -77,15 +80,15 @@ export default function AccountSecure() {
               <div className="mb-6 flex items-center gap-3 rounded-2xl border bg-[#FFF7F9] p-4" style={{ borderColor: "rgba(190,24,93,0.25)" }}>
                 <ShieldAlert className="h-6 w-6 shrink-0" style={{ color: CORAL }} />
                 <p className="text-sm font-medium text-[#111827]">
-                  If you did not sign in recently, secure your account now to sign out all devices.
+                  {translate("accountSecure.alert")}
                 </p>
               </div>
 
               <h1 className="text-[26px] font-black tracking-tight" style={{ color: PLUM }}>
-                Secure your account
+                {translate("accountSecure.title")}
               </h1>
               <p className="mt-2 text-sm text-[#6B7280]">
-                This will immediately revoke all active sessions and remove trusted devices.
+                {translate("accountSecure.description")}
               </p>
 
               <button
@@ -98,16 +101,16 @@ export default function AccountSecure() {
                 {busy ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    Securing account…
+                    {translate("accountSecure.securing")}
                   </>
                 ) : (
-                  "Secure my account"
+                  translate("accountSecure.secureButton")
                 )}
               </button>
 
               {!token ? (
                 <p className="mt-4 rounded-xl border px-4 py-3 text-[13px] font-medium" style={{ borderColor: "rgba(190,24,93,0.25)", background: "rgba(190,24,93,0.06)", color: CORAL }}>
-                  This secure link is invalid or has expired.
+                  {translate("accountSecure.invalidLink")}
                 </p>
               ) : null}
             </>
@@ -115,18 +118,18 @@ export default function AccountSecure() {
         </div>
 
         <p className="text-[11px] font-medium text-center lg:text-left text-gray-400">
-          Need help? Contact your organisation administrator.
+          {translate("accountSecure.help")}
         </p>
       </div>
 
       <div className="hidden lg:flex lg:col-span-7 items-center justify-center p-12 relative overflow-hidden">
         <div className="absolute inset-0 opacity-20" style={{ background: PLUM }} />
         <div className="relative z-10 max-w-lg rounded-[2rem] border border-white/30 bg-white/70 p-8 backdrop-blur-md">
-          <h2 className="text-xl font-black text-[#111827]">What happens next?</h2>
+          <h2 className="text-xl font-black text-[#111827]">{translate("accountSecure.whatNext")}</h2>
           <ul className="mt-4 space-y-3 text-sm text-[#6B7280]">
-            <li>All signed-in devices will be logged out immediately.</li>
-            <li>Trusted devices will be removed and 2FA will be required again on new sign-ins.</li>
-            <li>Sign in with your password and review your security settings.</li>
+            <li>{translate("accountSecure.step1")}</li>
+            <li>{translate("accountSecure.step2")}</li>
+            <li>{translate("accountSecure.step3")}</li>
           </ul>
         </div>
       </div>

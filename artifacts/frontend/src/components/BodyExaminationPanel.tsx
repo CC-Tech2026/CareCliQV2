@@ -7,9 +7,11 @@ import {
   MarkerColor,
   MARKER_COLORS,
   getZoneLabel,
+  getMarkerColorLabel,
 } from "@/components/BodyMap";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 export type { BodyMarker, BodyType, MarkerColor };
 
@@ -26,6 +28,7 @@ export function BodyExaminationPanel({
   readOnly?: boolean;
   bodyType?: BodyType;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const [view, setView] = useState<"front" | "back">("front");
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<MarkerColor>("red");
@@ -50,7 +53,6 @@ export function BodyExaminationPanel({
 
   return (
     <div className="space-y-3">
-      {/* View toggle */}
       <div className="flex gap-1 w-fit rounded-lg border border-border p-0.5 bg-muted">
         {(["front", "back"] as const).map((v) => (
           <button
@@ -63,13 +65,12 @@ export function BodyExaminationPanel({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {v}
+            {translate(`clinical.bodyMap.view.${v}`)}
           </button>
         ))}
       </div>
 
       <div className="flex gap-4 items-start">
-        {/* Body map */}
         <div className="shrink-0 w-[120px]">
           <BodyMap
             view={view}
@@ -82,10 +83,9 @@ export function BodyExaminationPanel({
         </div>
 
         <div className="flex-1 space-y-3 min-w-0">
-          {/* Color picker (edit mode) */}
           {!readOnly && (
             <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground font-medium">Mark type</p>
+              <p className="text-xs text-muted-foreground font-medium">{translate("clinical.bodyMap.markType")}</p>
               <div className="flex gap-1.5 flex-wrap">
                 {COLORS.map((c) => {
                   const def = MARKER_COLORS[c];
@@ -105,22 +105,23 @@ export function BodyExaminationPanel({
                         className="h-2 w-2 rounded-full shrink-0"
                         style={{ background: def.hex }}
                       />
-                      {def.label}
+                      {getMarkerColorLabel(c, translate)}
                     </button>
                   );
                 })}
               </div>
               <p className="text-[10px] text-muted-foreground">
-                Click a zone to add marker. Click again to remove.
+                {translate("clinical.bodyMap.clickHint")}
               </p>
             </div>
           )}
 
-          {/* Marker list */}
           {markers.length > 0 ? (
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">
-                {markers.length} marker{markers.length !== 1 ? "s" : ""} recorded
+                {markers.length === 1
+                  ? translateParams("clinical.bodyMap.markersRecorded", { count: String(markers.length) })
+                  : translateParams("clinical.bodyMap.markersRecordedPlural", { count: String(markers.length) })}
               </p>
               <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
                 {markers.map((m) => {
@@ -139,10 +140,10 @@ export function BodyExaminationPanel({
                           style={{ background: def.hex }}
                         />
                         <span className={cn("font-medium truncate", def.text)}>
-                          {getZoneLabel(m.zone)}
+                          {getZoneLabel(m.zone, translate)}
                         </span>
                         <span className="text-muted-foreground shrink-0">
-                          — {def.label}
+                          — {getMarkerColorLabel(m.color, translate)}
                         </span>
                       </div>
                       {!readOnly && (
@@ -160,7 +161,9 @@ export function BodyExaminationPanel({
             </div>
           ) : (
             <p className="text-xs text-muted-foreground italic">
-              {readOnly ? "No markers recorded." : "Click any body zone to add a marker."}
+              {readOnly
+                ? translate("clinical.bodyMap.noMarkersReadOnly")
+                : translate("clinical.bodyMap.clickToAdd")}
             </p>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 import { useOfflineSyncOptional } from "@/contexts/OfflineSyncContext";
 
@@ -11,6 +12,7 @@ type Props = {
 
 /** Page-level sync strip — defers to global offline banner when disconnected. */
 export function OfflineSyncBanner({ syncing = false, pendingCount = 0, className }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const globalSync = useOfflineSyncOptional();
   const online = globalSync?.online ?? (typeof navigator === "undefined" ? true : navigator.onLine);
   const pending = globalSync?.pendingCount ?? pendingCount;
@@ -32,8 +34,8 @@ export function OfflineSyncBanner({ syncing = false, pendingCount = 0, className
       <RefreshCw size={14} className={cn(isSyncing && "animate-spin")} aria-hidden />
       <span>
         {isSyncing
-          ? "Syncing pending actions…"
-          : `${pending} pending action${pending === 1 ? "" : "s"} queued`}
+          ? translate("offline.syncBanner.syncing")
+          : translateParams("offline.syncBanner.queued", { count: String(pending) })}
       </span>
     </div>
   );

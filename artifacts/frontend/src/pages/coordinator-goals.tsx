@@ -28,6 +28,7 @@ import {
   type ParticipantTask,
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -36,38 +37,39 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-const STATUS_META: Record<GoalStatus, { label: string; color: string; bg: string }> = {
-  progressing: { label: "Progressing",  color: "#059669", bg: "#ECFDF5" },
-  achieved:    { label: "Achieved",     color: "#7C3AED", bg: "#F5F3FF" },
-  stalled:     { label: "Stalled",      color: "#D97706", bg: "#FFFBEB" },
-  blocked:     { label: "Blocked",      color: "#DC2626", bg: "#FEF2F2" },
-  general:     { label: "Active",       color: "#3730A3", bg: "#F8F8FE" },
+const STATUS_META: Record<GoalStatus, { labelKey: string; color: string; bg: string }> = {
+  progressing: { labelKey: "coordinator.goals.status.progressing",  color: "#059669", bg: "#ECFDF5" },
+  achieved:    { labelKey: "coordinator.goals.status.achieved",     color: "#7C3AED", bg: "#F5F3FF" },
+  stalled:     { labelKey: "coordinator.goals.status.stalled",      color: "#D97706", bg: "#FFFBEB" },
+  blocked:     { labelKey: "coordinator.goals.status.blocked",      color: "#DC2626", bg: "#FEF2F2" },
+  general:     { labelKey: "coordinator.goals.status.active",       color: "#3730A3", bg: "#F8F8FE" },
 };
-function statusMeta(s?: GoalStatus) {
-  return STATUS_META[s ?? "general"] ?? STATUS_META.general;
+function statusMeta(s: GoalStatus | undefined, translate: (key: string) => string) {
+  const meta = STATUS_META[s ?? "general"] ?? STATUS_META.general;
+  return { ...meta, label: translate(meta.labelKey) };
 }
 
-const GOAL_AREA_META: Record<NdisGoal["goal_area"], { label: string; color: string; bg: string }> = {
-  daily_living: { label: "Daily Living",  color: "#1D4ED8", bg: "#EFF6FF" },
-  community:    { label: "Community",     color: "#15803D", bg: "#F0FDF4" },
-  health:       { label: "Health",        color: "#DC2626", bg: "#FEF2F2" },
-  social:       { label: "Social",        color: "#7E22CE", bg: "#FDF4FF" },
-  employment:   { label: "Employment",    color: "#D97706", bg: "#FFFBEB" },
-  other:        { label: "Other",         color: MUTED,     bg: SOFT      },
+const GOAL_AREA_META: Record<NdisGoal["goal_area"], { labelKey: string; color: string; bg: string }> = {
+  daily_living: { labelKey: "coordinator.goals.area.dailyLiving",  color: "#1D4ED8", bg: "#EFF6FF" },
+  community:    { labelKey: "coordinator.goals.area.community",     color: "#15803D", bg: "#F0FDF4" },
+  health:       { labelKey: "coordinator.goals.area.health",        color: "#DC2626", bg: "#FEF2F2" },
+  social:       { labelKey: "coordinator.goals.area.social",        color: "#7E22CE", bg: "#FDF4FF" },
+  employment:   { labelKey: "coordinator.goals.area.employment",    color: "#D97706", bg: "#FFFBEB" },
+  other:        { labelKey: "coordinator.goals.area.other",         color: MUTED,     bg: SOFT      },
 };
 
-const GOAL_STATUS_META: Record<NdisGoal["status"], { label: string; color: string; bg: string }> = {
-  active:    { label: "Active",    color: PLUM,      bg: SOFT      },
-  completed: { label: "Completed", color: "#059669", bg: "#ECFDF5" },
-  archived:  { label: "Archived",  color: MUTED,     bg: "#F3F4F6" },
+const GOAL_STATUS_META: Record<NdisGoal["status"], { labelKey: string; color: string; bg: string }> = {
+  active:    { labelKey: "coordinator.goals.status.active",    color: PLUM,      bg: SOFT      },
+  completed: { labelKey: "coordinator.goals.status.completed", color: "#059669", bg: "#ECFDF5" },
+  archived:  { labelKey: "coordinator.goals.status.archived",  color: MUTED,     bg: "#F3F4F6" },
 };
 
 const EVIDENCE_OPTS = [
-  { v: "optional",    label: "Optional"      },
-  { v: "photo",       label: "Photo"         },
-  { v: "voice",       label: "Voice Note"    },
-  { v: "text",        label: "Text Note"     },
-  { v: "photo+voice", label: "Photo + Voice" },
+  { v: "optional",    labelKey: "coordinator.goals.evidence.optional"      },
+  { v: "photo",       labelKey: "coordinator.goals.evidence.photo"         },
+  { v: "voice",       labelKey: "coordinator.goals.evidence.voice"    },
+  { v: "text",        labelKey: "coordinator.goals.evidence.text"     },
+  { v: "photo+voice", labelKey: "coordinator.goals.evidence.photoVoice" },
 ] as const;
 
 // ── Overview tab helpers ──────────────────────────────────────────────────────
@@ -75,21 +77,23 @@ const EVIDENCE_OPTS = [
 type FilterKey = "all" | "stalled" | "blocked" | "no_session";
 
 function CategoryChip({ category }: { category: string }) {
-  const map: Record<string, { label: string; bg: string; color: string }> = {
-    core:              { label: "Core",              bg: "#EFF6FF", color: "#1D4ED8" },
-    capacity_building: { label: "Capacity Building", bg: "#F0FDF4", color: "#15803D" },
-    capital:           { label: "Capital",           bg: "#FDF4FF", color: "#7E22CE" },
-    general:           { label: "General",           bg: SOFT,      color: PLUM      },
+  const { translate } = useAccessibility();
+  const map: Record<string, { labelKey: string; bg: string; color: string }> = {
+    core:              { labelKey: "coordinator.goals.category.core",              bg: "#EFF6FF", color: "#1D4ED8" },
+    capacity_building: { labelKey: "coordinator.goals.category.capacityBuilding", bg: "#F0FDF4", color: "#15803D" },
+    capital:           { labelKey: "coordinator.goals.category.capital",           bg: "#FDF4FF", color: "#7E22CE" },
+    general:           { labelKey: "coordinator.goals.category.general",           bg: SOFT,      color: PLUM      },
   };
   const meta = map[category.toLowerCase()] ?? map.general;
   return (
     <span className="rounded-full px-2 py-0.5 text-[10px] font-black uppercase" style={{ background: meta.bg, color: meta.color }}>
-      {meta.label}
+      {translate(meta.labelKey)}
     </span>
   );
 }
 
 function ScheduleReviewPanel({ group, open, onClose }: { group: ParticipantGoalGroup; open: boolean; onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -102,19 +106,19 @@ function ScheduleReviewPanel({ group, open, onClose }: { group: ParticipantGoalG
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ upcoming_review_date: reviewDate }),
     }),
-    onSuccess: () => { toast({ title: "Review date saved" }); qc.invalidateQueries({ queryKey: ["coordinator-goals", orgId] }); onClose(); },
-    onError: () => toast({ variant: "destructive", title: "Save failed" }),
+    onSuccess: () => { toast({ title: translate("coordinator.goals.toast.reviewSaved") }); qc.invalidateQueries({ queryKey: ["coordinator-goals", orgId] }); onClose(); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.saveFailed") }),
   });
 
   if (!open) return null;
   return (
     <div className="mt-4 rounded-xl border p-4 space-y-3" style={{ background: SOFT, borderColor: BORDER }}>
-      <p className="text-[12px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Schedule Review</p>
+      <p className="text-[12px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{translate("coordinator.goals.scheduleReview")}</p>
       <Input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="h-9 rounded-xl text-[13px]" />
       <div className="flex gap-2">
-        <Button size="sm" variant="outline" className="rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
+        <Button size="sm" variant="outline" className="rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>{translate("common.cancel")}</Button>
         <Button size="sm" className="rounded-xl text-xs" style={{ background: PLUM, color: "#fff" }} disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-          {mutation.isPending ? "Saving…" : "Save Date"}
+          {mutation.isPending ? translate("common.saving") : translate("coordinator.goals.form.saveDate")}
         </Button>
       </div>
     </div>
@@ -122,6 +126,7 @@ function ScheduleReviewPanel({ group, open, onClose }: { group: ParticipantGoalG
 }
 
 function ParticipantCard({ group }: { group: ParticipantGoalGroup }) {
+  const { translate, translateParams } = useAccessibility();
   const [open, setOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   return (
@@ -134,13 +139,18 @@ function ParticipantCard({ group }: { group: ParticipantGoalGroup }) {
           <div className="min-w-0">
             <p className="font-black text-[14px] truncate" style={{ color: TEXT }}>{group.participant_name}</p>
             <p className="text-[11px] truncate" style={{ color: MUTED }}>
-              {group.goals.length} goal{group.goals.length !== 1 ? "s" : ""}{group.last_session_date && ` · Last session ${group.last_session_date}`}
+              {group.goals.length === 1
+                ? translateParams("coordinator.goals.goalCount", { count: String(group.goals.length) })
+                : translateParams("coordinator.goals.goalCountPlural", { count: String(group.goals.length) })}
+              {group.last_session_date && translateParams("coordinator.goals.lastSession", { date: group.last_session_date })}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-3">
           {group.upcoming_review_date && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>Review {group.upcoming_review_date}</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>
+              {translateParams("coordinator.goals.review", { date: group.upcoming_review_date })}
+            </span>
           )}
           {open ? <ChevronUp size={16} style={{ color: MUTED }} /> : <ChevronDown size={16} style={{ color: MUTED }} />}
         </div>
@@ -148,7 +158,7 @@ function ParticipantCard({ group }: { group: ParticipantGoalGroup }) {
       {open && (
         <div className="px-5 pb-4 space-y-3">
           {group.goals.map((goal) => {
-            const sm = statusMeta(goal.status as GoalStatus);
+            const sm = statusMeta(goal.status as GoalStatus, translate);
             return (
               <div key={goal.id} className="flex items-start justify-between gap-3 rounded-xl p-3" style={{ background: SOFT }}>
                 <div className="flex-1 min-w-0 space-y-1">
@@ -163,7 +173,7 @@ function ParticipantCard({ group }: { group: ParticipantGoalGroup }) {
           })}
           <div className="flex gap-2 flex-wrap pt-1">
             <Button size="sm" variant="outline" className="rounded-xl text-xs gap-1" style={{ borderColor: BORDER, color: MUTED }} onClick={() => setReviewOpen((v) => !v)}>
-              <CalendarDays size={12} /> Schedule Review
+              <CalendarDays size={12} /> {translate("coordinator.goals.scheduleReview")}
             </Button>
           </div>
           <ScheduleReviewPanel group={group} open={reviewOpen} onClose={() => setReviewOpen(false)} />
@@ -184,6 +194,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved, isModal = true, s
   goal: Partial<NdisGoal> | null; participants: ParticipantGoalGroup[];
   onClose: () => void; onSaved: () => void; isModal?: boolean; selectedParticipantId?: string;
 }) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const isEdit = !!goal?.id;
   const [form, setForm] = useState<NdisGoalPayload>(
@@ -194,41 +205,41 @@ function GoalFormModal({ goal, participants, onClose, onSaved, isModal = true, s
   );
   const mut = useMutation({
     mutationFn: () => isEdit ? updateNdisGoal(goal!.id!, form) : createNdisGoal(form),
-    onSuccess: () => { toast({ title: isEdit ? "Goal updated" : "Goal created" }); onSaved(); onClose(); },
-    onError: () => toast({ variant: "destructive", title: "Save failed" }),
+    onSuccess: () => { toast({ title: isEdit ? translate("coordinator.goals.toast.goalUpdated") : translate("coordinator.goals.toast.goalCreated") }); onSaved(); onClose(); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.saveFailed") }),
   });
   const set = (k: keyof NdisGoalPayload, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
   const content = (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="font-black text-[16px]" style={{ color: TEXT }}>{isEdit ? "Edit Goal" : "New NDIS Goal"}</h2>
-        {isModal && <button onClick={onClose} title="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={16} style={{ color: MUTED }} /></button>}
+        <h2 className="font-black text-[16px]" style={{ color: TEXT }}>{isEdit ? translate("coordinator.goals.editGoal") : translate("coordinator.goals.form.newGoal")}</h2>
+        {isModal && <button onClick={onClose} title={translate("common.close")} className="p-1 rounded-full hover:bg-gray-100"><X size={16} style={{ color: MUTED }} /></button>}
       </div>
       {!isEdit && !selectedParticipantId && (
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }} htmlFor="participant-select">Participant *</Label>
-          <select id="participant-select" title="Participant" value={form.participant_id} onChange={(e) => set("participant_id", e.target.value)}
+          <Label className="text-xs font-semibold" style={{ color: MUTED }} htmlFor="participant-select">{translate("coordinator.goals.form.participantRequired")}</Label>
+          <select id="participant-select" title={translate("coordinator.goals.form.participant")} value={form.participant_id} onChange={(e) => set("participant_id", e.target.value)}
             className="w-full h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
-            <option value="">Select participant…</option>
+            <option value="">{translate("coordinator.goals.form.selectParticipant")}</option>
             {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
           </select>
         </div>
       )}
       {!isEdit && selectedParticipantId && (
         <div className="space-y-1 pb-2 border-b" style={{ borderColor: BORDER }}>
-          <p className="text-xs font-semibold" style={{ color: MUTED }}>Participant</p>
+          <p className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.participant")}</p>
           <p className="font-semibold text-[13px]" style={{ color: TEXT }}>
             {participants.find((p) => p.participant_id === selectedParticipantId)?.participant_name}
           </p>
         </div>
       )}
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Name *</Label>
-        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Increase community participation" className="rounded-xl h-9 text-[13px]" />
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.goalName")}</Label>
+        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={translate("coordinator.goals.form.goalNamePlaceholder")} className="rounded-xl h-9 text-[13px]" />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal Area</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.goalArea")}</Label>
         <div className="flex flex-wrap gap-1.5">
           {(Object.keys(GOAL_AREA_META) as NdisGoal["goal_area"][]).map((area) => {
             const m = GOAL_AREA_META[area];
@@ -236,33 +247,33 @@ function GoalFormModal({ goal, participants, onClose, onSaved, isModal = true, s
               <button key={area} type="button" onClick={() => set("goal_area", area)}
                 className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
                 style={{ background: form.goal_area === area ? m.color : m.bg, color: form.goal_area === area ? "#fff" : m.color }}>
-                {m.label}
+                {translate(m.labelKey)}
               </button>
             );
           })}
         </div>
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.description")}</Label>
         <textarea value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} rows={2}
-          placeholder="What does this goal involve?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
+          placeholder={translate("coordinator.goals.form.descriptionPlaceholder")} className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
           style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Success Criteria</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.successCriteria")}</Label>
         <textarea value={form.success_criteria ?? ""} onChange={(e) => set("success_criteria", e.target.value)} rows={2}
-          placeholder="How will we know this goal is achieved?" className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
+          placeholder={translate("coordinator.goals.form.successCriteriaPlaceholder")} className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
           style={{ border: `1px solid ${BORDER}`, color: TEXT }} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Target Date</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.targetDate")}</Label>
         <Input type="date" value={form.target_date ?? ""} onChange={(e) => set("target_date", e.target.value || null)} className="rounded-xl h-9 text-[13px]" />
       </div>
       <div className="flex gap-2 pt-2">
-        <Button variant="outline" className="flex-1 rounded-xl" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
+        <Button variant="outline" className="flex-1 rounded-xl" style={{ borderColor: BORDER }} onClick={onClose}>{translate("common.cancel")}</Button>
         <Button className="flex-1 rounded-xl" style={{ background: PLUM, color: "#fff" }}
           disabled={!form.name.trim() || (!isEdit && !form.participant_id) || mut.isPending} onClick={() => mut.mutate()}>
-          {mut.isPending ? "Saving…" : isEdit ? "Update Goal" : "Create Goal"}
+          {mut.isPending ? translate("common.saving") : isEdit ? translate("coordinator.goals.updateGoal") : translate("coordinator.goals.createGoal")}
         </Button>
       </div>
     </>
@@ -282,6 +293,7 @@ function GoalFormModal({ goal, participants, onClose, onSaved, isModal = true, s
 }
 
 function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const { data, isLoading } = useOrgQuery<GoalProgressResponse>(["goal-progress", goal.id, orgId], { queryFn: () => getGoalProgress(goal.id) });
@@ -289,14 +301,18 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
   return (
     <div className="rounded-2xl p-5 space-y-4 mt-3" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between">
-        <p className="font-black text-[13px]" style={{ color: TEXT }}>Progress — Last 30 Days</p>
-        <button onClick={onClose} title="Close" className="p-1 rounded-full hover:bg-white"><X size={14} style={{ color: MUTED }} /></button>
+        <p className="font-black text-[13px]" style={{ color: TEXT }}>{translate("coordinator.goals.progress.title")}</p>
+        <button onClick={onClose} title={translate("common.close")} className="p-1 rounded-full hover:bg-white"><X size={14} style={{ color: MUTED }} /></button>
       </div>
-      {isLoading && <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading…</div>}
+      {isLoading && <div className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> {translate("common.loading")}</div>}
       {data && (
         <>
           <div className="grid grid-cols-3 gap-2">
-            {[["Sessions", data.sessions_count], ["With Evidence", data.evidence_count], ["Evidence Rate", `${pct}%`]].map(([l, v]) => (
+            {[
+              [translate("coordinator.goals.progress.sessions"), data.sessions_count],
+              [translate("coordinator.goals.progress.withEvidence"), data.evidence_count],
+              [translate("coordinator.goals.progress.evidenceRate"), `${pct}%`],
+            ].map(([l, v]) => (
               <div key={String(l)} className="rounded-xl p-3 bg-white text-center" style={{ border: `1px solid ${BORDER}` }}>
                 <p className="text-[18px] font-black" style={{ color: PLUM }}>{v}</p>
                 <p className="text-[10px] font-semibold" style={{ color: MUTED }}>{l}</p>
@@ -305,7 +321,7 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
           </div>
           <div>
             <div className="flex justify-between text-[10px] font-semibold mb-1" style={{ color: MUTED }}>
-              <span>Evidence rate</span><span>{pct}%</span>
+              <span>{translate("coordinator.goals.progress.evidenceRateLabel")}</span><span>{pct}%</span>
             </div>
             <div className="h-2 rounded-full overflow-hidden" style={{ background: BORDER }}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct >= 70 ? "#22C55E" : pct >= 40 ? "#F59E0B" : CORAL }} />
@@ -313,12 +329,12 @@ function GoalProgressPanel({ goal, onClose }: { goal: NdisGoal; onClose: () => v
           </div>
           {data.sessions.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Recent Sessions</p>
+              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>{translate("coordinator.goals.progress.recentSessions")}</p>
               {data.sessions.map((s: { id: string; session_date: string; status: string; compliance_score?: number; notes?: string }) => (
                 <div key={s.id} className="flex items-center justify-between rounded-xl px-3 py-2 bg-white text-[12px]" style={{ border: `1px solid ${BORDER}` }}>
                   <span style={{ color: TEXT }}>{s.session_date}</span>
                   <div className="flex items-center gap-2">
-                    {s.notes && <span style={{ color: "#059669" }}>✓ Notes</span>}
+                    {s.notes && <span style={{ color: "#059669" }}>{translate("coordinator.goals.progress.notesRecorded")}</span>}
                     {s.compliance_score != null && <span style={{ color: s.compliance_score >= 80 ? "#059669" : "#D97706" }}>{s.compliance_score}%</span>}
                   </div>
                 </div>
@@ -335,6 +351,7 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
   goal: NdisGoal; onEdit: (g: NdisGoal) => void;
   onArchive: (id: string) => void; onComplete: (id: string) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const [progressOpen, setProgressOpen] = useState(false);
   const areaM = GOAL_AREA_META[goal.goal_area];
   const statusM = GOAL_STATUS_META[goal.status];
@@ -343,33 +360,33 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-1.5 mb-1">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase" style={{ background: areaM.bg, color: areaM.color }}>{areaM.label}</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase" style={{ background: statusM.bg, color: statusM.color }}>{statusM.label}</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase" style={{ background: areaM.bg, color: areaM.color }}>{translate(areaM.labelKey)}</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase" style={{ background: statusM.bg, color: statusM.color }}>{translate(statusM.labelKey)}</span>
           </div>
           <p className="font-black text-[14px]" style={{ color: TEXT }}>{goal.name}</p>
           {goal.description && <p className="text-[12px] mt-0.5 line-clamp-2" style={{ color: MUTED }}>{goal.description}</p>}
         </div>
         {goal.status === "active" && (
           <div className="flex gap-1 shrink-0">
-            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onEdit(goal)} title="Edit"><Edit2 size={13} style={{ color: MUTED }} /></button>
-            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onComplete(goal.id)} title="Complete"><CheckCircle2 size={13} style={{ color: "#059669" }} /></button>
-            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onArchive(goal.id)} title="Archive"><Archive size={13} style={{ color: MUTED }} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onEdit(goal)} title={translate("common.edit")}><Edit2 size={13} style={{ color: MUTED }} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onComplete(goal.id)} title={translate("coordinator.goals.status.completed")}><CheckCircle2 size={13} style={{ color: "#059669" }} /></button>
+            <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onArchive(goal.id)} title={translate("coordinator.goals.status.archived")}><Archive size={13} style={{ color: MUTED }} /></button>
           </div>
         )}
       </div>
       {goal.success_criteria && (
         <p className="text-[11px] px-3 py-2 rounded-xl" style={{ background: SOFT, color: MUTED }}>
-          <span className="font-black" style={{ color: TEXT }}>Success: </span>{goal.success_criteria}
+          <span className="font-black" style={{ color: TEXT }}>{translate("coordinator.goals.successPrefix")}</span>{goal.success_criteria}
         </p>
       )}
       <div className="flex items-center justify-between flex-wrap gap-2">
         {goal.target_date && (
           <span className="text-[11px] font-semibold flex items-center gap-1" style={{ color: MUTED }}>
-            <CalendarDays size={11} /> Target {goal.target_date}
+            <CalendarDays size={11} /> {translateParams("coordinator.goals.targetDate", { date: goal.target_date })}
           </span>
         )}
         <button className="text-[11px] font-semibold flex items-center gap-1 hover:underline" style={{ color: PLUM }} onClick={() => setProgressOpen((v) => !v)}>
-          <BarChart2 size={12} /> {progressOpen ? "Hide Progress" : "View Progress"}
+          <BarChart2 size={12} /> {progressOpen ? translate("coordinator.goals.progress.hide") : translate("coordinator.goals.progress.view")}
         </button>
       </div>
       {progressOpen && <GoalProgressPanel goal={goal} onClose={() => setProgressOpen(false)} />}
@@ -380,10 +397,10 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
 // ── Task Management tab ───────────────────────────────────────────────────────
 
 const SHIFT_TYPE_OPTS = [
-  { v: "morning",   label: "Morning"   },
-  { v: "afternoon", label: "Afternoon" },
-  { v: "evening",   label: "Evening"   },
-  { v: "anytime",   label: "Anytime"   },
+  { v: "morning",   labelKey: "coordinator.goals.shift.morning"   },
+  { v: "afternoon", labelKey: "coordinator.goals.shift.afternoon" },
+  { v: "evening",   labelKey: "coordinator.goals.shift.evening"   },
+  { v: "anytime",   labelKey: "coordinator.goals.shift.anytime"   },
 ] as const;
 
 type TemplateFormState = {
@@ -400,6 +417,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
   goals: NdisGoal[]; linkedGoalIds: string[]; setLinkedGoalIds: (ids: string[]) => void;
   onClose: () => void; onSaved: () => void;
 }) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const [form, setForm] = useState<TemplateFormState>(initial);
   const mut = useMutation({
@@ -413,21 +431,21 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
       };
       return templateId ? updateTaskTemplate(templateId, payload) : createTaskTemplate(participantId, payload);
     },
-    onSuccess: () => { toast({ title: templateId ? "Task updated" : "Task created" }); onSaved(); onClose(); },
-    onError: () => toast({ variant: "destructive", title: "Save failed" }),
+    onSuccess: () => { toast({ title: templateId ? translate("coordinator.goals.toast.taskUpdated") : translate("coordinator.goals.toast.taskCreated") }); onSaved(); onClose(); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.saveFailed") }),
   });
   const set = (k: keyof TemplateFormState, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
     <div className="rounded-2xl p-4 space-y-4" style={{ background: SOFT, border: `1px solid ${BORDER}` }}>
       <div className="flex items-center justify-between">
-        <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? "Edit Task" : "New Task"}</p>
-        <button onClick={onClose} title="Close"><X size={14} style={{ color: MUTED }} /></button>
+        <p className="font-black text-[13px]" style={{ color: TEXT }}>{templateId ? translate("coordinator.goals.form.editTask") : translate("coordinator.goals.form.newTask")}</p>
+        <button onClick={onClose} title={translate("common.close")}><X size={14} style={{ color: MUTED }} /></button>
       </div>
 
       {/* Shift type — first so it frames everything else */}
       <div className="space-y-1.5">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Applies to Shift</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.appliesToShift")}</Label>
         <div className="flex gap-1.5">
           {SHIFT_TYPE_OPTS.map((o) => (
             <button key={o.v} type="button" onClick={() => set("shift_type", o.v)}
@@ -437,32 +455,32 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
                 color: form.shift_type === o.v ? "#fff" : MUTED,
                 border: `1px solid ${form.shift_type === o.v ? PLUM : BORDER}`,
               }}>
-              {o.label}
+              {translate(o.labelKey)}
             </button>
           ))}
         </div>
         {form.shift_type === "anytime" && (
-          <p className="text-[11px]" style={{ color: MUTED }}>Auto-attaches to any shift type for this participant.</p>
+          <p className="text-[11px]" style={{ color: MUTED }}>{translate("coordinator.goals.form.anytimeHint")}</p>
         )}
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Task Name *</Label>
-        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Prompt independent dressing" className="rounded-xl h-9 text-[13px]" />
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.taskName")}</Label>
+        <Input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder={translate("coordinator.goals.form.taskNamePlaceholder")} className="rounded-xl h-9 text-[13px]" />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
-        <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} placeholder="Optional detail or instructions for the worker…"
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.description")}</Label>
+        <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={2} placeholder={translate("coordinator.goals.form.taskDescriptionPlaceholder")}
           className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, background: "var(--cc-bg)" }} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs font-semibold" style={{ color: MUTED }}>Evidence Required</Label>
+        <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.evidenceRequired")}</Label>
         <div className="flex flex-wrap gap-1.5">
           {EVIDENCE_OPTS.map((o) => (
             <button key={o.v} type="button" onClick={() => set("evidence_required", o.v)}
               className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
               style={{ background: form.evidence_required === o.v ? PLUM : "var(--cc-bg)", color: form.evidence_required === o.v ? "#fff" : MUTED, border: `1px solid ${form.evidence_required === o.v ? PLUM : BORDER}` }}>
-              {o.label}
+              {translate(o.labelKey)}
             </button>
           ))}
         </div>
@@ -470,16 +488,16 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
       <div className="flex items-center gap-4 flex-wrap">
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={form.is_mandatory} onChange={(e) => set("is_mandatory", e.target.checked)} className="rounded" />
-          <span className="text-[12px] font-semibold" style={{ color: TEXT }}>Mandatory</span>
+          <span className="text-[12px] font-semibold" style={{ color: TEXT }}>{translate("coordinator.goals.mandatory")}</span>
         </label>
         <div className="flex items-center gap-2">
-          <Label className="text-xs font-semibold whitespace-nowrap" style={{ color: MUTED }}>Est. Duration (min)</Label>
+          <Label className="text-xs font-semibold whitespace-nowrap" style={{ color: MUTED }}>{translate("coordinator.goals.estDuration")}</Label>
           <Input type="number" value={form.estimated_duration_minutes} onChange={(e) => set("estimated_duration_minutes", e.target.value)} placeholder="30" className="w-20 h-8 rounded-xl text-[13px]" />
         </div>
       </div>
       {goals.filter((g) => g.status === "active").length > 0 && (
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Linked Goals</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.goals.form.linkedGoals")}</Label>
           <div className="flex flex-wrap gap-1.5">
             {goals.filter((g) => g.status === "active").map((g) => {
               const linked = linkedGoalIds.includes(g.id);
@@ -496,9 +514,9 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
         </div>
       )}
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" className="flex-1 rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>Cancel</Button>
+        <Button variant="outline" size="sm" className="flex-1 rounded-xl text-xs" style={{ borderColor: BORDER }} onClick={onClose}>{translate("common.cancel")}</Button>
         <Button size="sm" className="flex-1 rounded-xl text-xs" style={{ background: PLUM, color: "#fff" }} disabled={!form.name.trim() || mut.isPending} onClick={() => mut.mutate()}>
-          {mut.isPending ? "Saving…" : templateId ? "Update" : "Create"}
+          {mut.isPending ? translate("common.saving") : templateId ? translate("coordinator.goals.form.update") : translate("coordinator.goals.form.create")}
         </Button>
       </div>
     </div>
@@ -506,6 +524,7 @@ function TaskTemplateForm({ participantId, initial, templateId, goals, linkedGoa
 }
 
 function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup[] }) {
+  const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -520,23 +539,23 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
 
   const deleteMut = useMutation({
     mutationFn: deleteTaskTemplate,
-    onSuccess: () => { toast({ title: "Task removed" }); qc.invalidateQueries({ queryKey: ["task-templates", selectedPid, orgId] }); },
-    onError: () => toast({ variant: "destructive", title: "Delete failed" }),
+    onSuccess: () => { toast({ title: translate("coordinator.goals.toast.taskDeleted") }); qc.invalidateQueries({ queryKey: ["task-templates", selectedPid, orgId] }); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.deleteFailed") }),
   });
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
-        <Label className="text-xs font-semibold shrink-0" style={{ color: MUTED }}>Participant</Label>
-        <select value={selectedPid} onChange={(e) => { setSelectedPid(e.target.value); setFormOpen(false); }} title="Participant"
+        <Label className="text-xs font-semibold shrink-0" style={{ color: MUTED }}>{translate("coordinator.goals.form.participant")}</Label>
+        <select value={selectedPid} onChange={(e) => { setSelectedPid(e.target.value); setFormOpen(false); }} title={translate("coordinator.goals.form.participant")}
           className="h-9 rounded-xl px-3 text-[13px] outline-none" style={{ border: `1px solid ${BORDER}`, color: TEXT, minWidth: 200 }}>
-          <option value="">Select participant…</option>
+          <option value="">{translate("coordinator.goals.form.selectParticipant")}</option>
           {participants.map((p) => <option key={p.participant_id} value={p.participant_id}>{p.participant_name}</option>)}
         </select>
         {selectedPid && (
           <Button size="sm" className="rounded-xl gap-1.5 ml-auto" style={{ background: PLUM, color: "#fff" }}
             onClick={() => { setEditTemplate(null); setLinkedGoalIds([]); setFormOpen(true); }}>
-            <Plus size={14} /> New Task
+            <Plus size={14} /> {translate("coordinator.goals.form.newTask")}
           </Button>
         )}
       </div>
@@ -556,12 +575,14 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
         />
       )}
 
-      {isLoading && <div className="flex items-center gap-2 py-6 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> Loading tasks…</div>}
+      {isLoading && <div className="flex items-center gap-2 py-6 text-[12px]" style={{ color: MUTED }}><Loader2 size={13} className="animate-spin" /> {translate("coordinator.goals.loadingTasks")}</div>}
 
       {templatesData && (
         <>
           <div className="space-y-2">
-            <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Default Tasks ({templatesData.default_tasks.length})</p>
+            <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+              {translateParams("coordinator.goals.taskDefaultSection", { count: String(templatesData.default_tasks.length) })}
+            </p>
             {templatesData.default_tasks.map((t: import('@/services/coordinatorService').TaskTemplate) => (
               <div key={t.id} className="flex items-start gap-3 rounded-xl p-3 bg-white" style={{ border: `1px solid ${BORDER}` }}>
                 <ClipboardList size={14} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
@@ -569,13 +590,15 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
                   <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{t.name}</p>
                   {t.description && <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{t.description}</p>}
                 </div>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>Default</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate("coordinator.goals.taskDefault")}</span>
               </div>
             ))}
           </div>
           {templatesData.custom_tasks.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Custom Tasks ({templatesData.custom_tasks.length})</p>
+              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
+                {translateParams("coordinator.goals.taskCustomSection", { count: String(templatesData.custom_tasks.length) })}
+              </p>
               {templatesData.custom_tasks.map((t: import('@/services/coordinatorService').TaskTemplate) => {
                 const evid = EVIDENCE_OPTS.find((o) => o.v === t.evidence_required);
                 return (
@@ -587,17 +610,17 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
                         {t.primary_shift_type && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize" style={{ background: SOFT, color: PLUM }}>{t.primary_shift_type}</span>
                         )}
-                        {t.is_mandatory && <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: "#FEF2F2", color: CORAL }}>Mandatory</span>}
-                        {evid && evid.v !== "optional" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{evid.label}</span>}
+                        {t.is_mandatory && <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: "#FEF2F2", color: CORAL }}>{translate("coordinator.goals.mandatory")}</span>}
+                        {evid && evid.v !== "optional" && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate(evid.labelKey)}</span>}
                         {t.estimated_duration_minutes && <span className="text-[10px] font-semibold" style={{ color: MUTED }}>~{t.estimated_duration_minutes} min</span>}
                       </div>
                       {t.description && <p className="text-[11px]" style={{ color: MUTED }}>{t.description}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title="Edit" onClick={() => { setEditTemplate(t); setLinkedGoalIds(t.linked_goal_ids ?? []); setFormOpen(true); }}>
+                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title={translate("common.edit")} onClick={() => { setEditTemplate(t); setLinkedGoalIds(t.linked_goal_ids ?? []); setFormOpen(true); }}>
                         <Edit2 size={12} style={{ color: MUTED }} />
                       </button>
-                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title="Delete" onClick={() => deleteMut.mutate(t.id)}>
+                      <button className="p-1.5 rounded-lg hover:bg-gray-100" title={translate("common.delete")} onClick={() => deleteMut.mutate(t.id)}>
                         <Trash2 size={12} style={{ color: CORAL }} />
                       </button>
                     </div>
@@ -615,6 +638,7 @@ function TaskTemplatesTab({ participants }: { participants: ParticipantGoalGroup
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function CoordinatorGoals() {
+  const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -650,13 +674,13 @@ export default function CoordinatorGoals() {
 
   const archiveMut = useMutation({
     mutationFn: archiveNdisGoal,
-    onSuccess: () => { toast({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); },
-    onError: () => toast({ variant: "destructive", title: "Archive failed" }),
+    onSuccess: () => { toast({ title: translate("coordinator.goals.toast.goalArchived") }); qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.archiveFailed") }),
   });
   const completeMut = useMutation({
     mutationFn: completeNdisGoal,
-    onSuccess: () => { toast({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); },
-    onError: () => toast({ variant: "destructive", title: "Update failed" }),
+    onSuccess: () => { toast({ title: translate("coordinator.goals.toast.goalComplete") }); qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); },
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.goals.toast.updateFailed") }),
   });
 
   // Transform legacy data for A-Z filter with active goals and tasks count
@@ -690,32 +714,32 @@ export default function CoordinatorGoals() {
   const blockedCount = legacyData.filter((g) => g.goals.some((gl) => gl.status === "blocked")).length;
 
   const TABS = [
-    { id: "planning",      label: "Goal-Based Tasks"   },
-    { id: "shift-tasks",   label: "Shift-Based Tasks"  },
-    { id: "overview",      label: "Plan Overview"      },
+    { id: "planning",  labelKey: "coordinator.goals.tab.planning"   },
+    { id: "tasks",     labelKey: "coordinator.goals.tab.tasks"    },
+    { id: "overview",  labelKey: "coordinator.goals.tab.overview"      },
   ] as const;
 
   return (
     <div className="space-y-6 pb-10">
       <div className="flex items-start justify-between flex-wrap gap-3 px-4 sm:px-6 lg:px-8">
         <div>
-          <p className="hidden" style={{ color: CORAL }}>Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Goal-Based Tasks</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>Create NDIS goals, manage tasks, and track progress toward participant outcomes.</p>
+          <p className="hidden" style={{ color: CORAL }}>{translate("common.coordinator")}</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("coordinator.goals.title")}</h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("coordinator.goals.subtitle")}</p>
         </div>
         {tab === "planning" && goalParticipant && (
           <Button className="rounded-2xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
-            <Plus size={16} /> New Goal
+            <Plus size={16} /> {translate("coordinator.goals.newGoal")}
           </Button>
         )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4 px-4 sm:px-6 lg:px-8">
         {[
-          ["Participants",    legacyData.length],
-          ["Active Goals",   (ndisGoals as NdisGoal[]).filter((g) => g.status === "active").length],
-          ["Completed",      (ndisGoals as NdisGoal[]).filter((g) => g.status === "completed").length],
-          ["Need Attention", stalledCount + blockedCount],
+          [translate("coordinator.goals.kpi.participants"),    legacyData.length],
+          [translate("coordinator.goals.kpi.activeGoals"),   (ndisGoals as NdisGoal[]).filter((g) => g.status === "active").length],
+          [translate("coordinator.goals.kpi.completed"),      (ndisGoals as NdisGoal[]).filter((g) => g.status === "completed").length],
+          [translate("coordinator.goals.kpi.needAttention"), stalledCount + blockedCount],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-xs font-bold uppercase" style={{ color: MUTED }}>{label}</p>
@@ -731,7 +755,7 @@ export default function CoordinatorGoals() {
             className="flex-1 py-2 rounded-xl text-[13px] font-bold transition-all"
             style={{ background: tab === t.id ? "var(--cc-bg)" : "transparent", color: tab === t.id ? PLUM : MUTED,
               boxShadow: tab === t.id ? "0 2px 8px rgba(55,48,163,0.08)" : "none" }}>
-            {t.label}
+            {translate(t.labelKey)}
           </button>
         ))}
       </div>
@@ -756,18 +780,18 @@ export default function CoordinatorGoals() {
                 <div className="flex-1 overflow-y-auto">
                   <div className="rounded-2xl border p-6 space-y-4 mt-4" style={{ borderColor: BORDER, background: SOFT }}>
                     <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
-                      Goals for {legacyData.find((p) => p.participant_id === goalParticipant)?.participant_name}
+                      {translateParams("coordinator.goals.goalsFor", { name: legacyData.find((p) => p.participant_id === goalParticipant)?.participant_name ?? "" })}
                     </h3>
 
-                    {goalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+                    {goalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> {translate("common.loading")}</div>}
 
                     {!goalsLoading && (
                       <>
                         {filteredNdis.length === 0 ? (
                           <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
                             <Target size={24} style={{ color: BORDER, margin: "0 auto" }} />
-                            <p className="mt-2 font-bold" style={{ color: TEXT }}>No goals yet</p>
-                            <p className="text-sm mt-1" style={{ color: MUTED }}>Click the plus icon to create the first NDIS goal</p>
+                            <p className="mt-2 font-bold" style={{ color: TEXT }}>{translate("coordinator.goals.emptyGoals")}</p>
+                            <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.createFirstHint")}</p>
                           </div>
                         ) : (
                           <div className="space-y-3">
@@ -792,55 +816,24 @@ export default function CoordinatorGoals() {
             {/* RIGHT: Goal form or Goal-based tasks management side panel */}
             {goalParticipant && (
               <div className="flex flex-col overflow-hidden">
-                {/* View switcher */}
-                <div className="flex gap-2 mb-4 shrink-0">
-                  <button
-                    onClick={() => setPlanningView("goals")}
-                    className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
-                    style={
-                      planningView === "goals"
-                        ? { background: PLUM, color: "#fff" }
-                        : { background: SOFT, color: MUTED, borderColor: BORDER }
-                    }
-                  >
-                    Goals
-                  </button>
-                  <button
-                    onClick={() => setPlanningView("goal-based-tasks")}
-                    className="px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors"
-                    style={
-                      planningView === "goal-based-tasks"
-                        ? { background: PLUM, color: "#fff" }
-                        : { background: SOFT, color: MUTED, borderColor: BORDER }
-                    }
-                  >
-                    Goal-Based Tasks
-                  </button>
-                </div>
-
-                {/* Goals view */}
-                {planningView === "goals" && (
-                  <>
-                    {goalFormOpen ? (
-                      <GoalFormModal
-                        goal={editGoal}
-                        participants={legacyData}
-                        isModal={false}
-                        selectedParticipantId={goalParticipant}
-                        onClose={() => { setGoalFormOpen(false); setEditGoal(null); }}
-                        onSaved={() => { qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); }}
-                      />
-                    ) : (
-                      <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
-                        <Button className="w-full rounded-xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
-                          <Plus size={16} /> New Goal
-                        </Button>
-                        <div className="text-center flex-1 flex items-center justify-center">
-                          <div>
-                            <p className="font-bold text-sm" style={{ color: TEXT }}>Create or edit goals</p>
-                            <p className="text-xs mt-1" style={{ color: MUTED }}>Select a goal from the left or create a new one</p>
-                          </div>
-                        </div>
+                {goalFormOpen ? (
+                  <GoalFormModal
+                    goal={editGoal}
+                    participants={legacyData}
+                    isModal={false}
+                    selectedParticipantId={goalParticipant}
+                    onClose={() => { setGoalFormOpen(false); setEditGoal(null); }}
+                    onSaved={() => { qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); }}
+                  />
+                ) : (
+                  <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
+                    <Button className="w-full rounded-xl gap-2" style={{ background: PLUM, color: "#fff" }} onClick={() => { setEditGoal(null); setGoalFormOpen(true); }}>
+                      <Plus size={16} /> {translate("coordinator.goals.newGoal")}
+                    </Button>
+                    <div className="text-center flex-1 flex items-center justify-center">
+                      <div>
+                        <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("coordinator.goals.createEditTitle")}</p>
+                        <p className="text-xs mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.createEditHint")}</p>
                       </div>
                     )}
                   </>
@@ -915,8 +908,8 @@ export default function CoordinatorGoals() {
               <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
                 <div>
                   <Target size={32} style={{ color: BORDER, margin: "0 auto" }} />
-                  <p className="font-bold mt-3" style={{ color: TEXT }}>Start planning goals</p>
-                  <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant from the left to get started</p>
+                  <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.startPlanningTitle")}</p>
+                  <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.startPlanningHint")}</p>
                 </div>
               </div>
             )}
@@ -950,33 +943,74 @@ export default function CoordinatorGoals() {
               </Button>
             </div>
 
-            <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-400px)]">
-              {/* LEFT: Participant filter */}
-              <div className="flex flex-col overflow-hidden">
-                <ParticipantAZFilter
-                  participants={participantListForFilter}
-                  selectedParticipantId={selectedParticipantIdForShiftTasks}
-                  onParticipantSelect={setSelectedParticipantIdForShiftTasks}
-                  showActiveGoalsBadge={false}
-                  isLoading={legacyLoading}
-                />
-              </div>
+            {/* RIGHT: Goals with tasks panel */}
+            <div className="flex flex-col overflow-hidden">
+              {selectedParticipantIdForTasks ? (
+                <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col overflow-hidden" style={{ borderColor: BORDER, background: SOFT }}>
+                  {taskGoalFormOpen ? (
+                    <>
+                      <button onClick={() => setTaskGoalFormOpen(false)} className="text-xs font-bold text-left mb-2" style={{ color: PLUM }}>{translate("coordinator.goals.backToTasks")}</button>
+                      <GoalFormModal
+                        goal={null}
+                        participants={legacyData}
+                        isModal={false}
+                        selectedParticipantId={selectedParticipantIdForTasks}
+                        onClose={() => setTaskGoalFormOpen(false)}
+                        onSaved={() => { 
+                          setTaskGoalFormOpen(false); 
+                          qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); 
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between shrink-0">
+                        <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
+                          {translate("coordinator.goals.manageTasks")}
+                        </h3>
+                        <Button 
+                          size="sm"
+                          className="rounded-xl gap-1.5"
+                          style={{ background: PLUM, color: "#fff" }}
+                          onClick={() => setTaskGoalFormOpen(true)}
+                        >
+                          <Plus size={14} /> {translate("coordinator.goals.goal")}
+                        </Button>
+                      </div>
 
-              {/* RIGHT: Task templates view */}
-              <div className="flex flex-col overflow-hidden">
-                {selectedParticipantIdForShiftTasks ? (
-                  <TaskManagementView
-                    participantId={selectedParticipantIdForShiftTasks}
-                    onCreateNew={() => setNewShiftTaskModalOpen(true)}
-                    onEditTemplate={() => {}}
-                  />
-                ) : (
-                  <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
-                    <div>
-                      <ClipboardList size={32} style={{ color: BORDER, margin: "0 auto" }} />
-                      <p className="font-bold mt-3" style={{ color: TEXT }}>Create task templates</p>
-                      <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant to see and manage their recurring shift-based tasks</p>
-                    </div>
+                      {participantGoalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> {translate("common.loading")}</div>}
+
+                      {!participantGoalsLoading && participantGoals.filter((g) => g.status === "active").length === 0 ? (
+                        <div className="rounded-xl border p-6 text-center flex-1 flex items-center justify-center" style={{ borderColor: BORDER, background: "#fff" }}>
+                          <div>
+                            <Target size={28} style={{ color: BORDER, margin: "0 auto" }} />
+                            <p className="mt-3 font-bold" style={{ color: TEXT }}>{translate("coordinator.goals.noActiveGoals")}</p>
+                            <p className="text-sm mt-2" style={{ color: MUTED }}>{translate("coordinator.goals.noActiveGoalsHint")}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex-1 overflow-y-auto space-y-4">
+                          {participantGoals.filter((g) => g.status === "active").map((goal) => (
+                            <TaskManagementPanel
+                              key={goal.id}
+                              goal={goal}
+                              tasks={tasks}
+                              onTasksChanged={() => {
+                                qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForTasks, orgId] });
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div>
+                    <ClipboardList size={32} style={{ color: BORDER, margin: "0 auto" }} />
+                    <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.manageTasksTitle")}</p>
+                    <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.manageTasksHint")}</p>
                   </div>
                 )}
               </div>
@@ -1003,25 +1037,25 @@ export default function CoordinatorGoals() {
             <div className="flex flex-col overflow-hidden">
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {([
-                  { key: "all",        label: "All" },
-                  { key: "stalled",    label: `Stalled (${stalledCount})` },
-                  { key: "blocked",    label: `Blocked (${blockedCount})` },
-                  { key: "no_session", label: "No Session" },
-                ] as { key: FilterKey; label: string }[]).map(({ key, label }) => (
+                  { key: "all",        labelKey: "coordinator.goals.filter.all" },
+                  { key: "stalled",    labelKey: "coordinator.goals.filter.stalled", count: stalledCount },
+                  { key: "blocked",    labelKey: "coordinator.goals.filter.blocked", count: blockedCount },
+                  { key: "no_session", labelKey: "coordinator.goals.filter.noSession" },
+                ] as { key: FilterKey; labelKey: string; count?: number }[]).map(({ key, labelKey, count }) => (
                   <button key={key} onClick={() => setFilter(key)}
                     className="rounded-full border px-3 py-1.5 text-xs font-bold transition-colors"
                     style={filter === key ? { background: PLUM, color: "#fff", borderColor: PLUM } : { background: "var(--cc-bg)", color: MUTED, borderColor: BORDER }}>
-                    {label}
+                    {count != null ? translateParams(labelKey, { count: String(count) }) : translate(labelKey)}
                   </button>
                 ))}
               </div>
 
               <div className="flex-1 overflow-y-auto">
-                {legacyLoading && <div className="flex items-center gap-2 py-4 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+                {legacyLoading && <div className="flex items-center gap-2 py-4 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> {translate("common.loading")}</div>}
                 {!legacyLoading && filteredLegacy.length === 0 && (
                   <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER, background: "#fff" }}>
                     <Target size={20} style={{ color: BORDER, margin: "0 auto" }} />
-                    <p className="mt-2 font-bold text-sm" style={{ color: TEXT }}>No participants found</p>
+                    <p className="mt-2 font-bold text-sm" style={{ color: TEXT }}>{translate("coordinator.goals.emptyParticipants")}</p>
                   </div>
                 )}
                 {filteredLegacy.map((group) => (
@@ -1032,7 +1066,7 @@ export default function CoordinatorGoals() {
                       border: `1px solid ${overviewParticipant === group.participant_id ? PLUM : BORDER}`,
                     }}>
                     <p className="font-semibold text-[13px]" style={{ color: TEXT }}>{group.participant_name}</p>
-                    <p className="text-[11px] mt-1" style={{ color: MUTED }}>{group.goals.length} goals</p>
+                    <p className="text-[11px] mt-1" style={{ color: MUTED }}>{translateParams("coordinator.goals.overviewGoals", { count: String(group.goals.length) })}</p>
                   </button>
                 ))}
               </div>
@@ -1058,8 +1092,8 @@ export default function CoordinatorGoals() {
               <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
                 <div>
                   <BarChart2 size={32} style={{ color: BORDER, margin: "0 auto" }} />
-                  <p className="font-bold mt-3" style={{ color: TEXT }}>View plan overview</p>
-                  <p className="text-sm mt-1" style={{ color: MUTED }}>Select a participant from the left to see details</p>
+                  <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.viewOverviewTitle")}</p>
+                  <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.viewOverviewHint")}</p>
                 </div>
               </div>
             )}

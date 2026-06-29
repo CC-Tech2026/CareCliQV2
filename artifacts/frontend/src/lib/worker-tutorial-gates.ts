@@ -59,6 +59,33 @@ function clockInModalOpen(): boolean {
 }
 
 const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
+  open_shift: {
+    isApplicable: () =>
+      isVisible("[data-tutorial='start-session']") || isVisible("[data-tutorial='shift-list']"),
+    showNext: false,
+    showSkip: false,
+    autoAdvanceWhen: () => window.location.pathname.endsWith("/briefing"),
+    allowTargetInteraction: true,
+    waitingMessage: "Tap Start Session to open the pre-shift briefing.",
+  },
+  pre_shift_briefing: {
+    isApplicable: () =>
+      isVisible("[data-tutorial='briefing-page']") || window.location.pathname.endsWith("/briefing"),
+    showNext: true,
+    showSkip: true,
+  },
+  pre_shift_briefing_complete: {
+    isApplicable: () =>
+      isVisible("[data-tutorial='briefing-page']") || window.location.pathname.endsWith("/briefing"),
+    showNext: false,
+    showSkip: true,
+    autoAdvanceWhen: () => hasTutorialMarker("[data-tutorial='briefing-complete-marker']"),
+    allowTargetInteraction: true,
+    waitingMessage: "Acknowledge alerts, scroll through all sections, then tap Ready to start.",
+  },
+  shift_overview: {
+    waitingMessage: "Loading your shift details…",
+  },
   risk_acknowledgement: {
     isApplicable: () => isVisible("[data-tutorial='risk-ack-checkbox']"),
     showNext: true,
@@ -75,18 +102,30 @@ const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
     blockingModalSelector: "[data-tutorial='risk-ack-dialog']",
     waitingMessage: "Tap Acknowledge Risks to continue.",
   },
+  travel_mileage: {
+    isApplicable: () => isVisible("[data-tutorial='shift-travel-mileage']"),
+    showNext: true,
+    showSkip: true,
+    allowTargetInteraction: true,
+  },
+  travel_transit: {
+    isApplicable: () => isVisible("[data-tutorial='shift-travel-transit']"),
+    showNext: true,
+    showSkip: true,
+    allowTargetInteraction: true,
+  },
   clock_in: {
     isApplicable: () => !clockInComplete() && isVisible("[data-tutorial='clock-in']"),
     showNext: false,
-    showSkip: false,
+    showSkip: true,
     autoAdvanceWhen: () => clockInModalOpen(),
     allowTargetInteraction: true,
     waitingMessage: "Tap Clock In to open the check-in dialog.",
   },
   clock_in_modal: {
     isApplicable: () => clockInModalOpen() && !clockInComplete(),
-    showNext: false,
-    showSkip: false,
+    showNext: true,
+    showSkip: true,
     autoAdvanceWhen: () =>
       clockInComplete() && !clockInModalOpen() && !isVisible("[data-tutorial='clock-in-error']"),
     allowTargetInteraction: true,
@@ -112,26 +151,42 @@ const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
     waitingMessage: "Tap Notes to open the live progress panel.",
   },
   task_evidence: {
+    isApplicable: () =>
+      isVisible("[data-tutorial='shift-task-checklist']") || isVisible("[data-tutorial='task-evidence']"),
+    showNext: true,
     showSkip: true,
-    autoAdvanceWhen: () => isVisible("[data-tutorial='task-evidence-actions']"),
     allowTargetInteraction: true,
+    canProceed: () =>
+      isVisible("[data-tutorial='task-evidence-panel-open']")
+      && document.body.getAttribute("data-tutorial-task-evidence-ready") === "1",
+    waitingMessage:
+      "Review the goal-linked checklist — a task row will open automatically. Tap Next when you are ready.",
+  },
+  evidence_attach: {
+    isApplicable: () =>
+      isVisible("[data-tutorial='task-evidence-panel']")
+      || isVisible("[data-tutorial='task-evidence-panel-open']")
+      || isVisible("[data-tutorial='task-evidence-actions']"),
+    showNext: true,
+    showSkip: true,
+    allowTargetInteraction: true,
+    waitingMessage:
+      "Type a note (20+ characters) and press Enter, or attach photo/voice. Tap Next when saved, or Skip to continue.",
   },
   end_shift: {
     isApplicable: () => isVisible("[data-tutorial='end-shift']"),
-    showNext: false,
+    showNext: true,
     showSkip: true,
-    autoAdvanceWhen: () => isVisible("[data-tutorial='end-shift-review']"),
     allowTargetInteraction: true,
     waitingMessage: "Tap End Shift to open the validation summary.",
   },
   end_shift_review: {
     isApplicable: () => isVisible("[data-tutorial='end-shift-review']"),
-    showNext: false,
+    showNext: true,
     showSkip: true,
-    autoAdvanceWhen: () => isVisible("[data-tutorial='shift-signature']"),
     allowTargetInteraction: true,
     blockingModalSelector: "[data-tutorial='end-shift-review']",
-    waitingMessage: "Fix flagged tasks or tap End Shift when validation passes.",
+    waitingMessage: "Review the summary, then tap End Shift to continue to sign-off.",
   },
   shift_signature: {
     isApplicable: () => isVisible("[data-tutorial='shift-signature']"),
@@ -170,6 +225,33 @@ export function isTutorialStepApplicable(step: TutorialStep): boolean {
   const gate = getTutorialGate(step.key);
   if (!gate?.isApplicable) return true;
   return gate.isApplicable();
+}
+
+/** Steps with a visible Next button should show the guide even if the target is still loading. */
+export function shouldAutoSkipMissingTutorialTarget(step: TutorialStep): boolean {
+  return !tutorialShowNext(step);
+}
+
+const TUTORIAL_PROTECTED_STEPS: ReadonlySet<TutorialStepKey> = new Set([
+  "end_shift",
+  "end_shift_review",
+  "shift_signature",
+]);
+
+/** Optional middle steps (e.g. session_notes when Notes panel is already open). */
+export function shouldAutoSkipStepInAdvance(step: TutorialStep): boolean {
+  if (TUTORIAL_PROTECTED_STEPS.has(step.key)) return false;
+  const gate = getTutorialGate(step.key);
+  if (!gate?.isApplicable) return false;
+  return !gate.isApplicable();
+}
+
+/** Never chain-skip protected steps when the target is not visible yet. */
+export function shouldSkipInapplicableTutorialStep(step: TutorialStep): boolean {
+  if (TUTORIAL_PROTECTED_STEPS.has(step.key)) return false;
+  const gate = getTutorialGate(step.key);
+  if (!gate?.isApplicable) return false;
+  return !gate.isApplicable();
 }
 
 export function getNextTutorialStepIndex(current: number, steps: TutorialStep[]): number | null {
@@ -235,7 +317,6 @@ export function shouldAdvanceFromDismissedStep(stepIndex: number): boolean {
 
   const gate = getTutorialGate(step.key);
   if (gate?.autoAdvanceWhen?.()) return true;
-  if (gate?.isApplicable && !gate.isApplicable()) return true;
 
   const nextIndex = getNextTutorialStepIndex(stepIndex, WORKER_TUTORIAL_STEPS);
   if (nextIndex === null) return false;
@@ -257,7 +338,7 @@ export async function waitForShiftTutorialReady(shiftId: string | null, maxMs = 
 
 export function isTutorialBlockingModalOpen(step: TutorialStep): boolean {
   const selector = getTutorialGate(step.key)?.blockingModalSelector;
-  if (!selector) return false;
+  if (!selector) return isAnyTutorialModalOpen();
   const nodes = document.querySelectorAll(selector);
   for (const node of nodes) {
     const state = node.getAttribute("data-state");
@@ -269,5 +350,26 @@ export function isTutorialBlockingModalOpen(step: TutorialStep): boolean {
     if (Number(style.opacity) <= 0.05) continue;
     return true;
   }
+  return isAnyTutorialModalOpen();
+}
+
+function isAnyTutorialModalOpen(): boolean {
+  for (const selector of ["[data-tutorial='end-shift-review']", "[data-tutorial='shift-signature']"]) {
+    const nodes = document.querySelectorAll(selector);
+    for (const node of nodes) {
+      const state = node.getAttribute("data-state");
+      if (state === "closed") continue;
+      const rect = node.getBoundingClientRect();
+      if (rect.width < 2 && rect.height < 2) continue;
+      const style = window.getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (Number(style.opacity) <= 0.05) continue;
+      return true;
+    }
+  }
   return false;
+}
+
+export function isTutorialEndShiftFlowModalOpen(): boolean {
+  return isAnyTutorialModalOpen();
 }

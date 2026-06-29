@@ -16,6 +16,7 @@ import {
   type LiveShift, type ShiftMessage,
 } from "@/services/coordinatorService";
 import { getShiftMessages } from "@/services/coordinatorService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -24,11 +25,16 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-const STATUS_RING: Record<LiveShift["live_status"], { ring: string; bg: string; label: string }> = {
-  green:  { ring: "#22C55E", bg: "#F0FDF4", label: "On Track"  },
-  yellow: { ring: "#F59E0B", bg: "#FFFBEB", label: "Attention" },
-  red:    { ring: "#EF4444", bg: "#FEF2F2", label: "Alert"     },
+const STATUS_RING: Record<LiveShift["live_status"], { ring: string; bg: string; labelKey: string }> = {
+  green:  { ring: "#22C55E", bg: "#F0FDF4", labelKey: "coordinator.live.status.onTrack"  },
+  yellow: { ring: "#F59E0B", bg: "#FFFBEB", labelKey: "coordinator.live.status.attention" },
+  red:    { ring: "#EF4444", bg: "#FEF2F2", labelKey: "coordinator.live.status.alert"     },
 };
+
+function liveStatusLabel(status: LiveShift["live_status"], translate: (key: string) => string) {
+  const s = STATUS_RING[status];
+  return { ...s, label: translate(s.labelKey) };
+}
 
 // ── Elapsed clock ─────────────────────────────────────────────────────────────
 function useElapsedTimer(startMinutes: number) {
@@ -55,12 +61,13 @@ function ElapsedBadge({ startMinutes }: { startMinutes: number }) {
 
 // ── Task progress bar ──────────────────────────────────────────────────────────
 function TaskBar({ total, completed }: { total: number; completed: number }) {
+  const { translate } = useAccessibility();
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const color = pct >= 80 ? "#22C55E" : pct >= 50 ? "#F59E0B" : "#E5E7EB";
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
-        <span className="text-[10px] font-medium" style={{ color: MUTED }}>Tasks</span>
+        <span className="text-[10px] font-medium" style={{ color: MUTED }}>{translate("coordinator.live.tasks")}</span>
         <span className="text-[10px] font-bold" style={{ color: TEXT }}>
           {completed}/{total}
         </span>
@@ -85,6 +92,7 @@ function MessageModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const { toast } = useToast();
@@ -106,15 +114,15 @@ function MessageModal({
       setText("");
       qc.invalidateQueries({ queryKey: ["shift-messages", shift.id, orgId] });
     },
-    onError: () => toast({ variant: "destructive", title: "Message failed to send" }),
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.live.messageFailed") }),
   });
 
-  const MSG_TYPES: Array<{ v: ShiftMessage["message_type"]; label: string }> = [
-    { v: "text",           label: "Message" },
-    { v: "request_photo",  label: "Request Photo" },
-    { v: "task_suggestion",label: "Task Tip" },
-    { v: "flag_issue",     label: "Flag Issue" },
-    { v: "emergency",      label: "Emergency" },
+  const MSG_TYPES: Array<{ v: ShiftMessage["message_type"]; labelKey: string }> = [
+    { v: "text",            labelKey: "coordinator.live.msgType.text" },
+    { v: "request_photo",   labelKey: "coordinator.live.msgType.requestPhoto" },
+    { v: "task_suggestion", labelKey: "coordinator.live.msgType.taskSuggestion" },
+    { v: "flag_issue",      labelKey: "coordinator.live.msgType.flagIssue" },
+    { v: "emergency",       labelKey: "coordinator.live.msgType.emergency" },
   ];
 
   return (
@@ -122,9 +130,11 @@ function MessageModal({
       <DialogContent className="max-w-md" style={{ borderRadius: 20 }}>
         <DialogHeader>
           <DialogTitle className="text-base font-black" style={{ color: TEXT }}>
-            Message · {shift.worker_name}
+            {translateParams("coordinator.live.messageTitle", { worker: shift.worker_name ?? "" })}
           </DialogTitle>
-          <p className="text-[12px]" style={{ color: MUTED }}>Re: {shift.participant_name ?? "participant"}</p>
+          <p className="text-[12px]" style={{ color: MUTED }}>
+            {translateParams("coordinator.live.messageRe", { participant: shift.participant_name ?? translate("common.participant").toLowerCase() })}
+          </p>
         </DialogHeader>
 
         {/* Type selector */}
@@ -139,7 +149,7 @@ function MessageModal({
                 color: type === t.v ? "#fff" : MUTED,
               }}
             >
-              {t.label}
+              {translate(t.labelKey)}
             </button>
           ))}
         </div>
@@ -149,9 +159,9 @@ function MessageModal({
           className="rounded-xl overflow-y-auto flex flex-col gap-2 p-3 mb-3"
           style={{ maxHeight: 240, background: SOFT, border: `1px solid ${BORDER}` }}
         >
-          {isLoading && <p className="text-[12px] text-center" style={{ color: MUTED }}>Loading…</p>}
+          {isLoading && <p className="text-[12px] text-center" style={{ color: MUTED }}>{translate("common.loading")}</p>}
           {!isLoading && messages.length === 0 && (
-            <p className="text-[12px] text-center" style={{ color: MUTED }}>No messages yet</p>
+            <p className="text-[12px] text-center" style={{ color: MUTED }}>{translate("coordinator.live.noMessages")}</p>
           )}
           {messages.map((m) => {
             const mine = m.sender_id === user?.id;
@@ -178,7 +188,7 @@ function MessageModal({
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Type a message…"
+            placeholder={translate("coordinator.live.messagePlaceholder")}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && text.trim() && sendMut.mutate()}
             className="flex-1 rounded-xl"
           />
@@ -205,6 +215,7 @@ function ShiftSpecialInstructionsEditor({
   shiftId: string;
   initialValue?: string | null;
 }) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const [value, setValue] = useState(initialValue ?? "");
   const [saving, setSaving] = useState(false);
@@ -217,10 +228,10 @@ function ShiftSpecialInstructionsEditor({
     setSaving(true);
     try {
       await updateShiftBriefing(shiftId, value.trim() || null);
-      toast({ title: "Special instructions saved" });
+      toast({ title: translate("coordinator.live.specialInstructionsSaved") });
     } catch (err) {
       toast({
-        title: "Save failed",
+        title: translate("coordinator.live.saveFailed"),
         description: err instanceof Error ? err.message : undefined,
         variant: "destructive",
       });
@@ -232,17 +243,17 @@ function ShiftSpecialInstructionsEditor({
   return (
     <div>
       <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>
-        Special instructions (this shift)
+        {translate("coordinator.live.specialInstructions")}
       </p>
       <textarea
         className="w-full rounded-xl border p-3 text-[13px] min-h-[80px]"
         style={{ borderColor: BORDER, color: TEXT }}
-        placeholder="e.g. Participant has a medical appointment at 2pm — call coordinator if taxi is late."
+        placeholder={translate("coordinator.live.specialInstructionsPlaceholder")}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
       <Button type="button" size="sm" className="mt-2" disabled={saving} onClick={() => void save()}>
-        {saving ? "Saving…" : "Save instructions"}
+        {saving ? translate("common.saving") : translate("coordinator.live.saveInstructions")}
       </Button>
     </div>
   );
@@ -258,13 +269,14 @@ function ShiftDetailModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const s = STATUS_RING[shift.live_status];
+  const { translate } = useAccessibility();
+  const s = liveStatusLabel(shift.live_status, translate);
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg" style={{ borderRadius: 20 }}>
         <DialogHeader>
           <DialogTitle className="font-black text-base" style={{ color: TEXT }}>
-            Shift Detail
+            {translate("coordinator.live.shiftDetail")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
@@ -281,7 +293,7 @@ function ShiftDetailModal({
             <div>
               <p className="font-black text-[15px]" style={{ color: TEXT }}>{shift.worker_name}</p>
               <p className="text-[12px]" style={{ color: MUTED }}>
-                {shift.shift_type ?? "Shift"} · {shift.participant_name}
+                {shift.shift_type ?? translate("coordinator.live.shiftFallback")} · {shift.participant_name}
               </p>
             </div>
             <span
@@ -294,26 +306,26 @@ function ShiftDetailModal({
 
           <div className="grid grid-cols-2 gap-3 text-[13px]">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>Clocked In</p>
-              <p style={{ color: TEXT }}>{shift.clocked_in_at ? new Date(shift.clocked_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.clockedIn")}</p>
+              <p style={{ color: TEXT }}>{shift.clocked_in_at ? new Date(shift.clocked_in_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : translate("common.emDash")}</p>
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>Elapsed</p>
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.elapsed")}</p>
               <ElapsedBadge startMinutes={shift.elapsed_minutes} />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>Session</p>
-              <p style={{ color: TEXT }}>{shift.session_id ? "Active" : "None"}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.session")}</p>
+              <p style={{ color: TEXT }}>{shift.session_id ? translate("coordinator.live.sessionActiveStatus") : translate("common.none")}</p>
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>Notes</p>
-              <p style={{ color: TEXT }}>{shift.visit_notes ? "Recorded" : "None"}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.notes")}</p>
+              <p style={{ color: TEXT }}>{shift.visit_notes ? translate("coordinator.live.notesRecorded") : translate("common.none")}</p>
             </div>
           </div>
 
           {shift.alerts.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: CORAL }}>Active Alerts</p>
+              <p className="text-[11px] font-black uppercase tracking-widest" style={{ color: CORAL }}>{translate("coordinator.live.activeAlerts")}</p>
               {shift.alerts.map((a) => (
                 <div
                   key={a.id}
@@ -329,7 +341,7 @@ function ShiftDetailModal({
 
           {shift.coordinator_notes && (
             <div>
-              <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>Coordinator Notes</p>
+              <p className="text-[11px] font-black uppercase tracking-widest mb-1" style={{ color: MUTED }}>{translate("coordinator.live.coordinatorNotes")}</p>
               <p className="text-[13px] rounded-xl p-3" style={{ background: SOFT, color: TEXT }}>
                 {shift.coordinator_notes}
               </p>
@@ -356,7 +368,8 @@ function LiveShiftCard({
   onEmergency: (s: LiveShift) => void;
   onDetail: (s: LiveShift) => void;
 }) {
-  const s = STATUS_RING[shift.live_status];
+  const { translate, translateParams } = useAccessibility();
+  const s = liveStatusLabel(shift.live_status, translate);
 
   return (
     <div
@@ -404,25 +417,25 @@ function LiveShiftCard({
           className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
           style={{ background: SOFT, color: PLUM }}
         >
-          {shift.shift_type ?? "General"}
+          {shift.shift_type ?? translate("coordinator.live.defaultShiftType")}
         </span>
         {shift.session_id ? (
           <span className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#22C55E" }}>
-            <Activity size={11} /> Session Active
+            <Activity size={11} /> {translate("coordinator.live.sessionActive")}
           </span>
         ) : (
           <span className="text-[11px] font-semibold" style={{ color: MUTED }}>
-            No session started
+            {translate("coordinator.live.noSession")}
           </span>
         )}
         {shift.visit_notes && (
           <span className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#3B82F6" }}>
-            <CheckCircle2 size={11} /> Notes
+            <CheckCircle2 size={11} /> {translate("coordinator.live.notes")}
           </span>
         )}
         {shift.emergency_flagged && (
           <span className="flex items-center gap-1 text-[11px] font-black" style={{ color: CORAL }}>
-            <AlertTriangle size={11} /> EMERGENCY
+            <AlertTriangle size={11} /> {translate("coordinator.live.emergency")}
           </span>
         )}
       </div>
@@ -439,7 +452,7 @@ function LiveShiftCard({
           <AlertTriangle size={12} style={{ color: CORAL }} />
           <p className="text-[11px] font-semibold truncate" style={{ color: CORAL }}>
             {shift.alerts[0].message}
-            {shift.alerts.length > 1 && ` +${shift.alerts.length - 1} more`}
+            {shift.alerts.length > 1 && translateParams("coordinator.live.alertsMore", { count: String(shift.alerts.length - 1) })}
           </p>
         </div>
       )}
@@ -453,7 +466,7 @@ function LiveShiftCard({
           style={{ borderColor: BORDER, color: MUTED }}
           onClick={() => onMessage(shift)}
         >
-          <MessageSquare size={12} /> Message
+          <MessageSquare size={12} /> {translate("coordinator.live.message")}
         </Button>
         <Button
           size="sm"
@@ -462,7 +475,7 @@ function LiveShiftCard({
           style={{ borderColor: BORDER, color: "#D97706" }}
           onClick={() => onFlag(shift)}
         >
-          <Flag size={12} /> Flag
+          <Flag size={12} /> {translate("coordinator.live.action.flag")}
         </Button>
         <Button
           size="sm"
@@ -480,6 +493,7 @@ function LiveShiftCard({
 
 // ── Flag modal ─────────────────────────────────────────────────────────────────
 function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: boolean; onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const { toast } = useToast();
@@ -489,11 +503,11 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
   const flagMut = useMutation({
     mutationFn: () => flagShift(shift!.id, note.trim(), severity),
     onSuccess: () => {
-      toast({ title: "Flag created" });
+      toast({ title: translate("coordinator.live.toast.flagCreated") });
       onClose();
       setNote("");
     },
-    onError: () => toast({ variant: "destructive", title: "Flag failed" }),
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.live.toast.flagFailed") }),
   });
 
   return (
@@ -501,7 +515,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
       <DialogContent className="max-w-sm" style={{ borderRadius: 20 }}>
         <DialogHeader>
           <DialogTitle className="font-black text-base" style={{ color: TEXT }}>
-            Flag Shift
+            {translate("coordinator.live.flagShift")}
           </DialogTitle>
           <p className="text-[12px]" style={{ color: MUTED }}>{shift?.worker_name}</p>
         </DialogHeader>
@@ -517,14 +531,14 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
                   color: severity === s ? "#fff" : MUTED,
                 }}
               >
-                {s}
+                {translate(`coordinator.live.severity.${s}`)}
               </button>
             ))}
           </div>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Describe the issue…"
+            placeholder={translate("coordinator.live.describeIssue")}
             rows={3}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
@@ -535,7 +549,7 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
             disabled={!note.trim() || flagMut.isPending}
             onClick={() => flagMut.mutate()}
           >
-            Submit Flag
+            {translate("coordinator.live.flagSubmit")}
           </Button>
         </div>
       </DialogContent>
@@ -545,20 +559,21 @@ function FlagModal({ shift, open, onClose }: { shift: LiveShift | null; open: bo
 
 // ── Emergency modal ────────────────────────────────────────────────────────────
 function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; open: boolean; onClose: () => void }) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
-  const [note, setNote] = useState("Emergency stop triggered by coordinator");
+  const [note, setNote] = useState(() => translate("coordinator.live.emergencyDefaultNote"));
 
   const emergMut = useMutation({
     mutationFn: () => emergencyStopShift(shift!.id, note),
     onSuccess: () => {
-      toast({ title: "Emergency stop issued — worker has been notified" });
+      toast({ title: translate("coordinator.live.toast.emergencyIssued") });
       qc.invalidateQueries({ queryKey: ["live-shifts", orgId] });
       onClose();
     },
-    onError: () => toast({ variant: "destructive", title: "Emergency stop failed" }),
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.live.toast.emergencyFailed") }),
   });
 
   return (
@@ -566,18 +581,18 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
       <DialogContent className="max-w-sm" style={{ borderRadius: 20 }}>
         <DialogHeader>
           <DialogTitle className="font-black text-base" style={{ color: CORAL }}>
-            ⚠️ Emergency Stop
+            {translate("coordinator.live.emergencyStop")}
           </DialogTitle>
           <p className="text-[12px]" style={{ color: MUTED }}>
-            This will flag the shift and notify the worker immediately.
+            {translate("coordinator.live.emergencyDesc")}
           </p>
         </DialogHeader>
         <div className="space-y-3">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            title="Incident note"
-            placeholder="Add optional details about this incident..."
+            title={translate("coordinator.live.incidentNote")}
+            placeholder={translate("coordinator.live.incidentPlaceholder")}
             rows={3}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid #FECACA`, color: TEXT }}
@@ -589,7 +604,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
               style={{ borderColor: BORDER }}
               onClick={onClose}
             >
-              Cancel
+              {translate("common.cancel")}
             </Button>
             <Button
               className="flex-1 rounded-xl"
@@ -597,7 +612,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
               disabled={emergMut.isPending}
               onClick={() => emergMut.mutate()}
             >
-              {emergMut.isPending ? "Stopping…" : "Confirm Emergency Stop"}
+              {emergMut.isPending ? translate("coordinator.live.stopping") : translate("coordinator.live.confirmEmergencyStop")}
             </Button>
           </div>
         </div>
@@ -608,6 +623,7 @@ function EmergencyModal({ shift, open, onClose }: { shift: LiveShift | null; ope
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function CoordinatorLivePage() {
+  const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const [filter, setFilter] = useState<"all" | "green" | "yellow" | "red">("all");
@@ -627,7 +643,7 @@ export default function CoordinatorLivePage() {
     red:    shifts.filter((s) => s.live_status === "red").length,
   };
 
-  const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+  const lastRefresh = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : translate("common.emDash");
 
   return (
     <div className="pb-10">
@@ -639,10 +655,10 @@ export default function CoordinatorLivePage() {
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-              Live Monitoring
+              {translate("coordinator.live.title")}
             </h1>
             <p className="text-[12px]" style={{ color: MUTED }}>
-              Real-time shift status · refreshes every 10s · last {lastRefresh}
+              {translateParams("coordinator.live.subtitle", { time: lastRefresh })}
             </p>
           </div>
         </div>
@@ -652,7 +668,9 @@ export default function CoordinatorLivePage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-black"
               style={{ background: "#FEF2F2", color: CORAL }}
             >
-              <AlertTriangle size={13} /> {counts.red} Alert{counts.red !== 1 ? "s" : ""}
+              <AlertTriangle size={13} /> {counts.red === 1
+                ? translateParams("coordinator.live.alertCount", { count: String(counts.red) })
+                : translateParams("coordinator.live.alertCountPlural", { count: String(counts.red) })}
             </span>
           )}
           <Button
@@ -662,7 +680,7 @@ export default function CoordinatorLivePage() {
             style={{ borderColor: BORDER }}
             onClick={() => refetch()}
           >
-            <RefreshCw size={13} /> Refresh
+            <RefreshCw size={13} /> {translate("coordinator.live.refresh")}
           </Button>
         </div>
       </div>
@@ -671,8 +689,8 @@ export default function CoordinatorLivePage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-6">
         {(["all", "green", "yellow", "red"] as const).map((k) => {
           const meta = k === "all"
-            ? { ring: PLUM, bg: SOFT, label: "Total Active" }
-            : STATUS_RING[k];
+            ? { ring: PLUM, bg: SOFT, label: translate("coordinator.live.filter.totalActive") }
+            : liveStatusLabel(k, translate);
           return (
             <button
               key={k}
@@ -705,10 +723,12 @@ export default function CoordinatorLivePage() {
         <div className="rounded-2xl p-12 text-center" style={{ background: "var(--cc-bg)", border: `1px solid ${BORDER}` }}>
           <Activity size={36} className="mx-auto mb-3" style={{ color: BORDER }} />
           <p className="font-black text-[16px] mb-1" style={{ color: TEXT }}>
-            {filter === "all" ? "No active shifts right now" : `No ${STATUS_RING[filter as "green" | "yellow" | "red"].label.toLowerCase()} shifts`}
+            {filter === "all"
+              ? translate("coordinator.live.emptyAll")
+              : translateParams("coordinator.live.emptyFiltered", { status: liveStatusLabel(filter as "green" | "yellow" | "red", translate).label.toLowerCase() })}
           </p>
           <p className="text-[13px]" style={{ color: MUTED }}>
-            Shifts will appear here when workers clock in
+            {translate("coordinator.live.emptyHint")}
           </p>
         </div>
       )}

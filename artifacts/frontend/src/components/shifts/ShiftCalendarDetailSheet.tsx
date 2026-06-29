@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { Link } from "wouter";
 import { Clock3, MapPin, Navigation, X } from "lucide-react";
 import {
   Drawer,
@@ -9,8 +10,7 @@ import {
 } from "@/components/ui/drawer";
 import { BORDER, TEXT, MUTED, PLUM, formatShiftTimeRange } from "@/lib/shift-utils";
 import type { CalendarShift } from "@/services/workerCalendarService";
-import { Link } from "wouter";
-
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   shift: CalendarShift | null;
@@ -19,6 +19,7 @@ type Props = {
 };
 
 export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
+  const { translate, translateParams } = useAccessibility();
   if (!shift) return null;
 
   const navUrl = shift.participant_address
@@ -32,7 +33,7 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <DrawerTitle className="text-left text-lg font-black" style={{ color: TEXT }}>
-                {shift.participant_name || "Shift"}
+                {shift.participant_name || translate("shift.calendar.fallbackTitle")}
               </DrawerTitle>
               <p className="mt-1 text-sm font-semibold" style={{ color: MUTED }}>
                 {formatShiftTimeRange(shift.scheduled_start, shift.scheduled_end)}
@@ -58,12 +59,12 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
           )}
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: MUTED }}>
             <Clock3 size={14} />
-            Status: {shift.calendar_status}
+            {translateParams("shift.calendar.status", { status: shift.calendar_status })}
           </div>
           {shift.coordinator_notes && (
             <div className="rounded-xl border bg-cc-bg p-3 text-sm" style={{ borderColor: BORDER }}>
               <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-                Coordinator notes
+                {translate("shift.calendar.coordinatorNotes")}
               </p>
               <p className="mt-1 font-medium" style={{ color: TEXT }}>{shift.coordinator_notes}</p>
             </div>
@@ -78,7 +79,7 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
                 style={{ background: PLUM }}
               >
                 <Navigation size={16} />
-                Navigate
+                {translate("shift.calendar.navigate")}
               </a>
             )}
             <Link href={`/my-shifts/${shift.id}`} className="flex-1">
@@ -87,7 +88,7 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
                 className="w-full rounded-full border py-3 text-xs font-black"
                 style={{ borderColor: BORDER, color: PLUM }}
               >
-                Full details
+                {translate("shift.calendar.fullDetails")}
               </button>
             </Link>
           </div>
@@ -98,8 +99,9 @@ export function ShiftCalendarDetailSheet({ shift, open, onOpenChange }: Props) {
 }
 
 export function anonymiseName(fullName?: string) {
-  const parts = (fullName || "Participant").split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return parts[0] || "Participant";
+  if (!fullName) return "";
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length === 1) return `${parts[0][0]}.`;
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 

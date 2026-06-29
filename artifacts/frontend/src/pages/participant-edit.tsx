@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SmartInput } from "@/components/SmartInput";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { ArrowLeft, Edit, Loader2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
@@ -42,7 +43,6 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-// Updated FormCard: Changed to single column flow on mobile, 2 columns on tablet/desktop
 function FormCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-cc-surface rounded-2xl overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
@@ -57,6 +57,7 @@ function FormCard({ title, children }: { title: string; children: React.ReactNod
 export default function ParticipantEdit({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
 
   const { data: participantData, isLoading } = useGetParticipant(id, {});
   const participant = (participantData as { data?: Record<string, unknown> } | undefined)?.data ?? null;
@@ -103,16 +104,16 @@ export default function ParticipantEdit({ id }: { id: string }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as { detail?: string }).detail ?? "Failed to update");
+        throw new Error((err as { detail?: string }).detail ?? translate("patients.toast.updateFailed"));
       }
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Participant updated successfully" });
+      toast({ title: translate("patients.toast.updated") });
       navigate("/patients");
     },
     onError: (err: Error) => {
-      toast({ title: err.message || "Update failed", variant: "destructive" });
+      toast({ title: err.message || translate("patients.toast.updateFailed"), variant: "destructive" });
     },
   });
 
@@ -130,9 +131,9 @@ export default function ParticipantEdit({ id }: { id: string }) {
   if (!participant) {
     return (
       <div className="max-w-2xl mx-auto text-center py-20 px-4" style={{ color: T2 }}>
-        Participant not found.{" "}
+        {translate("patients.notFound")}{" "}
         <button onClick={() => navigate("/patients")} className="underline font-medium" style={{ color: CORAL }}>
-          Back to Participants
+          {translate("patients.backToList")}
         </button>
       </div>
     );
@@ -148,14 +149,14 @@ export default function ParticipantEdit({ id }: { id: string }) {
           className="flex items-center gap-1.5 transition-opacity hover:opacity-70 py-1.5 -my-1.5"
           style={{ color: T3 }}
         >
-          <ArrowLeft size={14} /> Participants
+          <ArrowLeft size={14} /> {translate("patients.title")}
         </button>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
         <span className="truncate max-w-[120px] sm:max-w-[200px]" style={{ color: T2 }}>
           {String(participant.full_name ?? "")}
         </span>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
-        <span className="font-medium" style={{ color: T1 }}>Edit</span>
+        <span className="font-medium" style={{ color: T1 }}>{translate("common.edit")}</span>
       </div>
 
       {/* Header Info Banner */}
@@ -165,9 +166,12 @@ export default function ParticipantEdit({ id }: { id: string }) {
           <Edit size={18} style={{ color: PLUM }} />
         </div>
         <div className="min-w-0">
-          <h1 className="text-[22px] font-bold leading-tight truncate" style={{ color: T1 }}>Edit Participant</h1>
+          <h1 className="text-[22px] font-bold leading-tight truncate" style={{ color: T1 }}>{translate("patients.editTitle")}</h1>
           <p className="text-[13px] mt-0.5 truncate" style={{ color: T2 }}>
-            {String(participant.full_name ?? "")} · <span className="font-medium">NDIS:</span> {String(participant.ndis_number ?? "")}
+            {translateParams("patients.editSubtitle", {
+              name: String(participant.full_name ?? ""),
+              ndis: String(participant.ndis_number ?? ""),
+            })}
           </p>
         </div>
       </div>
@@ -176,26 +180,26 @@ export default function ParticipantEdit({ id }: { id: string }) {
         <form onSubmit={form.handleSubmit((d) => updateMutation.mutate(d))} className="space-y-5">
 
           {/* SECTION 1: Personal Details */}
-          <FormCard title="Personal Details">
+          <FormCard title={translate("patients.section.personalDetails")}>
             <FormField control={form.control} name="full_name" render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Full Name <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.fullName")} <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.fullName")} data-testid="input-full-name" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="ndis_number" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.ndisNumber")} <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.ndisNumber")} data-testid="input-ndis-number" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="date_of_birth" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.dateOfBirth")} <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-date-of-birth" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -203,26 +207,26 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
             <FormField control={form.control} name="email" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Email</FormLabel>
-                <FormControl><Input type="email" className="h-10 text-[14px] rounded-xl" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.email")}</FormLabel>
+                <FormControl><Input type="email" className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.email")} data-testid="input-email" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Phone</FormLabel>
-                <FormControl><Input type="tel" className="h-10 text-[14px] rounded-xl" placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.phone")}</FormLabel>
+                <FormControl><Input type="tel" className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             <FormField control={form.control} name="primary_disability" render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Primary Disability</FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.primaryDisability")}</FormLabel>
                 <FormControl>
                   <SmartInput
-                    placeholder="e.g. Autism Spectrum Disorder"
+                    placeholder={translate("patients.placeholder.primaryDisabilityShort")}
                     data-testid="input-primary-disability"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
@@ -234,7 +238,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
             <FormField control={form.control} name="biological_sex" render={({ field }) => (
               <FormItem className="sm:col-span-2 md:col-span-1">
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Biological Sex</FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.biologicalSex")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
                     <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-biological-sex" style={{ borderColor: BORDER }}>
@@ -242,9 +246,9 @@ export default function ParticipantEdit({ id }: { id: string }) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="unspecified">Prefer not to say</SelectItem>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="unspecified">{translate("patients.sex.unspecified")}</SelectItem>
+                    <SelectItem value="male">{translate("patients.sex.male")}</SelectItem>
+                    <SelectItem value="female">{translate("patients.sex.female")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -253,10 +257,10 @@ export default function ParticipantEdit({ id }: { id: string }) {
           </FormCard>
 
           {/* SECTION 2: NDIS Plan */}
-          <FormCard title="NDIS Plan">
+          <FormCard title={translate("patients.section.ndisPlan")}>
             <FormField control={form.control} name="plan_status" render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.planStatus")} <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger className="h-10 text-[14px] rounded-xl bg-cc-surface" data-testid="select-plan-status" style={{ borderColor: BORDER }}>
@@ -264,11 +268,11 @@ export default function ParticipantEdit({ id }: { id: string }) {
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="review">Review</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="active">{translate("patients.planStatus.active")}</SelectItem>
+                    <SelectItem value="review">{translate("patients.planStatus.review")}</SelectItem>
+                    <SelectItem value="pending">{translate("patients.planStatus.pending")}</SelectItem>
+                    <SelectItem value="inactive">{translate("patients.planStatus.inactive")}</SelectItem>
+                    <SelectItem value="expired">{translate("patients.planStatus.expired")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -277,7 +281,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
             <FormField control={form.control} name="plan_start_date" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan Start Date</FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.planStartDate")}</FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-start-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -285,7 +289,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
             <FormField control={form.control} name="plan_end_date" render={({ field }) => (
               <FormItem>
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Plan End Date</FormLabel>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.planEndDate")}</FormLabel>
                 <FormControl><Input type="date" className="h-10 text-[14px] rounded-xl native-calendar-picker" data-testid="input-plan-end-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -293,8 +297,8 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
             <FormField control={form.control} name="total_budget" render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>Total Budget ($)</FormLabel>
-                <FormControl><Input type="number" className="h-10 text-[14px] rounded-xl" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>
+                <FormLabel className="text-[12px] font-medium" style={{ color: T2 }}>{translate("patients.field.totalBudget")}</FormLabel>
+                <FormControl><Input type="number" className="h-10 text-[14px] rounded-xl" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -308,7 +312,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
               className="h-11 sm:h-10 px-5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB] text-center"
               style={{ borderColor: BORDER, color: T2 }}
             >
-              Cancel
+              {translate("common.cancel")}
             </button>
             <button
               type="submit"
@@ -319,12 +323,12 @@ export default function ParticipantEdit({ id }: { id: string }) {
               {updateMutation.isPending ? (
                 <>
                   <Loader2 size={14} className="animate-spin" />
-                  <span>Saving Changes...</span>
+                  <span>{translate("common.saving")}</span>
                 </>
               ) : (
                 <>
                   <Edit size={14} />
-                  <span>Save Changes</span>
+                  <span>{translate("patients.saveChanges")}</span>
                 </>
               )}
             </button>

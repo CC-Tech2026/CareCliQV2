@@ -1,7 +1,10 @@
 ﻿import { AlertCircle } from "lucide-react";
 import { Link } from "wouter";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 export default function NotFound() {
+  const { translate: t } = useAccessibility();
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center" style={{ background: "var(--cc-soft)" }}>
       <div
@@ -14,16 +17,16 @@ export default function NotFound() {
         >
           <AlertCircle className="h-7 w-7" style={{ color: "#F1738A" }} />
         </div>
-        <h1 className="text-[22px] font-bold mb-2" style={{ color: "#1C1626" }}>Page Not Found</h1>
+        <h1 className="text-[22px] font-bold mb-2" style={{ color: "#1C1626" }}>{t("auth.notFound.title")}</h1>
         <p className="text-[14px] mb-6" style={{ color: "var(--cc-text)" }}>
-          The page you're looking for doesn't exist or may have moved.
+          {t("auth.notFound.description")}
         </p>
         <Link href="/dashboard">
           <span
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
             style={{ background: "var(--cc-plum)" }}
           >
-            Go to Dashboard
+            {t("auth.notFound.back")}
           </span>
         </Link>
       </div>

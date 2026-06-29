@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   actionTravelSubmission,
   getCoordinatorTravelSettings,
@@ -35,6 +36,7 @@ function formatDate(iso?: string | null) {
 
 export default function CoordinatorTravelExpenses() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const queryClient = useQueryClient();
   const [rateDraft, setRateDraft] = useState("");
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -54,16 +56,16 @@ export default function CoordinatorTravelExpenses() {
     mutationFn: () => {
       const cents = Math.round(Number(rateDraft) * 100);
       if (!rateDraft || Number.isNaN(cents) || cents <= 0) {
-        throw new Error("Enter a valid rate per km.");
+        throw new Error(translate("coordinator.travel.error.invalidRate"));
       }
       return updateCoordinatorTravelRate(cents);
     },
     onSuccess: (res) => {
-      toast({ title: "Mileage rate updated", description: res.rate_display });
+      toast({ title: translate("coordinator.travel.toast.rateUpdated"), description: res.rate_display });
       queryClient.invalidateQueries({ queryKey: ["coordinator", "travel-settings"] });
     },
     onError: (e: Error) =>
-      toast({ title: "Update failed", description: e.message, variant: "destructive" }),
+      toast({ title: translate("coordinator.travel.toast.updateFailed"), description: e.message, variant: "destructive" }),
   });
 
   const actionMut = useMutation({
@@ -79,26 +81,26 @@ export default function CoordinatorTravelExpenses() {
       mark_paid?: boolean;
     }) => actionTravelSubmission(id, { approve, rejection_reason, mark_paid }),
     onSuccess: () => {
-      toast({ title: "Submission updated" });
+      toast({ title: translate("coordinator.travel.toast.submissionUpdated") });
       setRejectId(null);
       setRejectReason("");
       void refetch();
     },
     onError: (e: Error) =>
-      toast({ title: "Action failed", description: e.message, variant: "destructive" }),
+      toast({ title: translate("coordinator.travel.toast.actionFailed"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24 sm:p-6">
       <header>
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
-          Reimbursement
+          {translate("coordinator.travel.eyebrow")}
         </p>
         <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>
-          Travel expense approvals
+          {translate("coordinator.travel.title")}
         </h1>
         <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
-          Review worker mileage and transit claims, then approve or reject.
+          {translate("coordinator.travel.subtitle")}
         </p>
       </header>
 
@@ -106,7 +108,7 @@ export default function CoordinatorTravelExpenses() {
         <div className="mb-3 flex items-center gap-2">
           <Settings2 size={18} style={{ color: PLUM }} />
           <h2 className="text-sm font-black" style={{ color: TEXT }}>
-            Organisation mileage rate
+            {translate("coordinator.travel.mileageRate")}
           </h2>
         </div>
         {settings?.rate_display && (
@@ -117,7 +119,7 @@ export default function CoordinatorTravelExpenses() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1">
             <Label htmlFor="mileage-rate" className="text-xs text-cc-muted">
-              New rate ($/km)
+              {translate("coordinator.travel.newRate")}
             </Label>
             <Input
               id="mileage-rate"
@@ -137,23 +139,23 @@ export default function CoordinatorTravelExpenses() {
             disabled={rateMut.isPending}
             onClick={() => rateMut.mutate()}
           >
-            {rateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update rate"}
+            {rateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("coordinator.travel.updateRate")}
           </Button>
         </div>
       </section>
 
       <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <h2 className="text-sm font-black" style={{ color: TEXT }}>
-          Pending submissions ({submissions.length})
+          {translateParams("coordinator.travel.pendingSubmissions", { count: String(submissions.length) })}
         </h2>
 
         {isLoading ? (
           <p className="mt-4 text-sm" style={{ color: MUTED }}>
-            Loading…
+            {translate("common.loading")}
           </p>
         ) : submissions.length === 0 ? (
           <p className="mt-4 rounded-xl bg-cc-bg p-4 text-sm font-medium" style={{ color: MUTED }}>
-            No pending travel expense submissions.
+            {translate("coordinator.travel.noSubmissions")}
           </p>
         ) : (
           <ul className="mt-4 space-y-4">
@@ -165,7 +167,10 @@ export default function CoordinatorTravelExpenses() {
                       {sub.worker_name}
                     </p>
                     <p className="text-xs" style={{ color: MUTED }}>
-                      Submitted {formatDate(sub.submitted_at)} · {formatAud(sub.total_amount_cents)}
+                      {translateParams("coordinator.travel.submitted", {
+                        date: formatDate(sub.submitted_at),
+                        amount: formatAud(sub.total_amount_cents),
+                      })}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -177,7 +182,7 @@ export default function CoordinatorTravelExpenses() {
                       onClick={() => actionMut.mutate({ id: sub.id, approve: true })}
                     >
                       <Check size={14} />
-                      Approve
+                      {translate("coordinator.travel.approve")}
                     </Button>
                     <Button
                       type="button"
@@ -188,7 +193,7 @@ export default function CoordinatorTravelExpenses() {
                       onClick={() => setRejectId(sub.id)}
                     >
                       <X size={14} />
-                      Reject
+                      {translate("coordinator.travel.reject")}
                     </Button>
                   </div>
                 </div>
@@ -199,7 +204,7 @@ export default function CoordinatorTravelExpenses() {
                       <span className="flex items-center gap-2 capitalize" style={{ color: TEXT }}>
                         {exp.expense_type === "mileage" ? <Car size={14} /> : <Bus size={14} />}
                         {exp.expense_type}
-                        {exp.claimed_km != null ? ` · ${exp.claimed_km} km` : ""}
+                        {exp.claimed_km != null ? translateParams("coordinator.travel.kmSuffix", { km: String(exp.claimed_km) }) : ""}
                         {exp.transit_type ? ` · ${exp.transit_type}` : ""}
                       </span>
                       <span className="font-bold">{formatAud(exp.amount_cents)}</span>
@@ -210,13 +215,13 @@ export default function CoordinatorTravelExpenses() {
                 {rejectId === sub.id && (
                   <div className="mt-3 space-y-2 rounded-xl bg-red-50 p-3">
                     <Label htmlFor={`reject-${sub.id}`} className="text-xs font-bold text-red-800">
-                      Rejection reason
+                      {translate("coordinator.travel.rejectionReason")}
                     </Label>
                     <Textarea
                       id={`reject-${sub.id}`}
                       value={rejectReason}
                       onChange={(e) => setRejectReason(e.target.value)}
-                      placeholder="Explain why this claim is rejected…"
+                      placeholder={translate("coordinator.travel.rejectionPlaceholder")}
                       className="bg-cc-surface"
                     />
                     <div className="flex gap-2">
@@ -233,10 +238,10 @@ export default function CoordinatorTravelExpenses() {
                           })
                         }
                       >
-                        Confirm reject
+                        {translate("coordinator.travel.confirmReject")}
                       </Button>
                       <Button type="button" size="sm" variant="ghost" onClick={() => setRejectId(null)}>
-                        Cancel
+                        {translate("common.cancel")}
                       </Button>
                     </div>
                   </div>

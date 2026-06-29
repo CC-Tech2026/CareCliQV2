@@ -6,6 +6,7 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // Design tokens aligned with billing.tsx
 const PLUM   = "var(--cc-plum)";
@@ -20,6 +21,7 @@ interface PriceEditorProps {
 }
 
 export function NdisPriceEditor({ onClose }: PriceEditorProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { requireReAuth } = useReAuth();
   
@@ -33,7 +35,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
 
   async function loadHistory() {
     if (!itemCode.trim()) {
-      toast({ title: "Item code required", description: "Enter an item code to view history", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.itemCodeRequired"), description: translate("coordinator.ndis.price.enterItemCode"), variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -42,7 +44,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       setHistory(h);
       setShowHistory(true);
     } catch (err) {
-      toast({ title: "History not found", description: (err as Error).message, variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.historyNotFound"), description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -50,19 +52,19 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
 
   async function handleSavePrice() {
     if (!itemCode.trim()) {
-      toast({ title: "Item code required", description: "Enter an NDIS item code", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.itemCodeRequired"), description: translate("coordinator.ndis.price.enterNdisCode"), variant: "destructive" });
       return;
     }
     if (!priceNational || Number(priceNational) <= 0) {
-      toast({ title: "Valid price required", description: "Enter a price greater than 0", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.validPriceRequired"), description: translate("coordinator.ndis.price.priceGreaterThanZero"), variant: "destructive" });
       return;
     }
     if (!effectiveDate) {
-      toast({ title: "Effective date required", description: "Select when this price takes effect", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.effectiveDateRequired"), description: translate("coordinator.ndis.price.selectEffectiveDate"), variant: "destructive" });
       return;
     }
     if (!reason.trim()) {
-      toast({ title: "Reason required", description: "Provide a reason for this price change", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.reasonRequired"), description: translate("coordinator.ndis.price.provideReason"), variant: "destructive" });
       return;
     }
 
@@ -80,8 +82,8 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       if (!res) return;
       
       toast({ 
-        title: "Price updated", 
-        description: `${itemCode} effective ${effectiveDate}`,
+        title: translate("coordinator.ndis.price.updated"), 
+        description: translateParams("coordinator.ndis.price.updatedDesc", { code: itemCode, date: effectiveDate }),
       });
       
       // Reset form
@@ -92,7 +94,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       setHistory([]);
       setShowHistory(false);
     } catch (err) {
-      toast({ title: "Update failed", description: (err as Error).message, variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.price.updateFailed"), description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -103,7 +105,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
       <div className="w-full max-w-2xl mx-4 rounded-lg bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>Edit NDIS Item Price</h2>
+          <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("coordinator.ndis.price.title")}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <X className="w-5 h-5" style={{ color: MUTED }} />
           </button>
@@ -112,12 +114,12 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
         <div className="p-6 space-y-6">
           {/* Item Code Input */}
           <div>
-            <Label className="text-xs font-bold" style={{ color: MUTED }}>NDIS Item Code</Label>
+            <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.itemCode")}</Label>
             <div className="flex gap-2 mt-1.5">
               <Input 
                 value={itemCode}
                 onChange={e => setItemCode(e.target.value.toUpperCase())}
-                placeholder="e.g. 01_011_0107_1_1"
+                placeholder={translate("coordinator.ndis.price.itemCodePlaceholder")}
                 className="mt-0 rounded-lg flex-1"
                 style={{ borderColor: BORDER }}
               />
@@ -127,14 +129,14 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
                 className="px-4 py-2 rounded-full text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
                 style={{ background: PLUM }}
               >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "View History"}
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" />  : translate("coordinator.ndis.price.viewHistory")}
               </button>
             </div>
           </div>
 
           {/* Price Input */}
           <div>
-            <Label className="text-xs font-bold" style={{ color: MUTED }}>New Price (National, AUD per hour)</Label>
+            <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.newPrice")}</Label>
             <Input 
               type="number"
               min={0}
@@ -149,7 +151,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
 
           {/* Effective Date */}
           <div>
-            <Label className="text-xs font-bold" style={{ color: MUTED }}>Effective Date</Label>
+            <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.effectiveDate")}</Label>
             <Input 
               type="date"
               value={effectiveDate}
@@ -164,7 +166,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
 
           {/* Reason */}
           <div>
-            <Label className="text-xs font-bold" style={{ color: MUTED }}>Reason for Change <span className="font-medium">(audit trail)</span></Label>
+            <Label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.price.reason")} <span className="font-medium">{translate("coordinator.ndis.price.auditTrail")}</span></Label>
             <textarea 
               value={reason}
               onChange={e => setReason(e.target.value)}
@@ -178,7 +180,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
           {/* History Panel */}
           {showHistory && history.length > 0 && (
             <div className="rounded-lg p-4 border" style={{ background: SOFT, borderColor: BORDER }}>
-              <p className="text-xs font-bold mb-3" style={{ color: MUTED }}>RECENT VERSIONS (last 5)</p>
+              <p className="text-xs font-bold mb-3" style={{ color: MUTED }}>{translate("coordinator.ndis.price.recentVersions")}</p>
               <div className="divide-y space-y-2" style={{ borderColor: "#EEEAFB" }}>
                 {history.map((item, idx) => (
                   <div key={idx} className="py-2 text-xs">
@@ -187,7 +189,7 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
                         ${(item.price_national / 100).toFixed(2)}/h
                       </span>
                       <span style={{ color: MUTED }}>
-                        {item.valid_from} {item.valid_to ? `→ ${item.valid_to}` : "(current)"}
+                        {item.valid_from} {item.valid_to ? `→ ${item.valid_to}` : translate("coordinator.ndis.price.current")}
                       </span>
                     </div>
                     {item.edited_by && (
@@ -219,12 +221,12 @@ export function NdisPriceEditor({ onClose }: PriceEditorProps) {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Updating...
+                  {translate("coordinator.ndis.price.updating")}
                 </>
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Save Price Change
+                  {translate("coordinator.ndis.price.saveChange")}
                 </>
               )}
             </button>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
@@ -12,24 +13,25 @@ type Props = {
 
 const SCANNER_ID = "clock-in-qr-scanner";
 
-function friendlyCameraError(err: unknown): string {
-  const message = (err as Error)?.message?.toLowerCase() ?? "";
-  if (
-    message.includes("notallowed") ||
-    message.includes("permission") ||
-    message.includes("denied")
-  ) {
-    return "Camera permission denied.";
-  }
-  if (message.includes("notfound") || message.includes("no camera")) {
-    return "No camera found on this device.";
-  }
-  return "Could not start the camera.";
-}
-
 export function ClockInQrScanner({ open, onClose, onScan, onError }: Props) {
+  const { translate } = useAccessibility();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [starting, setStarting] = useState(false);
+
+  const friendlyCameraError = (err: unknown): string => {
+    const message = (err as Error)?.message?.toLowerCase() ?? "";
+    if (
+      message.includes("notallowed") ||
+      message.includes("permission") ||
+      message.includes("denied")
+    ) {
+      return translate("shift.qr.cameraDenied");
+    }
+    if (message.includes("notfound") || message.includes("no camera")) {
+      return translate("shift.qr.noCamera");
+    }
+    return translate("shift.qr.startFailed");
+  };
 
   useEffect(() => {
     if (!open) {
@@ -73,14 +75,14 @@ export function ClockInQrScanner({ open, onClose, onScan, onError }: Props) {
       void scannerRef.current?.stop().catch(() => undefined);
       scannerRef.current = null;
     };
-  }, [open, onClose, onScan, onError]);
+  }, [open, onClose, onScan, onError, translate]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black p-4">
       <div className="mb-3 flex items-center justify-between text-white">
-        <h2 className="text-sm font-black uppercase tracking-wide">Scan location QR</h2>
+        <h2 className="text-sm font-black uppercase tracking-wide">{translate("shift.qr.title")}</h2>
         <Button type="button" variant="ghost" size="icon" className="text-white hover:bg-cc-bg/10" onClick={onClose}>
           <X className="h-5 w-5" />
         </Button>
@@ -94,7 +96,7 @@ export function ClockInQrScanner({ open, onClose, onScan, onError }: Props) {
         )}
       </div>
       <p className="mt-4 text-center text-sm text-white/80">
-        Point your camera at the QR code posted at the participant&apos;s location.
+        {translate("shift.qr.hint")}
       </p>
     </div>
   );

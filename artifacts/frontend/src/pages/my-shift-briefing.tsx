@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { format, parseISO } from "date-fns";
 import { Link, useLocation, useParams } from "wouter";
 import {
@@ -26,6 +26,7 @@ import {
   type ShiftBriefingPayload,
 } from "@/services/shiftService";
 import { cn } from "@/lib/utils";
+import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
 
 function formatNoteDate(value?: string | null) {
   if (!value) return "";
@@ -47,10 +48,16 @@ function formatUpdatedDate(value?: string | null) {
 
 export default function MyShiftBriefing() {
   const params = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const shiftId = (params.id || "").trim();
   const { toast } = useToast();
   const { translate } = useAccessibility();
+  const tutorial = useWorkerTutorialOptional();
+  const isTutorial = useMemo(
+    () => location.includes("tutorial=1") || (tutorial?.isTutorialMode ?? false),
+    [location, tutorial?.isTutorialMode],
+  );
+  const isReview = useMemo(() => location.includes("review=1"), [location]);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
@@ -62,10 +69,10 @@ export default function MyShiftBriefing() {
   );
 
   useEffect(() => {
-    if (briefing?.briefing_complete) {
+    if (briefing?.briefing_complete && !isTutorial && !isReview) {
       navigate(`/my-shifts/${shiftId}`);
     }
-  }, [briefing?.briefing_complete, navigate, shiftId]);
+  }, [briefing?.briefing_complete, isTutorial, isReview, navigate, shiftId]);
 
   const checkScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -119,6 +126,14 @@ export default function MyShiftBriefing() {
     try {
       await completeShiftBriefing(shiftId, true);
       toast({ title: translate("shift.briefing.readyConfirmed") });
+      if (isTutorial && tutorial?.activeStep?.key === "pre_shift_briefing_complete") {
+        const marker = document.createElement("div");
+        marker.setAttribute("data-tutorial", "briefing-complete-marker");
+        marker.className = "sr-only";
+        document.body.appendChild(marker);
+        await tutorial.nextStep();
+        return;
+      }
       navigate(`/my-shifts/${shiftId}`);
     } catch (err) {
       toast({
@@ -168,7 +183,10 @@ export default function MyShiftBriefing() {
   const canComplete = briefing.all_alerts_acknowledged && scrolledToBottom;
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-[var(--cc-bg)]">
+    <div
+      className="flex min-h-[calc(100vh-4rem)] flex-col bg-[var(--cc-bg)]"
+      data-tutorial="briefing-page"
+    >
       <header
         className="shrink-0 border-b bg-[var(--cc-surface)]"
         style={{ borderColor: BORDER }}
@@ -262,6 +280,7 @@ export default function MyShiftBriefing() {
                 : "#94A3B8",
             }}
             disabled={busy !== null || !canComplete}
+            data-tutorial="briefing-complete"
             onClick={() => void handleComplete()}
           >
             {busy === "complete" ? (

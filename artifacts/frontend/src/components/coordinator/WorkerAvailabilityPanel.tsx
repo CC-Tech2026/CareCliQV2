@@ -18,6 +18,7 @@ import {
   type BlackoutDate,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -26,19 +27,27 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEYS = [
+  "coordinator.bulkShift.day.mon",
+  "coordinator.bulkShift.day.tue",
+  "coordinator.bulkShift.day.wed",
+  "coordinator.bulkShift.day.thu",
+  "coordinator.bulkShift.day.fri",
+  "coordinator.bulkShift.day.sat",
+  "coordinator.bulkShift.day.sun",
+];
 
-const COMMON_SKILLS = [
-  "Mobility Assistance",
-  "Continence Care",
-  "Medication Administration",
-  "Mental Health Awareness",
-  "Dementia Care",
-  "Autism Support",
-  "Complex Behaviour Support",
-  "Manual Handling",
-  "First Aid",
-  "Epilepsy Management",
+const COMMON_SKILL_KEYS = [
+  "coordinator.availability.skill.mobility",
+  "coordinator.availability.skill.continence",
+  "coordinator.availability.skill.medication",
+  "coordinator.availability.skill.mentalHealth",
+  "coordinator.availability.skill.dementia",
+  "coordinator.availability.skill.autism",
+  "coordinator.availability.skill.behaviour",
+  "coordinator.availability.skill.manualHandling",
+  "coordinator.availability.skill.firstAid",
+  "coordinator.availability.skill.epilepsy",
 ];
 
 interface WorkerAvailabilityPanelProps {
@@ -48,6 +57,7 @@ interface WorkerAvailabilityPanelProps {
 
 export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityPanelProps) {
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const [tab, setTab] = useState<"availability" | "skills">("availability");
 
   // Availability
@@ -85,10 +95,10 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
         blackout_dates: blackouts,
       }),
     onSuccess: () => {
-      toast({ title: "Availability saved" });
+      toast({ title: translate("coordinator.availability.saved") });
       refetchAvail();
     },
-    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: translate("coordinator.availability.saveFailed"), description: e.message, variant: "destructive" }),
   });
 
   const addBlackout = () => {
@@ -129,7 +139,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>
           <h3 className="text-[15px] font-black" style={{ color: TEXT }}>{worker.full_name}</h3>
-          <p className="text-[11px]" style={{ color: MUTED }}>Availability & Skills</p>
+          <p className="text-[11px]" style={{ color: MUTED }}>{translate("coordinator.availability.subtitle")}</p>
         </div>
         {onClose && (
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
@@ -142,7 +152,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
       <div className="flex" style={{ borderBottom: `1px solid ${BORDER}` }}>
         {(["availability", "skills"] as const).map((t) => (
           <button
-            key={t}
+            key={translate(`coordinator.availability.tab.${t}`)}
             onClick={() => setTab(t)}
             className="flex-1 py-2.5 text-[12px] font-black capitalize transition-colors"
             style={{
@@ -150,7 +160,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               borderBottom: tab === t ? `2px solid ${PLUM}` : "2px solid transparent",
             }}
           >
-            {t}
+            {translate(`coordinator.availability.tab.${t}`)}
           </button>
         ))}
       </div>
@@ -160,9 +170,9 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
           <div className="space-y-5">
             {/* Days of week */}
             <div>
-              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>Available Days</p>
+              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>{translate("coordinator.availability.availableDays")}</p>
               <div className="flex gap-1.5 flex-wrap">
-                {DAYS.map((label, i) => {
+                {DAY_KEYS.map((dayKey, i) => {
                   const val = i + 1;
                   const active = availDays.includes(val);
                   return (
@@ -176,7 +186,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                         border: `1px solid ${active ? PLUM : BORDER}`,
                       }}
                     >
-                      {label}
+                      {translate(dayKey)}
                     </button>
                   );
                 })}
@@ -186,7 +196,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
             {/* Hours */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>Day Start</p>
+                <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.dayStart")}</p>
                 <input
                   type="time"
                   value={startTime}
@@ -196,7 +206,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                 />
               </div>
               <div>
-                <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>Day End</p>
+                <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.dayEnd")}</p>
                 <input
                   type="time"
                   value={endTime}
@@ -209,7 +219,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
 
             {/* Max hours */}
             <div>
-              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>Max Hours / Week</p>
+              <p className="text-[11px] font-black mb-1.5" style={{ color: TEXT }}>{translate("coordinator.availability.maxHours")}</p>
               <input
                 type="number"
                 min={1}
@@ -223,7 +233,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
 
             {/* Blackout dates */}
             <div>
-              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>Blackout Dates</p>
+              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>{translate("coordinator.availability.blackoutDates")}</p>
               {blackouts.map((b, i) => (
                 <div key={i} className="flex items-center justify-between rounded-lg border px-3 py-1.5 mb-1.5" style={{ borderColor: BORDER }}>
                   <div>
@@ -237,12 +247,12 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               ))}
               <div className="space-y-1.5 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={newBlackout.start_date} onChange={(e) => setNewBlackout((b) => ({ ...b, start_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder="Start" />
-                  <input type="date" value={newBlackout.end_date} onChange={(e) => setNewBlackout((b) => ({ ...b, end_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder="End" />
+                  <input type="date" value={newBlackout.start_date} onChange={(e) => setNewBlackout((b) => ({ ...b, start_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.blackoutStart")} />
+                  <input type="date" value={newBlackout.end_date} onChange={(e) => setNewBlackout((b) => ({ ...b, end_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.blackoutEnd")} />
                 </div>
-                <input value={newBlackout.reason} onChange={(e) => setNewBlackout((b) => ({ ...b, reason: e.target.value }))} className="w-full rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder="Reason (optional)" />
+                <input value={newBlackout.reason} onChange={(e) => setNewBlackout((b) => ({ ...b, reason: e.target.value }))} className="w-full rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.reasonOptional")} />
                 <button onClick={addBlackout} disabled={!newBlackout.start_date || !newBlackout.end_date} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white" style={{ background: PLUM, opacity: !newBlackout.start_date ? 0.5 : 1 }}>
-                  <Plus size={10} /> Add Date
+                  <Plus size={10} /> {translate("coordinator.availability.addDate")}
                 </button>
               </div>
             </div>
@@ -253,16 +263,16 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               className="w-full rounded-xl py-2.5 text-[12px] font-black text-white"
               style={{ background: PLUM, opacity: saveMut.isPending ? 0.65 : 1 }}
             >
-              {saveMut.isPending ? "Saving…" : "Save Availability"}
+              {saveMut.isPending ? translate("common.saving") : translate("coordinator.availability.saveAvailability")}
             </button>
           </div>
         ) : (
           <div className="space-y-4">
             {/* Current skills */}
             <div>
-              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>Certified Skills</p>
+              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>{translate("coordinator.availability.certifiedSkills")}</p>
               {skills.length === 0 ? (
-                <p className="text-[12px]" style={{ color: MUTED }}>No skills recorded yet.</p>
+                <p className="text-[12px]" style={{ color: MUTED }}>{translate("coordinator.availability.noSkills")}</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {skills.map((s) => (
@@ -287,7 +297,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
 
             {/* Add skill */}
             <div>
-              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>Add Skill</p>
+              <p className="text-[11px] font-black mb-2" style={{ color: TEXT }}>{translate("coordinator.availability.addSkill")}</p>
               <div className="flex gap-2">
                 <input
                   value={newSkill}
@@ -295,7 +305,7 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   onKeyDown={(e) => e.key === "Enter" && newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
                   className="flex-1 rounded-xl border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3]"
                   style={{ borderColor: BORDER }}
-                  placeholder="Skill name…"
+                  placeholder={translate("coordinator.availability.skillPlaceholder")}
                 />
                 <button
                   onClick={() => newSkill.trim() && addSkillMut.mutate(newSkill.trim())}
@@ -307,14 +317,14 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                 </button>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {COMMON_SKILLS.filter((s) => !skills.some((ws) => ws.skill === s)).slice(0, 6).map((s) => (
+                {COMMON_SKILL_KEYS.filter((key) => !skills.some((ws) => ws.skill === translate(key))).slice(0, 6).map((key) => (
                   <button
-                    key={s}
-                    onClick={() => addSkillMut.mutate(s)}
+                    key={key}
+                    onClick={() => addSkillMut.mutate(translate(key))}
                     className="rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-[#EDE9FF]"
                     style={{ borderColor: BORDER, color: MUTED }}
                   >
-                    + {s}
+                    + {translate(key)}
                   </button>
                 ))}
               </div>

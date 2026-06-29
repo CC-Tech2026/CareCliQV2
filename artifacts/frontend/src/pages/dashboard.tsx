@@ -28,6 +28,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   getCoordinatorDashboard,
   getWorkerDashboard,
@@ -64,9 +65,15 @@ function safeDate(value?: string | null, fallback = "Not recorded") {
 }
 
 function statusTone(status?: string) {
-  const color = getStatusColor(status);
-  const bg = DS.STATUS_BG[status === "compliant" ? "success" : status === "non_compliant" ? "critical" : status === "draft" ? "info" : "warning"];
-  return `${bg === DS.STATUS_BG.success ? "bg-emerald-50" : bg === DS.STATUS_BG.critical ? "bg-red-50" : bg === DS.STATUS_BG.info ? "bg-slate-50" : "bg-amber-50"} border`;
+  const tone =
+    status === "compliant"
+      ? "success"
+      : status === "non_compliant"
+        ? "critical"
+        : status === "draft"
+          ? "info"
+          : "warning";
+  return `border px-2.5 py-1 text-[11px] font-bold cc-status-${tone}`;
 }
 
 function DashboardStatCard({
@@ -119,6 +126,8 @@ function DashboardStatCard({
 }
 
 function ClientListCard({ clients }: { clients: DashboardClient[] }) {
+  const { translate, translateParams } = useAccessibility();
+
   return (
     <section
       className="rounded-lg border bg-white p-6"
@@ -128,13 +137,13 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
       }}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Clients</h2>
-        <Link href="/my-clients" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>My Clients</Link>
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("dashboard.todaysClients")}</h2>
+        <Link href="/my-clients" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>{translate("dashboard.myClients")}</Link>
       </div>
       <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
           <p className="rounded-lg bg-[#F8F8FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-            No assigned sessions are scheduled for today.
+            {translate("dashboard.noClientsToday")}
           </p>
         )}
         {clients.map((client) => (
@@ -146,7 +155,10 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{client.full_name}</p>
                 <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                  {client.plan_management_type} · Last seen {safeDate(client.last_seen)}
+                  {client.plan_management_type} ·{" "}
+                  {client.last_seen
+                    ? translateParams("clients.lastSeenOn", { date: safeDate(client.last_seen) })
+                    : translate("clients.notSeenYet")}
                 </p>
               </div>
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusTone(client.compliance_status)}`}>
@@ -900,16 +912,19 @@ function WorkerStatCard({
   value: number | string;
   variant?: "default" | "warning" | "critical";
 }) {
-  const valueClass =
+  const valueColor =
     variant === "warning"
-      ? "text-amber-600"
+      ? "var(--cc-status-warning)"
       : variant === "critical"
-        ? "text-red-600"
-        : "text-[#3730A3]";
+        ? "var(--cc-status-critical)"
+        : "var(--cc-plum)";
   return (
-    <div className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-4 text-center shadow-sm transition-shadow hover:shadow-md">
-      <p className={`text-2xl font-black ${valueClass}`}>{value}</p>
-      <p className="mt-1 text-xs font-semibold leading-tight text-[#6B7280]">{label}</p>
+    <div
+      className="rounded-2xl border bg-cc-surface px-4 py-4 text-center shadow-sm transition-shadow hover:shadow-md"
+      style={{ borderColor: "var(--cc-border)" }}
+    >
+      <p className="text-2xl font-black" style={{ color: valueColor }}>{value}</p>
+      <p className="mt-1 text-xs font-semibold leading-tight" style={{ color: "var(--cc-muted)" }}>{label}</p>
     </div>
   );
 }
@@ -923,6 +938,7 @@ function WorkerDashboardView({
 }) {
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
   const { user } = useAuth();
+  const { translate } = useAccessibility();
   const firstName = (user?.full_name || "there").split(" ")[0];
   const dateLabel = format(new Date(), "EEEE d MMMM");
 
@@ -944,9 +960,9 @@ function WorkerDashboardView({
             Support Worker
           </p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-            Dashboard
+            {translate("dashboard.title")}
           </h1>
-          <p className="mt-1 text-sm font-medium text-[#6B7280]">
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
             {dateLabel}
           </p>
         </div>
@@ -957,7 +973,7 @@ function WorkerDashboardView({
               className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
               style={{ background: PLUM }}
             >
-              My Clients
+              {translate("dashboard.myClients")}
             </button>
           </Link>
         </div>
@@ -965,15 +981,15 @@ function WorkerDashboardView({
 
       {/* Key stats — 2-col on mobile, 4-col on sm+ */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <WorkerStatCard label="Sessions today" value={data.sessions_today} />
+        <WorkerStatCard label={translate("dashboard.sessionsToday")} value={data.sessions_today} />
         <WorkerStatCard
-          label="Notes due"
+          label={translate("dashboard.notesDue")}
           value={data.notes_due}
           variant={data.notes_due > 0 ? "warning" : "default"}
         />
-        <WorkerStatCard label="My clients" value={data.assigned_clients.length} />
+        <WorkerStatCard label={translate("dashboard.myClients")} value={data.assigned_clients.length} />
         <WorkerStatCard
-          label="Pending fixes"
+          label={translate("dashboard.pendingFixes")}
           value={data.pending_compliance_fixes.length}
           variant={data.pending_compliance_fixes.length > 0 ? "critical" : "default"}
         />
@@ -998,7 +1014,7 @@ function WorkerDashboardView({
           className="rounded-2xl border bg-white p-6 text-sm font-bold"
           style={{ borderColor: BORDER, color: MUTED }}
         >
-          Loading compliance details…
+          {translate("dashboard.loadingCompliance")}
         </div>
       ) : complianceDetail ? (
         <ComplianceDetailCard
@@ -1006,7 +1022,7 @@ function WorkerDashboardView({
           status={complianceDetail.status}
           rules={complianceDetail.rules}
           failedRules={complianceDetail.failed_rules}
-          title="My Compliance Score"
+          title={translate("dashboard.complianceScore")}
           compact
         />
       ) : (
@@ -1014,7 +1030,7 @@ function WorkerDashboardView({
           className="rounded-2xl border bg-white p-6 text-sm font-bold"
           style={{ borderColor: BORDER, color: DS.STATUS.critical }}
         >
-          Could not load compliance details.
+          {translate("dashboard.complianceLoadError")}
         </div>
       )}
 
@@ -1030,8 +1046,8 @@ function WorkerDashboardView({
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 5)} />
-        <SessionListCard title="Pending Compliance" sessions={data.pending_compliance_fixes.slice(0, 5)} />
+        <SessionListCard title={translate("dashboard.incompleteSessions")} sessions={data.incomplete_sessions.slice(0, 5)} />
+        <SessionListCard title={translate("dashboard.pendingCompliance")} sessions={data.pending_compliance_fixes.slice(0, 5)} />
       </div>
     </div>
   );

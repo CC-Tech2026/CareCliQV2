@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   getCoordinatorSafetyProtocol,
   updateCoordinatorSafetyProtocol,
@@ -23,7 +24,14 @@ const DEFAULT_CONTACTS: EscalationContact[] = [
   { role: "emergency", label: "Emergency services", phone: "000", sort_order: 2 },
 ];
 
+const CONTACT_LABEL_KEYS: Record<string, string> = {
+  coordinator: "participants.safety.contact.coordinator",
+  on_call: "participants.safety.contact.onCall",
+  emergency: "participants.safety.contact.emergency",
+};
+
 export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -50,7 +58,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
       } catch (err) {
         if (!cancelled) {
           toast({
-            title: "Could not load safety protocol",
+            title: translate("participants.safety.loadFailed"),
             description: err instanceof Error ? err.message : undefined,
             variant: "destructive",
           });
@@ -76,7 +84,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
         physical_safety_notes: physicalNotes.filter((n) => n.note.trim()),
         escalation_contacts: contacts.filter((c) => c.phone.trim()),
       });
-      toast({ title: "Safety protocol saved" });
+      toast({ title: translate("participants.safety.saved") });
     } catch (err) {
       toast({
         title: "Save failed",
@@ -100,7 +108,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
   return (
     <div className="space-y-6 rounded-2xl border bg-cc-surface p-6 shadow-sm">
       <div>
-        <h3 className="text-sm font-black uppercase tracking-wider text-violet-800">Safety card</h3>
+        <h3 className="text-sm font-black uppercase tracking-wider text-violet-800">{translate("participants.safety.cardTitle")}</h3>
         <p className="mt-1 text-xs text-muted-foreground">
           Mandatory read for workers before first clock-in with this participant.
         </p>
@@ -108,7 +116,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
           className="mt-3 min-h-[120px]"
           value={safetyCard}
           onChange={(e) => setSafetyCard(e.target.value)}
-          placeholder="Overall safety summary and key reminders…"
+          placeholder={translate("participants.safety.cardPlaceholder")}
           spellCheck
         />
       </div>
@@ -137,7 +145,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                   prev.map((row, idx) => (idx === i ? { ...row, trigger: e.target.value } : row)),
                 )
               }
-              placeholder="If participant refuses medication…"
+              placeholder={translate("participants.safety.triggerPlaceholder")}
             />
             <Input
               value={item.response}
@@ -146,7 +154,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                   prev.map((row, idx) => (idx === i ? { ...row, response: e.target.value } : row)),
                 )
               }
-              placeholder="Do not force; note refusal; notify coordinator…"
+              placeholder={translate("participants.safety.responsePlaceholder")}
             />
             <Button type="button" variant="ghost" size="icon" onClick={() => setScenarios((prev) => prev.filter((_, idx) => idx !== i))}>
               <Trash2 size={16} />
@@ -181,7 +189,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                     prev.map((row, idx) => (idx === i ? { ...row, title: e.target.value } : row)),
                   )
                 }
-                placeholder="Technique title"
+                placeholder={translate("participants.safety.techniquePlaceholder")}
               />
               <Button type="button" variant="ghost" size="icon" onClick={() => setTechniques((prev) => prev.filter((_, idx) => idx !== i))}>
                 <Trash2 size={16} />
@@ -203,7 +211,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                     ),
                   )
                 }
-                placeholder={`Step ${si + 1} (second person)`}
+                placeholder={translateParams("participants.safety.stepPlaceholder", { n: String(si + 1) })}
               />
             ))}
             {tech.steps.length < 5 && (
@@ -249,7 +257,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                   prev.map((row, idx) => (idx === i ? { ...row, note: e.target.value } : row)),
                 )
               }
-              placeholder="Do not enter bedroom unannounced…"
+              placeholder={translate("participants.safety.physicalPlaceholder")}
             />
             <Button type="button" variant="ghost" size="icon" onClick={() => setPhysicalNotes((prev) => prev.filter((_, idx) => idx !== i))}>
               <Trash2 size={16} />
@@ -264,7 +272,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
         </h3>
         {contacts.map((contact, i) => (
           <div key={contact.role} className="grid gap-2 md:grid-cols-3">
-            <Input value={contact.label} readOnly className="bg-muted/40" />
+            <Input value={translate(CONTACT_LABEL_KEYS[contact.role] ?? contact.role)} readOnly className="bg-muted/40" />
             <Input
               value={contact.phone}
               onChange={(e) =>
@@ -272,7 +280,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
                   prev.map((row, idx) => (idx === i ? { ...row, phone: e.target.value } : row)),
                 )
               }
-              placeholder="Phone number"
+              placeholder={translate("participants.safety.phonePlaceholder")}
             />
             <span className="self-center text-xs font-semibold capitalize text-muted-foreground">
               {contact.role.replace("_", " ")}
@@ -287,7 +295,7 @@ export function ParticipantSafetyProtocolEditor({ participantId }: Props) {
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving…
           </>
         ) : (
-          "Save safety protocol"
+          translate("participants.safety.save")
         )}
       </Button>
     </div>

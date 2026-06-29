@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, AlertTriangle, ChevronDown, ChevronRight, Shield
 import { cn } from "@/lib/utils";
 import type { RPFlag } from "@/lib/rp-detector";
 import { RP_CATEGORY_LABELS } from "@/lib/rp-detector";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 interface ComplianceRule {
   name?: string;
@@ -27,11 +28,18 @@ function scoreColor(score: number) {
   return { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", circle: "bg-red-500" };
 }
 
-function statusLabel(score: number, status?: string): string {
-  if (status) return status;
-  if (score >= 85) return "Compliant";
-  if (score >= 60) return "At Risk";
-  return "Non-Compliant";
+function statusLabel(score: number, status: string | undefined, translate: (k: string) => string): string {
+  if (status) {
+    const s = status.toLowerCase();
+    if (s === "compliant") return translate("compliance.result.compliant");
+    if (s === "at_risk" || s === "at risk") return translate("compliance.result.atRisk");
+    if (s === "non-compliant" || s === "non_compliant") return translate("compliance.result.nonCompliant");
+    if (s === "draft") return translate("compliance.result.draft");
+    return status;
+  }
+  if (score >= 85) return translate("compliance.result.compliant");
+  if (score >= 60) return translate("compliance.result.atRisk");
+  return translate("compliance.result.nonCompliant");
 }
 
 function statusBadgeClass(score: number, status?: string): string {
@@ -55,8 +63,8 @@ function ruleStatus(rule: ComplianceRule): "pass" | "warn" | "fail" {
   return "fail";
 }
 
-function ruleLabel(rule: ComplianceRule): string {
-  return rule.label ?? rule.name ?? "Unknown rule";
+function ruleLabel(rule: ComplianceRule, translate: (k: string) => string): string {
+  return rule.label ?? rule.name ?? translate("compliance.result.unknownRule");
 }
 
 export function ComplianceResultPanel({
@@ -66,11 +74,12 @@ export function ComplianceResultPanel({
   rpFlags,
   className,
 }: ComplianceResultPanelProps) {
+  const { translate, translateParams } = useAccessibility();
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rpOpen, setRpOpen] = useState(true);
 
   const colors = scoreColor(score);
-  const label = statusLabel(score, status);
+  const label = statusLabel(score, status, translate);
   const hasRp = rpFlags && rpFlags.length > 0;
   const hasRules = rules && rules.length > 0;
 
@@ -84,7 +93,7 @@ export function ComplianceResultPanel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Shield className={cn("h-4 w-4 shrink-0", colors.text)} />
-            <span className={cn("font-bold text-base", colors.text)}>Compliance Score</span>
+            <span className={cn("font-bold text-base", colors.text)}>{translate("compliance.result.score")}</span>
             <span
               className={cn(
                 "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border",
@@ -96,10 +105,10 @@ export function ComplianceResultPanel({
           </div>
           <p className={cn("text-xs mt-0.5", colors.text)}>
             {score >= 85
-              ? "This session meets NDIS documentation standards."
+              ? translate("compliance.result.meetsStandards")
               : score >= 60
-                ? "Some documentation gaps detected — review before claiming."
-                : "Critical documentation issues — resolve before submitting a claim."}
+                ? translate("compliance.result.gapsDetected")
+                : translate("compliance.result.criticalIssues")}
           </p>
         </div>
       </div>
@@ -115,7 +124,7 @@ export function ComplianceResultPanel({
             )}
             onClick={() => setRulesOpen((o) => !o)}
           >
-            <span>Rule Breakdown ({rules!.filter((r) => ruleStatus(r) === "pass").length}/{rules!.length} passed)</span>
+            <span>{translateParams("compliance.result.ruleBreakdown", { passed: String(rules!.filter((r) => ruleStatus(r) === "pass").length), total: String(rules!.length) })}</span>
             {rulesOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
           {rulesOpen && (
@@ -134,7 +143,7 @@ export function ComplianceResultPanel({
                     <span className={cn(
                       st === "pass" ? "text-emerald-700" : st === "warn" ? "text-amber-700" : "text-red-700",
                     )}>
-                      {ruleLabel(rule)}
+                      {ruleLabel(rule, translate)}
                       {rule.note && (
                         <span className="text-slate-500 font-normal ml-1">({rule.note})</span>
                       )}
@@ -157,7 +166,7 @@ export function ComplianceResultPanel({
           >
             <span className="flex items-center gap-1.5">
               <AlertTriangle className="h-3.5 w-3.5" />
-              Restrictive Practice Flags ({rpFlags!.length})
+              {translateParams("compliance.result.rpFlags", { count: String(rpFlags!.length) })}
             </span>
             {rpOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
@@ -171,14 +180,14 @@ export function ComplianceResultPanel({
                   <span className="text-red-700 italic block">"{flag.phrase}"</span>
                   {flag.suggested_rewrite && (
                     <div className="mt-1 pt-1 border-t border-red-200">
-                      <span className="text-red-600 font-medium block mb-0.5">Suggested rewrite:</span>
+                      <span className="text-red-600 font-medium block mb-0.5">{translate("compliance.result.suggestedRewrite")}</span>
                       <span className="text-red-700 italic">"{flag.suggested_rewrite}"</span>
                     </div>
                   )}
                 </div>
               ))}
               <p className="text-xs text-red-600 mt-1">
-                Restrictive practices must be documented in your NDIS behaviour support plan and require prior authorisation.
+                {translate("compliance.result.rpDisclaimer")}
               </p>
             </div>
           )}

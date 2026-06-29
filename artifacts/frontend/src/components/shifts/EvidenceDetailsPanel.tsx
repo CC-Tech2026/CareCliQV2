@@ -4,6 +4,7 @@ import { ChevronDown, Fingerprint, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EvidenceMetadata } from "@/services/complianceService";
 import { MUTED, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   metadata: EvidenceMetadata;
@@ -22,6 +23,7 @@ function formatTs(value?: string | null) {
 }
 
 export function EvidenceDetailsPanel({ metadata, defaultOpen = false, showRetention = true }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -32,25 +34,26 @@ export function EvidenceDetailsPanel({ metadata, defaultOpen = false, showRetent
         onClick={() => setOpen(!open)}
       >
         <span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
-          <Shield size={12} /> Evidence details
+          <Shield size={12} /> {translate("shift.evidence.details")}
         </span>
         <ChevronDown size={16} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
       {open && (
         <dl className="space-y-2 border-t border-cc-border px-3 py-3 text-xs">
-          <Detail label="Uploader" value={metadata.uploader_name ?? metadata.uploaded_by} />
-          <Detail label="Uploaded" value={formatTs(metadata.uploaded_at)} />
-          <Detail label="Device" value={metadata.device_type ?? "Unknown"} />
-          <Detail label="SHA-256" value={metadata.file_hash ?? "Pending sync"} mono />
+          <Detail label={translate("shift.evidence.uploader")} value={metadata.uploader_name ?? metadata.uploaded_by} />
+          <Detail label={translate("shift.evidence.uploaded")} value={formatTs(metadata.uploaded_at)} />
+          <Detail label={translate("shift.evidence.device")} value={metadata.device_type ?? translate("shift.evidence.unknown")} />
+          <Detail label={translate("shift.evidence.sha256")} value={metadata.file_hash ?? translate("shift.evidence.pendingSync")} mono />
           {showRetention && metadata.retention_until && (
             <p className="rounded-lg border border-cc-border bg-cc-surface px-2.5 py-2 text-xs font-semibold leading-snug" style={{ color: TEXT }}>
-              This evidence will be retained until{" "}
-              <strong>{format(new Date(metadata.retention_until), "d MMM yyyy")}</strong> per your organisation&apos;s data policy.
+              {translateParams("shift.evidence.retention", {
+                date: format(new Date(metadata.retention_until), "d MMM yyyy"),
+              })}
             </p>
           )}
           {metadata.is_quarantined && (
             <p className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 font-bold text-amber-800">
-              <Fingerprint size={14} /> File integrity warning — quarantined
+              <Fingerprint size={14} /> {translate("shift.evidence.quarantined")}
             </p>
           )}
         </dl>

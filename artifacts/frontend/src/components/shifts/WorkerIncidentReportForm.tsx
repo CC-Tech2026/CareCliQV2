@@ -20,6 +20,7 @@ import {
   type IncidentPhotoItem,
 } from "@/services/incidentService";
 import { CORAL } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?: string }> = {
   verbal: {
@@ -57,6 +58,7 @@ export function WorkerIncidentReportForm({
   onSubmitted,
   onCancel,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [reportType, setReportType] = useState("safety_hazard");
@@ -103,7 +105,7 @@ export function WorkerIncidentReportForm({
   const handlePhotoPick = async (file: File | null) => {
     if (!file || photos.length >= 3) return;
     if (file.size > 10 * 1024 * 1024) {
-      toast({ title: "Photo too large", description: "Maximum size is 10 MB.", variant: "destructive" });
+      toast({ title: translate("shift.incident.photoTooLarge"), description: translate("shift.incident.photoMaxSize"), variant: "destructive" });
       return;
     }
     try {
@@ -118,7 +120,7 @@ export function WorkerIncidentReportForm({
         },
       ]);
     } catch {
-      toast({ title: "Could not add photo", variant: "destructive" });
+      toast({ title: translate("shift.incident.photoFailed"), variant: "destructive" });
     }
   };
 
@@ -155,14 +157,14 @@ export function WorkerIncidentReportForm({
       const ref = result.reference_number;
       setConfirmationRef(ref ?? result.id.slice(0, 8).toUpperCase());
       toast({
-        title: "Incident reported",
-        description: ref ? `Reference ${ref}` : "Your report has been submitted.",
+        title: translate("shift.incident.reported"),
+        description: ref ? translateParams("shift.incident.reference", { ref }) : translate("shift.incident.reportedDesc"),
       });
       onSubmitted?.(ref);
     } catch (err) {
       toast({
-        title: "Could not submit report",
-        description: err instanceof Error ? err.message : "Please try again.",
+        title: translate("shift.incident.submitFailed"),
+        description: err instanceof Error ? err.message : translate("shift.signature.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -173,13 +175,13 @@ export function WorkerIncidentReportForm({
   if (confirmationRef) {
     return (
       <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 text-center">
-        <p className="text-sm font-black text-emerald-900">Incident submitted</p>
+        <p className="text-sm font-black text-emerald-900">{translate("shift.incident.submitted")}</p>
         <p className="text-2xl font-black tracking-wide text-emerald-800">{confirmationRef}</p>
         <p className="text-xs text-emerald-700">
-          Keep this reference number. The coordinator has been notified.
+          {translate("shift.incident.keepRef")}
         </p>
         <Button type="button" className="w-full" variant="outline" onClick={onCancel}>
-          Done
+          {translate("shift.incident.done")}
         </Button>
       </div>
     );
@@ -189,7 +191,7 @@ export function WorkerIncidentReportForm({
     <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/40 p-3">
       <Select value={reportType} onValueChange={setReportType}>
         <SelectTrigger className="bg-cc-surface">
-          <SelectValue placeholder="Incident type" />
+          <SelectValue placeholder={translate("shift.incident.typePlaceholder")} />
         </SelectTrigger>
         <SelectContent>
           {WORKER_REPORT_TYPES.map((t) => (
@@ -203,7 +205,7 @@ export function WorkerIncidentReportForm({
       {reportType === "participant_behaviour" && (
         <Select value={behaviourSubtype || undefined} onValueChange={applyBehaviourSubtype}>
           <SelectTrigger className="bg-cc-surface">
-            <SelectValue placeholder="Behaviour sub-type" />
+            <SelectValue placeholder={translate("shift.incident.behaviourPlaceholder")} />
           </SelectTrigger>
           <SelectContent>
             {BEHAVIOUR_SUBTYPES.map((t) => (
@@ -217,7 +219,7 @@ export function WorkerIncidentReportForm({
 
       <Select value={severity} onValueChange={setSeverity}>
         <SelectTrigger className="bg-cc-surface">
-          <SelectValue placeholder="Severity" />
+          <SelectValue placeholder={translate("shift.incident.severityPlaceholder")} />
         </SelectTrigger>
         <SelectContent>
           {WORKER_SEVERITIES.map((s) => (
@@ -239,7 +241,7 @@ export function WorkerIncidentReportForm({
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe what happened (min 20 characters)…"
+          placeholder={translate("shift.incident.describePlaceholder")}
           className="min-h-[100px] bg-cc-surface"
           spellCheck
         />
@@ -255,13 +257,13 @@ export function WorkerIncidentReportForm({
       <Textarea
         value={workerActions}
         onChange={(e) => setWorkerActions(e.target.value)}
-        placeholder="Actions you took (optional)"
+        placeholder={translate("shift.incident.actionsPlaceholder")}
         className="min-h-[60px] bg-cc-surface"
         spellCheck
       />
 
       <fieldset className="space-y-2 rounded-lg border bg-cc-surface p-3">
-        <legend className="px-1 text-xs font-bold">Was the participant present?</legend>
+        <legend className="px-1 text-xs font-bold">{translate("shift.incident.participantPresent")}</legend>
         <div className="flex gap-4 text-sm font-semibold">
           {(["yes", "no"] as const).map((value) => (
             <label key={value} className="flex items-center gap-2">
@@ -274,7 +276,7 @@ export function WorkerIncidentReportForm({
                   if (value === "no") setParticipantHarmed("");
                 }}
               />
-              {value === "yes" ? "Yes" : "No"}
+              {value === "yes" ? translate("common.yes") : translate("common.no")}
             </label>
           ))}
         </div>
@@ -284,12 +286,12 @@ export function WorkerIncidentReportForm({
             onValueChange={(v) => setParticipantHarmed(v as typeof participantHarmed)}
           >
             <SelectTrigger className="bg-cc-surface">
-              <SelectValue placeholder="Was participant harmed?" />
+              <SelectValue placeholder={translate("shift.incident.harmedPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="yes">Yes</SelectItem>
               <SelectItem value="no">No</SelectItem>
-              <SelectItem value="unknown">Unknown</SelectItem>
+              <SelectItem value="unknown">{translate("shift.incident.unknown")}</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -336,10 +338,10 @@ export function WorkerIncidentReportForm({
       >
         {submitting ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting…
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {translate("shift.incident.submitting")}
           </>
         ) : (
-          `Submit incident${participantName ? ` — ${participantName}` : ""}`
+          participantName ? translateParams("shift.incident.submitFor", { name: participantName }) : translate("shift.incident.submit")
         )}
       </Button>
     </div>

@@ -1,6 +1,7 @@
 ﻿import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   ArrowRight,
   UserRound,
@@ -24,9 +25,9 @@ const GREEN  = "#10B981";
 const SKY    = "#0EA5E9";
 
 interface WorkspaceDef {
-  title: string;
-  shortLabel: string;
-  subtitle: string;
+  titleKey: string;
+  shortKey: string;
+  subtitleKey: string;
   href: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   allowedRoles: string[];
@@ -35,18 +36,18 @@ interface WorkspaceDef {
 
 const WORKSPACES: WorkspaceDef[] = [
   {
-    title: "Support Worker Workspace",
-    shortLabel: "My Workspace",
-    subtitle: "Client visits, shift notes and compliance tracking.",
+    titleKey: "hub.workspace.worker.title",
+    shortKey: "hub.workspace.worker.short",
+    subtitleKey: "hub.workspace.worker.subtitle",
     href: "/my-clients",
     icon: UserRound,
     allowedRoles: ["support_worker"],
     accentColor: PLUM,
   },
   {
-    title: "Support Coordinator Workspace",
-    shortLabel: "My Workspace",
-    subtitle: "Team oversight, NDIS plans and billing.",
+    titleKey: "hub.workspace.coordinator.title",
+    shortKey: "hub.workspace.coordinator.short",
+    subtitleKey: "hub.workspace.coordinator.subtitle",
     href: "/dashboard",
     icon: LayoutDashboard,
     allowedRoles: ["support_coordinator"],
@@ -56,45 +57,45 @@ const WORKSPACES: WorkspaceDef[] = [
 
 const MD_WORKSPACES: WorkspaceDef[] = [
   {
-    title: "Executive Dashboard",
-    shortLabel: "Executive",
-    subtitle: "KPIs, trend analysis and strategic overview.",
+    titleKey: "hub.workspace.executive.title",
+    shortKey: "hub.workspace.executive.short",
+    subtitleKey: "hub.workspace.executive.subtitle",
     href: "/md/executive",
     icon: BarChart2,
     allowedRoles: ["managing_director"],
     accentColor: AMBER,
   },
   {
-    title: "Staff Management",
-    shortLabel: "Staff",
-    subtitle: "People performance and retention tracking.",
+    titleKey: "hub.workspace.staff.title",
+    shortKey: "hub.workspace.staff.short",
+    subtitleKey: "hub.workspace.staff.subtitle",
     href: "/md/staff",
     icon: UserCheck,
     allowedRoles: ["managing_director"],
     accentColor: GREEN,
   },
   {
-    title: "Compliance Dashboard",
-    shortLabel: "Compliance",
-    subtitle: "Org-wide compliance scores and audit readiness.",
+    titleKey: "hub.workspace.compliance.title",
+    shortKey: "hub.workspace.compliance.short",
+    subtitleKey: "hub.workspace.compliance.subtitle",
     href: "/md/compliance",
     icon: ShieldCheck,
     allowedRoles: ["managing_director"],
     accentColor: PLUM,
   },
   {
-    title: "Financial Overview",
-    shortLabel: "Financial",
-    subtitle: "Revenue, margins and billing performance.",
+    titleKey: "hub.workspace.financial.title",
+    shortKey: "hub.workspace.financial.short",
+    subtitleKey: "hub.workspace.financial.subtitle",
     href: "/md/financial",
     icon: DollarSign,
     allowedRoles: ["managing_director"],
     accentColor: SKY,
   },
   {
-    title: "Onboarding Centre",
-    shortLabel: "Onboarding",
-    subtitle: "Design programs and track staff progress.",
+    titleKey: "hub.workspace.onboarding.title",
+    shortKey: "hub.workspace.onboarding.short",
+    subtitleKey: "hub.workspace.onboarding.subtitle",
     href: "/md/onboarding",
     icon: GraduationCap,
     allowedRoles: ["managing_director"],
@@ -103,6 +104,7 @@ const MD_WORKSPACES: WorkspaceDef[] = [
 ];
 
 export function WorkspaceLauncher() {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [launching, setLaunching] = useState<WorkspaceDef | null>(null);
@@ -151,10 +153,10 @@ export function WorkspaceLauncher() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-bold leading-snug" style={{ color: TEXT }}>
-                {ws.shortLabel}
+                {translate(ws.shortKey)}
               </p>
               <p className="mt-0.5 truncate text-[11px]" style={{ color: MUTED }}>
-                {ws.subtitle}
+                {translate(ws.subtitleKey)}
               </p>
             </div>
             <ArrowRight size={14} strokeWidth={2} style={{ color: MUTED }} />
@@ -174,6 +176,7 @@ function MDWorkspaceLauncher({
   launching: WorkspaceDef | null;
   setLaunching: (ws: WorkspaceDef | null) => void;
 }) {
+  const { translate } = useAccessibility();
   function handleLaunch(ws: WorkspaceDef) {
     if (launching) return;
     setLaunching(ws);
@@ -210,7 +213,7 @@ function MDWorkspaceLauncher({
                   }
                 </div>
                 <span className="flex-1 text-[13px] font-bold text-left" style={{ color: TEXT }}>
-                  {ws.shortLabel}
+                  {translate(ws.shortKey)}
                 </span>
                 <ArrowRight size={12} strokeWidth={2} style={{ color: MUTED }} />
               </button>
@@ -223,6 +226,7 @@ function MDWorkspaceLauncher({
 }
 
 function LaunchOverlay({ ws }: { ws: WorkspaceDef }) {
+  const { translate } = useAccessibility();
   const Icon = ws.icon;
   return (
     <div
@@ -243,11 +247,11 @@ function LaunchOverlay({ ws }: { ws: WorkspaceDef }) {
       </div>
       <div className="flex flex-col items-center gap-1.5">
         <p className="text-[16px] font-bold" style={{ color: "var(--cc-text)" }}>
-          {ws.title}
+          {translate(ws.titleKey)}
         </p>
         <p className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-muted)" }}>
           <Loader2 size={12} strokeWidth={2} className="animate-spin" />
-          Opening workspace…
+          {translate("hub.workspace.opening")}
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useParams, Link } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import { useGetSession, useUpdateSession, useGetParticipant } from "@workspace/api-client-react";
 import type { Session } from "@workspace/api-client-react";
@@ -228,6 +229,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const { id: paramId } = useParams();
   const sessionId = id || paramId;
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: session, isLoading, refetch } = useGetSession(sessionId as string, {
@@ -263,9 +265,9 @@ export default function SessionDetail({ id }: { id?: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["getSession", sessionId] });
       refetch();
-      toast({ title: flagMutation.variables?.flag ? "Session flagged for review" : "Flag removed" });
+      toast({ title: flagMutation.variables?.flag ? translate("sessions.detail.toast.flagged") : translate("sessions.detail.toast.flagRemoved") });
     },
-    onError: () => toast({ title: "Action failed", variant: "destructive" }),
+    onError: () => toast({ title: translate("sessions.detail.toast.actionFailed"), variant: "destructive" }),
   });
 
   useEffect(() => {
@@ -352,7 +354,13 @@ export default function SessionDetail({ id }: { id?: string }) {
     session?.compliance_score,
     session?.status
   );
-  const statusCfg = STATUS_CONFIG[claimStatus];
+  const statusLabelKey: Record<ClaimStatus, string> = {
+    draft: "sessions.detail.status.draft",
+    compliant: "sessions.detail.status.compliant",
+    at_risk: "sessions.detail.status.atRisk",
+    non_compliant: "sessions.detail.status.nonCompliant",
+  };
+  const statusCfg = { ...STATUS_CONFIG[claimStatus], label: translate(statusLabelKey[claimStatus]) };
 
   // AI explanation query (fetch on demand for failed rules)
   const { data: explanation, isFetching: explanationLoading, refetch: fetchExplanation } = useOrgQuery(["explainCompliance", sessionId, rulesResult?.failed_rules?.length], {
@@ -392,7 +400,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         rule_suggestions: Array<{ rule: string; issue: string; suggestion: string }>;
       }>;
     },
-    onError: () => toast({ title: "AI note improvement failed", variant: "destructive" }),
+    onError: () => toast({ title: translate("sessions.detail.toast.aiImproveFailed"), variant: "destructive" }),
   });
 
   // Re-run compliance (POST /compliance/run/:id)
@@ -406,7 +414,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       toast({ title: `Compliance re-run complete — ${data.score.toFixed(0)}%` });
       refetch();
     },
-    onError: () => toast({ title: "Compliance check failed", variant: "destructive" }),
+    onError: () => toast({ title: translate("sessions.detail.toast.complianceFailed"), variant: "destructive" }),
   });
 
   // Save notes — with blocking modal if critical issues
@@ -414,11 +422,11 @@ export default function SessionDetail({ id }: { id?: string }) {
     if (!sessionId) return;
     updateSession.mutate({ sessionId, data: { notes } }, {
       onSuccess: () => {
-        toast({ title: "Notes saved" });
+        toast({ title: translate("sessions.detail.toast.notesSaved") });
         setIsEditing(false);
         refetch();
       },
-      onError: () => toast({ title: "Save failed", variant: "destructive" }),
+      onError: () => toast({ title: translate("sessions.detail.toast.saveFailed"), variant: "destructive" }),
     });
   };
 
@@ -447,16 +455,16 @@ export default function SessionDetail({ id }: { id?: string }) {
         const detail = data?.detail ?? {};
         if (detail?.code === "COMPLIANCE_WARN_UNACKNOWLEDGED") {
           toast({
-            title: "Acknowledgement required",
+            title: translate("sessions.detail.toast.ackRequired"),
             description: `Tick the checkbox for each issue in the compliance panel before saving.`,
             variant: "destructive",
           });
         } else {
-          toast({ title: "AI Analysis failed", description: detail?.message ?? "Please try again.", variant: "destructive" });
+          toast({ title: translate("sessions.detail.toast.aiFailed"), description: detail?.message ?? translate("toast.tryAgain"), variant: "destructive" });
         }
         return;
       }
-      toast({ title: "AI Analysis complete", description: "Compliance score and insights updated." });
+      toast({ title: translate("sessions.detail.toast.aiComplete"), description: translate("sessions.detail.toast.aiCompleteDesc") });
       refetch();
       const orgId = user?.organizationId ?? "__no_org__";
       qc.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
@@ -465,7 +473,7 @@ export default function SessionDetail({ id }: { id?: string }) {
       setShowExplanation(false);
       setAcknowledgedWarnRules(new Set());
     } catch {
-      toast({ title: "AI Analysis failed", variant: "destructive" });
+      toast({ title: translate("sessions.detail.toast.aiFailed"), variant: "destructive" });
     } finally {
       setIsAISaving(false);
     }
@@ -490,9 +498,9 @@ export default function SessionDetail({ id }: { id?: string }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: "Audit record exported", description: "JSON file downloaded." });
+      toast({ title: translate("sessions.detail.toast.auditExported"), description: translate("sessions.detail.toast.auditExportedDesc") });
     } catch {
-      toast({ title: "Export failed", variant: "destructive" });
+      toast({ title: translate("sessions.detail.toast.exportFailed"), variant: "destructive" });
     } finally {
       setIsExporting(false);
     }
@@ -503,10 +511,10 @@ export default function SessionDetail({ id }: { id?: string }) {
     setIsExportingPDF(true);
     try {
       await exportSingleSessionPDF(sessionId);
-      toast({ title: "PDF exported", description: "NDIS audit report downloaded." });
+      toast({ title: translate("sessions.detail.toast.pdfExported"), description: translate("sessions.detail.toast.pdfExportedDesc") });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      toast({ title: "PDF export failed", description: msg, variant: "destructive" });
+      toast({ title: translate("sessions.detail.toast.pdfExportFailed"), description: msg, variant: "destructive" });
     } finally {
       setIsExportingPDF(false);
     }
@@ -526,11 +534,11 @@ export default function SessionDetail({ id }: { id?: string }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Upload failed");
       setAttachments((prev) => [...prev, data]);
-      toast({ title: "Attachment uploaded", description: file.name });
+      toast({ title: translate("sessions.detail.toast.attachmentUploaded"), description: file.name });
     } catch (error) {
       toast({
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("sessions.detail.toast.uploadFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -656,7 +664,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div className="flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
           <Flag className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-orange-800">This session has been flagged for review</p>
+            <p className="text-sm font-bold text-orange-800">{translate("sessions.detail.flaggedBanner")}</p>
             {(session as unknown as { review_note?: string }).review_note && (
               <p className="text-sm text-orange-700 mt-0.5">{(session as unknown as { review_note: string }).review_note}</p>
             )}
@@ -670,7 +678,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               onClick={() => flagMutation.mutate({ flag: false })}
             >
               {flagMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlagOff className="h-3.5 w-3.5 mr-1" />}
-              Remove Flag
+              {translate("sessions.detail.removeFlag")}
             </Button>
           )}
         </div>
@@ -681,7 +689,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
             <h1 className="text-xl font-black tracking-tight">
-              {session.participants?.full_name || "Session Record"}
+              {session.participants?.full_name || translate("sessions.detail.sessionRecord")}
             </h1>
             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${statusCfg.cls}`}>
               <statusCfg.icon className="h-3.5 w-3.5" />
@@ -691,7 +699,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           <div className="flex items-center gap-4 text-[13px] flex-wrap" style={{ color: "var(--cc-text)" }}>
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-slate-400" />
-              {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : "No Date Listed"}
+              {session.session_date ? format(parseISO(session.session_date), "MMMM d, yyyy") : translate("sessions.detail.noDate")}
             </span>
             <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-slate-400" /> {session.duration_minutes || 0} min</span>
             <span className="flex items-center gap-1.5"><Activity className="h-4 w-4 text-slate-400" /> {session.session_type}</span>
@@ -701,7 +709,7 @@ export default function SessionDetail({ id }: { id?: string }) {
         {/* Top bar control utilities */}
         <div className="flex gap-2 flex-wrap items-center">
           <Link href="/patients">
-            <Button variant="outline" size="sm">View Participant</Button>
+            <Button variant="outline" size="sm">{translate("sessions.detail.viewParticipant")}</Button>
           </Link>
           {isCoordinator && !(session as unknown as { review_flag?: boolean }).review_flag && (
             <Button
@@ -712,7 +720,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               className="gap-1.5 border-orange-200 text-orange-600 hover:bg-orange-50"
             >
               {flagMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Flag className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline text-xs">Flag for Review</span>
+              <span className="hidden sm:inline text-xs">{translate("sessions.detail.flagForReview")}</span>
             </Button>
           )}
           <Button
@@ -724,7 +732,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           >
             {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             <span className="sr-only sm:not-sr-only sm:ml-1.5 text-xs">
-              {isExporting ? "Exporting…" : "Export Audit"}
+              {isExporting ? translate("sessions.detail.exporting") : translate("sessions.detail.exportAudit")}
             </span>
           </Button>
           <Button
@@ -738,7 +746,7 @@ export default function SessionDetail({ id }: { id?: string }) {
           >
             {isExportingPDF ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             <span className="sr-only sm:not-sr-only sm:ml-0.5 text-xs">
-              {isExportingPDF ? "Generating…" : "Export PDF"}
+              {isExportingPDF ? translate("sessions.detail.generating") : translate("sessions.detail.exportPdf")}
             </span>
           </Button>
           <Button
@@ -748,18 +756,18 @@ export default function SessionDetail({ id }: { id?: string }) {
             disabled={reRunCompliance.isPending}
           >
             {reRunCompliance.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Re-check
+            {translate("sessions.detail.recheck")}
           </Button>
           <Button
             className="gap-2 text-white rounded-xl shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             style={{ background: "var(--cc-plum)" }}
             onClick={handleAIAnalysis}
             disabled={isAISaving || hasBlockers}
-            title={hasBlockers ? "Fix critical issues before running AI analysis" : undefined}
+            title={hasBlockers ? translate("sessions.detail.fixBlockers") : undefined}
             data-testid="button-ai-analyze"
           >
             {isAISaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Analyze with AI
+            {translate("sessions.detail.analyzeAi")}
           </Button>
         </div>
       </div>
@@ -771,20 +779,20 @@ export default function SessionDetail({ id }: { id?: string }) {
           <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <div className="px-5 py-4 flex flex-row items-center justify-between border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
               <div className="text-[14px] font-semibold flex items-center gap-2" style={{ color: "#1C1626" }}>
-                <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> Clinical Notes
+                <FileText className="h-4 w-4" style={{ color: "#7A6A8A" }} /> {translate("sessions.detail.clinicalNotes")}
               </div>
               {!isEditing ? (
-                <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>Edit</Button>
+                <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>{translate("common.edit")}</Button>
               ) : (
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={() => {
                     const extended = session as ExtendedSession;
                     setIsEditing(false);
                     setNotes(extended.translated_english_note || extended.compliance_input_text || session.notes || "");
-                  }}>Cancel</Button>
+                  }}>{translate("common.cancel")}</Button>
                   <Button size="sm" onClick={handleSaveNotes} disabled={updateSession.isPending}>
                     {updateSession.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-                    Save
+                    {translate("common.save")}
                   </Button>
                 </div>
               )}
@@ -797,7 +805,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                     value={notes}
                     onChange={setNotes}
                     highlights={liveHighlights}
-                    placeholder="Enter clinical notes here. Include: what was done, participant response, measurable outcomes linked to NDIS goals..."
+                    placeholder={translate("sessions.detail.notesPlaceholder")}
                   />
                   {/* Highlight legend */}
                   {liveHighlights.length > 0 && (
@@ -858,7 +866,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                   <div className="flex justify-between text-[11px]" style={{ color: "#7A6A8A" }}>
                     <span>{notes.length} characters</span>
                     <span className={notes.length < 50 ? "text-red-500" : notes.length < 200 ? "text-amber-500" : "text-emerald-500"}>
-                      {notes.length < 50 ? "Too brief" : notes.length < 200 ? "Acceptable" : "Good length"}
+                      {notes.length < 50 ? translate("sessions.detail.notesTooBrief") : notes.length < 200 ? translate("sessions.detail.notesAcceptable") : translate("sessions.detail.notesGoodLength")}
                     </span>
                   </div>
                 </div>
@@ -894,10 +902,10 @@ export default function SessionDetail({ id }: { id?: string }) {
           {/* Structured Clinical Note Fields */}
           {(() => {
             const sections: { label: string; icon: typeof FileText; value: string | null | undefined; color: string }[] = [
-              { label: "Activities Performed", icon: Activity, value: session.activities_performed, color: "text-teal-700" },
-              { label: "Outcomes", icon: CheckCircle2, value: session.outcomes, color: "text-emerald-700" },
-              { label: "Participant Response", icon: Brain, value: session.participant_response, color: "text-indigo-700" },
-              { label: "Progress Toward Goals", icon: TrendingUp, value: session.progress_toward_goals, color: "text-blue-700" },
+              { label: translate("sessions.detail.activitiesPerformed"), icon: Activity, value: session.activities_performed, color: "text-teal-700" },
+              { label: translate("sessions.detail.outcomes"), icon: CheckCircle2, value: session.outcomes, color: "text-emerald-700" },
+              { label: translate("sessions.detail.participantResponse"), icon: Brain, value: session.participant_response, color: "text-indigo-700" },
+              { label: translate("sessions.detail.progressTowardGoals"), icon: TrendingUp, value: session.progress_toward_goals, color: "text-blue-700" },
             ];
             const filledSections = sections.filter((sec) => sec.value && sec.value.trim());
             if (filledSections.length === 0) return null;
@@ -1259,7 +1267,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                                   onClick={() => {
                                     setNotes((prev) => prev ? `${prev}\n\n${s.suggestion}` : s.suggestion);
                                     setIsEditing(true);
-                                    toast({ title: "Suggestion added", description: "Review and save when ready." });
+                                    toast({ title: translate("sessions.detail.toast.suggestionAdded"), description: translate("sessions.detail.toast.reviewAndSave") });
                                   }}
                                 >
                                   Accept
@@ -1284,7 +1292,7 @@ export default function SessionDetail({ id }: { id?: string }) {
                               setNotes(improveNoteMutation.data!.improved_note);
                               setIsEditing(true);
                               improveNoteMutation.reset();
-                              toast({ title: "Improved note accepted", description: "Review and save when ready." });
+                              toast({ title: translate("sessions.detail.toast.improvedAccepted"), description: translate("sessions.detail.toast.reviewAndSave") });
                             }}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" /> Accept Full Improved Note
@@ -1400,7 +1408,7 @@ export default function SessionDetail({ id }: { id?: string }) {
               <div className="flex justify-between items-center p-2 rounded-lg bg-slate-50">
                 <span className="text-slate-500">Calculated Cost:</span>
                 <span className="text-slate-900 font-extrabold text-[13px]">
-                  {(session as ExtendedSession).cost != null ? `$${(session as ExtendedSession).cost?.toFixed(2)}` : "Uncalculated"}
+                  {(session as ExtendedSession).cost != null ? `$${(session as ExtendedSession).cost?.toFixed(2)}` : translate("sessions.detail.uncalculated")}
                 </span>
               </div>
             </div>
@@ -1416,7 +1424,7 @@ export default function SessionDetail({ id }: { id?: string }) {
             <div className="p-5 space-y-4">
               <input 
                 type="file" 
-                title="Upload evidence"
+                title={translate("sessions.detail.uploadEvidence")}
                 accept="image/*" 
                 className="hidden" 
                 ref={fileInputRef} 

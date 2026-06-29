@@ -6,6 +6,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { flagSessionForReview } from "@/services/coordinatorService";
 import {
   Search, Calendar, Clock, ShieldCheck, ChevronDown,
@@ -32,33 +33,39 @@ const SOFT        = "#F8F8FE";
 
 // ── Sort options ───────────────────────────────────────────────────────────────
 type SortKey = "date_desc" | "date_asc" | "severity" | "participant" | "status" | "activity";
-const SORT_LABELS: Record<SortKey, string> = {
-  date_desc:   "Newest first",
-  date_asc:    "Oldest first",
-  severity:    "Severity (worst first)",
-  participant: "Participant A–Z",
-  status:      "Status",
-  activity:    "Recent activity",
+const SORT_I18N: Record<SortKey, string> = {
+  date_desc:   "sessions.sort.dateDesc",
+  date_asc:    "sessions.sort.dateAsc",
+  severity:    "sessions.sort.severity",
+  participant: "sessions.sort.participant",
+  status:      "sessions.sort.status",
+  activity:    "sessions.sort.activity",
 };
 
 // ── Chronological group labels ─────────────────────────────────────────────────
-type Group = "Today" | "This Week" | "This Month" | "Earlier";
+type GroupKey = "today" | "thisWeek" | "thisMonth" | "earlier";
+const GROUP_I18N: Record<GroupKey, string> = {
+  today: "sessions.group.today",
+  thisWeek: "sessions.group.thisWeek",
+  thisMonth: "sessions.group.thisMonth",
+  earlier: "sessions.group.earlier",
+};
 
-function getGroup(dateStr: string): Group {
+function getGroup(dateStr: string): GroupKey {
   try {
     const d = dateStr.includes("T")
       ? parseISO(dateStr)
       : parse(dateStr, "yyyy-MM-dd", new Date());
-    if (isToday(d))      return "Today";
-    if (isThisWeek(d, { weekStartsOn: 1 }))  return "This Week";
-    if (isThisMonth(d))  return "This Month";
-    return "Earlier";
+    if (isToday(d))      return "today";
+    if (isThisWeek(d, { weekStartsOn: 1 }))  return "thisWeek";
+    if (isThisMonth(d))  return "thisMonth";
+    return "earlier";
   } catch {
-    return "Earlier";
+    return "earlier";
   }
 }
 
-const GROUP_ORDER: Group[] = ["Today", "This Week", "This Month", "Earlier"];
+const GROUP_ORDER: GroupKey[] = ["today", "thisWeek", "thisMonth", "earlier"];
 
 // ── Safe date parser ───────────────────────────────────────────────────────────
 function safeParseDate(dateStr: string | null | undefined): Date | null {
@@ -75,20 +82,6 @@ function safeParseDate(dateStr: string | null | undefined): Date | null {
 function safeFormat(dateStr: string | null | undefined, fmt: string, fallback = "—"): string {
   const d = safeParseDate(dateStr);
   return d ? format(d, fmt) : fallback;
-}
-
-// ── Severity score → config ────────────────────────────────────────────────────
-function severityConfig(score: number | null | undefined, status?: string) {
-  const s = status?.toLowerCase();
-  if (s === "draft" || score == null) {
-    return { label: "Draft", color: T3, bg: `${PLUM}08`, bar: 0 };
-  }
-  if (s === "in_progress") {
-    return { label: "In Progress", color: "#7C3AED", bg: "rgba(124,58,237,0.06)", bar: 0 };
-  }
-  if (score >= 85) return { label: `Compliant · ${score}%`, color: "#16A34A", bg: "rgba(22,163,74,0.07)", bar: score };
-  if (score >= 60) return { label: `At Risk · ${score}%`,   color: "#D97706", bg: "rgba(245,158,11,0.07)", bar: score };
-  return          { label: `Non-Compliant · ${score}%`,      color: "#DC2626", bg: "rgba(239,68,68,0.07)",  bar: score };
 }
 
 // ── Field wrapper ──────────────────────────────────────────────────────────────
@@ -147,6 +140,21 @@ function SessionStatCard({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Sessions() {
+  const { translate, translateParams } = useAccessibility();
+
+  function severityConfig(score: number | null | undefined, status?: string) {
+    const s = status?.toLowerCase();
+    if (s === "draft" || score == null) {
+      return { label: translate("sessions.severity.draft"), color: T3, bg: `${PLUM}08`, bar: 0 };
+    }
+    if (s === "in_progress") {
+      return { label: translate("sessions.severity.inProgress"), color: "#7C3AED", bg: "rgba(124,58,237,0.06)", bar: 0 };
+    }
+    if (score >= 85) return { label: translateParams("sessions.severity.compliant", { score: String(score) }), color: "#16A34A", bg: "rgba(22,163,74,0.07)", bar: score };
+    if (score >= 60) return { label: translateParams("sessions.severity.atRisk", { score: String(score) }), color: "#D97706", bg: "rgba(245,158,11,0.07)", bar: score };
+    return { label: translateParams("sessions.severity.nonCompliant", { score: String(score) }), color: "#DC2626", bg: "rgba(239,68,68,0.07)", bar: score };
+  }
+
   const [search, setSearch]             = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [participantFilter, setParticipantFilter] = useState("all");
@@ -170,7 +178,7 @@ export default function Sessions() {
   const participantMap = useMemo(() => {
     const m = new Map<string, string>();
     (participants as ApiParticipant[]).forEach((p) => {
-      if (p.id) m.set(p.id, p.full_name ?? "Unknown");
+      if (p.id) m.set(p.id, p.full_name ?? translate("sessions.unknown"));
     });
     return m;
   }, [participants]);
@@ -181,7 +189,7 @@ export default function Sessions() {
       _participantName:
         s.participants?.full_name ||
         participantMap.get(s.participant_id) ||
-        "Unknown Participant",
+        translate("sessions.unknownParticipant"),
     })),
   [rawSessions, participantMap]);
 
@@ -251,7 +259,7 @@ export default function Sessions() {
   // ── Chronological grouping ───────────────────────────────────────────────────
   const grouped = useMemo(() => {
     if (sortBy !== "date_desc" && sortBy !== "date_asc") return null;
-    const map = new Map<Group, typeof sorted>();
+    const map = new Map<GroupKey, typeof sorted>();
     GROUP_ORDER.forEach((g) => map.set(g, []));
     sorted.forEach((s) => {
       const g = getGroup(s.session_date);
@@ -285,10 +293,10 @@ export default function Sessions() {
     setExportProgress({ done: 0, total: selectedIds.size });
     try {
       await exportBulkSessionsPDF(Array.from(selectedIds), (done, total) => setExportProgress({ done, total }));
-      toast({ title: "PDF exported", description: `Audit report for ${selectedIds.size} session(s) downloaded.` });
+      toast({ title: translate("sessions.toast.exported"), description: translateParams("sessions.toast.exportedDesc", { count: String(selectedIds.size) }) });
       clearSelection();
     } catch (err) {
-      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Unknown error", variant: "destructive" });
+      toast({ title: translate("sessions.toast.exportFailed"), description: err instanceof Error ? err.message : translate("common.error"), variant: "destructive" });
     } finally {
       setIsBulkExporting(false);
       setExportProgress(null);
@@ -321,9 +329,9 @@ export default function Sessions() {
       try {
         await flagSessionForReview(sessionId, !flagged, !flagged ? "Flagged from sessions list" : undefined);
         _qc.invalidateQueries({ queryKey: ["getSessions"] });
-        _toast({ title: flagged ? "Flag removed" : "Session flagged for review" });
+        _toast({ title: flagged ? translate("sessions.toast.flagRemoved") : translate("sessions.toast.flagged") });
       } catch {
-        _toast({ title: "Failed to update flag", variant: "destructive" });
+        _toast({ title: translate("sessions.toast.flagFailed"), variant: "destructive" });
       } finally {
         setLoading(false);
       }
@@ -337,7 +345,7 @@ export default function Sessions() {
         }`}
         onClick={toggle}
         disabled={loading}
-        title={flagged ? "Remove review flag" : "Flag for review"}
+        title={flagged ? translate("sessions.flag.remove") : translate("sessions.flag.add")}
       >
         {loading ? <Loader2 size={11} className="animate-spin" /> : <Flag size={11} strokeWidth={2.5} />}
       </button>
@@ -362,7 +370,7 @@ export default function Sessions() {
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => toggleSession(session.id)}
-              aria-label={`Select session for ${session._participantName}`}
+              aria-label={translateParams("sessions.selectFor", { name: session._participantName })}
             />
           </div>
 
@@ -373,7 +381,7 @@ export default function Sessions() {
               </span>
               <span className="hidden sm:inline text-slate-300 text-xs">·</span>
               <span className="text-[12px] font-medium capitalize truncate" style={{ color: T2 }}>
-                {session.session_type?.replace(/_/g, " ") ?? "General"}
+                {session.session_type?.replace(/_/g, " ") ?? translate("sessions.general")}
               </span>
             </div>
 
@@ -384,7 +392,7 @@ export default function Sessions() {
               </span>
               <span className="flex items-center gap-1 text-[11px]" style={{ color: T3 }}>
                 <Clock size={11} className="opacity-70" />
-                {session.duration_minutes ? `${session.duration_minutes} min` : "—"}
+                {session.duration_minutes ? translateParams("sessions.durationMin", { minutes: String(session.duration_minutes) }) : translate("common.emDash")}
               </span>
               {session.tags && session.tags.length > 0 && (
                 <div className="flex gap-1 items-center">
@@ -431,7 +439,7 @@ export default function Sessions() {
               <span
                 className="flex items-center gap-1 px-2 py-1 h-[22px] rounded text-[10px] font-bold border uppercase tracking-wide shrink-0"
                 style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#DC2626" }}
-                title="Restrictive Practice Detected"
+                title={translate("sessions.restrictivePractice")}
               >
                 <AlertTriangle size={9} strokeWidth={2.5} /> RP
               </span>
@@ -446,7 +454,7 @@ export default function Sessions() {
               className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-400 transition-all hover:text-slate-700 shrink-0"
               style={{ borderColor: BORDER }}
               onClick={() => navigate(`/sessions/${session.id}`)}
-              title="View session detail"
+              title={translate("sessions.viewDetail")}
             >
               <ChevronRight size={13} />
             </button>
@@ -480,9 +488,9 @@ export default function Sessions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="hidden" style={{ color: CORAL }}>Clinical Records</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Sessions</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("sessions.title")}</h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
-            {isLoading ? "Loading records…" : `${sessions.length} total · ${filtered.length} in current view`}
+            {isLoading ? translate("sessions.subtitleLoading") : translateParams("sessions.subtitleCount", { total: String(sessions.length), filtered: String(filtered.length) })}
           </p>
         </div>
         <Link href="/sessions/new">
@@ -491,17 +499,17 @@ export default function Sessions() {
             style={{ background: PLUM }}
           >
             <Plus size={16} strokeWidth={2.5} />
-            New Session
+            {translate("sessions.newSession")}
           </button>
         </Link>
       </div>
 
       {/* Stat cards — matches Dashboard grid */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SessionStatCard label="Total Sessions"  value={sessions.length}   caption="All recorded sessions"        icon={Calendar}      />
-        <SessionStatCard label="This Week"        value={thisWeekCount}     caption="Sessions in current week"     icon={Clock}         />
-        <SessionStatCard label="Avg Compliance"   value={avgCompliance}     caption="Across completed sessions"    icon={ShieldCheck}   valueColor={PLUM} />
-        <SessionStatCard label="In Progress"      value={inProgressCount}   caption="Currently active sessions"    icon={AlertTriangle} valueColor={inProgressCount > 0 ? "#D97706" : T1} />
+        <SessionStatCard label={translate("sessions.stat.total")}  value={sessions.length}   caption={translate("sessions.stat.totalCaption")}        icon={Calendar}      />
+        <SessionStatCard label={translate("sessions.stat.thisWeek")}        value={thisWeekCount}     caption={translate("sessions.stat.thisWeekCaption")}     icon={Clock}         />
+        <SessionStatCard label={translate("sessions.stat.avgCompliance")}   value={avgCompliance}     caption={translate("sessions.stat.avgComplianceCaption")}    icon={ShieldCheck}   valueColor={PLUM} />
+        <SessionStatCard label={translate("sessions.stat.inProgress")}      value={inProgressCount}   caption={translate("sessions.stat.inProgressCaption")}    icon={AlertTriangle} valueColor={inProgressCount > 0 ? "#D97706" : T1} />
       </div>
 
       {/* Filter + session list — dashboard card style */}
@@ -515,7 +523,7 @@ export default function Sessions() {
             <div className="md:col-span-6 lg:col-span-7 flex w-full">
               <Field icon={<Search size={14} />}>
                 <input
-                  placeholder="Search by participant or session type…"
+                  placeholder={translate("sessions.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full h-[38px] rounded-lg text-[13px] pl-9 outline-none pr-3 border bg-white"
@@ -527,13 +535,13 @@ export default function Sessions() {
             <div className="md:col-span-3 lg:col-span-2 w-full">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white" style={{ borderColor: BORDER, color: T2 }}>
-                  <SelectValue placeholder="All statuses" />
+                  <SelectValue placeholder={translate("sessions.filter.allStatusesPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="all">{translate("sessions.filter.allStatuses")}</SelectItem>
+                  <SelectItem value="completed">{translate("sessions.filter.completed")}</SelectItem>
+                  <SelectItem value="in_progress">{translate("sessions.filter.inProgress")}</SelectItem>
+                  <SelectItem value="draft">{translate("sessions.filter.draft")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -543,11 +551,11 @@ export default function Sessions() {
                 <SelectTrigger className="h-[38px] rounded-lg text-[13px] w-full bg-white flex items-center" style={{ borderColor: BORDER, color: T2 }}>
                   <div className="flex items-center truncate">
                     <Users size={13} className="mr-1.5 opacity-60 shrink-0" />
-                    <SelectValue placeholder="All participants" />
+                    <SelectValue placeholder={translate("sessions.filter.allParticipantsPlaceholder")} />
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Participants</SelectItem>
+                  <SelectItem value="all">{translate("sessions.filter.allParticipants")}</SelectItem>
                   {participantOptions.map(([id, name]) => (
                     <SelectItem key={id} value={id}>{name}</SelectItem>
                   ))}
@@ -560,7 +568,7 @@ export default function Sessions() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
               <span className="flex items-center gap-1.5 text-[12px] font-medium whitespace-nowrap" style={{ color: T3 }}>
-                <Calendar size={13} /> Date range
+                <Calendar size={13} /> {translate("sessions.dateRange")}
               </span>
               <input
                 type="date"
@@ -568,16 +576,16 @@ export default function Sessions() {
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                aria-label="From date"
+                aria-label={translate("sessions.dateFrom")}
               />
-              <span className="text-[12px]" style={{ color: T3 }}>to</span>
+              <span className="text-[12px]" style={{ color: T3 }}>{translate("sessions.dateToLabel")}</span>
               <input
                 type="date"
                 className="flex-1 sm:flex-initial h-[38px] min-w-[130px] rounded-lg text-[13px] px-3 outline-none border bg-white"
                 style={{ borderColor: BORDER, color: T1 }}
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                aria-label="To date"
+                aria-label={translate("sessions.dateTo")}
               />
 
               {hasDateFilter && (
@@ -586,7 +594,7 @@ export default function Sessions() {
                   className="flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-lg transition-colors hover:bg-[#F8F8FE]"
                   style={{ color: T3 }}
                 >
-                  <X size={12} /> Clear dates
+                  <X size={12} /> {translate("sessions.clearDates")}
                 </button>
               )}
             </div>
@@ -598,8 +606,8 @@ export default function Sessions() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(Object.entries(SORT_LABELS) as [SortKey, string][]).map(([k, label]) => (
-                    <SelectItem key={k} value={k}>{label}</SelectItem>
+                  {(Object.entries(SORT_I18N) as [SortKey, string][]).map(([k, i18nKey]) => (
+                    <SelectItem key={k} value={k}>{translate(i18nKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -609,7 +617,7 @@ export default function Sessions() {
           {/* Active filter pills */}
           {hasAnyFilter && !isLoading && (
             <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-dashed" style={{ borderColor: BORDER }}>
-              <span className="text-[11px] font-medium" style={{ color: T3 }}>Filters:</span>
+              <span className="text-[11px] font-medium" style={{ color: T3 }}>{translate("sessions.filters")}</span>
               {search && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border"
                   style={{ background: `${PLUM}08`, borderColor: `${PLUM}20`, color: PLUM }}>
@@ -631,7 +639,7 @@ export default function Sessions() {
               )}
               <button onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
                 className="text-[11px] font-medium underline underline-offset-2 ml-1" style={{ color: T3 }}>
-                Clear all
+                {translate("sessions.clearAll")}
               </button>
             </div>
           )}
@@ -644,10 +652,10 @@ export default function Sessions() {
             style={{ background: `${PLUM}08`, borderColor: BORDER }}
           >
             <span className="text-[13px] font-semibold" style={{ color: PLUM }}>
-              {selectedIds.size} session{selectedIds.size !== 1 ? "s" : ""} selected
+              {translateParams(selectedIds.size === 1 ? "sessions.selected" : "sessions.selectedPlural", { count: String(selectedIds.size) })}
               {exportProgress && (
                 <span className="font-normal ml-2" style={{ color: T3 }}>
-                  — generating {exportProgress.done}/{exportProgress.total}…
+                  {translateParams("sessions.generating", { done: String(exportProgress.done), total: String(exportProgress.total) })}
                 </span>
               )}
             </span>
@@ -660,14 +668,14 @@ export default function Sessions() {
                 style={{ borderColor: `${PLUM}35`, color: PLUM }}
               >
                 {isBulkExporting ? <Loader2 size={13} className="animate-spin" /> : <FileDown size={13} />}
-                {isBulkExporting ? "Exporting…" : "Export PDF"}
+                {isBulkExporting ? translate("sessions.exporting") : translate("sessions.exportPdf")}
               </button>
               <button
                 onClick={clearSelection}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors hover:bg-[#F8F8FE]"
                 style={{ color: T3 }}
               >
-                <X size={12} /> Deselect
+                <X size={12} /> {translate("sessions.deselect")}
               </button>
             </div>
           </div>
@@ -682,13 +690,13 @@ export default function Sessions() {
             <Checkbox
               checked={allSelected ? true : someSelected ? "indeterminate" : false}
               onCheckedChange={toggleSelectAll}
-              aria-label="Select all sessions"
+              aria-label={translate("sessions.selectAll")}
               data-testid="checkbox-select-all"
             />
             <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: T3 }}>
               {allSelected
-                ? `Deselect all ${sorted.length}`
-                : `Select all ${sorted.length} record${sorted.length !== 1 ? "s" : ""}`}
+                ? translateParams("sessions.deselectAll", { count: String(sorted.length) })
+                : translateParams(sorted.length === 1 ? "sessions.selectAllRecords" : "sessions.selectAllRecordsPlural", { count: String(sorted.length) })}
             </span>
           </div>
         )}
@@ -702,15 +710,15 @@ export default function Sessions() {
               <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3" style={{ background: SOFT }}>
                 <Calendar size={20} style={{ color: PLUM }} />
               </div>
-              <p className="text-[15px] font-semibold" style={{ color: T1 }}>No sessions found</p>
+              <p className="text-[15px] font-semibold" style={{ color: T1 }}>{translate("sessions.empty.title")}</p>
               <p className="text-[13px] mt-1" style={{ color: T3 }}>
-                {hasAnyFilter ? "Try adjusting your filters." : "Create your first session to get started."}
+                {hasAnyFilter ? translate("sessions.empty.filtered") : translate("sessions.empty.noFilter")}
               </p>
             </div>
           ) : grouped ? (
-            Array.from(grouped.entries()).map(([label, items]) => (
-              <React.Fragment key={label}>
-                <GroupHeading label={label} count={items.length} />
+            Array.from(grouped.entries()).map(([groupKey, items]) => (
+              <React.Fragment key={groupKey}>
+                <GroupHeading label={translate(GROUP_I18N[groupKey])} count={items.length} />
                 {items.map((s) => <SessionRow key={s.id} session={s} />)}
               </React.Fragment>
             ))
@@ -724,7 +732,7 @@ export default function Sessions() {
           <div className="px-5 py-3 border-t flex items-center justify-between"
             style={{ borderColor: BORDER, background: SOFT }}>
             <span className="text-[11px]" style={{ color: T3 }}>
-              Showing {sorted.length} of {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+              {translateParams(sessions.length === 1 ? "sessions.footer.showing" : "sessions.footer.showingPlural", { shown: String(sorted.length), total: String(sessions.length) })}
             </span>
             {sessions.length > sorted.length && (
               <button
@@ -732,7 +740,7 @@ export default function Sessions() {
                 style={{ color: PLUM }}
                 onClick={() => { setSearch(""); setStatusFilter("all"); setParticipantFilter("all"); setDateFrom(""); setDateTo(""); }}
               >
-                Clear filters to see all
+                {translate("sessions.footer.clearFilters")}
               </button>
             )}
           </div>

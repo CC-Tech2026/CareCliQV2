@@ -1,13 +1,12 @@
-﻿import { useState } from "react";
-import { Search, Home, CheckCircle2, Clock3, Users, FileText, Settings, ChevronRight } from "lucide-react";
+﻿import { useState, useMemo } from "react";
+import { CheckCircle2, Clock3 } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const BORDER = "var(--cc-border)";
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
-const SUCCESS = "#10B981";
-const WARNING = "#F59E0B";
 
 // Mock data for approvals
 const MOCK_APPROVALS = [
@@ -17,16 +16,22 @@ const MOCK_APPROVALS = [
   { id: 4, name: "Haya Collins", time: "7:30am - 4:00pm", date: "24 24hr", status: "pending", approved: false },
 ];
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAY_KEYS = [
+  "approvals.day.monday",
+  "approvals.day.tuesday",
+  "approvals.day.wednesday",
+  "approvals.day.thursday",
+  "approvals.day.friday",
+] as const;
 
-const TABS = [
-  { id: "favorites", label: "Favorites", icon: Clock3 },
-  { id: "pending", label: "Pending", icon: Clock3 },
-  { id: "recent", label: "Recent", icon: Clock3 },
-  { id: "people", label: "People", icon: Clock3 },
-  { id: "timesheets", label: "Timesheets", icon: Clock3 },
-  { id: "flexibility", label: "Flexibility", icon: Clock3 },
-];
+const TAB_KEYS = [
+  { id: "favorites", key: "approvals.tab.favorites" },
+  { id: "pending", key: "approvals.tab.pending" },
+  { id: "recent", key: "approvals.tab.recent" },
+  { id: "people", key: "approvals.tab.people" },
+  { id: "timesheets", key: "approvals.tab.timesheets" },
+  { id: "flexibility", key: "approvals.tab.flexibility" },
+] as const;
 
 const STAFF_SCHEDULE = [
   {
@@ -59,7 +64,7 @@ const STAFF_SCHEDULE = [
       { time: "9:30 AM - 12:00 PM" },
       { time: "9:30 AM - 12:00 PM" },
       { time: "3:00 AM - 3:00 AM" },
-      { text: "Off" },
+      { text: "off" },
     ],
   },
   {
@@ -78,8 +83,8 @@ const STAFF_SCHEDULE = [
     initials: "SN",
     slots: [
       { time: "6:00 AM - 2:00 PM" },
-      { text: "Off" },
-      { text: "Off" },
+      { text: "off" },
+      { text: "off" },
       { time: "6:00 AM - 2:00 PM" },
       { time: "6:00 AM - 2:00 PM" },
     ],
@@ -88,21 +93,32 @@ const STAFF_SCHEDULE = [
     name: "Chris Sano",
     initials: "CS",
     slots: [
-      { text: "Off" },
+      { text: "off" },
       { time: "3:30 AM - 4:00 PM" },
       { time: "3:30 AM - 4:00 PM" },
-      { text: "Off" },
-      { text: "Off" },
+      { text: "off" },
+      { text: "off" },
     ],
   },
 ];
 
 export default function Approvals() {
+  const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState("pending");
   const [approvals, setApprovals] = useState(MOCK_APPROVALS);
   const today = new Date();
   const startDate = new Date(today);
   startDate.setDate(startDate.getDate() - today.getDay() + 1);
+
+  const days = useMemo(
+    () => DAY_KEYS.map((key) => translate(key)),
+    [translate],
+  );
+
+  const tabs = useMemo(
+    () => TAB_KEYS.map((tab) => ({ ...tab, label: translate(tab.key) })),
+    [translate],
+  );
 
   const toggleApproval = (id: number) => {
     setApprovals(approvals.map((a) =>
@@ -110,7 +126,6 @@ export default function Approvals() {
     ));
   };
 
-  // Generate dates for each day
   const getDayDate = (dayIndex: number) => {
     const d = new Date(startDate);
     d.setDate(d.getDate() + dayIndex);
@@ -122,6 +137,9 @@ export default function Approvals() {
     d.setDate(d.getDate() + dayIndex);
     return d.toDateString() === today.toDateString();
   };
+
+  const approvedCount = approvals.filter((a) => a.approved).length;
+  const pendingCount = approvals.filter((a) => !a.approved).length;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--cc-bg)" }}>
@@ -135,8 +153,8 @@ export default function Approvals() {
       {/* Tab Navigation */}
       <div className="bg-white border-b" style={{ borderColor: BORDER }}>
         <div className="flex items-center overflow-x-auto px-6">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
+          {tabs.map((tab) => {
+            const Icon = Clock3;
             return (
               <button
                 key={tab.id}
@@ -161,10 +179,10 @@ export default function Approvals() {
         <div className="w-full lg:w-[420px] lg:border-r" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
           <div className="sticky top-0 z-10 border-b px-6 py-4" style={{ borderColor: BORDER }}>
             <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>
-              Approvals
+              {translate("approvals.title")}
             </h1>
             <p className="mt-1 text-sm" style={{ color: MUTED }}>
-              {approvals.filter(a => !a.approved).length} pending shifts
+              {translateParams("approvals.pendingShifts", { count: String(pendingCount) })}
             </p>
           </div>
 
@@ -218,13 +236,13 @@ export default function Approvals() {
                 color: PLUM,
               }}
             >
-              Cancel
+              {translate("common.cancel")}
             </button>
             <button
               className="flex-1 h-11 rounded-lg font-bold text-sm text-white transition-opacity hover:opacity-90"
               style={{ background: PLUM }}
             >
-              Approve ({approvals.filter((a) => a.approved).length})
+              {translateParams("approvals.approve", { count: String(approvedCount) })}
             </button>
           </div>
         </div>
@@ -235,21 +253,21 @@ export default function Approvals() {
           <div className="border-b bg-white px-8 py-6" style={{ borderColor: BORDER }}>
             <div className="mb-4">
               <h2 className="text-lg font-bold" style={{ color: TEXT }}>
-                Roster
+                {translate("approvals.roster")}
               </h2>
             </div>
             <div className="flex items-center gap-8 text-sm">
               <div>
-                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">Summary</p>
-                <p className="mt-1 font-bold" style={{ color: TEXT }}>88 Staff seen</p>
+                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">{translate("approvals.summary")}</p>
+                <p className="mt-1 font-bold" style={{ color: TEXT }}>{translate("approvals.staffSeen")}</p>
               </div>
               <div>
-                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">Shifts</p>
-                <p className="mt-1 font-bold" style={{ color: TEXT }}>44 shifts</p>
+                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">{translate("approvals.shiftsLabel")}</p>
+                <p className="mt-1 font-bold" style={{ color: TEXT }}>{translate("approvals.shifts")}</p>
               </div>
               <div>
-                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">Waiting</p>
-                <p className="mt-1 font-bold" style={{ color: CORAL }}>0 waiting</p>
+                <p style={{ color: MUTED }} className="text-xs uppercase font-semibold">{translate("approvals.waitingLabel")}</p>
+                <p className="mt-1 font-bold" style={{ color: CORAL }}>{translate("approvals.waiting")}</p>
               </div>
             </div>
           </div>
@@ -260,7 +278,7 @@ export default function Approvals() {
               <div className="sticky top-0 z-10 bg-white border-b" style={{ borderColor: BORDER }}>
                 <div className="flex">
                   <div className="w-[220px] px-6 py-4"></div>
-                  {DAYS.map((day, idx) => (
+                  {days.map((day, idx) => (
                     <div
                       key={day}
                       className="w-[180px] px-4 py-4 text-center border-l"
@@ -274,7 +292,7 @@ export default function Approvals() {
                       </p>
                       {isToday(idx) && (
                         <p className="mt-1 text-xs font-semibold" style={{ color: PLUM }}>
-                          Today
+                          {translate("approvals.today")}
                         </p>
                       )}
                     </div>
@@ -314,7 +332,7 @@ export default function Approvals() {
                         <div>
                           {slot.text ? (
                             <p className="text-xs font-medium" style={{ color: MUTED }}>
-                              {slot.text}
+                              {translate("approvals.off")}
                             </p>
                           ) : (
                             <>
@@ -322,7 +340,7 @@ export default function Approvals() {
                                 {slot.time}
                               </p>
                               <p className="mt-1 text-xs" style={{ color: MUTED }}>
-                                Confirmed
+                                {translate("approvals.confirmed")}
                               </p>
                             </>
                           )}

@@ -76,6 +76,7 @@ import WorkerAccessibility from "@/pages/worker-accessibility";
 import AccountSecure from "@/pages/account-secure";
 import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
 import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
+import { WorkerTutorialLauncher } from "@/components/help/WorkerTutorialLauncher";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
@@ -207,7 +208,11 @@ function Router() {
       </Route>
 
       <Route path="/worker/accessibility">
-        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+        <Redirect to="/accessibility" />
+      </Route>
+
+      <Route path="/accessibility">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><WorkerAccessibility /></AppLayout>
         </ProtectedRoute>
       </Route>
@@ -266,11 +271,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      {/* <Route path="/tasks">
+      <Route path="/tasks">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><Tasks /></AppLayout>
         </ProtectedRoute>
-      </Route> */}
+      </Route>
 
       <Route path="/worker/messages">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -506,6 +511,7 @@ function App() {
             <OfflineSyncProvider>
               <WorkerTutorialProvider>
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <WorkerTutorialLauncher />
                   <AuthSessionGuards />
                   <Router />
                 </WouterRouter>

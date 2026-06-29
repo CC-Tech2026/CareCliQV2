@@ -25,16 +25,17 @@ import {
   TEXT,
   shiftDurationMinutes,
 } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const FILTERS: { id: ShiftFilter; label: string }[] = [
-  { id: "today", label: "Today" },
-  { id: "upcoming", label: "Upcoming" },
-  { id: "completed", label: "Completed" },
-  { id: "cancelled", label: "Cancelled" },
+const FILTER_KEYS: { id: ShiftFilter; labelKey: string }[] = [
+  { id: "today", labelKey: "shifts.filter.today" },
+  { id: "upcoming", labelKey: "shifts.filter.upcoming" },
+  { id: "completed", labelKey: "shifts.filter.completed" },
+  { id: "cancelled", labelKey: "shifts.filter.cancelled" },
 ];
 
-function formatGroupLabel(dateKey: string) {
-  if (dateKey === "unknown") return "Unscheduled";
+function formatGroupLabel(dateKey: string, translate: (key: string) => string) {
+  if (dateKey === "unknown") return translate("shifts.unscheduled");
   const date = parseISO(`${dateKey}T12:00:00`);
   const day = startOfDay(date);
   const today = startOfDay(new Date());
@@ -49,15 +50,17 @@ function ShiftFilterTabs({
   filter,
   onChange,
   counts,
+  translate,
 }: {
   filter: ShiftFilter;
   onChange: (next: ShiftFilter) => void;
   counts?: Record<"today" | "upcoming" | "completed" | "cancelled", number>;
+  translate: (key: string) => string;
 }) {
   return (
     <div className="rounded-2xl bg-[#F0EDF8] p-1.5">
       <div className="flex gap-1 overflow-x-auto scrollbar-none">
-        {FILTERS.map((f) => {
+        {FILTER_KEYS.map((f) => {
           const active = filter === f.id;
           const count = counts?.[f.id as keyof typeof counts] ?? 0;
           return (
@@ -70,7 +73,7 @@ function ShiftFilterTabs({
                 active ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280]",
               )}
             >
-              <span>{f.label}</span>
+              <span>{translate(f.labelKey)}</span>
               <span
                 className="grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full px-1 text-[11px] font-black text-white"
                 style={{ background: active ? PLUM : "#9B8EC4" }}
@@ -100,6 +103,7 @@ function ShiftSkeleton() {
 
 export default function MyShifts() {
   const { user } = useAuth();
+  const { translate } = useAccessibility();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ShiftFilter>("today");
   const [pendingCount, setPendingCount] = useState(0);
@@ -184,10 +188,10 @@ export default function MyShifts() {
         ? Array.from(groups.entries()).sort(([a], [b]) => b.localeCompare(a))
         : Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
     return sorted.map(([key, shifts]) => ({
-      label: key === "unknown" ? "Unscheduled" : formatGroupLabel(key),
+      label: key === "unknown" ? translate("shifts.unscheduled") : formatGroupLabel(key, translate),
       shifts,
     }));
-  }, [filter, list]);
+  }, [filter, list, translate]);
 
   return (
     <div className="space-y-5 pb-6">
@@ -197,7 +201,7 @@ export default function MyShifts() {
             Support Worker
           </p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-            My Shifts
+            {translate("shifts.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
             {dateLabel}
@@ -212,7 +216,7 @@ export default function MyShifts() {
               title="View messages from coordinator"
             >
               <Bell size={18} />
-              <span className="hidden sm:inline text-xs font-black">Messages</span>
+              <span className="hidden sm:inline text-xs font-black">{translate("shifts.messages")}</span>
             </button>
           </Link>
           <Link href="/my-shifts">
@@ -221,7 +225,7 @@ export default function MyShifts() {
               className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm hover:opacity-90 transition"
               style={{ background: CORAL }}
             >
-              + Quick Start
+              + {translate("shifts.quickStart")}
             </button>
           </Link>
         </div>
@@ -230,12 +234,12 @@ export default function MyShifts() {
       <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-5 rounded-none sm:mx-0 sm:rounded-xl" />
 
       <div className="grid grid-cols-3 gap-3">
-        <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label="Shifts today" />
-        <StatCard value={String(completedToday)} label="Completed" />
-        <StatCard value={hoursScheduled} label="Hrs scheduled" />
+        <StatCard value={String(filterCounts?.today ?? todayShifts.length)} label={translate("shifts.shiftsToday")} />
+        <StatCard value={String(completedToday)} label={translate("shifts.completedToday")} />
+        <StatCard value={hoursScheduled} label={translate("shifts.hrsScheduled")} />
       </div>
 
-      <ShiftFilterTabs filter={filter} onChange={setFilter} counts={filterCounts} />
+      <ShiftFilterTabs filter={filter} onChange={setFilter} counts={filterCounts} translate={translate} />
 
       {isLoading && (
         <div className="space-y-3">
@@ -257,7 +261,7 @@ export default function MyShifts() {
             <CalendarDays size={28} style={{ color: PLUM }} />
           </div>
           <p className="text-base font-black" style={{ color: TEXT }}>
-            No {filter} shifts
+            {translate("shifts.empty")}
           </p>
           <p className="mx-auto mt-2 max-w-xs text-sm font-medium leading-relaxed" style={{ color: MUTED }}>
             Tap Open Shift on any upcoming card to review details before you arrive.
@@ -265,7 +269,7 @@ export default function MyShifts() {
         </section>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4" data-tutorial="shift-list">
         {groupedList.map((group) => (
           <div key={group.label ?? "default"} className="space-y-3">
             {group.label && (

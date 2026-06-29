@@ -14,11 +14,13 @@ import { ClockInQrScanner } from "@/components/shifts/ClockInQrScanner";
 import type { ClockInRequest, WorkerShift } from "@/services/shiftService";
 import { reverseGeocode } from "@/lib/reverse-geocode";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
   shift: WorkerShift;
   busy?: boolean;
+  tutorialDemo?: boolean;
   onClose: () => void;
   onConfirm: (payload: ClockInRequest) => Promise<void>;
 };
@@ -37,7 +39,8 @@ async function cameraPermissionState(): Promise<PermissionState | "unsupported">
   }
 }
 
-export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
+export function ClockInFlow({ open, shift, busy, tutorialDemo, onClose, onConfirm }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [step, setStep] = useState<Step>("choose");
   const [method, setMethod] = useState<"gps" | "qr" | null>(null);
   const [location, setLocation] = useState<ClockInRequest["location"]>(null);
@@ -67,14 +70,14 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
   const nowLabel = useMemo(() => new Date().toLocaleString(), [step, open]);
 
   const yourLocationLabel = useMemo(() => {
-    if (method === "qr") return "Verified via location QR code";
+    if (method === "qr") return translate("clockin.qrVerified");
     if (location) {
       return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}${
         location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ""
       }`;
     }
     return null;
-  }, [location, method]);
+  }, [location, method, translate]);
 
   const startGps = async () => {
     setMethod("gps");
@@ -82,7 +85,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
     setCaptureError(null);
     setManualQrOpen(false);
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setCaptureError("Geolocation is not supported on this device.");
+      setCaptureError(translate("clockin.geoUnsupported"));
       setStep("choose");
       return;
     }
@@ -97,8 +100,8 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
         (err) => {
           setCaptureError(
             err.code === err.PERMISSION_DENIED
-              ? "Location permission denied. Enable location access or use QR check-in."
-              : "Could not get your location. Try again or scan the location QR code.",
+              ? translate("clockin.geoDenied")
+              : translate("clockin.geoFailed"),
           );
           resolve(null);
         },
@@ -126,14 +129,12 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
 
     const permission = await cameraPermissionState();
     if (permission === "denied") {
-      setCaptureError(
-        "Camera permission denied. Use GPS check-in, enable camera access in browser settings, or enter the QR code manually.",
-      );
+      setCaptureError(translate("clockin.cameraDenied"));
       setManualQrOpen(true);
       return;
     }
     if (permission === "unsupported") {
-      setCaptureError("Camera scanning is not supported here. Enter the QR code manually or use GPS.");
+      setCaptureError(translate("clockin.cameraUnsupported"));
       setManualQrOpen(true);
       return;
     }
@@ -150,16 +151,14 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
 
   const handleScannerError = (message: string) => {
     setScannerOpen(false);
-    setCaptureError(
-      `${message} Use GPS check-in, enable camera access in browser settings, or enter the QR code manually.`,
-    );
+    setCaptureError(`${message} ${translate("clockin.scannerErrorHint")}`);
     setManualQrOpen(true);
   };
 
   const submitManualQr = () => {
     const token = manualQrValue.trim();
     if (!token) {
-      setCaptureError("Paste or type the QR code value first.");
+      setCaptureError(translate("clockin.manualQrRequired"));
       return;
     }
     setMethod("qr");
@@ -179,14 +178,18 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
     await onConfirm(payload);
   };
 
+  const participantName = shift.participant_name ?? translate("common.participant");
+
   return (
     <>
       <Dialog open={open && !scannerOpen} onOpenChange={(next) => !next && onClose()}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent className="max-w-md rounded-2xl" data-tutorial="clock-in-modal">
           <DialogHeader>
-            <DialogTitle className="text-[#111827]">Check in to shift</DialogTitle>
+            <DialogTitle className="text-[#111827]">{translate("clockin.title")}</DialogTitle>
             <DialogDescription>
-              Verify your arrival for {shift.participant_name ?? "this participant"} using GPS or the location QR code.
+              {tutorialDemo
+                ? translate("clockin.tutorial")
+                : translateParams("clockin.verify", { name: participantName })}
             </DialogDescription>
           </DialogHeader>
 
@@ -199,8 +202,8 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
               >
                 <MapPin className="h-6 w-6 shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-black text-[#111827]">Use GPS</p>
-                  <p className="text-xs text-muted-foreground">Verify you are at the participant address</p>
+                  <p className="font-black text-[#111827]">{translate("clockin.useGps")}</p>
+                  <p className="text-xs text-muted-foreground">{translate("clockin.gpsHint")}</p>
                 </div>
               </button>
               <button
@@ -210,8 +213,8 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
               >
                 <QrCode className="h-6 w-6 shrink-0 text-violet-600" />
                 <div>
-                  <p className="font-black text-[#111827]">Scan QR code</p>
-                  <p className="text-xs text-muted-foreground">Scan the code at the participant&apos;s location</p>
+                  <p className="font-black text-[#111827]">{translate("clockin.scanQr")}</p>
+                  <p className="text-xs text-muted-foreground">{translate("clockin.qrHint")}</p>
                 </div>
               </button>
 
@@ -223,15 +226,17 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
 
               {(manualQrOpen || captureError) && (
                 <div className="space-y-2 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Enter QR code manually</p>
+                  <p className="text-xs font-bold uppercase tracking-wide text-violet-700">
+                    {translate("clockin.manualQr")}
+                  </p>
                   <Input
                     value={manualQrValue}
                     onChange={(e) => setManualQrValue(e.target.value)}
-                    placeholder="Paste QR code value"
+                    placeholder={translate("clockin.manualQrPlaceholder")}
                     className="bg-white"
                   />
                   <Button type="button" variant="outline" className="w-full" onClick={submitManualQr}>
-                    Continue with code
+                    {translate("clockin.continueCode")}
                   </Button>
                 </div>
               )}
@@ -242,7 +247,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                   className="text-center text-xs font-semibold text-violet-700 underline-offset-2 hover:underline"
                   onClick={() => setManualQrOpen(true)}
                 >
-                  Enter QR code manually instead
+                  {translate("clockin.manualInstead")}
                 </button>
               )}
             </div>
@@ -251,7 +256,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
           {step === "capturing" && (
             <div className="grid place-items-center gap-3 py-8">
               <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-              <p className="text-sm font-semibold text-muted-foreground">Getting your location…</p>
+              <p className="text-sm font-semibold text-muted-foreground">{translate("clockin.capturing")}</p>
             </div>
           )}
 
@@ -262,32 +267,32 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div className="space-y-2">
                     <p>
-                      <span className="font-bold text-[#111827]">Date & time: </span>
+                      <span className="font-bold text-[#111827]">{translate("clockin.dateTime")} </span>
                       {nowLabel}
                     </p>
                     <p>
-                      <span className="font-bold text-[#111827]">Method: </span>
-                      {method === "gps" ? "GPS location" : "QR code"}
+                      <span className="font-bold text-[#111827]">{translate("clockin.method")} </span>
+                      {method === "gps" ? translate("clockin.methodGps") : translate("clockin.methodQr")}
                     </p>
                     {(yourLocationLabel || resolvingAddress) && (
                       <div>
                         <p>
-                          <span className="font-bold text-[#111827]">Your location: </span>
+                          <span className="font-bold text-[#111827]">{translate("clockin.yourLocation")}: </span>
                           {method === "gps" && locationAddress
                             ? locationAddress
-                            : yourLocationLabel ?? "Looking up address…"}
+                            : yourLocationLabel ?? translate("clockin.lookingUpAddress")}
                         </p>
                         {method === "gps" && locationAddress && yourLocationLabel && (
                           <p className="text-xs text-muted-foreground">{yourLocationLabel}</p>
                         )}
                         {method === "gps" && resolvingAddress && !locationAddress && (
-                          <p className="text-xs text-muted-foreground">Looking up address…</p>
+                          <p className="text-xs text-muted-foreground">{translate("clockin.lookingUpAddress")}</p>
                         )}
                       </div>
                     )}
                     {shift.participant_address && (
                       <p>
-                        <span className="font-bold text-[#111827]">Shift address: </span>
+                        <span className="font-bold text-[#111827]">{translate("clockin.shiftAddress")} </span>
                         {shift.participant_address}
                       </p>
                     )}
@@ -301,7 +306,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
             {step === "confirm" && (
               <>
                 <Button type="button" variant="outline" disabled={busy} onClick={() => setStep("choose")}>
-                  Back
+                  {translate("common.back")}
                 </Button>
                 <Button
                   type="button"
@@ -309,7 +314,7 @@ export function ClockInFlow({ open, shift, busy, onClose, onConfirm }: Props) {
                   disabled={busy}
                   onClick={() => void handleConfirm()}
                 >
-                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm check-in"}
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("clockin.confirm")}
                 </Button>
               </>
             )}

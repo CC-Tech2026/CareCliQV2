@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -220,6 +221,7 @@ function ParticipantForm({
   onCancel: () => void;
   submitLabel: string;
 }) {
+  const { translate } = useAccessibility();
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -230,10 +232,10 @@ function ParticipantForm({
             render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel>
-                  Full Name <span className="text-destructive">*</span>
+                  {translate("patients.field.fullName")} <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input placeholder="Jane Smith" data-testid="input-full-name" {...field} />
+                  <Input placeholder={translate("patients.placeholder.fullName")} data-testid="input-full-name" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -245,10 +247,10 @@ function ParticipantForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  NDIS Number <span className="text-destructive">*</span>
+                  {translate("patients.field.ndisNumber")} <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
-                  <Input placeholder="430012345" data-testid="input-ndis-number" {...field} />
+                  <Input placeholder={translate("patients.placeholder.ndisNumber")} data-testid="input-ndis-number" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -260,7 +262,7 @@ function ParticipantForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>
-                  Date of Birth <span className="text-destructive">*</span>
+                  {translate("patients.field.dateOfBirth")} <span className="text-destructive">*</span>
                 </FormLabel>
                 <FormControl>
                   <Input type="date" data-testid="input-date-of-birth" {...field} />
@@ -274,9 +276,9 @@ function ParticipantForm({
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{translate("patients.field.email")}</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} />
+                  <Input type="email" placeholder={translate("patients.placeholder.email")} data-testid="input-email" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -287,9 +289,9 @@ function ParticipantForm({
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone</FormLabel>
+                <FormLabel>{translate("patients.field.phone")}</FormLabel>
                 <FormControl>
-                  <Input placeholder="0412 345 678" data-testid="input-phone" {...field} />
+                  <Input placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -300,10 +302,10 @@ function ParticipantForm({
             name="primary_disability"
             render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel>Primary Disability</FormLabel>
+                <FormLabel>{translate("patients.field.primaryDisability")}</FormLabel>
                 <FormControl>
                   <SmartInput
-                    placeholder="e.g. Autism Spectrum Disorder — or tap the mic to speak"
+                    placeholder={translate("patients.placeholder.primaryDisability")}
                     data-testid="input-primary-disability"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
@@ -318,17 +320,17 @@ function ParticipantForm({
             name="biological_sex"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Biological Sex</FormLabel>
+                <FormLabel>{translate("patients.field.biologicalSex")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
                     <SelectTrigger data-testid="select-biological-sex">
-                      <SelectValue placeholder="Select..." />
+                      <SelectValue placeholder={translate("patients.selectPlaceholder")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="unspecified">Prefer not to say</SelectItem>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="unspecified">{translate("patients.sex.unspecified")}</SelectItem>
+                    <SelectItem value="male">{translate("patients.sex.male")}</SelectItem>
+                    <SelectItem value="female">{translate("patients.sex.female")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -340,18 +342,18 @@ function ParticipantForm({
             name="plan_status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Plan Status</FormLabel>
+                <FormLabel>{translate("patients.field.planStatus")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="select-plan-status">
-                      <SelectValue placeholder="Select status" />
+                      <SelectValue placeholder={translate("patients.selectStatus")} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="active">{translate("patients.planStatus.active")}</SelectItem>
+                    <SelectItem value="pending">{translate("patients.planStatus.pending")}</SelectItem>
+                    <SelectItem value="inactive">{translate("patients.planStatus.inactive")}</SelectItem>
+                    <SelectItem value="expired">{translate("patients.planStatus.expired")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -363,9 +365,9 @@ function ParticipantForm({
             name="total_budget"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Total Budget ($)</FormLabel>
+                <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
                 <FormControl>
-                  <Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} />
+                  <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -376,7 +378,7 @@ function ParticipantForm({
             name="plan_start_date"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Plan Start Date</FormLabel>
+                <FormLabel>{translate("patients.field.planStartDate")}</FormLabel>
                 <FormControl>
                   <Input type="date" data-testid="input-plan-start-date" {...field} />
                 </FormControl>
@@ -389,7 +391,7 @@ function ParticipantForm({
             name="plan_end_date"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Plan End Date</FormLabel>
+                <FormLabel>{translate("patients.field.planEndDate")}</FormLabel>
                 <FormControl>
                   <Input type="date" data-testid="input-plan-end-date" {...field} />
                 </FormControl>
@@ -400,7 +402,7 @@ function ParticipantForm({
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {translate("common.cancel")}
           </Button>
           <Button type="submit" data-testid="button-add-participant" disabled={isPending}>
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -425,6 +427,7 @@ function EditParticipantPanel({
 }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { translate } = useAccessibility();
 
   const editForm = useForm<ParticipantFormValues>({
     resolver: zodResolver(participantSchema),
@@ -464,29 +467,29 @@ function EditParticipantPanel({
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Participant updated successfully" });
+      toast({ title: translate("patients.toast.updated") });
       setOpen(false);
       onSaved();
     },
     onError: (err: Error) => {
-      toast({ title: err.message || "Update failed", variant: "destructive" });
+      toast({ title: err.message || translate("patients.toast.updateFailed"), variant: "destructive" });
     },
   });
 
   return (
     <div>
       <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <Edit className="h-3.5 w-3.5" /> {open ? "Close Edit" : "Edit"}
+        <Edit className="h-3.5 w-3.5" /> {open ? translate("patients.closeEdit") : translate("common.edit")}
       </Button>
       {open && (
         <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#111827]">Edit Participant</h4>
+          <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.editTitle")}</h4>
           <ParticipantForm
             form={editForm}
             onSubmit={(data) => updateMutation.mutate(data)}
             isPending={updateMutation.isPending}
             onCancel={() => setOpen(false)}
-            submitLabel="Save Changes"
+            submitLabel={translate("patients.saveChanges")}
           />
         </div>
       )}
@@ -507,6 +510,7 @@ function SetupPlanPanel({
 }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const { translate } = useAccessibility();
 
   const planForm = useForm<PlanFormValues>({
     resolver: zodResolver(planSchema),
@@ -532,21 +536,21 @@ function SetupPlanPanel({
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "NDIS plan saved" });
+      toast({ title: translate("patients.toast.planSaved") });
       setOpen(false);
       onSaved();
     },
-    onError: () => toast({ title: "Failed to save plan", variant: "destructive" }),
+    onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
   });
 
   return (
     <div>
       <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <PlusCircle className="h-3.5 w-3.5" /> {open ? "Close Plan Setup" : "Set Up NDIS Plan"}
+        <PlusCircle className="h-3.5 w-3.5" /> {open ? translate("patients.closePlanSetup") : translate("patients.setupPlan")}
       </Button>
       {open && (
         <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#111827]">Set Up NDIS Plan</h4>
+          <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.setupPlan")}</h4>
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -555,7 +559,7 @@ function SetupPlanPanel({
                 name="plan_number"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel>Plan Reference Number</FormLabel>
+                    <FormLabel>{translate("patients.field.planReference")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. 2024-ABC-001" {...field} />
                     </FormControl>
@@ -568,7 +572,7 @@ function SetupPlanPanel({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Plan Start <span className="text-destructive">*</span>
+                      {translate("patients.field.planStart")} <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
@@ -583,7 +587,7 @@ function SetupPlanPanel({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Plan End <span className="text-destructive">*</span>
+                      {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
@@ -597,9 +601,9 @@ function SetupPlanPanel({
                 name="total_funding"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
-                    <FormLabel>Total Funding ($)</FormLabel>
+                    <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="50000" {...field} />
+                      <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -607,7 +611,7 @@ function SetupPlanPanel({
               />
               <div className="col-span-2">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" /> Budget by Support Category
+                  <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
                 </p>
               </div>
               <FormField
@@ -615,7 +619,7 @@ function SetupPlanPanel({
                 name="core_budget"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Core Supports ($)</FormLabel>
+                    <FormLabel>{translate("patients.field.coreSupports")}</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="0" {...field} />
                     </FormControl>
@@ -628,7 +632,7 @@ function SetupPlanPanel({
                 name="capacity_budget"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Capacity Building ($)</FormLabel>
+                    <FormLabel>{translate("patients.field.capacityBuilding")}</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="0" {...field} />
                     </FormControl>
@@ -641,7 +645,7 @@ function SetupPlanPanel({
                 name="capital_budget"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Capital Supports ($)</FormLabel>
+                    <FormLabel>{translate("patients.field.capitalSupports")}</FormLabel>
                     <FormControl>
                       <Input type="number" placeholder="0" {...field} />
                     </FormControl>
@@ -656,7 +660,7 @@ function SetupPlanPanel({
               </Button>
               <Button type="submit" disabled={createPlan.isPending}>
                 {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Plan
+                {translate("patients.savePlan")}
               </Button>
             </div>
             </form>
@@ -672,6 +676,7 @@ function SetupPlanPanel({
 // ---------------------------------------------------------------------------
 
 function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
+  const { translate, translateParams } = useAccessibility();
   const participantQuery = useOrgQuery(["participant", id], {
     queryFn: () => fetchJson<ParticipantRecord>(`/api/participants/${id}`),
   });
@@ -726,9 +731,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
     onSuccess: () => {
       restrictedQuery.refetch();
-      toastFn({ title: "Clinical records saved" });
+      toastFn({ title: translate("patients.toast.clinicalSaved") });
     },
-    onError: () => toastFn({ title: "Save failed", variant: "destructive" }),
+    onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
   const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "shift_context" | "restricted">("overview");
 
@@ -746,7 +751,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     return (
       <div className="p-6">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700">
-          {(participantQuery.error as Error)?.message || "Unable to load participant details."}
+          {(participantQuery.error as Error)?.message || translate("patients.loadFailed")}
         </div>
       </div>
     );
@@ -766,26 +771,26 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     : null;
   const metricCards = [
     {
-      label: "Plan Status",
-      value: participant.plan_status || "Not recorded",
+      label: translate("patients.metric.planStatus"),
+      value: participant.plan_status || translate("patients.notRecorded"),
       icon: CheckCircle2,
       tone: statusBadge(participant.plan_status || ""),
     },
     {
-      label: "Budget Remaining",
+      label: translate("patients.metric.budgetRemaining"),
       value: money(remainingBudget),
       icon: DollarSign,
       tone: "bg-purple-50 text-[#3730A3] border-purple-100",
     },
     {
-      label: "Sessions",
+      label: translate("patients.tab.sessions"),
       value: String(sessions.length),
       icon: CalendarDays,
       tone: "bg-sky-50 text-sky-700 border-sky-100",
     },
     {
-      label: "Compliance",
-      value: averageCompliance == null ? "No score" : `${averageCompliance}%`,
+      label: translate("patients.tab.compliance"),
+      value: averageCompliance == null ? translate("patients.noScore") : `${averageCompliance}%`,
       icon: ShieldCheck,
       tone: complianceTone(averageCompliance),
     },
@@ -799,13 +804,13 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     .toUpperCase();
 
   const TABS = [
-    { id: "overview"    as const, label: "Overview",    icon: UserCircle   },
-    { id: "plan"        as const, label: "NDIS Plan",   icon: DollarSign   },
-    { id: "goals"       as const, label: "Goals",       icon: Target       },
-    { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
-    { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
-    ...(isCoordinator ? [{ id: "shift_context" as const, label: "Shift Context", icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
+    { id: "overview"    as const, label: translate("patients.tab.overview"),    icon: UserCircle   },
+    { id: "plan"        as const, label: translate("patients.tab.plan"),   icon: DollarSign   },
+    { id: "goals"       as const, label: translate("patients.tab.goals"),       icon: Target       },
+    { id: "sessions"    as const, label: translate("patients.tab.sessions"),    icon: CalendarDays },
+    { id: "compliance"  as const, label: translate("patients.tab.compliance"),  icon: ShieldCheck  },
+    ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), icon: Users }] : []),
+    ...(isCoordinator ? [{ id: "restricted" as const, label: translate("patients.tab.restricted"), icon: Lock }] : []),
   ];
 
   return (
@@ -838,7 +843,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* NDIS number + plan dates */}
         <p className="text-[11px] text-[#6B7280] ml-[52px] -mt-2 mb-3 leading-relaxed">
-          NDIS {participant.ndis_number || "not recorded"}
+          {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
           {participant.plan_start_date && participant.plan_end_date && (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
           )}
@@ -891,20 +896,20 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <ClipboardList className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">Personal Details</h4>
+              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.personalDetails")}</h4>
             </div>
             <dl className="grid grid-cols-2 gap-2">
               {[
-                ["Date of birth",     safeFormat(participant.date_of_birth)],
-                ["Biological sex",    participant.biological_sex || "Not set"],
-                ["Primary disability", participant.primary_disability || "Not set"],
-                ["Phone",             participant.phone || "Not set"],
-                ["Email",             participant.email || "Not set"],
-                ["Plan period",       participant.plan_start_date
+                [translate("patients.field.dateOfBirth"),     safeFormat(participant.date_of_birth)],
+                [translate("patients.field.biologicalSex"),    participant.biological_sex || translate("patients.notSet")],
+                [translate("patients.field.primaryDisability"), participant.primary_disability || translate("patients.notSet")],
+                [translate("patients.field.phone"),             participant.phone || translate("patients.notSet")],
+                [translate("patients.field.email"),             participant.email || translate("patients.notSet")],
+                [translate("patients.field.planPeriod"),       participant.plan_start_date
                   ? `${safeFormat(participant.plan_start_date)} – ${safeFormat(participant.plan_end_date)}`
-                  : "Not set"],
-                ["Plan status",       participant.plan_status || "Not set"],
-                ["Total budget",      money(totalBudget || budget?.total_funding)],
+                  : translate("patients.notSet")],
+                [translate("patients.field.planStatus"),       participant.plan_status || translate("patients.notSet")],
+                [translate("patients.field.totalBudget"),      money(totalBudget || budget?.total_funding)],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
                   <dt className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{label}</dt>
@@ -920,29 +925,29 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">NDIS Funding</h4>
+              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.ndisFunding")}</h4>
             </div>
             {budgetQuery.isLoading ? (
               <Skeleton className="h-24 w-full rounded-xl" />
             ) : budget?.has_plan === false ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-                No active NDIS plan saved yet. Use the <strong>Set Up Plan</strong> button at the top to create one.
+                {translate("patients.plan.noActive")}
               </div>
             ) : (
               <div className="space-y-3">
                 {/* Plan meta */}
                 {budget?.plan_number && (
                   <div className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1">Plan Number</p>
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] mb-1">{translate("patients.field.planNumber")}</p>
                     <p className="text-[12px] font-bold text-[#111827]">{budget.plan_number}</p>
                   </div>
                 )}
                 {/* Total / Used / Remaining */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    ["Total",     money(totalBudget || budget?.total_funding)],
-                    ["Used",      money(usedBudget)],
-                    ["Remaining", money(remainingBudget)],
+                    [translate("patients.budget.total"),     money(totalBudget || budget?.total_funding)],
+                    [translate("patients.budget.used"),      money(usedBudget)],
+                    [translate("patients.budget.remaining"), money(remainingBudget)],
                   ].map(([lbl, val]) => (
                     <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
                       <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{lbl}</p>
@@ -954,7 +959,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {totalBudget > 0 && (
                   <div className="rounded-xl border border-purple-100/60 bg-white p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[12px] font-bold text-[#111827]">Overall utilisation</span>
+                      <span className="text-[12px] font-bold text-[#111827]">{translate("patients.budget.utilisation")}</span>
                       <span className="text-[11px] font-black text-[#6B7280]">
                         {Math.round((usedBudget / totalBudget) * 100)}%
                       </span>
@@ -970,7 +975,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 {/* Category breakdown */}
                 {(budget?.budgets ?? []).length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">By Support Category</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">{translate("patients.budget.byCategory")}</p>
                     {(budget?.budgets ?? []).map((item) => (
                       <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
                         <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -984,7 +989,11 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                           />
                         </div>
                         <p className="mt-1.5 text-[10px] font-medium text-[#6B7280]">
-                          {money(item.used)} used · {money(item.remaining)} left of {money(item.allocated)}
+                          {translateParams("patients.budget.categoryUsage", {
+                            used: money(item.used),
+                            remaining: money(item.remaining),
+                            allocated: money(item.allocated),
+                          })}
                         </p>
                       </div>
                     ))}
@@ -1000,7 +1009,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
             <div className="mb-3 flex items-center gap-2">
               <Target className="h-3.5 w-3.5 text-[#3730A3]" />
-              <h4 className="text-[13px] font-black text-[#111827]">NDIS Goals</h4>
+              <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.ndisGoals")}</h4>
               {goals.length > 0 && (
                 <span className="ml-auto rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
                   {goals.length}
@@ -1010,8 +1019,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             {goals.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
                 <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">No goals recorded</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">Goals will appear here once added to the participant's NDIS plan.</p>
+                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.goals.empty")}</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.goals.emptyHint")}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1043,7 +1052,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">Session History</h4>
+                <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.sessionHistory")}</h4>
               </div>
               <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
                 {sessions.length}
@@ -1056,8 +1065,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             ) : sessions.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
                 <CalendarDays className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">No sessions yet</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">Sessions with this participant will appear here.</p>
+                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.sessions.empty")}</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.sessions.emptyHint")}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1114,11 +1123,11 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">Compliance Audit History</h4>
+                <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.complianceHistory")}</h4>
               </div>
               {complianceHistory.length > 0 && averageCompliance != null && (
                 <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-black ${complianceTone(averageCompliance)}`}>
-                  Avg {averageCompliance}%
+                  {translateParams("patients.compliance.avg", { score: String(averageCompliance) })}
                 </span>
               )}
             </div>
@@ -1129,8 +1138,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             ) : complianceHistory.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
                 <ShieldCheck className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">No compliance audits yet</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">Audits run automatically when sessions are saved with AI.</p>
+                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.compliance.empty")}</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.compliance.emptyHint")}</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1146,8 +1155,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                               {(item.session_type || "session").replace(/_/g, " ")}
                             </p>
                             <p className="text-[11px] text-[#6B7280] mt-0.5">
-                              Session {safeFormat(item.session_date)}
-                              {auditDate ? ` · Audited ${safeFormat(auditDate, "MMM d")}` : ""}
+                              {translateParams("patients.compliance.sessionDate", { date: safeFormat(item.session_date) })}
+                              {auditDate ? ` · ${translateParams("patients.compliance.audited", { date: safeFormat(auditDate, "MMM d") })}` : ""}
                             </p>
                           </div>
                           <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-black shrink-0 ${complianceTone(score)}`}>
@@ -1174,9 +1183,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <Lock className="h-3.5 w-3.5 text-orange-600" />
-                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">Restricted Clinical Records</p>
+                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">Coordinator Only</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
             </div>
             <p className="text-[12px] text-orange-700/80 leading-relaxed">
               This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
@@ -1210,7 +1219,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
                 >
                   {saveRestricted.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Save Clinical Records
+                  {translate("patients.restricted.save")}
                 </Button>
               </div>
             )}
@@ -1224,7 +1233,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Users className="h-3.5 w-3.5 text-violet-700" />
-                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">Worker Shift Context</p>
+                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
                   Coordinator Authoring
@@ -1255,6 +1264,7 @@ const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 // ---------------------------------------------------------------------------
 
 export default function Patients() {
+  const { translate, translateParams } = useAccessibility();
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortOrder, setSortOrder]     = useState<"asc" | "desc">("asc");
@@ -1298,7 +1308,7 @@ export default function Patients() {
           {/* Title row */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>Participants</h2>
+              <h2 className="text-[15px] font-black" style={{ color: "var(--cc-text)" }}>{translate("patients.title")}</h2>
               {!participantsLoading && (
                 <span
                   className="text-[10px] font-black px-2 py-0.5 rounded-full"
@@ -1313,7 +1323,7 @@ export default function Patients() {
             <Link href="/participants/new">
               <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-xl text-[12px]">
                 <UserPlus className="h-3.5 w-3.5" />
-                Add
+                {translate("patients.add")}
               </Button>
             </Link>
           </div>
@@ -1322,7 +1332,7 @@ export default function Patients() {
           <div className="relative mb-2">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: "var(--cc-muted)" }} />
             <Input
-              placeholder="Search name, NDIS number…"
+              placeholder={translate("patients.searchPlaceholder")}
               className="pl-8 h-9 rounded-xl text-[13px]"
               style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}
               value={search}
@@ -1335,14 +1345,14 @@ export default function Patients() {
           <div className="flex items-center gap-2">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-8 flex-1 rounded-xl text-[12px]" style={{ background: "var(--cc-soft)", border: "1px solid var(--cc-border)" }}>
-                <SelectValue placeholder="All statuses" />
+                <SelectValue placeholder={translate("patients.allStatuses")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="expired">Expired</SelectItem>
+                <SelectItem value="all">{translate("patients.allStatuses")}</SelectItem>
+                <SelectItem value="active">{translate("patients.planStatus.active")}</SelectItem>
+                <SelectItem value="pending">{translate("patients.planStatus.pending")}</SelectItem>
+                <SelectItem value="inactive">{translate("patients.planStatus.inactive")}</SelectItem>
+                <SelectItem value="expired">{translate("patients.planStatus.expired")}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -1356,7 +1366,7 @@ export default function Patients() {
                 color: "var(--cc-plum)",
                 border: "1px solid rgba(55,48,163,0.12)",
               }}
-              title={sortOrder === "asc" ? "Sorted A → Z (click for Z → A)" : "Sorted Z → A (click for A → Z)"}
+              title={sortOrder === "asc" ? translate("patients.sortAsc") : translate("patients.sortDesc")}
             >
               {sortOrder === "asc" ? "A→Z" : "Z→A"}
             </button>
@@ -1414,11 +1424,11 @@ export default function Patients() {
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "var(--cc-active-bg)" }}>
                 <Users className="h-5 w-5 opacity-40" style={{ color: "var(--cc-plum)" }} />
               </div>
-              <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>No participants found</p>
+              <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>{translate("patients.empty.title")}</p>
               <p className="text-[12px] text-center leading-relaxed" style={{ color: "var(--cc-muted)" }}>
                 {letterFilter
-                  ? `No participants starting with "${letterFilter}"`
-                  : "Try adjusting your search or filters"}
+                  ? translateParams("patients.empty.letterFilter", { letter: letterFilter })
+                  : translate("patients.empty.adjustFilters")}
               </p>
             </div>
           ) : (
@@ -1496,7 +1506,7 @@ export default function Patients() {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Back to Participants
+              {translate("patients.backToList")}
             </button>
             <div className="flex-1 overflow-y-auto">
               <ParticipantDetail id={selectedId} onRefreshList={refetch} />
@@ -1508,9 +1518,9 @@ export default function Patients() {
               <Users className="h-7 w-7 opacity-40" style={{ color: "var(--cc-plum)" }} />
             </div>
             <div>
-              <p className="text-[15px] font-semibold" style={{ color: "var(--cc-text)" }}>Select a participant</p>
+              <p className="text-[15px] font-semibold" style={{ color: "var(--cc-text)" }}>{translate("patients.selectPrompt")}</p>
               <p className="text-[13px] mt-1.5 leading-relaxed" style={{ color: "var(--cc-muted)" }}>
-                Choose someone from the list to view their NDIS plan, session history, and clinical profile.
+                {translate("patients.selectHint")}
               </p>
             </div>
           </div>

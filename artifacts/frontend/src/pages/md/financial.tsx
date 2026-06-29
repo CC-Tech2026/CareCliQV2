@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { DollarSign, AlertTriangle, ArrowLeft, TrendingUp, FileText, PieChart } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -73,6 +74,7 @@ function MonthBar({ label, revenue, max }: { label: string; revenue: number; max
 }
 
 export default function MDFinancialPage() {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const [rev, setRev] = useState<BillingReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,10 +130,10 @@ export default function MDFinancialPage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>Financial Overview</h1>
+            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.financial.title")}</h1>
             <p className="text-[12px] font-medium" style={{ color: MUTED }}>Revenue, margins and billing performance</p>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: CYAN }}>
@@ -146,17 +148,17 @@ export default function MDFinancialPage() {
         ) : error || !rev ? (
           <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
             <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-            <p className="font-black" style={{ color: TEXT }}>Could not load financial data</p>
+            <p className="font-black" style={{ color: TEXT }}>{translate("md.financial.loadFailed")}</p>
           </div>
         ) : (
           <>
             <section>
               <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Revenue Summary</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <MetricCard label="Total Billed" value={fmt(totalRev)} sub="All invoices raised" icon={DollarSign} color={CYAN} />
-                <MetricCard label="Total Paid" value={fmt(totalPaid)} sub="Collected revenue" icon={TrendingUp} color="#10B981" />
-                <MetricCard label="Outstanding" value={fmt(totalOutstanding)} sub="Awaiting payment" icon={FileText} color="#F59E0B" />
-                <MetricCard label="Total Invoices" value={String(totalInvoices)} sub="Invoices raised" icon={FileText} color={PLUM} />
+                <MetricCard label={translate("md.financial.totalBilled")} value={fmt(totalRev)} sub={translate("md.financial.sub.allInvoices")} icon={DollarSign} color={CYAN} />
+                <MetricCard label={translate("md.financial.totalPaid")} value={fmt(totalPaid)} sub={translate("md.financial.sub.collected")} icon={TrendingUp} color="#10B981" />
+                <MetricCard label={translate("md.financial.outstanding")} value={fmt(totalOutstanding)} sub={translate("md.financial.sub.awaitingPayment")} icon={FileText} color="#F59E0B" />
+                <MetricCard label={translate("md.financial.totalInvoices")} value={String(totalInvoices)} sub={translate("md.financial.sub.invoicesRaised")} icon={FileText} color={PLUM} />
               </div>
             </section>
 
@@ -235,7 +237,7 @@ export default function MDFinancialPage() {
 
             {monthly.length > 0 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>Monthly Revenue Breakdown</h2>
+                <h2 className="mb-4 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.financial.monthlyRevenue")} Breakdown</h2>
                 <div className="space-y-3">
                   {monthly.slice(-6).map((m) => (
                     <MonthBar key={m.month} label={m.month} revenue={m.revenue} max={maxMonthRev} />

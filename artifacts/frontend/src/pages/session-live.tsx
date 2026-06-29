@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useSettings } from "@/lib/use-settings";
 import { apiFetch } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
@@ -442,6 +443,7 @@ function MessageBubble({
 // ---------------------------------------------------------------------------
 
 export default function SessionLive() {
+  const { translate, translateParams } = useAccessibility();
   const { id } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -599,7 +601,7 @@ export default function SessionLive() {
           }),
         }).catch((error) => {
           console.error("message persistence failed", error);
-          toast({ title: "Message was not saved", variant: "destructive" });
+          toast({ title: translate("sessions.live.toast.messageNotSaved"), variant: "destructive" });
         });
       }
       return newMsg;
@@ -904,7 +906,7 @@ export default function SessionLive() {
       setIsActive(true);
       setElapsed(0);
       setReminderDismissed(true);
-      toast({ title: "Session started", description: "Timer started automatically." });
+      toast({ title: translate("sessions.live.toast.started"), description: translate("sessions.live.toast.timerAuto") });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, settings]);
@@ -914,7 +916,7 @@ export default function SessionLive() {
     if (!session || isActive || reminderDismissed) return;
     reminderTimerRef.current = setTimeout(() => {
       toast({
-        title: "Session scheduled",
+        title: translate("sessions.live.toast.scheduled"),
         description: `Ready: ${session.session_type}`,
         duration: 30000,
         action: (
@@ -978,7 +980,7 @@ export default function SessionLive() {
     setReminderDismissed(true);
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
     addMessage({ type: "system", content: "Session started", timestamp: new Date() });
-    toast({ title: "Session started", description: "Start documenting below." });
+    toast({ title: translate("sessions.live.toast.started"), description: translate("sessions.live.toast.startDocumenting") });
     if (settings?.sessionDefaults?.enableVoice) {
       setTimeout(() => startRecording(), 300);
     }
@@ -987,7 +989,7 @@ export default function SessionLive() {
   const sendTextMessage = () => {
     if (!inputText.trim()) return;
     if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.startFirst"), variant: "destructive" });
       return;
     }
     addMessage({ type: "text", content: inputText.trim(), timestamp: new Date() });
@@ -996,13 +998,13 @@ export default function SessionLive() {
 
   const logActivity = (type: string) => {
     if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.startFirst"), variant: "destructive" });
       setShowActivitySheet(false);
       return;
     }
     addMessage({ type: "activity", content: type, timestamp: new Date(), activityType: type });
     setShowActivitySheet(false);
-    toast({ title: `${type} logged` });
+    toast({ title: translateParams("sessions.live.toast.activityLogged", { type }) });
   };
 
   const cycleGoalStatus = (goalId: string) => {
@@ -1050,10 +1052,10 @@ export default function SessionLive() {
     setIsUploadingAttachment(true);
     try {
       await uploadAttachment(file, "image");
-      toast({ title: "Photo uploaded", description: format(new Date(), "HH:mm:ss") });
+      toast({ title: translate("sessions.live.toast.photoUploaded"), description: format(new Date(), "HH:mm:ss") });
     } catch (error) {
       toast({
-        title: "Photo upload failed",
+        title: translate("sessions.live.toast.photoFailed"),
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -1069,10 +1071,10 @@ export default function SessionLive() {
     setIsUploadingAttachment(true);
     try {
       await uploadAttachment(file, file.type.startsWith("image/") ? "image" : "file");
-      toast({ title: "File uploaded", description: file.name });
+      toast({ title: translate("sessions.live.toast.fileUploaded"), description: file.name });
     } catch (error) {
       toast({
-        title: "Upload failed",
+        title: translate("sessions.live.toast.uploadFailed"),
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -1088,7 +1090,7 @@ export default function SessionLive() {
     const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
       toast({
-        title: "Voice not supported",
+        title: translate("sessions.live.toast.voiceNotSupported"),
         description: "Use Chrome for voice notes.",
         variant: "destructive",
       });
@@ -1135,7 +1137,7 @@ export default function SessionLive() {
       translationStatus: "pending",
     });
     setRecordingText("");
-    toast({ title: "Voice note saved" });
+    toast({ title: translate("sessions.live.toast.voiceSaved") });
 
     const result = await translateToEnglish(text, documentationLanguage);
     if (result.status === "failed" || result.status === "unsupported") {
@@ -1146,7 +1148,7 @@ export default function SessionLive() {
         translationMetadata: result.metadata,
       });
       toast({
-        title: "Translation failed",
+        title: translate("sessions.live.toast.translationFailed"),
         description: result.error || "Edit or retry before completing the session.",
         variant: "destructive",
       });
@@ -1164,7 +1166,7 @@ export default function SessionLive() {
   const handleStop = useCallback(async () => {
     if (elapsed === 0) {
       toast({
-        title: "Session not started",
+        title: translate("sessions.live.toast.notStarted"),
         description: 'Click "Start" to begin the timer before ending.',
         variant: "destructive",
       });
@@ -1180,7 +1182,7 @@ export default function SessionLive() {
     );
     if (blockedTranslation) {
       toast({
-        title: "Translation required",
+        title: translate("sessions.live.toast.translationRequired"),
         description: "Resolve failed or pending voice translation before completing the session.",
         variant: "destructive",
       });
@@ -1198,7 +1200,7 @@ export default function SessionLive() {
       activityTypes.length > 0 || voiceTexts.length > 0 || textContent.length > 0;
     if (!prefilledHasContent && !session?.notes?.trim()) {
       toast({
-        title: "Nothing to document yet",
+        title: translate("sessions.live.toast.nothingToDocument"),
         description: "Log an activity or add a note before reviewing.",
         variant: "destructive",
       });
@@ -1267,7 +1269,7 @@ export default function SessionLive() {
     );
     if (blockedTranslation) {
       toast({
-        title: "Session cannot be approved: translation failed",
+        title: translate("sessions.live.toast.approveTranslationFailed"),
         description: "Retry or edit the voice note before saving the legal record.",
         variant: "destructive",
       });
@@ -1275,7 +1277,7 @@ export default function SessionLive() {
     }
 
     if (compSettings?.requireActivity && actMsgs.length === 0) {
-      toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.approveNoActivity"), variant: "destructive" });
       return;
     }
     if (compSettings?.requireNotes) {
@@ -1287,7 +1289,7 @@ export default function SessionLive() {
         ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
       if (!hasNotes) {
         toast({
-          title: "Session cannot be approved: clinical notes are required",
+          title: translate("sessions.live.toast.approveNotesRequired"),
           variant: "destructive",
         });
         return;
@@ -1295,7 +1297,7 @@ export default function SessionLive() {
     }
     if (compSettings?.requireDuration && elapsed === 0) {
       toast({
-        title: "Session cannot be approved: session duration not recorded",
+        title: translate("sessions.live.toast.approveNoDuration"),
         variant: "destructive",
       });
       return;
@@ -1394,12 +1396,12 @@ export default function SessionLive() {
       queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
-      toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
+      toast({ title: translate("sessions.live.toast.saved"), description: translate("sessions.live.toast.savedDesc") });
     } catch (err) {
       setIsSaving(false);
       console.error("session save failed", err);
       toast({
-        title: "Save failed",
+        title: translate("sessions.live.toast.saveFailed"),
         description: err instanceof Error ? err.message : "Could not save. Please try again.",
         variant: "destructive",
       });
@@ -1467,7 +1469,7 @@ export default function SessionLive() {
     stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
-    toast({ title: "Session restarted", description: "All logs cleared." });
+    toast({ title: translate("sessions.live.toast.restarted"), description: translate("sessions.live.toast.restartedDesc") });
   };
 
   // ---------------------------------------------------------------------------
@@ -1721,7 +1723,7 @@ export default function SessionLive() {
             />
             {bannerAllMet ? (
               <span className="text-[10px] text-emerald-700 font-semibold">
-                All compliance requirements met
+                {translate("sessions.live.banner.allMet")}
               </span>
             ) : (
               bannerItems.map((item) => (
@@ -1755,8 +1757,8 @@ export default function SessionLive() {
             <button
               onClick={() => setBodyMapOpen(false)}
               className="text-[#6B7280] hover:text-[#3730A3]"
-              title="Close body map"
-              aria-label="Close body map"
+              title={translate("sessions.live.bodyMap.close")}
+              aria-label={translate("sessions.live.bodyMap.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -1774,8 +1776,8 @@ export default function SessionLive() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
             <MessageSquare className="h-10 w-10 text-[#C7D2FE] mb-3" />
-            <p className="text-[#111827] text-sm font-bold">Session started</p>
-            <p className="text-[#6B7280] text-xs mt-1">Document notes, voice, and evidence below.</p>
+            <p className="text-[#111827] text-sm font-bold">{translate("sessions.live.chat.started")}</p>
+            <p className="text-[#6B7280] text-xs mt-1">{translate("sessions.live.chat.startedHint")}</p>
           </div>
         )}
 
@@ -1791,10 +1793,10 @@ export default function SessionLive() {
             <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
               <div className="flex items-center gap-2 mb-1.5 text-[#BE185D]">
                 <Radio className="h-3 w-3 animate-pulse" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">{translate("sessions.live.chat.listening")}</span>
               </div>
               <p className="text-[#6B7280] text-sm italic">
-                {recordingText || "Speak clearly…"}
+                {recordingText || translate("sessions.live.chat.speakClearly")}
               </p>
             </div>
           </div>
@@ -1808,7 +1810,7 @@ export default function SessionLive() {
         <div className="shrink-0 bg-red-50 border-t border-red-100 px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
           <p className="text-red-700 text-xs flex-1">
-            <span className="font-semibold">Possible RP language detected</span>
+            <span className="font-semibold">{translate("sessions.live.rp.detected")}</span>
             <span className="text-red-500 ml-1">
               ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
             </span>
@@ -1835,13 +1837,13 @@ export default function SessionLive() {
                   sendTextMessage();
                 }
               }}
-              placeholder="Message"
+              placeholder={translate("sessions.live.input.message")}
               disabled={!isActive}
               className="min-w-0 flex-1 bg-transparent text-[#111827] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
             />
             <button
               type="button"
-              aria-label="Attach file"
+              aria-label={translate("sessions.live.input.attach")}
               onClick={() => fileAttachRef.current?.click()}
               disabled={!isActive || isUploadingAttachment}
               className="h-10 w-10 rounded-full flex items-center justify-center text-[#3730A3] hover:bg-[#F8F8FE] transition-colors disabled:opacity-40 shrink-0"
@@ -1854,7 +1856,7 @@ export default function SessionLive() {
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={!isActive}
-            title={isRecording ? "Stop recording" : "Start voice note"}
+            title={isRecording ? translate("sessions.live.input.stopRecording") : translate("sessions.live.input.startVoice")}
             className={cn(
               "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(55,48,163,0.24)] ring-4 ring-white border border-[#E5E7EB] transition-all shrink-0 disabled:opacity-45",
               isRecording
@@ -1885,7 +1887,7 @@ export default function SessionLive() {
         className="hidden"
         onChange={handleFileAttach}
         title="Attach file"
-        aria-label="Attach file"
+        aria-label={translate("sessions.live.input.attach")}
       />
 
       {/* ── Activity sheet ── */}
@@ -2080,25 +2082,25 @@ export default function SessionLive() {
                     {
                       key: "activitiesPerformed" as keyof StructuredNotes,
                       label: "Activities Performed",
-                      placeholder: "Describe the specific support activities provided…",
+                      placeholder: translate("sessions.live.structured.activities"),
                       required: true,
                     },
                     {
                       key: "outcomes" as keyof StructuredNotes,
                       label: "Outcomes",
-                      placeholder: "Measurable outcomes achieved…",
+                      placeholder: translate("sessions.live.structured.outcomes"),
                       required: true,
                     },
                     {
                       key: "participantResponse" as keyof StructuredNotes,
                       label: "Participant Response",
-                      placeholder: "How did the participant engage and respond?",
+                      placeholder: translate("sessions.live.structured.response"),
                       required: true,
                     },
                     {
                       key: "progressTowardGoals" as keyof StructuredNotes,
                       label: "Progress Toward NDIS Goals",
-                      placeholder: "Link outcomes to specific NDIS goals…",
+                      placeholder: translate("sessions.live.structured.goals"),
                       required: false,
                     },
                   ] as const

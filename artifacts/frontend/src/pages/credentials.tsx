@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
   createCredential,
@@ -73,6 +74,17 @@ function statusClass(status: string) {
   return "bg-[#F8F8FE] text-[#3730A3] border-[#E5E7EB]";
 }
 
+function statusLabel(status: string, translate: (key: string) => string) {
+  const map: Record<string, string> = {
+    valid: "credentials.valid",
+    expiring: "credentials.expiring",
+    expired: "credentials.expired",
+    pending_review: "credentials.pendingReview",
+    rejected: "credentials.rejected",
+  };
+  return map[status] ? translate(map[status]) : humanize(status);
+}
+
 function CredentialRow({
   credential,
   coordinator,
@@ -86,19 +98,23 @@ function CredentialRow({
   onDelete: (credential: Credential) => void;
   onReview: (credential: Credential, status: "valid" | "rejected") => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
+
   return (
     <div className="grid gap-3 border-b border-[#EEEAFB] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-black text-[#111827]">{credential.title}</p>
           <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black uppercase ${statusClass(credential.status)}`}>
-            {credential.status.replace("_", " ")}
+            {coordinator ? credential.status.replace("_", " ") : statusLabel(credential.status, translate)}
           </span>
         </div>
         <p className="mt-1 text-xs font-medium text-[#6B7280]">
           {credential.credential_type}
           {credential.issuer ? ` • ${credential.issuer}` : ""}
-          {credential.expiry_date ? ` • expires ${credential.expiry_date}` : ""}
+          {credential.expiry_date
+            ? ` • ${coordinator ? `expires ${credential.expiry_date}` : translateParams("credentials.expiresOn", { date: credential.expiry_date })}`
+            : ""}
         </p>
         {credential.user && (
           <p className="mt-1 text-xs text-[#6B7280]">
@@ -107,7 +123,7 @@ function CredentialRow({
         )}
         {credential.file_url && (
           <a href={credential.file_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-bold text-[#3730A3]">
-            View uploaded document
+            {coordinator ? "View uploaded document" : translate("credentials.viewDocument")}
           </a>
         )}
       </div>
@@ -116,7 +132,7 @@ function CredentialRow({
           <>
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-[#E5E7EB] px-3 py-2 text-xs font-bold text-[#3730A3] hover:bg-[#F8F6FE]">
               <FileUp className="h-4 w-4" />
-              Upload file
+              {translate("credentials.uploadFile")}
               <input
                 type="file"
                 className="hidden"
@@ -129,7 +145,7 @@ function CredentialRow({
             </label>
             <Button variant="ghost" size="sm" className="gap-1 text-[#BE185D]" onClick={() => onDelete(credential)}>
               <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              {translate("credentials.delete")}
             </Button>
           </>
         )}
@@ -280,6 +296,7 @@ function BulkRemindersPanel({ onClose }: { onClose: () => void }) {
 export default function Credentials() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
@@ -349,27 +366,30 @@ export default function Credentials() {
     onSuccess: () => {
       setForm((prev) => ({ ...prev, title: "", credential_number: "", issuer: "", issue_date: "", expiry_date: "" }));
       invalidate();
-      toast({ title: "Credential saved", description: "It is now in your wallet for review." });
+      toast({
+        title: translate("credentials.saved"),
+        description: translate("credentials.savedDescription"),
+      });
     },
-    onError: (err) => toast({ title: "Could not save credential", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) => toast({ title: translate("credentials.saveFailed"), description: (err as Error).message, variant: "destructive" }),
   });
 
   const uploadMutation = useMutation({
     mutationFn: ({ credential, file }: { credential: Credential; file: File }) => uploadCredentialFile(credential.id, file),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Credential file uploaded" });
+      toast({ title: translate("credentials.uploaded") });
     },
-    onError: (err) => toast({ title: "Upload failed", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) => toast({ title: translate("credentials.uploadFailed"), description: (err as Error).message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (credential: Credential) => deleteCredential(credential.id),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Credential deleted" });
+      toast({ title: translate("credentials.deleted") });
     },
-    onError: (err) => toast({ title: "Delete failed", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) => toast({ title: translate("credentials.deleteFailed"), description: (err as Error).message, variant: "destructive" }),
   });
 
   const reviewMutation = useMutation({
@@ -407,7 +427,7 @@ export default function Credentials() {
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!form.title.trim()) {
-      toast({ title: "Title required", variant: "destructive" });
+      toast({ title: translate("credentials.titleRequired"), variant: "destructive" });
       return;
     }
     createMutation.mutate({
@@ -432,17 +452,25 @@ export default function Credentials() {
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Allied Health" : "Support Worker"}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          {isCoordinator ? "Team Credential Wallet" : "Credential Wallet"}
+          {isCoordinator ? "Team Credential Wallet" : translate("credentials.title")}
         </h1>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4">
-        {[
-          ["Total", summary.total],
-          ["Pending review", summary.pending],
-          ["Expiring", summary.expiring],
-          ["Expired", summary.expired],
-        ].map(([label, value]) => (
+        {(isCoordinator
+          ? [
+              ["Total", summary.total],
+              ["Pending review", summary.pending],
+              ["Expiring", summary.expiring],
+              ["Expired", summary.expired],
+            ]
+          : [
+              [translate("credentials.total"), summary.total],
+              [translate("credentials.pendingReview"), summary.pending],
+              [translate("credentials.expiring"), summary.expiring],
+              [translate("credentials.expired"), summary.expired],
+            ]
+        ).map(([label, value]) => (
           <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-xs font-bold uppercase text-[#6B7280]">{label}</p>
             <p className="mt-1 text-2xl font-black text-[#111827]">{value}</p>
@@ -551,11 +579,11 @@ export default function Credentials() {
         <form onSubmit={submit} className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="mb-4 flex items-center gap-2">
             <BadgeCheck className="h-5 w-5 text-[#3730A3]" />
-            <h2 className="font-black text-[#111827]">Add credential</h2>
+            <h2 className="font-black text-[#111827]">{translate("credentials.add")}</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <Label>Type</Label>
+              <Label>{translate("credentials.type")}</Label>
               <select
                 title="Credential type"
                 value={form.credential_type}
@@ -566,40 +594,40 @@ export default function Credentials() {
               </select>
             </div>
             <div>
-              <Label>Title</Label>
+              <Label>{translate("credentials.credentialTitle")}</Label>
               <Input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="mt-1 rounded-xl" />
             </div>
             <div>
-              <Label>Credential number</Label>
+              <Label>{translate("credentials.number")}</Label>
               <Input value={form.credential_number} onChange={(event) => setForm({ ...form, credential_number: event.target.value })} className="mt-1 rounded-xl" />
             </div>
             <div>
-              <Label>Issuer</Label>
+              <Label>{translate("credentials.issuer")}</Label>
               <Input value={form.issuer} onChange={(event) => setForm({ ...form, issuer: event.target.value })} className="mt-1 rounded-xl" />
             </div>
             <div>
-              <Label>Issue date</Label>
+              <Label>{translate("credentials.issueDate")}</Label>
               <Input type="date" value={form.issue_date} onChange={(event) => setForm({ ...form, issue_date: event.target.value })} className="mt-1 rounded-xl" />
             </div>
             <div>
-              <Label>Expiry date</Label>
+              <Label>{translate("credentials.expiryDate")}</Label>
               <Input type="date" value={form.expiry_date} onChange={(event) => setForm({ ...form, expiry_date: event.target.value })} className="mt-1 rounded-xl" />
             </div>
           </div>
           <div className="mt-4 flex justify-end">
             <Button disabled={createMutation.isPending} className="gap-2 rounded-xl" style={{ background: PLUM }}>
               {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
-              Save credential
+              {translate("credentials.save")}
             </Button>
           </div>
         </form>
       )}
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-        <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation credentials" : "My credentials"}</h2>
+        <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation credentials" : translate("credentials.myCredentials")}</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
           <Input
-            placeholder="Search by title, type, issuer, worker..."
+            placeholder={isCoordinator ? "Search by title, type, issuer, worker..." : translate("credentials.searchPlaceholder")}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             className="rounded-xl"
@@ -619,22 +647,30 @@ export default function Credentials() {
                     color: active ? PLUM : MUTED,
                   }}
                 >
-                  {filter === "all" ? "All" : humanize(filter)}
+                  {filter === "all"
+                    ? (isCoordinator ? "All" : translate("common.all"))
+                    : isCoordinator
+                      ? humanize(filter)
+                      : statusLabel(filter, translate)}
                 </button>
               );
             })}
           </div>
         </div>
-        {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>Loading credentials...</p>}
+        {isLoading && (
+          <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>
+            {isCoordinator ? "Loading credentials..." : translate("credentials.loading")}
+          </p>
+        )}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && data.length === 0 && (
           <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
-            No credentials have been recorded yet.
+            {isCoordinator ? "No credentials have been recorded yet." : translate("credentials.empty")}
           </p>
         )}
         {!isLoading && data.length > 0 && filteredData.length === 0 && (
           <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
-            No credentials match your current search or status filter.
+            {isCoordinator ? "No credentials match your current search or status filter." : translate("credentials.noMatch")}
           </p>
         )}
         <div className="mt-3">

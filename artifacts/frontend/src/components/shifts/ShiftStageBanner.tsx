@@ -1,7 +1,7 @@
 import { MapPin, PlayCircle, CheckCircle2 } from "lucide-react";
 import type { ShiftVisualState } from "@/services/shiftService";
-import { stageBannerShortText, stageBannerText } from "@/lib/shift-utils";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   visualState: ShiftVisualState;
@@ -22,11 +22,27 @@ const BANNER_ICONS: Record<string, typeof MapPin> = {
   completed: CheckCircle2,
 };
 
-export function ShiftStageBanner({ visualState, participantName, elapsed, className }: Props) {
-  const text = stageBannerText(visualState, participantName);
-  const shortText = stageBannerShortText(visualState);
-  if (!text) return null;
+const BANNER_TEXT_KEYS: Record<string, string> = {
+  clocked_in: "shift.banner.arrived",
+  session_active: "shift.banner.sessionActive",
+  completed: "shift.banner.completed",
+};
 
+const BANNER_SHORT_KEYS: Record<string, string> = {
+  clocked_in: "shift.banner.arrivedShort",
+  session_active: "shift.banner.activeShort",
+  completed: "shift.banner.doneShort",
+};
+
+export function ShiftStageBanner({ visualState, participantName, elapsed, className }: Props) {
+  const { translate, translateParams } = useAccessibility();
+  const textKey = BANNER_TEXT_KEYS[visualState];
+  const shortKey = BANNER_SHORT_KEYS[visualState];
+  if (!textKey || !shortKey) return null;
+
+  const name = participantName || translate("common.participant");
+  const text = translateParams(textKey, { name });
+  const shortText = translate(shortKey);
   const Icon = BANNER_ICONS[visualState];
   const showTimer = (visualState === "clocked_in" || visualState === "session_active") && elapsed;
 
@@ -46,7 +62,7 @@ export function ShiftStageBanner({ visualState, participantName, elapsed, classN
       {showTimer && (
         <span
           className="ml-1 rounded-md bg-black/15 px-2 py-0.5 font-mono text-[11px] tracking-normal sm:text-xs"
-          aria-label={`Elapsed time ${elapsed}`}
+          aria-label={translateParams("shift.banner.elapsedTime", { elapsed: elapsed ?? "" })}
         >
           {elapsed}
         </span>

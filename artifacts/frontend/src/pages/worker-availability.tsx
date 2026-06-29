@@ -4,9 +4,8 @@ import { format, addDays } from "date-fns";
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
-  DAY_LABELS,
-  SLOT_LABELS,
   getWorkerAvailability,
   nextSlotStatus,
   setEmergencyAvailabilityOverride,
@@ -22,13 +21,30 @@ import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 
 const SLOTS: TimeSlot[] = ["morning", "afternoon", "evening"];
 
-const STATUS_STYLES: Record<SlotStatus, { bg: string; label: string }> = {
-  available: { bg: "#DCFCE7", label: "Available" },
-  unavailable: { bg: "#FEE2E2", label: "Unavailable" },
-  preferred: { bg: "#EDE9FF", label: "Preferred" },
+const SLOT_KEYS: Record<TimeSlot, string> = {
+  morning: "availability.slot.morning",
+  afternoon: "availability.slot.afternoon",
+  evening: "availability.slot.evening",
+};
+
+const DAY_KEYS = [
+  "scheduleRequests.days.mon",
+  "scheduleRequests.days.tue",
+  "scheduleRequests.days.wed",
+  "scheduleRequests.days.thu",
+  "scheduleRequests.days.fri",
+  "scheduleRequests.days.sat",
+  "scheduleRequests.days.sun",
+] as const;
+
+const STATUS_KEYS: Record<SlotStatus, { bg: string; key: string }> = {
+  available: { bg: "#DCFCE7", key: "availability.status.available" },
+  unavailable: { bg: "#FEE2E2", key: "availability.status.unavailable" },
+  preferred: { bg: "#EDE9FF", key: "availability.status.preferred" },
 };
 
 export default function WorkerAvailabilityPage() {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data, isLoading } = useOrgQuery(["worker", "availability"], {
@@ -51,26 +67,26 @@ export default function WorkerAvailabilityPage() {
 
   const slotsMut = useMutation({
     mutationFn: () => updateAvailabilitySlots(slots),
-    onSuccess: () => { toast({ title: "Availability saved" }); invalidate(); },
-    onError: (e: Error) => toast({ title: "Save failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: translate("availability.saved") }); invalidate(); },
+    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const prefsMut = useMutation({
     mutationFn: () => updateAvailabilityPreferences(maxShifts),
-    onSuccess: () => { toast({ title: "Preference saved" }); invalidate(); },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: translate("availability.preferenceSaved") }); invalidate(); },
+    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const blackoutsMut = useMutation({
     mutationFn: () => updateAvailabilityBlackouts(blackouts),
-    onSuccess: () => { toast({ title: "Blackout dates saved" }); invalidate(); },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: translate("availability.blackoutsSaved") }); invalidate(); },
+    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const emergencyMut = useMutation({
     mutationFn: (date: string) => setEmergencyAvailabilityOverride(date),
-    onSuccess: () => { toast({ title: "Emergency availability active for 24 hours" }); invalidate(); },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: translate("availability.emergencyActive") }); invalidate(); },
+    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const toggleSlot = (day: number, time_slot: TimeSlot) => {
@@ -89,7 +105,7 @@ export default function WorkerAvailabilityPage() {
   const addBlackout = () => {
     if (!newBlackout.start_date || !newBlackout.end_date) return;
     if (blackouts.length >= 12) {
-      toast({ title: "Maximum 12 blackout ranges", variant: "destructive" });
+      toast({ title: translate("availability.maxBlackouts"), variant: "destructive" });
       return;
     }
     setBlackouts((prev) => [...prev, { ...newBlackout }]);
@@ -102,42 +118,42 @@ export default function WorkerAvailabilityPage() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5 pb-10">
       <header>
-        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>Support Worker</p>
-        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>My availability</h1>
+        <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
+        <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{translate("availability.title")}</h1>
         <Link href="/calendar" className="mt-2 inline-block text-xs font-black" style={{ color: PLUM }}>
-          ← Back to calendar
+          {translate("availability.backToCalendar")}
         </Link>
         {prefs?.updated_at && (
           <p className="mt-2 text-xs font-semibold" style={{ color: prefs.is_stale ? "#DC2626" : MUTED }}>
-            Last updated {prefs.days_since_updated ?? 0} days ago
-            {prefs.is_stale && " — please refresh your availability"}
+            {translateParams("availability.lastUpdatedDays", { days: String(prefs.days_since_updated ?? 0) })}
+            {prefs.is_stale && translate("availability.staleSuffix")}
           </p>
         )}
       </header>
 
-      {isLoading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
+      {isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
 
       <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
-        <h2 className="text-sm font-black mb-3" style={{ color: TEXT }}>Weekly availability</h2>
-        <p className="text-xs mb-3" style={{ color: MUTED }}>Tap cells to cycle: Available → Unavailable → Preferred</p>
+        <h2 className="text-sm font-black mb-3" style={{ color: TEXT }}>{translate("availability.weekly")}</h2>
+        <p className="text-xs mb-3" style={{ color: MUTED }}>{translate("availability.tapHint")}</p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[320px] text-center text-[10px]">
             <thead>
               <tr>
                 <th />
-                {DAY_LABELS.map((d) => (
-                  <th key={d} className="pb-2 font-black" style={{ color: MUTED }}>{d}</th>
+                {DAY_KEYS.map((key) => (
+                  <th key={key} className="pb-2 font-black" style={{ color: MUTED }}>{translate(key)}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {SLOTS.map((slot) => (
                 <tr key={slot}>
-                  <td className="pr-2 text-left font-black" style={{ color: MUTED }}>{SLOT_LABELS[slot]}</td>
-                  {DAY_LABELS.map((_, i) => {
+                  <td className="pr-2 text-left font-black" style={{ color: MUTED }}>{translate(SLOT_KEYS[slot])}</td>
+                  {DAY_KEYS.map((_, i) => {
                     const day = i + 1;
                     const status = getSlot(day, slot);
-                    const style = STATUS_STYLES[status];
+                    const style = STATUS_KEYS[status];
                     return (
                       <td key={day} className="p-0.5">
                         <button
@@ -145,7 +161,7 @@ export default function WorkerAvailabilityPage() {
                           onClick={() => toggleSlot(day, slot)}
                           className="h-9 w-full rounded-lg text-[8px] font-bold"
                           style={{ background: style.bg, color: TEXT }}
-                          title={style.label}
+                          title={translate(style.key)}
                         >
                           {status[0].toUpperCase()}
                         </button>
@@ -158,13 +174,13 @@ export default function WorkerAvailabilityPage() {
           </table>
         </div>
         <button type="button" onClick={() => slotsMut.mutate()} disabled={slotsMut.isPending} className="mt-4 w-full rounded-full py-2.5 text-xs font-black text-white hover:opacity-90 transition cursor-pointer" style={{ background: PLUM }}>
-          Save weekly grid
+          {translate("availability.saveGrid")}
         </button>
       </section>
 
       <section className="rounded-2xl border bg-cc-surface p-4" style={{ borderColor: BORDER }}>
-        <h2 className="text-sm font-black" style={{ color: TEXT }}>Max shifts per week</h2>
-        <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>Soft limit shown to your coordinator — they can override with a reason.</p>
+        <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("availability.maxShifts")}</h2>
+        <p className="text-xs mt-1 mb-3" style={{ color: MUTED }}>{translate("availability.maxShiftsHint")}</p>
         <input
           type="range"
           min={1}
@@ -175,46 +191,46 @@ export default function WorkerAvailabilityPage() {
         />
         <p className="text-center text-lg font-black mt-1" style={{ color: PLUM }}>{maxShifts}</p>
         <button type="button" onClick={() => prefsMut.mutate()} disabled={prefsMut.isPending} className="mt-2 w-full rounded-full py-2.5 text-xs font-black text-white hover:opacity-90 transition cursor-pointer" style={{ background: PLUM }}>
-          Save preference
+          {translate("availability.savePreference")}
         </button>
       </section>
 
       <section className="rounded-2xl border bg-cc-surface p-4 space-y-3" style={{ borderColor: BORDER }}>
-        <h2 className="text-sm font-black" style={{ color: TEXT }}>Blackout dates</h2>
-        <p className="text-xs" style={{ color: MUTED }}>Up to 12 future date ranges when you are unavailable.</p>
+        <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("availability.blackoutDates")}</h2>
+        <p className="text-xs" style={{ color: MUTED }}>{translate("availability.blackoutHint")}</p>
         {blackouts.map((b, i) => (
           <div key={i} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
             <span>{b.start_date} – {b.end_date}{b.reason ? ` (${b.reason})` : ""}</span>
-            <button type="button" onClick={() => setBlackouts((prev) => prev.filter((_, idx) => idx !== i))} className="font-bold text-red-600">Remove</button>
+            <button type="button" onClick={() => setBlackouts((prev) => prev.filter((_, idx) => idx !== i))} className="font-bold text-red-600">{translate("availability.remove")}</button>
           </div>
         ))}
         <div className="grid gap-2 sm:grid-cols-2">
           <input type="date" className="rounded-xl border px-3 py-2 text-sm" value={newBlackout.start_date} onChange={(e) => setNewBlackout((p) => ({ ...p, start_date: e.target.value }))} />
           <input type="date" className="rounded-xl border px-3 py-2 text-sm" value={newBlackout.end_date} onChange={(e) => setNewBlackout((p) => ({ ...p, end_date: e.target.value }))} />
         </div>
-        <input type="text" placeholder="Note (optional)" className="w-full rounded-xl border px-3 py-2 text-sm" value={newBlackout.reason} onChange={(e) => setNewBlackout((p) => ({ ...p, reason: e.target.value }))} />
+        <input type="text" placeholder={translate("availability.noteOptional")} className="w-full rounded-xl border px-3 py-2 text-sm" value={newBlackout.reason} onChange={(e) => setNewBlackout((p) => ({ ...p, reason: e.target.value }))} />
         <div className="flex gap-2">
-          <button type="button" onClick={addBlackout} className="flex-1 rounded-full border py-2 text-xs font-black hover:opacity-90 transition cursor-pointer" style={{ borderColor: BORDER, color: PLUM }}>Add range</button>
-          <button type="button" onClick={() => blackoutsMut.mutate()} disabled={blackoutsMut.isPending} className="flex-1 rounded-full py-2 text-xs font-black text-white hover:opacity-90 transition cursor-pointer" style={{ background: PLUM }}>Save blackouts</button>
+          <button type="button" onClick={addBlackout} className="flex-1 rounded-full border py-2 text-xs font-black hover:opacity-90 transition cursor-pointer" style={{ borderColor: BORDER, color: PLUM }}>{translate("availability.addRange")}</button>
+          <button type="button" onClick={() => blackoutsMut.mutate()} disabled={blackoutsMut.isPending} className="flex-1 rounded-full py-2 text-xs font-black text-white hover:opacity-90 transition cursor-pointer" style={{ background: PLUM }}>{translate("availability.saveBlackouts")}</button>
         </div>
       </section>
 
       <section className="rounded-2xl border bg-amber-50 border-amber-200 p-4" style={{ borderColor: BORDER }}>
-        <h2 className="text-sm font-black" style={{ color: TEXT }}>Emergency availability</h2>
+        <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("availability.emergency")}</h2>
         <p className="text-xs mt-1 mb-3 text-amber-900/80">
-          Signal that you can work outside your normal availability today or tomorrow. Expires after 24 hours.
+          {translate("availability.emergencyHint")}
         </p>
         {overrideActive && (
           <p className="text-xs font-bold text-amber-800 mb-2">
-            Active for {prefs?.emergency_override_date}
+            {translateParams("availability.emergencyActiveFor", { date: prefs?.emergency_override_date ?? "" })}
           </p>
         )}
         <div className="flex gap-2">
           <button type="button" onClick={() => emergencyMut.mutate(format(new Date(), "yyyy-MM-dd"))} disabled={emergencyMut.isPending} className="flex-1 rounded-full py-2.5 text-xs font-black text-white bg-amber-600 hover:opacity-90 transition cursor-pointer">
-            Available today
+            {translate("availability.today")}
           </button>
           <button type="button" onClick={() => emergencyMut.mutate(format(addDays(new Date(), 1), "yyyy-MM-dd"))} disabled={emergencyMut.isPending} className="flex-1 rounded-full py-2.5 text-xs font-black text-white bg-amber-600 hover:opacity-90 transition cursor-pointer">
-            Available tomorrow
+            {translate("availability.tomorrow")}
           </button>
         </div>
       </section>
