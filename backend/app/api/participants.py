@@ -623,6 +623,8 @@ class ShiftContextUpdate(BaseModel):
     current_conditions: Optional[str] = None
     behavioural_notes: Optional[list[BehaviouralNoteItem]] = None
     allergies: Optional[list[AllergyItem]] = None
+    background_summary: Optional[str] = None
+    briefing_alerts: Optional[list[str]] = None
 
 
 @router.get("/{participant_id}/shift-context")
@@ -635,12 +637,32 @@ async def get_shift_context(
         raise HTTPException(status_code=403, detail="Support coordinator access required.")
     await _require_participant_access(participant_id, current_user)
     from ..core.access import get_user_organization_id
-    from ..services.shift_service import _fetch_participant_allergies, _fetch_participant_context
+    from ..services import briefing_service
+    from ..services.shift_service import _fetch_participant_context
+    from ..services.supabase_client import get_supabase_admin
 
     org_id = str(get_user_organization_id(current_user) or "")
     ctx = _fetch_participant_context(participant_id, org_id)
     if not ctx:
         raise HTTPException(status_code=404, detail="Participant not found")
+    try:
+        supabase = get_supabase_admin()
+        patient_resp = (
+            supabase.table("patients")
+            .select("background_summary, background_summary_updated_at")
+            .eq("id", participant_id)
+            .limit(1)
+            .execute()
+        )
+        patient_row = (patient_resp.data or [{}])[0]
+        ctx["background_summary"] = patient_row.get("background_summary")
+        ctx["background_summary_updated_at"] = patient_row.get("background_summary_updated_at")
+        ctx["briefing_alerts"] = [
+            row.get("alert_text") or ""
+            for row in briefing_service.list_participant_briefing_alerts(participant_id, org_id)
+        ]
+    except Exception:
+        ctx.setdefault("briefing_alerts", [])
     return ctx
 
 
@@ -687,6 +709,26 @@ async def update_shift_context(
         patient_fields["previous_visit_notes"] = body.previous_visit_notes
         patient_fields["previous_visit_notes_updated_at"] = now
 
+    if body.background_summary is not None:
+        from ..services import briefing_service
+
+        try:
+            briefing_service.update_participant_background_summary(
+                participant_id, org_id, body.background_summary
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if body.briefing_alerts is not None:
+        from ..services import briefing_service
+
+        try:
+            briefing_service.save_participant_briefing_alerts(
+                participant_id, org_id, body.briefing_alerts
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if patient_fields:
         try:
             supabase.table("patients").update(patient_fields).eq("id", participant_id).execute()
@@ -710,8 +752,28 @@ async def update_shift_context(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Allergy update failed: {e}") from e
 
+    from ..services import briefing_service
     from ..services.shift_service import _fetch_participant_context
-    return _fetch_participant_context(participant_id, org_id)
+
+    ctx = _fetch_participant_context(participant_id, org_id)
+    try:
+        patient_resp = (
+            supabase.table("patients")
+            .select("background_summary, background_summary_updated_at")
+            .eq("id", participant_id)
+            .limit(1)
+            .execute()
+        )
+        patient_row = (patient_resp.data or [{}])[0]
+        ctx["background_summary"] = patient_row.get("background_summary")
+        ctx["background_summary_updated_at"] = patient_row.get("background_summary_updated_at")
+        ctx["briefing_alerts"] = [
+            row.get("alert_text") or ""
+            for row in briefing_service.list_participant_briefing_alerts(participant_id, org_id)
+        ]
+    except Exception:
+        ctx.setdefault("briefing_alerts", [])
+    return ctx
 
 
 # ── Safety protocols (coordinator authoring) ───────────────────────────────────

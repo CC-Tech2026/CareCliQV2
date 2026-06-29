@@ -15,6 +15,8 @@ type ShiftContextPayload = {
     communication_style?: string;
   };
   context?: ParticipantContext;
+  background_summary?: string | null;
+  briefing_alerts?: string[];
 };
 
 type Props = {
@@ -38,6 +40,8 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   const [activities, setActivities] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<ParticipantAllergy[]>([]);
   const [behaviouralNotes, setBehaviouralNotes] = useState([{ title: "Behavioural note", body: "" }]);
+  const [backgroundSummary, setBackgroundSummary] = useState("");
+  const [briefingAlerts, setBriefingAlerts] = useState<string[]>([]);
 
   const hydrateForm = (data: ShiftContextPayload) => {
     setPreferredName(data.profile?.preferred_name ?? "");
@@ -57,6 +61,8 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
         ? data.context.behavioural_notes
         : [{ title: "Behavioural note", body: "" }],
     );
+    setBackgroundSummary(data.background_summary ?? "");
+    setBriefingAlerts(data.briefing_alerts?.length ? data.briefing_alerts : []);
   };
 
   useEffect(() => {
@@ -103,6 +109,8 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
           preferred_activities: activities.filter(Boolean),
           behavioural_notes: behaviouralNotes.filter((n) => n.body.trim()),
           allergies: allergies.filter((a) => a.allergen.trim()),
+          background_summary: backgroundSummary || null,
+          briefing_alerts: briefingAlerts.filter(Boolean),
         }),
       });
       hydrateForm(saved);
@@ -126,8 +134,50 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
     <section className="space-y-4 rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
       <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">Worker shift context</p>
       <p className="text-[12px] text-violet-700/80">
-        Information shown to support workers on My Shift detail (profile, preferences, medical context).
+        Information shown to support workers before and during shifts (briefing, profile, preferences, medical context).
       </p>
+
+      <div className="rounded-xl border border-violet-300/60 bg-white/70 p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-violet-800">Pre-shift briefing</p>
+        <TextArea
+          label="About participant (2–4 sentences)"
+          value={backgroundSummary}
+          onChange={setBackgroundSummary}
+        />
+        <div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">
+            Critical alerts (max 3)
+          </p>
+          {briefingAlerts.map((alert, i) => (
+            <div key={i} className="mb-2 flex gap-2">
+              <Input
+                placeholder="Critical alert shown at top of briefing"
+                value={alert}
+                onChange={(e) =>
+                  setBriefingAlerts((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))
+                }
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setBriefingAlerts((prev) => prev.filter((_, j) => j !== i))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={briefingAlerts.length >= 3}
+            onClick={() => setBriefingAlerts((prev) => [...prev, ""])}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add critical alert
+          </Button>
+        </div>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Preferred name" value={preferredName} onChange={setPreferredName} />

@@ -799,6 +799,90 @@ async def worker_delete_custom_task(
     return shift
 
 
+class BriefingAlertAckBody(BaseModel):
+    alert_id: str
+
+
+class BriefingCompleteBody(BaseModel):
+    scrolled_to_bottom: bool = True
+
+
+@router.get("/shifts/{shift_id}/briefing")
+async def worker_shift_briefing(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Pre-shift briefing payload (CARECLIQV2-267)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        return briefing_service.get_briefing_for_worker(shift_id, worker_id, org_id)
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+@router.post("/shifts/{shift_id}/briefing/acknowledge-alert")
+async def worker_acknowledge_briefing_alert(
+    shift_id: str,
+    body: BriefingAlertAckBody,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        payload = briefing_service.acknowledge_briefing_alert(
+            shift_id, body.alert_id, worker_id, org_id
+        )
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.briefing_alert_acknowledged",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"alert_id": body.alert_id},
+    )
+    return payload
+
+
+@router.post("/shifts/{shift_id}/briefing/complete")
+async def worker_complete_briefing(
+    shift_id: str,
+    body: BriefingCompleteBody,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        payload = briefing_service.complete_briefing(
+            shift_id,
+            worker_id,
+            org_id,
+            scrolled_to_bottom=body.scrolled_to_bottom,
+        )
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.briefing_completed",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return payload
+
+
 @router.post("/shifts/{shift_id}/acknowledge-risks")
 async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(get_current_user)):
     """Log risk acknowledgement before shift start (CARECLIQV2-158)."""
