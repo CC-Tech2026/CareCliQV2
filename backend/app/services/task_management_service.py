@@ -30,15 +30,26 @@ class TaskManagementService:
         Idempotent: running multiple times won't duplicate instances.
         """
         # Get the shift details
-        shift_response = self.sb.table("shifts").select("*").eq("id", str(shift_id)).single().execute()
+        shift_response = self.sb.table("shifts").select("id, participant_id, scheduled_start, scheduled_end").eq("id", str(shift_id)).single().execute()
         if not shift_response.data:
             logger.warning(f"Shift {shift_id} not found")
             return []
         
         shift = shift_response.data
         participant_id = shift["participant_id"]
-        shift_type = shift["shift_type"].lower()  # morning, afternoon, night
-        shift_date = shift["shift_date"]
+        
+        # Derive shift type from scheduled_start time
+        # Morning: 6-12, Afternoon: 12-18, Night: 18-6 (next day)
+        scheduled_start = shift["scheduled_start"]
+        hour = scheduled_start.hour if isinstance(scheduled_start, datetime) else int(str(scheduled_start).split("T")[1].split(":")[0])
+        if 6 <= hour < 12:
+            shift_type = "morning"
+        elif 12 <= hour < 18:
+            shift_type = "afternoon"
+        else:
+            shift_type = "night"
+        
+        shift_date = scheduled_start.date() if isinstance(scheduled_start, datetime) else str(scheduled_start).split("T")[0]
         
         # Find all active templates for this participant
         templates_response = self.sb.table("task_templates").select("*").eq(
@@ -126,12 +137,13 @@ class TaskManagementService:
         Run this as a scheduled job to ensure recurring tasks are ready
         when shifts are rostered.
         """
-        future_date = datetime.now().date() + timedelta(days=lookhead_days)
+        now = datetime.utcnow()
+        future_datetime = now + timedelta(days=lookhead_days)
         
-        # Get all shifts within the window
-        shifts_response = self.sb.table("shifts").select("*").gte(
-            "shift_date", str(datetime.now().date())
-        ).lte("shift_date", str(future_date)).execute()
+        # Get all shifts within the window (using scheduled_start instead of shift_date)
+        shifts_response = self.sb.table("shifts").select("id").gte(
+            "scheduled_start", now.isoformat() + "Z"
+        ).lte("scheduled_start", future_datetime.isoformat() + "Z").execute()
         
         shifts = shifts_response.data or []
         total_generated = 0
