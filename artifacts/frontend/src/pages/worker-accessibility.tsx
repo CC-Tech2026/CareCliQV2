@@ -16,9 +16,7 @@ const FONT_OPTIONS: { id: FontSize; labelKey: string }[] = [
 ];
 
 const THEME_OPTIONS: { id: ThemeMode; labelKey: string; icon: typeof Sun }[] = [
-  { id: "system", labelKey: "accessibility.theme.system", icon: Sun },
   { id: "light", labelKey: "accessibility.theme.light", icon: Sun },
-  { id: "dark", labelKey: "accessibility.theme.dark", icon: Moon },
 ];
 
 const LANGUAGE_OPTIONS: { id: AppLanguage; label: string }[] = [

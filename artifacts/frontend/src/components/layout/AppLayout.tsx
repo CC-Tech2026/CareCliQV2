@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search,
+  Sun, Moon, Search, Accessibility, Car,
 } from "lucide-react";
 import { getStoredTheme, applyTheme, type Theme } from "@/lib/theme";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -65,7 +65,8 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Operations",
       items: [
-        { href: "/coordinator/rostering", label: "Rostering",      icon: CalendarDays },
+        { href: "/coordinator/rostering", label: "Rostering",       icon: CalendarDays },
+        { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
         { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
         { href: "/billing",               label: "Invoices",        icon: CreditCard   },
         { href: "/credentials",           label: "Credentials",     icon: BadgeCheck   },
@@ -91,6 +92,14 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       ],
     },
     {
+      group: "Development",
+      items: [
+        { href: "/worker/travel",       label: "Travel Expenses", icon: Car         },
+        { href: "/worker/performance",  label: "Performance",     icon: BarChart2   },
+        { href: "/worker/training",     label: "Training",        icon: GraduationCap },
+      ],
+    },
+    {
       group: "Safety",
       items: [
         { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
@@ -107,8 +116,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Account",
       items: [
-        { href: "/worker/profile",  label: "My Profile", icon: UserRound   },
-        { href: "/worker/security", label: "Security",   icon: LockKeyhole },
+        { href: "/worker/profile",    label: "My Profile",      icon: UserRound   },
+        { href: "/worker/security",   label: "Security",        icon: LockKeyhole },
+        { href: "/worker/accessibility", label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
