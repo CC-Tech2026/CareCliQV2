@@ -690,7 +690,7 @@ export default function CoordinatorGoals() {
   const blockedCount = legacyData.filter((g) => g.goals.some((gl) => gl.status === "blocked")).length;
 
   const TABS = [
-    { id: "planning",      label: "Goals & Planning"   },
+    { id: "planning",      label: "Goal-Based Tasks"   },
     { id: "shift-tasks",   label: "Shift-Based Tasks"  },
     { id: "overview",      label: "Plan Overview"      },
   ] as const;
@@ -700,7 +700,7 @@ export default function CoordinatorGoals() {
       <div className="flex items-start justify-between flex-wrap gap-3 px-4 sm:px-6 lg:px-8">
         <div>
           <p className="hidden" style={{ color: CORAL }}>Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Goals & Planning</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Goal-Based Tasks</h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>Create NDIS goals, manage tasks, and track progress toward participant outcomes.</p>
         </div>
         {tab === "planning" && goalParticipant && (
