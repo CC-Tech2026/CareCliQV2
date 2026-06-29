@@ -5,7 +5,7 @@ from typing import Optional
 from uuid import UUID
 import logging
 
-from ..db import get_supabase_client, get_org_supabase_client
+from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class TaskManagementService:
     """Service for task template and instance management."""
     
     def __init__(self, sb_client=None):
-        self.sb = sb_client or get_supabase_client()
+        self.sb = sb_client or get_supabase_admin()
     
     # ──────────────────────────────────────────────────────────────────────
     # Task Generation Logic
