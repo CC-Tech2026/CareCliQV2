@@ -109,6 +109,10 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   const isTutorialMode = activeIndex !== null || location.includes("tutorial=1");
 
   const refresh = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     try {
       const remote = await getTutorialProgress();
       setProgress(remote);
@@ -118,7 +122,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     void refresh();
