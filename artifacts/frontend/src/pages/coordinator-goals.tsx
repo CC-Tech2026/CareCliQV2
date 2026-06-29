@@ -6,6 +6,7 @@ import {
   CalendarDays, ChevronDown, ChevronUp, Loader2,
   Search, Target, Plus, X, CheckCircle2, Archive,
   ClipboardList, Edit2, Trash2, CheckSquare, BarChart2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +56,10 @@ const GOAL_AREA_META: Record<NdisGoal["goal_area"], { label: string; color: stri
 };
 
 const GOAL_STATUS_META: Record<NdisGoal["status"], { label: string; color: string; bg: string }> = {
-  active:    { label: "Active",    color: PLUM,      bg: SOFT      },
-  completed: { label: "Completed", color: "#059669", bg: "#ECFDF5" },
-  archived:  { label: "Archived",  color: MUTED,     bg: "#F3F4F6" },
+  active:           { label: "Active",           color: PLUM,      bg: SOFT      },
+  need_attention:   { label: "Need Attention",   color: "#DC2626", bg: "#FEF2F2" },
+  completed:        { label: "Completed",        color: "#059669", bg: "#ECFDF5" },
+  archived:         { label: "Archived",         color: MUTED,     bg: "#F3F4F6" },
 };
 
 const EVIDENCE_OPTS = [
@@ -347,7 +349,7 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
           <p className="font-black text-[14px]" style={{ color: TEXT }}>{goal.name}</p>
           {goal.description && <p className="text-[12px] mt-0.5 line-clamp-2" style={{ color: MUTED }}>{goal.description}</p>}
         </div>
-        {goal.status === "active" && (
+        {(goal.status === "active" || goal.status === "need_attention") && (
           <div className="flex gap-1 shrink-0">
             <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onEdit(goal)} title="Edit"><Edit2 size={13} style={{ color: MUTED }} /></button>
             <button className="p-1.5 rounded-lg hover:bg-gray-100" onClick={() => onComplete(goal.id)} title="Complete"><CheckCircle2 size={13} style={{ color: "#059669" }} /></button>
@@ -359,6 +361,17 @@ function NdisGoalCard({ goal, onEdit, onArchive, onComplete }: {
         <p className="text-[11px] px-3 py-2 rounded-xl" style={{ background: SOFT, color: MUTED }}>
           <span className="font-black" style={{ color: TEXT }}>Success: </span>{goal.success_criteria}
         </p>
+      )}
+      {goal.status === "need_attention" && (
+        <div className="flex gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200">
+          <AlertTriangle size={14} style={{ color: "#DC2626", flexShrink: 0, marginTop: "2px" }} />
+          <div className="flex-1">
+            <p className="text-[11px] font-semibold" style={{ color: "#DC2626" }}>Needs Attention</p>
+            {goal.need_attention_reason && (
+              <p className="text-[10px] mt-0.5" style={{ color: "#991B1B" }}>{goal.need_attention_reason}</p>
+            )}
+          </div>
+        </div>
       )}
       <div className="flex items-center justify-between flex-wrap gap-2">
         {goal.target_date && (

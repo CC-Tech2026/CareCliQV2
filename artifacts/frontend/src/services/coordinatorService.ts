@@ -834,7 +834,9 @@ export type NdisGoal = {
   target_date?: string | null;
   success_criteria?: string | null;
   related_task_ids?: string[];
-  status: "active" | "completed" | "archived";
+  status: "active" | "need_attention" | "completed" | "archived";
+  need_attention_set_at?: string | null;
+  need_attention_reason?: string | null;
   archived_at?: string | null;
   completed_at?: string | null;
   created_at?: string;
@@ -1027,5 +1029,51 @@ export function updateParticipantTask(taskId: string, payload: Partial<Participa
 export function deleteParticipantTask(taskId: string) {
   return jsonFetch<void>(`/api/coordinator/tasks/${encodeURIComponent(taskId)}`, {
     method: "DELETE",
+  });
+}
+
+/** AI Shift Suggestions — CARECLIQV2-XXX */
+
+export type ShiftSuggestion = {
+  task_id: string;
+  task_name: string;
+  confidence: number;  // 0.0-1.0
+  reason: string;
+  goal_id?: string;
+  goal_name?: string;
+};
+
+export type GoalFocusArea = {
+  goal_name: string;
+  priority: "high" | "medium" | "low";
+  rationale: string;
+};
+
+export type ShiftAnalytics = {
+  participant_id: string;
+  shift_type: string;
+  recommended_tasks: ShiftSuggestion[];
+  goal_focus_areas: GoalFocusArea[];
+  shift_insights: string;
+  similar_shifts_count: number;
+  risk_flags: string[];
+};
+
+/** Get AI suggestions for a shift before creating it */
+export function getShiftSuggestions(params: {
+  participant_id: string;
+  worker_id: string;
+  shift_type: string;
+  goal_ids?: string[];
+}) {
+  return jsonFetch<ShiftAnalytics>("/api/coordinator/shifts/suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      participant_id: params.participant_id,
+      worker_id: params.worker_id,
+      shift_type: params.shift_type,
+      goal_ids: params.goal_ids || [],
+    }),
   });
 }

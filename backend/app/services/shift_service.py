@@ -2166,6 +2166,90 @@ def clock_out_without_session(
     return _shift_card_payload(updated)
 
 
+def _check_and_update_goal_status(participant_id: str, organization_id: str) -> None:
+    """Check if goals should be flagged as needing attention based on missed tasks.
+    
+    A goal is flagged 'need_attention' if it has 3+ incomplete/pending tasks
+    created in the last 14 days. This helps coordinators focus on goals that
+    are slipping behind on task completion.
+    """
+    try:
+        from datetime import datetime, timedelta
+        
+        two_weeks_ago = (datetime.utcnow() - timedelta(days=14)).isoformat()
+        now = _now_iso()
+        
+        # Get all active goals for this participant
+        goals_resp = (
+            get_supabase_admin()
+            .table('ndis_goals')
+            .select('id, status')
+            .eq('participant_id', participant_id)
+            .eq('organization_id', organization_id)
+            .in_('status', ['active', 'need_attention'])
+            .execute()
+        )
+        goals = goals_resp.data or []
+        
+        for goal in goals:
+            goal_id = goal.get('id')
+            current_status = goal.get('status')
+            
+            if not goal_id:
+                continue
+            
+            # Count incomplete tasks for this goal in the last 14 days
+            tasks_resp = (
+                get_supabase_admin()
+                .table('participant_tasks')
+                .select('id, status')
+                .eq('goal_id', goal_id)
+                .eq('participant_id', participant_id)
+                .gte('created_at', two_weeks_ago)
+                .in_('status', ['pending', 'in_progress'])
+                .execute()
+            )
+            incomplete_tasks = tasks_resp.data or []
+            incomplete_count = len(incomplete_tasks)
+            
+            # Determine if goal should be flagged
+            should_flag = incomplete_count >= 3
+            
+            # Update if status should change
+            if should_flag and current_status != 'need_attention':
+                # Flag goal as needing attention
+                (
+                    get_supabase_admin()
+                    .table('ndis_goals')
+                    .update({
+                        'status': 'need_attention',
+                        'need_attention_set_at': now,
+                        'need_attention_reason': f'{incomplete_count} incomplete tasks in last 2 weeks',
+                        'updated_at': now,
+                    })
+                    .eq('id', goal_id)
+                    .execute()
+                )
+            elif not should_flag and current_status == 'need_attention':
+                # Clear need_attention flag if task completion improved
+                (
+                    get_supabase_admin()
+                    .table('ndis_goals')
+                    .update({
+                        'status': 'active',
+                        'need_attention_set_at': None,
+                        'need_attention_reason': None,
+                        'updated_at': now,
+                    })
+                    .eq('id', goal_id)
+                    .execute()
+                )
+    except Exception as exc:
+        if not _is_missing_schema_error(exc):
+            logger.warning(f"Failed to check goal status for participant {participant_id}: {exc}")
+        # Don't raise - this is a monitoring function, errors shouldn't block shift completion
+
+
 def end_shift(
     shift_id: str,
     worker_id: str,
@@ -2259,6 +2343,12 @@ def end_shift(
             payload["shift_signature"] = sig
     except Exception:
         pass
+    
+    # Check and update goal status based on task completion
+    participant_id = shift.get("participant_id")
+    if participant_id:
+        _check_and_update_goal_status(str(participant_id), organization_id)
+    
     return payload
 
 

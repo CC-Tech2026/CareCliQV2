@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle2, Circle, ArrowRight, Users, UserPlus,
-  ClipboardList, Link2, FileText, Building2, ChevronRight,
+  ClipboardList, FileText, Building2, ChevronRight,
   Sparkles, ExternalLink,
 } from "lucide-react";
 
@@ -45,13 +45,6 @@ const STEPS: ChecklistStep[] = [
     title: "Add your first participant",
     description: "Create participant profiles with NDIS numbers, plan details, and support goals.",
     action: { label: "Add Participant", href: "/patients" },
-  },
-  {
-    id: "assign_participants",
-    icon: Link2,
-    title: "Assign participants to workers",
-    description: "Link each participant to the support worker responsible for their care. Workers will only see their assigned participants.",
-    action: { label: "Manage Participants", href: "/patients" },
   },
   {
     id: "create_session",

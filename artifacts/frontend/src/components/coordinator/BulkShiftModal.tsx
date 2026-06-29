@@ -6,19 +6,26 @@ import { useState } from "react";
 import { format, addDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Calendar, Clock, Check, AlertTriangle, Loader2, X, Plus,
+  Calendar, Clock, Check, AlertTriangle, Loader2, X, Plus, Zap,
+  CheckCircle2, Link2,
 } from "lucide-react";
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   bulkCreateShifts,
+  getTaskTemplates,
+  getNdisGoals,
   type BulkShiftResult,
   type WorkerStats,
+  type TaskTemplate,
+  type TaskTemplatesResponse,
+  type NdisGoal,
 } from "@/services/coordinatorService";
+import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -97,6 +104,39 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
     },
   });
 
+  // Fetch task templates and goals for preview
+  const taskTemplatesQuery = useOrgQuery<TaskTemplatesResponse>(
+    [orgId, "bulk-shift-task-templates", participantId],
+    {
+      queryFn: () => getTaskTemplates(participantId),
+      enabled: !!participantId,
+    }
+  );
+
+  const goalsQuery = useOrgQuery<NdisGoal[]>(
+    [orgId, "bulk-shift-goals", participantId],
+    {
+      queryFn: () => getNdisGoals({ participant_id: participantId }),
+      enabled: !!participantId,
+    }
+  );
+
+  // Filter templates by shift type
+  const matchingTemplates = (templates: TaskTemplate[]) => {
+    return templates.filter((t) => {
+      if (!t.primary_shift_type) return false;
+      if (t.primary_shift_type === shiftType) return true;
+      if ((t.additional_shift_types ?? []).includes(shiftType)) return true;
+      return false;
+    });
+  };
+
+  const allTemplates = [
+    ...(taskTemplatesQuery.data?.default_tasks ?? []),
+    ...(taskTemplatesQuery.data?.custom_tasks ?? []),
+  ];
+  const previewMatching = matchingTemplates(allTemplates);
+
   function handleClose() {
     if (!mutation.isPending) {
       onOpenChange(false);
@@ -116,11 +156,15 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md rounded-2xl p-0 overflow-hidden gap-0" style={{ borderColor: BORDER }}>
-        {/* Header */}
+        {/* Header — Required for accessibility */}
         <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div>
-            <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Recurring Shifts</h2>
-            <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>Create bulk recurring shifts for a participant.</p>
+            <DialogTitle className="text-[18px] font-black" style={{ color: PLUM }}>
+              Recurring Shifts
+            </DialogTitle>
+            <DialogDescription className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
+              Create bulk recurring shifts for a participant.
+            </DialogDescription>
           </div>
           <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100" title="Close modal" aria-label="Close modal">
             <X size={16} style={{ color: MUTED }} />
@@ -231,6 +275,52 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Task Preview — shows which recurring tasks will auto-attach */}
+              {participantId && shiftType && taskTemplatesQuery.data && (
+                <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
+                  <div className="flex items-start gap-2.5">
+                    <Zap size={14} className="mt-1 shrink-0" style={{ color: PLUM }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-black" style={{ color: TEXT }}>
+                        {previewMatching.length === 0 ? "No tasks will attach" : `${previewMatching.length} task${previewMatching.length !== 1 ? "s" : ""} per shift`}
+                      </p>
+                      {previewMatching.length > 0 && (
+                        <div className="mt-2.5 space-y-1.5">
+                          {previewMatching.map((template) => {
+                            const linkedGoalIds = template.linked_goal_ids ?? (template.linked_goal_id ? [template.linked_goal_id] : []);
+                            const linkedGoalNames = linkedGoalIds
+                              .map((gid) => goalsQuery.data?.find((g) => g.id === gid)?.name)
+                              .filter(Boolean);
+                            return (
+                              <div key={template.id} className="text-[11px]">
+                                <div className="flex items-start gap-1.5">
+                                  <CheckCircle2 size={12} className="mt-0.5 shrink-0" style={{ color: "#16A34A" }} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-semibold" style={{ color: TEXT }}>{template.name}</p>
+                                    {linkedGoalNames.length > 0 && (
+                                      <p className="text-[10px] mt-0.5 flex items-center gap-1 flex-wrap" style={{ color: MUTED }}>
+                                        <Link2 size={10} />
+                                        {linkedGoalNames.join(", ")}
+                                      </p>
+                                    )}
+                                    {template.is_mandatory && (
+                                      <p className="text-[10px] mt-0.5" style={{ color: CORAL }}>🔴 Mandatory</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="text-[10px] mt-2.5" style={{ color: MUTED }}>
+                        Creates {totalShifts} shift{totalShifts !== 1 ? "s" : ""} × {previewMatching.length} task{previewMatching.length !== 1 ? "s" : ""} = {totalShifts * previewMatching.length} task instance{totalShifts * previewMatching.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Days of week */}
               <div className="space-y-2">

@@ -6,9 +6,8 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search,
+  Search,
 } from "lucide-react";
-import { getStoredTheme, applyTheme, type Theme } from "@/lib/theme";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
@@ -571,10 +570,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     userRole === "managing_director" ? "/md/compliance"  :
     "/compliance";
 
-  const [theme, setTheme] = useState<Theme>(getStoredTheme);
-  useEffect(() => { applyTheme(theme); }, [theme]);
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
-
   const navSections   = SECTIONED_NAV[userRole as NavRole]   ?? SECTIONED_NAV.support_worker;
   const topbarQuicknav = TOPBAR_QUICKNAV[userRole as NavRole] ?? TOPBAR_QUICKNAV.support_worker;
   const pageLabel     = getPageLabel(location);
@@ -799,18 +794,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   : <WorkerNotificationBell onClick={() => setWorkerNotifOpen(true)} />
                 }
               </div>
-
-              {/* Theme toggle */}
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={theme === "dark" ? "Light mode" : "Dark mode"}
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
-                style={{ borderColor: BORDER, color: MUTED }}
-              >
-                {theme === "dark" ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
-              </button>
 
               {/* Profile */}
               <ProfileDropdown

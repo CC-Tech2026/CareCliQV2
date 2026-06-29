@@ -965,77 +965,156 @@ async def coordinator_shifts(
     end_date: Optional[str] = Query(default=None),
     worker_id: Optional[str] = Query(default=None),
     status_filter: Optional[str] = Query(default=None, alias="status"),
-    limit: int = Query(default=500, ge=1, le=2000),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    """List organization shifts for coordinator roster/calendar management."""
+    """List organization shifts for coordinator roster/calendar management.
+    
+    Supports keyset pagination via limit/offset.
+    Efficiently fetches worker and participant names in single query.
+    
+    Query Parameters:
+    - start_date: Filter by start date (ISO 8601)
+    - end_date: Filter by end date (ISO 8601)
+    - worker_id: Filter by specific worker
+    - status: Filter by status (scheduled, in_progress, completed, cancelled)
+    - limit: Records per page (1-500, default 50)
+    - offset: Pagination offset (default 0)
+    """
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
 
     try:
-        rows = _execute_shift_query_with_legacy_fallback(
-            supabase=supabase,
-            org_id=org_id,
-            limit=limit,
-            start_date=start_date,
-            end_date=end_date,
-            worker_id=worker_id,
-            status_filter=status_filter,
-        )
+        # Use RPC function that does single query with JOINs
+        # Eliminates N+1 query pattern from previous implementation
+        result = supabase.rpc(
+            "get_coordinator_shifts_with_details",
+            {
+                "p_organization_id": org_id,
+                "p_start_date": start_date,
+                "p_end_date": end_date,
+                "p_worker_id": worker_id,
+                "p_status_filter": status_filter,
+                "p_limit": limit,
+                "p_offset": offset,
+            },
+        ).execute()
+        
+        rows = result.data or []
+        
+        # Backfill participant names from shift record if not populated
+        # (older shifts may not have participant_name denormalized)
+        if rows and any(not r.get("participant_name") for r in rows):
+            participant_ids = sorted({
+                str(r.get("participant_id")) 
+                for r in rows 
+                if r.get("participant_id") and not r.get("participant_name")
+            })
+            
+            if participant_ids:
+                try:
+                    participants_resp = (
+                        supabase.table("patients")
+                        .select("id, full_name")
+                        .in_("id", participant_ids)
+                        .eq("organization_id", org_id)
+                        .execute()
+                    )
+                    participants_by_id = {
+                        str(p.get("id")): p.get("full_name")
+                        for p in (participants_resp.data or [])
+                        if isinstance(p, dict) and p.get("id")
+                    }
+                    
+                    for row in rows:
+                        if not row.get("participant_name"):
+                            row["participant_name"] = (
+                                participants_by_id.get(str(row.get("participant_id")))
+                                or "Participant"
+                            )
+                except Exception:
+                    # Silently handle participant backfill failure
+                    for row in rows:
+                        if not row.get("participant_name"):
+                            row["participant_name"] = "Participant"
+        
+        return rows
+    
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc}")
-
-    worker_ids = sorted({str(r.get("worker_id")) for r in rows if r.get("worker_id")})
-    participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
-
-    workers_by_id: dict[str, dict] = {}
-    participants_by_id: dict[str, dict] = {}
-
-    if worker_ids:
+        # Fallback for RPC not available (legacy schema)
+        # Uses original N+1 approach but logs warning
+        logger.warning(
+            f"RPC get_coordinator_shifts_with_details not available, using fallback: {exc}"
+        )
+        
         try:
-            workers_resp = (
-                supabase.table("users")
-                .select("id, full_name, email")
-                .in_("id", worker_ids)
-                .eq("organization_id", org_id)
-                .execute()
+            rows = _execute_shift_query_with_legacy_fallback(
+                supabase=supabase,
+                org_id=org_id,
+                limit=limit + offset,  # Adjust for offset
+                start_date=start_date,
+                end_date=end_date,
+                worker_id=worker_id,
+                status_filter=status_filter,
             )
-            workers_by_id = {
-                str(w.get("id")): w
-                for w in (workers_resp.data or [])
-                if isinstance(w, dict) and w.get("id")
-            }
-        except Exception:
-            workers_by_id = {}
+            
+            # Apply offset
+            rows = rows[offset:offset+limit]
+            
+            worker_ids = sorted({str(r.get("worker_id")) for r in rows if r.get("worker_id")})
+            participant_ids = sorted({str(r.get("participant_id")) for r in rows if r.get("participant_id")})
 
-    if participant_ids:
-        try:
-            participants_resp = (
-                supabase.table("patients")
-                .select("id, full_name")
-                .in_("id", participant_ids)
-                .eq("organization_id", org_id)
-                .execute()
-            )
-            participants_by_id = {
-                str(p.get("id")): p
-                for p in (participants_resp.data or [])
-                if isinstance(p, dict) and p.get("id")
-            }
-        except Exception:
-            participants_by_id = {}
+            workers_by_id: dict[str, dict] = {}
+            participants_by_id: dict[str, dict] = {}
 
-    return [
-        {
-            **row,
-            "worker_name": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("full_name") or "Worker",
-            "worker_email": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("email"),
-            "participant_name": row.get("participant_name")
-            or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
-            or "Participant",
-        }
-        for row in rows
-    ]
+            if worker_ids:
+                try:
+                    workers_resp = (
+                        supabase.table("users")
+                        .select("id, full_name, email")
+                        .in_("id", worker_ids)
+                        .eq("organization_id", org_id)
+                        .execute()
+                    )
+                    workers_by_id = {
+                        str(w.get("id")): w
+                        for w in (workers_resp.data or [])
+                        if isinstance(w, dict) and w.get("id")
+                    }
+                except Exception:
+                    workers_by_id = {}
+
+            if participant_ids:
+                try:
+                    participants_resp = (
+                        supabase.table("patients")
+                        .select("id, full_name")
+                        .in_("id", participant_ids)
+                        .eq("organization_id", org_id)
+                        .execute()
+                    )
+                    participants_by_id = {
+                        str(p.get("id")): p
+                        for p in (participants_resp.data or [])
+                        if isinstance(p, dict) and p.get("id")
+                    }
+                except Exception:
+                    participants_by_id = {}
+
+            return [
+                {
+                    **row,
+                    "worker_name": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("full_name") or "Worker",
+                    "worker_email": (workers_by_id.get(str(row.get("worker_id")), {}) or {}).get("email"),
+                    "participant_name": row.get("participant_name")
+                    or (participants_by_id.get(str(row.get("participant_id")), {}) or {}).get("full_name")
+                    or "Participant",
+                }
+                for row in rows
+            ]
+        except Exception as exc2:
+            raise HTTPException(status_code=500, detail=f"Could not load shifts: {exc2}")
 
 
 class ShiftCredentialRequirementBody(BaseModel):
@@ -1220,6 +1299,7 @@ async def _generate_tasks_from_templates(
     shift_type: str,
     shift_date: date,
     org_id: str,
+    created_by_user_id: str = None,
 ):
     """
     Auto-generate task instances for a shift by finding matching active templates.
@@ -1282,13 +1362,17 @@ async def _generate_tasks_from_templates(
                 should_create = iso_weekday in recurrence_weekdays
             
             if should_create:
+                # Get the first linked goal if available (tasks are linked to one goal)
+                linked_goals = template.get("linked_goal_ids") or []
+                goal_id = linked_goals[0] if linked_goals else None
+                
                 tasks_to_create.append({
                     "participant_id": participant_id,
                     "organization_id": org_id,
-                    "shift_id": shift_id,
+                    "created_by": created_by_user_id,
                     "name": template.get("name"),
                     "description": template.get("description"),
-                    "goal_id": template.get("linked_goal_id"),
+                    "goal_id": goal_id,
                     "status": "pending",
                     "is_mandatory": template.get("is_mandatory", False),
                     "created_at": now,
@@ -1299,7 +1383,24 @@ async def _generate_tasks_from_templates(
         if tasks_to_create:
             try:
                 result = supabase.table("participant_tasks").insert(tasks_to_create).execute()
-                created_count = len(result.data or [])
+                created_tasks = result.data or []
+                created_count = len(created_tasks)
+                
+                # Link tasks to shift in shift_tasks association table
+                if created_tasks:
+                    shift_task_records = [
+                        {
+                            "shift_id": shift_id,
+                            "task_id": task.get("id"),
+                            "organization_id": org_id,
+                        }
+                        for task in created_tasks
+                    ]
+                    try:
+                        supabase.table("shift_tasks").insert(shift_task_records).execute()
+                    except Exception as link_exc:
+                        logger.warning(f"Failed to link tasks to shift {shift_id}: {link_exc}")
+                
                 logger.info(f"Auto-generated {created_count} tasks for shift {shift_id}")
                 return created_count
             except Exception as create_exc:
@@ -1458,6 +1559,7 @@ async def assign_shift(
                 shift_type,
                 shift_date,
                 org_id,
+                created_by_user_id=current_user.get("id"),
             )
             logger.info(f"Shift {shift_id}: generated {tasks_generated} task instances from templates")
         except Exception as gen_exc:
@@ -2798,6 +2900,65 @@ async def emergency_stop_shift(
             pass
 
     return {"ok": True, "shift": updated}
+
+
+# ── POST /shifts/suggestions ──────────────────────────────────────────────────
+# CARECLIQV2-XXX — AI-powered shift suggestions using RAG
+
+class ShiftSuggestionsBody(BaseModel):
+    participant_id: str
+    worker_id: str
+    shift_type: str
+    goal_ids: Optional[list[str]] = None
+
+
+@router.post("/shifts/suggestions")
+async def get_shift_suggestions(
+    body: ShiftSuggestionsBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI suggestions for a shift before creating it.
+    
+    Uses RAG to retrieve similar past shifts and goal progress context,
+    then generates recommendations for:
+    - Specific tasks most likely to succeed (with confidence scores)
+    - Goal focus areas ranked by progress potential
+    - Shift insights based on historical patterns
+    - Risk flags if any patterns detected
+    
+    Suggestions are advisory only; coordinator decides which to use.
+    Non-critical failures return partial data gracefully.
+    """
+    org_id = _require_coordinator(current_user)
+    
+    try:
+        from ..services.shift_analytics_service import generate_shift_suggestions
+        from ..services.ai_service import generate_shift_ai_suggestions
+        
+        # Generate suggestions with RAG context
+        analytics = await generate_shift_suggestions(
+            participant_id=body.participant_id,
+            worker_id=body.worker_id,
+            shift_type=body.shift_type,
+            organisation_id=org_id,
+            goal_ids=body.goal_ids,
+            ai_service_func=generate_shift_ai_suggestions,  # Inject AI method
+        )
+        
+        return analytics.to_dict()
+    
+    except Exception as exc:
+        logger.warning(f"Shift suggestions generation failed: {exc}")
+        # Return empty suggestions on failure (non-blocking)
+        return {
+            "participant_id": body.participant_id,
+            "shift_type": body.shift_type,
+            "recommended_tasks": [],
+            "goal_focus_areas": [],
+            "shift_insights": "",
+            "similar_shifts_count": 0,
+            "risk_flags": [],
+        }
 
 
 # ── GET /notifications (coordinator) ─────────────────────────────────────────

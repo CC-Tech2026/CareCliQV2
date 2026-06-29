@@ -11,10 +11,15 @@ import {
   checkParticipantGoalsAndTasks,
   getNdisGoals,
   getParticipantTasks,
+  getTaskTemplates,
+  getShiftSuggestions,
   type WorkerStats,
   type NdisGoal,
   type ParticipantTask,
   type GoalsAndTasksValidation,
+  type TaskTemplate,
+  type TaskTemplatesResponse,
+  type ShiftAnalytics,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,11 +29,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   CheckCircle2, AlertTriangle, Loader2, User2,
   CalendarClock, ShieldCheck, CheckSquare, ChevronDown,
+  Zap, Link2, Brain, Lightbulb,
 } from "lucide-react";
 
 const PLUM   = "var(--cc-plum)";
@@ -70,6 +76,7 @@ export function ShiftAssignmentModal({
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
   const [selectedTaskIds,       setSelectedTaskIds]       = useState<string[]>([]);
+  const [showAiSuggestions,     setShowAiSuggestions]     = useState(false);
 
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
@@ -114,6 +121,47 @@ export function ShiftAssignmentModal({
       enabled: !!selectedParticipantId && goalsTasksCheckQuery.data?.has_valid,
     }
   );
+
+  // Fetch task templates to show preview of matching tasks
+  const taskTemplatesQuery = useOrgQuery<TaskTemplatesResponse>(
+    [orgId, "shift-task-templates", selectedParticipantId],
+    {
+      queryFn: () => getTaskTemplates(selectedParticipantId),
+      enabled: !!selectedParticipantId && goalsTasksCheckQuery.data?.has_valid,
+    }
+  );
+
+  // Fetch AI suggestions when user requests them
+  const aiSuggestionsQuery = useOrgQuery<ShiftAnalytics>(
+    [orgId, "shift-ai-suggestions", selectedParticipantId, selectedWorkerId, shiftType],
+    {
+      queryFn: () =>
+        getShiftSuggestions({
+          participant_id: selectedParticipantId,
+          worker_id: selectedWorkerId || "unassigned",
+          shift_type: shiftType,
+          goal_ids: goalsQuery.data?.map((g) => g.id) || [],
+        }),
+      staleTime: 2 * 60_000,  // Cache for 2 min
+      enabled: showAiSuggestions && !!selectedParticipantId && goalsTasksCheckQuery.data?.has_valid,
+    }
+  );
+
+  // Filter templates by shift type to show preview
+  const matchingTemplates = (templates: TaskTemplate[]) => {
+    return templates.filter((t) => {
+      if (!t.primary_shift_type) return false;
+      if (t.primary_shift_type === shiftType) return true;
+      if ((t.additional_shift_types ?? []).includes(shiftType)) return true;
+      return false;
+    });
+  };
+
+  const allTemplates = [
+    ...(taskTemplatesQuery.data?.default_tasks ?? []),
+    ...(taskTemplatesQuery.data?.custom_tasks ?? []),
+  ];
+  const previewMatching = matchingTemplates(allTemplates);
 
   const assignMut = useMutation({
     mutationFn: () =>
@@ -195,12 +243,14 @@ export function ShiftAssignmentModal({
         className="max-w-lg rounded-2xl p-0 overflow-hidden gap-0"
         style={{ borderColor: BORDER }}
       >
-        {/* Header */}
+        {/* Header — Required for accessibility */}
         <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Create Shift</h2>
-          <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
+          <DialogTitle className="text-[18px] font-black" style={{ color: PLUM }}>
+            Create Shift
+          </DialogTitle>
+          <DialogDescription className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
             Schedule a new shift. Assign a worker now or leave unassigned for later.
-          </p>
+          </DialogDescription>
         </div>
 
         {/* Scrollable body */}
@@ -341,6 +391,154 @@ export function ShiftAssignmentModal({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+
+          {/* Task Preview — shows which recurring tasks will auto-attach */}
+          {!hasGoalsTasksError && shiftType && taskTemplatesQuery.data && (
+            <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
+              <div className="flex items-start gap-2.5">
+                <Zap size={14} className="mt-1 shrink-0" style={{ color: PLUM }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-black" style={{ color: TEXT }}>
+                    {previewMatching.length === 0 ? "No tasks will attach" : `${previewMatching.length} task${previewMatching.length !== 1 ? "s" : ""} will attach to this shift`}
+                  </p>
+                  {previewMatching.length > 0 && (
+                    <div className="mt-2.5 space-y-1.5">
+                      {previewMatching.map((template) => {
+                        const linkedGoalIds = template.linked_goal_ids ?? (template.linked_goal_id ? [template.linked_goal_id] : []);
+                        const linkedGoalNames = linkedGoalIds
+                          .map((gid) => goalsQuery.data?.find((g) => g.id === gid)?.name)
+                          .filter(Boolean);
+                        return (
+                          <div key={template.id} className="text-[11px]">
+                            <div className="flex items-start gap-1.5">
+                              <CheckCircle2 size={12} className="mt-0.5 shrink-0" style={{ color: "#16A34A" }} />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold" style={{ color: TEXT }}>{template.name}</p>
+                                {linkedGoalNames.length > 0 && (
+                                  <p className="text-[10px] mt-0.5 flex items-center gap-1 flex-wrap" style={{ color: MUTED }}>
+                                    <Link2 size={10} />
+                                    {linkedGoalNames.join(", ")}
+                                  </p>
+                                )}
+                                {template.is_mandatory && (
+                                  <p className="text-[10px] mt-0.5" style={{ color: CORAL }}>🔴 Mandatory</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[10px] mt-2.5" style={{ color: MUTED }}>Based on recurring task templates for {selectedParticipant?.full_name}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Suggestions — powered by RAG + historical data */}
+          {!hasGoalsTasksError && selectedParticipantId && (
+            <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
+              <button
+                type="button"
+                onClick={() => setShowAiSuggestions(!showAiSuggestions)}
+                className="w-full flex items-start gap-2.5 hover:opacity-80 transition-opacity"
+              >
+                <Brain size={14} className="mt-1 shrink-0" style={{ color: "#8B5CF6" }} />
+                <div className="flex-1 text-left min-w-0">
+                  <p className="text-[12px] font-black" style={{ color: TEXT }}>
+                    AI Shift Suggestions
+                    <span className="ml-2 text-[10px] font-normal" style={{ color: MUTED }}>
+                      {aiSuggestionsQuery.isLoading ? "Loading…" : showAiSuggestions ? "Hide" : "View"}
+                    </span>
+                  </p>
+                  <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>
+                    Recommendations based on past shifts and goals for this participant
+                  </p>
+                </div>
+                <ChevronDown size={14} className="mt-1 shrink-0" style={{ transform: showAiSuggestions ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+              </button>
+
+              {/* Suggestions Panel */}
+              {showAiSuggestions && (
+                <div className="mt-3.5 space-y-3 pt-3.5 border-t" style={{ borderColor: BORDER }}>
+                  {aiSuggestionsQuery.isLoading && (
+                    <div className="flex items-center justify-center gap-2 py-4">
+                      <Loader2 size={14} className="animate-spin" style={{ color: PLUM }} />
+                      <p className="text-[11px]" style={{ color: MUTED }}>Analyzing shift patterns…</p>
+                    </div>
+                  )}
+
+                  {aiSuggestionsQuery.isError && (
+                    <p className="text-[11px]" style={{ color: CORAL }}>Could not load suggestions. Please try again.</p>
+                  )}
+
+                  {aiSuggestionsQuery.data && !aiSuggestionsQuery.isLoading && (
+                    <>
+                      {/* Recommended Tasks */}
+                      {aiSuggestionsQuery.data.recommended_tasks && aiSuggestionsQuery.data.recommended_tasks.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-semibold" style={{ color: TEXT }}>📋 Recommended Tasks</p>
+                          <div className="space-y-1.5">
+                            {aiSuggestionsQuery.data.recommended_tasks.map((task: any, idx: number) => (
+                              <div key={idx} className="text-[10px] p-2 rounded-lg" style={{ background: "rgba(139, 92, 246, 0.1)" }}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-semibold" style={{ color: TEXT }}>{task.task_name}</p>
+                                    <p className="text-[9px] mt-0.5" style={{ color: MUTED }}>{task.reason}</p>
+                                  </div>
+                                  <span className="text-[11px] font-black px-2 py-0.5 rounded bg-white" style={{ color: "#8B5CF6" }}>
+                                    {Math.round(task.confidence * 100)}%
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Goal Focus Areas */}
+                      {aiSuggestionsQuery.data.goal_focus_areas && aiSuggestionsQuery.data.goal_focus_areas.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-semibold" style={{ color: TEXT }}>🎯 Focus Areas</p>
+                          <div className="space-y-1">
+                            {aiSuggestionsQuery.data.goal_focus_areas.map((area: any, idx: number) => (
+                              <div key={idx} className="text-[10px]">
+                                <p className="font-semibold" style={{ color: TEXT }}>{area.goal_name}</p>
+                                <p className="text-[9px]" style={{ color: MUTED }}>{area.rationale}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Shift Insights */}
+                      {aiSuggestionsQuery.data.shift_insights && (
+                        <div className="text-[10px] p-2 rounded-lg" style={{ background: "rgba(34, 197, 94, 0.1)", borderLeft: `3px solid #16A34A` }}>
+                          <p style={{ color: "#166534" }}>{aiSuggestionsQuery.data.shift_insights}</p>
+                        </div>
+                      )}
+
+                      {/* Risk Flags */}
+                      {aiSuggestionsQuery.data.risk_flags && aiSuggestionsQuery.data.risk_flags.length > 0 && (
+                        <div className="space-y-1 pt-2 border-t" style={{ borderColor: BORDER }}>
+                          <p className="text-[11px] font-semibold flex items-center gap-1" style={{ color: CORAL }}>
+                            <AlertTriangle size={12} />
+                            Alerts
+                          </p>
+                          <div className="space-y-1">
+                            {aiSuggestionsQuery.data.risk_flags.map((flag: string, idx: number) => (
+                              <p key={idx} className="text-[10px]" style={{ color: MUTED }}>• {flag}</p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

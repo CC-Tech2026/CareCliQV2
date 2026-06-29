@@ -1476,3 +1476,157 @@ Return ONLY valid JSON — no markdown:
         "past_strategies": raw.get("past_strategies") or fallback["past_strategies"],
         "recommendations": raw.get("recommendations") or fallback["recommendations"],
     }
+
+
+async def generate_shift_ai_suggestions(
+    participant_id: str,
+    worker_id: str,
+    shift_type: str,
+    similar_shifts: list[dict],
+    patterns: dict[str, Any],
+    goal_context: str,
+    goal_ids: list[str] | None,
+    risk_flags: list[str],
+) -> dict[str, Any]:
+    """Generate AI shift suggestions using RAG context (CARECLIQV2-XXX).
+    
+    Takes:
+    - Participant context, shift details, similar past shifts
+    - Task completion patterns from those shifts
+    - Goal progress notes (high-scoring sessions)
+    - Risk patterns detected by pattern_detection_service
+    
+    Returns:
+    - recommended_tasks: List of task suggestions with confidence & reasoning
+    - goal_focus_areas: Ranked goal focus areas based on progress potential
+    - shift_insights: Summary insights about what typically works for this participant
+    
+    Non-critical: Returns empty suggestions on failure.
+    """
+    
+    if not _openai_configured():
+        logger.warning("OpenAI not configured; skipping shift AI suggestions")
+        return {
+            "recommended_tasks": [],
+            "goal_focus_areas": [],
+            "shift_insights": "",
+        }
+    
+    # Sanitize inputs for safe prompt injection
+    sanitized_shift_type = str(shift_type or "").replace('"', "'")[:100]
+    sanitized_goal_ids = [str(g or "").replace('"', "'")[:50] for g in (goal_ids or [])]
+    
+    # Format past shift summaries
+    shift_summaries = ""
+    if similar_shifts:
+        summaries = []
+        for shift in similar_shifts[:3]:  # Cap to top 3
+            content = (shift.get("content") or "")[:300]
+            date = shift.get("session_date") or "prior shift"
+            similarity = shift.get("similarity_score") or 0.0
+            summaries.append(f"[{date}, similarity={similarity:.2f}]: {content}")
+        shift_summaries = "\n".join(summaries)
+    
+    # Format task frequency pattern
+    task_frequency = patterns.get("task_frequency", {})
+    task_patterns = ""
+    if task_frequency:
+        ranked = sorted(
+            task_frequency.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        task_patterns = "\n".join([
+            f"- {task.replace('_', ' ').title()}: appeared {count} times"
+            for task, count in ranked[:5]
+        ])
+    
+    # Format risk flags
+    risk_text = ""
+    if risk_flags:
+        risk_text = "\n\nRISK ALERTS (consider extra support):\n" + "\n".join([
+            f"- {flag}"
+            for flag in risk_flags[:3]
+        ])
+    
+    prompt = f"""You are an NDIS care coordinator AI. Based on historical shift data and goal progress for a participant, recommend specific tasks and focus areas for an upcoming {sanitized_shift_type} shift.
+
+PARTICIPANT HISTORY:
+{shift_summaries or "(No similar past shifts found)"}
+
+COMMON TASK PATTERNS FROM PAST SHIFTS:
+{task_patterns or "(No task patterns detected)"}
+
+GOAL PROGRESS CONTEXT:
+{goal_context[:800] or "(No prior session notes available)"}
+
+TARGET GOALS FOR THIS SHIFT:
+{", ".join(sanitized_goal_ids) or "(No specific goals linked)"}
+
+{risk_text}
+
+INSTRUCTIONS:
+1. Recommend 3-5 specific tasks that are most likely to advance the participant's goals, based on what worked in similar past shifts.
+2. For each task, provide confidence (0.0-1.0) and reason citing the historical patterns.
+3. Rank goal focus areas by likelihood of progress during this shift.
+4. Generate brief shift insights (max 200 chars) about what typically works for this participant.
+
+Format as JSON:
+{{
+  "recommended_tasks": [
+    {{
+      "task_name": "Personal Hygiene",
+      "confidence": 0.95,
+      "reason": "Appeared in 5/5 similar shifts; documented as mandatory"
+    }}
+  ],
+  "goal_focus_areas": [
+    {{
+      "goal_name": "Daily Living Skills",
+      "priority": "high",
+      "rationale": "Recent sessions show progress; continue building independence"
+    }}
+  ],
+  "shift_insights": "This participant typically responds well to structured routines with clear task boundaries."
+}}"""
+    
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,  # Conservative; reproducible suggestions
+            max_tokens=1000,
+            response_format={"type": "json_object"},
+        )
+        
+        raw = json.loads(resp.choices[0].message.content or "{}")
+        
+        # Validate and sanitize response
+        recommended_tasks = raw.get("recommended_tasks") or []
+        goal_focus_areas = raw.get("goal_focus_areas") or []
+        shift_insights = (raw.get("shift_insights") or "")[:200]
+        
+        # Cap recommended tasks to 5
+        if isinstance(recommended_tasks, list):
+            recommended_tasks = recommended_tasks[:5]
+        
+        # Cap goal focus areas to 3
+        if isinstance(goal_focus_areas, list):
+            goal_focus_areas = goal_focus_areas[:3]
+        
+        return {
+            "recommended_tasks": recommended_tasks,
+            "goal_focus_areas": goal_focus_areas,
+            "shift_insights": shift_insights,
+        }
+    
+    except Exception as exc:
+        logger.warning("Shift AI suggestion generation failed: %s", exc)
+        return {
+            "recommended_tasks": [],
+            "goal_focus_areas": [],
+            "shift_insights": "",
+        }
