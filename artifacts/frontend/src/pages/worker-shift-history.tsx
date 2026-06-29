@@ -237,8 +237,8 @@ function ShiftTrendChart({
                 dot={{ r: 4, fill: PLUM, strokeWidth: 0, cursor: "pointer" }}
                 activeDot={{
                   r: 6,
-                  onClick: (_event: unknown, dotData: unknown) => {
-                    const row = (dotData as { payload?: { shift_id?: string } })?.payload;
+                  onClick: (_, payload) => {
+                    const row = payload?.payload as { shift_id?: string };
                     if (row?.shift_id) onPointClick?.(row.shift_id);
                   },
                 }}

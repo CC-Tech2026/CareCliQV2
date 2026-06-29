@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   createTaskTemplate,
   updateTaskTemplate,
@@ -37,6 +38,15 @@ const CATEGORIES = [
   { value: "other", label: "Other" },
 ];
 
+const CATEGORY_KEYS: Record<string, string> = {
+  personal_care: "coordinator.taskTemplate.category.personalCare",
+  meal_prep: "coordinator.taskTemplate.category.mealPrep",
+  medication: "coordinator.taskTemplate.category.medication",
+  community_access: "coordinator.taskTemplate.category.communityAccess",
+  documentation: "coordinator.taskTemplate.category.documentation",
+  other: "coordinator.taskTemplate.category.other",
+};
+
 const WEEKDAYS = [
   { value: 0, label: "Sunday" },
   { value: 1, label: "Monday" },
@@ -56,6 +66,7 @@ interface TaskTemplateFormModalProps {
 }
 
 function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved }: TaskTemplateFormModalProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [form, setForm] = useState({
     name: template?.name ?? "",
@@ -97,11 +108,11 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         : createTaskTemplate(participantId, payload);
     },
     onSuccess: () => {
-      toast({ title: template ? "Template updated" : "Template created" });
+      toast({ title: template ? translate("coordinator.taskTemplate.updated") : translate("coordinator.taskTemplate.created") });
       onSaved();
       onClose();
     },
-    onError: (err: any) => toast({ variant: "destructive", title: `Save failed: ${err?.message}` }),
+    onError: (err: any) => toast({ variant: "destructive", title: translateParams("coordinator.taskTemplate.saveFailed", { message: err?.message ?? "" }) }),
   });
 
   const toggleWeekday = (day: number) => {
@@ -127,16 +138,16 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
       <div className="w-full max-w-2xl rounded-3xl p-6 space-y-4 overflow-y-auto bg-white" style={{ maxHeight: "90vh" }}>
         <div className="flex items-center justify-between">
           <h2 className="font-black text-[16px]" style={{ color: TEXT }}>
-            {template ? "Edit Task Template" : "New Task Template"}
+            {template ? translate("coordinator.taskTemplate.editTitle") : translate("coordinator.taskTemplate.newTitle")}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" title="Close">
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" title={translate("common.close")}>
             <X size={16} style={{ color: MUTED }} />
           </button>
         </div>
 
         {goal && (
           <div className="space-y-1">
-            <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal: {goal.name}</Label>
+            <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translateParams("coordinator.taskTemplate.goalLabel", { name: goal.name })}</Label>
             <p className="text-[12px]" style={{ color: MUTED }}>{goal.description}</p>
           </div>
         )}
@@ -144,28 +155,28 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         {/* Basic fields */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs font-semibold" style={{ color: MUTED }}>Task Name *</Label>
+            <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.taskName")}</Label>
             <Input
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Morning hygiene routine"
+              placeholder={translate("coordinator.taskTemplate.taskNamePlaceholder")}
               className="rounded-xl h-9 text-[13px]"
             />
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs font-semibold" style={{ color: MUTED }}>Category</Label>
+            <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.category")}</Label>
             <select
               value={form.category}
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
               style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-              aria-label="Task category"
+              aria-label={translate("coordinator.taskTemplate.category")}
             >
-              <option value="">Select category...</option>
+              <option value="">{translate("coordinator.taskTemplate.selectCategory")}</option>
               {CATEGORIES.map((cat) => (
                 <option key={cat.value} value={cat.value}>
-                  {cat.label}
+                  {translate(CATEGORY_KEYS[cat.value] ?? cat.label)}
                 </option>
               ))}
             </select>
@@ -173,12 +184,12 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.description")}</Label>
           <textarea
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             rows={2}
-            placeholder="What does this task involve?"
+            placeholder={translate("coordinator.taskTemplate.descriptionPlaceholder")}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
           />
@@ -186,11 +197,11 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
 
         {/* Shift-based section */}
         <div className="border-t pt-4" style={{ borderColor: BORDER }}>
-          <h3 className="font-semibold text-[13px] mb-3" style={{ color: TEXT }}>Shift & Recurrence</h3>
+          <h3 className="font-semibold text-[13px] mb-3" style={{ color: TEXT }}>{translate("coordinator.taskTemplate.shiftRecurrence")}</h3>
 
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold" style={{ color: MUTED }}>Primary Shift Type</Label>
+              <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.primaryShiftType")}</Label>
               <select
                 value={form.primary_shift_type}
                 onChange={(e) => setForm((f) => ({ ...f, primary_shift_type: e.target.value }))}
@@ -198,27 +209,27 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
                 style={{ border: `1px solid ${BORDER}`, color: TEXT }}
                 aria-label="Primary shift type"
               >
-                <option value="">Select shift type...</option>
+                <option value="">{translate("coordinator.taskTemplate.selectShiftType")}</option>
                 {SHIFT_TYPES.map((st) => (
                   <option key={st.value} value={st.value}>
-                    {st.label}
+                    {translate(`coordinator.taskTemplate.shiftType.${st.value}`)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold" style={{ color: MUTED }}>Recurrence Type</Label>
+              <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.recurrenceType")}</Label>
               <select
                 value={form.recurrence_type}
                 onChange={(e) => setForm((f) => ({ ...f, recurrence_type: e.target.value }))}
                 className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
                 style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-                aria-label="Recurrence type"
+                aria-label={translate("coordinator.taskTemplate.recurrenceType")}
               >
-                <option value="one_off">One-off</option>
-                <option value="recurring">Recurring</option>
-                <option value="specific_weekdays">Specific Weekdays</option>
+                <option value="one_off">{translate("coordinator.taskTemplate.recurrence.oneOff")}</option>
+                <option value="recurring">{translate("coordinator.taskTemplate.recurrence.recurring")}</option>
+                <option value="specific_weekdays">{translate("coordinator.taskTemplate.recurrence.specificWeekdays")}</option>
               </select>
             </div>
           </div>
@@ -226,7 +237,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
           {(form.recurrence_type === "recurring" || form.recurrence_type === "specific_weekdays") && (
             <div className="space-y-1 mb-3">
               <Label className="text-xs font-semibold" style={{ color: MUTED }}>
-                {form.recurrence_type === "specific_weekdays" ? "Days of Week" : "Frequency"}
+                {form.recurrence_type === "specific_weekdays" ? translate("coordinator.taskTemplate.daysOfWeek") : translate("coordinator.taskTemplate.frequency")}
               </Label>
               {form.recurrence_type === "specific_weekdays" ? (
                 <div className="flex flex-wrap gap-2">
@@ -240,7 +251,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
                         color: form.recurrence_weekdays.includes(day.value) ? "#fff" : TEXT,
                       }}
                     >
-                      {day.label.slice(0, 3)}
+                      {translate(`coordinator.taskTemplate.weekday.${['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][day.value]}`).slice(0, 3)}
                     </button>
                   ))}
                 </div>
@@ -250,11 +261,11 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
                   onChange={(e) => setForm((f) => ({ ...f, recurrence_frequency: e.target.value }))}
                   className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
                   style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-                  aria-label="Recurrence frequency"
+                  aria-label={translate("coordinator.taskTemplate.frequency")}
                 >
-                  <option value="">Select frequency...</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
+                  <option value="">{translate("coordinator.taskTemplate.selectFrequency")}</option>
+                  <option value="daily">{translate("coordinator.taskTemplate.frequency.daily")}</option>
+                  <option value="weekly">{translate("coordinator.taskTemplate.frequency.weekly")}</option>
                 </select>
               )}
             </div>
@@ -262,7 +273,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold" style={{ color: MUTED }}>Available From (HH:MM)</Label>
+              <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.availableFrom")}</Label>
               <Input
                 type="time"
                 value={form.due_window_start}
@@ -272,7 +283,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs font-semibold" style={{ color: MUTED }}>Available Until (HH:MM)</Label>
+              <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.availableUntil")}</Label>
               <Input
                 type="time"
                 value={form.due_window_end}
@@ -285,17 +296,17 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
 
         {/* Priority */}
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Priority</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.priority")}</Label>
           <select
             value={form.priority}
             onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))}
             className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            aria-label="Task priority"
+            aria-label={translate("coordinator.taskTemplate.priority")}
           >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
+            <option value="low">{translate("coordinator.taskTemplate.priority.low")}</option>
+            <option value="medium">{translate("coordinator.taskTemplate.priority.medium")}</option>
+            <option value="high">{translate("coordinator.taskTemplate.priority.high")}</option>
           </select>
         </div>
 
@@ -309,7 +320,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
             disabled={!form.name.trim() || mut.isPending}
             onClick={() => mut.mutate()}
           >
-            {mut.isPending ? "Saving…" : template ? "Update Template" : "Create Template"}
+            {mut.isPending ? translate("common.saving") : template ? translate("coordinator.taskTemplate.updateTemplate") : translate("coordinator.taskTemplate.createTemplate")}
           </Button>
         </div>
       </div>
@@ -330,6 +341,7 @@ export function TaskTemplatePanel({
   templates,
   onTemplatesChanged,
 }: TaskTemplatePanelProps) {
+  const { translate, translateParams } = useAccessibility();
   const [formOpen, setFormOpen] = useState(false);
   const [editTemplate, setEditTemplate] = useState<TaskTemplate | null>(null);
   const { toast } = useToast();
@@ -339,10 +351,10 @@ export function TaskTemplatePanel({
   const deleteMut = useMutation({
     mutationFn: deleteTaskTemplate,
     onSuccess: () => {
-      toast({ title: "Template deleted" });
+      toast({ title: translate("coordinator.taskTemplate.deleted") });
       onTemplatesChanged();
     },
-    onError: (err: any) => toast({ variant: "destructive", title: `Delete failed: ${err?.message}` }),
+    onError: (err: any) => toast({ variant: "destructive", title: translateParams("coordinator.taskTemplate.deleteFailed", { message: err?.message ?? "" }) }),
   });
 
   return (
@@ -350,7 +362,7 @@ export function TaskTemplatePanel({
       <div className="rounded-xl border p-4" style={{ borderColor: BORDER, background: SOFT }}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-[13px]" style={{ color: TEXT }}>
-            {goal ? `${goal.name} Templates` : "Task Templates"}
+            {goal ? translateParams("coordinator.taskTemplate.templatesFor", { name: goal.name }) : translate("coordinator.taskTemplate.title")}
           </h3>
           <Button
             size="sm"
@@ -361,7 +373,7 @@ export function TaskTemplatePanel({
               setFormOpen(true);
             }}
           >
-            <Plus size={12} /> Add
+            <Plus size={12} /> {translate("common.add")}
           </Button>
         </div>
 
@@ -383,7 +395,7 @@ export function TaskTemplatePanel({
                   </p>
                   {template.primary_shift_type && (
                     <p className="text-[10px] mt-1" style={{ color: MUTED }}>
-                      Shift: {template.primary_shift_type} • Recurs: {template.recurrence_type}
+                      {translateParams("coordinator.taskTemplate.shiftMeta", { shift: template.primary_shift_type ?? "", recurrence: template.recurrence_type })}
                     </p>
                   )}
                 </div>
@@ -394,14 +406,14 @@ export function TaskTemplatePanel({
                       setEditTemplate(template);
                       setFormOpen(true);
                     }}
-                    title="Edit"
+                    title={translate("common.edit")}
                   >
                     <Edit2 size={12} style={{ color: MUTED }} />
                   </button>
                   <button
                     className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                     onClick={() => deleteMut.mutate(template.id)}
-                    title="Delete"
+                    title={translate("common.delete")}
                     disabled={deleteMut.isPending}
                   >
                     <Trash2 size={12} style={{ color: CORAL }} />

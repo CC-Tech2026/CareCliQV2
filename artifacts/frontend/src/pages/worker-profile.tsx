@@ -15,10 +15,10 @@ import {
   setDesktopNotificationsEnabled,
 } from "@/lib/desktop-notifications";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useReAuth } from "@/hooks/useReAuth";
 import { getDeviceId } from "@/lib/device-id";
 import {
-  passwordStrengthLabel,
   passwordStrengthScore,
   validatePasswordPolicy,
 } from "@/lib/password-strength";
@@ -26,9 +26,6 @@ import {
   changePassword,
   getMe,
   getNotificationPreferences,
-  NOTIFICATION_CHANNEL_LABELS,
-  NOTIFICATION_EVENT_LABELS,
-  PREFERRED_CONTACT_LABELS,
   saveNotificationPreferences,
   updateContact,
   type NotificationChannel,
@@ -42,27 +39,50 @@ const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 const BORDER = "var(--cc-border)";
 
-const ROLE_LABELS: Record<string, string> = {
-  support_worker: "Support Worker",
-  allied_health: "Allied Health Professional",
-  support_coordinator: "Support Coordinator",
+const ROLE_KEYS: Record<string, string> = {
+  support_worker: "profile.role.supportWorker",
+  allied_health: "profile.role.alliedHealth",
+  support_coordinator: "profile.role.coordinator",
 };
 
-const EVENTS = Object.keys(NOTIFICATION_EVENT_LABELS) as NotificationEvent[];
-const CHANNELS = Object.keys(NOTIFICATION_CHANNEL_LABELS) as NotificationChannel[];
+const EVENTS: NotificationEvent[] = [
+  "shift_reminder",
+  "shift_change",
+  "coordinator_message",
+  "feedback_received",
+  "certification_expiry",
+];
+const CHANNELS: NotificationChannel[] = ["push", "email", "sms"];
+const CONTACT_METHODS: PreferredContactMethod[] = ["phone_call", "sms", "in_app_message"];
 
-function ReadOnlyField({ label, value }: { label: string; value?: string | null }) {
+const PASSWORD_POLICY_KEYS: Record<string, string> = {
+  "Password must be at least 8 characters.": "profile.passwordPolicy.tooShort",
+  "Password must include at least one uppercase letter.": "profile.passwordPolicy.uppercase",
+  "Password must include at least one number.": "profile.passwordPolicy.number",
+  "This password is too common. Choose a stronger password.": "profile.passwordPolicy.common",
+};
+
+function ReadOnlyField({
+  label,
+  value,
+  emptyLabel,
+}: {
+  label: string;
+  value?: string | null;
+  emptyLabel: string;
+}) {
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">{label}</p>
-      <p className="mt-1 text-[15px] font-semibold text-[#111827]">{value || "—"}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-cc-muted">{label}</p>
+      <p className="mt-1 text-[15px] font-semibold text-cc-text">{value || emptyLabel}</p>
     </div>
   );
 }
 
 export default function WorkerProfile() {
-  const { user, updateUser } = useAuth();
+  const { updateUser } = useAuth();
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
   const deviceId = useMemo(() => getDeviceId(), []);
 
@@ -84,16 +104,41 @@ export default function WorkerProfile() {
   const [desktopPermission, setDesktopPermission] = useState(() => getDesktopNotificationPermission());
   const [desktopEnabled, setDesktopEnabled] = useState(() => isDesktopNotificationsEnabled());
 
+  function roleLabel(role?: string | null) {
+    if (!role) return "";
+    const key = ROLE_KEYS[role];
+    return key ? translate(key) : role;
+  }
+
+  function contactLabel(method: PreferredContactMethod) {
+    return translate(`profile.contact.${method}`);
+  }
+
+  function eventLabel(event: NotificationEvent) {
+    return translate(`profile.notification.event.${event}`);
+  }
+
+  function channelLabel(channel: NotificationChannel) {
+    return translate(`profile.notification.channel.${channel}`);
+  }
+
+  function strengthLabel(score: number) {
+    if (score <= 1) return translate("profile.strength.weak");
+    if (score === 2) return translate("profile.strength.fair");
+    if (score === 3) return translate("profile.strength.good");
+    return translate("profile.strength.strong");
+  }
+
   async function handleEnableDesktopNotifications() {
     const result = await requestDesktopNotificationPermission();
     setDesktopPermission(result);
     setDesktopEnabled(result === "granted");
     if (result === "granted") {
-      toast({ title: "Desktop notifications enabled" });
+      toast({ title: translate("profile.desktopEnabled") });
     } else if (result === "denied") {
       toast({
-        title: "Desktop notifications blocked",
-        description: "Allow notifications in your browser site settings.",
+        title: translate("profile.desktopBlocked"),
+        description: translate("profile.desktopBlockedHint"),
         variant: "destructive",
       });
     }
@@ -102,7 +147,7 @@ export default function WorkerProfile() {
   function handleDisableDesktopNotifications() {
     setDesktopNotificationsEnabled(false);
     setDesktopEnabled(false);
-    toast({ title: "Desktop notifications disabled on this device" });
+    toast({ title: translate("profile.desktopDisabled") });
   }
 
   useEffect(() => {
@@ -119,8 +164,8 @@ export default function WorkerProfile() {
       .catch((error) => {
         if (!active) return;
         toast({
-          title: "Could not load profile",
-          description: error instanceof Error ? error.message : "Please try again.",
+          title: translate("profile.loadFailed"),
+          description: error instanceof Error ? error.message : translate("toast.tryAgain"),
           variant: "destructive",
         });
       })
@@ -130,7 +175,7 @@ export default function WorkerProfile() {
     return () => {
       active = false;
     };
-  }, [deviceId, toast]);
+  }, [deviceId, toast, translate]);
 
   const strength = passwordStrengthScore(newPassword);
 
@@ -152,11 +197,11 @@ export default function WorkerProfile() {
         profile_photo_url: result.profile.profile_photo_url,
       });
       setEditMode(false);
-      toast({ title: "Profile updated", description: result.message });
+      toast({ title: translate("profile.updated"), description: result.message });
     } catch (error) {
       toast({
-        title: "Could not save profile",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("profile.saveFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -168,11 +213,16 @@ export default function WorkerProfile() {
     event.preventDefault();
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) {
-      toast({ title: "Password policy", description: policyError, variant: "destructive" });
+      const key = PASSWORD_POLICY_KEYS[policyError];
+      toast({
+        title: translate("profile.passwordPolicy"),
+        description: key ? translate(key) : policyError,
+        variant: "destructive",
+      });
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast({ title: "Passwords do not match", variant: "destructive" });
+      toast({ title: translate("profile.passwordsNoMatch"), variant: "destructive" });
       return;
     }
     setChangingPassword(true);
@@ -185,11 +235,11 @@ export default function WorkerProfile() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast({ title: "Password updated", description: result.message });
+      toast({ title: translate("profile.passwordUpdated"), description: result.message });
     } catch (error) {
       toast({
-        title: "Password change failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("profile.passwordChangeFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -204,8 +254,8 @@ export default function WorkerProfile() {
       await saveNotificationPreferences(deviceId, next);
     } catch (error) {
       toast({
-        title: "Could not save notification settings",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("profile.notificationSaveFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -229,6 +279,7 @@ export default function WorkerProfile() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <span className="sr-only">{translate("common.loading")}</span>
       </div>
     );
   }
@@ -240,13 +291,13 @@ export default function WorkerProfile() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="hidden" style={{ color: CORAL }}>
-            Account
+            {translate("profile.account")}
           </p>
           <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-            My Profile
+            {translate("profile.title")}
           </h1>
           <p className="mt-2 text-sm text-[#6B7280]">
-            Manage your contact details, password, photo, and notification preferences.
+            {translate("profile.subtitle")}
           </p>
         </div>
         {!editMode ? (
@@ -257,7 +308,7 @@ export default function WorkerProfile() {
             style={{ background: PLUM }}
           >
             <Pencil className="h-4 w-4" />
-            Edit profile
+            {translate("profile.edit")}
           </Button>
         ) : (
           <div className="flex gap-2">
@@ -273,7 +324,7 @@ export default function WorkerProfile() {
               className="rounded-xl gap-2"
             >
               <X className="h-4 w-4" />
-              Cancel
+              {translate("common.cancel")}
             </Button>
             <Button
               type="button"
@@ -283,7 +334,7 @@ export default function WorkerProfile() {
               style={{ background: CORAL }}
             >
               {savingContact ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save changes
+              {translate("profile.saveChanges")}
             </Button>
           </div>
         )}
@@ -295,24 +346,36 @@ export default function WorkerProfile() {
             <UserRound className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Profile details</h2>
-            <p className="text-sm text-[#6B7280]">Your identity within your organisation.</p>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("profile.details")}</h2>
+            <p className="text-sm text-[#6B7280]">{translate("profile.detailsHint")}</p>
           </div>
         </div>
 
-        <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
+        <div className="mb-6 rounded-2xl bg-cc-soft p-4">
           <ProfilePhotoUpload currentUrl={profile.profile_photo_url} cropCircle />
         </div>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <ReadOnlyField label="Full name" value={profile.full_name} />
-          <ReadOnlyField label="Role" value={ROLE_LABELS[profile.membership_role || profile.role] || profile.role} />
-          <ReadOnlyField label="Employee ID" value={profile.employee_id} />
+          <ReadOnlyField
+            label={translate("profile.fullName")}
+            value={profile.full_name}
+            emptyLabel={translate("common.emDash")}
+          />
+          <ReadOnlyField
+            label={translate("profile.role")}
+            value={roleLabel(profile.membership_role || profile.role)}
+            emptyLabel={translate("common.emDash")}
+          />
+          <ReadOnlyField
+            label={translate("profile.employeeId")}
+            value={profile.employee_id}
+            emptyLabel={translate("common.emDash")}
+          />
 
           {editMode ? (
             <>
               <div>
-                <Label htmlFor="profile-email">Email</Label>
+                <Label htmlFor="profile-email">{translate("profile.email")}</Label>
                 <Input
                   id="profile-email"
                   type="email"
@@ -322,12 +385,12 @@ export default function WorkerProfile() {
                 />
                 {profile.pending_email ? (
                   <p className="mt-1 text-xs text-[#6B7280]">
-                    Pending verification for {profile.pending_email}
+                    {translateParams("profile.pendingVerification", { email: profile.pending_email })}
                   </p>
                 ) : null}
               </div>
               <div>
-                <Label htmlFor="profile-phone">Mobile</Label>
+                <Label htmlFor="profile-phone">{translate("profile.mobile")}</Label>
                 <Input
                   id="profile-phone"
                   value={draftPhone}
@@ -336,38 +399,47 @@ export default function WorkerProfile() {
                 />
               </div>
               <div className="md:col-span-2">
-                <Label htmlFor="preferred-contact">Preferred contact method</Label>
+                <Label htmlFor="preferred-contact">{translate("profile.preferredContact")}</Label>
                 <select
                   id="preferred-contact"
-                  title="Preferred contact method"
+                  title={translate("profile.preferredContact")}
                   value={draftPreferredContact}
                   onChange={(e) => setDraftPreferredContact(e.target.value as PreferredContactMethod)}
                   className="mt-1 h-11 w-full rounded-xl border bg-white px-3 text-sm"
                   style={{ borderColor: BORDER }}
                 >
-                  {Object.entries(PREFERRED_CONTACT_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                  {CONTACT_METHODS.map((value) => (
+                    <option key={value} value={value}>{contactLabel(value)}</option>
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-[#6B7280]">
-                  Shown to your coordinator when they view your profile. Does not affect system notifications.
+                  {translate("profile.preferredContactHint")}
                 </p>
               </div>
               <p className="md:col-span-2 text-xs text-[#6B7280]">
-                Saving contact changes requires your current password confirmation.
+                {translate("profile.saveContactHint")}
               </p>
             </>
           ) : (
             <>
-              <ReadOnlyField label="Email" value={profile.email} />
-              <ReadOnlyField label="Mobile" value={profile.phone} />
               <ReadOnlyField
-                label="Preferred contact method"
+                label={translate("profile.email")}
+                value={profile.email}
+                emptyLabel={translate("common.emDash")}
+              />
+              <ReadOnlyField
+                label={translate("profile.mobile")}
+                value={profile.phone}
+                emptyLabel={translate("common.emDash")}
+              />
+              <ReadOnlyField
+                label={translate("profile.preferredContact")}
                 value={
                   profile.preferred_contact_method
-                    ? PREFERRED_CONTACT_LABELS[profile.preferred_contact_method]
-                    : "In-app message"
+                    ? contactLabel(profile.preferred_contact_method)
+                    : translate("profile.inAppMessage")
                 }
+                emptyLabel={translate("common.emDash")}
               />
             </>
           )}
@@ -380,14 +452,14 @@ export default function WorkerProfile() {
             <LockKeyhole className="h-5 w-5 text-[#3730A3]" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#111827]">Change password</h2>
-            <p className="text-sm text-[#6B7280]">Minimum 8 characters with 1 uppercase letter and 1 number.</p>
+            <h2 className="text-lg font-bold text-[#111827]">{translate("profile.changePassword")}</h2>
+            <p className="text-sm text-[#6B7280]">{translate("profile.passwordPolicyHint")}</p>
           </div>
         </div>
 
         <form onSubmit={handleChangePassword} className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <Label htmlFor="current-password">Current password</Label>
+            <Label htmlFor="current-password">{translate("profile.currentPassword")}</Label>
             <PasswordInput
               id="current-password"
               value={currentPassword}
@@ -397,7 +469,7 @@ export default function WorkerProfile() {
             />
           </div>
           <div>
-            <Label htmlFor="new-password">New password</Label>
+            <Label htmlFor="new-password">{translate("profile.newPassword")}</Label>
             <PasswordInput
               id="new-password"
               value={newPassword}
@@ -417,13 +489,13 @@ export default function WorkerProfile() {
                   ))}
                 </div>
                 <p className="mt-1 text-xs font-medium text-[#6B7280]">
-                  Strength: {passwordStrengthLabel(strength)}
+                  {translate("profile.strength")} {strengthLabel(strength)}
                 </p>
               </div>
             ) : null}
           </div>
           <div>
-            <Label htmlFor="confirm-password">Confirm new password</Label>
+            <Label htmlFor="confirm-password">{translate("profile.confirmPassword")}</Label>
             <PasswordInput
               id="confirm-password"
               value={confirmPassword}
@@ -439,7 +511,7 @@ export default function WorkerProfile() {
               className="rounded-xl"
               style={{ background: PLUM }}
             >
-              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update password"}
+              {changingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("profile.updatePassword")}
             </Button>
           </div>
         </form>
@@ -447,21 +519,21 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#111827]">Desktop notifications</h2>
+          <h2 className="text-lg font-bold text-[#111827]">{translate("profile.desktopNotifications")}</h2>
           <p className="text-sm text-[#6B7280]">
-            Show system alerts (like Slack) when the tab is in the background or for urgent updates.
+            {translate("profile.desktopHint")}
           </p>
         </div>
         {!getDesktopNotificationSupport() ? (
-          <p className="text-sm text-[#6B7280]">Not supported in this browser.</p>
+          <p className="text-sm text-[#6B7280]">{translate("profile.desktopNotSupported")}</p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm font-semibold text-[#111827]">
               {desktopPermission === "granted" && desktopEnabled
-                ? "Enabled"
+                ? translate("profile.desktopStatusEnabled")
                 : desktopPermission === "denied"
-                  ? "Blocked by browser"
-                  : "Not enabled"}
+                  ? translate("profile.desktopStatusBlocked")
+                  : translate("profile.desktopStatusNotEnabled")}
             </p>
             {desktopPermission !== "granted" || !desktopEnabled ? (
               <Button
@@ -470,7 +542,7 @@ export default function WorkerProfile() {
                 style={{ background: PLUM }}
                 onClick={() => void handleEnableDesktopNotifications()}
               >
-                Enable desktop notifications
+                {translate("profile.enableDesktop")}
               </Button>
             ) : (
               <Button
@@ -479,7 +551,7 @@ export default function WorkerProfile() {
                 className="rounded-xl"
                 onClick={handleDisableDesktopNotifications}
               >
-                Disable on this device
+                {translate("profile.disableDesktop")}
               </Button>
             )}
           </div>
@@ -488,18 +560,18 @@ export default function WorkerProfile() {
 
       <section className="rounded-[1.5rem] border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="mb-5">
-          <h2 className="text-lg font-bold text-[#111827]">Notification preferences</h2>
+          <h2 className="text-lg font-bold text-[#111827]">{translate("profile.notificationPrefs")}</h2>
           <p className="text-sm text-[#6B7280]">
-            Saved for this device. Choose how you want to be notified for each event type.
+            {translate("profile.notificationPrefsHint")}
           </p>
         </div>
 
         {notificationPrefs ? (
           <div className="space-y-4">
             <div className="hidden md:grid md:grid-cols-[1.4fr_repeat(3,0.5fr)] gap-3 px-2 text-[11px] font-bold uppercase tracking-wider text-[#6B7280]">
-              <span>Event</span>
+              <span>{translate("profile.event")}</span>
               {CHANNELS.map((channel) => (
-                <span key={channel} className="text-center">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
+                <span key={channel} className="text-center">{channelLabel(channel)}</span>
               ))}
             </div>
             {EVENTS.map((event) => (
@@ -508,10 +580,10 @@ export default function WorkerProfile() {
                 className="grid gap-3 rounded-2xl border px-4 py-3 md:grid-cols-[1.4fr_repeat(3,0.5fr)] md:items-center"
                 style={{ borderColor: BORDER }}
               >
-                <p className="text-sm font-semibold text-[#111827]">{NOTIFICATION_EVENT_LABELS[event]}</p>
+                <p className="text-sm font-semibold text-[#111827]">{eventLabel(event)}</p>
                 {CHANNELS.map((channel) => (
                   <div key={channel} className="flex items-center justify-between md:justify-center gap-3">
-                    <span className="text-xs text-[#6B7280] md:hidden">{NOTIFICATION_CHANNEL_LABELS[channel]}</span>
+                    <span className="text-xs text-[#6B7280] md:hidden">{channelLabel(channel)}</span>
                     <Switch
                       checked={notificationPrefs[event][channel]}
                       disabled={savingPrefs}

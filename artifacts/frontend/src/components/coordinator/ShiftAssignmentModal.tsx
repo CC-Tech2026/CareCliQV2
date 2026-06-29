@@ -4,6 +4,7 @@ import { format, addHours } from "date-fns";
 import { Link } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   assignShift,
   getCoordinatorCredentialAlerts,
@@ -38,11 +39,11 @@ const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
 const SOFT   = "var(--cc-soft)";
 
-const SHIFT_TYPE_LABELS: Record<string, string> = {
-  standard_support: "Standard Support",
-  community_access: "Community Access",
-  allied_health:    "Allied Health Session",
-  respite_care:     "Respite Care",
+const SHIFT_TYPE_KEYS: Record<string, string> = {
+  standard_support: "coordinator.bulkShift.shiftType.standardSupport",
+  community_access: "coordinator.bulkShift.shiftType.communityAccess",
+  allied_health:    "coordinator.bulkShift.shiftType.alliedHealth",
+  respite_care:     "coordinator.bulkShift.shiftType.respiteCare",
 };
 
 interface ShiftAssignmentModalProps {
@@ -58,6 +59,7 @@ export function ShiftAssignmentModal({
   worker,
   workers = [],
 }: ShiftAssignmentModalProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const qc   = useQueryClient();
   const auth = useAuth();
@@ -128,18 +130,18 @@ export function ShiftAssignmentModal({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
       toast({
-        title: selectedWorkerId ? "Shift assigned" : "Shift created",
+        title: selectedWorkerId ? translate("coordinator.shiftAssign.assigned") : translate("coordinator.shiftAssign.created"),
         description: selectedWorkerId
-          ? "Worker has been notified of the new shift."
-          : "Unassigned shift added to the roster.",
+          ? translate("coordinator.shiftAssign.workerNotified")
+          : translate("coordinator.shiftAssign.unassignedAdded"),
       });
       resetForm();
       onOpenChange(false);
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to assign shift",
-        description: error.message || "Please check the details and try again.",
+        title: translate("coordinator.shiftAssign.failed"),
+        description: error.message || translate("coordinator.shiftAssign.failedDesc"),
         variant: "destructive",
       });
     },
@@ -184,10 +186,10 @@ export function ShiftAssignmentModal({
 
   const credColor = credStatusQuery.isLoading ? MUTED : hasBlock ? "#DC2626" : hasExpiring ? "#D97706" : "#16A34A";
   const credLabel = credStatusQuery.isLoading
-    ? "Checking credentials…"
-    : hasBlock   ? "Credentials invalid — cannot assign"
-    : hasExpiring ? "Credentials expiring soon"
-    : "Credentials valid";
+    ? translate("coordinator.shiftAssign.checkingCredentials")
+    : hasBlock   ? translate("coordinator.shiftAssign.credentialsInvalid")
+    : hasExpiring ? translate("coordinator.shiftAssign.credentialsExpiring")
+    : translate("coordinator.shiftAssign.credentialsValid");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,7 +199,7 @@ export function ShiftAssignmentModal({
       >
         {/* Header */}
         <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Create Shift</h2>
+          <h2 className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.shiftAssign.title")}</h2>
           <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
             Schedule a new shift. Assign a worker now or leave unassigned for later.
           </p>
@@ -209,7 +211,7 @@ export function ShiftAssignmentModal({
           <div className="space-y-2">
             <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
               Support Worker
-              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>optional</span>
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate("common.optional")}</span>
             </label>
             {worker ? (
               <div
@@ -229,7 +231,7 @@ export function ShiftAssignmentModal({
                       <p className="text-[11px]" style={{
                         color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
                       }}>
-                        {worker.avg_compliance.toFixed(0)}% compliance
+                        {translateParams("coordinator.shiftAssign.compliancePct", { pct: worker.avg_compliance.toFixed(0) })}
                       </p>
                     )}
                   </div>
@@ -271,10 +273,10 @@ export function ShiftAssignmentModal({
 
           {/* Participant */}
           <div className="space-y-2">
-            <label className="text-[12px] font-black" style={{ color: TEXT }}>Participant</label>
+            <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("common.participant")}</label>
             <Select value={selectedParticipantId} onValueChange={setSelectedParticipantId}>
               <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                <SelectValue placeholder="Select a participant…" />
+                <SelectValue placeholder={translate("coordinator.shiftAssign.selectParticipant")} />
               </SelectTrigger>
               <SelectContent>
                 {participantList.map((p) => (
@@ -309,10 +311,10 @@ export function ShiftAssignmentModal({
                     }}
                   >
                     {goalsTasksCheckQuery.isLoading
-                      ? "Checking goals & tasks…"
+                      ? translate("coordinator.shiftAssign.checkingGoals")
                       : hasGoalsTasksError
-                      ? "No NDIS goals or tasks set up"
-                      : "Goals & tasks configured"}
+                      ? translate("coordinator.shiftAssign.noGoalsTasks")
+                      : translate("coordinator.shiftAssign.goalsConfigured")}
                   </p>
                   {hasGoalsTasksError && (
                     <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
@@ -330,14 +332,14 @@ export function ShiftAssignmentModal({
           {/* Shift type */}
           {!hasGoalsTasksError && (
             <div className="space-y-2">
-              <label className="text-[12px] font-black" style={{ color: TEXT }}>Shift Type</label>
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.shiftType")}</label>
               <Select value={shiftType} onValueChange={setShiftType}>
                 <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(SHIFT_TYPE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  {Object.keys(SHIFT_TYPE_KEYS).map((value) => (
+                    <SelectItem key={value} value={value}>{translate(SHIFT_TYPE_KEYS[value])}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -348,7 +350,7 @@ export function ShiftAssignmentModal({
           {!hasGoalsTasksError && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>Start</label>
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.start")}</label>
                 <Input
                   type="datetime-local"
                   value={scheduledStart}
@@ -359,7 +361,7 @@ export function ShiftAssignmentModal({
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>End</label>
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.end")}</label>
                   {scheduledStart && !scheduledEnd && (
                     <button type="button" onClick={handleQuickEnd} className="text-[11px] font-bold" style={{ color: PLUM }}>
                       +4 hrs
@@ -380,7 +382,7 @@ export function ShiftAssignmentModal({
           {/* Task selection */}
           {!hasGoalsTasksError && goalsTasksValid && (tasksQuery.data ?? []).length > 0 && (
             <div className="space-y-2">
-              <label className="text-[12px] font-black" style={{ color: TEXT }}>Tasks to work on (optional)</label>
+              <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.shiftAssign.tasksOptional")}</label>
               <p className="text-[11px]" style={{ color: MUTED }}>
                 Select tasks for the worker to complete during this shift
               </p>
@@ -452,8 +454,8 @@ export function ShiftAssignmentModal({
                     <div className="mt-2 space-y-0.5">
                       {workerAlerts.slice(0, 3).map((a) => (
                         <p key={`${a.credential_id ?? a.credential_type}`} className="text-[11px]" style={{ color: "#92400E" }}>
-                          {a.title || a.credential_type || "Credential"} – {a.status}
-                          {a.expiry_date ? ` (expires ${a.expiry_date})` : ""}
+                          {a.title || a.credential_type || translate("coordinator.shiftAssign.credential")} – {a.status}
+                          {a.expiry_date ? ` (${translateParams("coordinator.shiftAssign.expires", { date: a.expiry_date })})` : ""}
                         </p>
                       ))}
                     </div>
@@ -466,15 +468,20 @@ export function ShiftAssignmentModal({
           {/* Summary */}
           {selectedParticipant && scheduledStart && !hasGoalsTasksError && (
             <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
-              <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>Shift Summary</p>
+              <p className="text-[11px] font-black uppercase tracking-widest mb-2.5" style={{ color: MUTED }}>{translate("coordinator.shiftAssign.shiftSummary")}</p>
               <div className="space-y-1.5 text-[12px]">
                 {([
-                  ["Worker",      selectedWorkerData?.full_name ?? "Unassigned"],
-                  ["Participant", selectedParticipant.full_name],
-                  ["Type",        SHIFT_TYPE_LABELS[shiftType] || shiftType],
-                  ["Start",       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
-                  ...(scheduledEnd ? [["End", format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
-                  ...(selectedTaskIds.length > 0 ? [["Tasks", `${selectedTaskIds.length} selected`] as [string, string]] : []),
+                  [translate("common.worker"),      selectedWorkerData?.full_name ?? translate("coordinator.shiftAssign.unassigned")],
+                  [translate("common.participant"), selectedParticipant.full_name],
+                  [translate("coordinator.shiftAssign.type"),        translate(SHIFT_TYPE_KEYS[shiftType] ?? shiftType)],
+                  [translate("coordinator.shiftAssign.start"),       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
+                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
+                  ...(selectedTaskIds.length > 0
+                    ? [[
+                        translate("coordinator.shiftAssign.tasksOptional").split(" (")[0],
+                        translateParams("coordinator.shiftAssign.tasksSelected", { count: String(selectedTaskIds.length) }),
+                      ]]
+                    : []),
                 ] as [string, string][]).map(([label, value]) => (
                   <div key={label} className="flex items-center justify-between gap-4">
                     <span style={{ color: MUTED }}>{label}</span>
@@ -511,15 +518,15 @@ export function ShiftAssignmentModal({
             style={{ background: canSubmit ? PLUM : MUTED }}
           >
             {assignMut.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> {selectedWorkerId ? "Assigning…" : "Creating…"}</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {selectedWorkerId ? translate("coordinator.shiftAssign.assigning") : translate("coordinator.shiftAssign.creating")}</>
             ) : hasGoalsTasksError ? (
-              <><AlertTriangle size={14} /> Set Up Goals First</>
+              <><AlertTriangle size={14} /> {translate("coordinator.shiftAssign.setupGoalsFirst")}</>
             ) : hasBlock ? (
-              <><AlertTriangle size={14} /> Credentials Required</>
+              <><AlertTriangle size={14} /> {translate("coordinator.shiftAssign.credentialsRequired")}</>
             ) : selectedWorkerId ? (
-              <><CalendarClock size={14} /> Assign Shift</>
+              <><CalendarClock size={14} /> {translate("coordinator.shiftAssign.assignShift")}</>
             ) : (
-              <><CalendarClock size={14} /> Create Unassigned Shift</>
+              <><CalendarClock size={14} /> {translate("coordinator.shiftAssign.createUnassigned")}</>
             )}
           </Button>
         </div>

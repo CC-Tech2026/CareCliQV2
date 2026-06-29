@@ -19,6 +19,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM  = "var(--cc-plum)";
@@ -62,17 +63,18 @@ function scoreColor(score: number) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg: Record<string, { color: string; bg: string; label: string }> = {
-    compliant:     { color: "#16A34A", bg: "rgba(22,163,74,0.08)",    label: "Compliant"     },
-    at_risk:       { color: "#D97706", bg: "rgba(245,158,11,0.08)",   label: "At Risk"       },
-    non_compliant: { color: "#DC2626", bg: "rgba(239,68,68,0.08)",    label: "Non-Compliant" },
-    draft:         { color: T3,        bg: `rgba(55,48,163,0.06)`,    label: "Draft"         },
+  const { translate } = useAccessibility();
+  const cfg: Record<string, { color: string; bg: string; labelKey: string }> = {
+    compliant:     { color: "#16A34A", bg: "rgba(22,163,74,0.08)",    labelKey: "compliance.page.compliant"     },
+    at_risk:       { color: "#D97706", bg: "rgba(245,158,11,0.08)",   labelKey: "compliance.page.atRisk"       },
+    non_compliant: { color: "#DC2626", bg: "rgba(239,68,68,0.08)",    labelKey: "compliance.page.nonCompliant" },
+    draft:         { color: T3,        bg: `rgba(55,48,163,0.06)`,    labelKey: "compliance.page.status.draft"         },
   };
   const c = cfg[status] ?? cfg.draft;
   return (
     <span className="inline-flex items-center justify-center text-[11px] font-bold px-2.5 h-5 rounded-full leading-none"
       style={{ background: c.bg, color: c.color }}>
-      {c.label}
+      {translate(c.labelKey)}
     </span>
   );
 }
@@ -82,11 +84,12 @@ function StatusBadge({ status }: { status: string }) {
 // at_risk + completed session = worker acknowledged Warn-tier rules.
 // at_risk + incomplete = flagged, not yet submitted.
 function TierChip({ complianceStatus, sessionStatus }: { complianceStatus: string; sessionStatus?: string }) {
+  const { translate } = useAccessibility();
   if (complianceStatus === "non_compliant" && sessionStatus !== "completed") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 h-4 rounded-full leading-none"
         style={{ background: "rgba(239,68,68,0.10)", color: "#DC2626" }}>
-        Blocked
+        {translate("compliance.page.tier.blocked")}
       </span>
     );
   }
@@ -94,7 +97,7 @@ function TierChip({ complianceStatus, sessionStatus }: { complianceStatus: strin
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 h-4 rounded-full leading-none"
         style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}>
-        Warned
+        {translate("compliance.page.tier.warned")}
       </span>
     );
   }
@@ -105,9 +108,9 @@ function aggregateFailingRules(sessions: ExtendedReportItem[]) {
   const counts: Record<string, number> = {};
   for (const s of sessions) {
     if ((s.compliance_score ?? 100) < 85) {
-      if (!s.goals_linked)                   counts["Goals not linked to NDIS plan"]  = (counts["Goals not linked to NDIS plan"]  || 0) + 1;
-      if (!s.notes_length || s.notes_length < 50) counts["Insufficient clinical notes"] = (counts["Insufficient clinical notes"] || 0) + 1;
-      if (!s.duration_minutes)               counts["Duration not recorded"]           = (counts["Duration not recorded"]          || 0) + 1;
+      if (!s.goals_linked)                   counts["compliance.page.rule.goalsNotLinked"]  = (counts["compliance.page.rule.goalsNotLinked"]  || 0) + 1;
+      if (!s.notes_length || s.notes_length < 50) counts["compliance.page.rule.insufficientNotes"] = (counts["compliance.page.rule.insufficientNotes"] || 0) + 1;
+      if (!s.duration_minutes)               counts["compliance.page.rule.durationNotRecorded"]           = (counts["compliance.page.rule.durationNotRecorded"]          || 0) + 1;
     }
   }
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -121,6 +124,7 @@ function Check({ pass, warn = false }: { pass: boolean; warn?: boolean }) {
 
 // ── Page Component ────────────────────────────────────────────────────────────
 export default function Compliance() {
+  const { translate, translateParams } = useAccessibility();
   const queryClient = useQueryClient();
   const { data: rawOverview, isLoading: overviewLoading } = useGetComplianceOverview();
   const { data: rawReport,   isLoading: reportLoading   } = useGetComplianceReport();
@@ -145,9 +149,9 @@ export default function Compliance() {
   };
 
   const patternTypeLabel = (type: AiDetectedPattern["pattern_type"]) => {
-    if (type === "low_compliance_pair") return "Coaching need";
-    if (type === "incident_escalation") return "Incident escalation";
-    return "Behaviour support";
+    if (type === "low_compliance_pair") return translate("compliance.page.pattern.coaching");
+    if (type === "incident_escalation") return translate("compliance.page.pattern.incident");
+    return translate("compliance.page.pattern.behaviour");
   };
 
   const overview    = rawOverview as unknown as ExtendedComplianceOverview | undefined;
@@ -184,7 +188,7 @@ export default function Compliance() {
       {/* ── Header Area ── */}
       <div className="border-b pb-4" style={{ borderColor: BORDER }}>
         <p className="hidden" style={{ color: T3 }}>Support Coordinator</p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Compliance Centre</h1>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("compliance.page.title")}</h1>
       </div>
 
       {/* ── Analytical Gauge & Performance Cards ── */}
@@ -194,7 +198,7 @@ export default function Compliance() {
         <div className="bg-white rounded-2xl p-5 flex flex-col items-center justify-between min-h-[196px] text-center"
           style={{ boxShadow: CARD_SHADOW }}>
           <p className="text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: T3 }}>
-            Overall Score
+            {translate("compliance.page.overallScore")}
           </p>
           {overviewLoading ? (
             <Skeleton className="h-[114px] w-[114px] rounded-full my-1" />
@@ -213,13 +217,13 @@ export default function Compliance() {
                   {Math.round(avg)}
                 </span>
                 <span className="text-[10px] font-bold mt-1 opacity-60 leading-none" style={{ color: T3 }}>
-                  / 100
+                  {translate("compliance.page.scoreOf100")}
                 </span>
               </div>
             </div>
           )}
           <p className="flex items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wider leading-none" style={{ color: T3 }}>
-            <TrendingUp size={13} style={{ color: CORAL }} /> NDIS Audit Score
+            <TrendingUp size={13} style={{ color: CORAL }} /> {translate("compliance.page.ndisAuditScore")}
           </p>
         </div>
 
@@ -230,8 +234,8 @@ export default function Compliance() {
               <div className="flex items-center justify-between px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <FileCheck2 size={14} className="text-emerald-600 shrink-0" />
-                  <span className="text-sm font-bold text-emerald-700">Compliant</span>
-                  <span className="text-[11px]" style={{ color: T3 }}>≥ 85%</span>
+                  <span className="text-sm font-bold text-emerald-700">{translate("compliance.page.compliant")}</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.compliantRange")}</span>
                 </div>
                 {overviewLoading
                   ? <Skeleton className="h-6 w-12" />
@@ -240,8 +244,8 @@ export default function Compliance() {
               <div className="flex items-center justify-between px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-500 shrink-0" />
-                  <span className="text-sm font-bold text-amber-700">At Risk</span>
-                  <span className="text-[11px]" style={{ color: T3 }}>60–84%</span>
+                  <span className="text-sm font-bold text-amber-700">{translate("compliance.page.atRisk")}</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.atRiskRange")}</span>
                 </div>
                 {overviewLoading
                   ? <Skeleton className="h-6 w-12" />
@@ -250,8 +254,8 @@ export default function Compliance() {
               <div className="flex items-center justify-between px-5 py-3.5">
                 <div className="flex items-center gap-2">
                   <XCircle size={14} className="text-red-600 shrink-0" />
-                  <span className="text-sm font-bold text-red-700">Non-Compliant</span>
-                  <span className="text-[11px]" style={{ color: T3 }}>&lt; 60%</span>
+                  <span className="text-sm font-bold text-red-700">{translate("compliance.page.nonCompliant")}</span>
+                  <span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.nonCompliantRange")}</span>
                 </div>
                 {overviewLoading
                   ? <Skeleton className="h-6 w-12" />
@@ -265,7 +269,7 @@ export default function Compliance() {
             style={{ background: `${PLUM}06`, border: `1px solid rgba(55,48,163,0.10)` }}>
             <Info size={14} className="shrink-0 mt-0.5" style={{ color: PLUM }} />
             <p className="text-[12px] leading-relaxed font-medium" style={{ color: T2 }}>
-              NDIS audit readiness requires a score of 85%+. At-risk sessions may be rejected during automated claims processing.
+              {translate("compliance.page.guidelines")}
             </p>
           </div>
         </div>
@@ -278,9 +282,9 @@ export default function Compliance() {
         <div className="bg-white rounded-2xl p-5 flex flex-col" style={{ boxShadow: CARD_SHADOW }}>
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 size={15} style={{ color: T3 }} />
-            <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>Most Common Issues</h2>
+            <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>{translate("compliance.page.commonIssues")}</h2>
           </div>
-          <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>Top documentation gaps across current sessions</p>
+          <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>{translate("compliance.page.commonIssuesSubtitle")}</p>
 
           <div className="flex-1 flex flex-col justify-center">
             {reportLoading ? (
@@ -290,19 +294,19 @@ export default function Compliance() {
             ) : failingRules.length === 0 ? (
               <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-green-50/50 border border-green-100 text-[#16A34A]">
                 <CheckCircle2 size={15} />
-                <span className="text-[13px] font-bold">Excellent documentation compliance!</span>
+                <span className="text-[13px] font-bold">{translate("compliance.page.excellentDocs")}</span>
               </div>
             ) : (
               <div className="space-y-3.5">
-                {failingRules.map(([rule, count], i) => {
+                {failingRules.map(([ruleKey, count], i) => {
                   const total = reportItems.length || 1;
                   const pct = Math.round((count / total) * 100);
                   return (
                     <div key={i} className="space-y-1.5">
                       <div className="flex justify-between items-center text-[13px]">
-                        <span className="font-semibold truncate max-w-[70%]" style={{ color: T2 }}>{rule}</span>
+                        <span className="font-semibold truncate max-w-[70%]" style={{ color: T2 }}>{translate(ruleKey)}</span>
                         <span className="font-bold shrink-0" style={{ color: pct >= 50 ? "#DC2626" : "#D97706" }}>
-                          {count} session{count > 1 ? "s" : ""}
+                          {translateParams(count > 1 ? "compliance.page.sessionCountPlural" : "compliance.page.sessionCount", { count: String(count) })}
                         </span>
                       </div>
                       <Progress
@@ -322,9 +326,9 @@ export default function Compliance() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <DollarSign size={15} style={{ color: T3 }} />
-              <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>Budget Impact</h2>
+              <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>{translate("compliance.page.budgetImpact")}</h2>
             </div>
-            <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>Financial exposures resulting from non-compliant logs</p>
+            <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>{translate("compliance.page.budgetImpactSubtitle")}</p>
           </div>
 
           {overviewLoading ? (
@@ -334,18 +338,18 @@ export default function Compliance() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl p-3.5 bg-red-50/40 border border-red-100/70">
                   <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#DC2626" }}>
-                    At-Risk Revenue
+                    {translate("compliance.page.atRiskRevenue")}
                   </p>
                   <p className="text-[20px] font-black tracking-tight leading-none" style={{ color: T1 }}>
                     ${Number(estimatedLostRevenue).toLocaleString()}
                   </p>
                   <p className="text-[11px] font-semibold mt-1.5 leading-none" style={{ color: "#DC2626" }}>
-                    from {nonCompliant} log{nonCompliant !== 1 ? "s" : ""}
+                    {translateParams(nonCompliant !== 1 ? "compliance.page.fromLogsPlural" : "compliance.page.fromLogs", { count: String(nonCompliant) })}
                   </p>
                 </div>
                 <div className="rounded-xl p-3.5 bg-green-50/40 border border-green-100/70">
                   <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: "#16A34A" }}>
-                    Claim Readiness
+                    {translate("compliance.page.claimReadiness")}
                   </p>
                   <p className="text-[20px] font-black tracking-tight leading-none" style={{ color: T1 }}>
                     {(overview?.total_sessions ?? 0) > 0
@@ -353,7 +357,7 @@ export default function Compliance() {
                       : 0}%
                   </p>
                   <p className="text-[11px] font-semibold mt-1.5 leading-none" style={{ color: "#16A34A" }}>
-                    sessions secure
+                    {translate("compliance.page.sessionsSecure")}
                   </p>
                 </div>
               </div>
@@ -361,11 +365,11 @@ export default function Compliance() {
               {budgetWarnings.length > 0 && (
                 <div className="rounded-xl border border-amber-100/80 bg-amber-50/30 p-3 space-y-2">
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#D97706" }}>
-                    NDIS Plan Budget Advisories
+                    {translate("compliance.page.budgetAdvisories")}
                   </p>
                   {budgetWarnings.slice(0, 4).map((w, i) => (
                     <div key={`${w.session_id}-${w.rule}-${i}`} className="text-[12px] leading-snug" style={{ color: T2 }}>
-                      <span className="font-bold">{w.participant_name ?? "Participant"}</span>
+                      <span className="font-bold">{w.participant_name ?? translate("compliance.page.participantFallback")}</span>
                       {w.session_date ? (() => {
                         try { return ` · ${format(parseISO(String(w.session_date)), "MMM d, yyyy")}`; }
                         catch { return ` · ${w.session_date}`; }
@@ -377,7 +381,7 @@ export default function Compliance() {
                   ))}
                   {budgetWarnings.length > 4 && (
                     <p className="text-[11px] font-semibold" style={{ color: T3 }}>
-                      +{budgetWarnings.length - 4} more budget advisory{budgetWarnings.length - 4 !== 1 ? "ies" : ""}
+                      {translateParams(budgetWarnings.length - 4 !== 1 ? "compliance.page.moreAdvisoriesPlural" : "compliance.page.moreAdvisories", { count: String(budgetWarnings.length - 4) })}
                     </p>
                   )}
                 </div>
@@ -387,7 +391,7 @@ export default function Compliance() {
                 <div className="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 bg-amber-50/40 border border-amber-100/70">
                   <Lightbulb size={14} className="shrink-0 mt-0.5" style={{ color: CORAL }} />
                   <p className="text-[12px] font-medium leading-normal" style={{ color: T2 }}>
-                    Amending the <span className="font-bold">{nonCompliant} non-compliant</span> files listed below can re-stabilize up to ${Number(estimatedLostRevenue).toLocaleString()} in pending claims.
+                    {translateParams("compliance.page.amendTip", { count: String(nonCompliant), amount: Number(estimatedLostRevenue).toLocaleString() })}
                   </p>
                 </div>
               )}
@@ -400,10 +404,10 @@ export default function Compliance() {
       <div className="bg-white rounded-2xl p-5 shrink-0" style={{ boxShadow: CARD_SHADOW }}>
         <div className="flex items-center gap-2 mb-1">
           <Sparkles size={15} style={{ color: PLUM }} />
-          <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>AI Detected Patterns</h2>
+          <h2 className="text-[15px] font-bold tracking-tight" style={{ color: T1 }}>{translate("compliance.page.aiPatterns")}</h2>
         </div>
         <p className="text-[12px] font-medium mb-4" style={{ color: T3 }}>
-          Cross-session risk patterns from weekly org analysis — dismiss when reviewed
+          {translate("compliance.page.aiPatternsSubtitle")}
         </p>
 
         {patternsLoading ? (
@@ -413,7 +417,7 @@ export default function Compliance() {
         ) : aiPatterns.length === 0 ? (
           <div className="flex items-center gap-2 rounded-xl px-4 py-3 bg-slate-50/80 border border-slate-100 text-[13px]" style={{ color: T3 }}>
             <CheckCircle2 size={15} className="shrink-0 text-emerald-600" />
-            <span className="font-medium">No active patterns detected for your organisation.</span>
+            <span className="font-medium">{translate("compliance.page.noPatterns")}</span>
           </div>
         ) : (
           <div className="space-y-2.5">
@@ -458,7 +462,7 @@ export default function Compliance() {
                     {dismissingId === pattern.id ? "…" : (
                       <>
                         <X size={12} className="mr-1" />
-                        Dismiss
+                        {translate("compliance.page.dismiss")}
                       </>
                     )}
                   </Button>
@@ -476,23 +480,23 @@ export default function Compliance() {
         <div className="flex items-center justify-between gap-4 flex-wrap px-5 py-3.5 border-b shrink-0 bg-slate-50/40"
           style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex flex-col justify-center">
-            <h2 className="text-[16px] font-bold tracking-tight" style={{ color: T1 }}>Session Audit Log</h2>
+            <h2 className="text-[16px] font-bold tracking-tight" style={{ color: T1 }}>{translate("compliance.page.auditLog")}</h2>
             <p className="text-[12px] font-semibold mt-1 leading-none" style={{ color: T3 }}>
-              {filteredSessions.length} total file entry{filteredSessions.length !== 1 ? "s" : ""} identified
+              {translateParams(filteredSessions.length !== 1 ? "compliance.page.auditLogCountPlural" : "compliance.page.auditLogCount", { count: String(filteredSessions.length) })}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Filter size={13} style={{ color: T3 }} />
             <Select value={statusFilter} onValueChange={v => setStatusFilter(v as ClaimStatus)}>
               <SelectTrigger className="h-9 w-44 text-[13px] rounded-xl font-medium shadow-sm bg-white" style={{ borderColor: BORDER, color: T2 }}>
-                <SelectValue placeholder="Filter profile type" />
+                <SelectValue placeholder={translate("compliance.page.filterPlaceholder")} />
               </SelectTrigger>
               <SelectContent className="rounded-xl">
-                <SelectItem value="all" className="text-[13px]">All Sessions</SelectItem>
-                <SelectItem value="compliant" className="text-[13px]">Compliant Only</SelectItem>
-                <SelectItem value="at_risk" className="text-[13px]">At Risk Profile</SelectItem>
-                <SelectItem value="non_compliant" className="text-[13px]">Non-Compliant Logs</SelectItem>
-                <SelectItem value="draft" className="text-[13px]">Draft Records</SelectItem>
+                <SelectItem value="all" className="text-[13px]">{translate("compliance.page.filter.all")}</SelectItem>
+                <SelectItem value="compliant" className="text-[13px]">{translate("compliance.page.filter.compliant")}</SelectItem>
+                <SelectItem value="at_risk" className="text-[13px]">{translate("compliance.page.filter.atRisk")}</SelectItem>
+                <SelectItem value="non_compliant" className="text-[13px]">{translate("compliance.page.filter.nonCompliant")}</SelectItem>
+                <SelectItem value="draft" className="text-[13px]">{translate("compliance.page.filter.draft")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -507,8 +511,8 @@ export default function Compliance() {
           ) : filteredSessions.length === 0 ? (
             <div className="py-16 flex flex-col items-center justify-center gap-2 text-center" style={{ color: T3 }}>
               <ShieldCheck size={28} className="opacity-30 mb-1" />
-              <p className="text-[14px] font-bold" style={{ color: T1 }}>No corresponding logs matching</p>
-              <p className="text-[12px] max-w-xs -mt-1 leading-normal">Modify the filtering configuration or add an authorization record tracking script.</p>
+              <p className="text-[14px] font-bold" style={{ color: T1 }}>{translate("compliance.page.empty.title")}</p>
+              <p className="text-[12px] max-w-xs -mt-1 leading-normal">{translate("compliance.page.empty.subtitle")}</p>
             </div>
           ) : (
             <>
@@ -517,7 +521,15 @@ export default function Compliance() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b bg-slate-50/70" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-                      {["Date", "Participant", "Session Type", "Compliance Score", "Status", "Checks Checkbox", ""].map((h, i) => (
+                      {[
+                        translate("compliance.page.col.date"),
+                        translate("compliance.page.col.participant"),
+                        translate("compliance.page.col.sessionType"),
+                        translate("compliance.page.col.score"),
+                        translate("compliance.page.col.status"),
+                        translate("compliance.page.col.checks"),
+                        "",
+                      ].map((h, i) => (
                         <th key={i} className="px-5 py-3 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>
                           {h.split(" ")[0]}
                         </th>
@@ -536,7 +548,7 @@ export default function Compliance() {
                       <tr key={String(item.session_id)} className="transition-colors duration-150 hover:bg-[#F6F4FB]/30 group">
                         <td className="px-5 py-3.5 text-[13px] font-semibold whitespace-nowrap" style={{ color: T2 }}>{dateStr}</td>
                         <td className="px-5 py-3.5 text-[13px] font-medium max-w-[140px] truncate" style={{ color: T1 }}>
-                          {String(item.participant_name ?? "Unassigned Case")}
+                          {String(item.participant_name ?? translate("compliance.page.unassigned"))}
                         </td>
                         <td className="px-5 py-3.5 text-[12px] font-medium max-w-[120px] truncate" style={{ color: T3 }}>
                           {String(item.session_type ?? "—")}
@@ -582,7 +594,7 @@ export default function Compliance() {
                           <Link href={`/sessions/${String(item.session_id)}`}>
                             <button className="text-[12px] font-bold px-3 py-1.5 rounded-lg border border-transparent transition-all hover:bg-purple-50 hover:text-[#3730A3] active:scale-[0.97]"
                               style={{ color: CORAL }}>
-                              Review &rarr;
+                              {translate("compliance.page.review")}
                             </button>
                           </Link>
                         </td>
@@ -607,7 +619,7 @@ export default function Compliance() {
                       {/* Header: Date + Status */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div>
-                          <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Date</p>
+                          <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>{translate("compliance.page.col.date")}</p>
                           <p className="text-[13px] font-semibold mt-0.5" style={{ color: T2 }}>{dateStr}</p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -618,15 +630,15 @@ export default function Compliance() {
 
                       {/* Participant */}
                       <div className="mb-3">
-                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Participant</p>
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>{translate("compliance.page.col.participant")}</p>
                         <p className="text-[13px] font-medium mt-0.5 line-clamp-2" style={{ color: T1 }}>
-                          {String(item.participant_name ?? "Unassigned Case")}
+                          {String(item.participant_name ?? translate("compliance.page.unassigned"))}
                         </p>
                       </div>
 
                       {/* Session Type */}
                       <div className="mb-3">
-                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Session Type</p>
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>{translate("compliance.page.col.sessionType")}</p>
                         <p className="text-[12px] font-medium mt-0.5" style={{ color: T3 }}>
                           {String(item.session_type ?? "—")}
                         </p>
@@ -634,7 +646,7 @@ export default function Compliance() {
 
                       {/* Compliance Score */}
                       <div className="mb-3 pb-3 border-b" style={{ borderColor: "rgba(232,213,232,0.3)" }}>
-                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>Compliance Score</p>
+                        <p className="text-[11px] font-black uppercase tracking-wider" style={{ color: T3 }}>{translate("compliance.page.col.score")}</p>
                         <div className="mt-1.5 flex items-baseline gap-3">
                           {item.compliance_score != null ? (
                             <>
@@ -653,19 +665,19 @@ export default function Compliance() {
 
                       {/* Checks */}
                       <div className="mb-3">
-                        <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: T3 }}>Compliance Checks</p>
+                        <p className="text-[11px] font-black uppercase tracking-wider mb-1.5" style={{ color: T3 }}>{translate("compliance.page.complianceChecks")}</p>
                         <div className="flex items-center gap-3">
                           {item.checks ? (
                             <>
-                              <div className="flex items-center gap-1"><Check pass={!!item.checks.notes_present} /><span className="text-[11px]" style={{ color: T3 }}>Notes</span></div>
-                              <div className="flex items-center gap-1"><Check pass={!!item.checks.duration_recorded} /><span className="text-[11px]" style={{ color: T3 }}>Duration</span></div>
-                              <div className="flex items-center gap-1"><Check pass={!!item.checks.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>Goals</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.notes_present} /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.notes")}</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.duration_recorded} /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.duration")}</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.checks.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.goals")}</span></div>
                             </>
                           ) : (
                             <>
-                              <div className="flex items-center gap-1"><Check pass={(item.notes_length ?? 0) > 50} /><span className="text-[11px]" style={{ color: T3 }}>Notes</span></div>
-                              <div className="flex items-center gap-1"><Check pass={!!item.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>Goals</span></div>
-                              <div className="flex items-center gap-1"><Check pass={(item.duration_minutes ?? 0) > 0} /><span className="text-[11px]" style={{ color: T3 }}>Duration</span></div>
+                              <div className="flex items-center gap-1"><Check pass={(item.notes_length ?? 0) > 50} /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.notes")}</span></div>
+                              <div className="flex items-center gap-1"><Check pass={!!item.goals_linked} warn /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.goals")}</span></div>
+                              <div className="flex items-center gap-1"><Check pass={(item.duration_minutes ?? 0) > 0} /><span className="text-[11px]" style={{ color: T3 }}>{translate("compliance.page.checks.duration")}</span></div>
                             </>
                           )}
                         </div>
@@ -674,7 +686,7 @@ export default function Compliance() {
                       {/* Action Button */}
                       <Link href={`/sessions/${String(item.session_id)}`}>
                         <button className="w-full text-[13px] font-bold py-2 rounded-lg border transition-all hover:bg-purple-50" style={{ color: CORAL, borderColor: CORAL }}>
-                          Review Session &rarr;
+                          {translate("compliance.page.reviewSession")}
                         </button>
                       </Link>
                     </div>

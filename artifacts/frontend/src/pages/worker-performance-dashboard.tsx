@@ -1,9 +1,9 @@
 import { ArrowDown, ArrowUp, Award, GraduationCap, Minus, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { getPerformanceDashboard } from "@/services/workerPerformanceService";
-import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
-
+import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 
 function TrendIcon({ direction }: { direction: string }) {
   if (direction === "up") return <ArrowUp size={28} className="text-emerald-600" />;
@@ -12,13 +12,18 @@ function TrendIcon({ direction }: { direction: string }) {
 }
 
 export default function WorkerPerformanceDashboardPage() {
+  const { translate, translateParams } = useAccessibility();
   const { data, isLoading, error } = useOrgQuery(["worker", "performance-dashboard"], {
     queryFn: getPerformanceDashboard,
     staleTime: 30_000,
   });
 
   if (isLoading) {
-    return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard…</div>;
+    return (
+      <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>
+        {translate("performance.loading")}
+      </div>
+    );
   }
   if (error) {
     return <div className="p-6 text-sm font-bold text-red-600">{(error as Error).message}</div>;
@@ -29,10 +34,14 @@ export default function WorkerPerformanceDashboardPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
       <header>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Performance</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Your progress</h1>
+        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          {translate("performance.eyebrow")}
+        </p>
+        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
+          {translate("performance.title")}
+        </h1>
         <p className="mt-2 text-sm font-medium" style={{ color: MUTED }}>
-          Trends, strengths, and milestones from your recent work.
+          {translate("performance.subtitle")}
         </p>
       </header>
 
@@ -43,7 +52,7 @@ export default function WorkerPerformanceDashboardPage() {
         <div className="grid sm:grid-cols-[1fr_auto]">
           <div className="p-6">
             <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
-              30-day compliance average
+              {translate("performance.complianceAvg")}
             </p>
             <p className="mt-2 text-5xl font-black tracking-tight" style={{ color: TEXT }}>
               {data?.average_score_30d ?? "—"}
@@ -64,7 +73,7 @@ export default function WorkerPerformanceDashboardPage() {
           >
             <TrendIcon direction={trend?.direction ?? "stable"} />
             <span className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
-              vs prior month
+              {translate("performance.vsPriorMonth")}
             </span>
           </div>
         </div>
@@ -74,7 +83,7 @@ export default function WorkerPerformanceDashboardPage() {
         <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#059669" }} />
-            <h2 className="text-sm font-black" style={{ color: TEXT }}>Recurring strengths</h2>
+            <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.strengths")}</h2>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {(data?.strengths ?? []).length ? (
@@ -82,14 +91,14 @@ export default function WorkerPerformanceDashboardPage() {
                 <span
                   key={s.label}
                   className="rounded-full px-3 py-1.5 text-xs font-black"
-                  style={{ background: 'var(--cc-status-success-bg)', color: "#059669" }}
+                  style={{ background: "var(--cc-status-success-bg)", color: "#059669" }}
                 >
                   {s.label}
                 </span>
               ))
             ) : (
               <p className="text-sm font-medium" style={{ color: MUTED }}>
-                Strengths appear as coordinators tag your feedback.
+                {translate("performance.strengthsHint")}
               </p>
             )}
           </div>
@@ -98,7 +107,7 @@ export default function WorkerPerformanceDashboardPage() {
         <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
           <div className="flex items-center gap-2">
             <TrendingUp size={18} style={{ color: "#D97706" }} />
-            <h2 className="text-sm font-black" style={{ color: TEXT }}>Focus areas</h2>
+            <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.focusAreas")}</h2>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {(data?.focus_areas ?? []).length ? (
@@ -106,14 +115,14 @@ export default function WorkerPerformanceDashboardPage() {
                 <span
                   key={s.label}
                   className="rounded-full px-3 py-1.5 text-xs font-black"
-                  style={{ background: 'var(--cc-status-warning-bg)', color: "#D97706" }}
+                  style={{ background: "var(--cc-status-warning-bg)", color: "#D97706" }}
                 >
                   {s.label}
                 </span>
               ))
             ) : (
               <p className="text-sm font-medium" style={{ color: MUTED }}>
-                No focus areas identified yet.
+                {translate("performance.noFocusAreas")}
               </p>
             )}
           </div>
@@ -123,7 +132,7 @@ export default function WorkerPerformanceDashboardPage() {
       <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Award size={18} style={{ color: PLUM }} />
-          <h2 className="text-sm font-black" style={{ color: TEXT }}>Achievement badges</h2>
+          <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("performance.badges")}</h2>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {(data?.badges ?? []).map((badge) => (
@@ -133,7 +142,7 @@ export default function WorkerPerformanceDashboardPage() {
               style={{
                 borderColor: BORDER,
                 opacity: badge.unlocked ? 1 : 0.55,
-                background: badge.unlocked ? "#F8F6FE" : 'var(--cc-surface)',
+                background: badge.unlocked ? "#F8F6FE" : "var(--cc-surface)",
               }}
             >
               <p className="text-sm font-black" style={{ color: TEXT }}>{badge.title}</p>
@@ -142,7 +151,9 @@ export default function WorkerPerformanceDashboardPage() {
               </p>
               {badge.unlocked && badge.unlocked_at && (
                 <p className="mt-2 text-[10px] font-black uppercase" style={{ color: "#059669" }}>
-                  Unlocked {new Date(badge.unlocked_at).toLocaleDateString()}
+                  {translateParams("performance.unlocked", {
+                    date: new Date(badge.unlocked_at).toLocaleDateString(),
+                  })}
                 </p>
               )}
             </div>
@@ -159,18 +170,18 @@ export default function WorkerPerformanceDashboardPage() {
             <div className="flex items-start gap-3">
               <div
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                style={{ background: 'var(--cc-active)' }}
+                style={{ background: "var(--cc-active)" }}
               >
                 <GraduationCap size={22} style={{ color: PLUM }} />
               </div>
               <div>
                 <p className="text-xs font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                  Recommended training
+                  {translate("performance.recommendedTraining")}
                 </p>
                 <p className="mt-1 text-base font-black" style={{ color: TEXT }}>
-                  Your coordinator recommends: {data.recommended_training.title}
+                  {translateParams("performance.recommendedFor", { title: data.recommended_training.title })}
                 </p>
-                <p className="mt-1 text-xs font-bold" style={{ color: PLUM }}>View training →</p>
+                <p className="mt-1 text-xs font-bold" style={{ color: PLUM }}>{translate("performance.viewTraining")}</p>
               </div>
             </div>
           </section>
@@ -178,8 +189,8 @@ export default function WorkerPerformanceDashboardPage() {
       )}
 
       <div className="flex flex-wrap gap-4 text-center text-xs font-bold">
-        <Link href="/worker/shift-history" style={{ color: PLUM }}>Shift history →</Link>
-        <Link href="/worker/training" style={{ color: PLUM }}>Training & certifications →</Link>
+        <Link href="/worker/shift-history" style={{ color: PLUM }}>{translate("performance.shiftHistory")}</Link>
+        <Link href="/worker/training" style={{ color: PLUM }}>{translate("performance.trainingLink")}</Link>
       </div>
     </div>
   );

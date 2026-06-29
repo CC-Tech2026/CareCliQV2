@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { ShieldAlert } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { BORDER, MUTED, PLUM, TEXT, WIDGET_SCROLL } from "@/lib/shift-utils";
 import type { DashboardComplianceAlert } from "@/services/dashboardService";
 
@@ -11,23 +12,25 @@ const SEVERITY_STYLES: Record<string, string> = {
 };
 
 export function DashboardComplianceAlerts({ alerts }: { alerts: DashboardComplianceAlert[] }) {
+  const { translate } = useAccessibility();
+
   return (
-    <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <ShieldAlert size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          Compliance Alerts
+          {translate("dashboard.complianceAlerts.title")}
         </h2>
       </div>
       <div className={`space-y-3 ${WIDGET_SCROLL}`}>
         {alerts.length === 0 && (
-          <p className="rounded-xl bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-            No compliance alerts at this time.
+          <p className="rounded-xl bg-cc-soft px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            {translate("dashboard.complianceAlerts.empty")}
           </p>
         )}
         {alerts.map((alert) => (
           <Link key={alert.id} href={alert.action_url || "/credentials"}>
-            <div className="rounded-xl border p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]" style={{ borderColor: "#EEEAFB" }}>
+            <div className="rounded-xl border p-3 transition hover:border-cc-plum/40 hover:bg-cc-soft" style={{ borderColor: BORDER }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-black" style={{ color: TEXT }}>

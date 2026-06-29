@@ -2,6 +2,7 @@
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Bell, Loader2 } from "lucide-react";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import {
@@ -32,6 +33,7 @@ function NotificationRow({
   item: UserNotification;
   onDismiss: (id: string) => void;
 }) {
+  const { translate } = useAccessibility();
   const unread = !item.read_at && !item.dismissed_at;
   return (
     <div
@@ -60,14 +62,14 @@ function NotificationRow({
             style={{ color: PLUM }}
             onClick={() => onDismiss(item.id)}
           >
-            Dismiss
+            {translate("notifications.dismiss")}
           </button>
         )}
       </div>
       {item.action_url && (
         <Link href={item.shift_id ? `/my-shifts/${item.shift_id}` : "/my-shifts"}>
           <a className="mt-2 inline-block text-xs font-bold" style={{ color: CORAL }}>
-            View details →
+            {translate("notifications.viewDetails")}
           </a>
         </Link>
       )}
@@ -76,6 +78,7 @@ function NotificationRow({
 }
 
 export default function WorkerNotificationsPage() {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
@@ -95,13 +98,13 @@ export default function WorkerNotificationsPage() {
     <div className="mx-auto w-full max-w-3xl space-y-5 pb-10">
       <header>
         <p className="hidden" style={{ color: CORAL }}>
-          Notifications
+          {translate("nav.notifications")}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          History
+          {translate("notifications.title")}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
-          Last 90 days
+          {translate("notifications.last90Days")}
         </p>
       </header>
 
@@ -115,7 +118,7 @@ export default function WorkerNotificationsPage() {
         <div className="rounded-2xl border bg-cc-surface px-6 py-10 text-center" style={{ borderColor: BORDER }}>
           <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
           <p className="text-sm font-bold" style={{ color: TEXT }}>
-            No notifications yet
+            {translate("notifications.empty")}
           </p>
         </div>
       )}
@@ -134,7 +137,7 @@ export default function WorkerNotificationsPage() {
       <div className="flex justify-center pt-2">
         <Link href="/my-shifts">
           <a className="text-sm font-semibold" style={{ color: PLUM }}>
-            ← Back to shifts
+            {translate("notifications.backToShifts")}
           </a>
         </Link>
       </div>

@@ -12,11 +12,11 @@ import {
 } from "@/components/ui/select";
 import { SmartInput } from "@/components/SmartInput";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { ArrowLeft, UserPlus, Loader2 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const PLUM   = "var(--cc-plum)";
-const CORAL  = "#F1738A";
 const T1     = "#1C1626";
 const T2     = "#374151";
 const T3     = "#7A6A8A";
@@ -54,6 +54,7 @@ function FormCard({ title, children }: { title: string; children: React.ReactNod
 export default function ParticipantNew() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const createParticipant = useCreateParticipant();
 
   const form = useForm<FormValues>({
@@ -79,10 +80,10 @@ export default function ParticipantNew() {
 
     try {
       await createParticipant.mutateAsync({ data: payload as CreateParticipantBody });
-      toast({ title: "Participant added successfully" });
+      toast({ title: translate("patients.toast.added") });
       navigate("/patients");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to add participant";
+      const msg = err instanceof Error ? err.message : translate("patients.toast.addFailed");
       toast({ title: msg, variant: "destructive" });
     }
   }
@@ -97,10 +98,10 @@ export default function ParticipantNew() {
           className="flex items-center gap-1.5 transition-colors hover:opacity-80"
           style={{ color: T3 }}
         >
-          <ArrowLeft size={14} /> Participants
+          <ArrowLeft size={14} /> {translate("patients.title")}
         </button>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
-        <span className="font-medium" style={{ color: T1 }}>Add Participant</span>
+        <span className="font-medium" style={{ color: T1 }}>{translate("patients.addTitle")}</span>
       </div>
 
       {/* Header */}
@@ -110,56 +111,56 @@ export default function ParticipantNew() {
           <UserPlus size={18} style={{ color: PLUM }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>Add Participant</h1>
-          <p className="text-[13px]" style={{ color: T2 }}>Create a new NDIS participant record</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("patients.addTitle")}</h1>
+          <p className="text-[13px]" style={{ color: T2 }}>{translate("patients.addSubtitle")}</p>
         </div>
       </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
-          <FormCard title="Personal Details">
+          <FormCard title={translate("patients.section.personalDetails")}>
             <FormField control={form.control} name="full_name" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Full Name <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input placeholder="Jane Smith" data-testid="input-full-name" {...field} /></FormControl>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.fullName")} <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input placeholder={translate("patients.placeholder.fullName")} data-testid="input-full-name" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="ndis_number" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>NDIS Number <span className="text-red-500">*</span></FormLabel>
-                <FormControl><Input placeholder="430012345" data-testid="input-ndis-number" {...field} /></FormControl>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.ndisNumber")} <span className="text-red-500">*</span></FormLabel>
+                <FormControl><Input placeholder={translate("patients.placeholder.ndisNumber")} data-testid="input-ndis-number" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="date_of_birth" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Date of Birth <span className="text-red-500">*</span></FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.dateOfBirth")} <span className="text-red-500">*</span></FormLabel>
                 <FormControl><Input type="date" data-testid="input-date-of-birth" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="email" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Email</FormLabel>
-                <FormControl><Input type="email" placeholder="jane@email.com" data-testid="input-email" {...field} /></FormControl>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.email")}</FormLabel>
+                <FormControl><Input type="email" placeholder={translate("patients.placeholder.email")} data-testid="input-email" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="phone" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Phone</FormLabel>
-                <FormControl><Input placeholder="0412 345 678" data-testid="input-phone" {...field} /></FormControl>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.phone")}</FormLabel>
+                <FormControl><Input placeholder={translate("patients.placeholder.phone")} data-testid="input-phone" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="primary_disability" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Primary Disability</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.primaryDisability")}</FormLabel>
                 <FormControl>
                   <SmartInput
-                    placeholder="e.g. Autism Spectrum Disorder — or tap the mic to speak"
+                    placeholder={translate("patients.placeholder.primaryDisability")}
                     data-testid="input-primary-disability"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
@@ -170,10 +171,10 @@ export default function ParticipantNew() {
             )} />
             <FormField control={form.control} name="allergies" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Known Allergies / Contraindications</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.allergies")}</FormLabel>
                 <FormControl>
                   <SmartInput
-                    placeholder="e.g. Penicillin, latex — leave blank if none"
+                    placeholder={translate("patients.placeholder.allergies")}
                     data-testid="input-allergies"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
@@ -185,10 +186,10 @@ export default function ParticipantNew() {
 
             <FormField control={form.control} name="communication_preferences" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Communication Preferences</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.communicationPreferences")}</FormLabel>
                 <FormControl>
                   <SmartInput
-                    placeholder="e.g. Uses AAC device, prefers visual cues, responds to short sentences"
+                    placeholder={translate("patients.placeholder.communicationPreferences")}
                     data-testid="input-communication-preferences"
                     value={field.value ?? ""}
                     onChange={(v) => field.onChange(v)}
@@ -200,15 +201,15 @@ export default function ParticipantNew() {
 
             <FormField control={form.control} name="biological_sex" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Biological Sex</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.biologicalSex")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value ?? "unspecified"}>
                   <FormControl>
                     <SelectTrigger data-testid="select-biological-sex"><SelectValue /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="unspecified">Prefer not to say</SelectItem>
-                    <SelectItem value="male">Male</SelectItem>
-                    <SelectItem value="female">Female</SelectItem>
+                    <SelectItem value="unspecified">{translate("patients.sex.unspecified")}</SelectItem>
+                    <SelectItem value="male">{translate("patients.sex.male")}</SelectItem>
+                    <SelectItem value="female">{translate("patients.sex.female")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -216,19 +217,19 @@ export default function ParticipantNew() {
             )} />
           </FormCard>
 
-          <FormCard title="NDIS Plan">
+          <FormCard title={translate("patients.section.ndisPlan")}>
             <FormField control={form.control} name="plan_status" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Status <span className="text-red-500">*</span></FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.planStatus")} <span className="text-red-500">*</span></FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger data-testid="select-plan-status"><SelectValue /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="active">{translate("patients.planStatus.active")}</SelectItem>
+                    <SelectItem value="pending">{translate("patients.planStatus.pending")}</SelectItem>
+                    <SelectItem value="inactive">{translate("patients.planStatus.inactive")}</SelectItem>
+                    <SelectItem value="expired">{translate("patients.planStatus.expired")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -236,22 +237,22 @@ export default function ParticipantNew() {
             )} />
             <FormField control={form.control} name="plan_start_date" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan Start Date</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.planStartDate")}</FormLabel>
                 <FormControl><Input type="date" data-testid="input-plan-start-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="plan_end_date" render={({ field }) => (
               <FormItem>
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Plan End Date</FormLabel>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.planEndDate")}</FormLabel>
                 <FormControl><Input type="date" data-testid="input-plan-end-date" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="total_budget" render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel style={{ color: T2, fontSize: 12 }}>Total Budget ($)</FormLabel>
-                <FormControl><Input type="number" placeholder="50000" data-testid="input-total-budget" {...field} /></FormControl>
+                <FormLabel style={{ color: T2, fontSize: 12 }}>{translate("patients.field.totalBudget")}</FormLabel>
+                <FormControl><Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -265,7 +266,7 @@ export default function ParticipantNew() {
               className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors hover:bg-[#F6F4FB]"
               style={{ borderColor: BORDER, color: T2 }}
             >
-              Cancel
+              {translate("common.cancel")}
             </button>
             <button
               type="submit"
@@ -277,7 +278,7 @@ export default function ParticipantNew() {
               {createParticipant.isPending
                 ? <Loader2 size={14} className="animate-spin" />
                 : <UserPlus size={14} />}
-              Add Participant
+              {translate("patients.addButton")}
             </button>
           </div>
         </form>

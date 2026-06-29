@@ -12,9 +12,13 @@ from .supabase_client import get_supabase_admin
 TUTORIAL_STEPS = (
     "shift_list",
     "open_shift",
+    "pre_shift_briefing",
+    "pre_shift_briefing_complete",
     "shift_overview",
     "risk_acknowledgement",
     "risk_acknowledgement_modal",
+    "travel_mileage",
+    "travel_transit",
     "clock_in",
     "clock_in_modal",
     "start_session",
@@ -24,7 +28,6 @@ TUTORIAL_STEPS = (
     "end_shift",
     "end_shift_review",
     "shift_signature",
-    "notifications",
 )
 
 

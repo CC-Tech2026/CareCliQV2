@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   assignToolkitItem,
   createToolkitItem,
@@ -44,7 +45,11 @@ function ItemRow({
   onRestock: (item: ToolkitItem) => void;
   onAssign: (item: ToolkitItem) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const low = isLow(item);
+  const category = item.category || (coordinator ? "General" : translate("toolkit.general"));
+  const unitLabel = item.unit || (coordinator ? "units" : translate("toolkit.units"));
+
   return (
     <div className="grid gap-3 border-b border-[#EEEAFB] py-4 last:border-0 lg:grid-cols-[1fr_auto] lg:items-center">
       <div>
@@ -53,21 +58,21 @@ function ItemRow({
           {low && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700">
               <AlertTriangle className="h-3 w-3" />
-              Low stock
+              {coordinator ? "Low stock" : translate("toolkit.lowStock")}
             </span>
           )}
         </div>
         <p className="mt-1 text-xs text-[#6B7280]">
-          {item.category || "General"} • {item.quantity} {item.unit || "units"} available
-          {item.minimum_quantity ? ` • minimum ${item.minimum_quantity}` : ""}
-          {item.expiry_date ? ` • expires ${item.expiry_date}` : ""}
+          {coordinator
+            ? `${category} • ${item.quantity} ${unitLabel} available${item.minimum_quantity ? ` • minimum ${item.minimum_quantity}` : ""}${item.expiry_date ? ` • expires ${item.expiry_date}` : ""}`
+            : `${translateParams("toolkit.unitsAvailable", { category, count: String(item.quantity) })}${item.minimum_quantity ? ` • ${translateParams("toolkit.minimum", { count: String(item.minimum_quantity) })}` : ""}${item.expiry_date ? ` • ${translateParams("toolkit.expiresOn", { date: item.expiry_date })}` : ""}`}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         {!coordinator && (
           <>
-            <Button variant="outline" size="sm" onClick={() => onUse(item)} className="rounded-xl">Use item</Button>
-            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-[#3730A3]">Request restock</Button>
+            <Button variant="outline" size="sm" onClick={() => onUse(item)} className="rounded-xl">{translate("toolkit.useItem")}</Button>
+            <Button variant="ghost" size="sm" onClick={() => onRestock(item)} className="rounded-xl text-[#3730A3]">{translate("toolkit.requestRestock")}</Button>
           </>
         )}
         {coordinator && (
@@ -81,6 +86,7 @@ function ItemRow({
 export default function Toolkit() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const queryClient = useQueryClient();
   const isCoordinator = user?.role === "support_coordinator";
   const orgId = user?.organizationId ?? "__no_org__";
@@ -127,18 +133,18 @@ export default function Toolkit() {
     mutationFn: (item: ToolkitItem) => useToolkitItem({ item_id: item.id, quantity: 1, notes: "Used from worker toolkit" }),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Item usage logged" });
+      toast({ title: translate("toolkit.usageLogged") });
     },
-    onError: (err) => toast({ title: "Could not use item", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) => toast({ title: translate("toolkit.useFailed"), description: (err as Error).message, variant: "destructive" }),
   });
 
   const restockMutation = useMutation({
     mutationFn: (item: ToolkitItem) => requestRestock({ item_id: item.id, quantity_requested: Math.max(1, item.minimum_quantity || 1), notes: "Worker requested restock" }),
     onSuccess: () => {
       invalidate();
-      toast({ title: "Restock request sent" });
+      toast({ title: translate("toolkit.restockSent") });
     },
-    onError: (err) => toast({ title: "Could not request restock", description: (err as Error).message, variant: "destructive" }),
+    onError: (err) => toast({ title: translate("toolkit.restockFailed"), description: (err as Error).message, variant: "destructive" }),
   });
 
   const assignMutation = useMutation({
@@ -182,16 +188,23 @@ export default function Toolkit() {
           {isCoordinator ? "Organisation" : user?.role === "allied_health" ? "Clinical" : "Support Worker"}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          {isCoordinator ? "Team Toolkit" : "My Toolkit"}
+          {isCoordinator ? "Team Toolkit" : translate("toolkit.title")}
         </h1>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          ["Items", summary.total],
-          ["Low stock", summary.low],
-          ["Assigned", summary.assigned],
-        ].map(([label, value]) => (
+        {(isCoordinator
+          ? [
+              ["Items", summary.total],
+              ["Low stock", summary.low],
+              ["Assigned", summary.assigned],
+            ]
+          : [
+              [translate("toolkit.items"), summary.total],
+              [translate("toolkit.lowStock"), summary.low],
+              [translate("toolkit.assigned"), summary.assigned],
+            ]
+        ).map(([label, value]) => (
           <div key={label} className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
             <p className="text-xs font-bold uppercase text-[#6B7280]">{label}</p>
             <p className="mt-1 text-2xl font-black text-[#111827]">{value}</p>
@@ -235,13 +248,17 @@ export default function Toolkit() {
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <Wrench className="h-5 w-5 text-[#3730A3]" />
-          <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation stock" : "Assigned kit"}</h2>
+          <h2 className="font-black" style={{ color: TEXT }}>{isCoordinator ? "Organisation stock" : translate("toolkit.assignedKit")}</h2>
         </div>
-        {isLoading && <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>Loading toolkit...</p>}
+        {isLoading && (
+          <p className="mt-4 text-sm font-bold" style={{ color: MUTED }}>
+            {isCoordinator ? "Loading toolkit..." : translate("toolkit.loading")}
+          </p>
+        )}
         {error && <p className="mt-4 text-sm font-bold text-red-600">{(error as Error).message}</p>}
         {!isLoading && items.length === 0 && (
           <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
-            No toolkit items are currently assigned.
+            {isCoordinator ? "No toolkit items are currently assigned." : translate("toolkit.empty")}
           </p>
         )}
         <div className="mt-3">
@@ -290,11 +307,13 @@ export default function Toolkit() {
       <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-2">
           <RotateCcw className="h-5 w-5 text-[#3730A3]" />
-          <h2 className="font-black" style={{ color: TEXT }}>Movement history</h2>
+          <h2 className="font-black" style={{ color: TEXT }}>
+            {isCoordinator ? "Movement history" : translate("toolkit.movementHistory")}
+          </h2>
         </div>
         {movements.length === 0 ? (
           <p className="mt-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm font-medium" style={{ color: MUTED }}>
-            No toolkit movements have been recorded yet.
+            {isCoordinator ? "No toolkit movements have been recorded yet." : translate("toolkit.movementEmpty")}
           </p>
         ) : (
           <div className="mt-3 divide-y divide-[#EEEAFB]">

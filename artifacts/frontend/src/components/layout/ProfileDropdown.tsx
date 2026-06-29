@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 interface ProfileDropdownProps {
   displayName: string;
@@ -31,6 +32,7 @@ export function ProfileDropdown({
   userRole,
   onLogout,
 }: ProfileDropdownProps) {
+  const { translate } = useAccessibility();
   const [open, setOpen] = useState(false);
   const isWorker = userRole === "support_worker";
 
@@ -90,7 +92,7 @@ export function ProfileDropdown({
             <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
               <Link href="/worker/profile" onClick={() => setOpen(false)}>
                 <User size={16} strokeWidth={2} />
-                <span>My Profile</span>
+                <span>{translate("nav.profile")}</span>
               </Link>
             </DropdownMenuItem>
           )}
@@ -99,7 +101,7 @@ export function ProfileDropdown({
             <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
               <Link href="/worker/privacy" onClick={() => setOpen(false)}>
                 <Shield size={16} strokeWidth={2} />
-                <span>Your data &amp; privacy</span>
+                <span>{translate("nav.privacy")}</span>
               </Link>
             </DropdownMenuItem>
           )}
@@ -107,7 +109,7 @@ export function ProfileDropdown({
           <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
             <Link href="/settings" onClick={() => setOpen(false)}>
               <Settings size={16} strokeWidth={2} />
-              <span>Settings</span>
+              <span>{translate("nav.settings")}</span>
             </Link>
           </DropdownMenuItem>
 
@@ -115,7 +117,7 @@ export function ProfileDropdown({
             <DropdownMenuItem asChild className="px-6 py-3 cursor-pointer rounded-none focus:bg-cc-bg">
               <Link href="/worker/security" onClick={() => setOpen(false)}>
                 <LockKeyhole size={16} strokeWidth={2} />
-                <span>Security</span>
+                <span>{translate("nav.security")}</span>
               </Link>
             </DropdownMenuItem>
           )}
@@ -131,7 +133,7 @@ export function ProfileDropdown({
             }}
           >
             <LogOut size={16} strokeWidth={2} />
-            <span>Sign Out</span>
+            <span>{translate("common.signOut")}</span>
           </DropdownMenuItem>
         </div>
       </DropdownMenuContent>

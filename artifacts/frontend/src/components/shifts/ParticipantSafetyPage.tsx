@@ -14,6 +14,7 @@ import {
   acknowledgeWorkerSafetyProtocol,
   type SafetyProtocol,
 } from "@/services/safetyProtocolService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
@@ -33,6 +34,7 @@ export function ParticipantSafetyPage({
   onAcknowledged,
 }: Props) {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -61,12 +63,12 @@ export function ParticipantSafetyPage({
         protocol.participant_id,
         protocol.content_version,
       );
-      toast({ title: "Safety card acknowledged" });
+      toast({ title: translate("safety.acknowledged") });
       onAcknowledged?.();
       onClose();
     } catch (err) {
       toast({
-        title: "Could not save acknowledgement",
+        title: translate("safety.ackSaveFailed"),
         description: err instanceof Error ? err.message : undefined,
         variant: "destructive",
       });
@@ -86,6 +88,7 @@ export function ParticipantSafetyPage({
       || contacts.some((c) => c.phone?.trim()),
   );
   const showAck = (mandatory || Boolean(protocol?.requires_safety_ack)) && hasVisibleContent;
+  const displayName = participantName ?? translate("common.participant");
 
   return (
     <Dialog
@@ -103,10 +106,10 @@ export function ParticipantSafetyPage({
         <DialogHeader className="border-b px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             <Shield size={18} className="text-violet-700" />
-            Safety protocols — {participantName ?? "participant"}
+            {translateParams("safety.protocolsTitle", { name: displayName })}
           </DialogTitle>
           <DialogDescription>
-            Review participant-specific safety procedures before and during your shift.
+            {translate("safety.protocolsDescription")}
           </DialogDescription>
         </DialogHeader>
 
@@ -118,10 +121,9 @@ export function ParticipantSafetyPage({
           {!hasVisibleContent && (
             <section className="rounded-xl border border-dashed border-violet-200 bg-violet-50/30 p-6 text-center">
               <Shield size={28} className="mx-auto mb-3 text-violet-400" />
-              <p className="text-sm font-bold text-violet-900">No safety content yet</p>
+              <p className="text-sm font-bold text-violet-900">{translate("safety.noContentTitle")}</p>
               <p className="mt-2 text-sm leading-relaxed text-violet-700">
-                Your coordinator has not published a safety card for this participant yet.
-                Check risk alerts above, or contact your coordinator before starting support.
+                {translate("safety.noContentDesc")}
               </p>
             </section>
           )}
@@ -129,7 +131,7 @@ export function ParticipantSafetyPage({
           {protocol?.safety_card_body?.trim() && (
             <section className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
               <h3 className="text-xs font-black uppercase tracking-wider text-violet-800">
-                Safety card
+                {translate("safety.safetyCard")}
               </h3>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-violet-950">
                 {protocol.safety_card_body}
@@ -139,11 +141,11 @@ export function ParticipantSafetyPage({
 
           {(protocol?.scenarios ?? []).map((scenario, i) => (
             <section key={i} className="rounded-xl border bg-cc-surface p-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">If</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{translate("safety.if")}</p>
               <p className="mt-1 text-sm font-semibold">{scenario.trigger}</p>
               <div className="my-2 flex items-center gap-1 text-violet-600">
                 <ChevronRight size={14} />
-                <span className="text-[10px] font-black uppercase">Then</span>
+                <span className="text-[10px] font-black uppercase">{translate("safety.then")}</span>
               </div>
               <p className="text-sm leading-relaxed">{scenario.response}</p>
             </section>
@@ -173,10 +175,10 @@ export function ParticipantSafetyPage({
           {contacts.length > 0 && (
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">
-                Who to call
+                {translate("safety.whoToCall")}
               </h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Try the coordinator first unless there is immediate danger.
+                {translate("safety.whoToCallHint")}
               </p>
               <ul className="mt-3 space-y-2">
                 {contacts.map((contact) => (
@@ -190,7 +192,7 @@ export function ParticipantSafetyPage({
                     <a href={`tel:${contact.phone.replace(/\s/g, "")}`}>
                       <Button type="button" size="sm" variant="outline" className="gap-1 font-bold">
                         <Phone size={14} />
-                        Call now
+                        {translate("safety.callNow")}
                       </Button>
                     </a>
                   </li>
@@ -209,12 +211,12 @@ export function ParticipantSafetyPage({
               onClick={() => void handleAcknowledge()}
             >
               {scrolledToEnd
-                ? "I have read and understood this"
-                : "Scroll to the bottom to continue"}
+                ? translate("safety.readUnderstood")
+                : translate("safety.scrollToContinue")}
             </Button>
           ) : (
             <Button type="button" variant="outline" className="w-full" onClick={onClose}>
-              Close
+              {translate("common.close")}
             </Button>
           )}
         </DialogFooter>

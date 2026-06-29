@@ -4,6 +4,7 @@ import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, ArrowRight, Search, ShieldCheck, Users } from "lucide-react";
 import { getMyClients, type WorkerClient } from "@/services/workerService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -20,14 +21,16 @@ function safeDate(value?: string | null) {
   try { return format(parseISO(value), "d MMM"); } catch { return value; }
 }
 
-function statusMeta(status?: string): { label: string; cls: string } {
-  if (status === "compliant")     return { label: "Compliant",    cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
-  if (status === "non_compliant") return { label: "Non-compliant", cls: "border-red-200 bg-red-50 text-red-700" };
-  return { label: "Needs review", cls: "border-amber-200 bg-amber-50 text-amber-700" };
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+
+function statusMeta(status: string | undefined, translate: (key: string) => string): { label: string; cls: string } {
+  if (status === "compliant") return { label: translate("compliance.status.compliant"), cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
+  if (status === "non_compliant") return { label: translate("compliance.status.nonCompliant"), cls: "border-red-200 bg-red-50 text-red-700" };
+  return { label: translate("clients.status.needsReview"), cls: "border-amber-200 bg-amber-50 text-amber-700" };
 }
 
-function ClientCard({ client }: { client: WorkerClient }) {
-  const { label, cls } = statusMeta(client.compliance_status);
+function ClientCard({ client, translate, translateParams }: { client: WorkerClient; translate: (key: string) => string; translateParams: (key: string, params: Record<string, string>) => string }) {
+  const { label, cls } = statusMeta(client.compliance_status, translate);
   const lastSeen = safeDate(client.last_seen);
   const ndis = (client as WorkerClient & { ndis_number?: string }).ndis_number;
 
@@ -64,8 +67,8 @@ function ClientCard({ client }: { client: WorkerClient }) {
 
           {/* Secondary meta */}
           <p className="text-[12px] font-medium mt-0.5 truncate" style={{ color: MUTED }}>
-            {client.plan_management_type ?? "No plan type"}
-            {lastSeen ? ` · Last seen ${lastSeen}` : ""}
+            {client.plan_management_type ?? translate("clients.noPlanType")}
+            {lastSeen ? ` · ${translateParams("clients.lastSeenOn", { date: lastSeen })}` : ""}
           </p>
         </div>
 
@@ -83,6 +86,7 @@ function ClientCard({ client }: { client: WorkerClient }) {
 
 export default function MyClients() {
   const [search, setSearch] = useState("");
+  const { translate, translateParams } = useAccessibility();
 
   const { data = [], isLoading, error } = useOrgQuery(["worker", "my-clients"], {
     queryFn: getMyClients,
@@ -106,9 +110,9 @@ export default function MyClients() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>My Clients</h1>
+          <h1 className="text-[20px] font-black tracking-tight" style={{ color: TEXT }}>{translate("clients.title")}</h1>
           <p className="text-[13px] font-medium mt-0.5" style={{ color: MUTED }}>
-            {data.length} assigned participant{data.length !== 1 ? "s" : ""}
+            {translateParams(data.length === 1 ? "clients.assignedCountOne" : "clients.assignedCountMany", { count: String(data.length) })}
           </p>
         </div>
       </div>
@@ -122,13 +126,13 @@ export default function MyClients() {
           <div className="flex items-center gap-2">
             <Users size={14} style={{ color: MUTED }} />
             <span className="text-[13px] font-black" style={{ color: TEXT }}>{data.length}</span>
-            <span className="text-[13px] font-medium" style={{ color: MUTED }}>assigned</span>
+            <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.assigned")}</span>
           </div>
           <div className="h-3.5 w-px" style={{ background: BORDER }} />
           <div className="flex items-center gap-2">
             <ShieldCheck size={14} className="text-emerald-500" />
             <span className="text-[13px] font-black text-emerald-700">{compliantCount}</span>
-            <span className="text-[13px] font-medium" style={{ color: MUTED }}>compliant</span>
+            <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.compliant")}</span>
           </div>
           {needsReviewCount > 0 && (
             <>
@@ -136,7 +140,7 @@ export default function MyClients() {
               <div className="flex items-center gap-2">
                 <AlertTriangle size={14} style={{ color: CORAL }} />
                 <span className="text-[13px] font-black" style={{ color: CORAL }}>{needsReviewCount}</span>
-                <span className="text-[13px] font-medium" style={{ color: MUTED }}>needs review</span>
+                <span className="text-[13px] font-medium" style={{ color: MUTED }}>{translate("clients.needsReview")}</span>
               </div>
             </>
           )}
@@ -154,7 +158,7 @@ export default function MyClients() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name or NDIS number…"
+            placeholder={translate("clients.searchPlaceholder")}
             className="w-full h-11 pl-10 pr-4 rounded-xl text-[14px] outline-none transition-all"
             style={{
               background: "var(--cc-soft)",
@@ -174,7 +178,7 @@ export default function MyClients() {
       >
         {isLoading && (
           <div className="py-8 text-center text-[13px] font-medium" style={{ color: MUTED }}>
-            Loading your clients…
+            {translate("clients.loading")}
           </div>
         )}
 
@@ -192,21 +196,21 @@ export default function MyClients() {
             >
               <Users size={22} style={{ color: PLUM, opacity: 0.4 }} />
             </div>
-            <p className="text-[14px] font-bold" style={{ color: TEXT }}>No assigned clients</p>
+            <p className="text-[14px] font-bold" style={{ color: TEXT }}>{translate("clients.empty")}</p>
             <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
-              Clients assigned to you by your coordinator will appear here.
+              {translate("clients.emptyDescription")}
             </p>
           </div>
         )}
 
         {!isLoading && filtered.length === 0 && data.length > 0 && (
           <div className="py-10 text-center text-[13px] font-medium px-4" style={{ color: MUTED }}>
-            No clients match "{search}"
+            {translateParams("clients.noMatch", { query: search })}
           </div>
         )}
 
         {filtered.map((client) => (
-          <ClientCard key={client.id} client={client} />
+          <ClientCard key={client.id} client={client} translate={translate} translateParams={translateParams} />
         ))}
       </div>
     </div>

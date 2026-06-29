@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { format, addDays } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   Calendar, Clock, Check, AlertTriangle, Loader2, X, Plus,
 } from "lucide-react";
@@ -54,6 +55,7 @@ interface BulkShiftModalProps {
 }
 
 export function BulkShiftModal({ open, onOpenChange, participants, workers }: BulkShiftModalProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__";
@@ -93,7 +95,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
     },
     onError: (err: Error) => {
-      toast({ title: "Bulk create failed", description: err.message, variant: "destructive" });
+      toast({ title: translate("coordinator.bulkShift.createFailed"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -119,10 +121,10 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
         {/* Header */}
         <div className="px-6 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div>
-            <h2 className="text-[18px] font-black" style={{ color: PLUM }}>Recurring Shifts</h2>
-            <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>Create bulk recurring shifts for a participant.</p>
+            <h2 className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.bulkShift.title")}</h2>
+            <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>{translate("coordinator.bulkShift.subtitle")}</p>
           </div>
-          <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100" title="Close modal" aria-label="Close modal">
+          <button onClick={handleClose} className="rounded-lg p-1.5 hover:bg-gray-100" title={translate("coordinator.bulkShift.closeModal")} aria-label={translate("coordinator.bulkShift.closeModal")}>
             <X size={16} style={{ color: MUTED }} />
           </button>
         </div>
@@ -136,12 +138,12 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 <div className="flex items-center justify-center gap-4">
                   <div>
                     <p className="text-[28px] font-black" style={{ color: PLUM }}>{result.created_count}</p>
-                    <p className="text-[11px] font-bold" style={{ color: MUTED }}>Created</p>
+                    <p className="text-[11px] font-bold" style={{ color: MUTED }}>{translate("coordinator.bulkShift.created")}</p>
                   </div>
                   {result.skipped_count > 0 && (
                     <div>
                       <p className="text-[28px] font-black" style={{ color: CORAL }}>{result.skipped_count}</p>
-                      <p className="text-[11px] font-bold" style={{ color: MUTED }}>Skipped</p>
+                      <p className="text-[11px] font-bold" style={{ color: MUTED }}>{translate("coordinator.bulkShift.skipped")}</p>
                     </div>
                   )}
                 </div>
@@ -149,7 +151,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
               {result.conflicts_summary.filter((c) => c.conflicts.length > 0).length > 0 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-[11px] font-black text-amber-800 mb-2">Shifts created with conflicts:</p>
+                  <p className="text-[11px] font-black text-amber-800 mb-2">{translate("coordinator.bulkShift.conflictsTitle")}</p>
                   {result.conflicts_summary
                     .filter((c) => c.conflicts.length > 0)
                     .slice(0, 5)
@@ -166,7 +168,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
               {result.skipped.length > 0 && (
                 <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-                  <p className="text-[11px] font-black text-red-800 mb-2">Skipped shifts:</p>
+                  <p className="text-[11px] font-black text-red-800 mb-2">{translate("coordinator.bulkShift.skippedTitle")}</p>
                   {result.skipped.slice(0, 5).map((s, i) => (
                     <div key={i} className="mb-1">
                       <p className="text-[10px] font-bold text-red-700">{s.date}: {s.reason}</p>
@@ -176,7 +178,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                     </div>
                   ))}
                   {result.skipped_count > 5 && (
-                    <p className="text-[10px] text-red-600">+{result.skipped_count - 5} more skipped</p>
+                    <p className="text-[10px] text-red-600">{translateParams("coordinator.bulkShift.moreSkipped", { count: String(result.skipped_count - 5) })}</p>
                   )}
                 </div>
               )}
@@ -186,10 +188,10 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
             <div className="space-y-5">
               {/* Participant */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>Participant *</label>
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.participant")}</label>
                 <Select value={participantId} onValueChange={setParticipantId}>
                   <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder="Select participant…" />
+                    <SelectValue placeholder={translate("coordinator.bulkShift.selectParticipant")} />
                   </SelectTrigger>
                   <SelectContent>
                     {participants.map((p) => (
@@ -202,14 +204,14 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               {/* Worker (optional) */}
               <div className="space-y-2">
                 <label className="text-[12px] font-black" style={{ color: TEXT }}>
-                  Auto-assign Worker <span className="font-normal">(optional)</span>
+                  Auto-assign Worker <span className="font-normal">({translate("common.optional")})</span>
                 </label>
                 <Select value={workerId} onValueChange={setWorkerId}>
                   <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
-                    <SelectValue placeholder="Select worker (optional)…" />
+                    <SelectValue placeholder={translate("coordinator.bulkShift.selectWorker")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No auto-assign</SelectItem>
+                    <SelectItem value="">{translate("coordinator.bulkShift.noAutoAssign")}</SelectItem>
                     {workers.map((w) => (
                       <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>
                     ))}
@@ -219,14 +221,14 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
               {/* Shift type */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>Shift Type</label>
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.shiftType")}</label>
                 <Select value={shiftType} onValueChange={setShiftType}>
                   <SelectTrigger className="rounded-xl" style={{ borderColor: BORDER }}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(SHIFT_TYPE_LABELS).map(([v, l]) => (
-                      <SelectItem key={v} value={v}>{l}</SelectItem>
+                    {Object.entries(SHIFT_TYPE_LABELS).map(([v]) => (
+                      <SelectItem key={v} value={v}>{translate(`coordinator.bulkShift.day.${["mon","tue","wed","thu","fri","sat","sun"][value]}`)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -234,7 +236,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
 
               {/* Days of week */}
               <div className="space-y-2">
-                <label className="text-[12px] font-black" style={{ color: TEXT }}>Repeat Days *</label>
+                <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.repeatDays")}</label>
                 <div className="flex gap-1.5 flex-wrap">
                   {DAYS_OF_WEEK.map(({ label, value }) => {
                     const active = selectedDays.includes(value);
@@ -260,25 +262,25 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               {/* Times */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>Start Time *</label>
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.startTime")}</label>
                   <input
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    title="Shift start time"
-                    placeholder="HH:MM"
+                    title={translate("coordinator.bulkShift.startTime")}
+                    placeholder={translate("coordinator.bulkShift.timePlaceholder")}
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>End Time *</label>
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.endTime")}</label>
                   <input
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    title="Shift end time"
-                    placeholder="HH:MM"
+                    title={translate("coordinator.bulkShift.endTime")}
+                    placeholder={translate("coordinator.bulkShift.timePlaceholder")}
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none focus:border-[#3730A3]"
                     style={{ borderColor: BORDER }}
                   />
@@ -288,26 +290,26 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               {/* Start date & weeks */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>Starting From *</label>
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.startingFrom")}</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    title="Date to start shift series"
+                    title={translate("coordinator.bulkShift.startingFrom")}
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none"
                     style={{ borderColor: BORDER }}
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[12px] font-black" style={{ color: TEXT }}>Repeat (weeks)</label>
+                  <label className="text-[12px] font-black" style={{ color: TEXT }}>{translate("coordinator.bulkShift.repeatWeeks")}</label>
                   <input
                     type="number"
                     min={1}
                     max={26}
                     value={weeks}
                     onChange={(e) => setWeeks(Math.max(1, parseInt(e.target.value) || 1))}
-                    title="Number of weeks to repeat shifts"
-                    placeholder="1-26 weeks"
+                    title={translate("coordinator.bulkShift.repeatWeeks")}
+                    placeholder={translate("coordinator.bulkShift.weeksPlaceholder")}
                     className="w-full rounded-xl border px-3 py-2 text-[13px] outline-none"
                     style={{ borderColor: BORDER }}
                   />
@@ -317,14 +319,14 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
               {/* Summary preview */}
               {canSubmit && (
                 <div className="rounded-xl border p-3.5" style={{ borderColor: BORDER, background: SOFT }}>
-                  <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>Summary</p>
+                  <p className="text-[11px] font-black uppercase tracking-widest mb-2" style={{ color: MUTED }}>{translate("coordinator.bulkShift.summary")}</p>
                   <div className="space-y-1 text-[12px]">
                     {[
-                      ["Participant", participant?.full_name || "—"],
-                      ...(worker ? [["Worker", worker.full_name]] as [string, string][] : []),
-                      ["Schedule", `${selectedDays.map((d) => DAYS_OF_WEEK[d]?.label).join(", ")} · ${startTime}–${endTime}`],
-                      ["Duration", `${weeks} weeks from ${format(new Date(startDate + "T00:00:00"), "d MMM yyyy")}`],
-                      ["Total shifts", `${totalShifts} shifts (${selectedDays.length}/week × ${weeks} weeks)`],
+                      [translate("common.participant"), participant?.full_name || "—"],
+                      ...(worker ? [[translate("common.worker"), worker.full_name]] as [string, string][] : []),
+                      [translate("coordinator.bulkShift.schedule"), `${selectedDays.map((d) => DAYS_OF_WEEK[d]?.label).join(", ")} · ${startTime}–${endTime}`],
+                      [translate("coordinator.bulkShift.duration"), translateParams("coordinator.bulkShift.durationValue", { weeks: String(weeks), date: format(new Date(startDate + "T00:00:00"), "d MMM yyyy") })],
+                      [translate("coordinator.bulkShift.totalShifts"), translateParams("coordinator.bulkShift.totalShiftsValue", { total: String(totalShifts), perWeek: String(selectedDays.length), weeks: String(weeks) })],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-start justify-between gap-4">
                         <span style={{ color: MUTED }}>{label}</span>
@@ -360,7 +362,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 className="rounded-full px-4 py-2 text-[12px] font-bold text-white"
                 style={{ background: PLUM }}
               >
-                <Check size={12} className="inline mr-1.5" />Done
+                <Check size={12} className="inline mr-1.5" />{translate("coordinator.bulkShift.done")}
               </button>
             </>
           ) : (
@@ -377,9 +379,9 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                 }}
               >
                 {mutation.isPending ? (
-                  <><Loader2 size={12} className="animate-spin" /> Creating…</>
+                  <><Loader2 size={12} className="animate-spin" /> {translate("coordinator.bulkShift.creating")}</>
                 ) : (
-                  <><Plus size={12} /> Create {totalShifts} Shift{totalShifts !== 1 ? "s" : ""}</>
+                  <><Plus size={12} /> {totalShifts === 1 ? translateParams("coordinator.bulkShift.createShifts", { count: String(totalShifts) }) : translateParams("coordinator.bulkShift.createShiftsPlural", { count: String(totalShifts) })}</>
                 )}
               </button>
             </>

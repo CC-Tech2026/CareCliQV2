@@ -4,6 +4,7 @@
  * Unassigned shifts panel (left) → drag to worker × hour cell.
  */
 import { useCallback, useState } from "react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   DndContext,
   DragOverlay,
@@ -95,7 +96,7 @@ function DraggableShiftCard({
         <GripVertical size={12} className="mt-0.5 shrink-0" style={{ color: MUTED }} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[11px] font-black" style={{ color: clrs.color }}>
-            {shift.participant_name || "Participant"}
+            {shift.participant_name || translate("common.participant")}
           </p>
           {start && (
             <p className="text-[10px] font-medium" style={{ color: MUTED }}>
@@ -124,7 +125,7 @@ function ShiftDragClone({ shift }: { shift: CoordinatorShiftRecord }) {
       style={{ borderColor: clrs.border, background: clrs.bg, cursor: "grabbing" }}
     >
       <p className="text-[12px] font-black" style={{ color: clrs.color }}>
-        {shift.participant_name || "Participant"}
+        {shift.participant_name || translate("common.participant")}
       </p>
       {start && (
         <p className="text-[11px]" style={{ color: MUTED }}>
@@ -188,6 +189,7 @@ function ConflictModal({
   onCancel: () => void;
   confirming: boolean;
 }) {
+  const { translate } = useAccessibility();
   const hard = pending.conflicts.filter((c) => c.severity === "error");
   const soft = [...pending.conflicts.filter((c) => c.severity !== "error"), ...pending.skillWarnings];
 
@@ -201,9 +203,9 @@ function ConflictModal({
             </div>
             <div>
               <h2 className="text-[16px] font-black" style={{ color: TEXT }}>
-                {hard.length > 0 ? "Scheduling Conflict" : "Assignment Warning"}
+                {hard.length > 0 ? translate("coordinator.dnd.schedulingConflict") : translate("coordinator.dnd.assignmentWarning")}
               </h2>
-              <p className="text-[12px]" style={{ color: MUTED }}>Assign to {pending.workerName}?</p>
+              <p className="text-[12px]" style={{ color: MUTED }}>{translateParams("coordinator.dnd.assignTo", { name: pending.workerName })}</p>
             </div>
           </div>
         </div>
@@ -238,9 +240,9 @@ function ConflictModal({
             style={{ background: hard.length > 0 ? CORAL : PLUM, opacity: confirming ? 0.65 : 1 }}
           >
             {confirming ? (
-              <><Loader2 size={12} className="animate-spin" /> Assigning…</>
+              <><Loader2 size={12} className="animate-spin" /> {translate("coordinator.dnd.assigning")}</>
             ) : (
-              <><ChevronRight size={12} /> Assign Anyway</>
+              <><ChevronRight size={12} /> {translate("coordinator.dnd.assignAnyway")}</>
             )}
           </button>
         </div>
@@ -265,15 +267,19 @@ function UnassignModal({
   confirming: boolean;
   warning?: string;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const start = shift.scheduled_start ? parseISO(shift.scheduled_start) : null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm rounded-2xl border bg-white shadow-2xl" style={{ borderColor: BORDER }}>
         <div className="px-5 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <h2 className="text-[15px] font-black" style={{ color: TEXT }}>Remove Worker?</h2>
+          <h2 className="text-[15px] font-black" style={{ color: TEXT }}>{translate("coordinator.dnd.removeWorker")}</h2>
           <p className="mt-0.5 text-[12px]" style={{ color: MUTED }}>
-            Remove {workerName} from {shift.participant_name || "this shift"}
-            {start ? ` on ${format(start, "d MMM")}` : ""}?
+            {translateParams("coordinator.dnd.removeWorkerDesc", {
+              worker: workerName,
+              shift: shift.participant_name || translate("coordinator.dnd.thisShift"),
+              date: start ? ` on ${format(start, "d MMM")}` : "",
+            })}
           </p>
         </div>
         {warning && (
@@ -292,7 +298,7 @@ function UnassignModal({
             className="rounded-full px-4 py-1.5 text-[12px] font-bold text-white"
             style={{ background: CORAL, opacity: confirming ? 0.65 : 1 }}
           >
-            {confirming ? "Removing…" : "Remove Worker"}
+            {confirming ? translate("coordinator.dnd.removing") : translate("coordinator.dnd.removeWorkerBtn")}
           </button>
         </div>
       </div>
@@ -309,6 +315,7 @@ interface DndScheduleViewProps {
 }
 
 export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndScheduleViewProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__";
@@ -330,12 +337,12 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
       assignExistingShift(shiftId, { worker_id: workerId, confirm_conflicts: confirm }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
-      toast({ title: "Shift assigned", description: "Worker has been notified." });
+      toast({ title: translate("coordinator.dnd.shiftAssigned"), description: translate("coordinator.dnd.workerNotified") });
       setPendingDrop(null);
       onRefresh();
     },
     onError: (err: Error) => {
-      toast({ title: "Assignment failed", description: err.message, variant: "destructive" });
+      toast({ title: translate("coordinator.dnd.assignmentFailed"), description: err.message, variant: "destructive" });
       setPendingDrop(null);
     },
   });
@@ -344,12 +351,12 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
     mutationFn: (shiftId: string) => unassignShift(shiftId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
-      toast({ title: "Worker removed", description: "Shift returned to unassigned." });
+      toast({ title: translate("coordinator.dnd.workerRemoved"), description: translate("coordinator.dnd.shiftUnassigned") });
       setPendingUnassign(null);
       onRefresh();
     },
     onError: (err: Error) => {
-      toast({ title: "Unassign failed", description: err.message, variant: "destructive" });
+      toast({ title: translate("coordinator.dnd.unassignFailed"), description: err.message, variant: "destructive" });
       setPendingUnassign(null);
     },
   });
@@ -385,7 +392,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
     if (shift.worker_id === workerId) return; // No change
 
     const worker = workers.find((w) => w.id === workerId);
-    const workerName = worker?.full_name ?? "Worker";
+    const workerName = worker?.full_name ?? translate("common.worker");
 
     // Determine shift times (use existing or build from drop cell)
     const shiftStart = shift.scheduled_start ?? `${dayIso}T${String(hour).padStart(2, "0")}:00:00Z`;
@@ -418,11 +425,11 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
 
   const handleUnassignClick = (shift: CoordinatorShiftRecord) => {
     const worker = workers.find((w) => w.id === shift.worker_id);
-    const workerName = worker?.full_name ?? "Worker";
+    const workerName = worker?.full_name ?? translate("common.worker");
     const start = shift.scheduled_start ? parseISO(shift.scheduled_start) : null;
     const minsUntil = start ? differenceInMinutes(start, new Date()) : Infinity;
     const warning = minsUntil < 1440 && minsUntil > 0
-      ? `Shift starts in ${minsUntil < 60 ? `${minsUntil} mins` : `${Math.round(minsUntil / 60)}h`}`
+      ? (minsUntil < 60 ? translateParams("coordinator.dnd.shiftStartsInMins", { mins: String(minsUntil) }) : translateParams("coordinator.dnd.shiftStartsInHours", { hours: String(Math.round(minsUntil / 60)) }))
       : undefined;
     setPendingUnassign({ shift, workerName, warning });
   };
@@ -433,7 +440,7 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/10">
           <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 shadow-xl">
             <Loader2 size={14} className="animate-spin" style={{ color: PLUM }} />
-            <span className="text-[12px] font-bold" style={{ color: TEXT }}>Checking conflicts…</span>
+            <span className="text-[12px] font-bold" style={{ color: TEXT }}>{translate("coordinator.dnd.checkingConflicts")}</span>
           </div>
         </div>
       )}
@@ -467,12 +474,12 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
               style={{ borderColor: BORDER }}
             >
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-                Unassigned ({unassignedShifts.length})
+                {translateParams("coordinator.dnd.unassigned", { count: String(unassignedShifts.length) })}
               </p>
               {unassignedShifts.length === 0 ? (
                 <div className="flex flex-col items-center py-6">
                   <CheckCircle2 size={20} style={{ color: "#16A34A" }} />
-                  <p className="mt-1.5 text-[11px] font-bold" style={{ color: "#16A34A" }}>All assigned</p>
+                  <p className="mt-1.5 text-[11px] font-bold" style={{ color: "#16A34A" }}>{translate("coordinator.dnd.allAssigned")}</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[calc(100vh-280px)] overflow-y-auto pr-0.5">

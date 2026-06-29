@@ -2,7 +2,8 @@
 import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bell, CheckCheck, Loader2, MessageCircle, Send } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { Bell, Loader2, MessageCircle, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import {
@@ -14,14 +15,17 @@ import {
 } from "@/services/notificationService";
 import { useConversationRealtime } from "@/hooks/useNotificationRealtime";
 
-function formatRelative(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+function useFormatRelative() {
+  const { translate, translateParams } = useAccessibility();
+  return (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return translate("messages.justNow");
+    if (mins < 60) return translateParams("messages.minutesAgo", { count: String(mins) });
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return translateParams("messages.hoursAgo", { count: String(hrs) });
+    return translateParams("messages.daysAgo", { count: String(Math.floor(hrs / 24)) });
+  };
 }
 
 function ConversationList({
@@ -33,11 +37,14 @@ function ConversationList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { translate } = useAccessibility();
+  const formatRelative = useFormatRelative();
+
   if (!conversations.length) {
     return (
       <div className="rounded-2xl border bg-white px-6 py-10 text-center" style={{ borderColor: BORDER }}>
         <Bell size={32} className="mx-auto mb-3 opacity-40" style={{ color: MUTED }} />
-        <p className="text-sm font-bold" style={{ color: TEXT }}>No conversations yet</p>
+        <p className="text-sm font-bold" style={{ color: TEXT }}>{translate("messages.noConversations")}</p>
       </div>
     );
   }
@@ -61,10 +68,10 @@ function ConversationList({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm font-bold truncate" style={{ color: TEXT }}>
-                {c.participant_name ?? "Coordinator"}
+                {c.participant_name ?? translate("messages.coordinator")}
               </p>
               <p className="mt-0.5 text-xs truncate" style={{ color: MUTED }}>
-                {c.last_message_preview || "No messages yet"}
+                {c.last_message_preview || translate("messages.noMessages")}
               </p>
             </div>
             <div className="shrink-0 text-right">
@@ -101,6 +108,7 @@ function ThreadView({
   sending: boolean;
 }) {
   const { user } = useAuth();
+  const { translate } = useAccessibility();
   const [draft, setDraft] = useState("");
   const readOnly = conversation.status === "read_only";
 
@@ -108,11 +116,11 @@ function ThreadView({
     <div className="flex h-[min(70vh,640px)] flex-col rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
       <div className="border-b px-4 py-3" style={{ borderColor: BORDER }}>
         <p className="text-sm font-black" style={{ color: TEXT }}>
-          {conversation.participant_name ?? "Shift conversation"}
+          {conversation.participant_name ?? translate("messages.shiftConversation")}
         </p>
         {readOnly && (
           <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
-            Read-only — shift ended
+            {translate("messages.readOnly")}
           </p>
         )}
       </div>
@@ -142,7 +150,7 @@ function ThreadView({
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Type a message…"
+            placeholder={translate("messages.placeholder")}
             maxLength={1000}
             className="flex-1 rounded-xl border px-3 py-2 text-sm"
             style={{ borderColor: BORDER }}
@@ -166,6 +174,7 @@ function ThreadView({
 }
 
 export default function WorkerMessages() {
+  const { translate, translateParams } = useAccessibility();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -206,13 +215,15 @@ export default function WorkerMessages() {
     <div className="mx-auto grid w-full max-w-5xl gap-5 pb-10 lg:grid-cols-[320px_1fr]">
       <header className="lg:col-span-2">
         <p className="hidden" style={{ color: CORAL }}>
-          Communications
+          {translate("messages.title")}
         </p>
         <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
-          Messages
+          {translate("messages.title")}
         </h1>
         <p className="mt-0.5 text-sm font-semibold" style={{ color: MUTED }}>
-          {data?.unread_count ? `${data.unread_count} unread` : "Coordinator conversations"}
+          {data?.unread_count
+            ? translateParams("messages.unread", { count: String(data.unread_count) })
+            : translate("messages.subtitle")}
         </p>
       </header>
 
@@ -251,12 +262,12 @@ export default function WorkerMessages() {
       <div className="lg:col-span-2 flex justify-center gap-4 pt-2">
         <Link href="/worker/notifications">
           <a className="text-sm font-semibold" style={{ color: PLUM }}>
-            Notification history
+            {translate("messages.notificationHistory")}
           </a>
         </Link>
         <Link href="/my-shifts">
           <a className="text-sm font-semibold" style={{ color: PLUM }}>
-            ← Back to shifts
+            {translate("notifications.backToShifts")}
           </a>
         </Link>
       </div>

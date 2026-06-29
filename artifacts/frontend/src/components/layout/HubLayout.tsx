@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
@@ -8,12 +9,12 @@ const BORDER = "var(--cc-border)";
 const SOFT   = "#F7F5FF";
 const PLUM   = "var(--cc-plum)";
 
-const ROLE_LABEL: Record<string, string> = {
-  support_worker:     "Support Worker",
-  support_coordinator:"Support Coordinator",
-  managing_director:  "Managing Director",
-  allied_health:      "Allied Health",
-  admin:              "Administrator",
+const ROLE_KEYS: Record<string, string> = {
+  support_worker: "hub.role.supportWorker",
+  support_coordinator: "hub.role.supportCoordinator",
+  managing_director: "hub.role.managingDirector",
+  allied_health: "hub.role.alliedHealth",
+  admin: "hub.role.admin",
 };
 
 function getInitials(name: string) {
@@ -27,10 +28,11 @@ function getInitials(name: string) {
 }
 
 export function HubLayout({ children }: { children: React.ReactNode }) {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
-  const displayName = user?.full_name || user?.email || "Staff Member";
+  const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials    = getInitials(displayName);
-  const role        = ROLE_LABEL[user?.role ?? ""] ?? "Staff Member";
+  const role        = translate(ROLE_KEYS[user?.role ?? ""] ?? "hub.role.staffFallback");
 
   const [orgName, setOrgName] = useState<string | null>(null);
 
@@ -70,7 +72,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                 className="hidden text-[13px] font-semibold sm:block"
                 style={{ color: TEXT }}
               >
-                {orgName ?? "Organisation Hub"}
+                {orgName ?? translate("hub.orgFallback")}
               </span>
             </div>
 

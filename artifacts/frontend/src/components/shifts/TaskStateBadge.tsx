@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import type { TaskVisualState } from "@/lib/task-evidence-status";
 import { TASK_STATE_STYLES } from "@/lib/task-evidence-status";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TASK_ICONS = {
   not_started: Circle,
@@ -10,14 +11,23 @@ const TASK_ICONS = {
   complete: CheckCircle2,
 } as const;
 
+const TASK_STATE_KEYS: Record<TaskVisualState, string> = {
+  not_started: "tasks.state.notStarted",
+  in_progress: "tasks.state.inProgress",
+  evidence_required: "tasks.state.evidenceRequired",
+  complete: "tasks.state.complete",
+};
+
 type Props = {
   state: TaskVisualState;
   className?: string;
 };
 
 export function TaskStateBadge({ state, className }: Props) {
+  const { translate } = useAccessibility();
   const style = TASK_STATE_STYLES[state];
   const Icon = TASK_ICONS[state];
+  const label = translate(TASK_STATE_KEYS[state]);
 
   return (
     <span
@@ -30,14 +40,14 @@ export function TaskStateBadge({ state, className }: Props) {
         background: style.bg,
         color: style.text,
       }}
-      aria-label={style.label}
+      aria-label={label}
     >
       <Icon
         size={12}
         className={cn("shrink-0", state === "in_progress" && "animate-spin")}
         aria-hidden
       />
-      {style.label}
+      {label}
     </span>
   );
 }

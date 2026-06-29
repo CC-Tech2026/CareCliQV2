@@ -8,6 +8,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
@@ -17,19 +18,20 @@ type Props = {
 };
 
 export function MobileDataWarningModal({ open, sizeLabel, onUploadNow, onWaitForWifi }: Props) {
+  const { translate, translateParams } = useAccessibility();
+
   return (
     <AlertDialog open={open}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Mobile data upload</AlertDialogTitle>
+          <AlertDialogTitle>{translate("offline.mobileData.title")}</AlertDialogTitle>
           <AlertDialogDescription>
-            You&apos;re on mobile data. Uploading {sizeLabel} may use significant data. Upload now or
-            wait for Wi-Fi?
+            {translateParams("offline.mobileData.description", { size: sizeLabel })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onWaitForWifi}>Wait for Wi-Fi</AlertDialogCancel>
-          <AlertDialogAction onClick={onUploadNow}>Upload now</AlertDialogAction>
+          <AlertDialogCancel onClick={onWaitForWifi}>{translate("offline.mobileData.waitWifi")}</AlertDialogCancel>
+          <AlertDialogAction onClick={onUploadNow}>{translate("offline.mobileData.uploadNow")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

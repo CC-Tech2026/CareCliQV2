@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Users, UserCheck, AlertTriangle, ArrowLeft, TrendingDown, Star, Shield } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -31,14 +32,14 @@ interface MDData {
 
 type Filter = "all" | "at_risk" | "strong";
 
-function StatusBadge({ score }: { score: number }) {
+function StatusBadge({ score, translate }: { score: number; translate: (k: string) => string }) {
   if (score >= 90)
-    return <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 border border-emerald-200">Strong Performer</span>;
+    return <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-black text-emerald-700 border border-emerald-200">{translate("md.staff.strongPerformer")}</span>;
   if (score >= 85)
-    return <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-black text-blue-700 border border-blue-200">On Track</span>;
+    return <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-black text-blue-700 border border-blue-200">{translate("md.staff.onTrack")}</span>;
   if (score >= 70)
-    return <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-black text-amber-700 border border-amber-200">Needs Attention</span>;
-  return <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-black text-red-700 border border-red-200">Retention Risk</span>;
+    return <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-black text-amber-700 border border-amber-200">{translate("md.staff.needsAttention")}</span>;
+  return <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-[10px] font-black text-red-700 border border-red-200">{translate("md.staff.retentionRisk")}</span>;
 }
 
 function ScoreBar({ score }: { score: number }) {
@@ -54,6 +55,7 @@ function ScoreBar({ score }: { score: number }) {
 }
 
 export default function MDStaffPage() {
+  const { translate, translateParams } = useAccessibility();
   const [, navigate] = useLocation();
   const [data, setData] = useState<MDData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function MDStaffPage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
             <h1 className="text-xl font-black" style={{ color: TEXT }}>Staff Management</h1>
@@ -111,7 +113,7 @@ export default function MDStaffPage() {
         ) : error || !data ? (
           <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
             <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-            <p className="font-black" style={{ color: TEXT }}>Could not load staff data</p>
+            <p className="font-black" style={{ color: TEXT }}>{translate("md.staff.loadFailed")}</p>
           </div>
         ) : (
           <>
@@ -150,7 +152,7 @@ export default function MDStaffPage() {
             <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
-                  Staff Directory ({allStaff.length})
+                  {translate("md.staff.directory")} ({allStaff.length})
                 </h2>
                 <div className="flex flex-wrap items-center gap-2">
                   {(["all", "at_risk", "strong"] as Filter[]).map((f) => (

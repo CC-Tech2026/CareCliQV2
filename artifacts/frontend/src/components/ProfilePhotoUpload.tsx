@@ -3,8 +3,9 @@ import { Camera, Loader2, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { cropImageToCircle } from "@/lib/image-crop";
-import { deleteProfilePhoto, uploadProfilePhoto } from "@/services/userService";
+import { uploadProfilePhoto } from "@/services/userService";
 
 type Props = {
   currentUrl?: string | null;
@@ -14,6 +15,7 @@ type Props = {
 export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const { user, updateUser } = useAuth();
   const [preview, setPreview] = useState(currentUrl || user?.profile_photo_url || "");
   const [busy, setBusy] = useState(false);
@@ -25,14 +27,18 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
     if (!file) return;
     if (!allowedTypes.includes(file.type)) {
       toast({
-        title: "Unsupported image",
-        description: cropCircle ? "Upload JPEG or PNG." : "Upload JPG, PNG, or WebP.",
+        title: translate("profile.photo.unsupported"),
+        description: cropCircle ? translate("profile.photo.uploadJpegPng") : translate("profile.photo.uploadJpgPngWebp"),
         variant: "destructive",
       });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Image too large", description: "Profile photos must be 5MB or smaller.", variant: "destructive" });
+      toast({
+        title: translate("profile.photo.tooLarge"),
+        description: translate("profile.photo.maxSize"),
+        variant: "destructive",
+      });
       return;
     }
     setBusy(true);
@@ -42,11 +48,11 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
       const profile = await uploadProfilePhoto(uploadFile);
       setPreview(profile.profile_photo_url || "");
       updateUser({ profile_photo_url: profile.profile_photo_url || null });
-      toast({ title: "Profile photo saved" });
+      toast({ title: translate("profile.photo.saved") });
     } catch (error) {
       toast({
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Please try another image.",
+        title: translate("profile.photo.uploadFailed"),
+        description: error instanceof Error ? error.message : translate("profile.photo.tryAnother"),
         variant: "destructive",
       });
     } finally {
@@ -59,11 +65,11 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
     try {
       setPreview("");
       updateUser({ profile_photo_url: null });
-      toast({ title: "Profile photo removed" });
+      toast({ title: translate("profile.photo.removed") });
     } catch (error) {
       toast({
-        title: "Remove failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("profile.photo.removeFailed"),
+        description: error instanceof Error ? error.message : translate("common.retry"),
         variant: "destructive",
       });
     } finally {
@@ -80,11 +86,11 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-      <div className="h-24 w-24 overflow-hidden rounded-full border border-[#E5E7EB] bg-[#F8F8FE]">
+      <div className="h-24 w-24 overflow-hidden rounded-full border bg-cc-soft" style={{ borderColor: "var(--cc-border)" }}>
         {preview ? (
-          <img src={preview} alt="Profile" className="h-full w-full object-cover" />
+          <img src={preview} alt={translate("profile.photo.alt")} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-xl font-black text-[#3730A3]">
+          <div className="flex h-full w-full items-center justify-center text-xl font-black text-cc-plum">
             {initials}
           </div>
         )}
@@ -106,16 +112,19 @@ export function ProfilePhotoUpload({ currentUrl, cropCircle = false }: Props) {
             className="gap-2 rounded-xl"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : preview ? <Camera className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-            {preview ? "Replace photo" : "Upload photo"}
+            {preview ? translate("profile.photo.replace") : translate("profile.photo.upload")}
           </Button>
           {preview && (
             <Button type="button" variant="ghost" onClick={removePhoto} disabled={busy} className="gap-2 rounded-xl text-[#BE185D]">
               <Trash2 className="h-4 w-4" />
-              Remove
+              {translate("profile.photo.remove")}
             </Button>
           )}
         </div>
-        <p className="text-xs font-medium text-[#6B7280]">JPEG or PNG. Maximum 5MB.{cropCircle ? " Cropped to a circle on upload." : ""}</p>
+        <p className="text-xs font-medium text-cc-muted">
+          {translate("profile.photo.hint")}
+          {cropCircle ? translate("profile.photo.hintCrop") : ""}
+        </p>
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import { listIncidents } from "@/services/incidentService";
 import { WorkerIncidentReportForm } from "@/components/shifts/WorkerIncidentReportForm";
 import { listShiftMessages, sendShiftOfficeMessage, type ShiftOfficeMessage } from "@/services/shiftService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const DEFAULT_OFFICE_PHONE = "1300 000 000";
 
@@ -50,6 +51,7 @@ export function DuringShiftAccordion({
   onToggle,
   officePhone,
 }: Props) {
+  const { translate } = useAccessibility();
   const resolvedOfficePhone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
   const { toast } = useToast();
 
@@ -86,7 +88,7 @@ export function DuringShiftAccordion({
       const { dataUrl } = await compressImageFile(file);
       setMessagePhotoPreviews((prev) => [...prev, dataUrl].slice(0, 2));
     } catch {
-      toast({ title: "Could not add photo", variant: "destructive" });
+      toast({ title: translate("shift.during.photoFailed"), variant: "destructive" });
     }
   };
 
@@ -100,14 +102,14 @@ export function DuringShiftAccordion({
         priority: messagePriority,
         attachment_data: messagePhotoPreviews.length ? messagePhotoPreviews : undefined,
       });
-      toast({ title: "Message sent", description: "Office has been notified." });
+      toast({ title: translate("shift.during.messageSent"), description: translate("shift.during.messageSentDesc") });
       setOfficeMessage("");
       setMessagePhotoPreviews([]);
       setShowMessageForm(false);
       void loadHistory();
     } catch (err) {
       toast({
-        title: "Could not send message",
+        title: translate("shift.during.messageFailed"),
         description: (err as Error).message || "Please try again.",
         variant: "destructive",
       });
@@ -125,7 +127,7 @@ export function DuringShiftAccordion({
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <Sparkles size={16} style={{ color: PLUM }} />
-          During Shift
+          {translate("shift.during.title")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
@@ -146,7 +148,7 @@ export function DuringShiftAccordion({
               }}
             >
               <AlertTriangle size={14} className="mr-1.5" />
-              Report incident
+              {translate("shift.during.reportIncident")}
             </Button>
             <Button
               type="button"
@@ -161,7 +163,7 @@ export function DuringShiftAccordion({
               }}
             >
               <MessageSquare size={14} className="mr-1.5" />
-              Message office
+              {translate("shift.during.messageOffice")}
             </Button>
           </div>
 
@@ -169,7 +171,7 @@ export function DuringShiftAccordion({
             <a href={`tel:${resolvedOfficePhone}`}>
               <Button type="button" variant="outline" className="h-11 w-full rounded-xl text-xs font-bold">
                 <Phone size={14} className="mr-1.5" />
-                Call office
+                {translate("shift.during.callOffice")}
               </Button>
             </a>
             <a href="tel:000">
@@ -178,7 +180,7 @@ export function DuringShiftAccordion({
                 variant="outline"
                 className="h-11 w-full rounded-xl border-red-200 text-xs font-bold text-red-700"
               >
-                Emergency 000
+                {translate("shift.during.emergency")}
               </Button>
             </a>
           </div>
@@ -186,8 +188,8 @@ export function DuringShiftAccordion({
           {showIncidentForm && (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
-                <p className="text-xs font-black uppercase tracking-wider text-red-800">Incident report</p>
-                <button type="button" onClick={() => setShowIncidentForm(false)} aria-label="Close incident form">
+                <p className="text-xs font-black uppercase tracking-wider text-red-800">{translate("shift.during.incidentReport")}</p>
+                <button type="button" onClick={() => setShowIncidentForm(false)} aria-label={translate("shift.during.closeIncident")}>
                   <X size={16} className="text-red-600" />
                 </button>
               </div>
@@ -208,8 +210,8 @@ export function DuringShiftAccordion({
           {showMessageForm && (
             <div className="space-y-3 rounded-xl border border-violet-100 bg-violet-50/40 p-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-wider text-violet-800">Message office</p>
-                <button type="button" onClick={() => setShowMessageForm(false)} aria-label="Close message form">
+                <p className="text-xs font-black uppercase tracking-wider text-violet-800">{translate("shift.during.messageOffice")}</p>
+                <button type="button" onClick={() => setShowMessageForm(false)} aria-label={translate("shift.during.closeMessage")}>
                   <X size={16} className="text-violet-600" />
                 </button>
               </div>
@@ -218,15 +220,15 @@ export function DuringShiftAccordion({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                  <SelectItem value="emergency">Emergency</SelectItem>
+                  <SelectItem value="normal">{translate("shift.during.priority.normal")}</SelectItem>
+                  <SelectItem value="urgent">{translate("shift.during.priority.urgent")}</SelectItem>
+                  <SelectItem value="emergency">{translate("shift.during.priority.emergency")}</SelectItem>
                 </SelectContent>
               </Select>
               <Textarea
                 value={officeMessage}
                 onChange={(e) => setOfficeMessage(e.target.value)}
-                placeholder="Write your message to the office…"
+                placeholder={translate("shift.during.messagePlaceholder")}
                 className="min-h-[80px] bg-cc-surface"
               />
               <div className="flex flex-wrap gap-2">
@@ -264,7 +266,7 @@ export function DuringShiftAccordion({
                 disabled={sendingMessage}
                 onClick={() => void handleSendMessage()}
               >
-                {sendingMessage ? "Sending…" : "Send message"}
+                {sendingMessage ? translate("shift.during.sending") : translate("shift.during.sendMessage")}
               </Button>
             </div>
           )}
@@ -272,7 +274,7 @@ export function DuringShiftAccordion({
           {messageHistory.length > 0 && (
             <div className="rounded-xl border bg-cc-bg p-3" style={{ borderColor: BORDER }}>
               <p className="mb-2 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                Office messages
+                {translate("shift.during.officeMessages")}
               </p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs">
                 {messageHistory.map((msg) => (
@@ -289,7 +291,7 @@ export function DuringShiftAccordion({
 
           {incidentHistory.length > 0 && (
             <div className="rounded-xl border bg-[#FFF7ED] p-3" style={{ borderColor: "#FED7AA" }}>
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">This shift</p>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-amber-800">{translate("shift.during.thisShift")}</p>
               <ul className="max-h-28 space-y-2 overflow-y-auto text-xs text-amber-950">
                 {incidentHistory.map((item) => (
                   <li key={item.id} className="rounded-lg bg-cc-surface px-2 py-1.5">

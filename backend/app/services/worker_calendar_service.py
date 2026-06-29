@@ -124,7 +124,7 @@ def list_shifts_for_calendar(
     for shift in rows:
         session = _get_session_for_shift(shift)
         card = _shift_card_payload(shift, session)
-        card = _enrich_worker_shift_card(card, shift, organization_id, session)
+        card = _enrich_worker_shift_card(card, shift, organization_id, session, worker_id)
         pid = str(shift.get("participant_id") or "")
         card["participant_suburb"] = extract_suburb(card.get("participant_address"))
         card["calendar_status"] = _calendar_display_status(shift)

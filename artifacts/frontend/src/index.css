@@ -149,6 +149,9 @@
   --color-cc-muted: var(--cc-muted);
   --color-cc-border: var(--cc-border);
   --color-cc-soft: var(--cc-soft);
+  --color-cc-bg: var(--cc-bg);
+  --color-cc-surface: var(--cc-surface);
+  --color-cc-active-bg: var(--cc-active-bg);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -201,14 +204,49 @@
   --cc-bg:         #FFFFFF;
   --cc-surface:    #FFFFFF;
   --cc-soft:       #F8F8FE;
+  --cc-ring-track: #EEEAFB;
   /* ── Nav state ── */
   --cc-active-bg:  #EEF2FF;
   /* ── Alert pill ── */
   --cc-alert-bg:   #FCE7F3;
+  /* ── Status badges ── */
+  --cc-status-success:      #166534;
+  --cc-status-success-bg:   #ECFDF5;
+  --cc-status-warning:      #B45309;
+  --cc-status-warning-bg:   #FFFBEB;
+  --cc-status-critical:     #BE185D;
+  --cc-status-critical-bg:  #FCE7F3;
+  --cc-status-info:         #0369A1;
+  --cc-status-info-bg:      #F0F9FF;
   /* ── Shadow language (plum-tinted, for modals/overlays only — no card shadows) ── */
   --cc-shadow-sm:  0 2px 8px rgba(55,48,163,0.06), 0 1px 3px rgba(55,48,163,0.04);
   --cc-shadow-md:  0 4px 16px rgba(55,48,163,0.09), 0 2px 6px rgba(55,48,163,0.04);
   --cc-shadow-lg:  0 20px 60px rgba(55,48,163,0.13), 0 8px 24px rgba(55,48,163,0.06);
+
+  /* Accessibility — scaled by AccessibilityContext on <html> */
+  --font-scale: 1;
+
+  /* Auth pages (login / signup) */
+  --auth-shell-bg: #FFFFFF;
+  --auth-form-bg: #FFFFFF;
+  --auth-marketing-bg: linear-gradient(135deg, #F5F3FF 0%, #FFF9F0 100%);
+  --auth-marketing-glow:
+    radial-gradient(ellipse at 5% 110%, rgba(55,48,163,0.08) 0%, transparent 55%),
+    radial-gradient(ellipse at 95% -5%, rgba(190,24,93,0.06) 0%, transparent 45%);
+  --auth-headline: #2D1B4E;
+  --auth-marketing-muted: #6B5B95;
+  --auth-marketing-body: #5A4A78;
+  --auth-accent: #3730A3;
+  --auth-input-border: #C7D2FE;
+  --auth-input-bg: #F8F8FE;
+  --auth-card-bg: rgba(255, 255, 255, 0.7);
+  --auth-card-border: rgba(55, 48, 163, 0.15);
+  --auth-stat-card-bg: rgba(55, 48, 163, 0.06);
+  --auth-stat-card-border: rgba(55, 48, 163, 0.12);
+  --auth-stat-label: #5A4A78;
+  --auth-stat-value: #2D1B4E;
+  --auth-footer: #94A3B8;
+  --auth-drag-handle: #E5E7EB;
 }
 
 .dark {
@@ -228,15 +266,46 @@
   /* Surfaces */
   --cc-bg:         #111827;
   --cc-surface:    #1F2937;
-  --cc-soft:       #1F2937;
+  --cc-soft:       #374151;
+  --cc-ring-track: #374151;
   /* Nav state */
   --cc-active-bg:  #1E1B4B;
   /* Alert pill */
   --cc-alert-bg:   rgba(190, 24, 93, 0.2);
+  /* Status badges */
+  --cc-status-success:      #4ADE80;
+  --cc-status-success-bg:   rgba(74, 222, 128, 0.12);
+  --cc-status-warning:      #FCD34D;
+  --cc-status-warning-bg:   rgba(252, 211, 77, 0.12);
+  --cc-status-critical:     #F472B6;
+  --cc-status-critical-bg:  rgba(244, 114, 182, 0.12);
+  --cc-status-info:         #38BDF8;
+  --cc-status-info-bg:      rgba(56, 189, 248, 0.12);
   /* Shadows — subtler on dark */
   --cc-shadow-sm:  0 2px 8px rgba(0,0,0,0.25);
   --cc-shadow-md:  0 4px 16px rgba(0,0,0,0.3);
   --cc-shadow-lg:  0 20px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
+
+  --auth-shell-bg: #111827;
+  --auth-form-bg: #1F2937;
+  --auth-marketing-bg: linear-gradient(135deg, #1e1b4b 0%, #111827 55%, #0f172a 100%);
+  --auth-marketing-glow:
+    radial-gradient(ellipse at 5% 110%, rgba(129, 140, 248, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 95% -5%, rgba(244, 114, 182, 0.08) 0%, transparent 45%);
+  --auth-headline: #F9FAFB;
+  --auth-marketing-muted: #9CA3AF;
+  --auth-marketing-body: #D1D5DB;
+  --auth-accent: #818CF8;
+  --auth-input-border: #4B5563;
+  --auth-input-bg: #374151;
+  --auth-card-bg: rgba(31, 41, 55, 0.85);
+  --auth-card-border: rgba(129, 140, 248, 0.2);
+  --auth-stat-card-bg: rgba(129, 140, 248, 0.1);
+  --auth-stat-card-border: rgba(129, 140, 248, 0.18);
+  --auth-stat-label: #9CA3AF;
+  --auth-stat-value: #F9FAFB;
+  --auth-footer: #6B7280;
+  --auth-drag-handle: #4B5563;
 }
 
 /* ── Dark mode global surface overrides ─────────────────────────────────────
@@ -261,6 +330,72 @@
 /* Hover states */
 .dark .hover\:bg-gray-50:hover  { background-color: var(--cc-soft)    !important; }
 .dark .hover\:bg-gray-100:hover { background-color: var(--cc-soft)    !important; }
+
+/* Hardcoded CareCliQ hex utilities (Support Worker pages) */
+.dark .bg-\[\#F8F6FE\],
+.dark .bg-\[\#F8F8FE\],
+.dark .bg-\[\#FCFBFF\],
+.dark .bg-\[\#F0EDF8\],
+.dark .bg-\[\#EEF2FF\]     { background-color: var(--cc-soft)      !important; }
+.dark .hover\:bg-\[\#F8F6FE\]:hover,
+.dark .hover\:bg-\[\#F8F8FE\]:hover,
+.dark .hover\:bg-\[\#EEF2FF\]:hover { background-color: var(--cc-soft) !important; }
+.dark .text-\[\#111827\]   { color: var(--cc-text)                 !important; }
+.dark .text-\[\#6B7280\]   { color: var(--cc-muted)                !important; }
+.dark .text-\[\#3730A3\]   { color: var(--cc-plum)                 !important; }
+.dark .text-\[\#BE185D\]   { color: var(--cc-coral)                !important; }
+.dark .border-\[\#E5E7EB\],
+.dark .border-\[\#E2E8F0\],
+.dark .border-\[\#EEEAFB\] { border-color: var(--cc-border)         !important; }
+.dark .divide-\[\#EEEAFB\] > * + * { border-color: var(--cc-border) !important; }
+.dark .hover\:border-\[\#C7D2FE\]:hover { border-color: var(--cc-plum) !important; }
+.dark .ring-\[\#E5E7EB\]   { --tw-ring-color: var(--cc-border)     !important; }
+
+/* Semantic status pills & alerts */
+.dark .bg-emerald-50  { background-color: var(--cc-status-success-bg)  !important; }
+.dark .bg-amber-50    { background-color: var(--cc-status-warning-bg)  !important; }
+.dark .bg-red-50      { background-color: var(--cc-status-critical-bg) !important; }
+.dark .bg-blue-50     { background-color: var(--cc-status-info-bg)     !important; }
+.dark .bg-slate-50    { background-color: var(--cc-soft)                !important; }
+.dark .bg-red-50\/70  { background-color: rgba(244, 114, 182, 0.10)   !important; }
+.dark .text-emerald-600,
+.dark .text-emerald-700 { color: var(--cc-status-success)  !important; }
+.dark .text-amber-600,
+.dark .text-amber-700   { color: var(--cc-status-warning)  !important; }
+.dark .text-red-600,
+.dark .text-red-700,
+.dark .text-red-800     { color: var(--cc-status-critical) !important; }
+.dark .text-blue-700    { color: var(--cc-status-info)     !important; }
+.dark .text-slate-600   { color: var(--cc-muted)           !important; }
+.dark .border-emerald-200 { border-color: rgba(74, 222, 128, 0.25)  !important; }
+.dark .border-amber-200   { border-color: rgba(252, 211, 77, 0.25)  !important; }
+.dark .border-red-100,
+.dark .border-red-200     { border-color: rgba(244, 114, 182, 0.25) !important; }
+.dark .border-blue-200    { border-color: rgba(56, 189, 248, 0.25)  !important; }
+.dark .border-slate-200   { border-color: var(--cc-border)         !important; }
+.dark .hover\:bg-red-50:hover { background-color: var(--cc-status-critical-bg) !important; }
+
+/* Theme-aware status pill utilities */
+.cc-status-success {
+  background: var(--cc-status-success-bg);
+  color: var(--cc-status-success);
+  border-color: color-mix(in srgb, var(--cc-status-success) 25%, transparent);
+}
+.cc-status-warning {
+  background: var(--cc-status-warning-bg);
+  color: var(--cc-status-warning);
+  border-color: color-mix(in srgb, var(--cc-status-warning) 25%, transparent);
+}
+.cc-status-critical {
+  background: var(--cc-status-critical-bg);
+  color: var(--cc-status-critical);
+  border-color: color-mix(in srgb, var(--cc-status-critical) 25%, transparent);
+}
+.cc-status-info {
+  background: var(--cc-status-info-bg);
+  color: var(--cc-status-info);
+  border-color: color-mix(in srgb, var(--cc-status-info) 25%, transparent);
+}
 
 /* LIGHT MODE */
 :root {
@@ -444,6 +579,10 @@
     @apply border-border;
   }
 
+  html {
+    font-size: calc(16px * var(--font-scale, 1));
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
@@ -577,4 +716,128 @@
 /* Bottom navigation bar padding */
 .safe-nav-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Accessibility (CARECLIQV2-290) ─────────────────────────────────────────
+   Classes / vars are toggled on <html> by AccessibilityContext.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Dyslexia-friendly body font */
+html.font-dyslexic body,
+html.font-dyslexic #root {
+  font-family: "OpenDyslexic", "Comic Sans MS", var(--app-font-sans), sans-serif !important;
+  letter-spacing: 0.02em;
+  word-spacing: 0.05em;
+}
+
+/* High contrast — CareCliQ tokens (inline var(--cc-*)) + shadcn HSL tokens */
+html.high-contrast {
+  --cc-text: #000000;
+  --cc-muted: #1a1a1a;
+  --cc-border: #000000;
+  --cc-bg: #ffffff;
+  --cc-surface: #ffffff;
+  --cc-soft: #f0f0f0;
+  --cc-active-bg: #e8e8ff;
+  --cc-plum: #0000cc;
+  --cc-coral: #b00020;
+  --cc-green: #006400;
+  --cc-amber: #8b4500;
+  --cc-sky: #004080;
+  --cc-status-success: #006400;
+  --cc-status-success-bg: #e6ffe6;
+  --cc-status-warning: #8b4500;
+  --cc-status-warning-bg: #fff8e6;
+  --cc-status-critical: #b00020;
+  --cc-status-critical-bg: #ffe6ec;
+  --cc-status-info: #004080;
+  --cc-status-info-bg: #e6f4ff;
+
+  --background: 0 0% 100%;
+  --foreground: 0 0% 0%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 0%;
+  --muted-foreground: 0 0% 12%;
+  --border: 0 0% 0%;
+  --primary: 229 100% 35%;
+  --primary-foreground: 0 0% 100%;
+}
+
+html.high-contrast.dark {
+  --cc-text: #ffffff;
+  --cc-muted: #e5e5e5;
+  --cc-border: #ffffff;
+  --cc-bg: #000000;
+  --cc-surface: #0a0a0a;
+  --cc-soft: #1a1a1a;
+  --cc-active-bg: #1a1a4d;
+  --cc-plum: #9999ff;
+  --cc-coral: #ff6b9d;
+  --cc-green: #66ff99;
+  --cc-amber: #ffd966;
+  --cc-sky: #66ccff;
+  --cc-status-success: #66ff99;
+  --cc-status-success-bg: #003300;
+  --cc-status-warning: #ffd966;
+  --cc-status-warning-bg: #332200;
+  --cc-status-critical: #ff6b9d;
+  --cc-status-critical-bg: #330018;
+  --cc-status-info: #66ccff;
+  --cc-status-info-bg: #001a33;
+
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 0%;
+  --card-foreground: 0 0% 100%;
+  --muted-foreground: 0 0% 92%;
+  --border: 0 0% 100%;
+}
+
+html.high-contrast button,
+html.high-contrast [role="button"],
+html.high-contrast a[class*="rounded"] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* Readable text blocks on worker pages */
+.text-safe {
+  font-size: inherit;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* WCAG touch target minimum */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scale common fixed-pixel Tailwind text utilities (app uses text-[Npx] heavily) */
+html .text-\[9px\]  { font-size: calc(9px  * var(--font-scale, 1)) !important; }
+html .text-\[10px\] { font-size: calc(10px * var(--font-scale, 1)) !important; }
+html .text-\[11px\] { font-size: calc(11px * var(--font-scale, 1)) !important; }
+html .text-\[12px\] { font-size: calc(12px * var(--font-scale, 1)) !important; }
+html .text-\[13px\] { font-size: calc(13px * var(--font-scale, 1)) !important; }
+html .text-\[14px\] { font-size: calc(14px * var(--font-scale, 1)) !important; }
+html .text-\[15px\] { font-size: calc(15px * var(--font-scale, 1)) !important; }
+html .text-\[16px\] { font-size: calc(16px * var(--font-scale, 1)) !important; }
+html .text-\[18px\] { font-size: calc(18px * var(--font-scale, 1)) !important; }
+html .text-\[20px\] { font-size: calc(20px * var(--font-scale, 1)) !important; }
+html .text-\[22px\] { font-size: calc(22px * var(--font-scale, 1)) !important; }
+html .text-\[24px\] { font-size: calc(24px * var(--font-scale, 1)) !important; }
+html .text-\[26px\] { font-size: calc(26px * var(--font-scale, 1)) !important; }
+html .text-\[28px\] { font-size: calc(28px * var(--font-scale, 1)) !important; }
+html .text-\[32px\] { font-size: calc(32px * var(--font-scale, 1)) !important; }
+html .text-\[38px\] { font-size: calc(38px * var(--font-scale, 1)) !important; }
+html .text-\[42px\] { font-size: calc(42px * var(--font-scale, 1)) !important; }
+html .text-\[44px\] { font-size: calc(44px * var(--font-scale, 1)) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  html.high-contrast *,
+  html.font-dyslexic * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Accessibility, Globe, Loader2, Moon, Sun, Type } from "lucide-react";
+import { Accessibility, Globe, Loader2, Monitor, Moon, Sun, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import type { AppLanguage, FontSize, ThemeMode } from "@/services/accessibilityService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
@@ -16,7 +17,9 @@ const FONT_OPTIONS: { id: FontSize; labelKey: string }[] = [
 ];
 
 const THEME_OPTIONS: { id: ThemeMode; labelKey: string; icon: typeof Sun }[] = [
+  { id: "system", labelKey: "accessibility.theme.system", icon: Monitor },
   { id: "light", labelKey: "accessibility.theme.light", icon: Sun },
+  { id: "dark", labelKey: "accessibility.theme.dark", icon: Moon },
 ];
 
 const LANGUAGE_OPTIONS: { id: AppLanguage; label: string }[] = [
@@ -28,6 +31,7 @@ const LANGUAGE_OPTIONS: { id: AppLanguage; label: string }[] = [
 
 export default function WorkerAccessibility() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const {
     prefs,
     language,
@@ -225,7 +229,11 @@ export default function WorkerAccessibility() {
           ))}
         </div>
         <p className="mt-3 text-xs" style={{ color: MUTED }}>
-          {translate("accessibility.language.hint")}
+          {translate(
+            user?.role === "support_worker"
+              ? "accessibility.language.hint"
+              : "accessibility.language.hintGeneric",
+          )}
         </p>
       </section>
     </div>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   createParticipantTask,
   updateParticipantTask,
@@ -34,6 +35,7 @@ interface TaskFormModalProps {
 }
 
 function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const [form, setForm] = useState({
     name: task?.name ?? "",
@@ -57,11 +59,11 @@ function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
         : createParticipantTask(goal.participant_id, payload);
     },
     onSuccess: () => {
-      toast({ title: task ? "Task updated" : "Task created" });
+      toast({ title: task ? translate("coordinator.taskMgmt.updated") : translate("coordinator.taskMgmt.created") });
       onSaved();
       onClose();
     },
-    onError: () => toast({ variant: "destructive", title: "Save failed" }),
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.taskMgmt.saveFailed") }),
   });
 
   return (
@@ -69,62 +71,62 @@ function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
       <div className="w-full max-w-lg rounded-3xl p-6 space-y-4 overflow-y-auto bg-white" style={{ maxHeight: "90vh" }}>
         <div className="flex items-center justify-between">
           <h2 className="font-black text-[16px]" style={{ color: TEXT }}>
-            {task ? "Edit Task" : "New Task"}
+            {task ? translate("coordinator.taskMgmt.editTask") : translate("coordinator.taskMgmt.newTask")}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" title="Close">
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" title={translate("common.close")}>
             <X size={16} style={{ color: MUTED }} />
           </button>
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Goal: {goal.name}</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translateParams("coordinator.taskTemplate.goalLabel", { name: goal.name })}</Label>
           <p className="text-[12px]" style={{ color: MUTED }}>{goal.description}</p>
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Task Name *</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskMgmt.taskName")}</Label>
           <Input
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="e.g. Grocery shopping"
+            placeholder={translate("coordinator.taskMgmt.taskNamePlaceholder")}
             className="rounded-xl h-9 text-[13px]"
           />
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Description</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskTemplate.description")}</Label>
           <textarea
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
             rows={2}
-            placeholder="What does this task involve?"
+            placeholder={translate("coordinator.taskTemplate.descriptionPlaceholder")}
             className="w-full rounded-xl px-3 py-2 text-[13px] outline-none resize-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
           />
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Frequency</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskMgmt.frequency")}</Label>
           <Input
             value={form.frequency}
             onChange={(e) => setForm((f) => ({ ...f, frequency: e.target.value }))}
-            placeholder="e.g. Daily, Weekly, As needed"
+            placeholder={translate("coordinator.taskMgmt.frequencyPlaceholder")}
             className="rounded-xl h-9 text-[13px]"
           />
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-semibold" style={{ color: MUTED }}>Status</Label>
+          <Label className="text-xs font-semibold" style={{ color: MUTED }}>{translate("coordinator.taskMgmt.status")}</Label>
           <select
             value={form.status}
             onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as any }))}
             className="w-full h-9 rounded-xl px-3 text-[13px] outline-none"
             style={{ border: `1px solid ${BORDER}`, color: TEXT }}
-            aria-label="Task status"
+            aria-label={translate("coordinator.taskMgmt.status")}
           >
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
+            <option value="pending">{translate("coordinator.taskMgmt.status.pending")}</option>
+            <option value="in_progress">{translate("coordinator.taskMgmt.status.inProgress")}</option>
+            <option value="completed">{translate("coordinator.taskMgmt.status.completed")}</option>
           </select>
         </div>
 
@@ -138,7 +140,7 @@ function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
             disabled={!form.name.trim() || mut.isPending}
             onClick={() => mut.mutate()}
           >
-            {mut.isPending ? "Saving…" : task ? "Update Task" : "Create Task"}
+            {mut.isPending ? translate("common.saving") : task ? translate("coordinator.taskMgmt.updateTask") : translate("coordinator.taskMgmt.createTask")}
           </Button>
         </div>
       </div>
@@ -153,6 +155,7 @@ interface GoalTasksAccordionProps {
 }
 
 function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionProps) {
+  const { translate, translateParams } = useAccessibility();
   const [open, setOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editTask, setEditTask] = useState<ParticipantTask | null>(null);
@@ -166,10 +169,10 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
   const deleteMut = useMutation({
     mutationFn: deleteParticipantTask,
     onSuccess: () => {
-      toast({ title: "Task deleted" });
+      toast({ title: translate("coordinator.taskMgmt.deleted") });
       onTasksChanged();
     },
-    onError: () => toast({ variant: "destructive", title: "Delete failed" }),
+    onError: () => toast({ variant: "destructive", title: translate("coordinator.taskMgmt.deleteFailed") }),
   });
 
   return (
@@ -184,7 +187,7 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
               {goal.name}
             </p>
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: SOFT, color: PLUM }}>
-              {goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}
+              {goalTasks.length === 1 ? translateParams("coordinator.taskMgmt.taskCount", { count: String(goalTasks.length) }) : translateParams("coordinator.taskMgmt.taskCountPlural", { count: String(goalTasks.length) })}
             </span>
           </div>
           {goalTasks.length > 0 && (
@@ -199,7 +202,7 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
                 />
               </div>
               <span style={{ color: MUTED }}>
-                {completedCount}/{goalTasks.length} done
+                {translateParams("coordinator.taskMgmt.doneProgress", { done: String(completedCount), total: String(goalTasks.length) })}
               </span>
             </div>
           )}
@@ -245,7 +248,7 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
                     )}
                     {task.frequency && (
                       <p className="text-[10px] mt-1" style={{ color: MUTED }}>
-                        Frequency: {task.frequency}
+                        {translateParams("coordinator.taskMgmt.frequencyLabel", { value: task.frequency })}
                       </p>
                     )}
                   </div>
@@ -256,14 +259,14 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
                         setEditTask(task);
                         setFormOpen(true);
                       }}
-                      title="Edit"
+                      title={translate("common.edit")}
                     >
                       <Edit2 size={12} style={{ color: MUTED }} />
                     </button>
                     <button
                       className="p-1.5 rounded-lg hover:bg-white transition-colors"
                       onClick={() => deleteMut.mutate(task.id)}
-                      title="Delete"
+                      title={translate("common.delete")}
                       disabled={deleteMut.isPending}
                     >
                       <Trash2 size={12} style={{ color: CORAL }} />
@@ -284,7 +287,7 @@ function GoalTasksAccordion({ goal, tasks, onTasksChanged }: GoalTasksAccordionP
               setFormOpen(true);
             }}
           >
-            <Plus size={13} /> Add Task
+            <Plus size={13} /> {translate("coordinator.taskMgmt.addTask")}
           </Button>
 
           {formOpen && (

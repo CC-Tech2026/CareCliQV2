@@ -5,20 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { BORDER, PLUM } from "@/lib/shift-utils";
 import {
   getShiftTransitDraft,
   saveTransitExpense,
 } from "@/services/travelExpenseService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const RECEIPT_THRESHOLD_AUD = 10;
 
-const TRANSIT_TYPES = [
-  { id: "bus", label: "Bus" },
-  { id: "train", label: "Train" },
-  { id: "tram", label: "Tram" },
-  { id: "ferry", label: "Ferry" },
-  { id: "other", label: "Other" },
+const TRANSIT_TYPE_KEYS = [
+  { id: "bus", labelKey: "shift.transit.type.bus" },
+  { id: "train", labelKey: "shift.transit.type.train" },
+  { id: "tram", labelKey: "shift.transit.type.tram" },
+  { id: "ferry", labelKey: "shift.transit.type.ferry" },
+  { id: "other", labelKey: "shift.transit.type.other" },
 ] as const;
 
 type Props = {
@@ -27,6 +28,7 @@ type Props = {
 };
 
 export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -54,11 +56,11 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
     mutationFn: async () => {
       const parsed = Number(amountAud);
       if (!amountAud.trim() || Number.isNaN(parsed) || parsed <= 0) {
-        throw new Error("Enter a valid amount in AUD.");
+        throw new Error(translate("shift.transit.invalidAmount"));
       }
       const amount_cents = Math.round(parsed * 100);
       if (amount_cents > RECEIPT_THRESHOLD_AUD * 100 && !receipt && !savedDraft?.receipt_storage_path) {
-        throw new Error("Receipt photo is required for claims over $10.");
+        throw new Error(translate("shift.transit.receiptRequiredError"));
       }
       return saveTransitExpense(shiftId, {
         amount_cents,
@@ -67,14 +69,14 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
       });
     },
     onSuccess: () => {
-      toast({ title: "Transit claim saved", description: "Added to your draft travel claims." });
+      toast({ title: translate("shift.transit.toastSaved"), description: translate("shift.transit.toastSavedDesc") });
       setReceipt(null);
       if (fileRef.current) fileRef.current.value = "";
       queryClient.invalidateQueries({ queryKey: ["worker", "transit-draft", shiftId] });
       queryClient.invalidateQueries({ queryKey: ["worker", "travel-drafts"] });
     },
     onError: (e: Error) =>
-      toast({ title: "Could not save transit claim", description: e.message, variant: "destructive" }),
+      toast({ title: translate("shift.transit.toastFailed"), description: e.message, variant: "destructive" }),
   });
 
   if (shiftStatus === "cancelled") return null;
@@ -84,27 +86,34 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
     !Number.isNaN(parsedAmount) && parsedAmount > RECEIPT_THRESHOLD_AUD;
 
   return (
-    <section className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <section
+      className="rounded-2xl border bg-cc-surface p-4 shadow-sm"
+      style={{ borderColor: BORDER }}
+      data-tutorial="shift-travel-transit"
+    >
       <div className="flex items-center gap-2">
         <Bus size={18} style={{ color: PLUM }} />
-        <h3 className="text-sm font-black text-cc-text">Public transit</h3>
+        <h3 className="text-sm font-black text-cc-text">{translate("shift.transit.title")}</h3>
       </div>
 
       {isLoading ? (
-        <p className="mt-3 text-sm text-cc-muted">Loading…</p>
+        <p className="mt-3 text-sm text-cc-muted">{translate("common.loading")}</p>
       ) : (
         <>
           {savedDraft && (
             <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
               <CheckCircle2 size={14} />
-              Transit claim saved (${(savedDraft.amount_cents / 100).toFixed(2)} · {savedDraft.transit_type})
+              {translateParams("shift.transit.saved", {
+                amount: (savedDraft.amount_cents / 100).toFixed(2),
+                type: savedDraft.transit_type,
+              })}
             </p>
           )}
 
           <div className="mt-3 space-y-3">
             <div>
               <Label htmlFor={`transit-type-${shiftId}`} className="text-xs text-cc-muted">
-                Transit type
+                {translate("shift.transit.type")}
               </Label>
               <select
                 id={`transit-type-${shiftId}`}
@@ -113,9 +122,9 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
                 className="mt-1 flex min-h-[44px] w-full rounded-xl border bg-cc-surface px-3 text-sm font-semibold text-cc-text"
                 style={{ borderColor: BORDER }}
               >
-                {TRANSIT_TYPES.map((t) => (
+                {TRANSIT_TYPE_KEYS.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.label}
+                    {translate(t.labelKey)}
                   </option>
                 ))}
               </select>
@@ -123,7 +132,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
 
             <div>
               <Label htmlFor={`transit-amount-${shiftId}`} className="text-xs text-cc-muted">
-                Amount (AUD)
+                {translate("shift.transit.amount")}
               </Label>
               <Input
                 id={`transit-amount-${shiftId}`}
@@ -139,7 +148,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
 
             <div>
               <Label htmlFor={`transit-receipt-${shiftId}`} className="text-xs text-cc-muted">
-                Receipt photo{receiptRequired ? " (required over $10)" : " (optional)"}
+                {receiptRequired ? translate("shift.transit.receiptRequired") : translate("shift.transit.receiptOptional")}
               </Label>
               <div className="mt-1 flex items-center gap-2">
                 <Input
@@ -152,7 +161,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
                 />
               </div>
               {savedDraft?.receipt_storage_path && !receipt && (
-                <p className="mt-1 text-xs text-cc-muted">Receipt already on file for this draft.</p>
+                <p className="mt-1 text-xs text-cc-muted">{translate("shift.transit.receiptOnFile")}</p>
               )}
             </div>
 
@@ -168,7 +177,7 @@ export function ShiftTransitExpenseCard({ shiftId, shiftStatus }: Props) {
               ) : (
                 <>
                   <Upload size={16} />
-                  {savedDraft ? "Update transit claim" : "Save transit claim"}
+                  {savedDraft ? translate("shift.transit.update") : translate("shift.transit.save")}
                 </>
               )}
             </Button>

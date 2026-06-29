@@ -41,7 +41,7 @@ function isWithinBusinessHours(config: SupportConfig | null): boolean {
   }
 }
 
-function IntercomPanel({ appId }: { appId?: string | null }) {
+function IntercomPanel({ appId, translate }: { appId?: string | null; translate: (key: string) => string }) {
   useEffect(() => {
     if (!appId || typeof window === "undefined") return;
     const w = window as Window & { Intercom?: (...args: unknown[]) => void; intercomSettings?: Record<string, unknown> };
@@ -62,7 +62,7 @@ function IntercomPanel({ appId }: { appId?: string | null }) {
   if (!appId) {
     return (
       <p className="text-sm" style={{ color: MUTED }}>
-        Live chat is not configured yet. Use phone or email below.
+        {translate("help.chat.unconfigured")}
       </p>
     );
   }
@@ -71,7 +71,7 @@ function IntercomPanel({ appId }: { appId?: string | null }) {
     <div className="rounded-2xl border border-cc-border bg-cc-bg p-6 text-center">
       <MessageCircle className="mx-auto h-8 w-8 text-cc-plum" />
       <p className="mt-3 text-sm font-bold" style={{ color: TEXT }}>
-        Chat is available in the corner of this screen.
+        {translate("help.chat.prompt")}
       </p>
       <Button
         className="mt-4 rounded-xl"
@@ -81,14 +81,14 @@ function IntercomPanel({ appId }: { appId?: string | null }) {
           w.Intercom?.("show");
         }}
       >
-        Open chat
+        {translate("help.chat.open")}
       </Button>
     </div>
   );
 }
 
 export default function WorkerHelp() {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const [tab, setTab] = useState<Tab>("faq");
   const [query, setQuery] = useState("");
   const [faq, setFaq] = useState<FaqArticle[]>([]);
@@ -128,12 +128,15 @@ export default function WorkerHelp() {
   const selectedArticle = filteredFaq.find((a) => a.slug === selectedSlug) ?? filteredFaq[0];
   const inHours = isWithinBusinessHours(config);
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "tutorial", label: "Tutorial" },
-    { id: "faq", label: "FAQ" },
-    { id: "chat", label: "Chat" },
-    { id: "issues", label: "Known issues" },
-  ];
+  const tabs: { id: Tab; label: string }[] = useMemo(
+    () => [
+      { id: "tutorial", label: translate("help.tab.tutorial") },
+      { id: "faq", label: translate("help.tab.faq") },
+      { id: "chat", label: translate("help.tab.chat") },
+      { id: "issues", label: translate("help.tab.issues") },
+    ],
+    [translate],
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12 text-safe">
@@ -173,10 +176,10 @@ export default function WorkerHelp() {
       {!loading && tab === "tutorial" && (
         <div className="space-y-4 rounded-2xl border border-cc-border bg-cc-surface p-6">
           <p className="text-sm" style={{ color: MUTED }}>
-            Interactive walkthrough of the core shift workflow. Replay anytime — it does not change live shift data.
+            {translate("help.tutorial.intro")}
           </p>
           <Button className="rounded-xl" style={{ background: PLUM }} onClick={() => tutorial.replay()}>
-            Replay full tutorial
+            {translate("help.tutorial.replay")}
           </Button>
           <div className="grid gap-2 sm:grid-cols-2">
             {WORKER_TUTORIAL_STEPS.map((step) => (
@@ -190,7 +193,7 @@ export default function WorkerHelp() {
                   {step.title}
                 </p>
                 <p className="mt-1 text-xs" style={{ color: MUTED }}>
-                  Just show me this topic again
+                  {translate("help.tutorial.topicHint")}
                 </p>
               </button>
             ))}
@@ -206,7 +209,7 @@ export default function WorkerHelp() {
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search help articles…"
+                placeholder={translate("help.faq.search")}
                 className="rounded-xl pl-9"
               />
             </div>
@@ -244,7 +247,7 @@ export default function WorkerHelp() {
               </>
             ) : (
               <p className="text-sm" style={{ color: MUTED }}>
-                No articles match your search.
+                {translate("help.faq.empty")}
               </p>
             )}
           </div>
@@ -254,20 +257,19 @@ export default function WorkerHelp() {
       {!loading && tab === "chat" && (
         <div className="space-y-6">
           {inHours ? (
-            <IntercomPanel appId={config?.intercom_app_id} />
+            <IntercomPanel appId={config?.intercom_app_id} translate={translate} />
           ) : (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-              {config?.outside_hours_message ||
-                "Support is available Mon–Fri 9:00–17:00 AEST. We will respond on the next business day."}
+              {config?.outside_hours_message || translate("help.chat.outsideHours")}
             </div>
           )}
 
           <div className="rounded-2xl border border-cc-border bg-cc-surface p-6">
             <h2 className="text-lg font-black" style={{ color: TEXT }}>
-              Can&apos;t find what you need?
+              {translate("help.chat.fallbackTitle")}
             </h2>
             <p className="mt-2 text-sm" style={{ color: MUTED }}>
-              {config?.business_hours_json?.weekdays || "Mon–Fri 9:00–17:00 AEST"}
+              {config?.business_hours_json?.weekdays || translate("help.chat.hoursDefault")}
             </p>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <a
@@ -275,7 +277,7 @@ export default function WorkerHelp() {
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-cc-border px-4 py-3 text-sm font-bold"
               >
                 <Phone className="h-4 w-4" />
-                Call now — {config?.support_phone}
+                {translateParams("help.chat.callNow", { phone: config?.support_phone || "" })}
               </a>
               <a
                 href={`mailto:${config?.support_email}`}
@@ -293,7 +295,7 @@ export default function WorkerHelp() {
         <div className="space-y-3">
           {issues.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-cc-border bg-cc-surface p-8 text-center text-sm" style={{ color: MUTED }}>
-              No active known issues. Everything looks good.
+              {translate("help.issues.empty")}
             </div>
           ) : (
             issues.map((issue) => (
@@ -306,17 +308,19 @@ export default function WorkerHelp() {
                 </p>
                 {issue.affected_version && (
                   <p className="mt-2 text-xs font-bold" style={{ color: MUTED }}>
-                    Affected version: {issue.affected_version}
+                    {translateParams("help.issues.affectedVersion", { version: issue.affected_version })}
                   </p>
                 )}
                 {issue.workaround && (
                   <p className="mt-2 text-sm">
-                    <span className="font-bold">Workaround:</span> {issue.workaround}
+                    <span className="font-bold">{translate("help.issues.workaround")}</span> {issue.workaround}
                   </p>
                 )}
                 {issue.expected_fix_date && (
                   <p className="mt-2 text-xs" style={{ color: MUTED }}>
-                    Expected fix: {format(parseISO(issue.expected_fix_date), "d MMM yyyy")}
+                    {translateParams("help.issues.expectedFix", {
+                      date: format(parseISO(issue.expected_fix_date), "d MMM yyyy"),
+                    })}
                   </p>
                 )}
               </div>

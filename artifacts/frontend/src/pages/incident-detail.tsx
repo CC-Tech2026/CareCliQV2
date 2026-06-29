@@ -21,7 +21,6 @@ import {
   FileWarning,
   ClipboardList,
   Loader2,
-  AlertTriangle,
   Calendar,
   MapPin,
   Users,
@@ -32,33 +31,53 @@ import {
 import { getIncident, updateIncident, getSimilarIncidentPatterns } from "@/services/incidentService";
 import type { SimilarIncidentPatternsResult } from "@/services/incidentService";
 import { useReAuth } from "@/hooks/useReAuth";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const SEVERITIES = [
-  { value: "low", label: "Low", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { value: "medium", label: "Medium", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  { value: "high", label: "High", color: "bg-orange-100 text-orange-700 border-orange-200" },
-  { value: "critical", label: "Critical", color: "bg-red-100 text-red-700 border-red-200" },
-] as const;
-
-const STATUSES = [
-  { value: "reported", label: "Reported", color: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "under_investigation", label: "Under Investigation", color: "bg-amber-100 text-amber-700 border-amber-200" },
-  { value: "resolved", label: "Resolved", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  { value: "closed", label: "Closed", color: "bg-slate-100 text-slate-600 border-slate-200" },
-] as const;
-
-const INCIDENT_TYPE_LABELS: Record<string, string> = {
-  injury: "Injury",
-  medication_error: "Medication Error",
-  behaviour_of_concern: "Behaviour of Concern",
-  property_damage: "Property Damage",
-  abuse_neglect: "Abuse / Neglect",
-  restrictive_practice: "Restrictive Practice",
-  environmental: "Environmental Hazard",
-  elopement: "Elopement",
-  near_miss: "Near Miss",
-  other: "Other",
+const SEVERITY_COLORS: Record<string, string> = {
+  low: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  medium: "bg-amber-100 text-amber-700 border-amber-200",
+  high: "bg-orange-100 text-orange-700 border-orange-200",
+  critical: "bg-red-100 text-red-700 border-red-200",
 };
+
+const STATUS_COLORS: Record<string, string> = {
+  reported: "bg-blue-100 text-blue-700 border-blue-200",
+  under_investigation: "bg-amber-100 text-amber-700 border-amber-200",
+  resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  closed: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+const INCIDENT_TYPE_KEYS: Record<string, string> = {
+  injury: "incidents.type.injury",
+  medication_error: "incidents.type.medicationError",
+  behaviour_of_concern: "incidents.type.behaviourOfConcern",
+  property_damage: "incidents.type.propertyDamage",
+  abuse_neglect: "incidents.type.abuseNeglect",
+  restrictive_practice: "incidents.type.restrictivePractice",
+  environmental: "incidents.type.environmental",
+  elopement: "incidents.type.elopement",
+  near_miss: "incidents.type.nearMiss",
+  other: "incidents.type.other",
+};
+
+function severityLabel(value: string, translate: (key: string) => string) {
+  return translate(`incidents.severity.${value}`);
+}
+
+function statusLabel(value: string, translate: (key: string) => string) {
+  const map: Record<string, string> = {
+    reported: "incidents.status.reported",
+    under_investigation: "incidents.status.underInvestigation",
+    resolved: "incidents.status.resolved",
+    closed: "incidents.status.closed",
+  };
+  return translate(map[value] ?? "incidents.status.reported");
+}
+
+function incidentTypeLabel(type: string, translate: (key: string) => string) {
+  const key = INCIDENT_TYPE_KEYS[type];
+  return key ? translate(key) : type;
+}
 
 interface Incident {
   id: string;
@@ -88,17 +107,10 @@ interface Incident {
   follow_up_date?: string;
 }
 
-function getSeverityConfig(sev: string) {
-  return SEVERITIES.find((s) => s.value === sev) ?? SEVERITIES[1];
-}
-
-function getStatusConfig(st: string) {
-  return STATUSES.find((s) => s.value === st) ?? STATUSES[0];
-}
-
 export default function IncidentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const queryClient = useQueryClient();
   const { requireReAuth, modal } = useReAuth();
   const { user } = useAuth();
@@ -144,9 +156,9 @@ export default function IncidentDetail({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: [orgId, "incident", id] });
       queryClient.invalidateQueries({ queryKey: [orgId, "incidents"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "incident-stats"] });
-      toast({ title: "Incident updated" });
+      toast({ title: translate("incidents.detail.updated") });
     },
-    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+    onError: () => toast({ title: translate("incidents.detail.updateFailed"), variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -162,16 +174,16 @@ export default function IncidentDetail({ id }: { id: string }) {
   if (!incident) {
     return (
       <div className="max-w-3xl mx-auto text-center py-20" style={{ color: "var(--cc-text)" }}>
-        Incident not found.{" "}
+        {translate("incidents.detail.notFound")}{" "}
         <button onClick={() => navigate("/incidents")} className="underline" style={{ color: "#F1738A" }}>
-          Back to Incidents
+          {translate("incidents.detail.backToIncidents")}
         </button>
       </div>
     );
   }
 
-  const sev = getSeverityConfig(incident.severity);
-  const st = getStatusConfig(incident.status);
+  const sevColor = SEVERITY_COLORS[incident.severity] ?? SEVERITY_COLORS.medium;
+  const stColor = STATUS_COLORS[incident.status] ?? STATUS_COLORS.reported;
   const canInvestigate = incident.status === "reported";
   const canResolve = incident.status === "under_investigation";
   const canClose = incident.status === "resolved";
@@ -190,7 +202,7 @@ export default function IncidentDetail({ id }: { id: string }) {
           className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
           style={{ color: "#7A6A8A" }}
         >
-          <ArrowLeft size={14} /> Incidents
+          <ArrowLeft size={14} /> {translate("incidents.detail.breadcrumbParent")}
         </button>
         <span style={{ color: "rgba(232,213,232,0.8)" }}>/</span>
         <span className="font-medium truncate max-w-[260px]" style={{ color: "#1C1626" }}>{incident.title}</span>
@@ -201,10 +213,10 @@ export default function IncidentDetail({ id }: { id: string }) {
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-2xl p-4">
           <Siren size={18} className="text-red-600 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-red-800">NDIS Reportable — Notification Required</p>
+            <p className="text-sm font-bold text-red-800">{translate("incidents.detail.ndisReportableTitle")}</p>
             <p className="text-xs text-red-700 mt-0.5">
-              This incident must be reported to the NDIS Quality &amp; Safeguards Commission.
-              {incident.severity === "critical" && " Critical incidents require notification within 24 hours."}
+              {translate("incidents.detail.ndisReportableBody")}
+              {incident.severity === "critical" && ` ${translate("incidents.detail.ndisCritical24h")}`}
             </p>
           </div>
           <Button
@@ -214,7 +226,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             className="shrink-0 bg-red-600 hover:bg-red-700 text-white text-xs h-8 rounded-xl"
           >
             <CheckCircle2 size={12} className="mr-1.5" />
-            Mark Reported
+            {translate("incidents.detail.markReported")}
           </Button>
         </div>
       )}
@@ -223,7 +235,7 @@ export default function IncidentDetail({ id }: { id: string }) {
         <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
           <Clock size={16} className="text-orange-600 shrink-0" />
           <p className="text-sm text-orange-800 font-medium">
-            This incident is overdue for resolution. Escalation action may be required.
+            {translate("incidents.detail.overdueWarning")}
           </p>
         </div>
       )}
@@ -245,11 +257,11 @@ export default function IncidentDetail({ id }: { id: string }) {
               )}
             </div>
             <div className="flex flex-col gap-1.5 items-end shrink-0">
-              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", sev.color)}>
-                {sev.label}
+              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", sevColor)}>
+                {severityLabel(incident.severity, translate)}
               </Badge>
-              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", st.color)}>
-                {st.label}
+              <Badge variant="outline" className={cn("text-xs px-2.5 py-0.5", stColor)}>
+                {statusLabel(incident.status, translate)}
               </Badge>
             </div>
           </div>
@@ -260,12 +272,12 @@ export default function IncidentDetail({ id }: { id: string }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-[13px]">
             <div>
               <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
-                <Calendar size={11} /> Incident Date
+                <Calendar size={11} /> {translate("incidents.detail.incidentDate")}
               </p>
               <p className="font-medium" style={{ color: "#1C1626" }}>
                 {incident.incident_date
                   ? format(parseISO(incident.incident_date), "d MMM yyyy")
-                  : "—"}
+                  : translate("common.emDash")}
               </p>
               <p className="text-[11px] mt-0.5" style={{ color: "#7A6A8A" }}>
                 {incident.incident_date
@@ -274,15 +286,15 @@ export default function IncidentDetail({ id }: { id: string }) {
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>Type</p>
+              <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.type")}</p>
               <p className="font-medium" style={{ color: "#1C1626" }}>
-                {INCIDENT_TYPE_LABELS[incident.incident_type] ?? incident.incident_type}
+                {incidentTypeLabel(incident.incident_type, translate)}
               </p>
             </div>
             {incident.location && (
               <div>
                 <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
-                  <MapPin size={11} /> Location
+                  <MapPin size={11} /> {translate("incidents.detail.location")}
                 </p>
                 <p style={{ color: "var(--cc-text)" }}>{incident.location}</p>
               </div>
@@ -290,14 +302,14 @@ export default function IncidentDetail({ id }: { id: string }) {
             {incident.witnesses && (
               <div>
                 <p className="text-[11px] font-medium flex items-center gap-1 mb-0.5" style={{ color: "#7A6A8A" }}>
-                  <Users size={11} /> Witnesses
+                  <Users size={11} /> {translate("incidents.detail.witnesses")}
                 </p>
                 <p style={{ color: "var(--cc-text)" }}>{incident.witnesses}</p>
               </div>
             )}
             {incident.practice_standard && (
               <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>NDIS Practice Standard</p>
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.ndisPracticeStandard")}</p>
                 <p className="flex items-center gap-1.5" style={{ color: "var(--cc-text)" }}>
                   <Shield size={12} style={{ color: "#3730A3" }} />
                   {incident.practice_standard}
@@ -306,7 +318,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             )}
             {incident.ndis_reported_at && (
               <div className="col-span-2">
-                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>NDIS QSC Notified</p>
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.ndisQscNotified")}</p>
                 <p className="flex items-center gap-1.5 text-[13px] font-medium text-emerald-700">
                   <CheckCircle2 size={13} />
                   {format(parseISO(incident.ndis_reported_at), "d MMM yyyy, h:mm a")}
@@ -315,7 +327,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             )}
             {incident.resolved_date && (
               <div>
-                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>Resolved</p>
+                <p className="text-[11px] font-medium mb-0.5" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.resolved")}</p>
                 <p style={{ color: "var(--cc-text)" }}>{format(parseISO(incident.resolved_date), "d MMM yyyy")}</p>
               </div>
             )}
@@ -323,20 +335,20 @@ export default function IncidentDetail({ id }: { id: string }) {
 
           {/* What happened */}
           <div className="pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
-            <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>What happened</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.whatHappened")}</p>
             <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--cc-text)" }}>{incident.description}</p>
           </div>
 
           {incident.participant_impact && (
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Participant Impact</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.participantImpact")}</p>
               <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{incident.participant_impact}</p>
             </div>
           )}
 
           {incident.worker_actions && (
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>Immediate Actions Taken</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.immediateActions")}</p>
               <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{incident.worker_actions}</p>
             </div>
           )}
@@ -351,7 +363,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                 className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl h-9 text-xs"
               >
                 <FileWarning size={13} className="mr-1.5" />
-                Start Investigation
+                {translate("incidents.detail.startInvestigation")}
               </Button>
             )}
             {canResolve && (
@@ -362,7 +374,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 text-xs"
               >
                 <CheckCircle2 size={13} className="mr-1.5" />
-                Mark Resolved
+                {translate("incidents.detail.markResolved")}
               </Button>
             )}
             {canClose && (
@@ -375,7 +387,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                 style={{ borderColor: "rgba(232,213,232,0.7)" }}
               >
                 <XCircle size={13} className="mr-1.5" />
-                Close Incident
+                {translate("incidents.detail.closeIncident")}
               </Button>
             )}
             {updateMutation.isPending && (
@@ -391,10 +403,10 @@ export default function IncidentDetail({ id }: { id: string }) {
           <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             <div className="flex items-center gap-2">
               <History size={15} style={{ color: "#7A6A8A" }} />
-              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Similar Past Incidents</p>
+              <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>{translate("incidents.detail.similarPastIncidents")}</p>
             </div>
             <p className="text-[11px] mt-1" style={{ color: "#7A6A8A" }}>
-              Semantically matched from your organisation&apos;s incident history
+              {translate("incidents.detail.similarPastSubtitle")}
             </p>
           </div>
 
@@ -409,19 +421,19 @@ export default function IncidentDetail({ id }: { id: string }) {
                 <div className="rounded-xl p-4 space-y-3" style={{ background: "rgba(241,115,138,0.06)", border: "1px solid rgba(241,115,138,0.15)" }}>
                   <div className="flex items-center gap-2">
                     <Sparkles size={14} style={{ color: "#3730A3" }} />
-                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#3730A3" }}>AI Pattern Analysis</p>
+                    <p className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: "#3730A3" }}>{translate("incidents.detail.aiPatternAnalysis")}</p>
                   </div>
                   <div className="space-y-3 text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Pattern Recognised</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.patternRecognised")}</p>
                       <p>{patternData.ai_summary.pattern_recognised}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Past Strategies</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.pastStrategies")}</p>
                       <p>{patternData.ai_summary.past_strategies}</p>
                     </div>
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>Recommendations</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "#7A6A8A" }}>{translate("incidents.detail.recommendations")}</p>
                       <p>{patternData.ai_summary.recommendations}</p>
                     </div>
                   </div>
@@ -439,7 +451,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: "#7A6A8A" }}>
                         <span className="flex items-center gap-1">
                           <Calendar size={11} />
-                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : "—"}
+                          {match.date ? format(parseISO(match.date), "d MMM yyyy") : translate("common.emDash")}
                         </span>
                         <span className="flex items-center gap-1">
                           <User size={11} />
@@ -447,7 +459,7 @@ export default function IncidentDetail({ id }: { id: string }) {
                         </span>
                       </div>
                       <Badge variant="outline" className="text-[10px] px-2 py-0 shrink-0 bg-violet-50 text-violet-700 border-violet-200">
-                        {Math.round(match.similarity_score * 100)}% match
+                        {translateParams("incidents.detail.matchPercent", { percent: String(Math.round(match.similarity_score * 100)) })}
                       </Badge>
                     </div>
                     <p className="text-[13px] leading-relaxed" style={{ color: "var(--cc-text)" }}>{match.excerpt}</p>
@@ -464,28 +476,28 @@ export default function IncidentDetail({ id }: { id: string }) {
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <ClipboardList size={15} style={{ color: "#7A6A8A" }} />
-            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Investigation &amp; Corrective Actions</p>
+            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>{translate("incidents.detail.investigationCorrective")}</p>
           </div>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>Investigation Notes</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>{translate("incidents.detail.investigationNotes")}</Label>
             <Textarea
               rows={5}
               value={investigationNotes}
               onChange={(e) => setInvestigationNotes(e.target.value)}
-              placeholder="Document the full investigation — root cause analysis, contributing factors, findings…"
+              placeholder={translate("incidents.detail.investigationNotesPlaceholder")}
               className="text-[13px] resize-none rounded-xl"
               style={{ borderColor: "rgba(232,213,232,0.5)" }}
             />
           </div>
           <div>
-            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>Corrective Actions</Label>
+            <Label className="text-[12px] font-medium mb-1.5 block" style={{ color: "var(--cc-text)" }}>{translate("incidents.detail.correctiveActions")}</Label>
             <Textarea
               rows={3}
               value={correctiveActions}
               onChange={(e) => setCorrectiveActions(e.target.value)}
-              placeholder="Actions taken or planned to prevent recurrence — training, process changes, equipment upgrades…"
+              placeholder={translate("incidents.detail.correctiveActionsPlaceholder")}
               className="text-[13px] resize-none rounded-xl"
               style={{ borderColor: "rgba(232,213,232,0.5)" }}
             />
@@ -505,7 +517,7 @@ export default function IncidentDetail({ id }: { id: string }) {
               {updateMutation.isPending
                 ? <Loader2 size={13} className="animate-spin mr-1.5" />
                 : null}
-              Save Notes
+              {translate("incidents.detail.saveNotes")}
             </Button>
           </div>
         </div>
@@ -516,30 +528,30 @@ export default function IncidentDetail({ id }: { id: string }) {
         <div className="px-6 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
           <div className="flex items-center gap-2">
             <Shield size={14} style={{ color: "#7A6A8A" }} />
-            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Audit Trail</p>
+            <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>{translate("incidents.detail.auditTrail")}</p>
           </div>
         </div>
         <div className="p-6">
           <div className="space-y-2 text-[12px]" style={{ color: "#7A6A8A" }}>
             <div className="flex justify-between">
-              <span>Incident reported</span>
+              <span>{translate("incidents.detail.incidentReported")}</span>
               <span className="font-medium" style={{ color: "#1C1626" }}>
                 {incident.reported_date
                   ? format(parseISO(incident.reported_date), "d MMM yyyy, h:mm a")
-                  : "—"}
+                  : translate("common.emDash")}
               </span>
             </div>
             {incident.ndis_reportable && (
               <div className="flex justify-between">
-                <span>NDIS reportable flagged</span>
+                <span>{translate("incidents.detail.ndisReportableFlagged")}</span>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-red-50 text-red-600 border-red-200">
-                  Yes
+                  {translate("common.yes")}
                 </Badge>
               </div>
             )}
             {incident.ndis_reported_at && (
               <div className="flex justify-between">
-                <span>Reported to NDIS QSC</span>
+                <span>{translate("incidents.detail.reportedToNdisQsc")}</span>
                 <span className="font-medium text-emerald-700">
                   {format(parseISO(incident.ndis_reported_at), "d MMM yyyy")}
                 </span>
@@ -547,7 +559,7 @@ export default function IncidentDetail({ id }: { id: string }) {
             )}
             {incident.resolved_date && (
               <div className="flex justify-between">
-                <span>Incident resolved</span>
+                <span>{translate("incidents.detail.incidentResolved")}</span>
                 <span className="font-medium" style={{ color: "#1C1626" }}>
                   {format(parseISO(incident.resolved_date), "d MMM yyyy")}
                 </span>

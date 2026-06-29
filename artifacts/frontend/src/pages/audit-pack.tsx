@@ -1,8 +1,8 @@
-﻿import { useState, useCallback } from "react";
+﻿import { useState, useCallback, useMemo } from "react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
   AlertTriangle, FileCheck2, ShieldCheck, Download,
-  TrendingUp, TrendingDown, Minus, Users, Flag,
+  TrendingUp, TrendingDown, Minus, Flag,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import {
@@ -12,6 +12,7 @@ import {
   getCoordinatorFlaggedSessions,
 } from "@/services/coordinatorService";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -37,6 +38,7 @@ function TrendIcon({ score }: { score?: number | null }) {
 type ExportTab = "summary" | "workers" | "flagged";
 
 export default function AuditPack() {
+  const { translate, translateParams } = useAccessibility();
   const [activeTab, setActiveTab] = useState<ExportTab>("summary");
 
   const compliance = useOrgQuery(["coordinator", "compliance-overview"], { queryFn: getCoordinatorComplianceOverview });
@@ -78,54 +80,60 @@ export default function AuditPack() {
     URL.revokeObjectURL(url);
   }, [compliance.data, workers.data, flags.data, flagged.data]);
 
-  const tabs: { key: ExportTab; label: string }[] = [
-    { key: "summary",  label: "Summary" },
-    { key: "workers",  label: "Worker Performance" },
-    { key: "flagged",  label: "Flagged Sessions" },
-  ];
+  const tabs: { key: ExportTab; label: string }[] = useMemo(() => [
+    { key: "summary",  label: translate("auditPack.tab.summary") },
+    { key: "workers",  label: translate("auditPack.tab.workers") },
+    { key: "flagged",  label: translate("auditPack.tab.flagged") },
+  ], [translate]);
+
+  const statCards = useMemo(() => [
+    {
+      icon: ShieldCheck,
+      label: translate("auditPack.stat.teamCompliance"),
+      value: compliance.data ? `${compliance.data.average_score}%` : translate("common.emDash"),
+      colour: complianceColour(compliance.data?.average_score),
+    },
+    {
+      icon: FileCheck2,
+      label: translate("auditPack.stat.sessionRecords"),
+      value: compliance.data?.total_sessions ?? translate("common.emDash"),
+      colour: PLUM,
+    },
+    {
+      icon: AlertTriangle,
+      label: translate("auditPack.stat.rpFlags"),
+      value: flags.data?.length ?? translate("common.emDash"),
+      colour: CORAL,
+    },
+    {
+      icon: Flag,
+      label: translate("auditPack.stat.needsReview"),
+      value: flagged.data?.length ?? translate("common.emDash"),
+      colour: "#D97706",
+    },
+  ], [translate, compliance.data, flags.data, flagged.data]);
 
   return (
     <div className="space-y-6 pb-10">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="hidden" style={{ color: CORAL }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Business Compliance Report</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>NDIS audit pack — all session records for your organisation</p>
+          <p className="hidden" style={{ color: CORAL }}>{translate("common.coordinator")}</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("auditPack.title")}</h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>{translate("auditPack.subtitle")}</p>
         </div>
         <Button
           onClick={handleExport}
           className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
           style={{ background: PLUM }}
         >
-          <Download size={15} /> Export Audit Pack
+          <Download size={15} /> {translate("auditPack.export")}
         </Button>
       </div>
 
       {/* Stat cards */}
       <div className="grid gap-4 sm:grid-cols-4">
-        {[
-          {
-            icon: ShieldCheck, label: "Team compliance",
-            value: compliance.data ? `${compliance.data.average_score}%` : "—",
-            colour: complianceColour(compliance.data?.average_score),
-          },
-          {
-            icon: FileCheck2, label: "Session records",
-            value: compliance.data?.total_sessions ?? "—",
-            colour: PLUM,
-          },
-          {
-            icon: AlertTriangle, label: "RP flags",
-            value: flags.data?.length ?? "—",
-            colour: CORAL,
-          },
-          {
-            icon: Flag, label: "Needs review",
-            value: flagged.data?.length ?? "—",
-            colour: "#D97706",
-          },
-        ].map(({ icon: Icon, label, value, colour }) => (
+        {statCards.map(({ icon: Icon, label, value, colour }) => (
           <section key={label} className="rounded-2xl bg-white p-5" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
             <Icon size={20} style={{ color: colour }} />
             <p className="mt-3 text-3xl font-black" style={{ color: TEXT }}>{value}</p>
@@ -138,9 +146,9 @@ export default function AuditPack() {
       {compliance.data && (
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Compliant (≥85%)", count: compliance.data.compliant, bg: "#DCFCE7", colour: "#16A34A" },
-            { label: "At Risk (60–84%)", count: compliance.data.at_risk, bg: "#FEF3C7", colour: "#D97706" },
-            { label: "Non-Compliant (<60%)", count: compliance.data.non_compliant, bg: "#FEE2E2", colour: "#DC2626" },
+            { label: translate("auditPack.compliant"), count: compliance.data.compliant, bg: "#DCFCE7", colour: "#16A34A" },
+            { label: translate("auditPack.atRisk"), count: compliance.data.at_risk, bg: "#FEF3C7", colour: "#D97706" },
+            { label: translate("auditPack.nonCompliant"), count: compliance.data.non_compliant, bg: "#FEE2E2", colour: "#DC2626" },
           ].map(({ label, count, bg, colour }) => (
             <div key={label} className="rounded-xl p-4 text-center" style={{ background: bg }}>
               <p className="text-2xl font-black" style={{ color: colour }}>{count}</p>
@@ -171,21 +179,21 @@ export default function AuditPack() {
       {/* ── Summary tab ── */}
       {activeTab === "summary" && (
         <section className="rounded-2xl bg-white p-5 space-y-3" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
-          <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>Restrictive Practice Flags</h2>
-          {(compliance.error || flags.error) && <p className="text-sm text-red-600">Audit data could not be loaded.</p>}
+          <h2 className="text-sm font-black uppercase tracking-wider" style={{ color: TEXT }}>{translate("auditPack.rpFlagsTitle")}</h2>
+          {(compliance.error || flags.error) && <p className="text-sm text-red-600">{translate("auditPack.loadError")}</p>}
           {(flags.data || []).length === 0 ? (
-            <p className="text-sm font-medium" style={{ color: MUTED }}>No restrictive practice flags are currently recorded.</p>
+            <p className="text-sm font-medium" style={{ color: MUTED }}>{translate("auditPack.noRpFlags")}</p>
           ) : (
             <div className="space-y-2">
               {(flags.data || []).map((flag, index) => (
                 <div key={`${flag.session_id}-${index}`} className="rounded-xl border p-4 space-y-1" style={{ borderColor: "#EEEAFB" }}>
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || "Participant"}</p>
+                    <p className="text-sm font-black" style={{ color: TEXT }}>{flag.participant_name || translate("common.participant")}</p>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700 capitalize">
                       {flag.severity || "review"}
                     </span>
                   </div>
-                  <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>{flag.category || "restrictive practice"}</p>
+                  <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>{flag.category || translate("auditPack.restrictivePractice")}</p>
                   {flag.phrase && <p className="text-xs italic text-slate-500">"{flag.phrase}"</p>}
                   {flag.suggestion && <p className="text-xs leading-5" style={{ color: MUTED }}>{flag.suggestion}</p>}
                 </div>
@@ -199,10 +207,10 @@ export default function AuditPack() {
       {activeTab === "workers" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-            <h2 className="text-sm font-black" style={{ color: TEXT }}>Worker Compliance Performance</h2>
+            <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("auditPack.workerPerformanceTitle")}</h2>
           </div>
           {workers.isLoading ? (
-            <p className="p-5 text-sm" style={{ color: MUTED }}>Loading…</p>
+            <p className="p-5 text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
           ) : (
             <div className="divide-y" style={{ borderColor: BORDER }}>
               {(workers.data || []).map((w) => (
@@ -214,21 +222,27 @@ export default function AuditPack() {
                         {(w.role || "").replace(/_/g, " ")}
                       </span>
                       {w.is_active === false && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Inactive</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">{translate("auditPack.inactive")}</span>
                       )}
                     </div>
-                    <p className="text-xs" style={{ color: MUTED }}>{w.total_sessions} sessions · {w.draft_count} drafts · {w.flagged_count} flagged</p>
+                    <p className="text-xs" style={{ color: MUTED }}>
+                      {translateParams("auditPack.workerStats", {
+                        sessions: String(w.total_sessions),
+                        drafts: String(w.draft_count),
+                        flagged: String(w.flagged_count),
+                      })}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <TrendIcon score={w.avg_compliance} />
                     <span className="text-sm font-black" style={{ color: complianceColour(w.avg_compliance) }}>
-                      {w.avg_compliance != null ? `${w.avg_compliance}%` : "—"}
+                      {w.avg_compliance != null ? `${w.avg_compliance}%` : translate("common.emDash")}
                     </span>
                   </div>
                 </div>
               ))}
               {!workers.isLoading && !workers.data?.length && (
-                <p className="px-5 py-4 text-sm" style={{ color: MUTED }}>No worker data available.</p>
+                <p className="px-5 py-4 text-sm" style={{ color: MUTED }}>{translate("auditPack.noWorkerData")}</p>
               )}
             </div>
           )}
@@ -239,12 +253,12 @@ export default function AuditPack() {
       {activeTab === "flagged" && (
         <section className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="px-5 py-4 border-b" style={{ borderColor: BORDER }}>
-            <h2 className="text-sm font-black" style={{ color: TEXT }}>Sessions Flagged for Review</h2>
+            <h2 className="text-sm font-black" style={{ color: TEXT }}>{translate("auditPack.flaggedSessionsTitle")}</h2>
           </div>
           {flagged.isLoading ? (
-            <p className="p-5 text-sm" style={{ color: MUTED }}>Loading…</p>
+            <p className="p-5 text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>
           ) : !flagged.data?.length ? (
-            <p className="p-5 text-sm" style={{ color: MUTED }}>No sessions are currently flagged for review.</p>
+            <p className="p-5 text-sm" style={{ color: MUTED }}>{translate("auditPack.noFlaggedSessions")}</p>
           ) : (
             <div className="divide-y" style={{ borderColor: BORDER }}>
               {flagged.data.map((s) => (
@@ -252,11 +266,14 @@ export default function AuditPack() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-bold" style={{ color: TEXT }}>
-                        {s.participant_name || "Participant"} — {s.session_type || "Session"}
+                        {translateParams("auditPack.sessionLabel", {
+                          participant: s.participant_name || translate("common.participant"),
+                          sessionType: s.session_type || translate("auditPack.defaultSessionType"),
+                        })}
                       </p>
                       <p className="text-xs" style={{ color: MUTED }}>
-                        {s.session_date ? format(parseISO(s.session_date), "d MMM yyyy") : "Unknown date"}
-                        {s.review_requested_at && ` · Flagged ${format(parseISO(s.review_requested_at), "d MMM")}`}
+                        {s.session_date ? format(parseISO(s.session_date), "d MMM yyyy") : translate("auditPack.unknownDate")}
+                        {s.review_requested_at && translateParams("auditPack.flaggedOn", { date: format(parseISO(s.review_requested_at), "d MMM") })}
                       </p>
                     </div>
                     <a
@@ -264,7 +281,7 @@ export default function AuditPack() {
                       className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full text-white"
                       style={{ background: PLUM }}
                     >
-                      Review
+                      {translate("auditPack.review")}
                     </a>
                   </div>
                   {s.review_note && (

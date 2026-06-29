@@ -42,6 +42,8 @@ const FONT_SCALE: Record<FontSize, string> = {
   xl: "1.4",
 };
 
+export { FONT_SCALE };
+
 function applyDocumentClasses(prefs: AccessibilityPreferences | null, language: AppLanguage) {
   const root = document.documentElement;
   root.style.setProperty("--font-scale", FONT_SCALE[prefs?.font_size ?? "default"]);
@@ -97,12 +99,41 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     };
   }, [deviceId]);
 
+  /** Re-apply theme when OS preference changes while in system mode. */
+  useEffect(() => {
+    if (prefs?.theme_mode !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => applyThemeModeImmediate("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [prefs?.theme_mode]);
+
   const persist = useCallback(
     async (patch: Partial<AccessibilityPreferences>) => {
       const res = await saveAccessibilityPreferences(deviceId, patch);
       setPrefs(res.preferences);
       applyDocumentClasses(res.preferences, language);
       return res.preferences;
+    },
+    [deviceId, language],
+  );
+
+  const applyPrefsPatch = useCallback(
+    (patch: Partial<AccessibilityPreferences>) => {
+      setPrefs((prev) => {
+        const next: AccessibilityPreferences = prev
+          ? { ...prev, ...patch }
+          : {
+              font_size: "default",
+              theme_mode: "system",
+              high_contrast: false,
+              dyslexia_font: false,
+              device_id: deviceId,
+              ...patch,
+            };
+        applyDocumentClasses(next, language);
+        return next;
+      });
     },
     [deviceId, language],
   );
@@ -132,10 +163,19 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       prefs,
       language,
       loading,
-      setFontSize: async (font_size) => { await persist({ font_size }); },
+      setFontSize: async (font_size) => {
+        applyPrefsPatch({ font_size });
+        await persist({ font_size });
+      },
       setThemeMode,
-      setHighContrast: async (high_contrast) => { await persist({ high_contrast }); },
-      setDyslexiaFont: async (dyslexia_font) => { await persist({ dyslexia_font }); },
+      setHighContrast: async (high_contrast) => {
+        applyPrefsPatch({ high_contrast });
+        await persist({ high_contrast });
+      },
+      setDyslexiaFont: async (dyslexia_font) => {
+        applyPrefsPatch({ dyslexia_font });
+        await persist({ dyslexia_font });
+      },
       setLanguage: async (lang) => {
         await updatePreferredLanguage(lang);
         setLanguageState(lang);
@@ -144,7 +184,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       translate: (key) => t(language, key),
       translateParams: (key, params) => tParams(language, key, params),
     }),
-    [prefs, language, loading, persist, setThemeMode],
+    [prefs, language, loading, persist, setThemeMode, applyPrefsPatch],
   );
 
   return (

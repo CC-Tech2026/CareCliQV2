@@ -1,5 +1,22 @@
 import { CheckCircle2, Circle } from "lucide-react";
 import type { ChecklistItem } from "@/services/onboardingService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+
+const ITEM_LABEL_KEYS: Record<string, string> = {
+  verify_email: "onboarding.item.verifyEmail",
+  complete_profile: "onboarding.item.completeProfile",
+  upload_profile_photo: "onboarding.profilePhoto",
+  add_credential_wallet_items: "onboarding.addCredentials",
+  review_assigned_clients: "onboarding.reviewClients",
+  read_ndis_note_writing_guide: "onboarding.item.readNdisGuide",
+  acknowledge_note_writing_rules: "onboarding.item.acknowledgeNoteRules",
+  confirm_readiness: "onboarding.confirmReadiness",
+};
+
+function checklistLabel(item: ChecklistItem, translate: (key: string) => string): string {
+  const key = ITEM_LABEL_KEYS[item.key];
+  return key ? translate(key) : item.label;
+}
 
 export function WorkerOnboardingChecklist({
   items,
@@ -8,6 +25,8 @@ export function WorkerOnboardingChecklist({
   items: ChecklistItem[];
   onToggle: (key: string, completed: boolean) => void;
 }) {
+  const { translate } = useAccessibility();
+
   return (
     <div className="divide-y divide-[#EEEAFB] rounded-2xl border border-[#E5E7EB] bg-white">
       {items.map((item) => (
@@ -23,7 +42,7 @@ export function WorkerOnboardingChecklist({
           ) : (
             <Circle className="h-5 w-5 text-[#6B7280]" />
           )}
-          <span className="text-sm font-bold text-[#111827]">{item.label}</span>
+          <span className="text-sm font-bold text-[#111827]">{checklistLabel(item, translate)}</span>
         </label>
       ))}
     </div>
