@@ -86,9 +86,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "My Work",
       items: [
-        { href: "/my-shifts",  label: "My Shifts",  icon: CalendarDays  },
-        { href: "/my-clients", label: "My Clients", icon: UserRound     },
-        { href: "/tasks",      label: "Tasks",      icon: ClipboardList },
+        { href: "/my-shifts",         label: "My Shifts",         icon: CalendarDays  },
+        { href: "/calendar",          label: "Calendar",          icon: CalendarDays  },
+        { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
+        { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
+        { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
       ],
     },
     {
