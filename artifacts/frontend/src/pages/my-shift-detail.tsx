@@ -3,6 +3,7 @@ import { recordShiftViewed } from "@/services/notificationService";
 import { Link, useParams } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkerTutorialOptional } from "@/contexts/WorkerTutorialContext";
 import { useShiftTimer } from "@/hooks/useShiftTimer";
 import { useShiftSessionActions } from "@/hooks/useShiftSessionActions";
 import {
@@ -123,6 +124,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const id = (idProp || params.id || "").trim();
   const { user } = useAuth();
   const { toast } = useToast();
+  const tutorial = useWorkerTutorialOptional();
+  const isTutorialMode = tutorial?.isTutorialMode ?? false;
   const orgId = user?.organizationId ?? "__no_org__";
   const [briefingOpen, setBriefingOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
@@ -192,11 +195,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       shift.requires_briefing
       && !shift.briefing_complete
       && shift.visual_state === "scheduled"
-      && !isTutorialDemo
+      && !isTutorialMode
     ) {
       window.location.replace(`/my-shifts/${id}/briefing`);
     }
-  }, [shift, id, isTutorialDemo]);
+  }, [shift, id, isTutorialMode]);
 
   useEffect(() => {
     if (!shift) return;
