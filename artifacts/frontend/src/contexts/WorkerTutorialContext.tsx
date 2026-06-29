@@ -142,6 +142,10 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   }, [isStepGuideBlocking]);
 
   const refresh = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
     try {
       const remote = await getTutorialProgress();
       setProgress(remote);
@@ -151,7 +155,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     void refresh();

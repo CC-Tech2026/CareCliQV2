@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ParticipantAZFilter, type ParticipantItem } from "@/components/coordinator/ParticipantAZFilter";
 import { TaskManagementPanel } from "@/components/coordinator/TaskManagementPanel";
+import { NewTaskModal } from "@/components/shifts/NewTaskModal";
+import { TaskManagementView } from "@/components/shifts/TaskManagementView";
 import {
   getCoordinatorGoals,
   type ParticipantGoalGroup,
@@ -642,17 +644,19 @@ export default function CoordinatorGoals() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<"planning" | "tasks" | "overview">("planning");
+  const [tab, setTab] = useState<"planning" | "shift-tasks" | "overview">("planning");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [goalStatusFilter, setGoalStatusFilter] = useState<"all" | NdisGoal["status"]>("active");
   const [goalParticipant, setGoalParticipant] = useState("");
   const [goalFormOpen, setGoalFormOpen] = useState(false);
   const [editGoal, setEditGoal] = useState<NdisGoal | null>(null);
-  
-  // For new Task Management tab
-  const [selectedParticipantIdForTasks, setSelectedParticipantIdForTasks] = useState("");
+  const [planningView, setPlanningView] = useState<"goals" | "goal-based-tasks">("goal-based-tasks");
   const [taskGoalFormOpen, setTaskGoalFormOpen] = useState(false);
+  
+  // For Shift-Based Tasks tab
+  const [selectedParticipantIdForShiftTasks, setSelectedParticipantIdForShiftTasks] = useState("");
+  const [newShiftTaskModalOpen, setNewShiftTaskModalOpen] = useState(false);
   
   // For Plan Overview tab
   const [overviewParticipant, setOverviewParticipant] = useState("");
@@ -662,16 +666,10 @@ export default function CoordinatorGoals() {
   // NDIS Goals for the planning tab
   const { data: ndisGoals = [], isLoading: goalsLoading } = useOrgQuery<NdisGoal[]>(["ndis-goals", orgId], { queryFn: () => getNdisGoals(), enabled: tab === "planning" });
 
-  // Tasks for task management tab
-  const { data: tasks = [], isLoading: tasksLoading } = useOrgQuery<ParticipantTask[]>(
-    ["participant-tasks", selectedParticipantIdForTasks, orgId],
-    { queryFn: () => getParticipantTasks(selectedParticipantIdForTasks), enabled: !!selectedParticipantIdForTasks && tab === "tasks" }
-  );
-
-  // Goals for task management tab
-  const { data: participantGoals = [], isLoading: participantGoalsLoading } = useOrgQuery<NdisGoal[]>(
-    ["participant-goals", selectedParticipantIdForTasks, orgId],
-    { queryFn: () => getNdisGoals({ participant_id: selectedParticipantIdForTasks }), enabled: !!selectedParticipantIdForTasks && tab === "tasks" }
+  // Tasks for planning tab's goal-based tasks management
+  const { data: goalBasedTasks = [], isLoading: tasksLoading } = useOrgQuery<ParticipantTask[]>(
+    ["participant-tasks", goalParticipant, orgId],
+    { queryFn: () => getParticipantTasks(goalParticipant), enabled: !!goalParticipant && tab === "planning" }
   );
 
   const archiveMut = useMutation({
@@ -691,9 +689,9 @@ export default function CoordinatorGoals() {
       participant_id: group.participant_id,
       participant_name: group.participant_name,
       active_goals_count: (ndisGoals as NdisGoal[]).filter((g) => g.participant_id === group.participant_id && g.status === "active").length,
-      tasks_count: tasks.filter((t) => t.participant_id === group.participant_id).length,
+      tasks_count: goalBasedTasks.filter((t) => t.participant_id === group.participant_id).length,
     }));
-  }, [legacyData, ndisGoals, tasks]);
+  }, [legacyData, ndisGoals, goalBasedTasks]);
 
   const filteredLegacy = useMemo(() => {
     let list = legacyData;
@@ -815,7 +813,7 @@ export default function CoordinatorGoals() {
               )}
             </div>
 
-            {/* RIGHT: Goal form side panel */}
+            {/* RIGHT: Goal form or Goal-based tasks management side panel */}
             {goalParticipant && (
               <div className="flex flex-col overflow-hidden">
                 {goalFormOpen ? (
@@ -837,7 +835,70 @@ export default function CoordinatorGoals() {
                         <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("coordinator.goals.createEditTitle")}</p>
                         <p className="text-xs mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.createEditHint")}</p>
                       </div>
-                    </div>
+                    )}
+                  </>
+                )}
+
+                {/* Goal-Based Tasks view */}
+                {planningView === "goal-based-tasks" && (
+                  <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col overflow-hidden" style={{ borderColor: BORDER, background: SOFT }}>
+                    {taskGoalFormOpen ? (
+                      <>
+                        <button onClick={() => setTaskGoalFormOpen(false)} className="text-xs font-bold text-left mb-2" style={{ color: PLUM }}>← Back to tasks</button>
+                        <GoalFormModal
+                          goal={null}
+                          participants={legacyData}
+                          isModal={false}
+                          selectedParticipantId={goalParticipant}
+                          onClose={() => setTaskGoalFormOpen(false)}
+                          onSaved={() => { 
+                            setTaskGoalFormOpen(false); 
+                            qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); 
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between shrink-0">
+                          <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
+                            Link Tasks to Goals
+                          </h3>
+                          <Button 
+                            size="sm"
+                            className="rounded-xl gap-1.5"
+                            style={{ background: PLUM, color: "#fff" }}
+                            onClick={() => setTaskGoalFormOpen(true)}
+                          >
+                            <Plus size={14} /> Goal
+                          </Button>
+                        </div>
+
+                        {goalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> Loading…</div>}
+
+                        {!goalsLoading && filteredNdis.filter((g) => g.status === "active").length === 0 ? (
+                          <div className="rounded-xl border p-6 text-center flex-1 flex items-center justify-center" style={{ borderColor: BORDER, background: "#fff" }}>
+                            <div>
+                              <Target size={28} style={{ color: BORDER, margin: "0 auto" }} />
+                              <p className="mt-3 font-bold" style={{ color: TEXT }}>No active goals yet</p>
+                              <p className="text-sm mt-2" style={{ color: MUTED }}>Create goals first in the Goals view, then assign tasks here</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 overflow-y-auto space-y-4">
+                            {filteredNdis.filter((g) => g.status === "active").map((goal) => (
+                              <TaskManagementPanel
+                                key={goal.id}
+                                goal={goal}
+                                tasks={goalBasedTasks}
+                                onTasksChanged={() => {
+                                  qc.invalidateQueries({ queryKey: ["participant-tasks", goalParticipant, orgId] });
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -857,20 +918,29 @@ export default function CoordinatorGoals() {
         </div>
       )}
 
-      {/* TASK MANAGEMENT TAB - 2 column layout */}
-      {tab === "tasks" && (
+      {/* SHIFT-BASED TASKS TAB ─ Recurring shift-tied task templates */}
+      {tab === "shift-tasks" && (
         <div className="px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border p-4 gap-4" style={{ borderColor: BORDER, background: SOFT }}>
-            <div className="grid gap-4 grid-cols-[1fr_1.2fr] h-[calc(100vh-320px)]">
-            {/* LEFT: Participant filter only */}
-            <div className="flex flex-col overflow-hidden">
-              <ParticipantAZFilter
-                participants={participantListForFilter}
-                selectedParticipantId={selectedParticipantIdForTasks}
-                onParticipantSelect={setSelectedParticipantIdForTasks}
-                showActiveGoalsBadge={true}
-                isLoading={legacyLoading}
-              />
+          <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: "#fff" }}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="font-bold text-lg" style={{ color: TEXT }}>Shift-Based Task Templates</h3>
+                <p className="text-sm mt-1" style={{ color: MUTED }}>Create recurring tasks tied to specific shifts (Morning, Afternoon, Night)</p>
+              </div>
+              <Button
+                size="sm"
+                className="rounded-xl gap-1.5"
+                style={{ background: PLUM, color: "#fff" }}
+                onClick={() => {
+                  if (selectedParticipantIdForShiftTasks) {
+                    setNewShiftTaskModalOpen(true);
+                  } else {
+                    toast({ title: "Please select a participant first", variant: "destructive" });
+                  }
+                }}
+              >
+                <Plus size={14} /> New Task Template
+              </Button>
             </div>
 
             {/* RIGHT: Goals with tasks panel */}
@@ -942,12 +1012,20 @@ export default function CoordinatorGoals() {
                     <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.manageTasksTitle")}</p>
                     <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.manageTasksHint")}</p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
-        </div>
+      )}
+
+      {/* Modal for creating new shift-based task */}
+      {selectedParticipantIdForShiftTasks && (
+        <NewTaskModal
+          participantId={selectedParticipantIdForShiftTasks}
+          isOpen={newShiftTaskModalOpen}
+          onClose={() => setNewShiftTaskModalOpen(false)}
+        />
       )}
 
       {/* PLAN OVERVIEW TAB - 2 column layout */}

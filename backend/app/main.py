@@ -2,12 +2,13 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
 from .services.email_queue import start_email_queue, stop_email_queue
 from .services.notification_scheduler import start_notification_scheduler, stop_notification_scheduler
+from .jobs import start_scheduler, stop_scheduler
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -157,7 +158,9 @@ async def lifespan(application: FastAPI):
     start_email_queue()
     await _apply_startup_migrations()
     start_notification_scheduler()
+    start_scheduler()
     yield
+    stop_scheduler()
     await stop_notification_scheduler()
     stop_email_queue()
 
@@ -197,6 +200,7 @@ app.include_router(dashboards.router, prefix="/api")
 app.include_router(worker_scheduling.router, prefix="/api")
 app.include_router(worker_performance.router, prefix="/api")
 app.include_router(worker_travel.router, prefix="/api")
+app.include_router(tasks.router, prefix="/api")
 app.include_router(worker.router, prefix="/api")
 app.include_router(privacy.router, prefix="/api")
 app.include_router(worker_help.router, prefix="/api")

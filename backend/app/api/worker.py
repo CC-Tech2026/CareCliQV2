@@ -1057,7 +1057,18 @@ async def worker_end_shift(
         except Exception as exc:
             logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
 
+    async def _process_task_handover() -> None:
+        """Process task handover when shift ends."""
+        try:
+            from ..services.task_management_service import get_task_management_service
+            service = get_task_management_service()
+            await service.process_shift_handover(shift_id)
+            logger.info(f"Task handover processed for shift {shift_id}")
+        except Exception as exc:
+            logger.warning(f"Task handover failed for shift {shift_id}: {exc}")
+
     background_tasks.add_task(_auto_summary_and_notify)
+    background_tasks.add_task(_process_task_handover)
     return shift
 
 

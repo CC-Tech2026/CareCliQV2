@@ -9,6 +9,7 @@ import {
 } from "react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { getDeviceId } from "@/lib/device-id";
+import { useAuth } from "@/contexts/AuthContext";
 import { t, tParams, type AppLanguage } from "@/lib/i18n/translations";
 import {
   getAccessibilityPreferences,
@@ -65,12 +66,31 @@ function ThemeSync({ themeMode }: { themeMode: ThemeMode | undefined }) {
 
 export function AccessibilityProvider({ children }: { children: ReactNode }) {
   const deviceId = useMemo(() => getDeviceId(), []);
+  const { isAuthenticated } = useAuth();
   const [prefs, setPrefs] = useState<AccessibilityPreferences | null>(null);
   const [language, setLanguageState] = useState<AppLanguage>("en");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    
+    // Set default preferences immediately
+    const defaults: AccessibilityPreferences = {
+      font_size: "default",
+      theme_mode: "system",
+      high_contrast: false,
+      dyslexia_font: false,
+      device_id: deviceId,
+    };
+    setPrefs(defaults);
+    applyDocumentClasses(defaults, "en");
+    
+    // Only fetch from backend if authenticated
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+    
     getAccessibilityPreferences(deviceId)
       .then((res) => {
         if (!active) return;
@@ -81,13 +101,6 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
       })
       .catch(() => {
         if (!active) return;
-        const defaults: AccessibilityPreferences = {
-          font_size: "default",
-          theme_mode: "system",
-          high_contrast: false,
-          dyslexia_font: false,
-          device_id: deviceId,
-        };
         setPrefs(defaults);
         applyDocumentClasses(defaults, "en");
       })
@@ -97,7 +110,7 @@ export function AccessibilityProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [deviceId]);
+  }, [deviceId, isAuthenticated]);
 
   /** Re-apply theme when OS preference changes while in system mode. */
   useEffect(() => {
