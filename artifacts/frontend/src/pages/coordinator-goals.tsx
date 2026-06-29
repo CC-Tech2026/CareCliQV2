@@ -627,7 +627,7 @@ export default function CoordinatorGoals() {
   const [goalParticipant, setGoalParticipant] = useState("");
   const [goalFormOpen, setGoalFormOpen] = useState(false);
   const [editGoal, setEditGoal] = useState<NdisGoal | null>(null);
-  const [planningView, setPlanningView] = useState<"goals" | "goal-based-tasks">("goals");
+  const [planningView, setPlanningView] = useState<"goals" | "goal-based-tasks">("goal-based-tasks");
   const [taskGoalFormOpen, setTaskGoalFormOpen] = useState(false);
   
   // For Shift-Based Tasks tab
