@@ -89,9 +89,7 @@ Respond with ONLY the task description, no additional text."""
                 {
                     "role": "system",
                     "content": "You are an expert NDIS care coordinator. Generate concise, measurable task descriptions.",
-                }
-            ],
-            messages=[
+                },
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
@@ -257,9 +255,7 @@ Respond with ONLY the goal description."""
                 {
                     "role": "system",
                     "content": "You are an expert NDIS planner. Generate clear, measurable goal descriptions.",
-                }
-            ],
-            messages=[
+                },
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
