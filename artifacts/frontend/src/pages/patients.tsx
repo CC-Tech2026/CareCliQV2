@@ -812,7 +812,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   const TABS = [
     { id: "overview"    as const, label: "Overview",    icon: UserCircle   },
     { id: "plan"        as const, label: "NDIS Plan",   icon: DollarSign   },
-    { id: "goals"       as const, label: "Goals",       icon: Target       },
+    { id: "goals"       as const, label: "ParticipantGoals",       icon: Target       },
     { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
     { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
     ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
