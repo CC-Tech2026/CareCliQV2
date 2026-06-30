@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -14,7 +15,6 @@ export type ParticipantItem = {
   participant_name: string;
   active_goals_count?: number;
   tasks_count?: number;
-  need_attention_status?: 'none' | 'blocked' | 'stalled' | 'low_compliance' | 'budget_concern';
 };
 
 interface ParticipantAZFilterProps {
@@ -112,7 +112,7 @@ export function ParticipantAZFilter({
               }}
               className="rounded-full px-2 py-1 text-xs font-bold transition-colors"
               style={{
-                background: isSelected ? PLUM : isAvailable ? SOFT : "#F3F4F6",
+                background: isSelected ? PLUM : isAvailable ? SOFT : "var(--cc-soft)",
                 color: isSelected ? "#fff" : isAvailable ? TEXT : MUTED,
                 border: `1px solid ${BORDER}`,
                 opacity: isAvailable ? 1 : 0.5,
@@ -140,46 +140,28 @@ export function ParticipantAZFilter({
             const isSelected = selectedParticipantId === participant.participant_id;
             const activeGoals = participant.active_goals_count ?? 0;
             const tasksCount = participant.tasks_count ?? 0;
-            const needAttention = participant.need_attention_status ?? 'none';
-            
-            // Map need_attention status to color and label
-            const attentionMeta: Record<string, { color: string; bg: string; label: string }> = {
-              'none': { color: '#059669', bg: '#ECFDF5', label: '✓ OK' },
-              'stalled': { color: '#D97706', bg: '#FFFBEB', label: '⚠ Stalled' },
-              'blocked': { color: '#DC2626', bg: '#FEF2F2', label: '⛔ Blocked' },
-              'low_compliance': { color: '#7C3AED', bg: '#F5F3FF', label: '📊 Low Score' },
-              'budget_concern': { color: '#F59E0B', bg: '#FEF3C7', label: '💰 Budget' },
-            };
-            const meta = attentionMeta[needAttention];
             
             return (
               <button
                 key={participant.participant_id}
                 onClick={() => onParticipantSelect(participant.participant_id)}
-                className="w-full flex items-center justify-between rounded-xl border p-3.5 text-left transition-all hover:bg-gray-50"
-                style={{
-                  borderColor: isSelected ? PLUM : (needAttention !== 'none' ? meta.color : BORDER),
-                  background: isSelected ? SOFT : "#fff",
-                }}
+                className={cn(
+                  "w-full flex items-center justify-between rounded-xl border p-3.5 text-left transition-all hover:bg-cc-soft",
+                  isSelected ? "bg-cc-active-bg" : "bg-cc-surface",
+                )}
+                style={{ borderColor: isSelected ? PLUM : BORDER }}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-black shrink-0 text-white"
-                    style={{ background: needAttention !== 'none' ? meta.color : PLUM }}
+                    style={{ background: PLUM }}
                   >
                     {participant.participant_name[0]}
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-black text-[14px]" style={{ color: TEXT }}>
-                        {participant.participant_name}
-                      </p>
-                      {needAttention !== 'none' && (
-                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0" style={{ background: meta.bg, color: meta.color }}>
-                          {meta.label}
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-black text-[14px]" style={{ color: TEXT }}>
+                      {participant.participant_name}
+                    </p>
                     {showActiveGoalsBadge && (
                       <p className="text-[11px]" style={{ color: MUTED }}>
                         {activeGoals} active goal{activeGoals !== 1 ? "s" : ""}

@@ -290,7 +290,7 @@ export const en: Dict = {
   "shift.briefing.readyToStart": "Ready to start",
   "shift.briefing.scrollHint": "Scroll to the bottom to continue",
   "shift.briefing.scrollRequired": "Scroll to the bottom of the briefing first",
-  "shift.briefing.alertsRequired": "Acknowledge all critical alerts first",
+  "shift.briefing.criticalAlerts": "Critical alerts",
   "shift.briefing.readyConfirmed": "You're ready to clock in",
   "shift.briefing.rebrief": "Important information was updated — please review again",
   "shift.briefing.ackFailed": "Could not save acknowledgement",
@@ -1737,6 +1737,7 @@ export const en: Dict = {
   "shifts.listCard.openMaps": "Open in Maps",
   "shifts.listCard.participant": "Participant",
   "shifts.listCard.resumeSession": "Resume Session",
+  "shifts.listCard.openShift": "Open Shift",
   "shifts.listCard.safetyRead": "🚨 Safety — read before arriving",
   "shifts.listCard.startSession": "Start Session",
   "shifts.listCard.starting": "Starting…",
@@ -2226,8 +2227,7 @@ export const en: Dict = {
   "sessions.live.structured.response": "How did the participant engage and respond?",
   "sessions.live.structured.goals": "Link outcomes to specific NDIS goals…",
 
-  "auditPack.title": "Audit Pack",
-  "auditPack.subtitle": "All sessions and compliance data, ready for NDIS audit.",
+  "auditPack.subtitle": "NDIS audit pack — all session records for your organisation",
   "auditPack.export": "Export Audit Pack",
   "auditPack.stat.teamCompliance": "Team compliance",
   "auditPack.stat.sessionRecords": "Session records",
@@ -2866,6 +2866,8 @@ export const en: Dict = {
   "shift.signature.confirmIncidents": "I confirm no incidents occurred that have not been reported.",
   "shift.signature.yourSignature": "Your signature",
   "shift.signature.confirm": "Confirm signature",
+  "shift.signature.completing": "Completing your shift…",
+  "shift.signature.completingDesc": "Please wait while we save and lock your documentation.",
   "shift.signature.saveFailed": "Could not save signature",
   "shift.signature.tryAgain": "Please try again.",
   "shift.evidence.details": "Evidence details",
@@ -3258,7 +3260,8 @@ export const en: Dict = {
   "md.onboarding.tab.resources": "Resources",
   "md.onboarding.tab.approvals": "Approvals",
   "md.onboarding.loadFailed": "Could not load onboarding data",
-  // ── Coordinator: task templates & management ─────────────────
+
+// ── Coordinator: task templates & management ─────────────────
   "coordinator.taskTemplate.editTitle": "Edit Task Template",
   "coordinator.taskTemplate.newTitle": "New Task Template",
   "coordinator.taskTemplate.goalLabel": "Goal: {name}",

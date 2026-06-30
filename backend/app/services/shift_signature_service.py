@@ -107,10 +107,6 @@ def submit_shift_signature(
     if not (signature_png_data_url or "").strip():
         raise ValueError("Signature image is required.")
 
-    existing = get_shift_signature(shift_id)
-    if existing:
-        raise HTTPException(status_code=409, detail="Shift already signed.")
-
     shift_resp = (
         get_supabase_admin()
         .table("shifts")
@@ -126,7 +122,11 @@ def submit_shift_signature(
         raise HTTPException(status_code=403, detail="Not authorized")
     if str(shift.get("organization_id")) != str(organization_id):
         raise HTTPException(status_code=403, detail="Shift does not belong to your organisation.")
-    if shift.get("status") == "completed":
+
+    existing = get_shift_signature(shift_id)
+    if existing and str(existing.get("worker_id")) != str(worker_id):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if shift.get("status") == "completed" and not existing:
         raise HTTPException(status_code=409, detail="Shift is already completed.")
 
     png_bytes = _decode_png(signature_png_data_url)
@@ -165,7 +165,12 @@ def submit_shift_signature(
     }
 
     try:
-        get_supabase_admin().table("shift_signatures").insert(record).execute()
+        supabase = get_supabase_admin()
+        if existing:
+            update_payload = {k: v for k, v in record.items() if k != "shift_id"}
+            supabase.table("shift_signatures").update(update_payload).eq("shift_id", shift_id).execute()
+        else:
+            supabase.table("shift_signatures").insert(record).execute()
     except Exception as exc:
         if _is_missing_table(exc):
             raise HTTPException(

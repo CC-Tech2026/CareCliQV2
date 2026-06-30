@@ -22,6 +22,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { appLocalDateKey } from "@/lib/datetime";
 import {
   anonymiseName,
   formatShiftBlockTime,
@@ -42,11 +43,7 @@ const MIN_BLOCK_PX = 30;
 
 function shiftOnLocalDay(shift: CalendarShift, d: Date): boolean {
   if (!shift.scheduled_start) return false;
-  try {
-    return isSameDay(parseISO(shift.scheduled_start), d);
-  } catch {
-    return shift.scheduled_start.startsWith(format(d, "yyyy-MM-dd"));
-  }
+  return appLocalDateKey(shift.scheduled_start) === format(d, "yyyy-MM-dd");
 }
 
 function shiftsOnDay(shifts: CalendarShift[], d: Date) {

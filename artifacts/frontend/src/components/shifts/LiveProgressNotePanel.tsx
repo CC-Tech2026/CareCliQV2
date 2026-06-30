@@ -37,6 +37,7 @@ import {
   type SessionNoteType,
 } from "@/services/sessionNotesService";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import type { ShiftTask } from "@/services/shiftService";
 
 type LiveSpeechRecognitionEvent = {
   resultIndex: number;
@@ -93,7 +94,10 @@ type SaveStatus = "idle" | "saving" | "saved" | "offline" | "error";
 type Props = {
   shiftId: string;
   participantName?: string;
+  participantFirstName?: string;
   sessionId?: string | null;
+  tasks?: ShiftTask[];
+  activeTaskId?: string | null;
   onClose?: () => void;
   /** Skip server sync when previewing the walkthrough. */
   tutorialDemo?: boolean;
@@ -116,7 +120,15 @@ function readImageDataUrl(file: File): Promise<string | null> {
   });
 }
 
-export function LiveProgressNotePanel({ participantName, sessionId, onClose, tutorialDemo }: Props) {
+export function LiveProgressNotePanel({
+  participantName,
+  participantFirstName,
+  sessionId,
+  tasks = [],
+  activeTaskId,
+  onClose,
+  tutorialDemo,
+}: Props) {
   const { translate } = useAccessibility();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -165,6 +177,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose, tut
       const payload: SessionNoteRecord = {
         note_id: noteId,
         session_id: sessionId,
+        task_id: activeTaskId ?? undefined,
         content: clean,
         created_at: now,
         auto_saved_at: now,
@@ -201,7 +214,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose, tut
         setSaveStatus("error");
       }
     },
-    [ended, sessionId, tutorialDemo],
+    [ended, sessionId, tutorialDemo, activeTaskId],
   );
 
   const flushPendingQueue = useCallback(async () => {

@@ -30,11 +30,13 @@ export function useWorkerNotificationPresenter() {
 
   useEffect(() => {
     const items = (data?.notifications ?? []).filter((n) => !n.dismissed_at);
+
     if (!seededRef.current) {
       seedPresentedNotificationIds(items.map((n) => n.id));
       seededRef.current = true;
       return;
     }
+
     for (const item of items) {
       presentWorkerNotification(item, navigate);
     }
@@ -51,7 +53,10 @@ export function useWorkerNotificationPresenter() {
     const invalidate = () => {
       void qc.invalidateQueries({ queryKey: [orgId, "notification-banners"] });
       void qc.invalidateQueries({ queryKey: [orgId, "worker-notifications"] });
+      void qc.invalidateQueries({ queryKey: [orgId, "worker-notifications-unread"] });
       void qc.invalidateQueries({ queryKey: [orgId, "notification-history"] });
+      void qc.invalidateQueries({ queryKey: [orgId, "worker-messages-unread"] });
+      void qc.invalidateQueries({ queryKey: [orgId, "worker-messages"] });
     };
 
     const channel = sb
@@ -81,6 +86,16 @@ export function useWorkerNotificationPresenter() {
           schema: "public",
           table: "user_notifications",
           filter: `user_id=eq.${user.id}`,
+        },
+        invalidate,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "alerts",
+          filter: `recipient_user_id=eq.${user.id}`,
         },
         invalidate,
       )

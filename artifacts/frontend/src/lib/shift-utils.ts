@@ -95,6 +95,32 @@ export function formatDurationLabel(minutes?: number | null) {
   return `${m}m`;
 }
 
+/** Human-readable on-site duration for mobile success screens (e.g. "1h 15m"). */
+export function formatMobileShiftDuration(
+  shift: { clocked_in_at?: string | null; clocked_out_at?: string | null; scheduled_start?: string; scheduled_end?: string; duration_minutes?: number },
+  elapsedTimer?: string,
+): string {
+  if (shift.clocked_in_at && shift.clocked_out_at) {
+    try {
+      const mins = differenceInMinutes(parseISO(shift.clocked_out_at), parseISO(shift.clocked_in_at));
+      const label = formatDurationLabel(mins);
+      if (label) return label;
+    } catch {
+      /* fall through */
+    }
+  }
+  if (elapsedTimer && elapsedTimer !== "00:00:00") {
+    const [h = 0, m = 0] = elapsedTimer.split(":").map(Number);
+    const label = formatDurationLabel(h * 60 + m);
+    if (label) return label;
+  }
+  return (
+    formatDurationLabel(
+      shiftDurationMinutes(shift.scheduled_start, shift.scheduled_end, shift.duration_minutes),
+    ) ?? "—"
+  );
+}
+
 export function timeUntilStart(start?: string) {
   if (!start) return null;
   try {
@@ -333,10 +359,26 @@ export function mandatoryTaskSatisfied(task: ShiftTask) {
 }
 
 /** Whether a task may be marked complete (mandatory tasks need evidence first). */
-export function canMarkTaskComplete(task: ShiftTask, draftNote?: string) {
+export function canMarkTaskComplete(
+  task: ShiftTask,
+  draftNote?: string,
+  options?: { sessionNoteTexts?: string[] },
+) {
   if (!isMandatoryTask(task)) return true;
-  const candidate: ShiftTask = { ...task, completed: true };
-  if (draftNote !== undefined) candidate.note = draftNote;
+  const mergedNote = [
+    draftNote,
+    task.note,
+    ...(options?.sessionNoteTexts ?? []),
+  ]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean)
+    .join("\n");
+
+  const candidate: ShiftTask = {
+    ...task,
+    completed: true,
+    note: mergedNote || task.note,
+  };
   return mandatoryTaskSatisfied(candidate);
 }
 

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { fetchNotifications } from "@/services/notificationService";
 import { jsonFetch } from "@/services/http";
 import {
   Bell, X, CheckCheck, AlertTriangle, Info, CheckCircle2,
@@ -499,7 +500,6 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
     ["worker-messages", orgId],
     {
       queryFn: () => fetchWorkerMessages(),
-      refetchInterval: 15000,
     }
   );
 
@@ -537,6 +537,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
       qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
+      qc.invalidateQueries({ queryKey: ["worker-notifications-unread", orgId] });
     },
   });
 
@@ -551,6 +552,7 @@ export function WorkerNotificationPanel({ onClose }: { onClose: () => void }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["worker-messages", orgId] });
       qc.invalidateQueries({ queryKey: ["worker-messages-unread", orgId] });
+      qc.invalidateQueries({ queryKey: ["worker-notifications-unread", orgId] });
     },
   });
 
@@ -716,17 +718,15 @@ export function WorkerNotificationBell({ onClick }: { onClick: () => void }) {
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
 
-  const { data: response } = useOrgQuery(
-    ["worker-messages-unread", orgId],
+  const { data: inboxUnread } = useOrgQuery(
+    ["worker-notifications-unread", orgId],
     {
-      queryFn: () => fetchWorkerMessages(true),
-      refetchInterval: 30000,
-      enabled: !!user,
-    }
+      queryFn: () => fetchNotifications({ unread_only: true, limit: 1 }),
+      staleTime: Number.POSITIVE_INFINITY,
+    },
   );
 
-  const messages = response?.messages ?? [];
-  const unread = messages.length;
+  const unread = inboxUnread?.count ?? 0;
 
   return (
     <button

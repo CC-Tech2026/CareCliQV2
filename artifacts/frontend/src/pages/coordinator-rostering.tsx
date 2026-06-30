@@ -25,6 +25,7 @@ import { DndScheduleView }        from "@/components/coordinator/DndScheduleView
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { appLocalDateKey } from "@/lib/datetime";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -432,8 +433,8 @@ export default function CoordinatorRosteringPage() {
   const workers = workersQuery.data ?? [];
   const shifts  = shiftsQuery.data  ?? [];
 
-  const todayKey       = format(new Date(), "yyyy-MM-dd");
-  const shiftsToday    = shifts.filter((s) => (s.scheduled_start ?? "").startsWith(todayKey));
+  const todayKey       = appLocalDateKey(new Date().toISOString());
+  const shiftsToday    = shifts.filter((s) => s.scheduled_start && appLocalDateKey(s.scheduled_start) === todayKey);
   const activeShifts   = shifts.filter((s) => s.status === "in_progress" || s.status === "clocked_in");
   const scheduledCount = shifts.filter((s) => s.status === "scheduled").length;
 

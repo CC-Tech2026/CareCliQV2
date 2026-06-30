@@ -161,9 +161,20 @@ export default function MyShifts() {
   });
   const todayShifts = todayData?.shifts ?? [];
 
-  const completedToday = todayShifts.filter((s) => s.status === "completed").length;
+  const { data: completedData } = useOrgQuery(["worker", "shifts", "completed"], {
+    queryFn: () => getWorkerShifts("completed"),
+  });
+  const completedTodayShifts = useMemo(() => {
+    const todayKey = appLocalDateKey(new Date().toISOString());
+    return (completedData?.shifts ?? []).filter(
+      (s) => s.scheduled_start && appLocalDateKey(s.scheduled_start) === todayKey,
+    );
+  }, [completedData?.shifts]);
+
+  const completedToday = completedTodayShifts.length;
   const hoursScheduled = useMemo(() => {
-    const mins = todayShifts.reduce(
+    const shiftsForHours = [...todayShifts, ...completedTodayShifts];
+    const mins = shiftsForHours.reduce(
       (sum, s) => sum + (shiftDurationMinutes(s.scheduled_start, s.scheduled_end, s.duration_minutes) ?? 0),
       0,
     );
@@ -172,7 +183,7 @@ export default function MyShifts() {
     if (h && m) return `${h}.${Math.round((m / 60) * 10)}h`;
     if (h) return `${h}h`;
     return m ? `${m}m` : "0h";
-  }, [todayShifts]);
+  }, [todayShifts, completedTodayShifts]);
 
   const dateLabel = format(new Date(), "EEEE d MMMM");
 

@@ -11,6 +11,13 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ShiftTaskEvidencePanel } from "@/components/shifts/ShiftTaskEvidencePanel";
+import { TaskFeedComplianceFlag } from "@/components/shifts/TaskFeedComplianceFlag";
+import { WorkerShiftCompliancePanel } from "@/components/compliance/WorkerShiftCompliancePanel";
+import {
+  contextNoteComplianceId,
+  useGoalLinkedTaskComplianceNotes,
+} from "@/hooks/useGoalLinkedTaskComplianceNotes";
+import { useWorkerCompliance } from "@/hooks/useWorkerCompliance";
 import {
   loadTasksLocally,
   saveTasksLocally,
@@ -39,6 +46,7 @@ import {
 } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
+import type { NoteComplianceFlag } from "@/lib/worker-compliance-engine";
 import type { TaskVisualState } from "@/lib/task-evidence-status";
 
 const TASK_STATE_KEYS: Record<TaskVisualState, string> = {
@@ -52,12 +60,15 @@ type Props = {
   shiftId: string;
   sessionId?: string | null;
   participantName?: string;
+  participantFirstName?: string;
+  shiftEndIso?: string | null;
   tasks: ShiftTask[];
   onTasksChange: (tasks: ShiftTask[]) => void;
   disabled?: boolean;
   sessionStyle?: boolean;
   focusTaskId?: string | null;
   tutorialDemo?: boolean;
+  onOpenIncidentReport?: () => void;
 };
 
 function isMandatory(task: ShiftTask) {
@@ -127,12 +138,15 @@ export function ShiftTaskChecklist({
   shiftId,
   sessionId,
   participantName,
+  participantFirstName,
+  shiftEndIso,
   tasks,
   onTasksChange,
   disabled,
   sessionStyle,
   focusTaskId,
   tutorialDemo,
+  onOpenIncidentReport,
 }: Props) {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
@@ -275,6 +289,24 @@ export function ShiftTaskChecklist({
   const goalGroups = groupShiftTasksByGoal(sorted);
   const noEvidenceCount = countTasksWithoutEvidence(localTasks);
 
+  const { notes: complianceNotes } = useGoalLinkedTaskComplianceNotes(
+    sessionStyle ? sessionId : null,
+    localTasks,
+  );
+  const { compliance, visibleNotifications, dismissNotification, flagForNote } = useWorkerCompliance({
+    notes: complianceNotes,
+    tasks: localTasks.map((task) => ({
+      task_id: task.task_id,
+      label: task.label,
+      completed: task.completed,
+      marked_na: task.marked_na,
+      goal_title: task.goal_title,
+    })),
+    participantFirstName: participantFirstName ?? participantName?.split(" ")[0],
+    shiftEndIso,
+    sessionId,
+  });
+
   useEffect(() => {
     if (!sessionStyle) return;
     setOpenGoals((current) => {
@@ -341,6 +373,16 @@ export function ShiftTaskChecklist({
 
   return (
     <div className="space-y-3">
+      {sessionId && (
+        <WorkerShiftCompliancePanel
+          compliance={compliance}
+          notifications={visibleNotifications}
+          onDismissNotification={dismissNotification}
+          onNotificationAction={onOpenIncidentReport ? () => onOpenIncidentReport() : undefined}
+          compact
+        />
+      )}
+
       <div className="rounded-xl border border-dashed border-cc-border bg-cc-soft px-3 py-2.5">
         <p className="flex items-center gap-2 text-[11px] font-black" style={{ color: PLUM }}>
           <MessageCircle size={13} />
@@ -409,6 +451,7 @@ export function ShiftTaskChecklist({
                   translate={translate}
                   translateParams={translateParams}
                   tutorialDemo={tutorialDemo}
+                  flagForNote={flagForNote}
                 />
               </div>
             )}
@@ -449,12 +492,14 @@ function QuickNoteField({
   onSave,
   translate,
   translateParams,
+  flag,
 }: {
   task: ShiftTask;
   disabled?: boolean;
   onSave: (note: string) => void;
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
+  flag?: NoteComplianceFlag;
 }) {
   const [draft, setDraft] = useState(task.context_note ?? "");
   const [open, setOpen] = useState(false);
@@ -480,18 +525,26 @@ function QuickNoteField({
 
   if (!open && saved) {
     return (
-      <button
-        type="button"
-        disabled={disabled}
-        className="mt-2 w-full rounded-lg border border-[#E5E7EB] bg-[#F8F6FE] px-2.5 py-1.5 text-left text-[11px] font-medium italic"
-        style={{ color: MUTED }}
-        onClick={() => {
-          setDraft(task.context_note ?? "");
-          setOpen(true);
-        }}
-      >
-        {notePreview(saved)}
-      </button>
+      <div className="mt-2 space-y-1.5">
+        {flag && (
+          <TaskFeedComplianceFlag flag={flag} taskLabel={task.label} className="rounded-lg border px-2.5 py-1.5" />
+        )}
+        <button
+          type="button"
+          disabled={disabled}
+          className={cn(
+            "w-full rounded-lg border px-2.5 py-1.5 text-left text-[11px] font-medium italic",
+            flag ? "border-red-200 bg-red-50" : "border-[#E5E7EB] bg-[#F8F6FE]",
+          )}
+          style={{ color: MUTED }}
+          onClick={() => {
+            setDraft(task.context_note ?? "");
+            setOpen(true);
+          }}
+        >
+          {notePreview(saved)}
+        </button>
+      </div>
     );
   }
 
@@ -545,6 +598,7 @@ function SessionTaskGroup({
   translate,
   translateParams,
   tutorialDemo,
+  flagForNote,
 }: {
   tasks: ShiftTask[];
   expandedNote: string | null;
@@ -560,6 +614,7 @@ function SessionTaskGroup({
   translate: (key: string) => string;
   translateParams: (key: string, params: Record<string, string>) => string;
   tutorialDemo?: boolean;
+  flagForNote: (noteId: string) => NoteComplianceFlag | undefined;
 }) {
   const [evidenceReady, setEvidenceReady] = useState<Record<string, boolean>>({});
 
@@ -574,6 +629,9 @@ function SessionTaskGroup({
         const updates = taskUpdateCount(task);
         const withEvidence = task.completed && hasTaskEvidence(task);
         const withoutEvidence = task.completed && !hasTaskEvidence(task);
+        const contextFlag = task.context_note
+          ? flagForNote(contextNoteComplianceId(task.task_id))
+          : undefined;
         const readyToComplete =
           !task.completed &&
           (canMarkTaskComplete(task) || evidenceReady[task.task_id] === true);
@@ -614,9 +672,18 @@ function SessionTaskGroup({
                       : ` · ${translate("tasks.noEvidence")} · ${translate("tasks.tapAddEvidence")}`}
                   </p>
                   {task.context_note && (
-                    <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
-                      {notePreview(task.context_note)}
-                    </p>
+                    <div className="mt-1 space-y-1">
+                      {contextFlag && (
+                        <TaskFeedComplianceFlag
+                          flag={contextFlag}
+                          taskLabel={task.label}
+                          className="rounded-lg border px-2 py-1"
+                        />
+                      )}
+                      <p className="text-[11px] font-medium italic" style={{ color: MUTED }}>
+                        {notePreview(task.context_note)}
+                      </p>
+                    </div>
                   )}
                 </button>
                 {withoutEvidence ? (
@@ -681,9 +748,18 @@ function SessionTaskGroup({
                     {!task.completed && readyToComplete && ` · ${translate("tasks.readyToComplete")}`}
                   </p>
                   {task.context_note && !panelOpen && (
-                    <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
-                      {notePreview(task.context_note)}
-                    </p>
+                    <div className="mt-1 space-y-1">
+                      {contextFlag && (
+                        <TaskFeedComplianceFlag
+                          flag={contextFlag}
+                          taskLabel={task.label}
+                          className="rounded-lg border px-2 py-1"
+                        />
+                      )}
+                      <p className="text-[11px] font-medium italic" style={{ color: MUTED }}>
+                        {notePreview(task.context_note)}
+                      </p>
+                    </div>
                   )}
                 </div>
                 {!task.completed && needsEvidence && (
@@ -708,6 +784,7 @@ function SessionTaskGroup({
                   onSave={(note) => void saveQuickNote(task.task_id, note)}
                   translate={translate}
                   translateParams={translateParams}
+                  flag={contextFlag}
                 />
               </div>
             )}

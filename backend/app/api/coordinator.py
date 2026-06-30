@@ -2904,6 +2904,10 @@ class NdisGoalBody(BaseModel):
     description: Optional[str] = None
     target_date: Optional[str] = None
     success_criteria: Optional[str] = None
+    why_it_matters: Optional[str] = None
+    worker_focus: Optional[list[str]] = None
+    priority: Optional[int] = 99
+    plan_id: Optional[str] = None
     related_task_ids: Optional[list[str]] = None
 
 
@@ -2946,7 +2950,11 @@ async def create_ndis_goal(
         "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
-        "success_criteria": body.success_criteria,
+        "success_criteria": body.success_criteria or body.why_it_matters,
+        "why_it_matters": body.why_it_matters or body.success_criteria,
+        "worker_focus": body.worker_focus or [],
+        "priority": body.priority if body.priority is not None else 99,
+        "plan_id": body.plan_id,
         "related_task_ids": body.related_task_ids or [],
         "status": "active",
         "created_at": now,
@@ -2975,7 +2983,11 @@ async def update_ndis_goal(
         "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
-        "success_criteria": body.success_criteria,
+        "success_criteria": body.success_criteria or body.why_it_matters,
+        "why_it_matters": body.why_it_matters or body.success_criteria,
+        "worker_focus": body.worker_focus or [],
+        "priority": body.priority if body.priority is not None else 99,
+        "plan_id": body.plan_id,
         "related_task_ids": body.related_task_ids or [],
         "updated_at": now,
     }

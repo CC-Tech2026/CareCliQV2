@@ -846,6 +846,10 @@ export type NdisGoal = {
   description?: string | null;
   target_date?: string | null;
   success_criteria?: string | null;
+  why_it_matters?: string | null;
+  worker_focus?: string[];
+  priority?: number;
+  plan_id?: string | null;
   related_task_ids?: string[];
   status: "active" | "completed" | "archived";
   archived_at?: string | null;

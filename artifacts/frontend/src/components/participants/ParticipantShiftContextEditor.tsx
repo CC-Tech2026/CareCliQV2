@@ -133,22 +133,22 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
-      <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("participants.shiftContext.title")}</p>
-      <p className="text-[12px] text-violet-700/80">
+    <section className="space-y-4 rounded-2xl border border-cc-border bg-cc-soft p-4">
+      <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">{translate("participants.shiftContext.title")}</p>
+      <p className="text-[12px] text-cc-muted">
         {translate("participants.shiftContext.hint")}
       </p>
 
-      <div className="rounded-xl border border-violet-300/60 bg-white/70 p-3 space-y-3">
-        <p className="text-[11px] font-black uppercase tracking-wide text-violet-800">{translate("participants.shiftContext.briefing")}</p>
+      <div className="rounded-xl border border-cc-border bg-cc-surface p-3 space-y-3">
+        <p className="text-[11px] font-black uppercase tracking-wide text-cc-plum">{translate("participants.shiftContext.briefing")}</p>
         <TextArea
           label={translate("participants.shiftContext.aboutParticipant")}
           value={backgroundSummary}
           onChange={setBackgroundSummary}
         />
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">
-            Critical alerts (max 3)
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">
+            {translate("participants.shiftContext.criticalAlerts")}
           </p>
           {briefingAlerts.map((alert, i) => (
             <div key={i} className="mb-2 flex gap-2">
@@ -196,7 +196,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
       <TextArea label={translate("participants.shiftContext.previousVisits")} value={previousVisitNotes} onChange={setPreviousVisitNotes} />
 
       <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">{translate("participants.shiftContext.preferredActivities")}</p>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.preferredActivities")}</p>
         {activities.map((item, i) => (
           <div key={i} className="mb-2 flex gap-2">
             <Input value={item} onChange={(e) => setActivities((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))} />
@@ -211,7 +211,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">{translate("participants.shiftContext.allergies")}</p>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.allergies")}</p>
         {allergies.map((item, i) => (
           <div key={i} className="mb-2 grid gap-2 sm:grid-cols-[1fr_120px_auto]">
             <Input
@@ -222,7 +222,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
               }
             />
             <select
-              className="rounded-md border px-2 text-sm"
+              className="cc-field rounded-md px-2 text-sm h-9"
               value={item.severity}
               onChange={(e) =>
                 setAllergies((prev) => prev.map((a, j) => (j === i ? { ...a, severity: e.target.value } : a)))
@@ -244,7 +244,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-violet-700">{translate("participants.shiftContext.behaviouralNotes")}</p>
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-cc-muted">{translate("participants.shiftContext.behaviouralNotes")}</p>
         {behaviouralNotes.map((note, i) => (
           <div key={i} className="mb-2 space-y-1">
             <Input
@@ -255,7 +255,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
               }
             />
             <textarea
-              className="w-full rounded-xl border px-3 py-2 text-sm min-h-[72px]"
+              className="cc-field w-full rounded-xl px-3 py-2 text-sm min-h-[72px]"
               placeholder={translate("participants.shiftContext.notePlaceholder")}
               value={note.body}
               onChange={(e) =>
@@ -274,7 +274,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
         </Button>
       </div>
 
-      <Button disabled={saving} onClick={save} className="bg-violet-700 hover:bg-violet-800 text-white">
+      <Button disabled={saving} onClick={save} className="cc-btn-primary">
         {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {translate("participants.shiftContext.save")}
       </Button>
@@ -285,7 +285,7 @@ export function ParticipantShiftContextEditor({ participantId }: Props) {
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{label}</p>
       <Input value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
@@ -294,9 +294,9 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 function TextArea({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700">{label}</p>
+      <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{label}</p>
       <textarea
-        className="w-full rounded-xl border bg-cc-surface px-3 py-2 text-sm min-h-[72px]"
+        className="cc-field w-full rounded-xl px-3 py-2 text-sm min-h-[72px] resize-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

@@ -75,8 +75,6 @@ import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
 import WorkerAccessibility from "@/pages/worker-accessibility";
 import AccountSecure from "@/pages/account-secure";
 import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
-import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
-import { WorkerTutorialLauncher } from "@/components/help/WorkerTutorialLauncher";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
@@ -237,11 +235,11 @@ function Router() {
         )}
       </Route>
 
-      <Route path="/calendar">
+      {/* <Route path="/calendar">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerScheduleCalendar /></AppLayout>
         </ProtectedRoute>
-      </Route>
+      </Route> */}
 
       <Route path="/my-shifts/requests">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
@@ -432,6 +430,11 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      {/* Legacy nav links still point here — keep redirect so workers don't hit a blank 404 */}
+      <Route path="/incident-new">
+        <Redirect to="/incidents/new" />
+      </Route>
+
       <Route path="/incidents/:id">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
@@ -509,13 +512,10 @@ function App() {
         <AuthProvider>
           <AccessibilityProvider>
             <OfflineSyncProvider>
-              <WorkerTutorialProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <WorkerTutorialLauncher />
-                  <AuthSessionGuards />
-                  <Router />
-                </WouterRouter>
-              </WorkerTutorialProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                <AuthSessionGuards />
+                <Router />
+              </WouterRouter>
             </OfflineSyncProvider>
             <Toaster />
           </AccessibilityProvider>
