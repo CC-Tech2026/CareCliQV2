@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { jsonFetch } from "@/services/http";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM  = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
@@ -51,7 +52,14 @@ function roleLabel(role?: string) {
 
 type Tab = "overview" | "management" | "shifts";
 
+const INVITE_ROLE_KEYS: Record<string, string> = {
+  support_worker: "team.invite.role.supportWorker",
+  allied_health: "team.invite.role.alliedHealth",
+  support_coordinator: "team.invite.role.coordinator",
+};
+
 export default function Team() {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -84,30 +92,30 @@ export default function Team() {
 
   const deactivateMut = useMutation({
     mutationFn: (id: string) => deactivateWorker(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Worker deactivated" }); setDeactivateTarget(null); },
-    onError: () => toast({ title: "Failed to deactivate", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: translate("team.toast.deactivated") }); setDeactivateTarget(null); },
+    onError: () => toast({ title: translate("team.toast.deactivateFailed"), variant: "destructive" }),
   });
 
   const activateMut = useMutation({
     mutationFn: (id: string) => activateWorker(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Worker reactivated" }); },
-    onError: () => toast({ title: "Failed to reactivate", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: translate("team.toast.reactivated") }); },
+    onError: () => toast({ title: translate("team.toast.reactivateFailed"), variant: "destructive" }),
   });
 
   const assignMut = useMutation({
     mutationFn: ({ workerId, patientId }: { workerId: string; patientId: string }) =>
       assignWorkerToClient(workerId, patientId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: "Client assigned" }); setAssignWorker(null); setAssignPatientId(""); },
-    onError: () => toast({ title: "Assignment failed", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [orgId, "coordinator"] }); toast({ title: translate("team.toast.assigned") }); setAssignWorker(null); setAssignPatientId(""); },
+    onError: () => toast({ title: translate("team.toast.assignFailed"), variant: "destructive" }),
   });
 
   const reminderMut = useMutation({
-    mutationFn: (workerId: string) => sendBulkReminders([workerId], "Your credential is expiring soon. Please update it before your next shift."),
+    mutationFn: (workerId: string) => sendBulkReminders([workerId], translate("team.reminderMessage")),
     onSuccess: (_, workerId) => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator-credential-alerts"] });
-      toast({ title: "Reminder sent", description: `Credential reminder sent to ${workerId}.` });
+      toast({ title: translate("team.toast.reminderSent"), description: translateParams("team.toast.reminderSentDesc", { workerId }) });
     },
-    onError: () => toast({ title: "Failed to send reminder", variant: "destructive" }),
+    onError: () => toast({ title: translate("team.toast.reminderFailed"), variant: "destructive" }),
   });
 
   const handleInvite = async () => {
@@ -119,11 +127,11 @@ export default function Team() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
-      toast({ title: "Invite sent", description: `${inviteEmail} has been invited as ${roleLabel(inviteRole)}.` });
+      toast({ title: translate("team.toast.inviteSent"), description: translateParams("team.toast.inviteSentDesc", { email: inviteEmail, role: translate(INVITE_ROLE_KEYS[inviteRole] ?? inviteRole) }) });
       setInviteOpen(false);
       setInviteEmail("");
     } catch {
-      toast({ title: "Invite failed", description: "Check the email and try again.", variant: "destructive" });
+      toast({ title: translate("team.toast.inviteFailed"), description: translate("team.toast.inviteFailedDesc"), variant: "destructive" });
     } finally {
       setInviteSending(false);
     }
@@ -146,8 +154,8 @@ export default function Team() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="hidden" style={{ color: CORAL }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Team</h1>
-          <p className="mt-1 text-sm" style={{ color: MUTED }}>{workers.length} team member{workers.length !== 1 ? "s" : ""}</p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("team.title")}</h1>
+          <p className="mt-1 text-sm" style={{ color: MUTED }}>{translateParams(workers.length === 1 ? "team.memberCount" : "team.memberCountPlural", { count: String(workers.length) })}</p>
         </div>
         <div className="flex gap-2">
           {tab !== "shifts" && (
@@ -156,7 +164,7 @@ export default function Team() {
               className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
               style={{ background: PLUM }}
             >
-              <Clock size={16} /> Assign Shift
+              <Clock size={16} /> {translate("team.assignShift")}
             </Button>
           )}
           <Button
@@ -164,7 +172,7 @@ export default function Team() {
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white"
             style={{ background: PLUM }}
           >
-            <UserPlus size={16} /> Invite Worker
+            <UserPlus size={16} /> {translate("team.inviteWorker")}
           </Button>
         </div>
       </div>
@@ -182,7 +190,7 @@ export default function Team() {
               boxShadow: tab === t ? "0 1px 3px rgba(55,48,163,0.12)" : "none",
             }}
           >
-            {t === "shifts" ? "Shift Assignments" : t}
+            {t === "shifts" ? translate("team.tab.shifts") : translate(`team.tab.${t}` as "team.tab.overview")}
           </button>
         ))}
       </div>
@@ -201,10 +209,10 @@ export default function Team() {
           <>
             {stats.isLoading && (
               <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}>
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading worker stats…
+                <Loader2 className="h-4 w-4 animate-spin" /> {translate("team.loadingStats")}
               </div>
             )}
-            {stats.error && <p className="text-sm text-red-600">Failed to load worker stats.</p>}
+            {stats.error && <p className="text-sm text-red-600">{translate("team.loadStatsFailed")}</p>}
 
             {!stats.isLoading && workers.length > 0 && (
               <div className="grid lg:grid-cols-[1fr_220px] gap-5 items-start">
@@ -214,13 +222,13 @@ export default function Team() {
                   <table className="w-full">
                     <thead>
                       <tr style={{ borderBottom: `2px solid ${BORDER}`, background: SOFT }}>
-                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase" style={{ color: MUTED }}>Name</th>
-                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase hidden md:table-cell" style={{ color: MUTED }}>Email</th>
-                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase hidden sm:table-cell" style={{ color: MUTED }}>Role</th>
-                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>Sessions</th>
-                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase hidden sm:table-cell" style={{ color: MUTED }}>This Week</th>
-                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>Compliance</th>
-                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>Status</th>
+                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase" style={{ color: MUTED }}>{translate("team.col.name")}</th>
+                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase hidden md:table-cell" style={{ color: MUTED }}>{translate("team.col.email")}</th>
+                        <th className="px-5 py-3.5 text-left text-xs font-bold uppercase hidden sm:table-cell" style={{ color: MUTED }}>{translate("team.col.role")}</th>
+                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>{translate("team.col.sessions")}</th>
+                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase hidden sm:table-cell" style={{ color: MUTED }}>{translate("team.col.thisWeek")}</th>
+                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>{translate("team.col.compliance")}</th>
+                        <th className="px-5 py-3.5 text-center text-xs font-bold uppercase" style={{ color: MUTED }}>{translate("team.col.status")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y" style={{ borderColor: BORDER }}>
@@ -233,12 +241,12 @@ export default function Team() {
                               {summary.workerAlerts.length > 0 && (
                                 <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: CORAL }}>
                                   <AlertTriangle size={11} />
-                                  {summary.expired > 0 ? `${summary.expired} expired` : `${summary.expiring} expiring`}
+                                  {summary.expired > 0 ? translateParams("team.expired", { count: String(summary.expired) }) : translateParams("team.expiring", { count: String(summary.expiring) })}
                                 </p>
                               )}
                             </td>
                             <td className="px-5 py-3.5 hidden md:table-cell">
-                              <p className="text-sm truncate max-w-[180px]" style={{ color: MUTED }}>{w.email || "—"}</p>
+                              <p className="text-sm truncate max-w-[180px]" style={{ color: MUTED }}>{w.email || translate("common.emDash")}</p>
                             </td>
                             <td className="px-5 py-3.5 hidden sm:table-cell">
                               <span className="text-xs font-bold px-2 py-1 rounded capitalize" style={{ background: SOFT, color: PLUM }}>
@@ -255,7 +263,7 @@ export default function Team() {
                               <div className="flex items-center justify-center gap-1">
                                 <ShieldCheck size={13} style={{ color: complianceColour(w.avg_compliance) }} />
                                 <p className="font-bold text-sm" style={{ color: complianceColour(w.avg_compliance) }}>
-                                  {w.avg_compliance != null ? `${w.avg_compliance}%` : "—"}
+                                  {w.avg_compliance != null ? `${w.avg_compliance}%` : translate("common.emDash")}
                                 </p>
                               </div>
                             </td>
@@ -267,7 +275,7 @@ export default function Team() {
                                   color: w.is_active !== false ? "#16A34A" : "#DC2626",
                                 }}
                               >
-                                {w.is_active !== false ? "Active" : "Inactive"}
+                                {w.is_active !== false ? translate("team.status.active") : translate("team.status.inactive")}
                               </span>
                             </td>
                           </tr>
@@ -279,18 +287,18 @@ export default function Team() {
 
                 {/* RIGHT — team stat sidebar */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Team snapshot</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{translate("team.snapshot")}</p>
 
                   {/* Stat tiles */}
                   {[
-                    { label: "Active workers",   value: activeCount,       color: "#16A34A", bg: "rgba(22,163,74,0.06)"  },
-                    { label: "Sessions this wk", value: weekSessions,      color: PLUM,      bg: "rgba(55,48,163,0.06)"  },
-                    { label: "Avg compliance",   value: avgCompliance != null ? `${avgCompliance}%` : "—",
+                    { labelKey: "team.stat.activeWorkers",   value: activeCount,       color: "#16A34A", bg: "rgba(22,163,74,0.06)"  },
+                    { labelKey: "team.stat.sessionsThisWeek", value: weekSessions,      color: PLUM,      bg: "rgba(55,48,163,0.06)"  },
+                    { labelKey: "team.stat.avgCompliance",   value: avgCompliance != null ? `${avgCompliance}%` : translate("common.emDash"),
                       color: avgCompliance != null ? complianceColour(avgCompliance) : MUTED,
                       bg: "rgba(55,48,163,0.04)" },
-                  ].map(({ label, value, color, bg }) => (
-                    <div key={label} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: bg }}>
-                      <span className="text-[11px] font-medium" style={{ color: MUTED }}>{label}</span>
+                  ].map(({ labelKey, value, color, bg }) => (
+                    <div key={labelKey} className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: bg }}>
+                      <span className="text-[11px] font-medium" style={{ color: MUTED }}>{translate(labelKey)}</span>
                       <span className="text-[15px] font-black tabular-nums" style={{ color }}>{value}</span>
                     </div>
                   ))}
@@ -301,11 +309,11 @@ export default function Team() {
                       <div className="flex items-center gap-1.5">
                         <AlertTriangle size={13} style={{ color: "#D97706" }} />
                         <p className="text-[11px] font-black" style={{ color: "#D97706" }}>
-                          {credAlertCount} credential{credAlertCount !== 1 ? "s" : ""} expiring
+                          {translateParams(credAlertCount === 1 ? "team.credentialsExpiring" : "team.credentialsExpiringPlural", { count: String(credAlertCount) })}
                         </p>
                       </div>
                       <p className="text-[10px] font-medium" style={{ color: MUTED }}>
-                        Review in the Credentials page before next shift assignments.
+                        {translate("team.credentialsHint")}
                       </p>
                     </div>
                   )}
@@ -316,7 +324,7 @@ export default function Team() {
                     className="w-full rounded-xl px-4 py-2.5 text-[12px] font-black transition hover:opacity-90 text-white"
                     style={{ background: PLUM }}
                   >
-                    Manage Team →
+                    {translate("team.manageTeam")}
                   </button>
                 </div>
               </div>
@@ -325,7 +333,7 @@ export default function Team() {
             {!stats.isLoading && workers.length === 0 && (
               <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
                 <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
-                <p className="text-sm font-bold" style={{ color: MUTED }}>No team members yet. Invite workers to get started.</p>
+                <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.empty.overview")}</p>
               </div>
             )}
           </>
@@ -335,7 +343,7 @@ export default function Team() {
       {/* ── MANAGEMENT TAB ───────────────────────────────── */}
       {tab === "management" && (
         <div className="space-y-4">
-          {stats.isLoading && <p className="text-sm" style={{ color: MUTED }}>Loading…</p>}
+          {stats.isLoading && <p className="text-sm" style={{ color: MUTED }}>{translate("common.loading")}</p>}
           {workers.map((w) => (
             <div
               key={w.id}
@@ -367,7 +375,7 @@ export default function Team() {
                     className="text-xs gap-1.5"
                     onClick={() => { setAssignWorker(w); setAssignPatientId(""); }}
                   >
-                    <Link2 size={12} /> Assign Client
+                    <Link2 size={12} /> {translate("team.assignClient")}
                   </Button>
 
                   <Button
@@ -377,7 +385,7 @@ export default function Team() {
                     onClick={() => reminderMut.mutate(w.id)}
                     disabled={reminderMut.isPending}
                   >
-                    <Mail size={12} /> Reminder
+                    <Mail size={12} /> {translate("team.reminder")}
                   </Button>
 
                   {/* Activate / Deactivate */}
@@ -388,7 +396,7 @@ export default function Team() {
                       className="text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
                       onClick={() => setDeactivateTarget(w)}
                     >
-                      <UserX size={12} /> Deactivate
+                      <UserX size={12} /> {translate("team.deactivate")}
                     </Button>
                   ) : (
                     <Button
@@ -398,7 +406,7 @@ export default function Team() {
                       onClick={() => activateMut.mutate(w.id)}
                       disabled={activateMut.isPending}
                     >
-                      <UserCheck size={12} /> Reactivate
+                      <UserCheck size={12} /> {translate("team.reactivate")}
                     </Button>
                   )}
                 </div>
@@ -407,19 +415,19 @@ export default function Team() {
               {/* Credential status strip */}
               <div className="mt-3 flex flex-wrap gap-2">
                 <CredentialChip
-                  label="WWCC"
+                  label={translate("team.credential.wwcc")}
                   status={getCredentialSummary(w.id).expired > 0 ? "warn" : w.is_active !== false ? "verified" : "inactive"}
                 />
                 <CredentialChip
-                  label="First Aid"
+                  label={translate("team.credential.firstAid")}
                   status={getCredentialSummary(w.id).expiring > 0 ? "warn" : w.is_active !== false ? "verified" : "inactive"}
                 />
                 <CredentialChip
-                  label={`${w.total_sessions} sessions`}
+                  label={translateParams("team.sessionsCount", { count: String(w.total_sessions) })}
                   status="info"
                 />
                 {w.flagged_count > 0 && (
-                  <CredentialChip label={`${w.flagged_count} flagged`} status="warn" />
+                  <CredentialChip label={translateParams("team.flaggedCount", { count: String(w.flagged_count) })} status="warn" />
                 )}
               </div>
             </div>
@@ -428,7 +436,7 @@ export default function Team() {
           {!stats.isLoading && workers.length === 0 && (
             <div className="rounded-2xl bg-white p-10 text-center" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <Users size={32} className="mx-auto mb-3" style={{ color: MUTED }} />
-              <p className="text-sm font-bold" style={{ color: MUTED }}>No team members yet.</p>
+              <p className="text-sm font-bold" style={{ color: MUTED }}>{translate("team.empty.management")}</p>
             </div>
           )}
         </div>
@@ -438,43 +446,43 @@ export default function Team() {
         <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black flex items-center gap-2" style={{ color: PLUM }}>
-              <UserPlus size={18} /> Invite Team Member
+              <UserPlus size={18} /> {translate("team.invite.title")}
             </h3>
-            <Button variant="outline" size="sm" onClick={() => setInviteOpen(false)}>Close</Button>
+            <Button variant="outline" size="sm" onClick={() => setInviteOpen(false)}>{translate("common.close")}</Button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Email Address</label>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.invite.email")}</label>
               <Input
                 type="email"
-                placeholder="worker@example.com"
+                placeholder={translate("team.invite.emailPlaceholder")}
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Role</label>
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.invite.role")}</label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="support_worker">Support Worker</SelectItem>
-                  <SelectItem value="allied_health">Allied Health</SelectItem>
-                  <SelectItem value="support_coordinator">Support Coordinator</SelectItem>
+                  <SelectItem value="support_worker">{translate("team.invite.role.supportWorker")}</SelectItem>
+                  <SelectItem value="allied_health">{translate("team.invite.role.alliedHealth")}</SelectItem>
+                  <SelectItem value="support_coordinator">{translate("team.invite.role.coordinator")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>{translate("common.cancel")}</Button>
             <Button
               onClick={handleInvite}
               disabled={!inviteEmail.trim() || inviteSending}
               className="text-white"
               style={{ background: PLUM }}
             >
-              {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Sending…</> : "Send Invite"}
+              {inviteSending ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />{translate("team.invite.sending")}</> : translate("team.invite.send")}
             </Button>
           </div>
         </section>
@@ -482,18 +490,18 @@ export default function Team() {
 
       {deactivateTarget && (
         <section className="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-3">
-          <h3 className="text-base font-black text-red-700">Deactivate {deactivateTarget.full_name}?</h3>
+          <h3 className="text-base font-black text-red-700">{translateParams("team.deactivate.title", { name: deactivateTarget.full_name })}</h3>
           <p className="text-sm text-red-700">
-            This worker will lose access to CareCliQ immediately. Their existing session records will be preserved. You can reactivate them at any time.
+            {translate("team.deactivate.body")}
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>{translate("common.cancel")}</Button>
             <Button
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => deactivateMut.mutate(deactivateTarget.id)}
               disabled={deactivateMut.isPending}
             >
-              {deactivateMut.isPending ? "Deactivating…" : "Yes, Deactivate"}
+              {deactivateMut.isPending ? translate("team.deactivate.deactivating") : translate("team.deactivate.confirm")}
             </Button>
           </div>
         </section>
@@ -503,15 +511,15 @@ export default function Team() {
         <section className="rounded-2xl bg-white p-5 space-y-4" style={{ boxShadow: "0 1px 4px rgba(55,48,163,0.08), 0 0 0 1px rgba(232,213,232,0.5)" }}>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-lg font-black" style={{ color: PLUM }}>
-              Assign Client to {assignWorker.full_name}
+              {translateParams("team.assign.title", { name: assignWorker.full_name })}
             </h3>
-            <Button variant="outline" size="sm" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>Close</Button>
+            <Button variant="outline" size="sm" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>{translate("common.close")}</Button>
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>Select Participant</label>
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{translate("team.assign.selectParticipant")}</label>
             <Select value={assignPatientId} onValueChange={setAssignPatientId}>
               <SelectTrigger>
-                <SelectValue placeholder="Choose a participant…" />
+                <SelectValue placeholder={translate("team.assign.chooseParticipant")} />
               </SelectTrigger>
               <SelectContent>
                 {allParticipants.map((p) => (
@@ -521,14 +529,14 @@ export default function Team() {
             </Select>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setAssignWorker(null); setAssignPatientId(""); }}>{translate("common.cancel")}</Button>
             <Button
               onClick={() => assignPatientId && assignMut.mutate({ workerId: assignWorker.id, patientId: assignPatientId })}
               disabled={!assignPatientId || assignMut.isPending}
               className="text-white"
               style={{ background: PLUM }}
             >
-              {assignMut.isPending ? "Assigning…" : "Assign"}
+              {assignMut.isPending ? translate("team.assign.assigning") : translate("team.assign.assign")}
             </Button>
           </div>
         </section>
@@ -541,8 +549,8 @@ export default function Team() {
             {/* LEFT: Worker list */}
             <div className="flex flex-col overflow-hidden">
               <div className="mb-4">
-                <label className="text-xs font-semibold uppercase" style={{ color: MUTED }}>Select Worker</label>
-                <p className="text-[10px] mt-1" style={{ color: MUTED }}>Choose a worker to assign shifts</p>
+                <label className="text-xs font-semibold uppercase" style={{ color: MUTED }}>{translate("team.shifts.selectWorker")}</label>
+                <p className="text-[10px] mt-1" style={{ color: MUTED }}>{translate("team.shifts.selectWorkerHint")}</p>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 border rounded-xl p-3" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
                 {workers.map((w) => (
@@ -558,7 +566,7 @@ export default function Team() {
                   >
                     <p className="font-semibold text-[13px]">{w.full_name}</p>
                     <p className="text-[11px] mt-1" style={{ color: selectedWorkerForShift?.id === w.id ? "rgba(255,255,255,0.8)" : MUTED }}>
-                      {w.total_sessions} sessions
+                      {translateParams("team.sessionsCount", { count: String(w.total_sessions) })}
                     </p>
                   </button>
                 ))}
@@ -571,7 +579,7 @@ export default function Team() {
                 <div className="rounded-2xl border p-6 space-y-4 h-full overflow-y-auto flex flex-col" style={{ borderColor: BORDER, background: SOFT }}>
                   <div className="flex items-center justify-between shrink-0">
                     <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
-                      Assign Shift — {selectedWorkerForShift.full_name}
+                      {translateParams("team.shifts.assignTitle", { name: selectedWorkerForShift.full_name })}
                     </h3>
                     <button
                       onClick={() => setSelectedWorkerForShift(null)}
@@ -585,14 +593,14 @@ export default function Team() {
                   {!shiftFormOpen ? (
                     <div className="text-center flex-1 flex items-center justify-center">
                       <div>
-                        <p className="font-bold text-sm" style={{ color: TEXT }}>Create or manage shifts</p>
-                        <p className="text-xs mt-1 mb-4" style={{ color: MUTED }}>Click the button below to assign shifts to this worker</p>
+                        <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("team.shifts.createOrManage")}</p>
+                        <p className="text-xs mt-1 mb-4" style={{ color: MUTED }}>{translate("team.shifts.createHint")}</p>
                         <Button
                           className="rounded-xl gap-2"
                           style={{ background: PLUM, color: "#fff" }}
                           onClick={() => setShiftFormOpen(true)}
                         >
-                          <Plus size={16} /> Create Shift
+                          <Plus size={16} /> {translate("team.shifts.createShift")}
                         </Button>
                       </div>
                     </div>
@@ -603,7 +611,7 @@ export default function Team() {
                         className="text-xs font-bold mb-2"
                         style={{ color: PLUM }}
                       >
-                        ← Back to options
+                        {translate("team.shifts.backToOptions")}
                       </button>
                       <ShiftAssignmentModal
                         open={true}
@@ -617,8 +625,8 @@ export default function Team() {
                 <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
                   <div>
                     <Clock size={32} style={{ color: BORDER, margin: "0 auto" }} />
-                    <p className="font-bold mt-3" style={{ color: TEXT }}>Assign shifts</p>
-                    <p className="text-sm mt-1" style={{ color: MUTED }}>Select a worker from the left to get started</p>
+                    <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("team.shifts.empty.title")}</p>
+                    <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("team.shifts.empty.hint")}</p>
                   </div>
                 </div>
               )}

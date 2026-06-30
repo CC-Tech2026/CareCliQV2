@@ -116,8 +116,13 @@ export function extractGateCode(text?: string | null) {
   return match?.[1] ?? null;
 }
 
-export function greetingForHour(date = new Date()) {
+export function greetingForHour(translate?: (key: string) => string, date = new Date()) {
   const h = date.getHours();
+  if (translate) {
+    if (h < 12) return translate("common.greeting.morning");
+    if (h < 17) return translate("common.greeting.afternoon");
+    return translate("common.greeting.evening");
+  }
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
@@ -390,4 +395,41 @@ export function shiftHasRiskAlerts(shift: ShiftRiskFields) {
 
 export function shiftNeedsRiskAck(shift: ShiftRiskFields) {
   return shiftHasRiskAlerts(shift) && !shift.risks_acknowledged;
+}
+
+type ShiftBriefingFields = {
+  visual_state?: string;
+  briefing_complete?: boolean;
+  requires_briefing?: boolean;
+};
+
+type ShiftBriefingOptions = {
+  /** Tutorial always walks through briefing even if already completed on this shift. */
+  tutorial?: boolean;
+  /** Open briefing in read-only review mode (no auto-redirect away). */
+  review?: boolean;
+};
+
+/** Scheduled shifts need the full briefing until explicitly complete (list API may omit flags). */
+export function shiftNeedsBriefing(shift: ShiftBriefingFields, options?: ShiftBriefingOptions): boolean {
+  if (shift.visual_state !== "scheduled") return false;
+  if (options?.tutorial) return true;
+  if (options?.review) return true;
+  return shift.briefing_complete !== true;
+}
+
+export function shiftBriefingHref(
+  shiftId: string,
+  options?: boolean | ShiftBriefingOptions,
+): string {
+  const opts: ShiftBriefingOptions =
+    typeof options === "boolean" ? { tutorial: options } : (options ?? {});
+  const params = new URLSearchParams();
+  if (opts.tutorial) {
+    params.set("tutorial", "1");
+    params.set("step", "pre_shift_briefing_complete");
+  }
+  if (opts.review) params.set("review", "1");
+  const qs = params.toString();
+  return `/my-shifts/${shiftId}/briefing${qs ? `?${qs}` : ""}`;
 }

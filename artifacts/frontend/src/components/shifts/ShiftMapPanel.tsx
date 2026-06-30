@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { BORDER, MUTED, PLUM, TEXT, extractGateCode } from "@/lib/shift-utils";
 import { getShiftLocation, type ShiftLocationDetails } from "@/services/shiftService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   shiftId: string;
@@ -39,6 +40,7 @@ export function ShiftMapPanel({
   onToggle,
   className,
 }: Props) {
+  const { translate } = useAccessibility();
   const { toast } = useToast();
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoDenied, setGeoDenied] = useState(false);
@@ -66,9 +68,9 @@ export function ShiftMapPanel({
     if (!gateCode) return;
     try {
       await navigator.clipboard.writeText(gateCode);
-      toast({ title: "Gate code copied" });
+      toast({ title: translate("shift.map.gateCopied") });
     } catch {
-      toast({ title: "Could not copy code", variant: "destructive" });
+      toast({ title: translate("shift.map.copyFailed"), variant: "destructive" });
     }
   };
 
@@ -99,7 +101,7 @@ export function ShiftMapPanel({
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
             <MapPin size={16} style={{ color: PLUM }} />
-            Location
+            {translate("shift.map.title")}
           </span>
           {!open && resolvedAddress && (
             <span className="mt-0.5 block truncate text-xs font-medium" style={{ color: MUTED }}>
@@ -114,7 +116,7 @@ export function ShiftMapPanel({
         <div className="border-t" style={{ borderColor: BORDER }}>
           {!resolvedAddress ? (
             <p className="px-4 py-3 text-sm" style={{ color: MUTED }}>
-              No address on file for this shift.
+              {translate("shift.map.noAddress")}
             </p>
           ) : (
             <>
@@ -124,14 +126,14 @@ export function ShiftMapPanel({
                 </p>
                 {geoDenied && (
                   <p className="mt-1 text-xs" style={{ color: MUTED }}>
-                    Location permission denied — directions use destination only.
+                    {translate("shift.map.geoDenied")}
                   </p>
                 )}
               </div>
 
               <div className="relative aspect-[16/10] w-full bg-[#F8F8FE]">
                 <iframe
-                  title="Shift location map"
+                  title={translate("shift.map.iframeTitle")}
                   src={embedMapUrl(resolvedAddress)}
                   className="h-full w-full border-0"
                   loading="lazy"
@@ -154,14 +156,14 @@ export function ShiftMapPanel({
                         style={{ background: PLUM }}
                       >
                         <Navigation size={16} className="mr-2" />
-                        Open in Google Maps
+                        {translate("shift.map.openMaps")}
                       </Button>
                     </a>
                   )}
                   <a href={mapsSearchUrl(resolvedAddress)} target="_blank" rel="noopener noreferrer">
                     <Button type="button" variant="outline" className="h-11 rounded-xl font-bold">
                       <ExternalLink size={16} className="mr-2" />
-                      View
+                      {translate("shift.map.view")}
                     </Button>
                   </a>
                 </div>
@@ -169,7 +171,7 @@ export function ShiftMapPanel({
                 {access && (
                   <div className="rounded-xl border bg-[#FFFBEB] p-3" style={{ borderColor: "#FDE68A" }}>
                     <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Access / gate</p>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">{translate("shift.map.accessGate")}</p>
                       <div className="flex items-center gap-2">
                         {gateVisible && gateCode && (
                           <button
@@ -178,7 +180,7 @@ export function ShiftMapPanel({
                             onClick={() => void copyGateCode()}
                           >
                             <Copy size={14} />
-                            Copy code
+                            {translate("shift.map.copyCode")}
                           </button>
                         )}
                         <button
@@ -187,12 +189,12 @@ export function ShiftMapPanel({
                           onClick={() => setGateVisible((v) => !v)}
                         >
                           {gateVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                          {gateVisible ? "Hide" : "Reveal"}
+                          {gateVisible ? translate("shift.map.hide") : translate("shift.map.reveal")}
                         </button>
                       </div>
                     </div>
                     <p className="text-sm text-amber-950">
-                      {gateVisible ? access : "•••••••• (tap Reveal)"}
+                      {gateVisible ? access : translate("shift.map.hiddenGate")}
                     </p>
                   </div>
                 )}
@@ -200,7 +202,7 @@ export function ShiftMapPanel({
                 {entry && (
                   <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
                     <p className="mb-1 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                      Entry instructions
+                      {translate("shift.map.entry")}
                     </p>
                     <p className="whitespace-pre-wrap text-sm" style={{ color: TEXT }}>
                       {entry}
@@ -211,7 +213,7 @@ export function ShiftMapPanel({
                 {parking && (
                   <div className="rounded-xl border p-3" style={{ borderColor: BORDER }}>
                     <p className="mb-1 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                      Parking / visit notes
+                      {translate("shift.map.parking")}
                     </p>
                     <p className="whitespace-pre-wrap text-sm" style={{ color: TEXT }}>
                       {parking}

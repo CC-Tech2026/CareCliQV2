@@ -2,10 +2,11 @@ import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ChevronDown, ChevronUp, MapPin, ExternalLink } from "lucide-react";
 import { Link } from "wouter";
-import { BodyMap, BodyMarker, BodyType, MARKER_COLORS, getZoneLabel } from "@/components/BodyMap";
+import { BodyMap, BodyMarker, BodyType, MARKER_COLORS, getZoneLabel, getMarkerColorLabel } from "@/components/BodyMap";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 export interface SessionWithMarkers {
   id: string;
@@ -30,6 +31,7 @@ function safeFormat(dateStr?: string | null, fmt = "MMM d, yyyy") {
 }
 
 export function BodyMarkerHistory({ sessions, bodyType = "unspecified", className }: BodyMarkerHistoryProps) {
+  const { translate, translateParams } = useAccessibility();
   const [view, setView] = useState<"front" | "back">("front");
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
@@ -74,9 +76,9 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
             Body Findings History
           </h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
-            {sessionsWithMarkers.length} session{sessionsWithMarkers.length !== 1 ? "s" : ""} with physical findings recorded
+            {sessionsWithMarkers.length === 1 ? translateParams("clinical.bodyMap.history.sessionsWithFindings", { count: String(sessionsWithMarkers.length) }) : translateParams("clinical.bodyMap.history.sessionsWithFindingsPlural", { count: String(sessionsWithMarkers.length) })}
             {persistentZones.length > 0 && (
-              <> · <span className="text-indigo-600 font-medium">{persistentZones.length} recurring site{persistentZones.length !== 1 ? "s" : ""}</span></>
+              <> · <span className="text-indigo-600 font-medium">{persistentZones.length === 1 ? translateParams("clinical.bodyMap.history.recurringSites", { count: String(persistentZones.length) }) : translateParams("clinical.bodyMap.history.recurringSitesPlural", { count: String(persistentZones.length) })}</span></>
             )}
           </p>
         </div>
@@ -124,7 +126,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
               {Object.entries(MARKER_COLORS).map(([key, cfg]) => (
                 <span key={key} className="flex items-center gap-1 text-[9px] font-medium text-slate-500">
                   <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: cfg.hex }} />
-                  {cfg.label}
+                  {getMarkerColorLabel(key as any, translate)}
                 </span>
               ))}
               <span className="flex items-center gap-1 text-[9px] font-medium text-slate-500">
@@ -137,7 +139,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
           <div className="flex-1 min-w-0 space-y-2">
             {persistentZones.length > 0 && (
               <div className="mb-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-1.5">Recurring findings</p>
+                <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 mb-1.5">{translate("clinical.bodyMap.history.recurringFindings")}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {persistentZones.map(([zone, count]) => {
                     const latestMarker = compositeMarkers.find((m) => m.zone === zone);
@@ -151,7 +153,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                         )}
                       >
                         {cfg && <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: cfg.hex }} />}
-                        {getZoneLabel(zone)}
+                        {getZoneLabel(zone, translate)}
                         <span className="font-bold">×{count}</span>
                       </span>
                     );
@@ -160,7 +162,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
               </div>
             )}
 
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Session timeline</p>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">{translate("clinical.bodyMap.history.sessionTimeline")}</p>
 
             {sessionsWithMarkers.map((s) => {
               const isExpanded = expandedSession === s.id;
@@ -176,7 +178,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
-                          {s.session_type || "Session"}
+                          {s.session_type || translate("clinical.bodyMap.history.session")}
                         </span>
                         <span className="text-[10px] text-slate-400 shrink-0">{safeFormat(s.session_date)}</span>
                       </div>
@@ -189,7 +191,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                               className="flex items-center gap-0.5 text-[9px] font-medium text-slate-600"
                             >
                               <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: cfg.hex }} />
-                              {getZoneLabel(m.zone)}
+                              {getZoneLabel(m.zone, translate)}
                             </span>
                           );
                         })}
@@ -197,7 +199,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-[10px] px-1.5 h-5">
-                        {s.body_markers.length} finding{s.body_markers.length !== 1 ? "s" : ""}
+                        {s.body_markers.length === 1 ? translateParams("clinical.bodyMap.history.finding", { count: String(s.body_markers.length) }) : translateParams("clinical.bodyMap.history.findings", { count: String(s.body_markers.length) })}
                       </Badge>
                       {isExpanded
                         ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" />
@@ -215,7 +217,7 @@ export function BodyMarkerHistory({ sessions, bodyType = "unspecified", classNam
                             <span className="mt-0.5 h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cfg.hex }} />
                             <div className="min-w-0 flex-1">
                               <p className={cn("text-[11px] font-semibold", cfg.text)}>
-                                {getZoneLabel(m.zone)} — {cfg.label}
+                                {getZoneLabel(m.zone, translate)} — {getMarkerColorLabel(key as any, translate)}
                               </p>
                               {m.note && (
                                 <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">

@@ -11,6 +11,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ParticipantRiskAlert, ParticipantRiskType, ShiftHealthAlert } from "@/services/shiftService";
 import { MUTED, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const RISK_ICONS: Record<ParticipantRiskType, LucideIcon> = {
   allergy: UtensilsCrossed,
@@ -145,6 +146,8 @@ export function ParticipantRiskAcknowledgementSection({
   onUncheck,
   onViewSupportInstructions,
 }: SectionProps) {
+  const { translate, translateParams } = useAccessibility();
+
   if (acknowledged) {
     return (
       <section
@@ -152,12 +155,16 @@ export function ParticipantRiskAcknowledgementSection({
         data-tutorial="risk-ack-complete"
       >
         <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
-          <ShieldAlert size={16} /> Risks acknowledged
+          <ShieldAlert size={16} /> {translate("safety.risksAcknowledged")}
         </p>
         {acknowledgedAt && (
           <p className="mt-1 text-xs font-semibold text-emerald-700">
-            Logged {new Date(acknowledgedAt).toLocaleString()}
-            {acknowledgedByName ? ` by ${acknowledgedByName}` : ""}
+            {translateParams("safety.loggedAt", {
+              date: new Date(acknowledgedAt).toLocaleString(),
+              by: acknowledgedByName
+                ? translateParams("safety.loggedBy", { name: acknowledgedByName })
+                : "",
+            })}
           </p>
         )}
         <div className="mt-3">
@@ -175,7 +182,7 @@ export function ParticipantRiskAcknowledgementSection({
         onClick={onToggle}
       >
         <span className="flex items-center gap-2 text-sm font-black text-red-700">
-          <ShieldAlert size={18} /> Safety — acknowledge before clock-in
+          <ShieldAlert size={18} /> {translate("safety.acknowledgeBeforeClockIn")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} />
       </button>
@@ -189,7 +196,7 @@ export function ParticipantRiskAcknowledgementSection({
               className="text-xs font-bold text-red-700 underline underline-offset-2"
               onClick={onViewSupportInstructions}
             >
-              View Support Instructions
+              {translate("safety.viewSupportInstructions")}
             </button>
           )}
         </div>
@@ -213,7 +220,7 @@ export function ParticipantRiskAcknowledgementSection({
           }}
         />
         <span className="text-sm font-bold leading-snug" style={{ color: TEXT }}>
-          I acknowledge the risks and safety alerts for this participant
+          {translate("safety.acknowledgeCheckbox")}
         </span>
       </label>
     </section>

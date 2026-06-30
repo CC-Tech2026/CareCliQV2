@@ -9,6 +9,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT = "var(--cc-text)";
 const MUTED = "var(--cc-muted)";
@@ -70,6 +71,7 @@ function KpiCard({
 }
 
 export default function MDExecutivePage() {
+  const { translate, translateParams } = useAccessibility();
   const [, navigate] = useLocation();
   const [data, setData] = useState<MDData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -103,11 +105,11 @@ export default function MDExecutivePage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>Executive Dashboard</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>Organisation-wide KPIs and strategic overview</p>
+            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.executive.title")}</h1>
+            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.executive.subtitle")}</p>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: AMBER }}>
             <BarChart2 size={16} strokeWidth={2.5} />
@@ -121,41 +123,41 @@ export default function MDExecutivePage() {
         ) : error || !data ? (
           <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
             <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-            <p className="font-black" style={{ color: TEXT }}>Could not load executive dashboard</p>
+            <p className="font-black" style={{ color: TEXT }}>{translate("md.executive.loadFailed")}</p>
           </div>
         ) : (
           <>
             {/* KPI Grid */}
             <section>
-              <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Key Performance Indicators</p>
+              <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>{translate("md.executive.kpiSection")}</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <KpiCard label="Active Participants" value={data.active_participants} icon={Users} accent={PLUM} />
-                <KpiCard label="Active Staff" value={data.active_staff} sub={`${data.staff_retention_rate}% retention rate`} icon={UserCheck} accent="#10B981" />
-                <KpiCard label="Sessions This Week" value={data.sessions_this_week} icon={Activity} accent="#0EA5E9" />
+                <KpiCard label={translate("md.executive.activeParticipants")} value={data.active_participants} icon={Users} accent={PLUM} />
+                <KpiCard label={translate("md.executive.activeStaff")} value={data.active_staff} sub={translateParams("md.executive.retentionSub", { rate: String(data.staff_retention_rate) })} icon={UserCheck} accent="#10B981" />
+                <KpiCard label={translate("md.executive.sessionsWeek")} value={data.sessions_this_week} icon={Activity} accent="#0EA5E9" />
                 <KpiCard
-                  label="Compliance Score"
+                  label={translate("md.executive.complianceScore")}
                   value={`${data.compliance_score}%`}
-                  sub={data.compliance_score < data.compliance_target ? `Below ${data.compliance_target}% target` : `Target ${data.compliance_target}% ✓`}
+                  sub={data.compliance_score < data.compliance_target ? translateParams("md.executive.belowTarget", { target: String(data.compliance_target) }) : translateParams("md.executive.targetMet", { target: String(data.compliance_target) })}
                   icon={ShieldCheck}
                   warn={data.compliance_score < data.compliance_target}
                 />
-                <KpiCard label="Incidents This Month" value={data.incidents_this_month} icon={AlertTriangle} accent="#F97316" warn={data.incidents_this_month >= 3} />
-                <KpiCard label="Goal Achievement" value={`${data.goal_achievement_rate}%`} icon={Target} accent="#10B981" />
-                <KpiCard label="Support Workers" value={data.support_workers} icon={Users} accent={PLUM} />
-                <KpiCard label="Workers at Risk" value={data.workers_at_risk.length} icon={TrendingDown} warn={data.workers_at_risk.length > 0} />
+                <KpiCard label={translate("md.executive.incidentsMonth")} value={data.incidents_this_month} icon={AlertTriangle} accent="#F97316" warn={data.incidents_this_month >= 3} />
+                <KpiCard label={translate("md.executive.goalAchievement")} value={`${data.goal_achievement_rate}%`} icon={Target} accent="#10B981" />
+                <KpiCard label={translate("md.executive.supportWorkers")} value={data.support_workers} icon={Users} accent={PLUM} />
+                <KpiCard label={translate("md.executive.workersAtRisk")} value={data.workers_at_risk.length} icon={TrendingDown} warn={data.workers_at_risk.length > 0} />
               </div>
             </section>
 
             {/* Trend Indicators */}
             <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-              <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Performance Trends</h2>
-              <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Direction indicators vs target thresholds</p>
+              <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.trendsTitle")}</h2>
+              <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>{translate("md.executive.trendsSub")}</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { label: "Compliance", value: data.compliance_score, target: data.compliance_target },
-                  { label: "Goal Achievement", value: data.goal_achievement_rate, target: 85 },
-                  { label: "Staff Retention", value: data.staff_retention_rate, target: 90 },
-                  { label: "Compliant Sessions", value: data.team_compliance_breakdown.compliant > 0 ? Math.round((data.team_compliance_breakdown.compliant / Math.max(data.team_compliance_breakdown.compliant + data.team_compliance_breakdown.at_risk + data.team_compliance_breakdown.non_compliant, 1)) * 100) : 0, target: 80 },
+                  { label: translate("md.executive.trend.compliance"), value: data.compliance_score, target: data.compliance_target },
+                  { label: translate("md.executive.trend.goals"), value: data.goal_achievement_rate, target: 85 },
+                  { label: translate("md.executive.trend.retention"), value: data.staff_retention_rate, target: 90 },
+                  { label: translate("md.executive.trend.compliantSessions"), value: data.team_compliance_breakdown.compliant > 0 ? Math.round((data.team_compliance_breakdown.compliant / Math.max(data.team_compliance_breakdown.compliant + data.team_compliance_breakdown.at_risk + data.team_compliance_breakdown.non_compliant, 1)) * 100) : 0, target: 80 },
                 ].map(({ label, value, target }) => (
                   <div key={label} className="flex items-center gap-3 rounded-xl p-3" style={{ background: SOFT }}>
                     <TrendIcon value={value} target={target} />
@@ -171,15 +173,15 @@ export default function MDExecutivePage() {
             {/* 90-day Compliance Chart */}
             {chartData.length > 1 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Compliance Trend — Last 90 Days</h2>
-                <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>Weekly average compliance score across all sessions</p>
+                <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.chartTitle")}</h2>
+                <p className="mb-4 text-[11px] font-medium" style={{ color: MUTED }}>{translate("md.executive.chartSub")}</p>
                 <ResponsiveContainer width="100%" height={220}>
                   <LineChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
                     <XAxis dataKey="week" tick={{ fontSize: 10, fill: MUTED }} />
                     <YAxis domain={[50, 100]} tick={{ fontSize: 10, fill: MUTED }} />
-                    <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 2" label={{ value: `Target ${data.compliance_target}%`, position: "right", fontSize: 9, fill: AMBER }} />
-                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }} formatter={(v: number) => [`${v}%`, "Avg Score"]} />
+                    <ReferenceLine y={data.compliance_target} stroke={AMBER} strokeDasharray="4 2" label={{ value: translateParams("md.executive.chartTarget", { target: String(data.compliance_target) }), position: "right", fontSize: 9, fill: AMBER }} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12 }} formatter={(v: number) => [`${v}%`, translate("md.executive.chartAvgScore")]} />
                     <Line type="monotone" dataKey="score" stroke={PLUM} strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: PLUM }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -189,7 +191,7 @@ export default function MDExecutivePage() {
             {/* Org Alerts */}
             {data.org_alerts.length > 0 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Organisation Alerts</h2>
+                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.orgAlerts")}</h2>
                 <div className="space-y-2">
                   {data.org_alerts.map((alert, i) => {
                     const sev = alert.severity;
@@ -210,7 +212,7 @@ export default function MDExecutivePage() {
             {/* Worker Rankings */}
             {data.worker_rankings.length > 0 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Top Worker Performance</h2>
+                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.executive.topWorkers")}</h2>
                 <div className="space-y-2">
                   {data.worker_rankings.slice(0, 8).map((w, i) => (
                     <div key={w.id} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ background: i === 0 ? "#F0FDF4" : SOFT }}>
@@ -218,7 +220,7 @@ export default function MDExecutivePage() {
                         {i + 1}
                       </span>
                       <span className="flex-1 text-[12px] font-semibold" style={{ color: TEXT }}>{w.full_name}</span>
-                      <span className="text-[11px] font-medium" style={{ color: MUTED }}>{w.sessions} sessions</span>
+                      <span className="text-[11px] font-medium" style={{ color: MUTED }}>{translateParams("md.executive.sessionsCount", { count: String(w.sessions) })}</span>
                       <span
                         className="rounded-full px-2 py-0.5 text-[10px] font-black"
                         style={{

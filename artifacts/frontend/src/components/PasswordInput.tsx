@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { cn } from "@/lib/utils";
 
 type PasswordInputProps = Omit<React.ComponentProps<typeof Input>, "type"> & {
@@ -67,10 +68,11 @@ function PasswordToggleButton({
   className?: string;
   iconClassName?: string;
 }) {
+  const { translate } = useAccessibility();
   return (
     <button
       type="button"
-      aria-label={show ? "Hide password" : "Show password"}
+      aria-label={show ? translate("clinical.password.hide") : translate("clinical.password.show")}
       onClick={onToggle}
       className={cn(
         "absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-[#6B7280] transition-colors hover:text-[#3730A3]",

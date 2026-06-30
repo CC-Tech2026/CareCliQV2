@@ -4,6 +4,7 @@ import { loadNdisPriceSchedule } from "@/services/ndisService";
 import { useToast } from "@/hooks/use-toast";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // Design tokens aligned with billing.tsx
 const PLUM   = "var(--cc-plum)";
@@ -19,6 +20,7 @@ interface ScheduleLoaderProps {
 }
 
 export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const { requireReAuth } = useReAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +53,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
 
   async function handleLoadSchedule() {
     if (!jsonContent) {
-      toast({ title: "File required", description: "Select a valid NDIS JSON file", variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.schedule.fileRequired"), description: translate("coordinator.ndis.schedule.selectValidFile"), variant: "destructive" });
       return;
     }
 
@@ -61,15 +63,15 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
       if (!res) return;
 
       toast({ 
-        title: "Schedule loaded", 
-        description: `${res.items_loaded} items from FY ${res.financial_year}`,
+        title: translate("coordinator.ndis.schedule.loaded"), 
+        description: translateParams("coordinator.ndis.schedule.loadedDesc", { count: String(res.items_loaded), year: res.financial_year }),
       });
       
       // Show any validation errors
       if (res.validation_errors.length > 0) {
         toast({
-          title: "Load completed with warnings",
-          description: `${res.validation_errors.length} items had issues (see below)`,
+          title: translate("coordinator.ndis.schedule.warnings"),
+          description: translateParams("coordinator.ndis.schedule.warningsDesc", { count: String(res.validation_errors.length) }),
           variant: "destructive",
         });
       }
@@ -82,7 +84,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
       // Auto-close on success (after short delay for user to see message)
       setTimeout(onClose, 2000);
     } catch (err) {
-      toast({ title: "Load failed", description: (err as Error).message, variant: "destructive" });
+      toast({ title: translate("coordinator.ndis.schedule.loadFailed"), description: (err as Error).message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
       <div className="w-full max-w-2xl mx-4 rounded-lg bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 px-6 py-4 border-b flex items-center justify-between gap-4" style={{ borderColor: BORDER, background: "var(--cc-bg)" }}>
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>Load NDIS Price Schedule</h2>
+          <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("coordinator.ndis.schedule.title")}</h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
             <X className="w-5 h-5" style={{ color: MUTED }} />
           </button>
@@ -105,12 +107,12 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
             <div className="flex gap-3">
               <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: "#D97706" }} />
               <div className="text-sm" style={{ color: "#92400E" }}>
-                <p className="font-bold">Loading a new schedule will:</p>
+                <p className="font-bold">{translate("coordinator.ndis.schedule.warningTitle")}</p>
                 <ul className="mt-2 list-disc list-inside space-y-1">
-                  <li>Create a new schedule record for the financial year</li>
-                  <li>Supersede any previous schedule for that year</li>
-                  <li>Preserve all manual price edits from previous years</li>
-                  <li>Apply a standardized set of items for your organization</li>
+                  <li>{translate("coordinator.ndis.schedule.warning1")}</li>
+                  <li>{translate("coordinator.ndis.schedule.warning2")}</li>
+                  <li>{translate("coordinator.ndis.schedule.warning3")}</li>
+                  <li>{translate("coordinator.ndis.schedule.warning4")}</li>
                 </ul>
               </div>
             </div>
@@ -118,7 +120,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
 
           {/* File Upload */}
           <div>
-            <label className="text-xs font-bold" style={{ color: MUTED }}>NDIS Support Catalogue JSON</label>
+            <label className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.schedule.jsonLabel")}</label>
             <div className="mt-3">
               <input
                 ref={fileInputRef}
@@ -135,10 +137,10 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
                 <Upload className="w-5 h-5" />
                 <div className="text-left">
                   <p className="font-bold text-sm" style={{ color: TEXT }}>
-                    {fileName || "Choose NDIS JSON file"}
+                    {fileName || translate("coordinator.ndis.schedule.chooseFile")}
                   </p>
                   <p className="text-xs mt-0.5">
-                    {fileName ? "Click to replace" : "Click to select file"}
+                    {fileName ? translate("coordinator.ndis.schedule.clickReplace") : translate("coordinator.ndis.schedule.clickSelect")}
                   </p>
                 </div>
               </button>
@@ -149,7 +151,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
           {jsonContent && (
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-bold" style={{ color: MUTED }}>File Preview</p>
+                <p className="text-xs font-bold" style={{ color: MUTED }}>{translate("coordinator.ndis.schedule.filePreview")}</p>
                 <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: "#DBEAFE", color: "#1E40AF" }}>
                   ✓ Valid JSON
                 </span>
@@ -203,7 +205,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Load Schedule
+                  {translate("coordinator.ndis.schedule.loadSchedule")}
                 </>
               )}
             </button>

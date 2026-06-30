@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getOrgEvents, createOrgEvent, deleteOrgEvent, type OrgEvent } from "@/services/hubService";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
@@ -21,15 +22,15 @@ type EventType = "audit" | "training" | "meeting" | "review";
 
 const EVENT_CFG: Record<EventType, {
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties; className?: string }>;
-  label: string;
+  labelKey: string;
   color: string;
   bg: string;
   dot: string;
 }> = {
-  audit:    { icon: ClipboardCheck, label: "Audit",    color: "#EF4444", bg: "#FEF2F2", dot: "#EF4444" },
-  training: { icon: BookOpen,       label: "Training", color: PLUM,      bg: "#EDE9FF", dot: PLUM },
-  meeting:  { icon: Users,          label: "Meeting",  color: "#0EA5E9", bg: "#E0F2FE", dot: "#0EA5E9" },
-  review:   { icon: Target,         label: "Review",   color: "#10B981", bg: "#D1FAE5", dot: "#10B981" },
+  audit:    { icon: ClipboardCheck, labelKey: "hub.calendar.eventType.audit",    color: "#EF4444", bg: "#FEF2F2", dot: "#EF4444" },
+  training: { icon: BookOpen,       labelKey: "hub.calendar.eventType.training", color: PLUM,      bg: "#EDE9FF", dot: PLUM },
+  meeting:  { icon: Users,          labelKey: "hub.calendar.eventType.meeting",  color: "#0EA5E9", bg: "#E0F2FE", dot: "#0EA5E9" },
+  review:   { icon: Target,         labelKey: "hub.calendar.eventType.review",   color: "#10B981", bg: "#D1FAE5", dot: "#10B981" },
 };
 
 const EVENT_TYPES: EventType[] = ["audit", "training", "meeting", "review"];
@@ -50,6 +51,7 @@ function EventCard({
   onDelete?: (id: string) => void;
   isCoordinator: boolean;
 }) {
+  const { translate } = useAccessibility();
   const cfg       = cfgOf(event.event_type);
   const Icon      = cfg.icon;
   const eventDate = parseISO(event.event_date);
@@ -73,10 +75,10 @@ function EventCard({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
           <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-black" style={{ background: cfg.bg, color: cfg.color }}>
-            <Icon size={9} strokeWidth={2} /> {cfg.label}
+            <Icon size={9} strokeWidth={2} /> {translate(cfg.labelKey)}
           </span>
-          {soon   && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">Soon</span>}
-          {passed && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-400">Past</span>}
+          {soon   && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">{translate("hub.calendar.soon")}</span>}
+          {passed && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-400">{translate("hub.calendar.past")}</span>}
         </div>
         <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{event.title}</p>
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: MUTED }}>
@@ -98,6 +100,7 @@ function EventCard({
 }
 
 export function OrganizationCalendar() {
+  const { translate, translateParams } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator" || user?.role === "managing_director";
 
@@ -171,7 +174,7 @@ export function OrganizationCalendar() {
       setShowForm(false);
       setForm(BLANK);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not create event.");
+      setSaveError(err instanceof Error ? err.message : translate("hub.calendar.createFailed"));
     } finally {
       setSaving(false);
     }
@@ -184,7 +187,7 @@ export function OrganizationCalendar() {
       setEvents((prev) => (prev ?? []).filter((e) => e.id !== id));
       if (selectedDay && dayEvents.length <= 1) setSelectedDay(null);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete event.");
+      setDeleteError(err instanceof Error ? err.message : translate("hub.calendar.deleteFailed"));
     }
   }
 
@@ -192,7 +195,7 @@ export function OrganizationCalendar() {
     <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>Team Calendar</p>
+        <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>{translate("hub.calendar.title")}</p>
         <div className="flex items-center gap-2">
           {isCoordinator && (
             <button
@@ -200,7 +203,7 @@ export function OrganizationCalendar() {
               className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#EDE9FF]"
               style={{ background: SOFT, color: PLUM }}
             >
-              <Plus size={11} strokeWidth={2} /> Add Event
+              <Plus size={11} strokeWidth={2} /> {translate("hub.calendar.addEvent")}
             </button>
           )}
           <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
@@ -220,19 +223,19 @@ export function OrganizationCalendar() {
         {showForm && isCoordinator && (
           <form onSubmit={handleAdd} className="mt-3 rounded-xl border p-4 space-y-3" style={{ borderColor: BORDER, background: SOFT }}>
             <div>
-              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
+              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.formTitle")}</label>
               <input
                 className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3] transition-colors"
                 style={{ borderColor: BORDER }}
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Event title"
+                placeholder={translate("hub.calendar.eventTitlePlaceholder")}
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Date *</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.date")}</label>
                 <input
                   type="date"
                   className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
@@ -243,36 +246,36 @@ export function OrganizationCalendar() {
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Type</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.type")}</label>
                 <select
                   className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
                   value={form.event_type}
                   onChange={(e) => setForm((f) => ({ ...f, event_type: e.target.value as EventType }))}
                 >
-                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{EVENT_CFG[t].label}</option>)}
+                  {EVENT_TYPES.map((t) => <option key={t} value={t}>{translate(EVENT_CFG[t].labelKey)}</option>)}
                 </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Duration</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.duration")}</label>
                 <input
                   className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
                   value={form.duration}
                   onChange={(e) => setForm((f) => ({ ...f, duration: e.target.value }))}
-                  placeholder="e.g. 2 hours"
+                  placeholder={translate("hub.calendar.durationPlaceholder")}
                 />
               </div>
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Location</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.location")}</label>
                 <input
                   className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none"
                   style={{ borderColor: BORDER }}
                   value={form.location}
                   onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                  placeholder="Optional"
+                  placeholder={translate("common.optional")}
                 />
               </div>
             </div>
@@ -294,7 +297,7 @@ export function OrganizationCalendar() {
                 className="rounded-lg px-4 py-1.5 text-[11px] font-bold text-white"
                 style={{ background: PLUM, opacity: saving ? 0.65 : 1 }}
               >
-                {saving ? "Saving…" : "Add Event"}
+                {saving ? translate("common.saving") : translate("hub.calendar.addEvent")}
               </button>
             </div>
           </form>
@@ -419,14 +422,14 @@ export function OrganizationCalendar() {
           ) : fetchError ? (
             <div className="py-5 text-center">
               <AlertTriangle size={16} className="mx-auto mb-1" style={{ color: "#F97316" }} />
-              <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load calendar</p>
+              <p className="text-[12px] font-bold" style={{ color: TEXT }}>{translate("hub.calendar.loadFailed")}</p>
             </div>
           ) : upcoming.length === 0 ? (
             <div className="py-5 text-center">
               <Calendar size={16} className="mx-auto mb-1.5" style={{ color: MUTED }} />
-              <p className="text-[12px] font-bold" style={{ color: TEXT }}>No upcoming events</p>
+              <p className="text-[12px] font-bold" style={{ color: TEXT }}>{translate("hub.calendar.noUpcoming")}</p>
               <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
-                {isCoordinator ? "Add an event to get started." : "Your coordinator will add events here."}
+                {isCoordinator ? translate("hub.calendar.coordinatorHint") : translate("hub.calendar.workerHint")}
               </p>
             </div>
           ) : (
@@ -441,7 +444,7 @@ export function OrganizationCalendar() {
               ))}
               {upcoming.length > 6 && (
                 <p className="py-2 text-[11px] font-bold" style={{ color: PLUM }}>
-                  +{upcoming.length - 6} more events
+                  {translateParams("hub.calendar.moreEvents", { count: String(upcoming.length - 6) })}
                 </p>
               )}
             </div>

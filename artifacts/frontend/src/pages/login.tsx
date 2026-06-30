@@ -1,10 +1,12 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Loader2, ArrowRight, ShieldCheck, ArrowLeft } from "lucide-react";
 import { PasswordNativeInput } from "@/components/PasswordInput";
+import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 import { validateLoginIdentifier } from "@/lib/auth-login-validation";
 import {
   getRememberDevicePreference,
@@ -14,7 +16,8 @@ import {
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
-const BORDER = "#C7D2FE";
+const BORDER = "var(--auth-input-border)";
+const INPUT_BG = "var(--auth-input-bg)";
 
 // ── 6-box OTP input ───────────────────────────────────────────────────────────
 function OtpInput({
@@ -71,10 +74,11 @@ function OtpInput({
             onKeyDown={(e) => handleKey(i, e)}
             onFocus={(e) => e.target.select()}
             disabled={disabled}
-            className="flex-1 aspect-square max-w-[56px] text-center text-[22px] font-black rounded-xl border outline-none transition-all duration-150 bg-[#F8F8FE] focus:bg-white"
+            className="flex-1 aspect-square max-w-[56px] text-center text-[22px] font-black rounded-xl border outline-none transition-all duration-150 focus:bg-cc-surface"
             style={{
+              background: INPUT_BG,
               borderColor: error ? CORAL : filled ? PLUM : BORDER,
-              boxShadow: filled && !error ? "0 0 0 3px rgba(55,48,163,0.10)" : "none",
+              boxShadow: filled && !error ? "0 0 0 3px color-mix(in srgb, var(--cc-plum) 10%, transparent)" : "none",
               color: "var(--cc-text)",
             }}
           />
@@ -143,6 +147,7 @@ export default function Login() {
   const { login, completeMfaLogin } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate: t } = useAccessibility();
   const isMobile = useIsMobile();
 
   const [identifier, setIdentifier]           = useState("");
@@ -167,7 +172,7 @@ export default function Login() {
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     const valErr = validateLoginIdentifier(identifier);
-    const pwdErr = !password.trim() ? "Enter your password" : null;
+    const pwdErr = !password.trim() ? t("auth.login.error.passwordRequired") : null;
     setIdentifierError(valErr);
     setPasswordError(pwdErr);
     if (valErr || pwdErr) return;
@@ -182,11 +187,11 @@ export default function Login() {
         setTrustDevice(true);
         return;
       }
-      toast({ title: "Welcome back!", description: "Your workspace is ready." });
+      toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
       navigate(resolvePostLoginPath(result.user.id));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Incorrect email or password";
-      toast({ title: "Sign-in failed", description: msg, variant: "destructive" });
+      const msg = err instanceof Error ? err.message : t("auth.login.error.invalidCredentials");
+      toast({ title: t("auth.login.error.signInFailed"), description: msg, variant: "destructive" });
     } finally {
       setBusy(false);
     }
@@ -195,60 +200,59 @@ export default function Login() {
   async function handleMfaSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!mfaChallengeToken) return;
-    if (!mfaCode.trim()) { setMfaCodeError("Enter your verification code"); return; }
+    if (!mfaCode.trim()) { setMfaCodeError(t("auth.login.error.mfaRequired")); return; }
     setBusy(true);
     try {
       const authUser = await completeMfaLogin(mfaChallengeToken, mfaCode.trim(), trustDevice);
-      toast({ title: "Welcome back!", description: "Your workspace is ready." });
+      toast({ title: t("auth.login.toast.welcome"), description: t("auth.login.toast.ready") });
       navigate(resolvePostLoginPath(authUser.id));
     } catch (err) {
-      setMfaCodeError(err instanceof Error ? err.message : "Invalid verification code");
+      setMfaCodeError(err instanceof Error ? err.message : t("auth.login.error.invalidMfa"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="min-h-[100dvh] w-full flex flex-col lg:flex-row font-sans bg-white">
+    <div className="relative min-h-[100dvh] w-full flex flex-col lg:flex-row font-sans bg-[var(--auth-shell-bg)] text-cc-text">
+      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+        <AuthThemeToggle />
+      </div>
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes authEnter    { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
         @keyframes fieldShake   { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
         @keyframes panelIn      { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
-        .login-input:focus { border-color: ${PLUM} !important; box-shadow: 0 0 0 3px rgba(55,48,163,0.10); }
+        .login-input:focus { border-color: var(--cc-plum) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--cc-plum) 10%, transparent); }
       ` }} />
 
       {/* ── Mobile-only brand header ────────────────────────────────────── */}
-      <div className="lg:hidden relative overflow-hidden" style={{ background: "linear-gradient(135deg, #F5F3FF 0%, #FFF9F0 100%)" }}>
+      <div className="lg:hidden relative overflow-hidden" style={{ background: "var(--auth-marketing-bg)" }}>
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(ellipse at 5% 110%, rgba(55,48,163,0.08) 0%, transparent 55%), " +
-              "radial-gradient(ellipse at 95% -5%, rgba(190,24,93,0.06) 0%, transparent 45%)",
-          }}
+          style={{ background: "var(--auth-marketing-glow)" }}
         />
         <div className="relative z-10 px-6 pt-12 pb-9">
           {/* Logo row */}
           <img src="/carecliQ_logo.png" alt="CareCliQ" className="h-8 w-auto" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "#6B5B95" }}>
-            NDIS Care Software
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "var(--auth-marketing-muted)" }}>
+            {t("auth.login.marketing.tagline")}
           </p>
 
           {/* Hero copy */}
-          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "#2D1B4E" }}>
-            Every shift.<br />
-            Every note.<br />
-            <span style={{ color: "#3730A3" }}>Every claim.</span>
+          <h2 className="mt-5 text-[28px] font-black leading-[1.12] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+            {t("auth.login.marketing.headline1")}<br />
+            {t("auth.login.marketing.headline2")}<br />
+            <span style={{ color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
           </h2>
 
           {/* Stats row */}
           <div className="mt-5 flex items-center gap-4">
-            {[["2,400+","shifts"],["97%","compliance"],["200+","providers"]].map(([n, l], i) => (
+            {[["2,400+", t("auth.login.marketing.statShifts")], ["97%", t("auth.login.marketing.statCompliance")], ["200+", t("auth.login.marketing.statProviders")]].map(([n, l], i) => (
               <div key={n} className="flex items-center gap-4">
-                {i > 0 && <div className="h-6 w-px" style={{ background: "rgba(55,48,163,0.12)" }} />}
+                {i > 0 && <div className="h-6 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
                 <div>
-                  <p className="text-[16px] font-black" style={{ color: "#2D1B4E" }}>{n}</p>
-                  <p className="text-[10px] font-medium" style={{ color: "#6B5B95" }}>{l}</p>
+                  <p className="text-[16px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
+                  <p className="text-[10px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
                 </div>
               </div>
             ))}
@@ -261,14 +265,14 @@ export default function Login() {
                 <div
                   key={a.i}
                   className="h-7 w-7 rounded-full border-2 flex items-center justify-center text-[9px] font-black text-white"
-                  style={{ background: a.bg, borderColor: "#F5F3FF" }}
+                  style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
                 >
                   {a.i}
                 </div>
               ))}
             </div>
-            <p className="text-[12px] font-bold" style={{ color: "#2D1B4E" }}>
-              Trusted by 200+ NDIS providers
+            <p className="text-[12px] font-bold" style={{ color: "var(--auth-headline)" }}>
+              {t("auth.login.marketing.trustedBy")}
             </p>
           </div>
         </div>
@@ -276,8 +280,8 @@ export default function Login() {
 
       {/* ── Form panel ─────────────────────────────────────────────────── */}
       <div
-        className="flex flex-col justify-between bg-white flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10"
-        style={{ borderRight: "1px solid #E5E7EB", animation: "panelIn 0.38s ease-out" }}
+        className="flex flex-col justify-between flex-1 lg:flex-none lg:w-[720px] lg:shrink-0 rounded-t-[28px] lg:rounded-none -mt-5 lg:mt-0 relative z-10 bg-[var(--auth-form-bg)]"
+        style={{ borderRight: "1px solid var(--cc-border)", animation: "panelIn 0.38s ease-out" }}
       >
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
@@ -286,7 +290,7 @@ export default function Login() {
 
         {/* Mobile drag handle */}
         <div className="lg:hidden flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-gray-200" />
+          <div className="h-1 w-10 rounded-full" style={{ background: "var(--auth-drag-handle)" }} />
         </div>
 
         {/* Form body */}
@@ -298,12 +302,12 @@ export default function Login() {
                 className="text-[22px] sm:text-[26px] font-black tracking-tight"
                 style={{ color: "var(--cc-text)" }}
               >
-                {mfaStep ? "Verify your identity" : "Welcome back"}
+                {mfaStep ? t("auth.login.mfaTitle") : t("auth.login.title")}
               </h1>
               <p className="mt-1.5 text-[14px] font-medium" style={{ color: "var(--cc-muted)" }}>
                 {mfaStep
-                  ? "Enter the code from your authenticator app."
-                  : "Sign in to your CareCliQ workspace."}
+                  ? t("auth.login.mfaSubtitle")
+                  : t("auth.login.subtitle")}
               </p>
             </div>
 
@@ -316,16 +320,16 @@ export default function Login() {
                   className="flex items-center gap-1.5 text-[13px] font-bold transition-opacity hover:opacity-75 active:opacity-50"
                   style={{ color: PLUM }}
                 >
-                  <ArrowLeft size={14} /> Back to sign in
+                  <ArrowLeft size={14} /> {t("auth.login.backToSignIn")}
                 </button>
 
                 <div
-                  className="rounded-xl border bg-[#F8F8FE] p-4 flex items-start gap-3"
-                  style={{ borderColor: BORDER }}
+                  className="rounded-xl border p-4 flex items-start gap-3"
+                  style={{ borderColor: BORDER, background: INPUT_BG }}
                 >
                   <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5" style={{ color: PLUM }} />
                   <p className="text-[13px] leading-relaxed font-medium" style={{ color: "var(--cc-muted)" }}>
-                    Two-factor authentication is active. Open your authenticator app to get your 6-digit code.
+                    {t("auth.login.mfaInfo")}
                   </p>
                 </div>
 
@@ -334,7 +338,7 @@ export default function Login() {
                     className="text-[11px] font-black uppercase tracking-wider mb-3 block"
                     style={{ color: "var(--cc-muted)" }}
                   >
-                    Verification code
+                    {t("auth.login.verificationCode")}
                   </label>
                   <OtpInput
                     value={mfaCode}
@@ -358,10 +362,11 @@ export default function Login() {
                     checked={trustDevice}
                     onChange={(e) => setTrustDevice(e.target.checked)}
                     disabled={busy}
-                    className="h-4 w-4 rounded border-[#C7D2FE] accent-[#3730A3]"
+                    className="h-4 w-4 rounded accent-cc-plum"
+                    style={{ borderColor: BORDER }}
                   />
                   <span className="text-[13px] font-medium" style={{ color: "var(--cc-muted)" }}>
-                    Trust this device for 30 days
+                    {t("auth.login.trustDevice")}
                   </span>
                 </label>
 
@@ -372,8 +377,8 @@ export default function Login() {
                   style={{ background: PLUM }}
                 >
                   {busy
-                    ? <><Loader2 size={16} className="animate-spin" /><span>Verifying…</span></>
-                    : <><span>Verify</span><ArrowRight size={16} strokeWidth={2.5} /></>
+                    ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.login.verifying")}</span></>
+                    : <><span>{t("auth.login.verify")}</span><ArrowRight size={16} strokeWidth={2.5} /></>
                   }
                 </button>
               </form>
@@ -381,7 +386,7 @@ export default function Login() {
               /* ── Sign-in step ── */
               <form onSubmit={handleSignIn} className="space-y-5" noValidate key="signin">
                 <Field
-                  label="Email or mobile number"
+                  label={t("auth.login.identifier")}
                   error={identifierError}
                   valid={identifierOk && !identifierError}
                 >
@@ -391,13 +396,14 @@ export default function Login() {
                     inputMode="email"
                     value={identifier}
                     onChange={(e) => { setIdentifier(e.target.value); if (identifierError) setIdentifierError(null); }}
-                    placeholder="you@example.com or 0412 345 678"
+                    placeholder={t("auth.login.identifierPlaceholder")}
                     disabled={busy}
                     autoComplete="username"
                     required
                     aria-invalid={!!identifierError}
-                    className="login-input w-full h-12 px-4 rounded-xl text-[14px] font-medium outline-none transition-all border bg-[#F8F8FE]"
+                    className="login-input w-full h-12 px-4 rounded-xl text-[14px] font-medium outline-none transition-all border"
                     style={{
+                      background: INPUT_BG,
                       borderColor: identifierError ? CORAL : identifierOk ? "#22C55E" : BORDER,
                       color: "var(--cc-text)",
                       paddingRight: identifierOk && !identifierError ? 36 : undefined,
@@ -406,7 +412,7 @@ export default function Login() {
                 </Field>
 
                 <Field
-                  label="Password"
+                  label={t("auth.login.password")}
                   error={passwordError}
                   right={
                     <button
@@ -415,7 +421,7 @@ export default function Login() {
                       className="text-[12px] font-bold transition-opacity hover:opacity-75"
                       style={{ color: PLUM }}
                     >
-                      Forgot password?
+                      {t("auth.login.forgotPassword")}
                     </button>
                   }
                 >
@@ -428,8 +434,9 @@ export default function Login() {
                     autoComplete="current-password"
                     required
                     aria-invalid={!!passwordError}
-                    className="login-input w-full h-12 px-4 rounded-xl text-[14px] font-medium outline-none transition-all border bg-[#F8F8FE]"
+                    className="login-input w-full h-12 px-4 rounded-xl text-[14px] font-medium outline-none transition-all border"
                     style={{
+                      background: INPUT_BG,
                       borderColor: passwordError ? CORAL : BORDER,
                       color: "var(--cc-text)",
                     }}
@@ -442,10 +449,11 @@ export default function Login() {
                     checked={rememberDevice}
                     onChange={(e) => setRememberDevice(e.target.checked)}
                     disabled={busy}
-                    className="h-4 w-4 rounded border-[#C7D2FE] accent-[#3730A3]"
+                    className="h-4 w-4 rounded accent-cc-plum"
+                    style={{ borderColor: BORDER }}
                   />
                   <span className="text-[13px] font-medium" style={{ color: "var(--cc-muted)" }}>
-                    Remember this device
+                    {t("auth.login.rememberDevice")}
                   </span>
                 </label>
 
@@ -456,8 +464,8 @@ export default function Login() {
                   style={{ background: PLUM }}
                 >
                   {busy
-                    ? <><Loader2 size={16} className="animate-spin" /><span>Signing in…</span></>
-                    : <><span>Sign In</span><ArrowRight size={16} strokeWidth={2.5} /></>
+                    ? <><Loader2 size={16} className="animate-spin" /><span>{t("auth.login.signingIn")}</span></>
+                    : <><span>{t("auth.login.submit")}</span><ArrowRight size={16} strokeWidth={2.5} /></>
                   }
                 </button>
               </form>
@@ -465,13 +473,13 @@ export default function Login() {
 
             {!mfaStep && (
               <p className="text-center text-[13px] font-medium mt-6" style={{ color: "var(--cc-muted)" }}>
-                Don't have an account?{" "}
+                {t("auth.login.noAccount")}{" "}
                 <button
                   onClick={() => navigate("/signup")}
                   className="font-black transition-opacity hover:opacity-75"
                   style={{ color: CORAL }}
                 >
-                  Create account
+                  {t("auth.login.createAccount")}
                 </button>
               </p>
             )}
@@ -480,8 +488,8 @@ export default function Login() {
 
         {/* Footer */}
         <div className="px-4 sm:px-8 md:px-10 lg:px-12 pb-6 lg:pb-8 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <p className="text-[11px] font-medium" style={{ color: "#94A3B8" }}>
-            NDIS Practice Standards · AHPRA aligned · Australian built
+          <p className="text-[11px] font-medium" style={{ color: "var(--auth-footer)" }}>
+            {t("auth.login.footer")}
           </p>
         </div>
       </div>
@@ -489,29 +497,29 @@ export default function Login() {
       {/* ── Product panel (desktop only) ───────────────────────────────── */}
       <div
         className="hidden lg:flex flex-1 flex-col justify-between p-12 xl:p-16 overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #F5F3FF 0%, #FFF9F0 100%)" }}
+        style={{ background: "var(--auth-marketing-bg)" }}
       >
-        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "#6B5B95" }}>
-          CareCliQ · NDIS Care Software
+        <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: "var(--auth-marketing-muted)" }}>
+          {t("auth.login.marketing.brandLine")}
         </p>
 
         <div>
-          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "#2D1B4E" }}>
-            Every shift.<br />
-            Every note.<br />
-            <span style={{ color: "#3730A3" }}>Every claim.</span>
+          <h2 className="text-[38px] xl:text-[44px] font-black leading-[1.1] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+            {t("auth.login.marketing.headline1")}<br />
+            {t("auth.login.marketing.headline2")}<br />
+            <span style={{ color: "var(--auth-accent)" }}>{t("auth.login.marketing.headline3")}</span>
           </h2>
-          <p className="mt-4 text-[14px] font-medium max-w-[340px] leading-relaxed" style={{ color: "#5A4A78" }}>
-            Built for Australian NDIS providers — support coordinators, service managers, and disability support businesses.
+          <p className="mt-4 text-[14px] font-medium max-w-[340px] leading-relaxed" style={{ color: "var(--auth-marketing-body)" }}>
+            {t("auth.login.marketing.description")}
           </p>
 
           <div className="mt-6 flex items-center gap-5">
-            {[["2,400+","shifts logged"],["97%","NDIS compliance"],["200+","NDIS providers"]].map(([n, l], i) => (
+            {[["2,400+", t("auth.login.marketing.statShiftsLogged")], ["97%", t("auth.login.marketing.statNdisCompliance")], ["200+", t("auth.login.marketing.statNdisProviders")]].map(([n, l], i) => (
               <div key={n} className="flex items-center gap-5">
-                {i > 0 && <div className="h-8 w-px" style={{ background: "rgba(55,48,163,0.12)" }} />}
+                {i > 0 && <div className="h-8 w-px" style={{ background: "var(--auth-stat-card-border)" }} />}
                 <div>
-                  <p className="text-[20px] font-black" style={{ color: "#2D1B4E" }}>{n}</p>
-                  <p className="text-[11px] font-medium mt-0.5" style={{ color: "#6B5B95" }}>{l}</p>
+                  <p className="text-[20px] font-black" style={{ color: "var(--auth-stat-value)" }}>{n}</p>
+                  <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{l}</p>
                 </div>
               </div>
             ))}
@@ -520,17 +528,17 @@ export default function Login() {
           <div className="mt-8 max-w-[400px] space-y-3">
             <div
               className="rounded-2xl p-4"
-              style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(55,48,163,0.15)" }}
+              style={{ background: "var(--auth-card-bg)", border: "1px solid var(--auth-card-border)" }}
             >
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: "#5A4A78" }}>
-                  Today's active shifts
+                <p className="text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: "var(--auth-stat-label)" }}>
+                  {t("auth.login.marketing.activeShifts")}
                 </p>
                 <span
                   className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: "rgba(55,48,163,0.12)", color: "#3730A3" }}
+                  style={{ background: "var(--auth-stat-card-bg)", color: "var(--auth-accent)" }}
                 >
-                  4 live
+                  {t("auth.login.marketing.live")}
                 </span>
               </div>
               <div className="space-y-2.5">
@@ -543,8 +551,8 @@ export default function Login() {
                       {w.i}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold" style={{ color: "#2D1B4E" }}>{w.name}</p>
-                      <p className="text-[11px]" style={{ color: "#6B5B95" }}>
+                      <p className="text-[13px] font-bold" style={{ color: "var(--auth-headline)" }}>{w.name}</p>
+                      <p className="text-[11px]" style={{ color: "var(--auth-marketing-muted)" }}>
                         {w.role} · {w.time}
                       </p>
                     </div>
@@ -555,15 +563,15 @@ export default function Login() {
             </div>
 
             <div className="flex gap-3">
-              {[["Compliance","94%","NDIS score"],["Participants","38","active plans"]].map(([t, v, s]) => (
+              {[[t("auth.login.marketing.compliance"),"94%", t("auth.login.marketing.ndisScore")], [t("auth.login.marketing.participants"),"38", t("auth.login.marketing.activePlans")]].map(([label, v, s]) => (
                 <div
-                  key={t}
+                  key={String(label)}
                   className="flex-1 rounded-2xl px-4 py-3"
-                  style={{ background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.07)" }}
+                  style={{ background: "var(--auth-stat-card-bg)", border: "1px solid var(--auth-stat-card-border)" }}
                 >
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "rgba(255,255,255,0.30)" }}>{t}</p>
-                  <p className="text-[24px] font-black text-white mt-0.5">{v}</p>
-                  <p className="text-[11px] font-medium" style={{ color: "rgba(255,255,255,0.30)" }}>{s}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em]" style={{ color: "var(--auth-marketing-muted)" }}>{label}</p>
+                  <p className="text-[24px] font-black mt-0.5" style={{ color: "var(--auth-stat-value)" }}>{v}</p>
+                  <p className="text-[11px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>{s}</p>
                 </div>
               ))}
             </div>
@@ -576,16 +584,16 @@ export default function Login() {
               <div
                 key={a.i}
                 className="h-9 w-9 rounded-full border-2 flex items-center justify-center text-[11px] font-black text-white"
-                style={{ background: a.bg, borderColor: "#0F172A" }}
+                style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
               >
                 {a.i}
               </div>
             ))}
           </div>
           <div>
-            <p className="text-[14px] font-black text-white">200+ NDIS providers</p>
-            <p className="text-[12px] font-medium" style={{ color: "rgba(255,255,255,0.36)" }}>
-              trust CareCliQ across Australia
+            <p className="text-[14px] font-black" style={{ color: "var(--auth-headline)" }}>{t("auth.login.marketing.providersCount")}</p>
+            <p className="text-[12px] font-medium" style={{ color: "var(--auth-marketing-muted)" }}>
+              {t("auth.login.marketing.trustAustralia")}
             </p>
           </div>
         </div>

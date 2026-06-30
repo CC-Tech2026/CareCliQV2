@@ -36,6 +36,7 @@ import {
   type SessionNoteRecord,
   type SessionNoteType,
 } from "@/services/sessionNotesService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type LiveSpeechRecognitionEvent = {
   resultIndex: number;
@@ -64,15 +65,15 @@ type LiveSpeechWindow = Window & {
   webkitSpeechRecognition?: new () => LiveSpeechRecognition;
 };
 
-const INPUT_LANGUAGES = [
-  { value: "auto", label: "Auto detect" },
-  { value: "en", label: "English" },
-  { value: "es", label: "Spanish" },
-  { value: "fr", label: "French" },
-  { value: "ar", label: "Arabic" },
-  { value: "tl", label: "Tagalog" },
-  { value: "zh", label: "Chinese" },
-  { value: "hi", label: "Hindi" },
+const INPUT_LANGUAGE_KEYS = [
+  { value: "auto", labelKey: "shift.session.lang.auto" },
+  { value: "en", labelKey: "shift.session.lang.en" },
+  { value: "es", labelKey: "shift.session.lang.es" },
+  { value: "fr", labelKey: "shift.session.lang.fr" },
+  { value: "ar", labelKey: "shift.session.lang.ar" },
+  { value: "tl", labelKey: "shift.session.lang.tl" },
+  { value: "zh", labelKey: "shift.session.lang.zh" },
+  { value: "hi", labelKey: "shift.session.lang.hi" },
 ] as const;
 
 const SPEECH_LANGUAGE_CODES: Record<string, string> = {
@@ -94,6 +95,8 @@ type Props = {
   participantName?: string;
   sessionId?: string | null;
   onClose?: () => void;
+  /** Skip server sync when previewing the walkthrough. */
+  tutorialDemo?: boolean;
 };
 
 function readImageDataUrl(file: File): Promise<string | null> {
@@ -113,7 +116,8 @@ function readImageDataUrl(file: File): Promise<string | null> {
   });
 }
 
-export function LiveProgressNotePanel({ participantName, sessionId, onClose }: Props) {
+export function LiveProgressNotePanel({ participantName, sessionId, onClose, tutorialDemo }: Props) {
+  const { translate } = useAccessibility();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<LiveSpeechRecognition | null>(null);
@@ -136,7 +140,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
   const [deleting, setDeleting] = useState(false);
 
   const refreshNotes = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || tutorialDemo) return;
     try {
       const rows = await listSessionNotes(sessionId);
       const sessionNotes = sortNotesLatestFirst((rows ?? []).filter((n) => !n.task_id));
@@ -144,7 +148,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
     } catch {
       /* keep optimistic list */
     }
-  }, [sessionId]);
+  }, [sessionId, tutorialDemo]);
 
   const appendNote = useCallback(
     async (params: {
@@ -154,7 +158,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
       attachment_urls?: string[];
     }) => {
       const clean = params.content.trim().slice(0, SESSION_NOTE_MAX);
-      if (!clean || !sessionId || ended) return;
+      if (!clean || !sessionId || ended || tutorialDemo) return;
 
       const noteId = newClientNoteId();
       const now = new Date().toISOString();
@@ -197,11 +201,11 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
         setSaveStatus("error");
       }
     },
-    [ended, sessionId],
+    [ended, sessionId, tutorialDemo],
   );
 
   const flushPendingQueue = useCallback(async () => {
-    if (!sessionId || (typeof navigator !== "undefined" && !navigator.onLine)) return;
+    if (!sessionId || tutorialDemo || (typeof navigator !== "undefined" && !navigator.onLine)) return;
     const pending = loadPendingSessionNotes(sessionId);
     if (!pending.length) return;
     try {
@@ -213,7 +217,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
     } catch {
       /* retry on next online tick */
     }
-  }, [refreshNotes, sessionId]);
+  }, [refreshNotes, sessionId, tutorialDemo]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -390,41 +394,41 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
   }
 
   const listeningLabel = (() => {
-    if (isListening) return "Listening...";
-    if (ended) return "Session ended — review before saving";
-    if (saveStatus === "saving") return "Saving...";
-    if (saveStatus === "saved") return "Saved";
-    if (saveStatus === "offline" || !online) return "Offline — notes saved locally";
-    if (saveStatus === "error") return "Could not sync — will retry";
-    return "Ready to listen";
+    if (isListening) return translate("shift.session.listening");
+    if (ended) return translate("shift.session.reviewBeforeSave");
+    if (saveStatus === "saving") return translate("common.saving");
+    if (saveStatus === "saved") return translate("shift.evidence.saved");
+    if (saveStatus === "offline" || !online) return translate("shift.session.offlineNotes");
+    if (saveStatus === "error") return translate("shift.session.syncRetry");
+    return translate("shift.session.readyListen");
   })();
 
   const livePreview = liveDictation;
 
   return (
     <aside
-      className="flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm"
-      style={{ borderColor: BORDER }}
+      className="flex h-full flex-col overflow-hidden rounded-lg border border-cc-border bg-cc-surface shadow-sm"
+      data-tutorial="live-progress-note"
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b px-5 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-cc-border px-5 py-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: MUTED }}>
-              Live Progress Note
+              {translate("shift.session.liveNote")}
             </p>
             <span
               className="rounded-full border px-2.5 py-1 text-[11px] font-black"
               style={{
-                borderColor: ended ? "#E5E7EB" : "#A7F3D0",
-                background: ended ? "#F8F8FE" : "#ECFDF5",
+                borderColor: ended ? "var(--cc-border)" : "#A7F3D0",
+                background: ended ? "var(--cc-soft)" : "var(--cc-status-success-bg)",
                 color: ended ? MUTED : "#047857",
               }}
             >
-              {ended ? "Ended" : "In progress"}
+              {ended ? translate("shift.session.ended") : translate("shift.session.inProgress")}
             </span>
           </div>
           <h2 className="mt-1 truncate text-lg font-black" style={{ color: TEXT }}>
-            {participantName || "Participant"}
+            {participantName || translate("common.participant")}
           </h2>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -436,16 +440,16 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
               style={{ background: PLUM }}
             >
               <StopCircle size={15} />
-              End Session
+              {translate("shift.session.endSession")}
             </button>
           )}
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-2 transition hover:bg-[#F8F8FE]"
+              className="rounded-full p-2 transition hover:bg-cc-soft"
               style={{ color: MUTED }}
-              aria-label="Close session composer"
+              aria-label={translate("shift.session.closeComposer")}
             >
               <X size={18} />
             </button>
@@ -453,33 +457,33 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
         </div>
       </div>
 
-      <div className="shrink-0 border-b px-4 py-3" style={{ borderColor: "#EEEAFB" }}>
+      <div className="shrink-0 border-b border-cc-border px-4 py-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]" style={{ color: MUTED }}>
             <Languages size={15} />
-            Input language
+            {translate("shift.session.inputLanguage")}
           </label>
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             disabled={ended}
-            className="h-10 w-full rounded-full border bg-[#F8F6FE] px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
-            style={{ borderColor: BORDER, color: TEXT }}
+            className="h-10 w-full rounded-full border border-cc-border bg-cc-soft px-4 text-sm font-bold outline-none sm:w-auto sm:min-w-[160px]"
+            style={{ color: TEXT }}
           >
-            {INPUT_LANGUAGES.map((item) => (
+            {INPUT_LANGUAGE_KEYS.map((item) => (
               <option key={item.value} value={item.value}>
-                {item.label}
+                {translate(item.labelKey)}
               </option>
             ))}
           </select>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-cc-bg p-4">
         <div className="mx-auto max-w-3xl space-y-3">
           <div
-            className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm"
-            style={{ borderColor: BORDER, color: MUTED }}
+            className="mx-auto flex w-fit items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-3 py-1 text-xs font-bold shadow-sm"
+            style={{ color: MUTED }}
           >
             {isListening && (
               <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
@@ -494,8 +498,8 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
 
           {isListening && livePreview && (
             <div
-              className="rounded-lg border bg-white px-3 py-2 text-sm italic"
-              style={{ borderColor: "#DCD6F1", color: MUTED }}
+              className="rounded-lg border border-cc-border bg-cc-surface px-3 py-2 text-sm italic"
+              style={{ color: MUTED }}
               aria-live="polite"
             >
               {livePreview}
@@ -504,11 +508,11 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
 
           <div>
             <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
-              Last saved
+              {translate("shift.session.lastSaved")}
             </p>
             {notes.length === 0 ? (
-              <p className="rounded-lg border border-dashed px-4 py-8 text-center text-sm font-medium italic" style={{ borderColor: "#DCD6F1", color: MUTED }}>
-                Notes you send will appear here, newest first.
+              <p className="rounded-lg border border-dashed border-cc-border px-4 py-8 text-center text-sm font-medium italic" style={{ color: MUTED }}>
+                {translate("shift.session.notesEmpty")}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -527,11 +531,10 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
       </div>
 
       {!ended && (
-        <div className="shrink-0 border-t bg-white p-3" style={{ borderColor: "#EEEAFB" }}>
+        <div className="shrink-0 border-t border-cc-border bg-cc-surface p-3">
           <div className="flex items-center gap-3">
             <div
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border bg-white px-3 py-2 shadow-sm"
-              style={{ borderColor: BORDER }}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-cc-border bg-cc-surface px-3 py-2 shadow-sm"
             >
               <input
                 ref={fileInputRef}
@@ -556,23 +559,23 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
                 maxLength={SESSION_NOTE_MAX}
                 className="min-h-11 min-w-0 flex-1 bg-transparent px-3 text-base font-medium outline-none"
                 style={{ color: TEXT }}
-                placeholder="Voice or type in the note area above"
+                placeholder={translate("shift.session.notePlaceholder")}
               />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-soft"
                 style={{ color: PLUM }}
-                aria-label="Attach file"
+                aria-label={translate("shift.session.attachFile")}
               >
                 <Paperclip size={22} />
               </button>
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-[#F8F8FE]"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-cc-soft"
                 style={{ color: PLUM }}
-                aria-label="Capture photo"
+                aria-label={translate("shift.session.capturePhoto")}
               >
                 <Camera size={22} />
               </button>
@@ -580,9 +583,9 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
             <button
               type="button"
               onClick={toggleDictation}
-              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white text-white shadow-lg transition hover:scale-[1.02]"
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-cc-surface text-white shadow-lg transition hover:scale-[1.02]"
               style={{ background: isListening ? CORAL : PLUM }}
-              aria-label={isListening ? "Stop voice dictation" : "Start voice dictation"}
+              aria-label={isListening ? translate("shift.session.stopDictation") : translate("shift.session.startDictation")}
             >
               {isListening ? <MicOff size={28} /> : <Mic size={30} />}
             </button>
@@ -593,13 +596,13 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
       <AlertDialog open={Boolean(noteToDelete)} onOpenChange={(open) => !open && !deleting && setNoteToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
+            <AlertDialogTitle>{translate("shift.session.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This entry will be permanently removed from the session notes. This cannot be undone.
+              {translate("shift.session.deleteDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{translate("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               disabled={deleting}
@@ -608,7 +611,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
                 void confirmDelete();
               }}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? translate("shift.session.deleting") : translate("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -617,7 +620,7 @@ export function LiveProgressNotePanel({ participantName, sessionId, onClose }: P
       <Dialog open={Boolean(previewImage)} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{previewImage?.title || "Image preview"}</DialogTitle>
+            <DialogTitle>{previewImage?.title || translate("shift.session.imagePreview")}</DialogTitle>
           </DialogHeader>
           {previewImage && (
             <img

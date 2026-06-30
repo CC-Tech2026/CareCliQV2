@@ -51,9 +51,9 @@ export function useShiftSessionActions({
   );
 
   const invalidate = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
-    void queryClient.invalidateQueries({ queryKey: ["worker", "shift", shiftId] });
-  }, [queryClient, shiftId]);
+    void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shifts"] });
+    void queryClient.invalidateQueries({ queryKey: shiftQueryKey });
+  }, [orgId, queryClient, shiftQueryKey]);
 
   const refreshPendingCount = useCallback(async () => {
     const pending = await getPendingStartSession(shiftId);

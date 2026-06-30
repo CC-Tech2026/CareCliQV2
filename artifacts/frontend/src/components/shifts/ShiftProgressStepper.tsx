@@ -2,8 +2,15 @@
 import { cn } from "@/lib/utils";
 import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import type { ShiftVisualState } from "@/services/shiftService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const STEPS = ["Review", "Arrive", "Active", "End", "Submit"] as const;
+const STEP_KEYS = [
+  "shift.step.review",
+  "shift.step.arrive",
+  "shift.step.active",
+  "shift.step.end",
+  "shift.step.submit",
+] as const;
 
 function stepIndex(state: ShiftVisualState): number {
   if (state === "scheduled") return 0;
@@ -14,21 +21,27 @@ function stepIndex(state: ShiftVisualState): number {
 }
 
 export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisualState }) {
+  const { translate } = useAccessibility();
   const current = stepIndex(visualState);
 
   return (
-    <section className="rounded-2xl border bg-white px-4 py-4 shadow-sm" style={{ borderColor: "var(--cc-border)" }}>
+    <section
+      className="rounded-2xl border bg-white px-4 py-4 shadow-sm"
+      style={{ borderColor: "var(--cc-border)" }}
+      data-tutorial="shift-progress"
+    >
       <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-        Shift Progress
+        {translate("shift.progress")}
       </p>
       <div className="grid grid-cols-5">
-        {STEPS.map((label, i) => {
+        {STEP_KEYS.map((key, i) => {
+          const label = translate(key);
           const done = i < current;
           const active = i === current;
           const connectorDone = i < current;
 
           return (
-            <div key={label} className="flex flex-col items-center">
+            <div key={key} className="flex flex-col items-center">
               <div className="relative flex h-8 w-full items-center justify-center">
                 {i > 0 && (
                   <div
@@ -51,7 +64,7 @@ export function ShiftProgressStepper({ visualState }: { visualState: ShiftVisual
                 >
                   {done ? <Check size={14} strokeWidth={3} /> : active ? <Pause size={12} /> : i + 1}
                 </div>
-                {i < STEPS.length - 1 && (
+                {i < STEP_KEYS.length - 1 && (
                   <div
                     className="absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2"
                     style={{ background: done ? PLUM : "#E5E7EB" }}

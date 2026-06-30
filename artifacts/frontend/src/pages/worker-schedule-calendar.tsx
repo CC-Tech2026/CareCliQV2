@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   anonymiseName,
   formatShiftBlockTime,
@@ -70,21 +71,21 @@ function parseStart(shift: CalendarShift): Date | null {
   }
 }
 
-function shiftStatusCfg(shift: CalendarShift) {
+function shiftStatusCfg(shift: CalendarShift, translate: (key: string) => string) {
   const s = (shift.status || "").toLowerCase();
   if (s === "in_progress" || s === "clocked_in") {
-    return { label: "Active", bg: "#DBEAFE", color: "#1D4ED8" };
+    return { label: translate("calendar.status.active"), bg: "#DBEAFE", color: "#1D4ED8" };
   }
   if (s === "completed") {
-    return { label: "Completed", bg: "#DCFCE7", color: "#166534" };
+    return { label: translate("calendar.status.completed"), bg: "#DCFCE7", color: "#166534" };
   }
   if (shift.calendar_status === "cancelled" || s === "cancelled") {
-    return { label: "Cancelled", bg: "#F1F5F9", color: "#64748B" };
+    return { label: translate("calendar.status.cancelled"), bg: "#F1F5F9", color: "#64748B" };
   }
   if (shift.calendar_status === "tentative") {
-    return { label: "Tentative", bg: "#FEF3C7", color: "#D97706" };
+    return { label: translate("calendar.status.tentative"), bg: "#FEF3C7", color: "#D97706" };
   }
-  return { label: "Scheduled", bg: "#EDE9FF", color: 'var(--cc-plum)' };
+  return { label: translate("calendar.status.scheduled"), bg: "#EDE9FF", color: 'var(--cc-plum)' };
 }
 
 function WorkerShiftChip({
@@ -94,6 +95,7 @@ function WorkerShiftChip({
   shift: CalendarShift;
   onClick: () => void;
 }) {
+  const { translate } = useAccessibility();
   const style = shiftBlockStyle(shift);
   const d = parseStart(shift);
   return (
@@ -106,7 +108,7 @@ function WorkerShiftChip({
       className="w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-bold leading-tight"
       style={{ background: style.background as string, color: style.color as string }}
     >
-      {shift.participant_first_name || shift.participant_name?.split(" ")[0] || "—"}
+      {shift.participant_first_name || shift.participant_name?.split(" ")[0] || translate("common.emDash")}
       {d ? ` ${format(d, "HH:mm")}` : ""}
     </button>
   );
@@ -127,9 +129,14 @@ function WorkerMonthGrid({
   onSelectDay: (d: Date) => void;
   onShiftClick: (shift: CalendarShift) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const gridEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  const weekdayHeaders = eachDayOfInterval({
+    start: gridStart,
+    end: endOfWeek(gridStart, { weekStartsOn: 1 }),
+  }).map((d) => format(d, "EEE"));
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, CalendarShift[]>();
@@ -148,7 +155,7 @@ function WorkerMonthGrid({
         className="grid grid-cols-7"
         style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}
       >
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        {weekdayHeaders.map((d) => (
           <div
             key={d}
             className="py-2.5 text-center text-[10px] font-black uppercase tracking-widest"
@@ -202,7 +209,7 @@ function WorkerMonthGrid({
               </div>
               {off.length > 0 && (
                 <div className="mb-0.5 truncate rounded px-1.5 py-0.5 text-[9px] font-bold text-slate-600 bg-slate-200">
-                  Time off
+                  {translate("calendar.timeOff")}
                 </div>
               )}
               <div className="space-y-0.5">
@@ -211,7 +218,7 @@ function WorkerMonthGrid({
                 ))}
                 {dayShifts.length > 2 && (
                   <p className="pl-1 text-[10px] font-bold" style={{ color: PLUM }}>
-                    +{dayShifts.length - 2} more
+                    {translateParams("calendar.moreShifts", { count: String(dayShifts.length - 2) })}
                   </p>
                 )}
               </div>
@@ -234,6 +241,7 @@ function WorkerDayPanel({
   timeOff: TimeOffBlock[];
   onShiftClick: (shift: CalendarShift) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const dayShifts = useMemo(
     () =>
       shifts
@@ -261,7 +269,7 @@ function WorkerDayPanel({
           className="rounded-full px-2.5 py-1 text-[11px] font-black"
           style={{ background: SOFT, color: PLUM }}
         >
-          {dayShifts.length} {dayShifts.length === 1 ? "shift" : "shifts"}
+          {dayShifts.length} {dayShifts.length === 1 ? translate("calendar.shiftOne") : translate("calendar.shiftMany")}
         </span>
       </div>
       <div className="flex-1 overflow-y-auto max-h-[560px] px-3 py-3 space-y-2">
@@ -272,10 +280,10 @@ function WorkerDayPanel({
             style={{ borderColor: BORDER }}
           >
             <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-[10px] font-black uppercase text-slate-600">
-              Time off
+              {translate("calendar.timeOff")}
             </span>
             <p className="mt-2 text-[13px] font-bold" style={{ color: TEXT }}>
-              Approved leave
+              {translate("calendar.approvedLeave")}
             </p>
           </div>
         ))}
@@ -283,15 +291,15 @@ function WorkerDayPanel({
           <div className="py-14 text-center">
             <CalendarDays className="mx-auto mb-2" size={22} style={{ color: MUTED }} />
             <p className="text-[13px] font-bold" style={{ color: TEXT }}>
-              No shifts scheduled
+              {translate("calendar.noShifts")}
             </p>
             <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
-              Select another day or check your list view.
+              {translate("calendar.emptyDayHint")}
             </p>
           </div>
         ) : (
           dayShifts.map((shift) => {
-            const cfg = shiftStatusCfg(shift);
+            const cfg = shiftStatusCfg(shift, translate);
             const start = parseStart(shift);
             const end = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
             const durMs = start && end ? end.getTime() - start.getTime() : null;
@@ -318,13 +326,13 @@ function WorkerDayPanel({
                   </span>
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                     <Clock3 size={11} />
-                    {start ? format(start, "h:mm a") : "—"}
+                    {start ? format(start, "h:mm a") : translate("common.emDash")}
                     {end ? ` – ${format(end, "h:mm a")}` : ""}
                     {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
                 <p className="text-[14px] font-black" style={{ color: TEXT }}>
-                  {shift.participant_name || "Participant"}
+                  {shift.participant_name || translate("common.participant")}
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   {shift.participant_suburb && (
@@ -337,7 +345,7 @@ function WorkerDayPanel({
                       className="rounded px-1.5 py-0.5 text-[9px] font-black uppercase"
                       style={{ background: SOFT, color: MUTED }}
                     >
-                      Awaiting confirmation
+                      {translate("calendar.awaitingConfirmation")}
                     </span>
                   )}
                 </div>
@@ -351,6 +359,7 @@ function WorkerDayPanel({
 }
 
 export default function WorkerScheduleCalendar() {
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -391,9 +400,9 @@ export default function WorkerScheduleCalendar() {
       const full = `${window.location.origin}${res.feed_path}.ics`;
       setFeedUrl(full);
       void navigator.clipboard?.writeText(full);
-      toast({ title: "Calendar link copied", description: "Subscribe in your phone calendar app." });
+      toast({ title: translate("calendar.linkCopied"), description: translate("calendar.linkCopiedDesc") });
     },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: translate("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handlePrint = useCallback(async () => {
@@ -401,7 +410,7 @@ export default function WorkerScheduleCalendar() {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const title = format(month, "MMMM yyyy");
     doc.setFontSize(16);
-    doc.text(`My Schedule — ${title}`, 14, 18);
+    doc.text(translateParams("calendar.pdfTitle", { month: title }), 14, 18);
     doc.setFontSize(9);
     let y = 28;
     const confirmed = shifts.filter(
@@ -426,7 +435,7 @@ export default function WorkerScheduleCalendar() {
       y += 3;
     }
     doc.save(`schedule-${format(month, "yyyy-MM")}.pdf`);
-  }, [month, shifts]);
+  }, [month, shifts, translateParams]);
 
   const handleShiftClick = (shift: CalendarShift) => {
     setConfirmShift(shift);
@@ -463,13 +472,13 @@ export default function WorkerScheduleCalendar() {
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
-            Support Worker
+            {translate("common.supportWorker")}
           </p>
           <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-            My Schedule
+            {translate("calendar.title")}
           </h1>
           <p className="mt-1 text-sm" style={{ color: MUTED }}>
-            View your shifts, time off, and calendar subscription.
+            {translate("calendar.subtitle")}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -479,7 +488,7 @@ export default function WorkerScheduleCalendar() {
               className="flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-black"
               style={{ borderColor: BORDER, color: PLUM }}
             >
-              <List size={14} /> List view
+              <List size={14} /> {translate("calendar.listView")}
             </button>
           </Link>
           <Link href="/my-shifts/requests">
@@ -488,7 +497,7 @@ export default function WorkerScheduleCalendar() {
               className="rounded-full border px-3 py-2 text-xs font-black"
               style={{ borderColor: BORDER, color: PLUM }}
             >
-              Requests
+              {translate("calendar.requests")}
             </button>
           </Link>
           <Link href="/worker/availability">
@@ -497,7 +506,7 @@ export default function WorkerScheduleCalendar() {
               className="rounded-full border px-3 py-2 text-xs font-black"
               style={{ borderColor: BORDER, color: PLUM }}
             >
-              Availability
+              {translate("calendar.availability")}
             </button>
           </Link>
         </div>
@@ -516,7 +525,7 @@ export default function WorkerScheduleCalendar() {
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
               style={{ background: viewMode === m ? PLUM : 'var(--cc-surface)', color: viewMode === m ? "white" : MUTED }}
             >
-              {m}
+              {translate(m === "month" ? "calendar.month" : "calendar.week")}
             </button>
           ))}
         </div>
@@ -546,7 +555,7 @@ export default function WorkerScheduleCalendar() {
             className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-cc-bg"
             style={{ borderColor: BORDER, color: PLUM }}
           >
-            Today
+            {translate("calendar.today")}
           </button>
         </div>
         {isLoading && <Loader2 className="h-4 w-4 animate-spin" style={{ color: MUTED }} />}
@@ -557,7 +566,7 @@ export default function WorkerScheduleCalendar() {
             className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black text-white"
             style={{ background: PLUM }}
           >
-            <Link2 size={14} /> {feedMut.isPending ? "Generating…" : "Share calendar"}
+            <Link2 size={14} /> {feedMut.isPending ? translate("calendar.generating") : translate("calendar.share")}
           </button>
           <button
             type="button"
@@ -565,14 +574,14 @@ export default function WorkerScheduleCalendar() {
             className="flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-black"
             style={{ borderColor: BORDER, color: PLUM }}
           >
-            <Printer size={14} /> Print PDF
+            <Printer size={14} /> {translate("calendar.printPdf")}
           </button>
         </div>
       </div>
 
       {feedUrl && (
         <div className="rounded-xl border bg-cc-bg p-3 text-xs" style={{ borderColor: BORDER }}>
-          <p className="font-black" style={{ color: TEXT }}>iCal subscription URL</p>
+          <p className="font-black" style={{ color: TEXT }}>{translate("calendar.icalUrl")}</p>
           <p className="mt-1 break-all font-mono" style={{ color: MUTED }}>{feedUrl}</p>
         </div>
       )}
@@ -581,7 +590,7 @@ export default function WorkerScheduleCalendar() {
         <div
           className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-[var(--cc-status-critical)] dark:bg-[var(--cc-status-critical-bg)] dark:text-[var(--cc-status-critical)]"
         >
-          Could not load calendar: {(error as Error)?.message || "Please try again."}
+          {translate("calendar.loadFailed")}: {(error as Error)?.message || translate("toast.tryAgain")}
         </div>
       )}
 
@@ -622,7 +631,7 @@ export default function WorkerScheduleCalendar() {
                 </p>
                 {off.length > 0 && (
                   <div className="mb-2 rounded-lg bg-slate-200 px-3 py-2 text-xs font-bold text-slate-600">
-                    Time off
+                    {translate("calendar.timeOff")}
                   </div>
                 )}
                 <div className="space-y-2">
@@ -640,7 +649,7 @@ export default function WorkerScheduleCalendar() {
                         className="w-full rounded-lg px-3 py-2 text-left transition-opacity hover:opacity-90"
                         style={{ ...style, minHeight: height }}
                       >
-                        <p className="text-sm font-black">{shift.participant_first_name || "Shift"}</p>
+                        <p className="text-sm font-black">{shift.participant_first_name || translate("calendar.shiftFallback")}</p>
                         <p className="text-xs font-semibold opacity-90">
                           {formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end)}
                         </p>
@@ -651,7 +660,7 @@ export default function WorkerScheduleCalendar() {
                     );
                   })}
                   {!dayShifts.length && !off.length && (
-                    <p className="text-xs font-medium py-2" style={{ color: MUTED }}>No shifts</p>
+                    <p className="text-xs font-medium py-2" style={{ color: MUTED }}>{translate("calendar.noShiftsShort")}</p>
                   )}
                 </div>
               </div>
@@ -663,7 +672,7 @@ export default function WorkerScheduleCalendar() {
       {isLoading && viewMode === "month" && (
         <div className="rounded-2xl border bg-cc-surface p-8 text-center animate-pulse" style={{ borderColor: BORDER }}>
           <CalendarDays className="mx-auto mb-2 opacity-40" />
-          Loading schedule…
+          {translate("calendar.loading")}
         </div>
       )}
 
@@ -671,15 +680,15 @@ export default function WorkerScheduleCalendar() {
         className="flex flex-wrap gap-4 rounded-xl border bg-cc-surface px-4 py-3 text-[11px] font-bold"
         style={{ borderColor: BORDER }}
       >
-        <LegendItem label="Confirmed" swatch={{ background: PLUM }} />
+        <LegendItem label={translate("calendar.legend.confirmed")} swatch={{ background: PLUM }} />
         <LegendItem
-          label="Tentative"
+          label={translate("calendar.legend.tentative")}
           swatch={{
             background: `repeating-linear-gradient(45deg, ${PLUM}44, ${PLUM}44 4px, ${PLUM}22 4px, ${PLUM}22 8px)`,
           }}
         />
-        <LegendItem label="Cancelled" swatch={{ background: "#CBD5E1", textDecoration: "line-through" }} />
-        <LegendItem label="Time off" swatch={{ background: "#E2E8F0" }} />
+        <LegendItem label={translate("calendar.legend.cancelled")} swatch={{ background: "#CBD5E1", textDecoration: "line-through" }} />
+        <LegendItem label={translate("calendar.legend.timeOff")} swatch={{ background: "#E2E8F0" }} />
       </div>
 
       <WorkerShiftConfirmDialog

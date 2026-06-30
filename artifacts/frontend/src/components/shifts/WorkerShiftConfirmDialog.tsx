@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatShiftBlockTime } from "@/components/shifts/ShiftCalendarDetailSheet";
 import type { CalendarShift } from "@/services/workerCalendarService";
-import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { BORDER, CORAL, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 
 type Props = {
@@ -21,12 +22,17 @@ type Props = {
 };
 
 export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDetails }: Props) {
+  const { translate, translateParams } = useAccessibility();
   if (!shift) return null;
 
   const dateLabel = shift.scheduled_start
     ? format(parseISO(shift.scheduled_start), "EEEE, d MMMM yyyy")
-    : "this day";
+    : translate("shift.confirm.thisDay");
   const timeLabel = formatShiftBlockTime(shift.scheduled_start, shift.scheduled_end);
+  const participant = shift.participant_name || translate("shift.confirm.yourParticipant");
+  const schedule = timeLabel
+    ? translateParams("shift.confirm.onDateAtTime", { date: dateLabel, time: timeLabel })
+    : translateParams("shift.confirm.onDate", { date: dateLabel });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,23 +46,14 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
               <CalendarDays size={22} style={{ color: PLUM }} />
             </div>
             <DialogTitle className="text-xl font-black" style={{ color: TEXT }}>
-              View full shift details?
+              {translate("shift.confirm.title")}
             </DialogTitle>
             <DialogDescription className="text-sm leading-relaxed" style={{ color: MUTED }}>
-              You have a shift with{" "}
+              {translate("shift.confirm.intro")}{" "}
               <span className="font-bold" style={{ color: TEXT }}>
-                {shift.participant_name || "your participant"}
-              </span>
-              {timeLabel ? (
-                <>
-                  {" "}
-                  on <span className="font-semibold">{dateLabel}</span> at{" "}
-                  <span className="font-semibold">{timeLabel}</span>.
-                </>
-              ) : (
-                <> on <span className="font-semibold">{dateLabel}</span>.</>
-              )}{" "}
-              Would you like to open the full details?
+                {participant}
+              </span>{" "}
+              {schedule}. {translate("shift.confirm.prompt")}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -67,7 +64,7 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
             className="w-full rounded-full py-3 text-sm font-black text-white"
             style={{ background: `linear-gradient(135deg, ${PLUM}, ${CORAL})` }}
           >
-            View full details
+            {translate("shift.confirm.viewDetails")}
           </button>
           <button
             type="button"
@@ -75,7 +72,7 @@ export function WorkerShiftConfirmDialog({ shift, open, onOpenChange, onViewDeta
             className="w-full rounded-full border py-3 text-sm font-black"
             style={{ borderColor: BORDER, color: MUTED }}
           >
-            Not now
+            {translate("shift.confirm.notNow")}
           </button>
         </DialogFooter>
       </DialogContent>

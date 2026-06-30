@@ -10,12 +10,13 @@ import {
   saveMileageExpense,
   type MileageEstimate,
 } from "@/services/travelExpenseService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 
-const REASON_MESSAGES: Record<string, string> = {
-  missing_destination: "This shift has no participant address for mileage calculation.",
-  maps_api_not_configured: "Distance auto-calculation is not configured yet.",
-  maps_request_failed: "Could not reach maps service.",
+const REASON_KEYS: Record<string, string> = {
+  missing_destination: "shift.travel.missingDestination",
+  maps_api_not_configured: "shift.travel.mapsNotConfigured",
+  maps_request_failed: "shift.travel.mapsFailed",
 };
 
 export type MileageDraftState = {
@@ -42,6 +43,7 @@ export function ShiftTravelExpenseCard({
   clockedInAt,
   mileageDraftRef,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const queryClient = useQueryClient();
   const [claimedKm, setClaimedKm] = useState("");
   const [isOverridden, setIsOverridden] = useState(false);
@@ -154,36 +156,40 @@ export function ShiftTravelExpenseCard({
   const hasSavedMileage = Boolean(savedDraft);
 
   return (
-    <section className="rounded-2xl border bg-cc-surface p-4 shadow-sm" style={{ borderColor: BORDER }}>
+    <section
+      className="rounded-2xl border bg-cc-surface p-4 shadow-sm"
+      style={{ borderColor: BORDER }}
+      data-tutorial="shift-travel-mileage"
+    >
       <div className="flex items-center gap-2">
         <Car size={18} style={{ color: PLUM }} />
-        <h3 className="text-sm font-black text-cc-text">Travel mileage</h3>
+        <h3 className="text-sm font-black text-cc-text">{translate("shift.travel.title")}</h3>
       </div>
 
       {isLoading ? (
         <p className="mt-3 flex items-center gap-2 text-sm text-cc-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Calculating distance…
+          {translate("shift.travel.calculating")}
         </p>
       ) : !estimate?.home_address_set ? (
         <p className="mt-3 text-sm text-cc-muted">
-          Set your home address in{" "}
+          {translate("shift.travel.setHome").split("{link}")[0]}
           <Link href="/worker/profile" className="font-bold underline" style={{ color: PLUM }}>
-            My Profile
-          </Link>{" "}
-          to auto-calculate mileage when you clock in.
+            {translate("shift.travel.myProfile")}
+          </Link>
+          {translate("shift.travel.setHome").split("{link}")[1] ?? ""}
         </p>
       ) : (
         <>
           {hasSavedMileage && isClockedIn && (
             <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
               <CheckCircle2 size={14} />
-              Mileage saved automatically.
+              {translate("shift.travel.autoSaved")}
             </p>
           )}
           {!isClockedIn && isOverridden && (
             <p className="mt-2 text-xs font-semibold text-cc-plum">
-              Custom distance will be saved when you clock in.
+              {translate("shift.travel.customOnClockIn")}
             </p>
           )}
 
@@ -191,21 +197,23 @@ export function ShiftTravelExpenseCard({
 
           {estimate.available && estimate.distance_km != null && (
             <p className="mt-1 text-sm font-semibold text-cc-text">
-              Estimated distance: {estimate.distance_km} km
+              {translateParams("shift.travel.estimatedDistance", { km: String(estimate.distance_km) })}
               {(estimate.estimated_amount_cents ?? savedDraft?.amount_cents) != null &&
-                ` · $${((estimate.estimated_amount_cents ?? savedDraft?.amount_cents ?? 0) / 100).toFixed(2)}`}
+                translateParams("shift.travel.estimatedAmount", {
+                  amount: ((estimate.estimated_amount_cents ?? savedDraft?.amount_cents ?? 0) / 100).toFixed(2),
+                })}
             </p>
           )}
 
           {!estimate.available && estimate.reason && (
             <p className="mt-1 text-xs font-medium text-amber-700">
-              {REASON_MESSAGES[estimate.reason] ?? "Distance could not be calculated."}
+              {translate(REASON_KEYS[estimate.reason] ?? "shift.travel.calcFailed")}
             </p>
           )}
 
           <div className="mt-3 space-y-2">
             <Label htmlFor={`mileage-${shiftId}`} className="text-xs text-cc-muted">
-              Distance (km)
+              {translate("shift.travel.distanceKm")}
             </Label>
             <Input
               id={`mileage-${shiftId}`}
@@ -219,12 +227,12 @@ export function ShiftTravelExpenseCard({
             {!isClockedIn && (
               <p className="text-xs text-cc-muted">
                 {isOverridden
-                  ? "Your custom distance saves when you clock in."
-                  : "Calculated distance saves automatically when you clock in."}
+                  ? translate("shift.travel.customSavesClockIn")
+                  : translate("shift.travel.autoSavesClockIn")}
               </p>
             )}
             {isClockedIn && isOverridden && (
-              <p className="text-xs text-cc-muted">Changes save automatically.</p>
+              <p className="text-xs text-cc-muted">{translate("shift.travel.changesAutoSave")}</p>
             )}
           </div>
         </>

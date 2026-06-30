@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 import { differenceInMinutes, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { ShiftStatusBadge } from "@/components/shifts/ShiftStatusBadge";
@@ -35,6 +37,8 @@ import {
   avatarShouldPulse,
   isShiftToday,
   shiftNeedsRiskAck,
+  shiftNeedsBriefing,
+  shiftBriefingHref,
 } from "@/lib/shift-utils";
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
@@ -44,11 +48,11 @@ const SERVICE_TAG_STYLES: Record<string, string> = {
 
 type Props = { shift: WorkerShift };
 
-function formatServiceLabel(category?: string) {
+function formatServiceLabel(category: string | undefined, translate: (key: string) => string) {
   const raw = (category || "CORE").toUpperCase();
-  if (raw === "CAPACITY BUILDING" || raw === "CAPACITY") return "Capacity Building";
-  if (raw === "CORE") return "Core";
-  return category || "Core";
+  if (raw === "CAPACITY BUILDING" || raw === "CAPACITY") return translate("shifts.listCard.serviceCapacity");
+  if (raw === "CORE") return translate("shifts.listCard.serviceCore");
+  return category || translate("shifts.listCard.serviceCore");
 }
 
 function serviceTagKey(category?: string) {
@@ -119,9 +123,12 @@ function SafetyBox({
 export function ShiftListCard({ shift }: Props) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
+  const { translate, translateParams } = useAccessibility();
   const orgId = user?.organizationId ?? "__no_org__";
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const tutorial = useWorkerTutorialOptional();
+  const isTutorial = tutorial?.isTutorialMode ?? false;
   const [expanded, setExpanded] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -132,27 +139,27 @@ export function ShiftListCard({ shift }: Props) {
   );
   const scheduledLabel = formatDurationLabel(scheduledDuration);
   const recordedLabel = formatRecordedDuration(shift);
-  const serviceTag = formatServiceLabel(shift.service_category);
+  const serviceTag = formatServiceLabel(shift.service_category, translate);
   const tagStyle = SERVICE_TAG_STYLES[serviceTagKey(shift.service_category)] ?? SERVICE_TAG_STYLES.CORE;
   const isCancelled = shift.status === "cancelled";
   const isCompleted = shift.status === "completed" || shift.visual_state === "completed";
   const isTodayActive = isShiftToday(shift) && !isCancelled && !isCompleted;
   const isSessionLive = shift.visual_state === "session_active";
   const sessionButtonLabel = starting
-    ? "Starting…"
+    ? translate("shifts.listCard.starting")
     : isSessionLive
-      ? "Resume Session"
-      : "Start Session";
+      ? translate("shifts.listCard.resumeSession")
+      : translate("shifts.listCard.startSession");
   const stateStyle = isCancelled
-    ? { border: "#FECACA", badge: "bg-red-50 text-red-700 border-red-200", label: "Cancelled", avatar: "#EF4444" }
+    ? { border: "#FECACA", badge: "bg-red-50 text-red-700 border-red-200", label: translate("shifts.listCard.cancelled"), avatar: "#EF4444" }
     : (STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled);
   const pulse = avatarShouldPulse(shift.visual_state);
 
-  const allergiesText = shift.allergies?.trim() || "No known allergies";
+  const allergiesText = shift.allergies?.trim() || translate("shifts.listCard.noAllergies");
   const healthAlertText =
     shift.health_alerts?.map((a) => a.title || a.detail).filter(Boolean).join(" ") ||
     shift.health_flags?.trim() ||
-    "No active health alerts";
+    translate("shifts.listCard.noHealthAlerts");
   const goals = shift.active_goals ?? [];
   const mapsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
@@ -165,10 +172,17 @@ export function ShiftListCard({ shift }: Props) {
 
   const durationMeta = (() => {
     if (isCompleted && scheduledLabel && recordedLabel) {
-      return `${scheduledLabel} · ${recordedLabel} recorded`;
+      return translateParams("shifts.listCard.durationBoth", {
+        scheduled: scheduledLabel,
+        recorded: recordedLabel,
+      });
     }
-    if (isCompleted && recordedLabel) return `${recordedLabel} recorded`;
-    if (scheduledLabel) return `${scheduledLabel} scheduled`;
+    if (isCompleted && recordedLabel) {
+      return translateParams("shifts.listCard.durationRecorded", { duration: recordedLabel });
+    }
+    if (scheduledLabel) {
+      return translateParams("shifts.listCard.durationScheduled", { duration: scheduledLabel });
+    }
     return null;
   })();
 
@@ -178,10 +192,15 @@ export function ShiftListCard({ shift }: Props) {
       return;
     }
 
+    if (shiftNeedsBriefing(shift, { tutorial: isTutorial })) {
+      navigate(shiftBriefingHref(shift.id, { tutorial: isTutorial }));
+      return;
+    }
+
     if (shiftNeedsRiskAck(shift)) {
       toast({
-        title: "Acknowledge safety alerts first",
-        description: "Review and acknowledge participant risks before starting a session.",
+        title: translate("toast.ackSafetyFirst"),
+        description: translate("toast.ackSafetySession"),
         variant: "destructive",
       });
       navigate(`/my-shifts/${shift.id}?focus=safety`);
@@ -209,13 +228,15 @@ export function ShiftListCard({ shift }: Props) {
       void queryClient.invalidateQueries({ queryKey: ["worker", "shifts"] });
       void queryClient.invalidateQueries({ queryKey: [orgId, "worker", "shift", shift.id] });
       toast({
-        title: "Session started",
-        description: `Session started with ${shift.participant_name ?? "participant"}.`,
+        title: translate("toast.sessionStarted"),
+        description: translateParams("toast.sessionStartedDesc", {
+          name: shift.participant_name ?? translate("common.participant"),
+        }),
       });
       navigate(`/my-shifts/${updated.id}`);
     } catch (err) {
       toast({
-        title: "Could not start session",
+        title: translate("toast.couldNotStartSession"),
         description: (err as Error).message,
         variant: "destructive",
       });
@@ -231,6 +252,7 @@ export function ShiftListCard({ shift }: Props) {
         disabled={starting}
         className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-black text-white disabled:opacity-60"
         style={{ background: PLUM }}
+        data-tutorial="start-session"
         onClick={() => void handleSessionAction()}
       >
         <Zap size={15} />
@@ -245,7 +267,7 @@ export function ShiftListCard({ shift }: Props) {
           style={{ borderColor: BORDER, color: TEXT }}
         >
           <Navigation size={15} />
-          Directions
+          {translate("shifts.listCard.directions")}
         </a>
       )}
       {phone && (
@@ -255,7 +277,7 @@ export function ShiftListCard({ shift }: Props) {
           style={{ borderColor: BORDER, color: TEXT }}
         >
           <Phone size={15} />
-          Call
+          {translate("shifts.listCard.call")}
         </a>
       )}
     </div>
@@ -272,26 +294,26 @@ export function ShiftListCard({ shift }: Props) {
             className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white"
             style={{ background: CORAL }}
           >
-            Complete Session Notes — Stay Compliant
+            {translate("shifts.listCard.completeNotes")}
           </button>
         </Link>
       )}
 
       <div className="mb-1 mt-2">
         <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: PLUM }}>
-          🚨 Safety — read before arriving
+          {translate("shifts.listCard.safetyRead")}
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <SafetyBox icon={Siren} title="Allergies" body={allergiesText} />
-        <SafetyBox icon={ShieldCheck} title="Health Alerts" body={healthAlertText} />
+        <SafetyBox icon={Siren} title={translate("shifts.listCard.allergies")} body={allergiesText} />
+        <SafetyBox icon={ShieldCheck} title={translate("shifts.listCard.healthAlerts")} body={healthAlertText} />
       </div>
 
       {goals.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: PLUM }}>
-            Active goals for today
+            {translate("shifts.listCard.activeGoals")}
           </p>
           <div className="flex flex-wrap gap-2">
             {goals.map((goal, i) => (
@@ -309,18 +331,18 @@ export function ShiftListCard({ shift }: Props) {
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {mapsUrl && <ActionPill href={mapsUrl} icon={Send} label="Open in Maps" external />}
+        {mapsUrl && <ActionPill href={mapsUrl} icon={Send} label={translate("shifts.listCard.openMaps")} external />}
         {phone && <ActionPill href={`tel:${phone.replace(/\s/g, "")}`} icon={Phone} label={phone} />}
         <Link href={profileHref}>
           <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-xs font-bold transition hover:bg-[#F0EDF8]" style={{ borderColor: BORDER, color: TEXT }}>
             <UserRound size={14} style={{ color: PLUM }} />
-            Full Profile
+            {translate("shifts.listCard.fullProfile")}
           </span>
         </Link>
         <Link href={`/my-shifts/${shift.id}`}>
           <span className="inline-flex min-h-[2.75rem] items-center gap-2 rounded-full border bg-white px-4 py-2.5 text-xs font-bold transition hover:bg-[#F0EDF8]" style={{ borderColor: BORDER, color: TEXT }}>
             <MessageCircle size={14} style={{ color: PLUM }} />
-            Message Coordinator
+            {translate("shifts.listCard.messageCoordinator")}
           </span>
         </Link>
       </div>
@@ -348,7 +370,7 @@ export function ShiftListCard({ shift }: Props) {
           <div className="min-w-0 flex-1 pt-0.5">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-[17px] font-black leading-snug" style={{ color: TEXT }}>
-                {shift.participant_name || "Participant"}
+                {shift.participant_name || translate("shifts.listCard.participant")}
               </h3>
               <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-black uppercase", tagStyle)}>
                 {serviceTag}
@@ -377,14 +399,14 @@ export function ShiftListCard({ shift }: Props) {
           <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
             {isCancelled ? (
               <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700">
-                Cancelled
+                {translate("shifts.listCard.cancelled")}
               </span>
             ) : isCompleted ? (
               <span
                 className="rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide"
                 style={{ borderColor: "var(--cc-border)", background: "#F0EDF8", color: PLUM }}
               >
-                Done
+                {translate("shifts.listCard.done")}
               </span>
             ) : (
               <ShiftStatusBadge visualState={shift.visual_state} />
@@ -404,7 +426,7 @@ export function ShiftListCard({ shift }: Props) {
               className="mt-3 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
               style={{ background: CORAL }}
             >
-              Complete Session Notes — Stay Compliant
+              {translate("shifts.listCard.completeNotes")}
             </button>
           </Link>
         )}

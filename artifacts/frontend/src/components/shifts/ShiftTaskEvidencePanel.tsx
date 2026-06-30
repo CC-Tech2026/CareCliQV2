@@ -41,6 +41,7 @@ import {
   resolveEffectiveTaskNote,
 } from "@/lib/shift-utils";
 import { notifyTaskEvidenceUpdated } from "@/components/shifts/SessionTimeline";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const NOTE_MAX = 500;
 const VOICE_MAX_SECONDS = 60;
@@ -60,6 +61,7 @@ type Props = {
   onMarkComplete: (merge?: Partial<ShiftTask>) => void | Promise<void>;
   onReadyChange?: (ready: boolean) => void;
   variant?: "full" | "thread";
+  tutorialDemo?: boolean;
 };
 
 function formatVoiceTimer(seconds: number) {
@@ -68,13 +70,18 @@ function formatVoiceTimer(seconds: number) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function taskPlaceholder(task: ShiftTask, participantName?: string) {
-  const name = participantName || "the participant";
+function taskPlaceholder(
+  task: ShiftTask,
+  participantName: string | undefined,
+  translate: (k: string) => string,
+  translateParams: (k: string, p: Record<string, string>) => string,
+) {
+  const name = participantName || translate("shift.evidence.theParticipant");
   const label = task.label.toLowerCase();
   if (label.includes("community")) {
-    return `What did ${name} do during community time?`;
+    return translateParams("shift.evidence.communityPlaceholder", { name });
   }
-  return `${task.label} — What did ${name} do?`;
+  return translateParams("shift.evidence.taskPlaceholder", { label: task.label, name });
 }
 
 export function ShiftTaskEvidencePanel({
@@ -87,7 +94,9 @@ export function ShiftTaskEvidencePanel({
   onMarkComplete,
   onReadyChange,
   variant = "full",
+  tutorialDemo = false,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [note, setNote] = useState(task.note ?? "");
   const [records, setRecords] = useState<TaskEvidenceRecord[]>([]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -170,6 +179,15 @@ export function ShiftTaskEvidencePanel({
     async (batch: TaskEvidenceRecord[]) => {
       if (!batch.length) return;
       setSaveState("saving");
+      if (tutorialDemo) {
+        for (const row of batch) {
+          await saveTaskEvidence({ ...row, synced: false, upload_status: "pending" });
+        }
+        setSaveState("saved");
+        await loadRecords();
+        if (variant === "thread") markThreadSaved();
+        return;
+      }
       try {
         if (!navigator.onLine) {
           setSaveState("offline");
@@ -202,7 +220,7 @@ export function ShiftTaskEvidencePanel({
         setSaveState("offline");
       }
     },
-    [sessionId, loadRecords],
+    [sessionId, loadRecords, tutorialDemo, variant, markThreadSaved],
   );
 
   useEffect(() => {
@@ -290,6 +308,7 @@ export function ShiftTaskEvidencePanel({
   const submitProgressUpdate = useCallback(async () => {
     const trimmed = note.trim();
     if (!trimmed || disabled) return;
+    if (isMandatoryTask(task) && trimmed.length < 20) return;
 
     const record: TaskEvidenceRecord = {
       evidence_id: newEvidenceId(),
@@ -365,11 +384,11 @@ export function ShiftTaskEvidencePanel({
     event.target.value = "";
     if (!file || disabled || uploadingFile) return;
     if (!file.type.startsWith("image/")) {
-      setCameraError("Only image files can be attached.");
+      setCameraError(translate("shift.evidence.onlyImages"));
       return;
     }
     if (photos.length >= MAX_PHOTOS) {
-      setCameraError(`Maximum ${MAX_PHOTOS} photos per task`);
+      setCameraError(translateParams("shift.evidence.maxPhotosPerTask", { max: String(MAX_PHOTOS) }));
       return;
     }
 
@@ -400,7 +419,7 @@ export function ShiftTaskEvidencePanel({
       notifyTaskEvidenceUpdated();
       if (variant === "thread") markThreadSaved();
     } catch (err) {
-      setCameraError((err as Error).message || "Could not attach image");
+      setCameraError((err as Error).message || translate("shift.evidence.attachFailed"));
       setSaveState("idle");
     } finally {
       setUploadingFile(false);
@@ -422,7 +441,7 @@ export function ShiftTaskEvidencePanel({
       }
       setCameraOpen(true);
     } catch {
-      setCameraError("Camera permission denied or unavailable. Check browser settings.");
+      setCameraError(translate("shift.evidence.cameraDenied"));
     }
   };
 
@@ -551,7 +570,7 @@ export function ShiftTaskEvidencePanel({
         }
       }, 1000);
     } catch {
-      setCameraError("Microphone permission denied or unavailable.");
+      setCameraError(translate("shift.evidence.micDenied"));
     }
   };
 
@@ -585,8 +604,8 @@ export function ShiftTaskEvidencePanel({
     ) {
       setCameraError(
         isMandatoryTask(task)
-          ? "Mandatory tasks need a photo, voice memo, or note of at least 20 characters."
-          : "Add at least 20 characters or attach photo/voice before completing.",
+          ? translate("tasks.evidenceRequiredHint")
+          : translate("shift.evidence.optionalEvidence"),
       );
       return;
     }
@@ -624,7 +643,7 @@ export function ShiftTaskEvidencePanel({
         scheduleSavedStatusClear();
       }
     } catch (err) {
-      setCameraError((err as Error).message || "Could not complete task");
+      setCameraError((err as Error).message || translate("shift.evidence.completeFailed"));
       setSaveState("idle");
     }
   }, [
@@ -651,8 +670,16 @@ export function ShiftTaskEvidencePanel({
   }, []);
 
   if (variant === "thread") {
+    const hasSavedEvidence =
+      records.some(
+        (r) =>
+          (r.type === "text" && (r.content?.trim().length ?? 0) >= 20)
+          || r.type === "photo"
+          || r.type === "voice",
+      ) || saveState === "saved";
+
     return (
-      <div className="border-t border-[#ECE6FB] bg-[#FBFAFF] p-3">
+      <div className="relative border-t border-cc-border bg-cc-soft p-3" data-tutorial="task-evidence-panel">
         {task.description && (
           <p className="mb-2 text-xs font-semibold italic leading-relaxed" style={{ color: MUTED }}>
             {task.description}
@@ -660,10 +687,10 @@ export function ShiftTaskEvidencePanel({
         )}
 
         <div
-          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-[#E5E7EB] p-3"
+          className="mb-3 min-h-[120px] rounded-xl border border-dashed border-cc-border bg-cc-surface p-3"
           style={{
             backgroundImage:
-              "radial-gradient(circle at 1px 1px, #E8E4F4 1px, transparent 0)",
+              "radial-gradient(circle at 1px 1px, var(--cc-border) 1px, transparent 0)",
             backgroundSize: "14px 14px",
           }}
         >
@@ -673,10 +700,10 @@ export function ShiftTaskEvidencePanel({
                 <MessageCircle size={18} className="text-[#8B75D9]" />
               </span>
               <p className="text-xs font-black" style={{ color: TEXT }}>
-                No updates yet
+                {translate("shift.evidence.noUpdates")}
               </p>
               <p className="mt-1 max-w-[220px] text-[11px] font-semibold" style={{ color: MUTED }}>
-                Type a note, take a photo, or record your voice below.
+                {translate("shift.evidence.addHint")}
               </p>
             </div>
           ) : (
@@ -684,20 +711,20 @@ export function ShiftTaskEvidencePanel({
               {records.map((record) => (
                 <div
                   key={record.evidence_id}
-                  className="rounded-lg border border-[#E5E7EB] bg-white/90 px-3 py-2 text-xs font-semibold"
+                  className="rounded-lg border border-cc-border bg-cc-surface/90 px-3 py-2 text-xs font-semibold"
                   style={{ color: TEXT }}
                 >
                   {record.type === "photo" && (
                     <div className="flex items-center gap-2">
                       <Camera size={14} className="text-[#8B75D9]" />
-                      <span>Photo added</span>
+                      <span>{translate("shift.evidence.photoAdded")}</span>
                     </div>
                   )}
                   {record.type === "voice" && (
                     <div className="flex items-center gap-2">
                       <Mic size={14} className="text-[#8B75D9]" />
                       <span>
-                        Voice note
+                        {translate("shift.evidence.voiceNote")}
                         {record.duration_seconds
                           ? ` (${formatVoiceTimer(record.duration_seconds)})`
                           : ""}
@@ -731,7 +758,10 @@ export function ShiftTaskEvidencePanel({
         </div>
 
         {cameraError && (
-          <p className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+          <p
+            data-tutorial="task-evidence-error"
+            className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+          >
             {cameraError}
           </p>
         )}
@@ -745,7 +775,7 @@ export function ShiftTaskEvidencePanel({
                 style={{ background: PLUM }}
                 onClick={() => void capturePhoto()}
               >
-                Capture
+                {translate("shift.evidence.capture")}
               </Button>
               <Button variant="outline" className="rounded-xl" onClick={stopCamera}>
                 <X size={16} />
@@ -760,18 +790,18 @@ export function ShiftTaskEvidencePanel({
               {formatVoiceTimer(recordSeconds)} / {formatVoiceTimer(VOICE_MAX_SECONDS)}
             </span>
             <Button size="sm" variant="outline" className="rounded-lg" onClick={stopRecording}>
-              <Square size={14} className="mr-1" /> Stop
+              <Square size={14} className="mr-1" /> {translate("shift.evidence.stop")}
             </Button>
           </div>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" data-tutorial="task-evidence-actions">
           <button
             type="button"
             disabled={disabled || photos.length >= MAX_PHOTOS}
             onClick={() => void startCamera()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E5E7EB] bg-white text-[#8B75D9]"
-            aria-label="Add photo"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            aria-label={translate("shift.evidence.addPhoto")}
           >
             <Camera size={14} />
           </button>
@@ -779,8 +809,8 @@ export function ShiftTaskEvidencePanel({
             type="button"
             disabled={disabled || uploadingFile || photos.length >= MAX_PHOTOS}
             onClick={() => fileInputRef.current?.click()}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#E5E7EB] bg-white text-[#8B75D9]"
-            aria-label="Attach image"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-cc-border bg-cc-surface text-[#8B75D9]"
+            aria-label={translate("shift.evidence.attachImage")}
           >
             <Paperclip size={14} />
           </button>
@@ -792,11 +822,12 @@ export function ShiftTaskEvidencePanel({
             onChange={(e) => void handleFileUpload(e)}
           />
           <input
+            data-tutorial="task-evidence-note"
             value={note}
             disabled={disabled}
             maxLength={NOTE_MAX}
-            placeholder="Write a progress update..."
-            className="h-9 min-w-0 flex-1 rounded-full border border-[#E5E7EB] bg-white px-4 text-sm"
+            placeholder={translate("shift.evidence.progressPlaceholder")}
+            className="h-9 min-w-0 flex-1 rounded-full border border-cc-border bg-cc-surface px-4 text-sm"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -810,22 +841,22 @@ export function ShiftTaskEvidencePanel({
             disabled={disabled || Boolean(voiceRecord)}
             onClick={() => (recording ? stopRecording() : void startRecording())}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#6D4BDA] text-white"
-            aria-label="Record voice note"
+            aria-label={translate("shift.evidence.recordVoice")}
           >
             <Mic size={14} />
           </button>
         </div>
 
         <p className="mt-2 text-[10px] font-bold" style={{ color: MUTED }}>
-          {evidenceAddedFlash && <span className="text-emerald-700">✓ Evidence added · </span>}
-          {saveState === "saving" && (uploadingFile ? "Uploading file…" : "Saving…")}
-          {saveState === "saved" && "Saved"}
-          {saveState === "offline" && "Offline — saved locally"}
+          {evidenceAddedFlash && <span className="text-emerald-700">{translate("shift.evidence.added")}</span>}
+          {saveState === "saving" && (uploadingFile ? translate("shift.evidence.uploadingFile") : translate("common.saving"))}
+          {saveState === "saved" && translate("shift.evidence.saved")}
+          {saveState === "offline" && translate("shift.evidence.offlineLocal")}
           {saveState === "idle" &&
             !evidenceAddedFlash &&
             readyToMarkComplete &&
             !task.completed && (
-              <span className="text-emerald-700">Ready — tap Mark task complete or press Enter</span>
+              <span className="text-emerald-700">{translate("shift.evidence.readyMark")}</span>
             )}
           {saveState === "idle" &&
             !evidenceAddedFlash &&
@@ -834,8 +865,8 @@ export function ShiftTaskEvidencePanel({
             !task.completed &&
             note.trim().length > 0 &&
             note.trim().length < 20 && (
-              <span className="text-amber-700">
-                {20 - note.trim().length} more character{20 - note.trim().length === 1 ? "" : "s"} to mark complete
+              <span className="text-amber-700" data-tutorial="task-evidence-error">
+                {translateParams(20 - note.trim().length === 1 ? "shift.evidence.charsToComplete" : "shift.evidence.charsToCompletePlural", { count: String(20 - note.trim().length) })}
               </span>
             )}
           {saveState === "idle" &&
@@ -850,7 +881,7 @@ export function ShiftTaskEvidencePanel({
             note.length === 0 &&
             isMandatoryTask(task) &&
             !task.completed && (
-              <span className="text-amber-700">Type 20+ characters or add photo/voice</span>
+              <span className="text-amber-700">{translate("shift.evidence.typeOrAttach")}</span>
             )}
         </p>
 
@@ -862,8 +893,15 @@ export function ShiftTaskEvidencePanel({
             onClick={() => void handleMarkComplete()}
           >
             <Check size={16} className="mr-2 inline" />
-            Mark task complete
+            {translateParams("tasks.markComplete", { label: task.label })}
           </Button>
+        )}
+        {hasSavedEvidence && (
+          <div
+            data-tutorial="task-evidence-saved"
+            className="pointer-events-none absolute left-0 top-0 h-[2px] w-[2px] overflow-hidden opacity-0"
+            aria-hidden="true"
+          />
         )}
       </div>
     );
@@ -877,7 +915,7 @@ export function ShiftTaskEvidencePanel({
         </p>
         {task.goal_title && (
           <p className="text-xs font-bold" style={{ color: PLUM }}>
-            NDIS goal: {task.goal_title}
+            {translate("tasks.ndisGoal")}: {task.goal_title}
           </p>
         )}
         {task.description && (
@@ -887,7 +925,7 @@ export function ShiftTaskEvidencePanel({
         )}
         {task.outcome_tip && (
           <p className="text-xs font-semibold italic" style={{ color: MUTED }}>
-            How will you know it&apos;s done? {task.outcome_tip}
+            {translate("shift.evidence.outcomeTip")} {task.outcome_tip}
           </p>
         )}
       </div>
@@ -895,12 +933,12 @@ export function ShiftTaskEvidencePanel({
       <div className="space-y-4 p-3">
         <div className="flex items-center justify-between text-[10px] font-bold" style={{ color: MUTED }}>
           <span>
-            {saveState === "saving" && "⟳ Saving…"}
-            {saveState === "saved" && "✓ Saved"}
-            {saveState === "offline" && "Offline — saved locally"}
+            {saveState === "saving" && `⟳ ${translate("common.saving")}`}
+            {saveState === "saved" && `✓ ${translate("shift.evidence.saved")}`}
+            {saveState === "offline" && translate("shift.evidence.offlineLocal")}
           </span>
           {records[0]?.created_at && (
-            <span>Captured {format(new Date(records[records.length - 1].created_at), "h:mm a")}</span>
+            <span>{translateParams("shift.evidence.capturedAt", { time: format(new Date(records[records.length - 1].created_at), "h:mm a") })}</span>
           )}
         </div>
 
@@ -912,14 +950,14 @@ export function ShiftTaskEvidencePanel({
 
         <section>
           <p className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: PLUM }}>
-            <Camera size={13} /> Photo <span className="text-emerald-600">Strong ✓</span>
+            <Camera size={13} /> {translate("shift.evidence.photoStrong")} <span className="text-emerald-600">{translate("shift.evidence.strongCheck")}</span>
           </p>
           {cameraOpen ? (
             <div className="space-y-2 rounded-xl border border-[#E5E7EB] p-2">
               <video ref={videoRef} className="aspect-video w-full rounded-lg bg-black object-cover" playsInline muted />
               <div className="flex gap-2">
                 <Button className="flex-1 rounded-xl font-bold text-white" style={{ background: PLUM }} onClick={() => void capturePhoto()}>
-                  Capture
+                  {translate("shift.evidence.capture")}
                 </Button>
                 <Button variant="outline" className="rounded-xl" onClick={stopCamera}>
                   <X size={16} />
@@ -938,7 +976,7 @@ export function ShiftTaskEvidencePanel({
               style={photos.length ? undefined : { color: PLUM }}
             >
               <Camera size={18} />
-              {photos.length >= MAX_PHOTOS ? "Max photos reached" : "Capture Photo Evidence"}
+              {photos.length >= MAX_PHOTOS ? translate("shift.evidence.maxPhotos") : translate("shift.evidence.capturePhoto")}
             </button>
           )}
           {photos.length > 0 && (
@@ -947,14 +985,14 @@ export function ShiftTaskEvidencePanel({
                 <div key={photo.evidence_id} className="relative">
                   <img
                     src={photo.file_url || photo.content}
-                    alt="Task evidence"
+                    alt={translate("shift.evidence.taskEvidenceAlt")}
                     className="h-[150px] w-[150px] rounded-xl border object-cover"
                   />
                   <button
                     type="button"
                     className="absolute right-1 top-1 rounded-full bg-white/90 p-1 shadow"
                     onClick={() => void removePhoto(photo.evidence_id)}
-                    aria-label="Remove photo"
+                    aria-label={translate("shift.evidence.removePhoto")}
                   >
                     <Trash2 size={14} className="text-red-600" />
                   </button>
@@ -966,7 +1004,7 @@ export function ShiftTaskEvidencePanel({
 
         <section>
           <p className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: PLUM }}>
-            <Mic size={13} /> Voice <span className="text-emerald-600">Strong ✓</span>
+            <Mic size={13} /> {translate("shift.evidence.voiceStrong")} <span className="text-emerald-600">{translate("shift.evidence.strongCheck")}</span>
           </p>
           {!voiceRecord ? (
             <button
@@ -976,20 +1014,20 @@ export function ShiftTaskEvidencePanel({
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F8F8FE] py-3.5 text-sm font-bold"
               style={{ color: PLUM }}
             >
-              <Mic size={18} /> Start Voice Dictation
+              <Mic size={18} /> {translate("shift.evidence.startVoice")}
             </button>
           ) : (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
               <p className="text-sm font-bold text-emerald-800">
-                ✓ Voice saved {voiceRecord.duration_seconds ? `(${formatVoiceTimer(voiceRecord.duration_seconds)})` : ""}
+                ✓ {translate("shift.evidence.voiceSaved")} {voiceRecord.duration_seconds ? `(${formatVoiceTimer(voiceRecord.duration_seconds)})` : ""}
               </p>
               <div className="mt-2 flex gap-2">
                 <Button variant="outline" size="sm" className="rounded-lg" onClick={togglePlayVoice}>
                   {playingVoice ? <Pause size={14} /> : <Play size={14} />}
-                  {playingVoice ? "Pause" : "Play"}
+                  {playingVoice ? translate("shift.evidence.pause") : translate("shift.evidence.play")}
                 </Button>
                 <Button variant="outline" size="sm" className="rounded-lg text-red-600" onClick={() => void removeVoice()}>
-                  <Trash2 size={14} className="mr-1" /> Re-record
+                  <Trash2 size={14} className="mr-1" /> {translate("shift.evidence.rerecord")}
                 </Button>
               </div>
             </div>
@@ -1000,7 +1038,7 @@ export function ShiftTaskEvidencePanel({
                 {formatVoiceTimer(recordSeconds)} / {formatVoiceTimer(VOICE_MAX_SECONDS)}
               </span>
               <Button size="sm" variant="outline" className="rounded-lg" onClick={stopRecording}>
-                <Square size={14} className="mr-1" /> Stop
+                <Square size={14} className="mr-1" /> {translate("shift.evidence.stop")}
               </Button>
             </div>
           )}
@@ -1008,14 +1046,14 @@ export function ShiftTaskEvidencePanel({
 
         <section>
           <p className="mb-2 flex flex-wrap items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: PLUM }}>
-            <FileText size={13} /> Written Note
-            {weakNoteOnly && <span className="font-black normal-case text-amber-600">weak if no photo/voice</span>}
+            <FileText size={13} /> {translate("shift.evidence.writtenNote")}
+            {weakNoteOnly && <span className="font-black normal-case text-amber-600">{translate("shift.evidence.weakHint")}</span>}
           </p>
           <Textarea
             value={note}
             disabled={disabled}
             maxLength={NOTE_MAX}
-            placeholder={taskPlaceholder(task, participantName)}
+            placeholder={taskPlaceholder(task, participantName, translate, translateParams)}
             className="min-h-[88px] resize-none text-sm"
             onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             onBlur={() => {
@@ -1026,11 +1064,11 @@ export function ShiftTaskEvidencePanel({
             {note.length}/{NOTE_MAX}
             {!readyToMarkComplete && isMandatoryTask(task) && note.trim().length > 0 && note.trim().length < 20 && (
               <span className="ml-2 text-amber-700">
-                · {20 - note.trim().length} more to mark complete
+                {translateParams("shift.evidence.moreToComplete", { count: String(20 - note.trim().length) })}
               </span>
             )}
             {readyToMarkComplete && !task.completed && (
-              <span className="ml-2 text-emerald-700">· Ready to mark complete</span>
+              <span className="ml-2 text-emerald-700">{translate("shift.evidence.readyToComplete")}</span>
             )}
           </p>
         </section>
@@ -1039,8 +1077,8 @@ export function ShiftTaskEvidencePanel({
           <p className="flex items-start gap-2 text-xs font-semibold leading-relaxed text-amber-900">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             {isMandatoryTask(task)
-              ? "Mandatory tasks need a photo, voice memo, or note of at least 20 characters."
-              : "Completing without evidence will flag this task weak in your compliance report."}
+              ? translate("tasks.evidenceRequiredHint")
+              : translate("shift.evidence.optionalWeak")}
           </p>
         </div>
 
@@ -1052,7 +1090,7 @@ export function ShiftTaskEvidencePanel({
             onClick={() => void handleMarkComplete()}
           >
             <Check size={16} className="mr-2 inline" />
-            Mark task complete
+            {translateParams("tasks.markComplete", { label: task.label })}
           </Button>
         )}
       </div>

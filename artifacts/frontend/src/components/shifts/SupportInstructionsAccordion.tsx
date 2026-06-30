@@ -3,6 +3,7 @@ import { ChevronDown, LifeBuoy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ShiftSupportInstruction } from "@/services/shiftService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   instructions?: ShiftSupportInstruction[];
@@ -43,7 +44,7 @@ function InstructionBody({ body, sectionCritical }: { body: string; sectionCriti
   );
 }
 
-function InstructionSection({ section, defaultOpen }: { section: ShiftSupportInstruction; defaultOpen: boolean }) {
+function InstructionSection({ section, defaultOpen, translate, translateParams }: { section: ShiftSupportInstruction; defaultOpen: boolean; translate: (k: string) => string; translateParams: (k: string, p: Record<string, string>) => string; }) {
   const [open, setOpen] = useState(defaultOpen);
   const critical = section.critical === "true" || section.critical === true;
 
@@ -67,7 +68,7 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
           style={critical ? undefined : { color: MUTED }}
         >
           {section.category}
-          {critical && " · Critical"}
+{critical && translate("shift.support.critical")}
         </p>
         <ChevronDown size={16} className={cn("shrink-0 transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
@@ -78,7 +79,7 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
           {section.image_url && (
             <img
               src={section.image_url}
-              alt={`${section.category} diagram`}
+alt={translateParams("shift.support.diagramAlt", { category: section.category })}
               className="max-h-48 w-full rounded-lg border object-contain"
               style={{ borderColor: BORDER }}
               loading="lazy"
@@ -91,6 +92,7 @@ function InstructionSection({ section, defaultOpen }: { section: ShiftSupportIns
 }
 
 export function SupportInstructionsAccordion({ instructions, open = true, onToggle, sectionId }: Props) {
+  const { translate, translateParams } = useAccessibility();
   if (!instructions?.length) return null;
 
   return (
@@ -106,7 +108,7 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <LifeBuoy size={16} style={{ color: PLUM }} />
-          Support Instructions
+{translate("shift.support.title")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
@@ -118,6 +120,8 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
               <InstructionSection
                 key={`${section.category}-${i}`}
                 section={section}
+                translate={translate}
+                translateParams={translateParams}
                 defaultOpen={i === 0 || section.critical === "true" || section.critical === true}
               />
             ))}

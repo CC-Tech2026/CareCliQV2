@@ -44,6 +44,7 @@ import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useReAuth } from "@/hooks/useReAuth";
 import { Link } from "wouter";
@@ -83,13 +84,13 @@ function isValidABNFormat(abn: string): boolean {
 // ---------------------------------------------------------------------------
 type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
-  { id: "account",       label: "Account",          icon: User        },
-  { id: "provider",      label: "Provider",          icon: Building2   },
-  { id: "defaults",      label: "Session Defaults",  icon: Settings2   },
-  { id: "compliance",    label: "Compliance",        icon: ShieldCheck },
-  { id: "notifications", label: "Notifications",     icon: Bell, coordinatorOnly: true },
-  { id: "team",          label: "Team",              icon: Users2, coordinatorOnly: true },
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
+  { id: "account",       labelKey: "settings.nav.account",          icon: User        },
+  { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
+  { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
+  { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
+  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
+  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -257,6 +258,7 @@ function defaultPrefs(): NotifPrefs {
 function NotificationsSection() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -301,9 +303,9 @@ function NotificationsSection() {
           quiet_to: prefs.quiet_to,
         }),
       });
-      toast({ title: "Notification preferences saved" });
+      toast({ title: translate("settings.toast.notificationsSaved") });
     } catch {
-      toast({ variant: "destructive", title: "Save failed" });
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed") });
     } finally {
       setSaving(false);
     }
@@ -322,15 +324,15 @@ function NotificationsSection() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
-        <Loader2 size={14} className="animate-spin" /> Loading preferences…
+        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingPreferences")}
       </div>
     );
   }
 
   return (
     <Section
-      title="Notifications"
-      description="Control which events trigger notifications and how you receive them."
+      title={translate("settings.notifications.title")}
+      description={translate("settings.notifications.subtitle")}
       icon={Bell}
     >
       {/* Desktop Table View */}
@@ -463,7 +465,17 @@ function NotificationsSection() {
 
 function SecuritySection() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const { requireReAuth, modal } = useReAuth();
+
+  function formatWhen(value?: string | null) {
+    if (!value) return translate("common.emDash");
+    try {
+      return formatDistanceToNow(new Date(value), { addSuffix: true });
+    } catch {
+      return value;
+    }
+  }
 
   const [loading, setLoading] = useState(true);
   const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
@@ -507,7 +519,7 @@ function SecuritySection() {
     loadSecurityData()
       .catch(() => {
         if (!active) return;
-        toast({ title: "Could not load security settings", variant: "destructive" });
+        toast({ title: translate("security.loadFailed"), variant: "destructive" });
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -523,7 +535,7 @@ function SecuritySection() {
       setEnrollCode("");
       setRecoveryCodes(null);
     } catch (error) {
-      toast({ title: "Could not start 2FA setup", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+      toast({ title: translate("security.start2faFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
     } finally {
       setEnrollBusy(false);
     }
@@ -540,9 +552,9 @@ function SecuritySection() {
       setEnrolling(false);
       setEnrollSecret(null);
       setEnrollCode("");
-      toast({ title: "Two-factor authentication enabled", description: "Save your recovery codes in a secure place." });
+      toast({ title: translate("security.twoFactorEnabled"), description: translate("security.twoFactorEnabledHint") });
     } catch (error) {
-      toast({ title: "Verification failed", description: error instanceof Error ? error.message : "Check the code and try again.", variant: "destructive" });
+      toast({ title: translate("security.verifyFailed"), description: error instanceof Error ? error.message : translate("security.verifyFailedHint"), variant: "destructive" });
     } finally {
       setEnrollBusy(false);
     }
@@ -559,7 +571,7 @@ function SecuritySection() {
       });
       setMfaStatus({ enabled: false, method: null, phone: null });
       setDisablePassword("");
-      toast({ title: "Two-factor authentication disabled" });
+      toast({ title: translate("security.twoFactorDisabled") });
     } catch { /* requireReAuth handles cancellation */ } finally {
       setDisableBusy(false);
     }
@@ -572,7 +584,7 @@ function SecuritySection() {
         await loadSecurityData();
         return true;
       });
-      toast({ title: "Trusted device removed" });
+      toast({ title: translate("security.deviceRemoved") });
     } catch { /* noop */ }
   }
 
@@ -584,9 +596,9 @@ function SecuritySection() {
       await logoutOtherSessions(logoutOthersPassword);
       setLogoutOthersPassword("");
       await loadSecurityData();
-      toast({ title: "Other sessions signed out" });
+      toast({ title: translate("security.signOutOthersSuccess") });
     } catch (error) {
-      toast({ title: "Could not sign out other devices", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+      toast({ title: translate("security.signOutOthersFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
     } finally {
       setLogoutOthersBusy(false);
     }
@@ -604,24 +616,24 @@ function SecuritySection() {
       setRenameKind(null);
       setRenameValue("");
       await loadSecurityData();
-      toast({ title: "Name updated" });
+      toast({ title: translate("security.nameUpdated") });
     } catch (error) {
-      toast({ title: "Could not rename", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
+      toast({ title: translate("security.renameFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
     }
   }
 
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
-        <Loader2 size={14} className="animate-spin" /> Loading security settings…
+        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingSecurity")}
       </div>
     );
   }
 
   return (
     <Section
-      title="Security"
-      description="Two-factor authentication, trusted devices, active sessions, and sign-in history."
+      title={translate("security.title")}
+      description={translate("security.subtitle")}
       icon={LockKeyhole}
     >
       {modal}
@@ -630,15 +642,15 @@ function SecuritySection() {
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Scan QR code</DialogTitle>
-            <DialogDescription>Open your authenticator app and scan this code to add CareCliQ.</DialogDescription>
+            <DialogTitle>{translate("security.scanQr")}</DialogTitle>
+            <DialogDescription>{translate("security.qrDescription")}</DialogDescription>
           </DialogHeader>
           {enrollOtpAuthUrl && (
             <div className="flex justify-center rounded-xl bg-white p-5 ring-1 ring-[#E5E7EB]">
               <QRCode value={enrollOtpAuthUrl} size={200} bgColor="#FFFFFF" fgColor="#111827" />
             </div>
           )}
-          <p className="text-center text-xs" style={{ color: "var(--cc-muted)" }}>Or enter the secret key manually if scanning is not available.</p>
+          <p className="text-center text-xs" style={{ color: "var(--cc-muted)" }}>{translate("security.qrManualHint")}</p>
         </DialogContent>
       </Dialog>
 
@@ -646,32 +658,32 @@ function SecuritySection() {
       <Dialog open={!!renamingId} onOpenChange={(open) => { if (!open) { setRenamingId(null); setRenameKind(null); setRenameValue(""); } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Rename {renameKind}</DialogTitle>
+            <DialogTitle>{renameKind === "device" ? translate("security.renameDevice") : translate("settings.renameSession")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-1">
             <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="rounded-xl" autoFocus />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setRenamingId(null); setRenameKind(null); setRenameValue(""); }}>Cancel</Button>
-              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-plum)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>Save</Button>
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setRenamingId(null); setRenameKind(null); setRenameValue(""); }}>{translate("common.cancel")}</Button>
+              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-plum)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>{translate("common.save")}</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* Two-factor authentication */}
-      <PanelCard label="Two-Factor Authentication">
+      <PanelCard label={translate("security.twoFactor")}>
         {recoveryCodes && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-bold text-amber-900">Save your recovery codes</p>
-            <p className="mt-1 text-sm text-amber-800">Each code can be used once if you lose access to your authenticator app.</p>
+            <p className="text-sm font-bold text-amber-900">{translate("security.recoveryCodes")}</p>
+            <p className="mt-1 text-sm text-amber-800">{translate("security.recoveryCodesHint")}</p>
             <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
               {recoveryCodes.map((code) => (
                 <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">{code}</div>
               ))}
             </div>
             <Button type="button" variant="outline" size="sm" className="mt-3 rounded-xl gap-2"
-              onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); toast({ title: "Recovery codes copied" }); }}>
-              <Copy className="h-3.5 w-3.5" /> Copy codes
+              onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); toast({ title: translate("security.codesCopied") }); }}>
+              <Copy className="h-3.5 w-3.5" /> {translate("security.copyCodes")}
             </Button>
           </div>
         )}
@@ -680,27 +692,27 @@ function SecuritySection() {
           enrolling && enrollSecret ? (
             <form onSubmit={handleVerifyEnrollment} className="space-y-4">
               <div className="rounded-xl bg-[#F8F8FE] p-4">
-                <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>Set up your authenticator app</p>
-                <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>Scan the QR code or add a manual entry in Google Authenticator, Authy, or 1Password.</p>
+                <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.setupAuthenticator")}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.setupAuthenticatorHint")}</p>
                 <div className="mt-3 flex items-stretch gap-2">
                   <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">{enrollSecret}</code>
-                  <button type="button" onClick={() => setQrOpen(true)} aria-label="Show QR code" title="Show QR code"
+                  <button type="button" onClick={() => setQrOpen(true)} aria-label={translate("security.showQrAria")} title={translate("security.showQrTitle")}
                     className="flex min-w-[48px] items-center justify-center rounded-xl border bg-white px-3 hover:bg-[#EEF2FF]" style={{ borderColor: "var(--cc-border)" }}>
                     <QrCode className="h-5 w-5 text-[#3730A3]" />
                   </button>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="sec-totp-code">Enter the 6-digit code</Label>
+                <Label htmlFor="sec-totp-code">{translate("security.totpCode")}</Label>
                 <Input id="sec-totp-code" value={enrollCode} onChange={(e) => setEnrollCode(e.target.value)}
-                  inputMode="numeric" autoComplete="one-time-code" className="rounded-xl max-w-[200px] tracking-widest" placeholder="000000" />
+                  inputMode="numeric" autoComplete="one-time-code" className="rounded-xl max-w-[200px] tracking-widest" placeholder={translate("security.totpPlaceholder")} />
               </div>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setEnrolling(false); setEnrollSecret(null); setEnrollOtpAuthUrl(null); setQrOpen(false); setEnrollCode(""); }}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={enrollBusy || !enrollCode.trim()} className="rounded-xl" style={{ background: "var(--cc-plum)" }}>
-                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify and enable"}
+                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
                 </Button>
               </div>
             </form>
@@ -709,23 +721,23 @@ function SecuritySection() {
               <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Add an extra layer of protection with an authenticator app (Google Authenticator, Authy, 1Password).</p>
               <Button type="button" onClick={() => void handleStartEnrollment()} disabled={enrollBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-plum)" }}>
                 {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
-                Enable authenticator app
+                {translate("security.enableAuthenticator")}
               </Button>
             </div>
           )
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#166534" }}>
-              <Check className="h-4 w-4" /> Two-factor authentication is active
+              <Check className="h-4 w-4" /> {translate("security.twoFactorActive")}
             </div>
             <form onSubmit={handleDisableMfa} className="max-w-md space-y-3 border-t pt-4" style={{ borderColor: "var(--cc-border)" }}>
-              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>To disable 2FA, confirm your current password.</p>
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.disableTwoFactorHint")}</p>
               <div className="space-y-1.5">
-                <Label htmlFor="sec-disable-mfa">Current password</Label>
+                <Label htmlFor="sec-disable-mfa">{translate("profile.currentPassword")}</Label>
                 <PasswordInput id="sec-disable-mfa" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="rounded-xl max-w-sm" />
               </div>
               <Button type="submit" variant="outline" disabled={disableBusy || !disablePassword} className="rounded-xl border-red-200 text-red-700 hover:bg-red-50">
-                {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Disable two-factor authentication"}
+                {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.disableTwoFactor")}
               </Button>
             </form>
           </div>
@@ -733,10 +745,10 @@ function SecuritySection() {
       </PanelCard>
 
       {/* Trusted devices */}
-      <PanelCard label="Trusted Devices">
-        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Devices that can skip 2FA verification for 30 days.</p>
+      <PanelCard label={translate("security.trustedDevices")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.trustedDevicesHint")}</p>
         {trustedDevices.length === 0 ? (
-          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No trusted devices.</p>
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("security.noTrustedDevices")}</p>
         ) : (
           <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             {trustedDevices.map((device) => (
@@ -744,10 +756,10 @@ function SecuritySection() {
                 <div>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
                     {device.device_name}
-                    {device.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">This device</span>}
+                    {device.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.thisDevice")}</span>}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                    {device.os_name} · trusted until {formatDistanceToNow(new Date(device.trusted_until), { addSuffix: true })}
+                    {translateParams("security.trustedUntil", { os: device.os_name, when: formatWhen(device.trusted_until) })}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -767,10 +779,10 @@ function SecuritySection() {
       </PanelCard>
 
       {/* Active sessions */}
-      <PanelCard label="Active Sessions">
-        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Devices currently signed in to your account.</p>
+      <PanelCard label={translate("security.activeSessions")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.sessionsHint")}</p>
         {sessions.length === 0 ? (
-          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No active sessions found.</p>
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("settings.noActiveSessions")}</p>
         ) : (
           <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             {sessions.map((session) => (
@@ -778,10 +790,10 @@ function SecuritySection() {
                 <div>
                   <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
                     {session.device_name}
-                    {session.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">Current</span>}
+                    {session.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.currentSession")}</span>}
                   </p>
                   <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
-                    {session.city || "Unknown location"}{session.country ? `, ${session.country}` : ""} · active {formatDistanceToNow(new Date(session.last_active_at), { addSuffix: true })}
+                    {translateParams("security.sessionLocation", { city: session.city || translate("security.unknownCity"), country: session.country || translate("security.unknownCountry"), when: formatWhen(session.last_active_at) })}
                   </p>
                 </div>
                 <Button type="button" size="sm" variant="outline" className="rounded-lg h-8"
@@ -793,22 +805,22 @@ function SecuritySection() {
           </div>
         )}
         <form onSubmit={handleLogoutOthers} className="mt-4 border-t pt-4 max-w-md space-y-3" style={{ borderColor: "var(--cc-border)" }}>
-          <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>Sign out all other devices</p>
+          <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.signOutAllOthers")}</p>
           <div className="space-y-1.5">
-            <Label htmlFor="sec-logout-others">Confirm your password</Label>
+            <Label htmlFor="sec-logout-others">{translate("security.confirmPassword")}</Label>
             <PasswordInput id="sec-logout-others" value={logoutOthersPassword} onChange={(e) => setLogoutOthersPassword(e.target.value)} className="rounded-xl max-w-sm" />
           </div>
           <Button type="submit" variant="outline" disabled={logoutOthersBusy || !logoutOthersPassword} className="rounded-xl">
-            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign out other sessions"}
+            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.signOutOthers")}
           </Button>
         </form>
       </PanelCard>
 
       {/* Recent sign-ins */}
-      <PanelCard label="Recent Sign-ins">
-        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>Review recent account access activity.</p>
+      <PanelCard label={translate("security.recentSignIns")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.recentSignInsHint")}</p>
         {loginHistory.length === 0 ? (
-          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>No sign-in history yet.</p>
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("security.noSignInHistory")}</p>
         ) : (
           <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
             {loginHistory.slice(0, 10).map((entry) => (
@@ -822,7 +834,7 @@ function SecuritySection() {
                 </div>
                 {entry.is_suspicious ? (
                   <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">
-                    <AlertTriangle className="h-3 w-3" /> Unusual sign-in
+                    <AlertTriangle className="h-3 w-3" /> {translate("security.unusualSignIn")}
                   </span>
                 ) : null}
               </div>
@@ -838,6 +850,7 @@ function SecuritySection() {
 
 export default function Settings() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const { user, token: authToken } = useAuth();
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
@@ -923,9 +936,9 @@ export default function Settings() {
     try {
       await requireReAuth(() => apiFetch(`/api/invitations/revoke/${id}`, { method: "DELETE" }));
       setInvites((prev) => prev.filter((i) => i.id !== id));
-      toast({ title: "Invitation revoked" });
+      toast({ title: translate("settings.toast.inviteRevoked") });
     } catch {
-      toast({ title: "Failed to revoke invitation", variant: "destructive" });
+      toast({ title: translate("settings.toast.inviteRevokeFailed"), variant: "destructive" });
     }
   };
 
@@ -935,9 +948,9 @@ export default function Settings() {
     try {
       await requireReAuth(() => apiFetch(`/api/invitations/members/${memberId}`, { method: "DELETE" }));
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
-      toast({ title: "Member removed" });
+      toast({ title: translate("settings.toast.memberRemoved") });
     } catch {
-      toast({ title: "Failed to remove member", variant: "destructive" });
+      toast({ title: translate("settings.toast.memberRemoveFailed"), variant: "destructive" });
     }
   };
 
@@ -952,9 +965,9 @@ export default function Settings() {
         })
       );
       setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m));
-      toast({ title: "Role updated", description: `Role changed to ${ROLE_LABELS[newRole] ?? newRole}` });
+      toast({ title: translate("settings.toast.roleUpdated"), description: translateParams("settings.toast.roleUpdatedDesc", { role: ROLE_LABELS[newRole] ?? newRole }) });
     } catch {
-      toast({ title: "Failed to update role", variant: "destructive" });
+      toast({ title: translate("settings.toast.roleUpdateFailed"), variant: "destructive" });
     }
   };
 
@@ -1090,15 +1103,15 @@ export default function Settings() {
         });
       } catch {
         toast({
-          title: "Saved locally",
-          description: "Signature saved to this device. Server sync failed — it will retry next time you open Settings.",
+          title: translate("settings.toast.savedLocally"),
+          description: translate("settings.toast.savedLocallyDesc"),
           variant: "destructive",
         });
         return;
       }
       toast({
-        title: "Signature saved",
-        description: "Your signature is now synced and will appear on all PDF reports across all devices.",
+        title: translate("settings.toast.signatureSaved"),
+        description: translate("settings.toast.signatureSavedDesc"),
       });
     },
     [saveToServer, serverSettings, toast]
@@ -1131,7 +1144,7 @@ export default function Settings() {
     } catch {
       // server sync failed — signature already cleared locally
     }
-    toast({ title: "Signature removed", description: "PDF reports will show the placeholder sign-here box." });
+    toast({ title: translate("settings.toast.signatureRemoved"), description: translate("settings.toast.signatureRemovedDesc") });
   }, [clearCanvas, saveToServer, serverSettings, toast]);
 
   // ── File upload ────────────────────────────────────────────────────────────
@@ -1139,11 +1152,11 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== "image/png" && file.type !== "image/jpeg") {
-      toast({ title: "Invalid file type", description: "Please upload a PNG or JPG image.", variant: "destructive" });
+      toast({ title: translate("settings.toast.invalidFileType"), description: translate("settings.toast.invalidFileTypeDesc"), variant: "destructive" });
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Please upload an image smaller than 2 MB.", variant: "destructive" });
+      toast({ title: translate("settings.toast.fileTooLarge"), description: translate("settings.toast.fileTooLargeDesc"), variant: "destructive" });
       return;
     }
     const reader = new FileReader();
@@ -1157,7 +1170,7 @@ export default function Settings() {
     try {
       await saveToServer({ data: { avatarId: newId ?? null } });
     } catch {
-      toast({ title: "Could not save avatar", variant: "destructive" });
+      toast({ title: translate("settings.toast.avatarSaveFailed"), variant: "destructive" });
     }
   };
 
@@ -1166,9 +1179,9 @@ export default function Settings() {
     setIsSavingPract(true);
     try {
       await saveToServer({ data: { name: practName.trim() || null, credentials: practCredentials.trim() || null } });
-      toast({ title: "Practitioner details saved" });
+      toast({ title: translate("settings.toast.practitionerSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save practitioner details.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.practitionerSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingPract(false);
     }
@@ -1182,15 +1195,15 @@ export default function Settings() {
 
   const handleSaveProvider = async () => {
     if (!abnValid) {
-      toast({ title: "Invalid ABN", description: "Please enter exactly 11 digits or leave the field blank.", variant: "destructive" });
+      toast({ title: translate("settings.toast.invalidAbn"), description: translate("settings.toast.invalidAbnDesc"), variant: "destructive" });
       return;
     }
     setIsSavingProvider(true);
     try {
       await saveToServer({ data: { provider: { businessName: businessName.trim() || null, abn: abn.replace(/\s/g, "") || null } } });
-      toast({ title: "Provider information saved" });
+      toast({ title: translate("settings.toast.providerSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save provider information.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.providerSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingProvider(false);
     }
@@ -1200,9 +1213,9 @@ export default function Settings() {
     setIsSavingDefaults(true);
     try {
       await saveToServer({ data: { sessionDefaults: { defaultDuration: defaultDuration ? Number(defaultDuration) : null, autoStartTimer, enableVoice } } });
-      toast({ title: "Session defaults saved" });
+      toast({ title: translate("settings.toast.defaultsSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save session defaults.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.defaultsSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingDefaults(false);
     }
@@ -1223,9 +1236,9 @@ export default function Settings() {
           },
         },
       });
-      toast({ title: "Compliance requirements saved" });
+      toast({ title: translate("settings.toast.complianceSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save compliance requirements.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.complianceSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingCompliance(false);
     }
@@ -1236,7 +1249,7 @@ export default function Settings() {
     if (!trimmed) return;
     const lower = trimmed.toLowerCase();
     if (physicalExamSessionTypes.some((t) => t.toLowerCase() === lower)) {
-      toast({ title: "Already in the list", description: `"${trimmed}" is already configured.` });
+      toast({ title: translate("settings.toast.alreadyInList"), description: translateParams("settings.toast.alreadyInListDesc", { name: trimmed }) });
       return;
     }
     setPhysicalExamSessionTypes((prev) => [...prev, trimmed]);
@@ -1255,7 +1268,7 @@ export default function Settings() {
   const LoadingRow = () => (
     <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
       <Loader2 className="h-4 w-4 animate-spin" />
-      <span>Loading settings…</span>
+      <span>{translate("settings.loading")}</span>
     </div>
   );
 
@@ -1279,16 +1292,16 @@ export default function Settings() {
           <Settings2 className="h-5 w-5" style={{ color: "#3730A3" }} />
         </div>
         <div>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>Workspace Settings</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("settings.title")}</h1>
           <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-muted)" }}>
-            Manage your account, provider details, session defaults and compliance rules
+            {translate("settings.subtitle")}
           </p>
         </div>
       </div>
 
       {/* ── Mobile nav (outside flex row — stacks vertically on mobile) ────── */}
       <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
-        {visibleNavItems.map(({ id, label, icon: Icon }) => (
+        {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveSection(id)}
@@ -1299,7 +1312,7 @@ export default function Settings() {
             }}
           >
             <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#6B7280" }} />
-            {label}
+            {translate(labelKey)}
           </button>
         ))}
       </div>
@@ -1319,7 +1332,7 @@ export default function Settings() {
           <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "var(--cc-muted)" }}>
             Navigation
           </p>
-          {visibleNavItems.map(({ id, label, icon: Icon }) => (
+          {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
@@ -1333,7 +1346,7 @@ export default function Settings() {
                 className="h-4 w-4 shrink-0"
                 style={{ color: activeSection === id ? "white" : "#6B7280" }}
               />
-              {label}
+              {translate(labelKey)}
             </button>
           ))}
         </div>
@@ -1345,12 +1358,12 @@ export default function Settings() {
         {/* ── Account section ─────────────────────────────────────────────── */}
         {activeSection === "account" && (
           <Section
-            title="Account"
-            description="Your practitioner identity and digital signature for NDIS audit reports."
+            title={translate("settings.account.title")}
+            description={translate("settings.account.subtitle")}
             icon={User}
           >
             {/* Signature card */}
-            <PanelCard label="Digital Signature">
+            <PanelCard label={translate("settings.signature.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1359,7 +1372,7 @@ export default function Settings() {
                     <div className="rounded-xl p-4" style={{ background: "rgba(22,163,74,0.07)", border: "1px solid rgba(22,163,74,0.2)" }}>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "#16A34A" }}>
-                          <Check className="h-3.5 w-3.5" /> Signature saved
+                          <Check className="h-3.5 w-3.5" /> {translate("settings.signature.saved")}
                         </span>
                         <Button
                           variant="ghost"
@@ -1368,7 +1381,7 @@ export default function Settings() {
                           onClick={handleClear}
                           disabled={isSaving}
                         >
-                          <Trash2 className="h-3 w-3" /> Remove
+                          <Trash2 className="h-3 w-3" /> {translate("common.remove")}
                         </Button>
                       </div>
                       <div className="bg-white rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
@@ -1380,10 +1393,10 @@ export default function Settings() {
                   <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "draw" | "upload")}>
                     <TabsList className="w-full rounded-lg h-9">
                       <TabsTrigger value="draw" className="flex-1 gap-1.5 text-xs">
-                        <PenLine className="h-3.5 w-3.5" /> Draw
+                        <PenLine className="h-3.5 w-3.5" /> {translate("settings.signature.draw")}
                       </TabsTrigger>
                       <TabsTrigger value="upload" className="flex-1 gap-1.5 text-xs">
-                        <Upload className="h-3.5 w-3.5" /> Upload Image
+                        <Upload className="h-3.5 w-3.5" /> {translate("settings.signature.upload")}
                       </TabsTrigger>
                     </TabsList>
 
@@ -1412,11 +1425,11 @@ export default function Settings() {
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" className="gap-1.5" onClick={clearCanvas} disabled={!hasDrawing}>
-                          <RotateCcw className="h-3.5 w-3.5" /> Clear
+                          <RotateCcw className="h-3.5 w-3.5" /> {translate("settings.signature.clear")}
                         </Button>
                         <Button size="sm" className="gap-1.5 ml-auto" onClick={saveDrawn} disabled={!hasDrawing || isSaving || isLoadingSettings}>
                           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                          Save Signature
+                          {translate("settings.signature.save")}
                         </Button>
                       </div>
                     </TabsContent>
@@ -1449,7 +1462,7 @@ export default function Settings() {
                         )}
                         <Button size="sm" className="gap-1.5 ml-auto" onClick={saveUploaded} disabled={!uploadPreview || isSaving || isLoadingSettings}>
                           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                          Save Signature
+                          {translate("settings.signature.save")}
                         </Button>
                       </div>
                     </TabsContent>
@@ -1463,14 +1476,14 @@ export default function Settings() {
             </PanelCard>
 
             {/* Practitioner details card */}
-            <PanelCard label="Practitioner Details">
+            <PanelCard label={translate("settings.practitioner.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Full Name</Label>
+                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.fullName")}</Label>
                       <Input
                         id="pract-name"
                         value={practName}
@@ -1480,7 +1493,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Credentials</Label>
+                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.credentials")}</Label>
                       <Input
                         id="pract-credentials"
                         value={practCredentials}
@@ -1493,7 +1506,7 @@ export default function Settings() {
                   <div className="flex justify-end">
                     <Button size="sm" onClick={handleSavePractitioner} disabled={isSavingPract} className="gap-1.5 min-w-[110px]">
                       {isSavingPract ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Save Details
+                      {translate("settings.practitioner.save")}
                     </Button>
                   </div>
                 </div>
@@ -1501,7 +1514,7 @@ export default function Settings() {
             </PanelCard>
 
             {/* Avatar picker card */}
-            <PanelCard label="Profile Avatar">
+            <PanelCard label={translate("settings.avatar.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1519,7 +1532,7 @@ export default function Settings() {
                     />
                     <div>
                       <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>
-                        {avatarId ? "Avatar selected" : "No avatar chosen"}
+                        {avatarId ? translate("settings.avatar.selected") : translate("settings.avatar.none")}
                       </p>
                       <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
                         Choose a character below. It appears in your sidebar instead of your initials. Saves automatically.
@@ -1536,17 +1549,17 @@ export default function Settings() {
         {/* ── Provider section ─────────────────────────────────────────────── */}
         {activeSection === "provider" && (
           <Section
-            title="Provider"
-            description="Your registered NDIS provider business details. These appear on PDF audit reports and invoices."
+            title={translate("settings.provider.title")}
+            description={translate("settings.provider.subtitle")}
             icon={Building2}
           >
-            <PanelCard label="Business Information">
+            <PanelCard label={translate("settings.provider.businessInfo")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>Business Name</Label>
+                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.provider.businessName")}</Label>
                     <Input
                       id="business-name"
                       value={businessName}
@@ -1582,7 +1595,7 @@ export default function Settings() {
                   <div className="flex justify-end pt-1">
                     <Button size="sm" onClick={handleSaveProvider} disabled={isSavingProvider || abnError} className="gap-1.5 min-w-[130px]">
                       {isSavingProvider ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Save Provider Info
+                      {translate("settings.provider.save")}
                     </Button>
                   </div>
                 </div>
@@ -1594,11 +1607,11 @@ export default function Settings() {
         {/* ── Session Defaults section ─────────────────────────────────────── */}
         {activeSection === "defaults" && (
           <Section
-            title="Session Defaults"
-            description="Default settings applied automatically when you start a new live session."
+            title={translate("settings.defaults.title")}
+            description={translate("settings.defaults.subtitle")}
             icon={Settings2}
           >
-            <PanelCard label="Duration">
+            <PanelCard label={translate("settings.defaults.duration")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1621,7 +1634,7 @@ export default function Settings() {
               )}
             </PanelCard>
 
-            <PanelCard label="Automation">
+            <PanelCard label={translate("settings.defaults.automation")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1646,7 +1659,7 @@ export default function Settings() {
               <div className="flex justify-end">
                 <Button size="sm" onClick={handleSaveDefaults} disabled={isSavingDefaults} className="gap-1.5 min-w-[120px]">
                   {isSavingDefaults ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Defaults
+                  {translate("settings.defaults.save")}
                 </Button>
               </div>
             )}
@@ -1656,11 +1669,11 @@ export default function Settings() {
         {/* ── Compliance section ───────────────────────────────────────────── */}
         {activeSection === "compliance" && (
           <Section
-            title="Compliance"
-            description="Enforce documentation standards before a session can be approved. These checks run alongside the built-in NDIS compliance engine."
+            title={translate("settings.compliance.title")}
+            description={translate("settings.compliance.subtitle")}
             icon={ShieldCheck}
           >
-            <PanelCard label="Required Before Approval">
+            <PanelCard label={translate("settings.compliance.required")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1687,7 +1700,7 @@ export default function Settings() {
               )}
             </PanelCard>
 
-            <PanelCard label="Session Types Requiring Physical Examination">
+            <PanelCard label={translate("settings.compliance.physicalExam")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1772,7 +1785,7 @@ export default function Settings() {
                 <div className="flex justify-end">
                   <Button size="sm" onClick={handleSaveCompliance} disabled={isSavingCompliance} className="gap-1.5 min-w-[140px]">
                     {isSavingCompliance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    Save Requirements
+                    {translate("settings.compliance.save")}
                   </Button>
                 </div>
 
@@ -1807,12 +1820,12 @@ export default function Settings() {
 
         {activeSection === "team" && isCoordinator && (
           <Section
-            title="Team"
-            description="Manage your organisation's staff members and invite new practitioners."
+            title={translate("settings.team.title")}
+            description={translate("settings.team.subtitle")}
             icon={Users2}
           >
             {/* Active members */}
-            <PanelCard label="Active Members">
+            <PanelCard label={translate("settings.team.activeMembers")}>
               {loadingTeam ? (
                 <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
@@ -1889,7 +1902,7 @@ export default function Settings() {
             </PanelCard>
 
             {/* Pending invitations */}
-            <PanelCard label="Pending Invitations">
+            <PanelCard label={translate("settings.team.pendingInvites")}>
               {invites.length === 0 ? (
                 <p className="text-[13px] py-3 text-center" style={{ color: "#7A6A8A" }}>
                   No pending invitations.
@@ -1944,7 +1957,7 @@ export default function Settings() {
             {/* Invite button */}
             <div className="flex justify-end">
               <Link href="/team" className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium">
-                <Plus size={15} /> Invite Staff Member
+                <Plus size={15} /> {translate("settings.team.inviteStaff")}
               </Link>
             </div>
 

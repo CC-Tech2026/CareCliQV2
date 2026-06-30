@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const DEBOUNCE_MS = 500;
 const GRADIENT = "#3730A3";
@@ -22,6 +23,7 @@ export function StartSessionButton({
   disabled = false,
   className,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const lastTapRef = useRef(0);
 
   const handleClick = useCallback(() => {
@@ -31,7 +33,7 @@ export function StartSessionButton({
     onStartSession();
   }, [onStartSession]);
 
-  const name = participantName || "participant";
+  const name = participantName || translate("common.participant");
   const isDisabled = disabled || isLoading;
 
   return (
@@ -39,7 +41,7 @@ export function StartSessionButton({
       type="button"
       onClick={handleClick}
       disabled={isDisabled}
-      aria-label={`Start session for ${name}`}
+      aria-label={translateParams("shift.startSessionFor", { name })}
       aria-busy={isLoading}
       data-shift-id={shiftId}
       data-tutorial="start-session"
@@ -56,12 +58,12 @@ export function StartSessionButton({
       {isLoading ? (
         <>
           <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
-          Starting...
+          {translate("shift.starting")}
         </>
       ) : (
         <>
           <Zap size={18} className="mr-2" aria-hidden="true" />
-          Start Session
+          {translate("shift.startSession")}
         </>
       )}
     </button>

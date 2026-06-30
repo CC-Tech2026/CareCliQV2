@@ -7,15 +7,24 @@ import { Label } from "@/components/ui/label";
 import { ProfilePhotoUpload } from "@/components/ProfilePhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { getMe, updateMe, type UserProfile } from "@/services/userService";
 
 const PLUM = "var(--cc-plum)";
 const CORAL = "var(--cc-coral)";
 
+const DISCIPLINE_OPTIONS = [
+  { value: "OT", key: "profileCompletion.discipline.ot" },
+  { value: "Physio", key: "profileCompletion.discipline.physio" },
+  { value: "Speech", key: "profileCompletion.discipline.speech" },
+  { value: "Other", key: "profileCompletion.discipline.other" },
+] as const;
+
 export default function ProfileCompletion() {
   const [, navigate] = useLocation();
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
+  const { translate } = useAccessibility();
   const [profile, setProfile] = useState<Partial<UserProfile>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -41,11 +50,19 @@ export default function ProfileCompletion() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!profile.full_name?.trim() || !profile.phone?.trim()) {
-      toast({ title: "Profile details required", description: "Full name and phone are required.", variant: "destructive" });
+      toast({
+        title: translate("profileCompletion.detailsRequired"),
+        description: translate("profileCompletion.detailsRequiredDesc"),
+        variant: "destructive",
+      });
       return;
     }
     if (isAllied && !profile.discipline?.trim()) {
-      toast({ title: "Discipline required", description: "Choose your allied health discipline.", variant: "destructive" });
+      toast({
+        title: translate("profileCompletion.disciplineRequired"),
+        description: translate("profileCompletion.disciplineRequiredDesc"),
+        variant: "destructive",
+      });
       return;
     }
     setSaving(true);
@@ -63,12 +80,12 @@ export default function ProfileCompletion() {
         onboarding_completed: saved.onboarding_completed ?? (user?.role !== "support_worker"),
         profile_photo_url: saved.profile_photo_url || null,
       });
-      toast({ title: "Profile completed" });
+      toast({ title: translate("profileCompletion.completed") });
       navigate(user?.role === "support_worker" ? "/worker-onboarding" : "/dashboard");
     } catch (error) {
       toast({
-        title: "Could not save profile",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("profileCompletion.saveFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -77,17 +94,24 @@ export default function ProfileCompletion() {
   }
 
   if (loading) {
-    return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" /></div>;
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin text-[#3730A3]" />
+        <span className="sr-only">{translate("common.loading")}</span>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6 pb-10">
       <div>
         <p className="hidden" style={{ color: CORAL }}>
-          {isAllied ? "Allied Health" : "Support Worker"}
+          {isAllied ? translate("profileCompletion.alliedHealth") : translate("profileCompletion.supportWorker")}
         </p>
-        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Complete your profile</h1>
-        <p className="mt-2 text-sm text-[#6B7280]">These details are stored on your secure CareCliQ profile and used in compliance records.</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+          {translate("profileCompletion.title")}
+        </h1>
+        <p className="mt-2 text-sm text-[#6B7280]">{translate("profileCompletion.subtitle")}</p>
       </div>
       <form onSubmit={submit} className="rounded-[1.5rem] border border-[#E5E7EB] bg-white p-6 shadow-sm">
         <div className="mb-6 rounded-2xl bg-[#F8F8FE] p-4">
@@ -95,44 +119,43 @@ export default function ProfileCompletion() {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <Label>Full name</Label>
+            <Label>{translate("profileCompletion.fullName")}</Label>
             <Input value={profile.full_name || ""} onChange={(e) => setProfile({ ...profile, full_name: e.target.value })} className="mt-1 rounded-xl" />
           </div>
           <div>
-            <Label>Phone</Label>
+            <Label>{translate("profileCompletion.phone")}</Label>
             <Input value={profile.phone || ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} className="mt-1 rounded-xl" />
           </div>
           <div>
-            <Label>Suburb</Label>
+            <Label>{translate("profileCompletion.suburb")}</Label>
             <Input value={profile.suburb || ""} onChange={(e) => setProfile({ ...profile, suburb: e.target.value })} className="mt-1 rounded-xl" />
           </div>
           <div>
-            <Label>Address</Label>
+            <Label>{translate("profileCompletion.address")}</Label>
             <Input value={profile.address || ""} onChange={(e) => setProfile({ ...profile, address: e.target.value })} className="mt-1 rounded-xl" />
           </div>
           {isAllied && (
             <>
               <div>
-                <Label>Discipline</Label>
+                <Label>{translate("profileCompletion.discipline")}</Label>
                 <select
-                  title="Discipline"
+                  title={translate("profileCompletion.discipline")}
                   value={profile.discipline || ""}
                   onChange={(e) => setProfile({ ...profile, discipline: e.target.value })}
                   className="mt-1 h-10 w-full rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm"
                 >
-                  <option value="">Select discipline</option>
-                  <option value="OT">OT</option>
-                  <option value="Physio">Physio</option>
-                  <option value="Speech">Speech</option>
-                  <option value="Other">Other</option>
+                  <option value="">{translate("profileCompletion.selectDiscipline")}</option>
+                  {DISCIPLINE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{translate(opt.key)}</option>
+                  ))}
                 </select>
               </div>
               <div>
-                <Label>AHPRA registration number</Label>
+                <Label>{translate("profileCompletion.ahpra")}</Label>
                 <Input value={profile.ahpra_registration_number || ""} onChange={(e) => setProfile({ ...profile, ahpra_registration_number: e.target.value })} className="mt-1 rounded-xl" />
               </div>
               <div>
-                <Label>Business / trading name</Label>
+                <Label>{translate("profileCompletion.businessName")}</Label>
                 <Input value={profile.business_name || ""} onChange={(e) => setProfile({ ...profile, business_name: e.target.value })} className="mt-1 rounded-xl" />
               </div>
               <label className="flex items-center gap-2 pt-7 text-sm font-semibold text-[#111827]">
@@ -141,7 +164,7 @@ export default function ProfileCompletion() {
                   checked={!!profile.professional_indemnity_confirmed}
                   onChange={(e) => setProfile({ ...profile, professional_indemnity_confirmed: e.target.checked })}
                 />
-                Professional indemnity insurance confirmed
+                {translate("profileCompletion.indemnity")}
               </label>
             </>
           )}
@@ -149,11 +172,15 @@ export default function ProfileCompletion() {
         <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl bg-[#F8F8FE] p-4 text-sm text-[#6B7280]">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-[#3730A3]" />
-            <span>Role confirmed as {isAllied ? "Allied Health Professional" : "Support Worker"}.</span>
+            <span>
+              {isAllied
+                ? translate("profileCompletion.roleConfirmedAllied")
+                : translate("profileCompletion.roleConfirmedWorker")}
+            </span>
           </div>
           <Button disabled={saving} className="gap-2 rounded-xl" style={{ background: PLUM }}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save profile
+            {translate("profileCompletion.save")}
           </Button>
         </div>
       </form>

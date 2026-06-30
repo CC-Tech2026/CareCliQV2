@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Check, X, Inbox } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   formatPreferredDays,
   listCoordinatorScheduleRequests,
@@ -21,6 +22,7 @@ const BORDER = "var(--cc-border)";
 
 export function ScheduleRequestQueue() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const queryClient = useQueryClient();
   const [declineId, setDeclineId] = useState<string | null>(null);
   const [declineNote, setDeclineNote] = useState("");
@@ -35,12 +37,13 @@ export function ScheduleRequestQueue() {
     mutationFn: ({ id, status, note }: { id: string; status: "approved" | "declined"; note?: string }) =>
       resolveCoordinatorScheduleRequest(id, { status, coordinator_notes: note }),
     onSuccess: () => {
-      toast({ title: "Request updated" });
+      toast({ title: translate("coordinator.scheduleRequest.updated") });
       setDeclineId(null);
       setDeclineNote("");
       void queryClient.invalidateQueries({ queryKey: ["coordinator", "schedule-requests"] });
     },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) =>
+      toast({ title: translate("coordinator.scheduleRequest.failed"), description: e.message, variant: "destructive" }),
   });
 
   const requests = data?.requests ?? [];
@@ -53,7 +56,7 @@ export function ScheduleRequestQueue() {
       <div className="mb-3 flex items-center gap-2">
         <Inbox size={16} style={{ color: PLUM }} />
         <h3 className="text-sm font-black" style={{ color: TEXT }}>
-          Pending schedule requests ({requests.length})
+          {translateParams("coordinator.scheduleRequest.pendingTitle", { count: String(requests.length) })}
         </h3>
       </div>
       <div className="space-y-3">
@@ -69,7 +72,7 @@ export function ScheduleRequestQueue() {
       </div>
       {declineId && (
         <div className="mt-4 rounded-xl border bg-red-50 p-3" style={{ borderColor: "#FECACA" }}>
-          <p className="text-xs font-black text-red-800 mb-2">Decline reason (required)</p>
+          <p className="text-xs font-black text-red-800 mb-2">{translate("coordinator.scheduleRequest.declineReason")}</p>
           <textarea
             className="w-full rounded-lg border px-3 py-2 text-sm"
             rows={2}
@@ -83,10 +86,15 @@ export function ScheduleRequestQueue() {
               onClick={() => resolveMut.mutate({ id: declineId, status: "declined", note: declineNote })}
               className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white disabled:opacity-50"
             >
-              Confirm decline
+              {translate("coordinator.scheduleRequest.confirmDecline")}
             </button>
-            <button type="button" onClick={() => { setDeclineId(null); setDeclineNote(""); }} className="text-xs font-bold" style={{ color: MUTED }}>
-              Cancel
+            <button
+              type="button"
+              onClick={() => { setDeclineId(null); setDeclineNote(""); }}
+              className="text-xs font-bold"
+              style={{ color: MUTED }}
+            >
+              {translate("common.cancel")}
             </button>
           </div>
         </div>
@@ -106,13 +114,19 @@ function RequestRow({
   onDecline: () => void;
   loading: boolean;
 }) {
+  const { translate, translateParams } = useAccessibility();
+
   let detail = request.request_type.replace(/_/g, " ");
   if (request.time_off) {
     detail = `${timeOffReasonLabel(request.time_off.reason_code)} · ${request.time_off.start_date} – ${request.time_off.end_date}`;
   } else if (request.preferred_shift) {
-    detail = `Preferred: ${formatPreferredDays(request.preferred_shift.preferred_days)}`;
+    detail = translateParams("coordinator.scheduleRequest.preferred", {
+      days: formatPreferredDays(request.preferred_shift.preferred_days),
+    });
   } else if (request.shift_swap) {
-    detail = `Swap shift ${request.shift_swap.shift_id?.slice(0, 8)}…`;
+    detail = translateParams("coordinator.scheduleRequest.swap", {
+      id: request.shift_swap.shift_id?.slice(0, 8) ?? "",
+    });
   }
 
   return (
@@ -127,10 +141,10 @@ function RequestRow({
       </div>
       <div className="flex gap-1">
         <button type="button" disabled={loading} onClick={onApprove} className="flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[10px] font-black text-white">
-          <Check size={12} /> Approve
+          <Check size={12} /> {translate("coordinator.scheduleRequest.approve")}
         </button>
         <button type="button" disabled={loading} onClick={onDecline} className="flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-[10px] font-black text-red-700">
-          <X size={12} /> Decline
+          <X size={12} /> {translate("coordinator.scheduleRequest.decline")}
         </button>
       </div>
     </div>

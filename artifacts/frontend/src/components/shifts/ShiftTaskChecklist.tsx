@@ -37,6 +37,16 @@ import {
   taskUpdateCount,
   TEXT,
 } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
+import type { TaskVisualState } from "@/lib/task-evidence-status";
+
+const TASK_STATE_KEYS: Record<TaskVisualState, string> = {
+  not_started: "tasks.state.notStarted",
+  in_progress: "tasks.state.inProgress",
+  evidence_required: "tasks.state.evidenceRequired",
+  complete: "tasks.state.complete",
+};
 
 type Props = {
   shiftId: string;
@@ -47,6 +57,7 @@ type Props = {
   disabled?: boolean;
   sessionStyle?: boolean;
   focusTaskId?: string | null;
+  tutorialDemo?: boolean;
 };
 
 function isMandatory(task: ShiftTask) {
@@ -57,10 +68,12 @@ function TaskStatusCheckbox({
   task,
   disabled,
   onToggle,
+  translateParams,
 }: {
   task: ShiftTask;
   disabled?: boolean;
   onToggle: () => void;
+  translateParams: (key: string, params: Record<string, string>) => string;
 }) {
   if (!task.completed) {
     return (
@@ -71,8 +84,8 @@ function TaskStatusCheckbox({
           e.stopPropagation();
           onToggle();
         }}
-        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-[#D8D0EE] bg-white"
-        aria-label={`Mark ${task.label} complete`}
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-cc-border bg-cc-surface"
+        aria-label={translateParams("tasks.markComplete", { label: task.label })}
       />
     );
   }
@@ -87,7 +100,7 @@ function TaskStatusCheckbox({
           onToggle();
         }}
         className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-emerald-500 bg-emerald-500"
-        aria-label={`Mark ${task.label} incomplete`}
+        aria-label={translateParams("tasks.markIncomplete", { label: task.label })}
       >
         <CheckCircle2 size={12} className="text-white" />
       </button>
@@ -103,7 +116,7 @@ function TaskStatusCheckbox({
         onToggle();
       }}
       className="grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-amber-400 bg-amber-100"
-      aria-label={`Mark ${task.label} incomplete`}
+      aria-label={translateParams("tasks.markIncomplete", { label: task.label })}
     >
       <AlertTriangle size={11} className="text-amber-700" />
     </button>
@@ -119,8 +132,11 @@ export function ShiftTaskChecklist({
   disabled,
   sessionStyle,
   focusTaskId,
+  tutorialDemo,
 }: Props) {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
+  const tutorial = useWorkerTutorialOptional();
   const [localTasks, setLocalTasks] = useState<ShiftTask[]>(tasks);
   const [expandedNote, setExpandedNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -130,6 +146,24 @@ export function ShiftTaskChecklist({
   useEffect(() => {
     if (focusTaskId) setExpandedNote(focusTaskId);
   }, [focusTaskId]);
+
+  useEffect(() => {
+    const stepKey = tutorial?.activeStep?.key;
+    if (stepKey !== "task_evidence" && stepKey !== "evidence_attach") {
+      document.body.removeAttribute("data-tutorial-task-evidence-ready");
+      return;
+    }
+    const firstTask = tasks[0];
+    if (firstTask) setExpandedNote(firstTask.task_id);
+    if (stepKey !== "task_evidence") return;
+    const timer = window.setTimeout(() => {
+      document.body.setAttribute("data-tutorial-task-evidence-ready", "1");
+    }, 1400);
+    return () => {
+      window.clearTimeout(timer);
+      document.body.removeAttribute("data-tutorial-task-evidence-ready");
+    };
+  }, [tutorial?.activeStep?.key, tasks]);
 
   useEffect(() => {
     hydratedRef.current = false;
@@ -153,15 +187,14 @@ export function ShiftTaskChecklist({
     (task: ShiftTask) => {
       if (canMarkTaskComplete(task)) return false;
       toast({
-        title: "Evidence required",
-        description:
-          "Mandatory tasks need a photo, voice memo, or written note of at least 20 characters. Type your note in the task thread and press Enter, or use Mark task complete.",
+        title: translate("tasks.evidenceRequired"),
+        description: translate("tasks.evidenceRequiredHint"),
         variant: "destructive",
       });
       setExpandedNote(task.task_id);
       return true;
     },
-    [toast],
+    [toast, translate],
   );
 
   const persist = useCallback(
@@ -169,13 +202,14 @@ export function ShiftTaskChecklist({
       setLocalTasks(next);
       saveTasksLocally(shiftId, next);
       onTasksChange(next);
+      if (tutorialDemo) return;
       setBusy(true);
       try {
         await updateShiftTasks(shiftId, next);
       } catch (err) {
         toast({
-          title: "Could not save tasks",
-          description: (err as Error).message || "Please try again.",
+          title: translate("tasks.saveFailed"),
+          description: (err as Error).message || translate("toast.tryAgain"),
           variant: "destructive",
         });
         throw err;
@@ -183,7 +217,7 @@ export function ShiftTaskChecklist({
         setBusy(false);
       }
     },
-    [shiftId, onTasksChange, toast],
+    [shiftId, onTasksChange, toast, translate, tutorialDemo],
   );
 
   const toggleTaskComplete = async (taskId: string) => {
@@ -255,23 +289,23 @@ export function ShiftTaskChecklist({
   if (!sessionStyle) {
     return (
       <div className="space-y-3">
-        <div className="rounded-xl border border-dashed border-[#DCD4F2] bg-[#F7F4FF] px-3 py-2.5">
+        <div className="rounded-xl border border-dashed border-cc-border bg-cc-soft px-3 py-2.5">
           <p className="flex items-center gap-2 text-[11px] font-black" style={{ color: PLUM }}>
             <MessageCircle size={13} />
-            Task list preview
+            {translate("tasks.previewTitle")}
           </p>
           <p className="mt-1 text-[11px] font-semibold" style={{ color: MUTED }}>
-            Start session to open task threads and capture updates.
+            {translate("tasks.previewHint")}
           </p>
         </div>
 
         {goalGroups.map((group) => (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white"
+            className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
-            <div className="flex w-full items-center gap-2 px-3 py-2.5 text-left" style={{ background: group.accent.soft }}>
+            <div className="flex w-full items-center gap-2 bg-cc-soft px-3 py-2.5 text-left">
               <span
                 className="grid h-7 w-7 shrink-0 place-items-center rounded-lg"
                 style={{ background: `${group.accent.main}18`, color: group.accent.main }}
@@ -280,7 +314,7 @@ export function ShiftTaskChecklist({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: group.accent.main }}>
-                  NDIS GOAL · {group.category}
+                  {translate("tasks.ndisGoal")} · {group.category}
                 </p>
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>
                   {group.title}
@@ -294,9 +328,9 @@ export function ShiftTaskChecklist({
               </span>
             </div>
 
-            <div className="space-y-2 border-t border-[#E5E7EB] bg-[#FCFBFF] p-2">
+            <div className="space-y-2 border-t border-cc-border bg-cc-bg p-2">
               {group.tasks.map((task) => (
-                <PreviewTaskRow key={task.task_id} task={task} />
+                <PreviewTaskRow key={task.task_id} task={task} translate={translate} />
               ))}
             </div>
           </div>
@@ -307,17 +341,17 @@ export function ShiftTaskChecklist({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-dashed border-[#DCD4F2] bg-[#F7F4FF] px-3 py-2.5">
+      <div className="rounded-xl border border-dashed border-cc-border bg-cc-soft px-3 py-2.5">
         <p className="flex items-center gap-2 text-[11px] font-black" style={{ color: PLUM }}>
           <MessageCircle size={13} />
-          Task completion with evidence tracking
+          {translate("tasks.trackingTitle")}
         </p>
         <p className="mt-1 text-[11px] font-semibold" style={{ color: MUTED }}>
-          Expand a task to add photo, voice, or notes. Mandatory tasks cannot be checked off until evidence is added.
+          {translate("tasks.trackingHint")}
         </p>
         {noEvidenceCount > 0 && (
           <p className="mt-1 text-[11px] font-bold text-amber-700">
-            {noEvidenceCount} task{noEvidenceCount === 1 ? "" : "s"} flagged for review at shift end
+            {translateParams("tasks.flaggedReview", { count: String(noEvidenceCount) })}
           </p>
         )}
       </div>
@@ -328,13 +362,12 @@ export function ShiftTaskChecklist({
         return (
           <div
             key={group.key}
-            className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white"
+            className="overflow-hidden rounded-xl border border-cc-border bg-cc-surface"
             style={{ borderLeftWidth: 4, borderLeftColor: group.accent.main }}
           >
             <button
               type="button"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
-              style={{ background: group.accent.soft }}
+              className="flex w-full items-center gap-2 bg-cc-soft px-3 py-2.5 text-left"
               onClick={() => setOpenGoals((prev) => ({ ...prev, [group.key]: !open }))}
             >
               <span
@@ -345,7 +378,7 @@ export function ShiftTaskChecklist({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[10px] font-black uppercase tracking-[0.16em]" style={{ color: group.accent.main }}>
-                  NDIS GOAL · {group.category}
+                  {translate("tasks.ndisGoal")} · {group.category}
                 </p>
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>
                   {group.title}
@@ -360,7 +393,7 @@ export function ShiftTaskChecklist({
               <ChevronDown size={16} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
             </button>
             {open && (
-              <div className="space-y-2 border-t border-[#E5E7EB] bg-[#FCFBFF] p-2">
+              <div className="space-y-2 border-t border-cc-border bg-cc-bg p-2">
                 <SessionTaskGroup
                   tasks={group.tasks}
                   expandedNote={expandedNote}
@@ -373,6 +406,9 @@ export function ShiftTaskChecklist({
                   markTaskComplete={markTaskComplete}
                   sessionId={sessionId}
                   participantName={participantName}
+                  translate={translate}
+                  translateParams={translateParams}
+                  tutorialDemo={tutorialDemo}
                 />
               </div>
             )}
@@ -383,16 +419,16 @@ export function ShiftTaskChecklist({
   );
 }
 
-function PreviewTaskRow({ task }: { task: ShiftTask }) {
+function PreviewTaskRow({ task, translate }: { task: ShiftTask; translate: (key: string) => string }) {
   const required = isMandatory(task);
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5">
+    <div className="rounded-xl border border-cc-border bg-cc-surface px-3 py-2.5">
       <div className="flex items-start gap-3">
         <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 border-[#D8D0EE] bg-white" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-bold" style={{ color: TEXT }}>{task.label}</p>
           <p className="mt-0.5 text-[11px] font-semibold" style={{ color: MUTED }}>
-            {required ? "Required" : "Optional"} · Start session to add updates
+            {required ? translate("tasks.required") : translate("tasks.optional")} · {translate("tasks.startSessionHint")}
           </p>
         </div>
         <ChevronRight size={16} className="shrink-0" style={{ color: MUTED }} />
@@ -411,10 +447,14 @@ function QuickNoteField({
   task,
   disabled,
   onSave,
+  translate,
+  translateParams,
 }: {
   task: ShiftTask;
   disabled?: boolean;
   onSave: (note: string) => void;
+  translate: (key: string) => string;
+  translateParams: (key: string, params: Record<string, string>) => string;
 }) {
   const [draft, setDraft] = useState(task.context_note ?? "");
   const [open, setOpen] = useState(false);
@@ -433,7 +473,7 @@ function QuickNoteField({
         className="text-[11px] font-bold text-[#6D4BDA] underline-offset-2 hover:underline"
         onClick={() => setOpen(true)}
       >
-        [Add Note]
+        [{translate("tasks.addNote")}]
       </button>
     );
   }
@@ -462,7 +502,7 @@ function QuickNoteField({
         maxLength={QUICK_NOTE_MAX}
         rows={2}
         value={draft}
-        placeholder="What was done? Any observations?"
+        placeholder={translate("tasks.contextPlaceholder")}
         className="w-full resize-none rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs"
         onChange={(e) => setDraft(e.target.value.slice(0, QUICK_NOTE_MAX))}
         onBlur={() => {
@@ -481,7 +521,10 @@ function QuickNoteField({
         }
       />
       <p className="text-[10px] font-semibold" style={{ color: MUTED }}>
-        {draft.length}/{QUICK_NOTE_MAX} · Enter to save · Ctrl+Enter for new line · Context only, not evidence
+        {translateParams("tasks.noteCharCount", {
+          current: String(draft.length),
+          max: String(QUICK_NOTE_MAX),
+        })}
       </p>
     </div>
   );
@@ -499,6 +542,9 @@ function SessionTaskGroup({
   markTaskComplete,
   sessionId,
   participantName,
+  translate,
+  translateParams,
+  tutorialDemo,
 }: {
   tasks: ShiftTask[];
   expandedNote: string | null;
@@ -511,8 +557,13 @@ function SessionTaskGroup({
   markTaskComplete: (taskId: string, completed?: boolean, merge?: Partial<ShiftTask>) => void;
   sessionId?: string | null;
   participantName?: string;
+  translate: (key: string) => string;
+  translateParams: (key: string, params: Record<string, string>) => string;
+  tutorialDemo?: boolean;
 }) {
   const [evidenceReady, setEvidenceReady] = useState<Record<string, boolean>>({});
+
+  const taskStateLabel = (state: TaskVisualState) => translate(TASK_STATE_KEYS[state]);
 
   return (
     <div className="space-y-2">
@@ -548,6 +599,7 @@ function SessionTaskGroup({
                   task={task}
                   disabled={disabled}
                   onToggle={() => void toggleTaskComplete(task.task_id)}
+                  translateParams={translateParams}
                 />
                 <button
                   type="button"
@@ -556,10 +608,10 @@ function SessionTaskGroup({
                 >
                   <p className="text-sm font-black" style={{ color: TEXT }}>{task.label}</p>
                   <p className="mt-0.5 text-[11px] font-semibold" style={{ color: stateStyle.text }}>
-                    {stateStyle.label}
+                    {taskStateLabel(visualState)}
                     {withEvidence
-                      ? ` · ${updates || 1} update${updates === 1 ? "" : "s"} · With evidence ✓`
-                      : " · No evidence · Tap to add photo or voice"}
+                      ? ` · ${translateParams("tasks.updates", { count: String(updates || 1) })} · ${translate("tasks.withEvidenceCheck")}`
+                      : ` · ${translate("tasks.noEvidence")} · ${translate("tasks.tapAddEvidence")}`}
                   </p>
                   {task.context_note && (
                     <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
@@ -580,7 +632,7 @@ function SessionTaskGroup({
                   className="mt-2 w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-left text-[11px] font-bold text-amber-800"
                   onClick={() => setExpandedNote(task.task_id)}
                 >
-                  Add evidence
+                  {translate("tasks.addEvidence")}
                 </button>
               )}
             </div>
@@ -597,7 +649,7 @@ function SessionTaskGroup({
             )}
             style={{
               borderColor: stateStyle.border,
-              background: task.completed ? "#F8FAFC" : stateStyle.bg,
+              background: task.completed ? "var(--cc-bg)" : stateStyle.bg,
             }}
           >
             <div className="flex w-full items-center gap-1 p-3">
@@ -608,6 +660,7 @@ function SessionTaskGroup({
                 task={task}
                 disabled={disabled}
                 onToggle={() => void toggleTaskComplete(task.task_id)}
+                translateParams={translateParams}
               />
               <button
                 type="button"
@@ -620,12 +673,12 @@ function SessionTaskGroup({
                     {task.label}
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold" style={{ color: stateStyle.text }}>
-                    {required ? "Mandatory · " : "Optional · "}
-                    {stateStyle.label}
-                    {task.completed && withoutEvidence && " · No evidence"}
-                    {task.completed && withEvidence && " · With evidence"}
-                    {!task.completed && needsEvidence && " · Add photo, voice, or note (20+ chars)"}
-                    {!task.completed && readyToComplete && " · Ready to complete"}
+                    {required ? `${translate("tasks.mandatoryLabel")} · ` : `${translate("tasks.optional")} · `}
+                    {taskStateLabel(visualState)}
+                    {task.completed && withoutEvidence && ` · ${translate("tasks.noEvidence")}`}
+                    {task.completed && withEvidence && ` · ${translate("tasks.withEvidence")}`}
+                    {!task.completed && needsEvidence && ` · ${translate("tasks.needsEvidenceHint")}`}
+                    {!task.completed && readyToComplete && ` · ${translate("tasks.readyToComplete")}`}
                   </p>
                   {task.context_note && !panelOpen && (
                     <p className="mt-1 text-[11px] font-medium italic" style={{ color: MUTED }}>
@@ -648,35 +701,40 @@ function SessionTaskGroup({
             </div>
 
             {!panelOpen && (
-              <div className="border-t border-[#ECE6FB] px-3 pb-3">
+              <div className="border-t border-cc-border px-3 pb-3">
                 <QuickNoteField
                   task={task}
                   disabled={disabled}
                   onSave={(note) => void saveQuickNote(task.task_id, note)}
+                  translate={translate}
+                  translateParams={translateParams}
                 />
               </div>
             )}
 
             {panelOpen && sessionId && (
-              <ShiftTaskEvidencePanel
-                task={task}
-                sessionId={sessionId}
-                participantName={participantName}
-                disabled={disabled}
-                variant="thread"
-                onTaskPatch={(patch) => saveEvidence(task.task_id, patch)}
-                onStrongEvidence={(patch) => saveStrongEvidence(task.task_id, patch)}
-                onMarkComplete={(merge) => markTaskComplete(task.task_id, true, merge)}
-                onReadyChange={(ready) => {
-                  setEvidenceReady((prev) =>
-                    prev[task.task_id] === ready ? prev : { ...prev, [task.task_id]: ready },
-                  );
-                }}
-              />
+              <div data-tutorial="task-evidence-panel-open">
+                <ShiftTaskEvidencePanel
+                  task={task}
+                  sessionId={sessionId}
+                  participantName={participantName}
+                  disabled={disabled}
+                  variant="thread"
+                  tutorialDemo={tutorialDemo}
+                  onTaskPatch={(patch) => saveEvidence(task.task_id, patch)}
+                  onStrongEvidence={(patch) => saveStrongEvidence(task.task_id, patch)}
+                  onMarkComplete={(merge) => markTaskComplete(task.task_id, true, merge)}
+                  onReadyChange={(ready) => {
+                    setEvidenceReady((prev) =>
+                      prev[task.task_id] === ready ? prev : { ...prev, [task.task_id]: ready },
+                    );
+                  }}
+                />
+              </div>
             )}
             {panelOpen && !sessionId && (
-              <div className="border-t border-[#E5E7EB] bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
-                Start a session to capture photo, voice, and written evidence for this task.
+              <div className="border-t border-cc-border bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-700">
+                {translate("tasks.startSessionEvidence")}
               </div>
             )}
           </div>

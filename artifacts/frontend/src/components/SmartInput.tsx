@@ -10,6 +10,7 @@ import React, {
 import { cn } from "@/lib/utils";
 import { Mic, MicOff, Loader2, Globe } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
@@ -244,6 +245,7 @@ interface ModePillsProps {
 }
 
 function ModePills({ st, onMode }: ModePillsProps) {
+  const { translate } = useAccessibility();
   const { isListening, isProcessing, hasDictated, detectedLanguage, mode, rawTranscript } = st;
 
   if (!isListening && !hasDictated && !rawTranscript.trim()) return null;
@@ -253,7 +255,7 @@ function ModePills({ st, onMode }: ModePillsProps) {
       {isListening ? (
         <span className="flex items-center gap-1.5 text-xs text-red-500 font-medium animate-pulse">
           <span className="h-2 w-2 rounded-full bg-red-500 inline-block animate-pulse" />
-          Listening…
+          {translate("clinical.smartInput.listening")}
         </span>
       ) : (
         <>
@@ -267,9 +269,9 @@ function ModePills({ st, onMode }: ModePillsProps) {
             const isActive = mode === m;
             const isBusy = isProcessing && isActive;
             const label =
-              m === "raw" ? "Raw" :
-              m === "translate" ? (isBusy ? "Translating…" : "Translate") :
-              isBusy ? "Rewriting…" : "Clinical";
+              m === "raw" ? translate("clinical.smartInput.raw") :
+              m === "translate" ? (isBusy ? translate("clinical.smartInput.translating") : translate("clinical.smartInput.translate")) :
+              isBusy ? translate("clinical.smartInput.rewriting") : translate("clinical.smartInput.clinical");
             return (
               <button
                 key={m}
@@ -306,11 +308,12 @@ interface MicButtonProps {
 }
 
 function MicButton({ isListening, isProcessing, disabled, onClick, className }: MicButtonProps) {
+  const { translate } = useAccessibility();
   if (!speechSupported()) return null;
   return (
     <button
       type="button"
-      aria-label={isListening ? "Stop recording" : "Start voice dictation"}
+      aria-label={isListening ? translate("clinical.smartInput.stopRecording") : translate("clinical.smartInput.startDictation")}
       disabled={disabled || isProcessing}
       onClick={onClick}
       className={cn(

@@ -24,6 +24,7 @@ import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentMo
 import { DndScheduleView }        from "@/components/coordinator/DndScheduleView";
 import { BulkShiftModal }         from "@/components/coordinator/BulkShiftModal";
 import { WorkerAvailabilityPanel } from "@/components/coordinator/WorkerAvailabilityPanel";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const PLUM   = "var(--cc-plum)";
 const CORAL  = "var(--cc-coral)";
@@ -34,16 +35,17 @@ const SOFT   = "var(--cc-soft)";
 
 type ViewMode = "month" | "week" | "schedule" | "list";
 
-const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
-  scheduled:   { label: "Scheduled", bg: "#EDE9FF", color: "#3730A3" },
-  in_progress: { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
-  clocked_in:  { label: "Active",    bg: "#DBEAFE", color: "#1D4ED8" },
-  completed:   { label: "Completed", bg: "#DCFCE7", color: "#166534" },
-  cancelled:   { label: "Cancelled", bg: "#F1F5F9", color: "#64748B" },
+const STATUS_CFG: Record<string, { labelKey: string; bg: string; color: string }> = {
+  scheduled:   { labelKey: "coordinator.rostering.status.scheduled", bg: "#EDE9FF", color: "#3730A3" },
+  in_progress: { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
+  clocked_in:  { labelKey: "coordinator.rostering.status.active",    bg: "#DBEAFE", color: "#1D4ED8" },
+  completed:   { labelKey: "coordinator.rostering.status.completed", bg: "#DCFCE7", color: "#166534" },
+  cancelled:   { labelKey: "coordinator.rostering.status.cancelled", bg: "#F1F5F9", color: "#64748B" },
 };
 
-function statusCfg(s?: string | null) {
-  return STATUS_CFG[s ?? ""] ?? STATUS_CFG.scheduled;
+function statusCfg(s: string | null | undefined, translate: (key: string) => string) {
+  const cfg = STATUS_CFG[s ?? ""] ?? STATUS_CFG.scheduled;
+  return { ...cfg, label: translate(cfg.labelKey) };
 }
 
 function parseStart(s: CoordinatorShiftRecord): Date | null {
@@ -52,13 +54,17 @@ function parseStart(s: CoordinatorShiftRecord): Date | null {
 }
 
 function ShiftChip({ shift }: { shift: CoordinatorShiftRecord }) {
-  const cfg = statusCfg(shift.status);
+  const { translate, translateParams } = useAccessibility();
+  const cfg = statusCfg(shift.status, translate);
   const d   = parseStart(shift);
+  const participant = shift.participant_name || translate("common.participant");
+  const worker = shift.worker_name || translate("common.worker");
+  const timeSuffix = d ? ` @ ${format(d, "HH:mm")}` : "";
   return (
     <div
       className="truncate rounded px-1.5 py-0.5 text-[10px] font-bold leading-tight cursor-default"
       style={{ background: cfg.bg, color: cfg.color }}
-      title={`${shift.participant_name || "Participant"} — ${shift.worker_name || "Worker"}${d ? ` @ ${format(d, "HH:mm")}` : ""}`}
+      title={translateParams("coordinator.rostering.shiftChipTitle", { participant, worker, time: timeSuffix })}
     >
       {shift.participant_name?.split(" ")[0] || "—"}
       {d ? ` ${format(d, "HH:mm")}` : ""}
@@ -74,6 +80,16 @@ function MonthGrid({
   selectedDay: Date;
   onSelectDay: (d: Date) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
+  const dayLabels = [
+    translate("coordinator.rostering.day.mon"),
+    translate("coordinator.rostering.day.tue"),
+    translate("coordinator.rostering.day.wed"),
+    translate("coordinator.rostering.day.thu"),
+    translate("coordinator.rostering.day.fri"),
+    translate("coordinator.rostering.day.sat"),
+    translate("coordinator.rostering.day.sun"),
+  ];
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const gridEnd   = endOfWeek(endOfMonth(month),     { weekStartsOn: 1 });
   const days      = eachDayOfInterval({ start: gridStart, end: gridEnd });
@@ -92,7 +108,7 @@ function MonthGrid({
   return (
     <div className="rounded-2xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7" style={{ borderBottom: `1px solid ${BORDER}`, background: SOFT }}>
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+        {dayLabels.map((d) => (
           <div key={d} className="py-2.5 text-center text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
             {d}
           </div>
@@ -139,7 +155,7 @@ function MonthGrid({
                 {dayShifts.slice(0, 2).map((s) => <ShiftChip key={s.id} shift={s} />)}
                 {dayShifts.length > 2 && (
                   <p className="pl-1 text-[10px] font-bold" style={{ color: PLUM }}>
-                    +{dayShifts.length - 2} more
+                    {translateParams("coordinator.rostering.moreShifts", { count: String(dayShifts.length - 2) })}
                   </p>
                 )}
               </div>
@@ -158,6 +174,7 @@ function WeekGrid({
   shifts: CoordinatorShiftRecord[];
   workers: WorkerStats[];
 }) {
+  const { translate, translateParams } = useAccessibility();
   const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
   const byWorkerDay = useMemo(() => {
@@ -185,7 +202,7 @@ function WeekGrid({
               className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[160px]"
               style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
             >
-              Worker
+              {translate("coordinator.rostering.worker")}
             </th>
             {days.map((d) => (
               <th
@@ -223,7 +240,7 @@ function WeekGrid({
                       <p className="text-[10px]" style={{
                         color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
                       }}>
-                        {worker.avg_compliance.toFixed(0)}% compliance
+                        {translateParams("coordinator.rostering.compliance", { percent: worker.avg_compliance.toFixed(0) })}
                       </p>
                     )}
                   </div>
@@ -240,7 +257,7 @@ function WeekGrid({
                   >
                     <div className="space-y-1">
                       {dayShifts.map((s) => {
-                        const cfg   = statusCfg(s.status);
+                        const cfg   = statusCfg(s.status, translate);
                         const start = parseStart(s);
                         const end   = s.scheduled_end ? parseISO(s.scheduled_end) : null;
                         return (
@@ -266,7 +283,7 @@ function WeekGrid({
           {rows.length === 0 && (
             <tr>
               <td colSpan={8} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
-                No shifts scheduled for this week.
+                {translate("coordinator.rostering.noShiftsWeek")}
               </td>
             </tr>
           )}
@@ -284,6 +301,7 @@ function DayPanel({
   workers: WorkerStats[];
   onAssign: () => void;
 }) {
+  const { translate } = useAccessibility();
   const dayShifts = useMemo(
     () =>
       shifts
@@ -301,7 +319,7 @@ function DayPanel({
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-full px-2.5 py-1 text-[11px] font-black" style={{ background: SOFT, color: PLUM }}>
-            {dayShifts.length} {dayShifts.length === 1 ? "shift" : "shifts"}
+            {dayShifts.length} {dayShifts.length === 1 ? translate("coordinator.rostering.shift") : translate("coordinator.rostering.shifts")}
           </span>
           <Button
             size="sm"
@@ -309,7 +327,7 @@ function DayPanel({
             className="flex items-center gap-1.5 rounded-full text-white text-xs"
             style={{ background: PLUM }}
           >
-            <Plus size={12} /> Assign
+            <Plus size={12} /> {translate("coordinator.rostering.assign")}
           </Button>
         </div>
       </div>
@@ -317,12 +335,12 @@ function DayPanel({
         {dayShifts.length === 0 ? (
           <div className="py-14 text-center">
             <CalendarDays className="mx-auto mb-2" size={22} style={{ color: MUTED }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>No shifts scheduled</p>
-            <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Click Assign to add a shift for this date.</p>
+            <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("coordinator.rostering.noShiftsDay")}</p>
+            <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{translate("coordinator.rostering.noShiftsDayHint")}</p>
           </div>
         ) : (
           dayShifts.map((shift) => {
-            const cfg   = statusCfg(shift.status);
+            const cfg   = statusCfg(shift.status, translate);
             const start = parseStart(shift);
             const end   = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
             const durMs = start && end ? end.getTime() - start.getTime() : null;
@@ -340,10 +358,10 @@ function DayPanel({
                     {durH ? ` · ${durH}h` : ""}
                   </span>
                 </div>
-                <p className="text-[14px] font-black" style={{ color: TEXT }}>{shift.participant_name || "Participant"}</p>
+                <p className="text-[14px] font-black" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2">
                   <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
-                    <User2 size={11} /> {shift.worker_name || workers.find((w) => w.id === shift.worker_id)?.full_name || "Worker"}
+                    <User2 size={11} /> {shift.worker_name || workers.find((w) => w.id === shift.worker_id)?.full_name || translate("common.worker")}
                   </span>
                   {shift.shift_type && (
                     <span className="rounded px-1.5 py-0.5 text-[9px] font-black uppercase" style={{ background: SOFT, color: MUTED }}>
@@ -371,6 +389,7 @@ function KpiCard({ label, value, sub, color = TEXT }: { label: string; value: st
 }
 
 export default function CoordinatorRosteringPage() {
+  const { translate, translateParams } = useAccessibility();
   const [viewMode,     setViewMode]     = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekStart,    setWeekStart]    = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -443,7 +462,7 @@ export default function CoordinatorRosteringPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="hidden" style={{ color: MUTED }}>Support Coordinator</p>
-          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Rostering & Scheduling</h1>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>{translate("coordinator.rostering.title")}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -452,14 +471,14 @@ export default function CoordinatorRosteringPage() {
             className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black"
             style={{ borderColor: BORDER, color: MUTED }}
           >
-            <LayoutGrid size={14} /> Recurring
+            <LayoutGrid size={14} /> {translate("coordinator.rostering.recurring")}
           </Button>
           <Button
             onClick={() => setAssignOpen(true)}
             className="inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-black text-white"
             style={{ background: PLUM }}
           >
-            <Plus size={15} /> Create Shift
+            <Plus size={15} /> {translate("coordinator.rostering.createShift")}
           </Button>
         </div>
       </div>
@@ -472,26 +491,26 @@ export default function CoordinatorRosteringPage() {
         <div className="flex items-center gap-2">
           <CalendarDays size={14} style={{ color: MUTED }} />
           <span className="text-sm font-black" style={{ color: TEXT }}>{shiftsToday.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>today</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.today")}</span>
         </div>
         <div className="h-4 w-px" style={{ background: BORDER }} />
         <div className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
           <span className="text-sm font-black text-blue-700">{activeShifts.length}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>active now</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.activeNow")}</span>
         </div>
         <div className="h-4 w-px" style={{ background: BORDER }} />
         <div className="flex items-center gap-2">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: PLUM }} />
           <span className="text-sm font-black" style={{ color: PLUM }}>{scheduledCount}</span>
-          <span className="text-sm font-medium" style={{ color: MUTED }}>upcoming</span>
+          <span className="text-sm font-medium" style={{ color: MUTED }}>{translate("coordinator.rostering.upcoming")}</span>
         </div>
         <div className="h-4 w-px" style={{ background: BORDER }} />
         <div className="flex items-center gap-2">
           <Users2 size={14} style={{ color: MUTED }} />
           <span className="text-sm font-black" style={{ color: TEXT }}>{workers.length}</span>
           <span className="text-sm font-medium" style={{ color: MUTED }}>
-            {workersQuery.isLoading ? "loading…" : "team members"}
+            {workersQuery.isLoading ? translate("coordinator.rostering.loadingTeam") : translate("coordinator.rostering.teamMembers")}
           </span>
         </div>
       </div>
@@ -506,7 +525,7 @@ export default function CoordinatorRosteringPage() {
               className="px-4 py-2 text-[12px] font-bold capitalize transition-colors"
               style={{ background: viewMode === mode ? PLUM : "var(--cc-bg)", color: viewMode === mode ? "white" : MUTED }}
             >
-              {mode}
+              {translate(`coordinator.rostering.view.${mode}`)}
             </button>
           ))}
         </div>
@@ -514,7 +533,7 @@ export default function CoordinatorRosteringPage() {
         {viewMode !== "list" && viewMode !== "schedule" && (
           <div className="flex items-center gap-2">
             <button
-              title="Previous period"
+              title={translate("coordinator.rostering.previousPeriod")}
               onClick={handlePrev}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
@@ -523,7 +542,7 @@ export default function CoordinatorRosteringPage() {
             </button>
             <span className="min-w-[160px] text-center text-[13px] font-black" style={{ color: TEXT }}>{periodLabel}</span>
             <button
-              title="Next period"
+              title={translate("coordinator.rostering.nextPeriod")}
               onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
@@ -535,7 +554,7 @@ export default function CoordinatorRosteringPage() {
               className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER, color: PLUM }}
             >
-              Today
+              {translate("coordinator.rostering.todayBtn")}
             </button>
           </div>
         )}
@@ -543,24 +562,24 @@ export default function CoordinatorRosteringPage() {
         <div className="ml-auto flex flex-wrap gap-2">
           <Select value={workerFilter} onValueChange={setWorkerFilter}>
             <SelectTrigger className="h-8 flex-1 sm:w-[170px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
-              <SelectValue placeholder="All workers" />
+              <SelectValue placeholder={translate("coordinator.rostering.allWorkers")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All workers</SelectItem>
+              <SelectItem value="all">{translate("coordinator.rostering.allWorkers")}</SelectItem>
               {workers.map((w) => <SelectItem key={w.id} value={w.id}>{w.full_name}</SelectItem>)}
             </SelectContent>
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="h-8 flex-1 sm:w-[145px] rounded-lg text-[12px]" style={{ borderColor: BORDER }}>
-              <SelectValue placeholder="All statuses" />
+              <SelectValue placeholder={translate("coordinator.rostering.allStatuses")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="scheduled">Scheduled</SelectItem>
-              <SelectItem value="in_progress">Active</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="all">{translate("coordinator.rostering.allStatuses")}</SelectItem>
+              <SelectItem value="scheduled">{translate("coordinator.rostering.status.scheduled")}</SelectItem>
+              <SelectItem value="in_progress">{translate("coordinator.rostering.status.active")}</SelectItem>
+              <SelectItem value="completed">{translate("coordinator.rostering.status.completed")}</SelectItem>
+              <SelectItem value="cancelled">{translate("coordinator.rostering.status.cancelled")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -571,7 +590,7 @@ export default function CoordinatorRosteringPage() {
       {shiftsQuery.error && (
         <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           <AlertCircle size={15} className="shrink-0" />
-          Failed to load roster data. Please refresh or try again.
+          {translate("coordinator.rostering.loadError")}
         </div>
       )}
 
@@ -592,18 +611,18 @@ export default function CoordinatorRosteringPage() {
             className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest"
             style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, background: SOFT }}
           >
-            <span>Participant</span><span className="hidden sm:inline">Worker</span><span className="hidden md:inline">Date & Time</span><span className="hidden md:inline">Shift Type</span><span className="hidden sm:inline">Status</span>
+            <span>{translate("common.participant")}</span><span className="hidden sm:inline">{translate("common.worker")}</span><span className="hidden md:inline">{translate("coordinator.rostering.list.dateTime")}</span><span className="hidden md:inline">{translate("coordinator.rostering.list.shiftType")}</span><span className="hidden sm:inline">{translate("coordinator.rostering.list.status")}</span>
           </div>
           <div>
             {shifts.length === 0 && !shiftsQuery.isLoading && (
               <div className="py-16 text-center">
                 <Users2 className="mx-auto mb-2" size={24} style={{ color: MUTED }} />
-                <p className="text-[13px] font-bold" style={{ color: TEXT }}>No shifts match the current filters.</p>
-                <p className="mt-1 text-[11px]" style={{ color: MUTED }}>Try adjusting the worker or status filter.</p>
+                <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("coordinator.rostering.list.noMatch")}</p>
+                <p className="mt-1 text-[11px]" style={{ color: MUTED }}>{translate("coordinator.rostering.list.noMatchHint")}</p>
               </div>
             )}
             {shifts.map((shift) => {
-              const cfg   = statusCfg(shift.status);
+              const cfg   = statusCfg(shift.status, translate);
               const start = parseStart(shift);
               const end   = shift.scheduled_end ? parseISO(shift.scheduled_end) : null;
               return (
@@ -612,12 +631,12 @@ export default function CoordinatorRosteringPage() {
                   className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[2fr_2fr_1.4fr_1.2fr_1fr] gap-2 items-center px-4 py-3 text-sm hover:bg-[#F8F6FE] transition-colors"
                   style={{ borderBottom: `1px solid ${BORDER}` }}
                 >
-                  <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || "Participant"}</p>
+                  <p className="truncate font-bold" style={{ color: TEXT }}>{shift.participant_name || translate("common.participant")}</p>
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ background: PLUM }}>
                       {(shift.worker_name || "W").split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                     </div>
-                    <p className="truncate text-[12px]" style={{ color: MUTED }}>{shift.worker_name || "Worker"}</p>
+                    <p className="truncate text-[12px]" style={{ color: MUTED }}>{shift.worker_name || translate("common.worker")}</p>
                   </div>
                   <div>
                     {start ? (
@@ -653,7 +672,7 @@ export default function CoordinatorRosteringPage() {
           {/* Period nav for schedule view */}
           <div className="flex items-center gap-2 rounded-2xl border bg-white px-4 py-3" style={{ borderColor: BORDER }}>
             <button
-              title="Previous week"
+              title={translate("coordinator.rostering.previousWeek")}
               onClick={handlePrev}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
@@ -663,7 +682,7 @@ export default function CoordinatorRosteringPage() {
             <span>
               {format(weekStart, "d MMM")} – {format(addDays(weekStart, 6), "d MMM yyyy")}
             </span>
-            <button title="Next week" onClick={handleNext}
+            <button title={translate("coordinator.rostering.nextWeek")} onClick={handleNext}
               className="flex h-8 w-8 items-center justify-center rounded-lg border transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER }}
             >
@@ -674,10 +693,10 @@ export default function CoordinatorRosteringPage() {
               className="rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#F8F6FE]"
               style={{ borderColor: BORDER, color: PLUM }}
             >
-              Today
+              {translate("coordinator.rostering.todayBtn")}
             </button>
             <div className="ml-auto text-[11px] font-medium" style={{ color: MUTED }}>
-              Drag unassigned shifts onto worker rows to assign
+              {translate("coordinator.rostering.dragHint")}
             </div>
           </div>
 
@@ -699,7 +718,7 @@ export default function CoordinatorRosteringPage() {
           {/* Worker settings list */}
           <div className="rounded-2xl border bg-white p-4" style={{ borderColor: BORDER }}>
             <p className="mb-3 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-              Worker Availability & Skills
+              {translate("coordinator.rostering.workerAvailability")}
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               {workers.map((w) => (
@@ -721,7 +740,7 @@ export default function CoordinatorRosteringPage() {
                   <div className="min-w-0">
                     <p className="truncate text-[11px] font-bold" style={{ color: PLUM }}>{w.full_name.split(" ")[0]}</p>
                     <p className="text-[10px] flex items-center gap-1" style={{ color: MUTED }}>
-                      <Settings2 size={9} /> Settings
+                      <Settings2 size={9} /> {translate("common.settings")}
                     </p>
                   </div>
                 </button>

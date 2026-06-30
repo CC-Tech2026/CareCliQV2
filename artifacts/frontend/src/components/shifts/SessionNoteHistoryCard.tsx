@@ -2,6 +2,7 @@ import { Camera, Mic, Paperclip, Trash2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import type { SessionNoteRecord, SessionNoteType } from "@/services/sessionNotesService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const ATTACHMENT_RE = /^\[Attachment(?:\s+selected)?:\s*([^\]]+)\]$/i;
 
@@ -56,6 +57,7 @@ type Props = {
 };
 
 export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const type = inferNoteType(note);
   const Icon = typeIcon(type);
   const ts = noteTimestamp(note);
@@ -96,19 +98,19 @@ export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
                 type="button"
                 className="text-xs font-bold underline-offset-2 hover:underline"
                 style={{ color: PLUM }}
-                onClick={() => onViewImage(preview, fileName || "Image")}
+                onClick={() => onViewImage(preview, fileName || translate("shift.session.image"))}
               >
-                View image
+                {translate("shift.session.viewImage")}
               </button>
             )}
             {fileName && (
               <p className="font-medium">
-                {type === "photo" ? "Image" : "Attached file"}: {fileName}
+                {type === "photo" ? translate("shift.session.image") : translate("shift.session.attachedFile")}: {fileName}
               </p>
             )}
             {ext && (
               <p className="text-xs font-semibold" style={{ color: MUTED }}>
-                Extension: .{ext}
+                {translateParams("shift.session.extension", { ext })}
               </p>
             )}
             {!fileName && !isImage && (
@@ -120,7 +122,7 @@ export function SessionNoteHistoryCard({ note, onDelete, onViewImage }: Props) {
       <button
         type="button"
         className="shrink-0 self-start rounded p-1.5 text-red-600 transition hover:bg-red-50"
-        aria-label="Delete note"
+        aria-label={translate("shift.session.noteDelete")}
         onClick={onDelete}
       >
         <Trash2 size={15} />

@@ -1,6 +1,7 @@
 import { Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Props) {
+  const { translate } = useAccessibility();
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = String(remainingSeconds % 60).padStart(2, "0");
   return (
@@ -17,19 +19,19 @@ export function IdleTimeoutModal({ open, remainingSeconds, onStaySignedIn }: Pro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-[#111827]">
             <Clock size={18} className="text-[#BE185D]" />
-            You'll be logged out in 2 minutes
+            {translate("auth.idle.title")}
           </DialogTitle>
           <DialogDescription>
-            You have been inactive. CareCliQ will sign you out to protect participant records.
+            {translate("auth.idle.description")}
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-2xl bg-[#F8F8FE] px-5 py-4 text-center">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6B7280]">Signing out in</p>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#6B7280]">{translate("auth.idle.countdown")}</p>
           <p className="mt-1 text-4xl font-black text-[#3730A3]">{minutes}:{seconds}</p>
         </div>
         <DialogFooter>
           <Button onClick={onStaySignedIn} className="w-full rounded-xl">
-            Stay logged in
+            {translate("auth.idle.staySignedIn")}
           </Button>
         </DialogFooter>
       </DialogContent>

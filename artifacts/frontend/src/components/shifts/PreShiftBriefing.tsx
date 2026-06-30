@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import type { WorkerShift } from "@/services/shiftService";
 import { formatActiveGoalLabel } from "@/services/shiftService";
 import { MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   shift: WorkerShift;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
+  const { translate } = useAccessibility();
   const hasContent =
     shift.coordinator_notes ||
     shift.allergies ||
@@ -28,7 +30,7 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <ClipboardList size={16} style={{ color: PLUM }} />
-          Pre-Shift Briefing
+          {translate("shift.briefing")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
@@ -36,24 +38,24 @@ export function PreShiftBriefing({ shift, open = true, onToggle }: Props) {
       {open && (
         <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: "var(--cc-border)" }}>
           {shift.coordinator_notes && (
-            <BriefBlock icon={ClipboardList} title="Coordinator Note" tone="amber">
+            <BriefBlock icon={ClipboardList} title={translate("shift.briefing.coordinatorNote")} tone="amber">
               {shift.coordinator_notes}
             </BriefBlock>
           )}
           {shift.allergies && (
-            <BriefBlock icon={Pill} title="Allergies" tone="rose">
+            <BriefBlock icon={Pill} title={translate("shift.briefing.allergies")} tone="rose">
               {shift.allergies}
             </BriefBlock>
           )}
           {shift.health_alerts && shift.health_alerts.length > 0 && (
-            <BriefBlock icon={ShieldAlert} title="Health Alerts" tone="yellow">
+            <BriefBlock icon={ShieldAlert} title={translate("shift.briefing.healthAlerts")} tone="yellow">
               {shift.health_alerts.map((a) => a.title || a.detail).join(" ")}
             </BriefBlock>
           )}
           {shift.active_goals && shift.active_goals.length > 0 && (
             <div className="rounded-xl px-3 py-3" style={{ background: SOFT }}>
               <p className="mb-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-                <Target size={12} /> Active Goals
+                <Target size={12} /> {translate("shift.briefing.activeGoals")}
               </p>
               <ul className="space-y-2">
                 {shift.active_goals.map((goal, i) => (

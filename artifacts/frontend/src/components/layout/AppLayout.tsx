@@ -2,13 +2,13 @@ import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import {
   Menu, X, ChevronLeft, ChevronRight,
-  LayoutDashboard, Users, UserRound, CalendarDays,
+  LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search, Car,
+  Sun, Moon, Search, Car, Accessibility,
 } from "lucide-react";
-import { getStoredTheme, applyTheme, type Theme } from "@/lib/theme";
+import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
 import { WorkerNotificationBell, WorkerNotificationPanel } from "@/components/worker/WorkerNotificationPanel";
 import { NotificationBannerStack } from "@/components/worker/NotificationBannerStack";
@@ -19,6 +19,13 @@ import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
+import {
+  bottomNavLabelForHref,
+  groupLabelForName,
+  navLabelForHref,
+  pageLabelForPath,
+} from "@/lib/i18n/nav-labels";
 
 // ── Design tokens (CSS vars — dark mode ready) ────────────────────────────────
 const PLUM   = "var(--cc-plum)";
@@ -78,6 +85,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/worker/profile",  label: "My Profile", icon: UserRound   },
         { href: "/worker/security", label: "Security",   icon: LockKeyhole },
+        { href: "/accessibility",   label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -86,10 +94,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "My Work",
       items: [
-        { href: "/my-shifts",  label: "My Shifts",  icon: CalendarDays  },
-        { href: "/calendar",   label: "Schedule",   icon: CalendarDays  },
-        { href: "/my-clients", label: "My Clients", icon: UserRound     },
-        { href: "/tasks",      label: "Tasks",      icon: ClipboardList },
+        { href: "/my-shifts",         label: "My Shifts",         icon: Clock         },
+        { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
+        { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
+        { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
+        { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
       ],
     },
     {
@@ -119,6 +128,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       items: [
         { href: "/worker/profile",    label: "My Profile",      icon: UserRound   },
         { href: "/worker/security",   label: "Security",        icon: LockKeyhole },
+        { href: "/accessibility",     label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -146,6 +156,14 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/toolkit",     label: "Toolkit",     icon: Wrench     },
       ],
     },
+    {
+      group: "Account",
+      items: [
+        { href: "/worker/profile",  label: "My Profile",    icon: UserRound     },
+        { href: "/worker/security", label: "Security",      icon: LockKeyhole   },
+        { href: "/accessibility",   label: "Accessibility", icon: Accessibility },
+      ],
+    },
   ],
   managing_director: [
     { items: [{ href: "/hub", label: "Hub", icon: LayoutDashboard }] },
@@ -157,6 +175,12 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/md/compliance", label: "Compliance", icon: ShieldCheck  },
         { href: "/md/financial",  label: "Financial",  icon: DollarSign   },
         { href: "/md/onboarding", label: "Onboarding", icon: GraduationCap},
+      ],
+    },
+    {
+      group: "Account",
+      items: [
+        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -176,7 +200,7 @@ const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
   ],
   support_worker: [
     { href: "/dashboard",    label: "Dashboard",  icon: LayoutDashboard },
-    { href: "/my-shifts",    label: "My Shifts",  icon: CalendarDays    },
+    { href: "/my-shifts",    label: "My Shifts",  icon: Clock           },
     { href: "/my-clients",   label: "My Clients", icon: UserRound       },
     { href: "/tasks",        label: "Tasks",      icon: ClipboardList   },
     { href: "/my-compliance",label: "Compliance", icon: ShieldCheck     },
@@ -207,9 +231,9 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   ],
   support_worker: [
     { href: "/dashboard",    label: "Home",      icon: LayoutDashboard },
-    { href: "/my-shifts",    label: "Shifts",    icon: CalendarDays    },
+    { href: "/my-shifts",    label: "Shifts",    icon: Clock           },
     { href: "/my-clients",   label: "Clients",   icon: UserRound       },
-    { href: "/tasks",        label: "Tasks",     icon: ClipboardList   },
+    // { href: "/tasks",        label: "Tasks",     icon: ClipboardList   },
     { href: "/my-compliance",label: "Compliance",icon: ShieldCheck     },
   ],
   allied_health: [
@@ -228,54 +252,6 @@ const ROLE_BOTTOM_NAV: Record<NavRole, NavItem[]> = {
   ],
 };
 
-const ROUTE_LABELS: [string, string][] = [
-  ["/coordinator/rostering", "Rostering"],
-  ["/coordinator/live",      "Live Monitoring"],
-  ["/coordinator-goals",     "Goals & Planning"],
-  ["/session-new",           "New Shift"],
-  ["/session/",              "Shift"],
-  ["/sessions",              "Shifts"],
-  ["/audit-pack",            "Audit Pack"],
-  ["/incident-new",          "New Incident"],
-  ["/incident/",             "Incident"],
-  ["/incidents",             "Incidents"],
-  ["/compliance",            "Compliance"],
-  ["/my-compliance",         "My Compliance"],
-  ["/my-shifts",             "My Shifts"],
-  ["/my-clients",            "My Participants"],
-  ["/participants",          "Participants"],
-  ["/patients",              "Participants"],
-  ["/participant-new",       "New Participant"],
-  ["/participant-edit",      "Edit Participant"],
-  ["/credentials",           "Credentials"],
-  ["/billing",               "Invoices"],
-  ["/toolkit",               "Toolkit"],
-  ["/team",                  "Team"],
-  ["/tasks",                 "Tasks"],
-  ["/reports",               "Reports"],
-  ["/settings",              "Settings"],
-  ["/worker/profile",        "My Profile"],
-  ["/worker/security",       "Security"],
-  ["/worker/messages",       "Messages"],
-  ["/worker/notifications",  "Notifications"],
-  ["/hub",                   "Hub"],
-  ["/md/executive",          "Executive"],
-  ["/md/staff",              "Staff"],
-  ["/md/compliance",         "Compliance"],
-  ["/md/financial",          "Financial"],
-  ["/md/onboarding",         "Onboarding"],
-  ["/dashboard",             "Dashboard"],
-];
-
-function getPageLabel(location: string): string {
-  for (const [prefix, label] of ROUTE_LABELS) {
-    if (location === prefix || location.startsWith(prefix + "/") || (prefix.endsWith("/") && location.startsWith(prefix))) {
-      return label;
-    }
-  }
-  return "";
-}
-
 function isActive(location: string, href: string) {
   // /patients also matches the legacy /participants route — kept as an explicit
   // alias since it doesn't fit the plain prefix check below.
@@ -288,14 +264,17 @@ function getInitials(name: string) {
 }
 
 // ── Quick-jump search ─────────────────────────────────────────────────────────
-function GlobalSearch({ sections }: { sections: NavSection[] }) {
+function GlobalSearch({ sections, translate }: { sections: NavSection[]; translate: (key: string) => string }) {
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [, navigate] = useLocation();
   const allItems = sections.flatMap((s) => s.items);
 
   const results = query.trim().length > 0
-    ? allItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
+    ? allItems.filter((item) => {
+        const label = navLabelForHref(item.href, item.label, translate);
+        return label.toLowerCase().includes(query.toLowerCase());
+      }).slice(0, 6)
     : [];
 
   function handleSelect(href: string) {
@@ -321,7 +300,7 @@ function GlobalSearch({ sections }: { sections: NavSection[] }) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => { setFocused(false); setQuery(""); }, 160)}
-          placeholder="Quick jump…"
+          placeholder={translate("common.quickJump")}
           className="flex-1 bg-transparent text-[12px] outline-none min-w-0"
           style={{ color: TEXT }}
         />
@@ -347,7 +326,7 @@ function GlobalSearch({ sections }: { sections: NavSection[] }) {
                 style={{ color: TEXT }}
               >
                 <Icon size={14} strokeWidth={2} style={{ color: MUTED }} />
-                {item.label}
+                {navLabelForHref(item.href, item.label, translate)}
               </button>
             );
           })}
@@ -361,11 +340,13 @@ function GlobalSearch({ sections }: { sections: NavSection[] }) {
 function SidebarContents({
   location, collapsed, isDrawer,
   alertCount, displayName, displayRole, initials,
-  onNav, onLogout,
+  onNav, onLogout, translate, translateParams,
 }: {
   location: string; collapsed: boolean; isDrawer: boolean;
   alertCount: number; displayName: string; displayRole: string; initials: string;
   onNav?: () => void; onLogout: () => void;
+  translate: (key: string) => string;
+  translateParams: (key: string, params: Record<string, string>) => string;
 }) {
   const compact = !isDrawer && collapsed;
   const { user } = useAuth();
@@ -382,8 +363,8 @@ function SidebarContents({
         <Link
           href="/dashboard"
           onClick={onNav}
-          aria-label="CareCliQ — Go to Dashboard"
-          title="Home"
+          aria-label={translate("layout.aria.goToDashboard")}
+          title={translate("nav.home")}
           className={cn(
             "flex items-center rounded-xl transition-all hover:bg-[var(--cc-soft)] active:opacity-75",
             compact ? "h-10 w-10 justify-center" : "h-10 px-2 gap-2 w-full",
@@ -400,7 +381,7 @@ function SidebarContents({
             {section.group && !compact && (
               <p className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.14em] flex items-center gap-2" style={{ color: MUTED }}>
                 <span className="w-px h-3 rounded-full shrink-0" style={{ background: BORDER }} />
-                {section.group}
+                {groupLabelForName(section.group, translate)}
               </p>
             )}
             {section.group && compact && si > 0 && (
@@ -410,6 +391,7 @@ function SidebarContents({
               {section.items.map((item) => {
                 const active = isActive(location, item.href);
                 const Icon = item.icon;
+                const label = navLabelForHref(item.href, item.label, translate);
                 const isCompliance = item.href === "/compliance" || item.href === "/my-compliance" || item.href === "/md/compliance";
                 const isIncident   = item.href === "/incidents";
                 const hasAlert     = alertCount > 0 && isCompliance;
@@ -418,7 +400,7 @@ function SidebarContents({
                     key={item.href}
                     href={item.href}
                     onClick={onNav}
-                    title={compact ? item.label : undefined}
+                    title={compact ? label : undefined}
                     aria-current={active ? "page" : undefined}
                   >
                     <div
@@ -441,7 +423,7 @@ function SidebarContents({
                         strokeWidth={active ? 2.5 : isIncident ? 2.5 : 2}
                         style={{ color: active ? "#fff" : isIncident ? CORAL : MUTED }}
                       />
-                      {!compact && <span className="flex-1 truncate">{item.label}</span>}
+                      {!compact && <span className="flex-1 truncate">{label}</span>}
                       {!compact && hasAlert && (
                         <span
                           className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center"
@@ -460,7 +442,7 @@ function SidebarContents({
 
         {/* Settings */}
         <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <Link href="/settings" onClick={onNav} title={compact ? "Settings" : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
+          <Link href="/settings" onClick={onNav} title={compact ? translate("common.settings") : undefined} aria-current={isActive(location, "/settings") ? "page" : undefined}>
             <div
               className={cn(
                 "flex items-center rounded-xl text-[13px] transition-all cursor-pointer",
@@ -474,7 +456,7 @@ function SidebarContents({
             >
               <Settings size={18} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
                 style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
-              {!compact && <span>Settings</span>}
+              {!compact && <span>{translate("common.settings")}</span>}
             </div>
           </Link>
         </div>
@@ -493,7 +475,7 @@ function SidebarContents({
               }}
             >
               <AlertTriangle size={14} strokeWidth={2.5} />
-              <span>Report Incident</span>
+              <span>{translate("nav.reportIncident")}</span>
             </div>
           </Link>
         </div>
@@ -517,7 +499,9 @@ function SidebarContents({
                 background: alertCount > 0 ? "#BE185D" : "#16A34A",
                 borderColor: "var(--cc-bg)",
               }}
-              title={alertCount > 0 ? `${alertCount} compliance action${alertCount !== 1 ? "s" : ""} pending` : "Compliance up to date"}
+              title={alertCount > 0
+                ? translateParams("layout.compliance.actionsPending", { count: String(alertCount) })
+                : translate("layout.compliance.upToDate")}
             />
           </div>
         ) : (
@@ -536,7 +520,9 @@ function SidebarContents({
                   background: alertCount > 0 ? "#BE185D" : "#16A34A",
                   borderColor: "var(--cc-bg)",
                 }}
-                title={alertCount > 0 ? `${alertCount} compliance action${alertCount !== 1 ? "s" : ""} pending` : "Compliance up to date"}
+                title={alertCount > 0
+                ? translateParams("layout.compliance.actionsPending", { count: String(alertCount) })
+                : translate("layout.compliance.upToDate")}
               />
             </div>
             <div className="flex-1 min-w-0">
@@ -545,7 +531,7 @@ function SidebarContents({
                 {displayRole}
               </p>
             </div>
-            <button type="button" onClick={onLogout} title="Sign out" className="p-1.5 rounded-md hover:bg-black/5 transition-colors" style={{ color: MUTED }}>
+            <button type="button" onClick={onLogout} title={translate("common.signOut")} className="p-1.5 rounded-md hover:bg-black/5 transition-colors" style={{ color: MUTED }}>
               <LogOut size={15} strokeWidth={2} />
             </button>
           </div>
@@ -568,10 +554,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { settings } = useSettings();
   const { user, logout } = useAuth();
+  const { translate, translateParams } = useAccessibility();
   const { data: alerts = [] } = useGetUnreadAlerts();
 
-  const displayName = user?.full_name || settings?.name || user?.email || "Support Worker";
-  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? "Support Worker";
+  const displayName = user?.full_name || settings?.name || user?.email || translate("common.supportWorker");
+  const displayRole = user?.role?.replace(/_/g, " ") ?? settings?.credentials ?? translate("common.supportWorker");
   const initials    = getInitials(displayName);
   const alertCount  = Array.isArray(alerts) ? alerts.length : 0;
   const userRole    = user?.role as NavRole | undefined;
@@ -581,13 +568,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     userRole === "managing_director" ? "/md/compliance"  :
     "/compliance";
 
-  const [theme, setTheme] = useState<Theme>(getStoredTheme);
-  useEffect(() => { applyTheme(theme); }, [theme]);
-  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+  const { setThemeMode } = useAccessibility();
+  const { resolvedTheme } = useTheme();
+  const isDark =
+    resolvedTheme === "dark" ||
+    (!resolvedTheme && typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
 
   const navSections   = SECTIONED_NAV[userRole as NavRole]   ?? SECTIONED_NAV.support_worker;
   const topbarQuicknav = TOPBAR_QUICKNAV[userRole as NavRole] ?? TOPBAR_QUICKNAV.support_worker;
-  const pageLabel     = getPageLabel(location);
+  const pageLabel     = pageLabelForPath(location, translate);
 
   const toggleCollapse = () => {
     const next = !collapsed;
@@ -597,7 +587,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sharedProps = {
     location, collapsed, alertCount, displayName, displayRole, initials,
-    onLogout: logout,
+    onLogout: logout, translate, translateParams,
   };
 
   // Short role label for pill
@@ -616,7 +606,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={toggleCollapse}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? translate("layout.sidebar.expand") : translate("layout.sidebar.collapse")}
           className="absolute z-10 flex items-center justify-center transition-all duration-150 hover:scale-105 group"
           style={{
             right: -7,
@@ -674,7 +664,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     type="button"
                     className="h-8 w-8 rounded-xl flex items-center justify-center relative"
                     style={{ background: "var(--cc-alert-bg)", color: CORAL }}
-                    aria-label={`${alertCount} compliance actions`}
+                    aria-label={translateParams("layout.compliance.needAttention", { count: String(alertCount) })}
                   >
                     <AlertTriangle size={15} strokeWidth={2.5} />
                     <span
@@ -689,7 +679,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setDrawerOpen(true)}
-                aria-label="Open navigation menu"
+                aria-label={translate("layout.aria.openNav")}
                 className="h-9 w-9 rounded-xl flex items-center justify-center transition-colors active:bg-black/5"
                 style={{ color: TEXT }}
               >
@@ -724,6 +714,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 {topbarQuicknav.map((item) => {
                   const active = isActive(location, item.href);
                   const Icon = item.icon;
+                  const label = navLabelForHref(item.href, item.label, translate);
                   return (
                     <Link key={item.href} href={item.href}>
                       <div
@@ -735,7 +726,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                         }}
                       >
                         <Icon size={13} strokeWidth={active ? 2.5 : 2} style={{ color: active ? "#fff" : MUTED }} />
-                        <span>{item.label}</span>
+                        <span>{label}</span>
                         {alertCount > 0 && (item.href === "/compliance" || item.href === "/my-compliance") && (
                           <span
                             className="min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center text-white"
@@ -760,7 +751,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   >
                     <Settings size={13} strokeWidth={isActive(location, "/settings") ? 2.5 : 2}
                       style={{ color: isActive(location, "/settings") ? "#fff" : MUTED }} />
-                    <span>Settings</span>
+                    <span>{translate("common.settings")}</span>
                   </div>
                 </Link>
               </div>
@@ -781,20 +772,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {/* ── Right zone: search + actions ── */}
             <div className="flex items-center gap-2 px-4 shrink-0">
               {/* Search */}
-              <GlobalSearch sections={navSections} />
+              <GlobalSearch sections={navSections} translate={translate} />
 
               {/* Compliance alert button — pulses when actions are pending */}
               {alertCount > 0 && (
                 <Link href={topbarAlertHref}>
                   <button
                     type="button"
-                    aria-label={`${alertCount} compliance action${alertCount !== 1 ? "s" : ""} need attention`}
+                    aria-label={translateParams("layout.compliance.needAttention", { count: String(alertCount) })}
                     className="relative flex items-center gap-1.5 px-3 h-8 rounded-full text-[12px] font-bold transition-all hover:opacity-90 whitespace-nowrap"
                     style={{ background: "var(--cc-alert-bg)", color: CORAL, border: "1px solid rgba(190,24,93,0.18)" }}
                   >
                     <AlertTriangle size={13} strokeWidth={2.5} />
                     <span className="font-black">{alertCount}</span>
-                    <span className="hidden xl:inline">action{alertCount !== 1 ? "s" : ""}</span>
+                    <span className="hidden xl:inline">
+                      {alertCount !== 1 ? translate("layout.compliance.actions") : translate("layout.compliance.action")}
+                    </span>
                   </button>
                 </Link>
               )}
@@ -814,12 +807,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={toggleTheme}
-                title={theme === "dark" ? "Light mode" : "Dark mode"}
-                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
+                aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
                 className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-[var(--cc-soft)]"
                 style={{ borderColor: BORDER, color: MUTED }}
               >
-                {theme === "dark" ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+                {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
               </button>
 
               {/* Profile */}
@@ -865,6 +858,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {(ROLE_BOTTOM_NAV[userRole as NavRole] ?? ROLE_BOTTOM_NAV.support_worker).map((item: NavItem) => {
           const active = isActive(location, item.href);
           const Icon = item.icon;
+          const label = bottomNavLabelForHref(item.href, item.label, translate);
           return (
             <Link
               key={item.href}
@@ -897,7 +891,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <span className={cn("text-[10.5px] leading-none", active ? "font-bold" : "font-medium")}>
-                {item.label}
+                {label}
               </span>
             </Link>
           );
@@ -925,8 +919,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => setDrawerOpen(false)}
-            aria-label="Close menu"
-            title="Close menu"
+            aria-label={translate("layout.aria.closeMenu")}
+            title={translate("layout.aria.closeMenu")}
             className="p-1.5 rounded-xl hover:bg-black/5 transition-colors"
             style={{ color: MUTED }}
           >

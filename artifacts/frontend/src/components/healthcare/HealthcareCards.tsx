@@ -12,6 +12,7 @@ import {
   BORDER,
 } from "@/lib/design-system";
 import type { ReactNode } from "react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // ── Primary Status Card (for KPIs, metrics, alerts) ──────────────────────────
 interface StatusCardProps {
@@ -201,6 +202,13 @@ export function ContextCard({
   details,
   actions,
 }: ContextCardProps) {
+  const { translate } = useAccessibility();
+  const statusLabel =
+    status === "at-risk"
+      ? translate("clinical.healthcare.status.atRisk")
+      : status === "inactive"
+        ? translate("clinical.healthcare.status.inactive")
+        : translate("clinical.healthcare.status.active");
   const statusColor = STATUS[status === "at-risk" ? "warning" : status === "inactive" ? "inactive" : "success"];
   
   return (
@@ -259,7 +267,7 @@ export function ContextCard({
               color: statusColor,
             }}
           >
-            {status}
+            {statusLabel}
           </div>
         )}
       </div>

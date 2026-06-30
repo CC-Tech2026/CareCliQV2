@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { formatDistanceToNow, parseISO } from "date-fns";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   Megaphone,
   GraduationCap,
@@ -30,16 +31,24 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; strokeWidth?
   "Announcement":     Megaphone,
 };
 
-const SEVERITY_STYLES: Record<Severity, { badge: string; label: string }> = {
-  critical: { badge: "bg-red-50 text-red-700 border border-red-200",     label: "Critical" },
-  high:     { badge: "bg-orange-50 text-orange-700 border border-orange-200", label: "High" },
-  medium:   { badge: "bg-amber-50 text-amber-700 border border-amber-200",   label: "Medium" },
-  info:     { badge: "bg-blue-50 text-blue-700 border border-blue-200",       label: "Info" },
-  positive: { badge: "bg-emerald-50 text-emerald-700 border border-emerald-200", label: "Positive" },
+const SEVERITY_STYLES: Record<Severity, { badge: string; labelKey: string }> = {
+  critical: { badge: "bg-red-50 text-red-700 border border-red-200",     labelKey: "hub.news.severity.critical" },
+  high:     { badge: "bg-orange-50 text-orange-700 border border-orange-200", labelKey: "hub.news.severity.high" },
+  medium:   { badge: "bg-amber-50 text-amber-700 border border-amber-200",   labelKey: "hub.news.severity.medium" },
+  info:     { badge: "bg-blue-50 text-blue-700 border border-blue-200",       labelKey: "hub.news.severity.info" },
+  positive: { badge: "bg-emerald-50 text-emerald-700 border border-emerald-200", labelKey: "hub.news.severity.positive" },
 };
 
 const CATEGORIES = ["Announcement", "Policy Update", "Training", "Audit Reminder", "Staff Achievement"];
 const SEVERITIES: Severity[] = ["info", "positive", "medium", "high", "critical"];
+
+const CATEGORY_KEYS: Record<string, string> = {
+  Announcement: "hub.news.category.announcement",
+  "Policy Update": "hub.news.category.policy",
+  Training: "hub.news.category.training",
+  "Audit Reminder": "hub.news.category.audit",
+  "Staff Achievement": "hub.news.category.achievement",
+};
 
 function NewsCard({
   item,
@@ -50,6 +59,7 @@ function NewsCard({
   onDelete?: (id: string) => void;
   isCoordinator: boolean;
 }) {
+  const { translate } = useAccessibility();
   const sty  = SEVERITY_STYLES[item.severity as Severity] ?? SEVERITY_STYLES.info;
   const Icon = ICON_MAP[item.category] ?? FileText;
 
@@ -68,7 +78,7 @@ function NewsCard({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${sty.badge}`}>
-            {sty.label}
+            {translate(sty.labelKey)}
           </span>
           <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: SOFT, color: MUTED }}>
             {item.category}
@@ -90,7 +100,7 @@ function NewsCard({
           onClick={() => onDelete(item.id)}
           className="ml-1 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
           style={{ color: MUTED }}
-          title="Delete announcement"
+          title={translate("hub.news.deleteAnnouncement")}
         >
           <Trash2 size={13} strokeWidth={2} />
         </button>
@@ -102,6 +112,7 @@ function NewsCard({
 const BLANK_FORM = { title: "", body: "", severity: "info" as Severity, category: "Announcement" };
 
 export function NewsFeed() {
+  const { translate } = useAccessibility();
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
 
@@ -138,7 +149,7 @@ export function NewsFeed() {
       setShowForm(false);
       setForm(BLANK_FORM);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Could not publish announcement.");
+      setSaveError(err instanceof Error ? err.message : translate("hub.news.publishFailed"));
     } finally {
       setSaving(false);
     }
@@ -150,7 +161,7 @@ export function NewsFeed() {
       await deleteAnnouncement(id);
       setItems((prev) => (prev ?? []).filter((i) => i.id !== id));
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : "Could not delete announcement.");
+      setDeleteError(err instanceof Error ? err.message : translate("hub.news.deleteFailed"));
     }
   }
 
@@ -177,7 +188,7 @@ export function NewsFeed() {
               style={{ background: SOFT, color: PLUM }}
             >
               <Plus size={12} strokeWidth={2} />
-              Publish
+              {translate("hub.news.publish")}
             </button>
           )}
           {!loading && (
@@ -205,31 +216,31 @@ export function NewsFeed() {
             style={{ borderColor: BORDER, background: SOFT }}
           >
             <div>
-              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Title *</label>
+              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.news.formTitle")}</label>
               <input
                 className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                 style={{ borderColor: BORDER }}
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                placeholder="Announcement title"
+                placeholder={translate("hub.news.titlePlaceholder")}
                 required
               />
             </div>
             <div>
-              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Body *</label>
+              <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.news.body")}</label>
               <textarea
                 className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1 resize-none"
                 style={{ borderColor: BORDER }}
                 rows={3}
                 value={form.body}
                 onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                placeholder="Write the announcement content…"
+                placeholder={translate("hub.news.bodyPlaceholder")}
                 required
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Priority</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.news.priority")}</label>
                 <select
                   className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                   style={{ borderColor: BORDER }}
@@ -237,12 +248,12 @@ export function NewsFeed() {
                   onChange={(e) => setForm((f) => ({ ...f, severity: e.target.value as Severity }))}
                 >
                   {SEVERITIES.map((s) => (
-                    <option key={s} value={s}>{SEVERITY_STYLES[s].label}</option>
+                    <option key={s} value={s}>{translate(SEVERITY_STYLES[s].labelKey)}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>Category</label>
+                <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.news.category")}</label>
                 <select
                   className="w-full rounded-lg border px-3 py-2 text-[13px] outline-none focus:ring-1"
                   style={{ borderColor: BORDER }}
@@ -250,7 +261,7 @@ export function NewsFeed() {
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                 >
                   {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                    <option key={c} value={c}>{translate(CATEGORY_KEYS[c] ?? c)}</option>
                   ))}
                 </select>
               </div>
@@ -275,7 +286,7 @@ export function NewsFeed() {
                 className="rounded-lg px-4 py-1.5 text-[11px] font-bold text-white"
                 style={{ background: PLUM, opacity: saving ? 0.65 : 1 }}
               >
-                {saving ? "Publishing…" : "Publish"}
+                {saving ? translate("hub.news.publishing") : translate("hub.news.publish")}
               </button>
             </div>
           </form>
@@ -290,17 +301,17 @@ export function NewsFeed() {
         ) : fetchError ? (
           <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
             <AlertTriangle size={22} className="mx-auto mb-2" style={{ color: "#F97316" }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>Could not load announcements</p>
-            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Check your connection and try again.</p>
+            <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("hub.news.loadFailed")}</p>
+            <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{translate("hub.news.retryHint")}</p>
           </div>
         ) : displayItems.length === 0 ? (
           <div className="rounded-xl border p-6 text-center" style={{ borderColor: BORDER }}>
             <Megaphone size={22} className="mx-auto mb-2" style={{ color: MUTED }} />
-            <p className="text-[13px] font-bold" style={{ color: TEXT }}>No announcements yet</p>
+            <p className="text-[13px] font-bold" style={{ color: TEXT }}>{translate("hub.news.empty")}</p>
             <p className="mt-1 text-[12px]" style={{ color: MUTED }}>
               {isCoordinator
-                ? "Use the Publish button to post the first announcement."
-                : "Your coordinator will post announcements here."}
+                ? translate("hub.news.coordinatorHint")
+                : translate("hub.news.workerHint")}
             </p>
           </div>
         ) : (

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { Clock3 } from "lucide-react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { BORDER, MUTED, PLUM, STATE_STYLES, TEXT, WIDGET_SCROLL, shiftInitials } from "@/lib/shift-utils";
 import type { DashboardShiftSummary } from "@/services/dashboardService";
 
@@ -16,6 +17,7 @@ function parseStart(value?: string) {
 }
 
 export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
+  const { translate } = useAccessibility();
   const ordered = useMemo(
     () => [...shifts].sort((a, b) => parseStart(a.scheduled_start) - parseStart(b.scheduled_start)),
     [shifts],
@@ -29,21 +31,21 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
   const span = Math.max(dayEnd - dayStart, 60 * 60 * 1000);
 
   return (
-    <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }}>
       <div className="mb-4 flex items-center gap-2">
         <Clock3 size={18} style={{ color: PLUM }} />
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          Today&apos;s Timeline
+          {translate("dashboard.todaysTimeline")}
         </h2>
       </div>
 
       {ordered.length === 0 ? (
-        <p className="rounded-xl bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-          Your day timeline will appear when shifts are scheduled.
+        <p className="rounded-xl bg-cc-soft px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          {translate("dashboard.timelineEmpty")}
         </p>
       ) : (
         <div className="space-y-4">
-          <div className="relative hidden h-3 overflow-hidden rounded-full bg-[#F0EDF8] md:block">
+          <div className="relative hidden h-3 overflow-hidden rounded-full bg-cc-soft md:block">
             {ordered.map((shift) => {
               const start = parseStart(shift.scheduled_start);
               const end = parseStart(shift.scheduled_end || shift.scheduled_start);
@@ -73,8 +75,8 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
               return (
                 <Link key={shift.id} href={`/my-shifts/${shift.id}?focus=safety`}>
                   <div
-                    className="flex items-start gap-3 rounded-xl border p-3 transition hover:bg-[#F8F6FE]"
-                    style={{ borderColor: isNext ? PLUM : "#EEEAFB" }}
+                    className="flex items-start gap-3 rounded-xl border p-3 transition hover:bg-cc-soft"
+                    style={{ borderColor: isNext ? PLUM : BORDER }}
                   >
                     <div className="flex flex-col items-center">
                       <div
@@ -95,7 +97,7 @@ export function DayShiftTimeline({ shifts, nextShiftId }: Props) {
                         {shift.time_label}
                       </p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${STATE_STYLES[visual]?.badge}`}>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${STATE_STYLES[visual]?.badge || ""}`}>
                       {STATE_STYLES[visual]?.label || shift.status}
                     </span>
                   </div>

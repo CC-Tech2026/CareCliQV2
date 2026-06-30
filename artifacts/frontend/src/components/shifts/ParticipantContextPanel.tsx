@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ParticipantContext } from "@/services/shiftService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   context?: ParticipantContext;
@@ -55,8 +56,9 @@ export function ParticipantContextPanel({
   open = true,
   onToggle,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [tab, setTab] = useState<Tab>("medical");
-  const firstName = participantFirstName || "participant";
+  const firstName = participantFirstName || translate("common.participant").toLowerCase();
   const stale = isStale(syncedAt);
   const anaphylactic = (context?.medical?.allergies || []).filter((a) => a.severity === "anaphylactic");
 
@@ -72,11 +74,11 @@ export function ParticipantContextPanel({
   const hasComm = Boolean(context?.communication_guidance?.trim());
 
   const tabs: Array<{ id: Tab; label: string; show: boolean }> = [
-    { id: "medical", label: "Medical", show: true },
-    { id: "behaviour", label: "Behaviour", show: true },
-    { id: "activities", label: "Activities", show: true },
-    { id: "visits", label: "Past visits", show: true },
-    { id: "communication", label: "Communication", show: true },
+    { id: "medical", label: translate("shift.participant.tab.medical"), show: true },
+    { id: "behaviour", label: translate("shift.participant.tab.behaviour"), show: true },
+    { id: "activities", label: translate("shift.participant.tab.activities"), show: true },
+    { id: "visits", label: translate("shift.participant.tab.visits"), show: true },
+    { id: "communication", label: translate("shift.participant.tab.communication"), show: true },
   ];
 
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
@@ -90,7 +92,7 @@ export function ParticipantContextPanel({
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <ClipboardList size={16} style={{ color: PLUM }} />
-          Participant Context
+          {translate("shift.participant.context")}
         </span>
         <ChevronDown size={18} className={cn("transition", open && "rotate-180")} style={{ color: MUTED }} />
       </button>
@@ -99,7 +101,7 @@ export function ParticipantContextPanel({
         <div className="border-t" style={{ borderColor: BORDER }}>
           {stale && (
             <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-              Participant info may be outdated. Sync when connected.
+              {translate("shift.participant.outdated")}
             </div>
           )}
 
@@ -107,7 +109,7 @@ export function ParticipantContextPanel({
             <div className="mx-4 mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2.5">
               <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-red-800">
                 <AlertTriangle size={14} aria-hidden />
-                Anaphylactic allergy
+                {translate("shift.participant.anaphylactic")}
               </p>
               <ul className="mt-1 space-y-0.5 text-sm font-semibold text-red-900">
                 {anaphylactic.map((a) => (
@@ -154,17 +156,17 @@ export function ParticipantContextPanel({
                       </div>
                     ))}
                     {context?.medical?.conditions && (
-                      <InfoBlock icon={Pill} label="Current conditions" body={context.medical.conditions} />
+                      <InfoBlock icon={Pill} label={translate("shift.participant.conditions")} body={context.medical.conditions} />
                     )}
                     {context?.medical?.medications && (
-                      <InfoBlock icon={Pill} label="Medications" body={context.medical.medications} />
+                      <InfoBlock icon={Pill} label={translate("shift.participant.medications")} body={context.medical.medications} />
                     )}
                     {context?.medical?.alerts && (
-                      <InfoBlock icon={AlertTriangle} label="Medical alerts" body={context.medical.alerts} />
+                      <InfoBlock icon={AlertTriangle} label={translate("shift.participant.medicalAlerts")} body={context.medical.alerts} />
                     )}
                   </>
                 ) : (
-                  <EmptyNote text="No medical information recorded yet." />
+                  <EmptyNote text={translate("shift.participant.noMedical")} />
                 )}
               </div>
             )}
@@ -183,7 +185,7 @@ export function ParticipantContextPanel({
                     </div>
                   ))
                 ) : (
-                  <EmptyNote text="No behavioural notes recorded yet." />
+                  <EmptyNote text={translate("shift.participant.noBehaviour")} />
                 )}
               </div>
             )}
@@ -193,7 +195,7 @@ export function ParticipantContextPanel({
                 <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Sparkles size={12} aria-hidden />
-                    Things {firstName} enjoys
+                    {translateParams("shift.participant.enjoys", { name: firstName })}
                   </p>
                   <ul className="mt-2 space-y-1">
                     {context!.preferred_activities!.map((item) => (
@@ -204,7 +206,7 @@ export function ParticipantContextPanel({
                   </ul>
                 </div>
               ) : (
-                <EmptyNote text={`No preferred activities recorded for ${firstName} yet.`} />
+                <EmptyNote text={translateParams("shift.participant.noActivities", { name: firstName })} />
               )
             )}
 
@@ -213,11 +215,11 @@ export function ParticipantContextPanel({
                 <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Heart size={12} aria-hidden />
-                    Notes from previous visits
+                    {translate("shift.participant.previousVisits")}
                   </p>
                   {context?.previous_visit_notes_updated_at && (
                     <p className="mt-1 text-[10px] font-semibold" style={{ color: MUTED }}>
-                      Updated {formatSynced(context.previous_visit_notes_updated_at)}
+                      {translateParams("shift.participant.updated", { date: formatSynced(context.previous_visit_notes_updated_at) ?? "" })}
                     </p>
                   )}
                   <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-relaxed" style={{ color: TEXT }}>
@@ -225,22 +227,22 @@ export function ParticipantContextPanel({
                   </p>
                 </div>
               ) : (
-                <EmptyNote text="No notes from previous visits yet." />
+                <EmptyNote text={translate("shift.participant.noVisits")} />
               )
             )}
 
             {activeTab === "communication" && (
               hasComm ? (
-                <InfoBlock icon={MessageSquare} label="How to communicate" body={context!.communication_guidance!} />
+                <InfoBlock icon={MessageSquare} label={translate("shift.participant.howCommunicate")} body={context!.communication_guidance!} />
               ) : (
-                <EmptyNote text="No communication guidance recorded yet." />
+                <EmptyNote text={translate("shift.participant.noComm")} />
               )
             )}
           </div>
 
           {syncedAt && (
             <p className="border-t px-4 py-2 text-[10px] font-semibold" style={{ borderColor: BORDER, color: MUTED }}>
-              Last synced {formatSynced(syncedAt)}
+              {translateParams("shift.participant.lastSynced", { date: formatSynced(syncedAt) ?? "" })}
             </p>
           )}
         </div>

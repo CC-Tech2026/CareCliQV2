@@ -6,6 +6,7 @@ import {
   FileVideo, Link2, X, Loader2,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -1145,14 +1146,15 @@ function ApprovalsTab() {
   );
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview",  label: "Overview" },
-  { id: "builder",   label: "Builder" },
-  { id: "resources", label: "Resources" },
-  { id: "approvals", label: "Approvals" },
+const TAB_KEYS: { id: Tab; labelKey: string }[] = [
+  { id: "overview", labelKey: "md.onboarding.tab.overview" },
+  { id: "builder", labelKey: "md.onboarding.tab.builder" },
+  { id: "resources", labelKey: "md.onboarding.tab.resources" },
+  { id: "approvals", labelKey: "md.onboarding.tab.approvals" },
 ];
 
 export default function MDOnboardingPage() {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -1165,11 +1167,11 @@ export default function MDOnboardingPage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>Onboarding Centre</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>Design programs, manage resources, track progress and approve completions</p>
+            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
+            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.onboarding.subtitle")}</p>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
             <GraduationCap size={16} strokeWidth={2.5} />
@@ -1177,7 +1179,7 @@ export default function MDOnboardingPage() {
         </div>
 
         <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
-          {TABS.map((tab) => (
+          {TAB_KEYS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -1188,7 +1190,7 @@ export default function MDOnboardingPage() {
                 boxShadow: activeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}
             >
-              {tab.label}
+              {translate(tab.labelKey)}
             </button>
           ))}
         </div>

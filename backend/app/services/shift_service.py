@@ -828,6 +828,7 @@ def _enrich_worker_shift_card(
     shift: dict[str, Any],
     organization_id: str,
     session: Optional[dict[str, Any]] = None,
+    worker_id: Optional[str] = None,
 ) -> dict[str, Any]:
     """Hydrate list/detail cards with participant risks, goals, and completion metadata."""
     participant_id = str(shift.get("participant_id") or "")
@@ -860,6 +861,18 @@ def _enrich_worker_shift_card(
                 payload["shift_signature"] = signature
         except Exception:
             pass
+
+    if worker_id and payload.get("visual_state") == "scheduled" and not shift.get("clocked_in_at"):
+        try:
+            from .briefing_service import is_briefing_complete_for_shift
+
+            complete = is_briefing_complete_for_shift(shift, worker_id)
+            payload["briefing_complete"] = complete
+            payload["requires_briefing"] = not complete
+        except Exception as exc:
+            logger.debug("briefing list enrichment failed: %s", exc)
+            payload.setdefault("briefing_complete", False)
+            payload.setdefault("requires_briefing", True)
 
     return payload
 
@@ -1310,7 +1323,7 @@ def list_shifts_for_worker(
     for shift in filtered:
         session = _get_session_for_shift(shift)
         card = _shift_card_payload(shift, session)
-        cards.append(_enrich_worker_shift_card(card, shift, organization_id, session))
+        cards.append(_enrich_worker_shift_card(card, shift, organization_id, session, worker_id))
     return cards
 
 
@@ -1372,7 +1385,7 @@ def get_shift_detail_for_worker(
     except Exception as exc:
         logger.debug("briefing enrichment failed: %s", exc)
         payload.setdefault("briefing_complete", bool(shift.get("clocked_in_at")))
-        payload.setdefault("requires_briefing", False)
+        payload.setdefault("requires_briefing", not bool(shift.get("clocked_in_at")))
     return payload
 
 

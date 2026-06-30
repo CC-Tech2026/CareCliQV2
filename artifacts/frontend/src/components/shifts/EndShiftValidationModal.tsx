@@ -26,17 +26,25 @@ import {
 import type { ShiftTask } from "@/services/shiftService";
 import { CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import { useState } from "react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tasks: ShiftTask[];
   busy?: boolean;
+  tutorialDemo?: boolean;
   onCancel: () => void;
   onAddEvidence: (taskId: string) => void;
   onMarkNa: (taskId: string, reason: NaReason) => void;
   onEndAnyway: () => void;
   onEndShift: () => void;
+};
+
+const NA_REASON_KEYS: Record<NaReason, string> = {
+  not_needed: "validation.naReason.notNeeded",
+  refused: "validation.naReason.refused",
+  medical: "validation.naReason.medical",
 };
 
 function pct(count: number, total: number) {
@@ -49,11 +57,13 @@ function StatRow({
   count,
   total,
   tone,
+  translateParams,
 }: {
   label: string;
   count: number;
   total: number;
   tone?: "warn" | "muted" | "ok";
+  translateParams: (key: string, params: Record<string, string>) => string;
 }) {
   return (
     <div
@@ -68,16 +78,20 @@ function StatRow({
         {label}
       </span>
       <span className="font-black" style={{ color: tone === "warn" ? "#B45309" : TEXT }}>
-        {count} of {total} ({pct(count, total)})
+        {translateParams("validation.statCount", {
+          count: String(count),
+          total: String(total),
+          pct: pct(count, total),
+        })}
       </span>
     </div>
   );
 }
 
-function complianceBadge(score: number) {
-  if (score >= 80) return { label: "High", className: "bg-emerald-100 text-emerald-800 border-emerald-200" };
-  if (score >= 50) return { label: "Medium", className: "bg-amber-100 text-amber-800 border-amber-200" };
-  return { label: "Low", className: "bg-red-100 text-red-800 border-red-200" };
+function complianceBadge(score: number, translate: (key: string) => string) {
+  if (score >= 80) return { label: translate("validation.high"), className: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+  if (score >= 50) return { label: translate("validation.medium"), className: "bg-amber-100 text-amber-800 border-amber-200" };
+  return { label: translate("validation.low"), className: "bg-red-100 text-red-800 border-red-200" };
 }
 
 export function EndShiftValidationModal({
@@ -85,16 +99,18 @@ export function EndShiftValidationModal({
   onOpenChange,
   tasks,
   busy,
+  tutorialDemo,
   onCancel,
   onAddEvidence,
   onMarkNa,
   onEndAnyway,
   onEndShift,
 }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const validation: ShiftValidationResult = computeShiftValidation(tasks);
   const taskFlags = taskFlagsOnly(validation);
   const hasWarnings = taskFlags.length > 0 || validation.low_compliance;
-  const badge = complianceBadge(validation.compliance_score);
+  const badge = complianceBadge(validation.compliance_score, translate);
   const [naTaskId, setNaTaskId] = useState<string | null>(null);
   const [naReason, setNaReason] = useState<NaReason>("not_needed");
 
@@ -102,40 +118,59 @@ export function EndShiftValidationModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto gap-4">
+      <DialogContent
+        className="max-h-[90vh] max-w-md overflow-y-auto gap-4"
+        data-tutorial="end-shift-review"
+        hideCloseButton={tutorialDemo}
+        onInteractOutside={(event) => {
+          if (tutorialDemo) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (tutorialDemo) event.preventDefault();
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>End shift validation</DialogTitle>
+          <DialogTitle>{translate("validation.title")}</DialogTitle>
           <DialogDescription>
-            Review task completion and evidence before ending your shift.
+            {tutorialDemo ? translate("validation.tutorialDesc") : translate("validation.desc")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2">
-          <StatRow label="Completed tasks" count={validation.tasks_completed} total={validation.tasks_total} tone="ok" />
           <StatRow
-            label="With evidence"
+            label={translate("validation.completed")}
+            count={validation.tasks_completed}
+            total={validation.tasks_total}
+            tone="ok"
+            translateParams={translateParams}
+          />
+          <StatRow
+            label={translate("validation.withEvidence")}
             count={validation.tasks_with_evidence}
             total={validation.tasks_total}
             tone="ok"
+            translateParams={translateParams}
           />
           <StatRow
-            label="Without evidence"
+            label={translate("validation.withoutEvidence")}
             count={validation.tasks_without_evidence}
             total={validation.tasks_total}
             tone={validation.tasks_without_evidence > 0 ? "warn" : undefined}
+            translateParams={translateParams}
           />
           <StatRow
-            label="Not completed"
+            label={translate("validation.notCompleted")}
             count={validation.tasks_not_completed}
             total={validation.tasks_total}
             tone={validation.tasks_not_completed > 0 ? "warn" : undefined}
+            translateParams={translateParams}
           />
         </div>
 
         <div
           className={cn("flex items-center justify-between rounded-xl border px-3 py-2.5", badge.className)}
         >
-          <span className="text-sm font-bold">Compliance score</span>
+          <span className="text-sm font-bold">{translate("validation.complianceScore")}</span>
           <span className="text-lg font-black">
             {validation.compliance_score}% · {badge.label}
           </span>
@@ -144,7 +179,7 @@ export function EndShiftValidationModal({
         {!hasWarnings && (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800">
             <CheckCircle2 size={18} />
-            All tasks look good — ready to end shift.
+            {translate("validation.allGood")}
           </div>
         )}
 
@@ -153,8 +188,8 @@ export function EndShiftValidationModal({
             <p className="flex items-center gap-2 text-sm font-black text-amber-800">
               <AlertTriangle size={16} />
               {taskFlags.length > 0
-                ? `You have ${taskFlags.length} flagged task${taskFlags.length === 1 ? "" : "s"}`
-                : "Low compliance score"}
+                ? translateParams("validation.flaggedTasks", { count: String(taskFlags.length) })
+                : translate("validation.lowCompliance")}
             </p>
             <ul className="max-h-48 space-y-2 overflow-y-auto">
               {taskFlags.map((flag) => (
@@ -169,7 +204,9 @@ export function EndShiftValidationModal({
                     {flag.label}
                   </p>
                   <p className="text-xs font-semibold capitalize" style={{ color: MUTED }}>
-                    {flag.flag_type === "incomplete" ? "Not completed" : "No evidence"}
+                    {flag.flag_type === "incomplete"
+                      ? translate("validation.notCompletedFlag")
+                      : translate("validation.noEvidenceFlag")}
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {flag.flag_type === "no_evidence" && flag.task_id && (
@@ -180,7 +217,7 @@ export function EndShiftValidationModal({
                         style={{ background: PLUM }}
                         onClick={() => onAddEvidence(flag.task_id!)}
                       >
-                        + Add Evidence Now
+                        + {translate("validation.addEvidenceNow")}
                       </Button>
                     )}
                     {flag.flag_type === "incomplete" && flag.task_id && (
@@ -191,7 +228,7 @@ export function EndShiftValidationModal({
                         className="h-8 rounded-lg text-xs font-bold"
                         onClick={() => setNaTaskId(flag.task_id!)}
                       >
-                        Mark as N/A
+                        {translate("validation.markNa")}
                       </Button>
                     )}
                   </div>
@@ -204,7 +241,7 @@ export function EndShiftValidationModal({
                         <SelectContent>
                           {NA_REASONS.map((r) => (
                             <SelectItem key={r.value} value={r.value}>
-                              {r.label}
+                              {translate(NA_REASON_KEYS[r.value])}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -218,7 +255,7 @@ export function EndShiftValidationModal({
                           setNaTaskId(null);
                         }}
                       >
-                        Confirm
+                        {translate("validation.confirm")}
                       </Button>
                     </div>
                   )}
@@ -237,7 +274,7 @@ export function EndShiftValidationModal({
               disabled={busy}
               onClick={() => onAddEvidence(firstEvidenceTask)}
             >
-              Add Evidence
+              {translate("validation.addEvidence")}
             </Button>
           )}
           {hasWarnings ? (
@@ -249,7 +286,7 @@ export function EndShiftValidationModal({
               disabled={busy}
               onClick={onEndAnyway}
             >
-              End Anyway
+              {translate("validation.endAnyway")}
             </Button>
           ) : (
             <Button
@@ -259,7 +296,7 @@ export function EndShiftValidationModal({
               disabled={busy}
               onClick={onEndShift}
             >
-              End Shift
+              {translate("validation.endShift")}
             </Button>
           )}
           <Button
@@ -270,7 +307,7 @@ export function EndShiftValidationModal({
             disabled={busy}
             onClick={onCancel}
           >
-            Cancel
+            {translate("common.cancel")}
           </Button>
         </DialogFooter>
       </DialogContent>
