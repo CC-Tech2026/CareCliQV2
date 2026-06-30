@@ -1,12 +1,4 @@
-"""CRUD service for patient_goals — NDIS plan-linked goals.
-
-Worker-facing reads (get_goals_for_participant) stay on patient_goals.
-Coordinator-created goals live in ndis_goals (participant_id-linked,
-api/coordinator.py's /goals routes) and are mirrored into patient_goals
-on write — see _sync_to_patient_goals in api/coordinator.py — so this
-table remains the single read source for the worker side regardless of
-which flow created the goal.
-"""
+"""CRUD service for patient_goals — NDIS plan-linked goals."""
 
 from __future__ import annotations
 
