@@ -120,8 +120,9 @@ export function WorkerMobileShiftView({
         participantFirstName,
         shiftEndIso: shift.clocked_out_at ?? null,
         incidentReportFiledNoteIds: filedNoteIds,
+        includeSubmitWarnings: phase === "review",
       }),
-    [complianceNotes, activeTasks, participantFirstName, shift.clocked_out_at, filedNoteIds],
+    [complianceNotes, activeTasks, participantFirstName, shift.clocked_out_at, filedNoteIds, phase],
   );
 
   const visibleNotifications = compliance.notifications.filter(

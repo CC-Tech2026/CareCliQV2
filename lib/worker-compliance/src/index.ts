@@ -60,6 +60,8 @@ export type EvaluateComplianceInput = {
   shiftEndIso?: string | null;
   previousSessionNotes?: string[];
   incidentReportFiledNoteIds?: Set<string>;
+  /** When true, surface submit-time warnings (e.g. missing medication note) as banners. */
+  includeSubmitWarnings?: boolean;
 };
 
 const VAGUE_PHRASES = [/\bdid well\b/i, /\bseemed okay\b/i, /\bwas fine\b/i, /\bgood session\b/i, /\bno issues\b/i];
@@ -89,7 +91,14 @@ function medicationTask(tasks: ComplianceTask[]) {
 }
 
 export function evaluateWorkerCompliance(input: EvaluateComplianceInput): ComplianceEvaluation {
-  const { notes, tasks, participantFirstName, shiftEndIso, previousSessionNotes = [] } = input;
+  const {
+    notes,
+    tasks,
+    participantFirstName,
+    shiftEndIso,
+    previousSessionNotes = [],
+    includeSubmitWarnings = false,
+  } = input;
   const textNotes = notes.filter((n) => n.content?.trim() && !/^\[Attachment/i.test(n.content));
   const allText = textNotes.map((n) => n.content).join("\n");
   const noteFlags: NoteComplianceFlag[] = [];
@@ -155,7 +164,7 @@ export function evaluateWorkerCompliance(input: EvaluateComplianceInput): Compli
     message: medMissing ? "Medication task on shift but no medication note recorded." : "Medication documentation OK.",
     actionLabel: medMissing ? "Add medication note" : undefined,
   });
-  if (medMissing) {
+  if (medMissing && includeSubmitWarnings) {
     notifications.push({
       id: "rule-7-medication", tier: "amber",
       title: "Medication note missing",

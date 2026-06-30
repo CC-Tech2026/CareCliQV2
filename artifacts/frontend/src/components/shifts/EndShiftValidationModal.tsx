@@ -159,6 +159,7 @@ function EndShiftValidationBody({
         tasks: complianceTasks,
         participantFirstName,
         incidentReportFiledNoteIds: filedNoteIds,
+        includeSubmitWarnings: true,
       }),
     [sessionNotes, complianceTasks, participantFirstName, filedNoteIds],
   );

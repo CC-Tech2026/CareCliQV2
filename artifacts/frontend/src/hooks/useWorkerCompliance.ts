@@ -14,6 +14,7 @@ type Options = {
   shiftEndIso?: string | null;
   previousSessionNotes?: string[];
   sessionId?: string | null;
+  includeSubmitWarnings?: boolean;
 };
 
 export function useWorkerCompliance({
@@ -23,6 +24,7 @@ export function useWorkerCompliance({
   shiftEndIso,
   previousSessionNotes,
   sessionId,
+  includeSubmitWarnings = false,
 }: Options) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [filedNoteIds, setFiledNoteIds] = useState<Set<string>>(() => new Set());
@@ -40,8 +42,9 @@ export function useWorkerCompliance({
         shiftEndIso,
         previousSessionNotes,
         incidentReportFiledNoteIds: filedNoteIds,
+        includeSubmitWarnings,
       }),
-    [notes, tasks, participantFirstName, shiftEndIso, previousSessionNotes, filedNoteIds],
+    [notes, tasks, participantFirstName, shiftEndIso, previousSessionNotes, filedNoteIds, includeSubmitWarnings],
   );
 
   const visibleNotifications = compliance.notifications.filter((n) => !dismissedIds.has(n.id));
