@@ -255,7 +255,7 @@ export default function SessionDetail({ id }: { id?: string }) {
   const [pollTick, setPollTick] = useState(0);
   const [attachments, setAttachments] = useState<Array<{ id: string; file_name: string; public_url?: string; file_path?: string; mime_type?: string }>>([]);
   const { user } = useAuth();
-  const isCoordinator = user?.role === "coordinator";
+  const isCoordinator = user?.role === "support_coordinator";
   const qc = useQueryClient();
   const flagMutation = useMutation({
     mutationFn: ({ flag, note }: { flag: boolean; note?: string }) =>
@@ -873,22 +873,22 @@ export default function SessionDetail({ id }: { id?: string }) {
             </div>
           </div>
 
-          {(session.original_language_input || session.translated_english_note) && (
+          {(session as ExtendedSession).original_language_input || (session as ExtendedSession).translated_english_note ? (
             <div className="rounded-2xl bg-white overflow-hidden" style={{ boxShadow: "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)" }}>
               <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
                 <p className="text-[14px] font-semibold" style={{ color: "#1C1626" }}>Translation Audit Trail</p>
               </div>
               <div className="p-5">
                 <TranslationAuditView
-                  originalLanguageInput={session.original_language_input ?? undefined}
-                  translatedEnglishNote={session.translated_english_note ?? undefined}
-                  translationMetadata={session.translation_metadata as Record<string, unknown> | null}
-                  translationStatus={session.translation_status ?? undefined}
-                  translationProvider={session.translation_provider ?? undefined}
+                  originalLanguageInput={(session as ExtendedSession).original_language_input ?? undefined}
+                  translatedEnglishNote={(session as ExtendedSession).translated_english_note ?? undefined}
+                  translationMetadata={(session as ExtendedSession).translation_metadata as Record<string, unknown> | null}
+                  translationStatus={(session as ExtendedSession).translation_status ?? undefined}
+                  translationProvider={(session as ExtendedSession).translation_provider ?? undefined}
                 />
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Structured Clinical Note Fields */}
           {(() => {

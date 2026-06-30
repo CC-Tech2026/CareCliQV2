@@ -109,7 +109,7 @@ function Section({
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: "linear-gradient(135deg, rgba(85,51,204,0.12), rgba(85,51,204,0.06))" }}
         >
-          <Icon className="h-[18px] w-[18px]" style={{ color: "#5533CC" }} />
+          <Icon className="h-[18px] w-[18px]" />
         </div>
         <div>
           <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>{title}</h2>
@@ -653,7 +653,7 @@ export default function Settings() {
               color: activeSection === id ? "white" : "#4A3D5A",
             }}
           >
-            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#7A6A9E" }} />
+            <Icon className="h-3.5 w-3.5" />
             {label}
           </button>
         ))}

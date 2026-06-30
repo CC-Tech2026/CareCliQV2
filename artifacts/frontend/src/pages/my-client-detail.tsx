@@ -1166,14 +1166,16 @@ function IncidentReportModal({
         title: "Incident logged",
         description: "The incident has been recorded against this participant.",
         action: (
-          <button
+          <ToastAction
+            altText="View incidents"
             onClick={() => { onClose(); navigate("/incidents"); }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
           >
-            <Siren size={12} />
-            View Incidents
-          </button>
-        ) as unknown as import("react").ReactElement,
+            <span className="inline-flex items-center gap-1.5">
+              <Siren size={12} />
+              View Incidents
+            </span>
+          </ToastAction>
+        ),
       });
       onClose();
     } catch (err: unknown) {
@@ -1655,9 +1657,9 @@ export default function MyClientDetail({ id }: { id: string }) {
         setGoalNotes((n) => ({
           ...n,
           [goal.id]: {
+            ...(n[goal.id] || {}),
             goal_id: goal.id,
             goal_title: goal.title || goal.description || "",
-            ...(n[goal.id] || {}),
           },
         }));
       }
