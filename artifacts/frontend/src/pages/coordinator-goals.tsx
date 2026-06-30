@@ -835,8 +835,8 @@ export default function CoordinatorGoals() {
                         <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("coordinator.goals.createEditTitle")}</p>
                         <p className="text-xs mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.createEditHint")}</p>
                       </div>
-                    )}
-                  </>
+                    </div>
+                  </div>
                 )}
 
                 {/* Goal-Based Tasks view */}
@@ -1012,8 +1012,8 @@ export default function CoordinatorGoals() {
                     <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.manageTasksTitle")}</p>
                     <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.manageTasksHint")}</p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
