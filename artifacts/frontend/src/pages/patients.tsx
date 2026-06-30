@@ -697,7 +697,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   });
 
   const { user } = useAuth();
-  const isCoordinator = user?.role === "coordinator";
+  const isCoordinator = user?.role === "support_coordinator";
 
   const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
     queryFn: () => fetchJson<{
