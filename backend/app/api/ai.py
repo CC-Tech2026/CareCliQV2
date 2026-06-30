@@ -272,15 +272,15 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
         except Exception:
             pass
 
-    # If participant_id supplied but no goals, try to fetch from patient_goals table
+    # If participant_id supplied but no goals, fetch from ndis_goals
     if body.participant_id and not goals:
         participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
         try:
             from ..services import goals_service
-            from ..services.migration_state import patient_goals_table_missing
-            if not patient_goals_table_missing:
+            from ..services.migration_state import ndis_goals_table_missing
+            if not ndis_goals_table_missing:
                 goals = await goals_service.get_goals_for_participant(body.participant_id)
         except Exception:
             pass

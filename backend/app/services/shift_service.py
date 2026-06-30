@@ -21,7 +21,13 @@ from .check_in_service import (
 from .session_service import _prepare_session_payload
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
-from ..core.timezone import APP_TIMEZONE, app_today, parse_shift_datetime
+from ..core.timezone import (
+    APP_TIMEZONE,
+    app_day_bounds_utc,
+    app_today,
+    parse_shift_datetime,
+    shift_local_date,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -451,46 +457,12 @@ def _fetch_active_goals_for_participant(
     organization_id: str,
 ) -> list[dict[str, Any]]:
     """Active NDIS goals for shift briefing (CARECLIQV2-90)."""
+    from .goals_service import fetch_active_goals_for_shift
+
     if not participant_id:
         return []
     try:
-        plan_resp = (
-            get_supabase_admin()
-            .table("ndis_plans")
-            .select("id")
-            .eq("patient_id", participant_id)
-            .eq("status", "active")
-            .order("plan_start", desc=True)
-            .limit(1)
-            .execute()
-        )
-        plan_rows = plan_resp.data or []
-        if not plan_rows:
-            return []
-        plan_id = plan_rows[0].get("id")
-        if not plan_id:
-            return []
-        goals_resp = (
-            get_supabase_admin()
-            .table("patient_goals")
-            .select("id, title, description, category, status, priority, worker_focus")
-            .eq("plan_id", plan_id)
-            .eq("status", "active")
-            .order("priority", desc=False)
-            .order("created_at")
-            .execute()
-        )
-        goals: list[dict[str, Any]] = []
-        for row in goals_resp.data or []:
-            goals.append({
-                "id": row.get("id"),
-                "title": row.get("title") or row.get("description") or "",
-                "description": row.get("description") or row.get("title") or "",
-                "category": row.get("category") or "general",
-                "priority": row.get("priority"),
-                "worker_focus": row.get("worker_focus") or [],
-            })
-        return goals
+        return fetch_active_goals_for_shift(participant_id, organization_id)
     except Exception as exc:
         if _is_missing_schema_error(exc):
             return []
@@ -1189,21 +1161,9 @@ def _date_part(value: Any) -> str:
     return str(value)[:10]
 
 
-def _utc_day_bounds(today: date) -> tuple[str, str]:
-    day_start = datetime.combine(today, datetime.min.time(), tzinfo=timezone.utc)
-    next_day = day_start + timedelta(days=1)
-    return day_start.isoformat(), next_day.isoformat()
-
-
 def _matches_filter(shift: dict, filter_name: str, today: date) -> bool:
     status = (shift.get("status") or "scheduled").lower()
-    day = _date_part(shift.get("scheduled_start"))
-    shift_day: Optional[date] = None
-    if day:
-        try:
-            shift_day = date.fromisoformat(day)
-        except ValueError:
-            shift_day = None
+    shift_day = shift_local_date(shift.get("scheduled_start"))
 
     if filter_name == "completed":
         return status == "completed"
@@ -1213,7 +1173,7 @@ def _matches_filter(shift: dict, filter_name: str, today: date) -> bool:
         return filter_name == "all"
 
     if filter_name == "today":
-        return shift_day == today and status != "cancelled"
+        return shift_day == today and status not in {"completed", "cancelled"}
     if filter_name == "upcoming":
         return shift_day > today and status not in {"completed", "cancelled"}
     if filter_name == "past":
@@ -1228,7 +1188,7 @@ def filter_shift_rows(
 ) -> list[dict[str, Any]]:
     """Filter shift rows by bucket (CARECLIQV2-132)."""
     bucket = _normalize_shift_filter(filter_name)
-    ref = today or date.today()
+    ref = today or app_today()
     return [row for row in rows if _matches_filter(row, bucket, ref)]
 
 
@@ -1237,7 +1197,7 @@ def count_shifts_by_filter(
     today: Optional[date] = None,
 ) -> dict[str, int]:
     """Count shifts per UI filter bucket (CARECLIQV2-133)."""
-    ref = today or date.today()
+    ref = today or app_today()
     return {
         name: sum(1 for row in rows if _matches_filter(row, name, ref))
         for name in WORKER_SHIFT_COUNT_FILTERS
@@ -1253,12 +1213,12 @@ def _apply_shift_list_query(query: Any, filter_name: str, today: date) -> Any:
     if filter_name == "cancelled":
         return query.eq("status", "cancelled")
 
-    day_start_iso, next_day_iso = _utc_day_bounds(today)
+    day_start_iso, next_day_iso = app_day_bounds_utc(today)
     if filter_name == "today":
         return (
             query.gte("scheduled_start", day_start_iso)
             .lt("scheduled_start", next_day_iso)
-            .neq("status", "cancelled")
+            .not_.in_("status", ["completed", "cancelled"])
         )
     if filter_name == "upcoming":
         return (
@@ -1286,7 +1246,7 @@ def _fetch_worker_shift_rows(
             .eq("worker_id", worker_id)
         )
         if filter_name:
-            query = _apply_shift_list_query(query, filter_name, date.today())
+            query = _apply_shift_list_query(query, filter_name, app_today())
         resp = query.order("scheduled_start", desc=False).execute()
         return resp.data or []
     except Exception as exc:
@@ -1313,7 +1273,7 @@ def list_shifts_for_worker(
 ) -> list[dict[str, Any]]:
     """Return shift cards for a worker, filtered by date bucket."""
     bucket = _normalize_shift_filter(filter_name)
-    today = date.today()
+    today = app_today()
     rows = _fetch_worker_shift_rows(
         worker_id,
         organization_id,

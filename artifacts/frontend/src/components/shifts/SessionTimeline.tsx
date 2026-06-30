@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { Camera, ChevronDown, ClipboardList, MessageCircle, Mic, Paperclip } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listSessionEvidence, type TaskEvidenceRecord } from "@/lib/task-evidence-storage";
+import { listMergedSessionEvidence, SESSION_NOTES_UPDATED_EVENT } from "@/lib/merge-session-evidence";
+import type { TaskEvidenceRecord } from "@/lib/task-evidence-storage";
 import type { ShiftTask } from "@/services/shiftService";
 import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -136,7 +137,7 @@ export function SessionTimeline({
       return;
     }
     try {
-      const records = await listSessionEvidence(sessionId);
+      const records = await listMergedSessionEvidence(sessionId);
       setEntries(buildEntries(records, tasks, translate("shift.evidence.taskUpdate")));
     } catch {
       setEntries([]);
@@ -146,8 +147,17 @@ export function SessionTimeline({
   useEffect(() => {
     void refresh();
     const handler = () => void refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
     window.addEventListener("task-evidence-updated", handler);
-    return () => window.removeEventListener("task-evidence-updated", handler);
+    window.addEventListener(SESSION_NOTES_UPDATED_EVENT, handler);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("task-evidence-updated", handler);
+      window.removeEventListener(SESSION_NOTES_UPDATED_EVENT, handler);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [refresh]);
 
   if (!sessionId) return null;

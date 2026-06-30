@@ -1,5 +1,16 @@
 import type { UserNotification } from "@/services/notificationService";
 
+export const MOBILE_MAX_WIDTH = 767;
+
+export function isMobileViewport(): boolean {
+  return typeof window !== "undefined" && window.innerWidth <= MOBILE_MAX_WIDTH;
+}
+
+/** Sticky banner stack is desktop-only; mobile uses toast alerts instead. */
+export function shouldShowStickyBannerStack(): boolean {
+  return !isMobileViewport();
+}
+
 /**
  * Worker notification display rules (CARECLIQV2-261 / 262 / 263).
  *

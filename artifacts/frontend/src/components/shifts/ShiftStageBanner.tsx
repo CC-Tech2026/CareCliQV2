@@ -1,4 +1,4 @@
-import { MapPin, PlayCircle, CheckCircle2 } from "lucide-react";
+import { Loader2, MapPin, PlayCircle, CheckCircle2, Square } from "lucide-react";
 import type { ShiftVisualState } from "@/services/shiftService";
 import { cn } from "@/lib/utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -8,6 +8,8 @@ type Props = {
   participantName?: string;
   elapsed?: string;
   className?: string;
+  onEndShift?: () => void;
+  endShiftBusy?: boolean;
 };
 
 const BANNER_STYLES: Record<string, string> = {
@@ -34,7 +36,14 @@ const BANNER_SHORT_KEYS: Record<string, string> = {
   completed: "shift.banner.doneShort",
 };
 
-export function ShiftStageBanner({ visualState, participantName, elapsed, className }: Props) {
+export function ShiftStageBanner({
+  visualState,
+  participantName,
+  elapsed,
+  className,
+  onEndShift,
+  endShiftBusy,
+}: Props) {
   const { translate, translateParams } = useAccessibility();
   const textKey = BANNER_TEXT_KEYS[visualState];
   const shortKey = BANNER_SHORT_KEYS[visualState];
@@ -46,26 +55,55 @@ export function ShiftStageBanner({ visualState, participantName, elapsed, classN
   const Icon = BANNER_ICONS[visualState];
   const showTimer = (visualState === "clocked_in" || visualState === "session_active") && elapsed;
 
+  const showEndShift = visualState === "session_active" && Boolean(onEndShift);
+
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex min-h-[56px] items-center justify-center gap-2 px-4 text-center text-xs font-black uppercase tracking-wide shadow-sm transition-colors duration-300 sm:text-sm",
+        "sticky top-0 z-10 flex min-h-[56px] items-center px-4 text-xs font-black uppercase tracking-wide shadow-sm transition-colors duration-300 sm:text-sm",
+        showEndShift ? "justify-between gap-3" : "justify-center gap-2 text-center",
         BANNER_STYLES[visualState],
         className,
       )}
       role="status"
       aria-live="polite"
     >
-      {Icon && <Icon size={16} className="shrink-0" aria-hidden />}
-      <span className="hidden sm:inline">{text}</span>
-      <span className="sm:hidden">{shortText}</span>
-      {showTimer && (
-        <span
-          className="ml-1 rounded-md bg-black/15 px-2 py-0.5 font-mono text-[11px] tracking-normal sm:text-xs"
-          aria-label={translateParams("shift.banner.elapsedTime", { elapsed: elapsed ?? "" })}
-        >
-          {elapsed}
-        </span>
+      <div className={cn("flex min-w-0 items-center gap-2", !showEndShift && "justify-center")}>
+        {Icon && <Icon size={16} className="shrink-0" aria-hidden />}
+        <span className="hidden truncate sm:inline">{text}</span>
+        <span className="truncate sm:hidden">{shortText}</span>
+      </div>
+
+      {(showTimer || showEndShift) && (
+        <div className="flex shrink-0 items-center gap-2">
+          {/* {showTimer && (
+            <span
+              className="rounded-md bg-black/15 px-2 py-0.5 font-mono text-[11px] tracking-normal sm:text-xs"
+              aria-label={translateParams("shift.banner.elapsedTime", { elapsed: elapsed ?? "" })}
+            >
+              {elapsed}
+            </span>
+          )} */}
+          {/* {showEndShift && (
+            <button
+              type="button"
+              data-tutorial="end-shift"
+              disabled={endShiftBusy}
+              onClick={(event) => {
+                event.stopPropagation();
+                onEndShift?.();
+              }}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full bg-white/15 px-3 text-[11px] font-black uppercase tracking-wide text-white transition hover:bg-white/25 disabled:opacity-60 sm:text-xs"
+            >
+              {endShiftBusy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Square size={12} />
+              )}
+              {translate("shift.endShiftButton")}
+            </button>
+          )} */}
+        </div>
       )}
     </div>
   );

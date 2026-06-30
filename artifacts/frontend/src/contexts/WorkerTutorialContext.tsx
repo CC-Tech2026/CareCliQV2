@@ -107,6 +107,9 @@ async function resolveTutorialShiftId(): Promise<string | null> {
 }
 
 export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
+  if (!WORKER_TUTORIAL_ENABLED) {
+    return <>{children}</>;
+  }
   const [location, navigate] = useLocation();
   const { isAuthenticated } = useAuth();
   const [progress, setProgress] = useState<TutorialProgress>(loadLocalProgress);

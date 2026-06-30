@@ -97,7 +97,7 @@ export function StaffCommunity() {
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-            Staff Community
+            {translate("hub.community.title")}
           </p>
         </div>
         {!loading && displayItems.length > 0 && (

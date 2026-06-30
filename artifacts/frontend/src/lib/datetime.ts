@@ -31,6 +31,19 @@ export function formatAppTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+/** e.g. "4:45 PM today" or "4:45 PM, 28 Jun" for mobile shift success screens */
+export function formatMobileSubmittedAt(iso: string): string {
+  const time = formatAppTime(iso);
+  const isToday = appLocalDateKey(iso) === appLocalDateKey(new Date().toISOString());
+  if (isToday) return `${time} today`;
+  const date = new Intl.DateTimeFormat("en-AU", {
+    timeZone: APP_TIMEZONE,
+    day: "numeric",
+    month: "short",
+  }).format(new Date(iso));
+  return `${time}, ${date}`;
+}
+
 /** Calendar date key yyyy-MM-dd in Australia/Adelaide */
 export function appLocalDateKey(iso: string): string {
   const p = tzParts(iso);

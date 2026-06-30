@@ -118,17 +118,23 @@ def test_background_summary_sentence_validation():
 
 
 @patch("backend.app.services.briefing_service.get_briefing_for_worker")
+@patch("backend.app.services.briefing_service._acknowledge_all_briefing_alerts")
 @patch("backend.app.services.briefing_service._get_worker_shift")
 @patch("backend.app.services.briefing_service.get_supabase_admin")
-def test_complete_briefing_requires_alert_ack(mock_admin, mock_shift, mock_payload):
+def test_complete_briefing_auto_acknowledges_alerts(mock_admin, mock_shift, mock_ack_all, mock_payload):
     mock_shift.return_value = _sample_shift()
     mock_payload.return_value = {
-        "all_alerts_acknowledged": False,
+        "all_alerts_acknowledged": True,
         "patient_briefing_version": 1,
         "shift_briefing_version": 1,
+        "briefing_complete": True,
     }
-    with pytest.raises(ValueError, match="Acknowledge all critical alerts"):
-        briefing_service.complete_briefing("shift-1", "worker-1", "org-1")
+    mock_admin.return_value.table.return_value.upsert.return_value.execute.return_value = None
+
+    result = briefing_service.complete_briefing("shift-1", "worker-1", "org-1")
+
+    mock_ack_all.assert_called_once_with("shift-1", "worker-1", "patient-1", "org-1")
+    assert result["briefing_complete"] is True
 
 
 @patch("backend.app.services.briefing_service.ensure_briefing_completed")

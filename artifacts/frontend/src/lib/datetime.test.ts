@@ -18,4 +18,12 @@ describe("datetime timezone helpers", () => {
     expect(formatAppTime(utc)).toMatch(/9:00\s*am/i);
     expect(appLocalDateKey(utc)).toBe("2026-06-30");
   });
+
+  it("maps Adelaide calendar day for shift grouping", () => {
+    const adelaideDay = "2026-06-30";
+    const wrongUtc = "2026-06-30T19:30:00.000Z";
+    const correctUtc = "2026-06-30T10:00:00.000Z";
+    expect(appLocalDateKey(wrongUtc)).toBe("2026-07-01");
+    expect(appLocalDateKey(correctUtc)).toBe(adelaideDay);
+  });
 });

@@ -71,7 +71,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
   {
     key: "pre_shift_briefing_complete",
     title: "Complete the briefing",
-    body: "Acknowledge any critical alerts, scroll through all sections, then tap Ready to start.",
+    body: "Read the critical alerts, scroll through all sections, then tap Ready to start.",
     target: "[data-tutorial='briefing-complete']",
     fallbackTarget: "[data-tutorial='briefing-page']",
     requiresShift: true,

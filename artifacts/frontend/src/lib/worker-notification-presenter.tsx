@@ -1,11 +1,22 @@
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import type { UserNotification } from "@/services/notificationService";
-import { showDesktopNotification } from "@/lib/desktop-notifications";
+import { WorkerBannerToastContent } from "@/components/worker/WorkerBannerToastContent";
 import {
+  acknowledgeNotification,
+  dismissNotification,
+  type UserNotification,
+} from "@/services/notificationService";
+import { showDesktopNotification } from "@/lib/desktop-notifications";
+import { notificationAccentColor } from "@/lib/notification-copy";
+import {
+  isBannerNotification,
+  isMobileViewport,
+  shouldDismissBannerOnView,
   shouldShowDesktopNotification,
   shouldShowToast,
 } from "@/lib/notification-display";
+
+const MOBILE_BANNER_TOAST_MS = 5_000;
 
 const presentedIds = new Set<string>();
 
@@ -62,10 +73,45 @@ export function resolveNotificationPath(notification: UserNotification): string 
 function toastVariant(
   notification: UserNotification,
 ): "default" | "destructive" {
+  if (notification.banner_style === "red") return "destructive";
   if (notification.severity === "urgent" || notification.severity === "high") {
     return "destructive";
   }
   return "default";
+}
+
+function markMobileBannerSeen(notification: UserNotification) {
+  if (notification.requires_ack && !notification.acknowledged_at) {
+    void acknowledgeNotification(notification.id);
+    return;
+  }
+  if (!notification.dismissed_at && shouldDismissBannerOnView(notification)) {
+    void dismissNotification(notification.id);
+  }
+}
+
+function mobileBannerToastClass(notification: UserNotification): string {
+  return [
+    "items-start gap-3 rounded-xl border border-slate-200/80 bg-white py-3.5 pl-4 pr-10 text-slate-900",
+    "shadow-[0_10px_40px_rgba(15,23,42,0.14)]",
+    "data-[state=open]:slide-in-from-top-2",
+  ].join(" ");
+}
+
+function presentMobileBannerNotificationToast(notification: UserNotification): void {
+  const accent = notificationAccentColor(notification.banner_style);
+
+  toast({
+    title: (
+      <span className="text-[13px] font-semibold text-slate-800">{notification.title}</span>
+    ),
+    description: <WorkerBannerToastContent notification={notification} />,
+    duration: MOBILE_BANNER_TOAST_MS,
+    variant: "default",
+    className: mobileBannerToastClass(notification),
+    style: { borderLeftWidth: 3, borderLeftColor: accent.text },
+    onDismiss: () => markMobileBannerSeen(notification),
+  });
 }
 
 export function presentWorkerNotification(
@@ -80,6 +126,11 @@ export function presentWorkerNotification(
   const open = () => {
     if (path) navigate(path);
   };
+
+  if (!document.hidden && isBannerNotification(notification) && isMobileViewport()) {
+    presentMobileBannerNotificationToast(notification);
+    return;
+  }
 
   if (!document.hidden && shouldShowToast(notification)) {
     toast({

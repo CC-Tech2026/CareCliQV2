@@ -154,22 +154,37 @@ export function ParticipantRiskAcknowledgementSection({
         className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4"
         data-tutorial="risk-ack-complete"
       >
-        <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
-          <ShieldAlert size={16} /> {translate("safety.risksAcknowledged")}
-        </p>
-        {acknowledgedAt && (
-          <p className="mt-1 text-xs font-semibold text-emerald-700">
-            {translateParams("safety.loggedAt", {
-              date: new Date(acknowledgedAt).toLocaleString(),
-              by: acknowledgedByName
-                ? translateParams("safety.loggedBy", { name: acknowledgedByName })
-                : "",
-            })}
-          </p>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left"
+          onClick={onToggle}
+          aria-expanded={open}
+        >
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 text-sm font-black text-emerald-800">
+              <ShieldAlert size={16} /> {translate("safety.risksAcknowledged")}
+            </p>
+            {acknowledgedAt && (
+              <p className="mt-1 text-xs font-semibold text-emerald-700">
+                {translateParams("safety.loggedAt", {
+                  date: new Date(acknowledgedAt).toLocaleString(),
+                  by: acknowledgedByName
+                    ? translateParams("safety.loggedBy", { name: acknowledgedByName })
+                    : "",
+                })}
+              </p>
+            )}
+          </div>
+          <ChevronDown
+            size={18}
+            className={cn("shrink-0 text-emerald-700 transition", open && "rotate-180")}
+          />
+        </button>
+        {open && (
+          <div className="mt-3">
+            <ParticipantRiskAlerts alerts={alerts} compact />
+          </div>
         )}
-        <div className="mt-3">
-          <ParticipantRiskAlerts alerts={alerts} compact />
-        </div>
       </section>
     );
   }

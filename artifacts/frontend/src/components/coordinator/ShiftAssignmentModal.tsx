@@ -225,7 +225,7 @@ export function ShiftAssignmentModal({
         <div className="px-6 pt-5 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <h2 className="text-[18px] font-black" style={{ color: PLUM }}>{translate("coordinator.shiftAssign.title")}</h2>
           <p className="mt-0.5 text-[13px]" style={{ color: MUTED }}>
-            Schedule a new shift. Assign a worker now or leave unassigned for later.
+            {translate("coordinator.shiftAssign.subtitle")}
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export function ShiftAssignmentModal({
           {/* Worker */}
           <div className="space-y-2">
             <label className="text-[12px] font-black flex items-center gap-2" style={{ color: TEXT }}>
-              Support Worker
+              {translate("coordinator.shiftAssign.supportWorker")}
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: SOFT, color: MUTED }}>{translate("common.optional")}</span>
             </label>
             {worker ? (

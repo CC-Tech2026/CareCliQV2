@@ -132,7 +132,7 @@ export function WorkspaceLauncher() {
       <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
         <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-            Workspace
+            {translate("hub.workspace.title")}
           </p>
         </div>
         <div className="p-3">
@@ -188,7 +188,7 @@ function MDWorkspaceLauncher({
       <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
         <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-            MD Workspaces
+            {translate("hub.workspace.mdTitle")}
           </p>
         </div>
         <div className="p-3 space-y-0.5">

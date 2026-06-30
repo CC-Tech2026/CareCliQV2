@@ -230,6 +230,39 @@
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
 
+  /* Worker mobile spec v2 — light */
+  --wm-pink: #D4537E;
+  --wm-purple: #7F77DD;
+  --wm-amber: #EF9F27;
+  --wm-red: #E24B4A;
+  --wm-green: #639922;
+  --wm-bg: #F7F5F2;
+  --wm-surface: #FFFFFF;
+  --wm-border: #E8E6E1;
+  --wm-text: #1a1a18;
+  --wm-muted: #888780;
+  --wm-clocked-in-bg: #EAF3DE;
+  --wm-clocked-in-border: #C0DD97;
+  --wm-clocked-in-text: #27500A;
+  --wm-clocked-in-icon: #3B6D11;
+  --wm-warn-bg: #FFF3E0;
+  --wm-warn-border: #FAC775;
+  --wm-warn-text: #854F0B;
+  --wm-warn-title: #633806;
+  --wm-alert-bg: #FCEBEB;
+  --wm-alert-border: #F7C1C1;
+  --wm-alert-text: #791F1F;
+  --wm-alert-icon: #A32D2D;
+  --wm-info-bg: #EEEDFE;
+  --wm-info-border: #AFA9EC;
+  --wm-info-title: #3C3489;
+  --wm-chip-green-bg: #EAF3DE;
+  --wm-chip-green-border: #C0DD97;
+  --wm-checkbox-border: #D3D1C7;
+  --wm-task-active-bg: #FFFFFF;
+  --wm-task-done-text: #9CA3AF;
+  --wm-missing-bg: #FFF8F0;
+
   /* Auth pages (login / signup) */
   --auth-shell-bg: #FFFFFF;
   --auth-form-bg: #FFFFFF;
@@ -289,6 +322,39 @@
   --cc-shadow-sm:  0 2px 8px rgba(0,0,0,0.25);
   --cc-shadow-md:  0 4px 16px rgba(0,0,0,0.3);
   --cc-shadow-lg:  0 20px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
+
+  /* Worker mobile spec v2 — dark */
+  --wm-pink: #F472B6;
+  --wm-purple: #A5B4FC;
+  --wm-amber: #FCD34D;
+  --wm-red: #F87171;
+  --wm-green: #4ADE80;
+  --wm-bg: #111827;
+  --wm-surface: #1F2937;
+  --wm-border: #374151;
+  --wm-text: #F9FAFB;
+  --wm-muted: #9CA3AF;
+  --wm-clocked-in-bg: rgba(74, 222, 128, 0.12);
+  --wm-clocked-in-border: rgba(74, 222, 128, 0.35);
+  --wm-clocked-in-text: #86EFAC;
+  --wm-clocked-in-icon: #4ADE80;
+  --wm-warn-bg: rgba(252, 211, 77, 0.12);
+  --wm-warn-border: rgba(252, 211, 77, 0.35);
+  --wm-warn-text: #FCD34D;
+  --wm-warn-title: #FDE68A;
+  --wm-alert-bg: rgba(248, 113, 113, 0.12);
+  --wm-alert-border: rgba(248, 113, 113, 0.35);
+  --wm-alert-text: #FCA5A5;
+  --wm-alert-icon: #F87171;
+  --wm-info-bg: rgba(165, 180, 252, 0.12);
+  --wm-info-border: rgba(165, 180, 252, 0.35);
+  --wm-info-title: #C7D2FE;
+  --wm-chip-green-bg: rgba(74, 222, 128, 0.12);
+  --wm-chip-green-border: rgba(74, 222, 128, 0.35);
+  --wm-checkbox-border: #4B5563;
+  --wm-task-active-bg: #374151;
+  --wm-task-done-text: #6B7280;
+  --wm-missing-bg: rgba(252, 211, 77, 0.08);
 
   --auth-shell-bg: #111827;
   --auth-form-bg: #1F2937;
@@ -401,6 +467,29 @@
 .dark .border-blue-200    { border-color: rgba(56, 189, 248, 0.25)  !important; }
 .dark .border-slate-200   { border-color: var(--cc-border)         !important; }
 .dark .hover\:bg-red-50:hover { background-color: var(--cc-status-critical-bg) !important; }
+
+/* Violet / orange accent panels (participant shift context, clinical records) */
+.dark .bg-violet-50\/30,
+.dark .bg-violet-50,
+.dark .bg-violet-100    { background-color: color-mix(in srgb, var(--cc-plum) 12%, var(--cc-surface)) !important; }
+.dark .bg-orange-50\/30,
+.dark .bg-orange-50,
+.dark .bg-orange-100    { background-color: color-mix(in srgb, var(--cc-coral) 12%, var(--cc-surface)) !important; }
+.dark .bg-purple-50     { background-color: var(--cc-active-bg) !important; }
+.dark .bg-white\/70     { background-color: var(--cc-surface) !important; }
+.dark .text-violet-700,
+.dark .text-violet-800  { color: var(--cc-plum)  !important; }
+.dark .text-orange-600,
+.dark .text-orange-700  { color: var(--cc-coral) !important; }
+.dark .border-violet-200\/70,
+.dark .border-violet-300 { border-color: var(--cc-border) !important; }
+.dark .border-orange-200\/70,
+.dark .border-orange-200,
+.dark .border-orange-300 { border-color: var(--cc-border) !important; }
+.dark .border-purple-100 { border-color: var(--cc-border) !important; }
+.dark .text-sky-700     { color: var(--cc-sky) !important; }
+.dark .border-sky-100   { border-color: var(--cc-border) !important; }
+.dark .bg-slate-100     { background-color: var(--cc-soft) !important; }
 
 /* Theme-aware status pill utilities */
 .cc-status-success {
@@ -857,9 +946,30 @@
   padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 
+/* Main content when mobile bottom nav is hidden (shift detail / briefing) */
+.safe-scroll-no-bottom-nav {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
 /* Bottom navigation bar padding */
 .safe-nav-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Worker mobile session — full-screen immersive (spec v2) */
+body.worker-mobile-immersive .safe-header-mobile,
+body.worker-mobile-immersive .safe-nav-bottom {
+  display: none !important;
+}
+
+body.worker-mobile-immersive main {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+body.worker-mobile-immersive .pb-safe,
+.worker-mobile-immersive .pb-safe {
+  padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
 }
 
 /* ── Accessibility (CARECLIQV2-290) ─────────────────────────────────────────

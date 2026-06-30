@@ -483,6 +483,37 @@ def acknowledge_briefing_alert(
     return get_briefing_for_worker(shift_id, worker_id, organization_id)
 
 
+def _acknowledge_all_briefing_alerts(
+    shift_id: str,
+    worker_id: str,
+    participant_id: str,
+    organization_id: str,
+) -> None:
+    """Record acknowledgement for every participant briefing alert on complete."""
+    alerts = list_participant_briefing_alerts(participant_id, organization_id)
+    if not alerts:
+        return
+    now = _now_iso()
+    rows = [
+        {
+            "shift_id": shift_id,
+            "alert_id": str(alert["id"]),
+            "worker_id": worker_id,
+            "acknowledged_at": now,
+        }
+        for alert in alerts
+    ]
+    try:
+        get_supabase_admin().table("shift_briefing_alert_acknowledgements").upsert(
+            rows,
+            on_conflict="shift_id,alert_id,worker_id",
+        ).execute()
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            raise ValueError("Briefing acknowledgements are not available — run database migrations.") from exc
+        raise
+
+
 def complete_briefing(
     shift_id: str,
     worker_id: str,
@@ -497,10 +528,10 @@ def complete_briefing(
     if shift.get("clocked_in_at"):
         raise ValueError("Shift is already clocked in.")
 
-    briefing = get_briefing_for_worker(shift_id, worker_id, organization_id)
-    if not briefing.get("all_alerts_acknowledged"):
-        raise ValueError("Acknowledge all critical alerts before continuing.")
+    participant_id = str(shift.get("participant_id") or "")
+    _acknowledge_all_briefing_alerts(shift_id, worker_id, participant_id, organization_id)
 
+    briefing = get_briefing_for_worker(shift_id, worker_id, organization_id)
     patient_version = int(briefing.get("patient_briefing_version") or 1)
     shift_version = int(briefing.get("shift_briefing_version") or 1)
     now = _now_iso()
