@@ -12,6 +12,7 @@ from ..core.access import owner_payload
 from .check_in_service import (
     log_shift_check_in,
     normalize_client_timestamp,
+    normalize_client_timestamp_with_location,
     resolve_participant_coordinates,
     validate_clock_in_window,
     verify_gps_location,
@@ -1593,7 +1594,16 @@ def clock_in_shift(
     verification_distance = check_in_meta.pop("_verification_distance_meters", None)
     qr_code_id = check_in_meta.pop("_qr_code_id", None)
 
-    normalized_client_ts = normalize_client_timestamp(client_timestamp)
+    # Use location-aware timestamp normalization if location provided
+    if location:
+        normalized_client_ts = normalize_client_timestamp_with_location(
+            client_timestamp,
+            latitude=location.get("latitude"),
+            longitude=location.get("longitude"),
+        )
+    else:
+        normalized_client_ts = normalize_client_timestamp(client_timestamp)
+    
     now = normalized_client_ts or _now_iso()
     tasks = shift.get("tasks") or []
     if not tasks:

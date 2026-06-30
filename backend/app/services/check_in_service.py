@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.config import settings
+from ..core.timezone import APP_TIMEZONE, get_timezone_for_location
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
@@ -310,15 +311,57 @@ def log_shift_check_in(
 
 
 def normalize_client_timestamp(client_timestamp: Optional[str]) -> Optional[str]:
+    """
+    Normalize client timestamp to UTC ISO string.
+    
+    Treats naive timestamps as APP_TIMEZONE local time (not UTC).
+    Use normalize_client_timestamp_with_location() for worker-location-aware handling.
+    """
     if not client_timestamp:
         return None
     try:
         parsed = _parse_iso(client_timestamp)
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            # ✅ FIX: Treat naive as APP_TIMEZONE, not UTC
+            parsed = parsed.replace(tzinfo=APP_TIMEZONE)
         now = datetime.now(timezone.utc)
         if abs((now - parsed).total_seconds()) > OFFLINE_SYNC_MAX_SKEW_HOURS * 3600:
             return None
-        return parsed.isoformat()
+        return parsed.astimezone(timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_client_timestamp_with_location(
+    client_timestamp: Optional[str],
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> Optional[str]:
+    """
+    Normalize client timestamp with location-based timezone support.
+    
+    If location provided, treats naive timestamps as local time in the worker's detected timezone.
+    Falls back to APP_TIMEZONE if location-based detection is disabled or unavailable.
+    
+    Args:
+        client_timestamp: ISO datetime string from client (may be naive)
+        latitude: Worker's latitude for timezone resolution
+        longitude: Worker's longitude for timezone resolution
+    
+    Returns:
+        UTC ISO string or None if invalid
+    """
+    if not client_timestamp:
+        return None
+    try:
+        parsed = _parse_iso(client_timestamp)
+        if parsed.tzinfo is None:
+            # ✅ Use location-aware timezone resolution
+            local_tz = get_timezone_for_location(latitude, longitude)
+            parsed = parsed.replace(tzinfo=local_tz)
+        now = datetime.now(timezone.utc)
+        if abs((now - parsed).total_seconds()) > OFFLINE_SYNC_MAX_SKEW_HOURS * 3600:
+            return None
+        return parsed.astimezone(timezone.utc).isoformat()
     except (TypeError, ValueError):
         return None
