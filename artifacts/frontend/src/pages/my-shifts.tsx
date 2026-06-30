@@ -1,6 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { appLocalDateKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import { CalendarDays, CalendarClock, CheckCircle2, FileText, XCircle, type LucideIcon } from "lucide-react";
@@ -182,7 +183,7 @@ export default function MyShifts() {
     const groups = new Map<string, WorkerShift[]>();
     for (const shift of list) {
       const key = shift.scheduled_start
-        ? format(parseISO(shift.scheduled_start), "yyyy-MM-dd")
+        ? appLocalDateKey(shift.scheduled_start)
         : "unknown";
       const bucket = groups.get(key) ?? [];
       bucket.push(shift);

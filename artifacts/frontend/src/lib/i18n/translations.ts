@@ -3757,7 +3757,7 @@ export const WORKER_BOTTOM_NAV_KEYS: Record<string, string> = {
   "hub.workspace.opening": "Opening workspace…",
   "hub.workspace.worker.title": "Support Worker Workspace",
   "hub.workspace.worker.short": "My Workspace",
-  "hub.workspace.worker.subtitle": "Client visits, shift notes and compliance tracking.",
+  "hub.workspace.worker.subtitle": "Your daily overview, shifts and action items.",
   "hub.workspace.coordinator.title": "Support Coordinator Workspace",
   "hub.workspace.coordinator.short": "My Workspace",
   "hub.workspace.coordinator.subtitle": "Team oversight, NDIS plans and billing.",

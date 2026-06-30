@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from ..core.access import get_user_id, get_user_organization_id, is_coordinator_role, get_coordinator_team_ids
 from ..core.security import get_current_user
+from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
 from ..services.compliance_engine import collect_budget_rule_alerts_from_sessions
 from ..services.pattern_detection_service import (
     dismiss_pattern,
@@ -848,13 +849,15 @@ async def update_shift_schedule(
     new_values: dict[str, Any] = {}
     if body.scheduled_start:
         old_values["scheduled_start"] = shift.get("scheduled_start")
-        update_payload["scheduled_start"] = body.scheduled_start
-        new_values["scheduled_start"] = body.scheduled_start
+        parsed_start = parse_shift_datetime(body.scheduled_start)
+        update_payload["scheduled_start"] = parsed_start.isoformat()
+        new_values["scheduled_start"] = parsed_start.isoformat()
         changes.append("start time updated")
     if body.scheduled_end:
         old_values["scheduled_end"] = shift.get("scheduled_end")
-        update_payload["scheduled_end"] = body.scheduled_end
-        new_values["scheduled_end"] = body.scheduled_end
+        parsed_end = parse_shift_datetime(body.scheduled_end)
+        update_payload["scheduled_end"] = parsed_end.isoformat()
+        new_values["scheduled_end"] = parsed_end.isoformat()
         changes.append("end time updated")
 
     try:
@@ -1429,8 +1432,12 @@ async def assign_shift(
     
     # Parse timestamps and calculate duration if needed
     try:
-        scheduled_start = datetime.fromisoformat(body.scheduled_start)
-        scheduled_end = datetime.fromisoformat(body.scheduled_end) if body.scheduled_end else (scheduled_start + timedelta(hours=4))
+        scheduled_start = parse_shift_datetime(body.scheduled_start)
+        scheduled_end = (
+            parse_shift_datetime(body.scheduled_end)
+            if body.scheduled_end
+            else (scheduled_start + timedelta(hours=4))
+        )
         
         # Calculate duration in minutes if not provided and end time is provided
         duration_minutes = body.duration_minutes
@@ -2077,12 +2084,12 @@ async def bulk_create_shifts(
             shift_date = first_day + timedelta(days=week * 7 + days_ahead)
             shift_start_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, sh, sm,
-                tzinfo=timezone.utc,
-            )
+                tzinfo=APP_TIMEZONE,
+            ).astimezone(timezone.utc)
             shift_end_dt = datetime(
                 shift_date.year, shift_date.month, shift_date.day, eh, em,
-                tzinfo=timezone.utc,
-            )
+                tzinfo=APP_TIMEZONE,
+            ).astimezone(timezone.utc)
             if shift_end_dt <= shift_start_dt:
                 shift_end_dt += timedelta(days=1)
 
@@ -2189,8 +2196,12 @@ async def create_unassigned_shift(
     participant = p_resp.data[0]
 
     try:
-        s_dt = datetime.fromisoformat(body.scheduled_start)
-        e_dt = datetime.fromisoformat(body.scheduled_end) if body.scheduled_end else s_dt + timedelta(hours=4)
+        s_dt = parse_shift_datetime(body.scheduled_start)
+        e_dt = (
+            parse_shift_datetime(body.scheduled_end)
+            if body.scheduled_end
+            else s_dt + timedelta(hours=4)
+        )
         duration = body.duration_minutes or int((e_dt - s_dt).total_seconds() / 60)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=f"Invalid datetime: {exc}")

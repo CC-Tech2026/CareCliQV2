@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   ArrowRight,
-  UserRound,
   LayoutDashboard,
   Loader2,
   BarChart2,
@@ -39,8 +38,8 @@ const WORKSPACES: WorkspaceDef[] = [
     titleKey: "hub.workspace.worker.title",
     shortKey: "hub.workspace.worker.short",
     subtitleKey: "hub.workspace.worker.subtitle",
-    href: "/my-clients",
-    icon: UserRound,
+    href: "/dashboard",
+    icon: LayoutDashboard,
     allowedRoles: ["support_worker"],
     accentColor: PLUM,
   },

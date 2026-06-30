@@ -24,7 +24,7 @@ function isWithinBusinessHours(config: SupportConfig | null): boolean {
   try {
     const now = new Date();
     const formatter = new Intl.DateTimeFormat("en-AU", {
-      timeZone: config.business_hours_json.timezone || "Australia/Sydney",
+      timeZone: config.business_hours_json.timezone || "Australia/Adelaide",
       weekday: "short",
       hour: "numeric",
       hour12: false,
