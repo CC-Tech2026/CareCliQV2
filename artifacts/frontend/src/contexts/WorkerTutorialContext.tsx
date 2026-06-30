@@ -24,6 +24,8 @@ import {
 import { getWorkerShifts } from "@/services/shiftService";
 import { confirmTutorialDismiss } from "@/lib/worker-tutorial-dismiss";
 import { clearTutorialModalBlocking } from "@/lib/worker-tutorial-modal";
+import { purgeTutorialOfflineArtifacts } from "@/lib/tutorial-offline";
+import { WORKER_TUTORIAL_ENABLED } from "@/lib/worker-tutorial-feature";
 import { TutorialGuideLoadingOverlay } from "@/components/help/TutorialGuideLoadingOverlay";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -119,18 +121,40 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   const driverRef = useRef<Driver | null>(null);
   const activeIndexRef = useRef<number | null>(null);
 
-  const isTutorialMode = activeIndex !== null || location.includes("tutorial=1");
+  const isTutorialMode =
+    WORKER_TUTORIAL_ENABLED && (activeIndex !== null || location.includes("tutorial=1"));
 
-  const isFlowModalPaused = flowModalBlocking || isTutorialEndShiftFlowModalOpen();
+  const activeStepKey = activeIndex !== null ? WORKER_TUTORIAL_STEPS[activeIndex]?.key : null;
+  const isEndShiftFlowTutorialStep =
+    activeStepKey === "end_shift_review" || activeStepKey === "shift_signature";
+  // Do not read the DOM during render — flowModalBlocking is synced from shift detail.
+  const isFlowModalPaused = flowModalBlocking || isEndShiftFlowTutorialStep;
 
   const isStepGuideBlocking = useMemo(
     () =>
-      !stepPromptHidden
+      WORKER_TUTORIAL_ENABLED
+      && !stepPromptHidden
       && !driverSuppressed
       && !isFlowModalPaused
       && (bootstrapping || (activeIndex !== null && !stepGuideReady)),
     [stepPromptHidden, driverSuppressed, isFlowModalPaused, bootstrapping, activeIndex, stepGuideReady],
   );
+
+  useEffect(() => {
+    if (WORKER_TUTORIAL_ENABLED) return;
+    destroyTutorialDriver(driverRef.current);
+    driverRef.current = null;
+    setActiveIndex(null);
+    setStepGuideReady(false);
+    setFlowModalBlocking(false);
+    setBootstrapping(false);
+    clearTutorialModalBlocking();
+    sessionStorage.setItem(DISMISSED_KEY, "1");
+    sessionStorage.removeItem(IN_PROGRESS_KEY);
+    if (location.includes("tutorial=1")) {
+      navigate(location.replace(/[?&]tutorial=1(&step=[^&]*)?/, "").replace(/\?$/, "") || "/my-shifts");
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     if (!isStepGuideBlocking) return;
@@ -182,6 +206,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     setStepGuideReady(false);
     setFlowModalBlocking(false);
     sessionStorage.removeItem(IN_PROGRESS_KEY);
+    void purgeTutorialOfflineArtifacts();
     if (location.includes("tutorial=1")) {
       navigate(location.replace(/[?&]tutorial=1(&step=[^&]*)?/, "").replace(/\?$/, "") || "/my-shifts");
     }
@@ -207,8 +232,12 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     (index: number, shiftId: string | null) => {
       const step = WORKER_TUTORIAL_STEPS[index];
       if (!step) return;
+      const isEndShiftFlow =
+        step.key === "end_shift_review" || step.key === "shift_signature";
       setStepPromptHidden(false);
-      if (!flowModalBlocking && !isTutorialEndShiftFlowModalOpen()) {
+      if (isEndShiftFlow) {
+        setStepGuideReady(true);
+      } else if (!flowModalBlocking && !isTutorialEndShiftFlowModalOpen()) {
         setStepGuideReady(false);
       }
       setActiveIndex(index);
@@ -260,8 +289,10 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     async (fromIndex = 0, topicKey?: TutorialStepKey) => {
+      if (!WORKER_TUTORIAL_ENABLED) return;
       setBootstrapping(true);
       try {
+        await purgeTutorialOfflineArtifacts();
         sessionStorage.removeItem(DISMISSED_KEY);
         sessionStorage.setItem(IN_PROGRESS_KEY, "1");
         setStepPromptHidden(false);
@@ -284,6 +315,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   );
 
   const resume = useCallback(async () => {
+    if (!WORKER_TUTORIAL_ENABLED) return;
     if (progress.completed || isTutorialSessionDismissed()) return;
     setBootstrapping(true);
     try {
@@ -364,6 +396,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
   }, [advance, persistStep]);
 
   const replay = useCallback(async () => {
+    if (!WORKER_TUTORIAL_ENABLED) return;
     setBootstrapping(true);
     try {
       sessionStorage.removeItem(DISMISSED_KEY);
@@ -399,6 +432,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     setStepGuideReady(false);
     setFlowModalBlocking(false);
     setBootstrapping(false);
+    void purgeTutorialOfflineArtifacts();
     sessionStorage.setItem(DISMISSED_KEY, "1");
     sessionStorage.removeItem(IN_PROGRESS_KEY);
     if (location.includes("tutorial=1")) {
@@ -414,22 +448,43 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setFlowModalBlockingStable = useCallback((blocking: boolean) => {
+    setFlowModalBlocking((prev) => (prev === blocking ? prev : blocking));
+  }, []);
+
   useEffect(() => {
+    if (!WORKER_TUTORIAL_ENABLED) return;
     if (activeIndex === null || stepPromptHidden) {
       destroyTutorialDriver(driverRef.current);
       driverRef.current = null;
       return;
     }
 
-    if (flowModalBlocking || driverSuppressed || isTutorialEndShiftFlowModalOpen()) {
+    const step = WORKER_TUTORIAL_STEPS[activeIndex];
+    if (!step) return;
+    const isEndShiftFlow =
+      step.key === "end_shift_review" || step.key === "shift_signature";
+
+    // Validation / signature modals are the UI for these steps — driver.js must not
+    // highlight the dialog (causes refresh loops and React error #185).
+    if (isEndShiftFlow) {
       destroyTutorialDriver(driverRef.current);
       driverRef.current = null;
-      setStepGuideReady((ready) => (ready ? ready : true));
+      setStepGuideReady(true);
       return;
     }
 
-    const step = WORKER_TUTORIAL_STEPS[activeIndex];
-    if (!step) return;
+    // Other steps: tear down the overlay while a flow modal is open.
+    if (
+      driverSuppressed
+      || flowModalBlocking
+      || isTutorialEndShiftFlowModalOpen()
+    ) {
+      destroyTutorialDriver(driverRef.current);
+      driverRef.current = null;
+      setStepGuideReady(true);
+      return;
+    }
 
     let cancelled = false;
 
@@ -437,8 +492,18 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       destroyTutorialDriver(driverRef.current);
       driverRef.current = null;
 
-      if (isTutorialEndShiftFlowModalOpen() || flowModalBlocking) {
-        setStepGuideReady((ready) => (ready ? ready : true));
+      const currentStep =
+        activeIndexRef.current !== null
+          ? WORKER_TUTORIAL_STEPS[activeIndexRef.current]
+          : null;
+      if (
+        !currentStep
+        || currentStep.key === "end_shift_review"
+        || currentStep.key === "shift_signature"
+        || flowModalBlocking
+        || isTutorialEndShiftFlowModalOpen()
+      ) {
+        setStepGuideReady(true);
         return;
       }
 
@@ -539,7 +604,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       replay,
       close,
       setDriverSuppressed,
-      setFlowModalBlocking,
+      setFlowModalBlocking: setFlowModalBlockingStable,
       isStepGuideBlocking,
     }),
     [
@@ -556,7 +621,7 @@ export function WorkerTutorialProvider({ children }: { children: ReactNode }) {
       replay,
       close,
       setDriverSuppressed,
-      setFlowModalBlocking,
+      setFlowModalBlockingStable,
       isStepGuideBlocking,
     ],
   );

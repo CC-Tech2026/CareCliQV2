@@ -1,9 +1,10 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, isSameDay, parseISO, startOfDay, subDays } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { appLocalDateKey } from "@/lib/datetime";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { CalendarDays, FileText, Bell } from "lucide-react";
+import { CalendarDays, CalendarClock, CheckCircle2, FileText, XCircle, type LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import { ShiftListCard } from "@/components/shifts/ShiftListCard";
 import { OfflineSyncBanner } from "@/components/shifts/OfflineSyncBanner";
@@ -27,11 +28,11 @@ import {
 } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const FILTER_KEYS: { id: ShiftFilter; labelKey: string }[] = [
-  { id: "today", labelKey: "shifts.filter.today" },
-  { id: "upcoming", labelKey: "shifts.filter.upcoming" },
-  { id: "completed", labelKey: "shifts.filter.completed" },
-  { id: "cancelled", labelKey: "shifts.filter.cancelled" },
+const FILTER_KEYS: { id: ShiftFilter; labelKey: string; icon: LucideIcon }[] = [
+  { id: "today", labelKey: "shifts.filter.today", icon: CalendarDays },
+  { id: "upcoming", labelKey: "shifts.filter.upcoming", icon: CalendarClock },
+  { id: "completed", labelKey: "shifts.filter.completed", icon: CheckCircle2 },
+  { id: "cancelled", labelKey: "shifts.filter.cancelled", icon: XCircle },
 ];
 
 function formatGroupLabel(dateKey: string, translate: (key: string) => string) {
@@ -58,25 +59,30 @@ function ShiftFilterTabs({
   translate: (key: string) => string;
 }) {
   return (
-    <div className="rounded-2xl bg-[#F0EDF8] p-1.5">
+    <div className="rounded-2xl bg-cc-soft p-1.5">
       <div className="flex gap-1 overflow-x-auto scrollbar-none">
         {FILTER_KEYS.map((f) => {
           const active = filter === f.id;
           const count = counts?.[f.id as keyof typeof counts] ?? 0;
+          const label = translate(f.labelKey);
+          const Icon = f.icon;
           return (
             <button
               key={f.id}
               type="button"
               onClick={() => onChange(f.id)}
+              title={label}
+              aria-label={`${label} (${count})`}
               className={cn(
-                "flex flex-1 min-w-[4.5rem] items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-black whitespace-nowrap transition-all",
-                active ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280]",
+                "flex flex-1 min-w-[3rem] md:min-w-[4.5rem] items-center justify-center gap-1.5 rounded-xl px-2 py-3 md:px-3 text-xs font-black whitespace-nowrap transition-all",
+                active ? "bg-cc-surface text-cc-text shadow-sm" : "text-cc-muted",
               )}
             >
-              <span>{translate(f.labelKey)}</span>
+              <Icon size={18} strokeWidth={2.25} className="shrink-0 md:hidden" aria-hidden />
+              <span className="hidden md:inline">{label}</span>
               <span
                 className="grid h-5 min-w-[1.25rem] shrink-0 place-items-center rounded-full px-1 text-[11px] font-black text-white"
-                style={{ background: active ? PLUM : "#9B8EC4" }}
+                style={{ background: active ? PLUM : "var(--cc-muted)" }}
               >
                 {count}
               </span>
@@ -177,7 +183,7 @@ export default function MyShifts() {
     const groups = new Map<string, WorkerShift[]>();
     for (const shift of list) {
       const key = shift.scheduled_start
-        ? format(parseISO(shift.scheduled_start), "yyyy-MM-dd")
+        ? appLocalDateKey(shift.scheduled_start)
         : "unknown";
       const bucket = groups.get(key) ?? [];
       bucket.push(shift);
@@ -207,7 +213,7 @@ export default function MyShifts() {
             {dateLabel}
           </p>
         </div>
-        <div className="shrink-0 flex items-start gap-2 pt-1">
+        {/* <div className="shrink-0 flex items-start gap-2 pt-1">
           <Link href="/worker/messages">
             <button
               type="button"
@@ -228,7 +234,7 @@ export default function MyShifts() {
               + {translate("shifts.quickStart")}
             </button>
           </Link>
-        </div>
+        </div> */}
       </header>
 
       <OfflineSyncBanner syncing={syncing} pendingCount={pendingCount} className="-mx-5 rounded-none sm:mx-0 sm:rounded-xl" />
@@ -284,7 +290,7 @@ export default function MyShifts() {
         ))}
       </div>
 
-      {filter === "today" && todayShifts.some((s) => s.status === "completed") && (
+      {/* {filter === "today" && todayShifts.some((s) => s.status === "completed") && (
         <section className="flex items-start gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
             <FileText size={18} className="text-amber-600" />
@@ -304,7 +310,7 @@ export default function MyShifts() {
             </button>
           </div>
         </section>
-      )}
+      )} */}
     </div>
   );
 }

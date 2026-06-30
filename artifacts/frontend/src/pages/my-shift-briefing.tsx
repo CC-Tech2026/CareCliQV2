@@ -164,7 +164,7 @@ export default function MyShiftBriefing() {
 
   if (error || !briefing) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
+      <div className="w-full space-y-4 p-6">
         <Link
           href="/my-shifts"
           className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
@@ -191,7 +191,7 @@ export default function MyShiftBriefing() {
         className="shrink-0 border-b bg-[var(--cc-surface)]"
         style={{ borderColor: BORDER }}
       >
-        <div className="mx-auto max-w-2xl px-4 pb-4 pt-3">
+        <div className="w-full px-4 pb-4 pt-3">
           <Link
             href="/my-shifts"
             className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-colors hover:opacity-80"
@@ -221,7 +221,7 @@ export default function MyShiftBriefing() {
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5">
-        <div className="mx-auto max-w-2xl space-y-3.5 pb-36">
+        <div className="w-full space-y-3.5 pb-36">
           {briefing.requires_rebrief && (
             <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden />
@@ -260,7 +260,7 @@ export default function MyShiftBriefing() {
         className="shrink-0 border-t bg-[var(--cc-surface)]/95 px-4 py-4 backdrop-blur-sm"
         style={{ borderColor: BORDER, boxShadow: "0 -8px 24px rgba(15, 23, 42, 0.06)" }}
       >
-        <div className="mx-auto max-w-2xl space-y-2">
+        <div className="w-full space-y-2">
           {!canComplete && (
             <p className="text-center text-[12px] font-medium" style={{ color: MUTED }}>
               {!briefing.all_alerts_acknowledged

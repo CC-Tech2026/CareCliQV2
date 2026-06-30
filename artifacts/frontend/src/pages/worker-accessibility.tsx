@@ -70,7 +70,7 @@ export default function WorkerAccessibility() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24 sm:p-6 text-safe">
+    <div className="w-full space-y-6 pb-24 text-safe">
       <header>
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           {translate("accessibility.inclusive")}
@@ -112,8 +112,9 @@ export default function WorkerAccessibility() {
         </div>
       </section>
 
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
       <section
-        className="rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm"
+        className="flex h-full flex-col rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm"
         style={{ borderColor: BORDER }}
         aria-labelledby="theme-heading"
       >
@@ -153,7 +154,7 @@ export default function WorkerAccessibility() {
       </section>
 
       <section
-        className="rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm"
+        className="flex h-full flex-col rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm"
         style={{ borderColor: BORDER }}
         aria-labelledby="display-heading"
       >
@@ -198,6 +199,7 @@ export default function WorkerAccessibility() {
           </div>
         </div>
       </section>
+      </div>
 
       <section
         className="rounded-2xl border bg-[var(--cc-surface)] p-5 shadow-sm"

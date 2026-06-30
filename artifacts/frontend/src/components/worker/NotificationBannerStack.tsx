@@ -229,7 +229,7 @@ aria-label={translate("worker.notification.alerts")}
       >
         Requires your attention
       </p> */}
-      <div className="mx-auto flex max-w-6xl flex-col gap-3">
+      <div className="mx-auto flex w-full flex-col gap-3">
         {visibleBanners.map((n) => (
           <BannerItem
             key={n.id}

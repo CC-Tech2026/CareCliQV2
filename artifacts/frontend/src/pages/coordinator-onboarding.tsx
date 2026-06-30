@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { ccqOnboardingKey } from "@/lib/storage-keys";
 import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle2, Circle, ArrowRight, Users, UserPlus,
@@ -61,7 +62,7 @@ export default function CoordinatorOnboarding() {
   const { toast } = useToast();
   const { translate, translateParams } = useAccessibility();
 
-  const STORAGE_KEY = `carescribe_onboarding_${user?.id ?? "anon"}`;
+  const STORAGE_KEY = ccqOnboardingKey(user?.id ?? "anon");
 
   const [completed, setCompleted] = useState<Set<string>>(() => {
     try {

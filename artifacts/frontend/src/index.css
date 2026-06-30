@@ -332,7 +332,10 @@
 .dark .hover\:bg-gray-100:hover { background-color: var(--cc-soft)    !important; }
 
 /* Hardcoded CareCliQ hex utilities (Support Worker pages) */
-.dark .bg-\[\#F8F6FE\],
+.dark .bg-\[\#F7F5FF\]     { background-color: var(--cc-soft)      !important; }
+.dark .bg-\[\#FAFAFA\]     { background-color: var(--cc-soft)      !important; }
+.dark .hover\:bg-\[\#FAFAFA\]:hover { background-color: var(--cc-soft) !important; }
+.dark .hover\:bg-\[\#EDE9FF\]:hover { background-color: var(--cc-active-bg) !important; }
 .dark .bg-\[\#F8F8FE\],
 .dark .bg-\[\#FCFBFF\],
 .dark .bg-\[\#F0EDF8\],
@@ -340,6 +343,10 @@
 .dark .hover\:bg-\[\#F8F6FE\]:hover,
 .dark .hover\:bg-\[\#F8F8FE\]:hover,
 .dark .hover\:bg-\[\#EEF2FF\]:hover { background-color: var(--cc-soft) !important; }
+.dark .bg-\[\#F0EDFC\],
+.dark .bg-\[\#FDFCFF\]     { background-color: var(--cc-soft)      !important; }
+.dark .border-purple-100\/60,
+.dark .border-purple-100\/70 { border-color: var(--cc-border)     !important; }
 .dark .text-\[\#111827\]   { color: var(--cc-text)                 !important; }
 .dark .text-\[\#6B7280\]   { color: var(--cc-muted)                !important; }
 .dark .text-\[\#3730A3\]   { color: var(--cc-plum)                 !important; }
@@ -354,6 +361,8 @@
 /* Semantic status pills & alerts */
 .dark .bg-emerald-50  { background-color: var(--cc-status-success-bg)  !important; }
 .dark .bg-amber-50    { background-color: var(--cc-status-warning-bg)  !important; }
+.dark .bg-yellow-50   { background-color: var(--cc-status-warning-bg)  !important; }
+.dark .bg-rose-50     { background-color: var(--cc-status-critical-bg) !important; }
 .dark .bg-red-50      { background-color: var(--cc-status-critical-bg) !important; }
 .dark .bg-blue-50     { background-color: var(--cc-status-info-bg)     !important; }
 .dark .bg-slate-50    { background-color: var(--cc-soft)                !important; }
@@ -361,14 +370,28 @@
 .dark .text-emerald-600,
 .dark .text-emerald-700 { color: var(--cc-status-success)  !important; }
 .dark .text-amber-600,
-.dark .text-amber-700   { color: var(--cc-status-warning)  !important; }
+.dark .text-amber-700,
+.dark .text-amber-800,
+.dark .text-amber-900   { color: var(--cc-status-warning)  !important; }
+.dark .text-yellow-700,
+.dark .text-yellow-800,
+.dark .text-yellow-900,
+.dark .text-yellow-950  { color: var(--cc-status-warning)  !important; }
 .dark .text-red-600,
 .dark .text-red-700,
 .dark .text-red-800     { color: var(--cc-status-critical) !important; }
+.dark .text-rose-700,
+.dark .text-rose-800,
+.dark .text-rose-900,
+.dark .text-rose-950    { color: var(--cc-status-critical) !important; }
 .dark .text-blue-700    { color: var(--cc-status-info)     !important; }
 .dark .text-slate-600   { color: var(--cc-muted)           !important; }
 .dark .border-emerald-200 { border-color: rgba(74, 222, 128, 0.25)  !important; }
 .dark .border-amber-200   { border-color: rgba(252, 211, 77, 0.25)  !important; }
+.dark .border-yellow-100,
+.dark .border-yellow-200  { border-color: rgba(252, 211, 77, 0.25)  !important; }
+.dark .border-rose-100,
+.dark .border-rose-200    { border-color: rgba(244, 114, 182, 0.25) !important; }
 .dark .border-red-100,
 .dark .border-red-200     { border-color: rgba(244, 114, 182, 0.25) !important; }
 .dark .border-blue-200    { border-color: rgba(56, 189, 248, 0.25)  !important; }
@@ -581,10 +604,50 @@
 
   html {
     font-size: calc(16px * var(--font-scale, 1));
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  /* Native + unstyled form controls — theme-aware across the app */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="hidden"]):not([type="image"]),
+  select,
+  textarea {
+    background-color: var(--cc-surface);
+    color: var(--cc-text);
+    border-color: var(--cc-border);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--cc-muted);
+    opacity: 1;
+  }
+
+  select option,
+  select optgroup {
+    background-color: var(--cc-surface);
+    color: var(--cc-text);
+  }
+
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85);
+    cursor: pointer;
   }
 }
 
@@ -609,6 +672,83 @@
  * need to be distinguished from eachother visually.
  */
 @layer utilities {
+
+  /* Shared form field — use on native input/select/textarea */
+  .cc-field {
+    width: 100%;
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-style: solid;
+    border-color: var(--cc-border);
+    background-color: var(--cc-surface);
+    color: var(--cc-text);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .cc-field::placeholder {
+    color: var(--cc-muted);
+    opacity: 1;
+  }
+
+  .cc-field:focus {
+    outline: none;
+    border-color: var(--cc-plum);
+    box-shadow: 0 0 0 1px var(--cc-plum);
+  }
+
+  .cc-field:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Solid → outline on hover */
+  .cc-btn-primary {
+    border: 2px solid var(--cc-plum);
+    background-color: var(--cc-plum);
+    color: #fff;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .cc-btn-primary:hover:not(:disabled) {
+    background-color: transparent;
+    color: var(--cc-plum);
+  }
+
+  .cc-btn-outline {
+    border: 2px solid var(--cc-plum);
+    background-color: transparent;
+    color: var(--cc-plum);
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .cc-btn-outline:hover:not(:disabled) {
+    background-color: var(--cc-plum);
+    color: #fff;
+  }
+
+  .cc-btn-amber {
+    border: 2px solid #D97706;
+    background-color: #D97706;
+    color: #fff;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .dark .cc-btn-amber {
+    border-color: #F59E0B;
+    background-color: #B45309;
+  }
+
+  .cc-btn-amber:hover:not(:disabled) {
+    background-color: transparent;
+    color: #D97706;
+  }
+
+  .dark .cc-btn-amber:hover:not(:disabled) {
+    color: #FBBF24;
+  }
 
   /* Hide ugly search cancel button in Chrome until we can style it properly */
   input[type="search"]::-webkit-search-cancel-button {

@@ -69,7 +69,7 @@ def _report_pdf_bytes(title: str, content: dict) -> bytes:
     goals = content.get("goals") or []
     flags = sections.get("risk_compliance_flags") or []
     lines = [
-        "CareScribe Allied Health Report",
+        "CareCliQ Allied Health Report",
         title,
         f"Generated: {content.get('generated_at')}",
         "",
@@ -109,7 +109,7 @@ def _report_pdf_bytes(title: str, content: dict) -> bytes:
             lines.append(f"- Session {flag.get('id', '')}: compliance score {flag.get('compliance_score', 'not scored')}")
     else:
         lines.append("- No active compliance flags in reviewed records.")
-    lines.extend(["", "Clinician Signature:", clinician.get("full_name", "CareScribe clinician")])
+    lines.extend(["", "Clinician Signature:", clinician.get("full_name", "CareCliQ clinician")])
     text_ops = []
     y = 790
     for line in lines[:70]:

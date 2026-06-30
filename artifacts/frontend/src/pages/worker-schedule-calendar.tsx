@@ -468,7 +468,7 @@ export default function WorkerScheduleCalendar() {
     : `${format(weekStart, "d MMM")} – ${format(endOfWeek(weekStart, { weekStartsOn: 1 }), "d MMM yyyy")}`;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-5 pb-12">
+    <div className="w-full space-y-5 pb-12">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>

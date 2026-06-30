@@ -168,7 +168,7 @@ export function ShiftListCard({ shift }: Props) {
   const profileHref = shift.participant_id
     ? `/my-clients/${shift.participant_id}`
     : `/my-shifts/${shift.id}`;
-  const notesHref = shift.session_id ? `/sessions/${shift.session_id}` : `/my-shifts/${shift.id}`;
+  const notesHref = `/my-shifts/${shift.id}`;
 
   const durationMeta = (() => {
     if (isCompleted && scheduledLabel && recordedLabel) {

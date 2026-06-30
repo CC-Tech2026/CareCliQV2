@@ -91,7 +91,7 @@ export default function CoordinatorTravelExpenses() {
   });
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24 sm:p-6">
+    <div className="w-full space-y-6 pb-24">
       <header>
         <p className="text-xs font-black uppercase tracking-wider" style={{ color: PLUM }}>
           {translate("coordinator.travel.eyebrow")}

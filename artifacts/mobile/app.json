@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CareScribe",
+    "name": "CareCliQ",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -48,7 +48,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow CareScribe to access your microphone to record voice notes during sessions."
+          "microphonePermission": "Allow CareCliQ to access your microphone to record voice notes during sessions."
         }
       ]
     ],

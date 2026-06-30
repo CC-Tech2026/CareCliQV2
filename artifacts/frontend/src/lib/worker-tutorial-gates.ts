@@ -1,6 +1,7 @@
 import type { TutorialStep, TutorialStepKey } from "@/lib/worker-tutorial-steps";
 import type { TutorialProgress } from "@/services/helpService";
 import { WORKER_TUTORIAL_STEPS } from "@/lib/worker-tutorial-steps";
+import { SHIFT_LIVE_PROGRESS_NOTE_ENABLED } from "@/lib/shift-feature-flags";
 
 /**
  * Per-step tutorial controls (gate overrides step defaults in worker-tutorial-steps.ts):
@@ -88,8 +89,9 @@ const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
   },
   risk_acknowledgement: {
     isApplicable: () => isVisible("[data-tutorial='risk-ack-checkbox']"),
-    showNext: true,
+    showNext: false,
     showSkip: false,
+    autoAdvanceWhen: () => isVisible("[data-tutorial='risk-ack-dialog']"),
     allowTargetInteraction: true,
     waitingMessage: "Tick the checkbox, then confirm in the dialog.",
   },
@@ -115,7 +117,12 @@ const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
     allowTargetInteraction: true,
   },
   clock_in: {
-    isApplicable: () => !clockInComplete() && isVisible("[data-tutorial='clock-in']"),
+    isApplicable: () => {
+      if (clockInComplete()) return false;
+      if (!isVisible("[data-tutorial='clock-in']")) return false;
+      if (isVisible("[data-tutorial='risk-ack-checkbox']")) return false;
+      return true;
+    },
     showNext: false,
     showSkip: true,
     autoAdvanceWhen: () => clockInModalOpen(),
@@ -137,13 +144,18 @@ const GATES: Partial<Record<TutorialStepKey, TutorialGate>> = {
       !isVisible("[data-tutorial='live-progress-note']") && isVisible("[data-tutorial='start-session']"),
     showNext: false,
     showSkip: true,
-    autoAdvanceWhen: () => isVisible("[data-tutorial='live-progress-note']"),
+    autoAdvanceWhen: () =>
+      SHIFT_LIVE_PROGRESS_NOTE_ENABLED
+        ? isVisible("[data-tutorial='live-progress-note']")
+        : isVisible("[data-tutorial='end-shift']") || isVisible("[data-tutorial='shift-task-checklist']"),
     allowTargetInteraction: true,
     waitingMessage: "Tap Start Session when you are clocked in.",
   },
   session_notes: {
     isApplicable: () =>
-      isVisible("[data-tutorial='session-notes']") && !isVisible("[data-tutorial='live-progress-note']"),
+      SHIFT_LIVE_PROGRESS_NOTE_ENABLED
+      && isVisible("[data-tutorial='session-notes']")
+      && !isVisible("[data-tutorial='live-progress-note']"),
     showNext: false,
     showSkip: true,
     autoAdvanceWhen: () => isVisible("[data-tutorial='live-progress-note']"),
@@ -227,19 +239,23 @@ export function isTutorialStepApplicable(step: TutorialStep): boolean {
   return gate.isApplicable();
 }
 
-/** Steps with a visible Next button should show the guide even if the target is still loading. */
-export function shouldAutoSkipMissingTutorialTarget(step: TutorialStep): boolean {
-  return !tutorialShowNext(step);
-}
-
 const TUTORIAL_PROTECTED_STEPS: ReadonlySet<TutorialStepKey> = new Set([
+  "risk_acknowledgement",
+  "risk_acknowledgement_modal",
   "end_shift",
   "end_shift_review",
   "shift_signature",
 ]);
 
+/** Steps with a visible Next button should show the guide even if the target is still loading. */
+export function shouldAutoSkipMissingTutorialTarget(step: TutorialStep): boolean {
+  if (TUTORIAL_PROTECTED_STEPS.has(step.key)) return false;
+  return !tutorialShowNext(step);
+}
+
 /** Optional middle steps (e.g. session_notes when Notes panel is already open). */
 export function shouldAutoSkipStepInAdvance(step: TutorialStep): boolean {
+  if (step.key === "session_notes" && !SHIFT_LIVE_PROGRESS_NOTE_ENABLED) return true;
   if (TUTORIAL_PROTECTED_STEPS.has(step.key)) return false;
   const gate = getTutorialGate(step.key);
   if (!gate?.isApplicable) return false;
@@ -248,6 +264,7 @@ export function shouldAutoSkipStepInAdvance(step: TutorialStep): boolean {
 
 /** Never chain-skip protected steps when the target is not visible yet. */
 export function shouldSkipInapplicableTutorialStep(step: TutorialStep): boolean {
+  if (step.key === "session_notes" && !SHIFT_LIVE_PROGRESS_NOTE_ENABLED) return true;
   if (TUTORIAL_PROTECTED_STEPS.has(step.key)) return false;
   const gate = getTutorialGate(step.key);
   if (!gate?.isApplicable) return false;
@@ -314,6 +331,9 @@ export function tutorialCanProceed(step: TutorialStep): boolean {
 export function shouldAdvanceFromDismissedStep(stepIndex: number): boolean {
   const step = WORKER_TUTORIAL_STEPS[stepIndex];
   if (!step) return false;
+
+  // End-shift steps advance explicitly via End Shift / validation / signature handlers.
+  if (step.key === "end_shift" || step.key === "end_shift_review") return false;
 
   const gate = getTutorialGate(step.key);
   if (gate?.autoAdvanceWhen?.()) return true;

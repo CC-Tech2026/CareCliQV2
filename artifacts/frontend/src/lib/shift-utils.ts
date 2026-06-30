@@ -1,6 +1,7 @@
 import { format, formatDistanceToNow, parseISO, differenceInMinutes } from "date-fns";
 import type { ShiftTask, ShiftVisualState } from "@/services/shiftService";
 import { CC, CC_STATUS } from "@/lib/brand-tokens";
+import { appLocalDateKey, formatAppTime } from "@/lib/datetime";
 
 export const PLUM = CC.plum;
 export const PLUM_SUBTLE = CC.plumSubtle;
@@ -54,9 +55,9 @@ export function shiftInitials(name?: string) {
 export function formatShiftSchedule(start?: string, end?: string) {
   if (!start) return "Time not set";
   try {
-    const s = format(parseISO(start), "h:mm a");
-    const e = end ? format(parseISO(end), "h:mm a") : null;
-    const day = format(parseISO(start), "EEE d MMM");
+    const s = formatAppTime(start);
+    const e = end ? formatAppTime(end) : null;
+    const day = format(parseISO(`${appLocalDateKey(start)}T12:00:00`), "EEE d MMM");
     return e ? `${s} – ${e}, ${day}` : `${s}, ${day}`;
   } catch {
     return start;
@@ -66,8 +67,8 @@ export function formatShiftSchedule(start?: string, end?: string) {
 export function formatShiftTimeRange(start?: string, end?: string) {
   if (!start) return "Time not set";
   try {
-    const s = format(parseISO(start), "h:mm a");
-    const e = end ? format(parseISO(end), "h:mm a") : null;
+    const s = formatAppTime(start);
+    const e = end ? formatAppTime(end) : null;
     return e ? `${s} – ${e}` : s;
   } catch {
     return start;
@@ -200,8 +201,8 @@ export function formatElapsedTimer(fromIso?: string | null, now = Date.now()) {
 export function isShiftToday(shift: { scheduled_start?: string; status?: string }) {
   if (!shift.scheduled_start) return false;
   try {
-    const day = format(parseISO(shift.scheduled_start), "yyyy-MM-dd");
-    const today = format(new Date(), "yyyy-MM-dd");
+    const day = appLocalDateKey(shift.scheduled_start);
+    const today = appLocalDateKey(new Date().toISOString());
     return day === today && shift.status !== "cancelled";
   } catch {
     return false;

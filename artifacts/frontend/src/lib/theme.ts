@@ -11,7 +11,9 @@ export function getStoredTheme(): Theme {
 }
 
 export function applyTheme(theme: Theme) {
-  document.documentElement.classList.toggle("dark", theme === "dark");
+  const root = document.documentElement;
+  root.classList.toggle("dark", theme === "dark");
+  root.style.colorScheme = theme === "dark" ? "dark" : "light";
   try { localStorage.setItem("cc-theme", theme); } catch { /* noop */ }
 }
 

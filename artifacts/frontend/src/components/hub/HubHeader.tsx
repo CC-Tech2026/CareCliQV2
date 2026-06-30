@@ -15,7 +15,7 @@ const ROLE_KEY: Record<string, string> = {
 };
 
 const ROLE_CTA_KEY: Record<string, { label: string; href: string }> = {
-  support_worker: { label: "hub.header.cta.myClients", href: "/my-clients" },
+  support_worker: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   support_coordinator: { label: "hub.header.cta.dashboard", href: "/dashboard" },
   managing_director: { label: "hub.header.cta.executive", href: "/md/executive" },
   allied_health: { label: "hub.header.cta.caseload", href: "/patients" },
@@ -101,8 +101,8 @@ export function HubHeader() {
 
         <button
           onClick={() => navigate(cta.href)}
-          className="mt-6 flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
-          style={{ color: "#3730A3" }}
+          className="mt-6 flex items-center gap-2 rounded-full px-5 py-2.5 text-[12px] font-black transition-opacity hover:opacity-90"
+          style={{ background: "#FFFFFF", color: "#3730A3" }}
         >
           {translate(cta.label)}
           <ArrowRight size={13} strokeWidth={2.5} />

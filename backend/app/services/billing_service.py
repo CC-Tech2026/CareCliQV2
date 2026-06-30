@@ -427,7 +427,7 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
 
 def _minimal_pdf_bytes(invoice: dict) -> bytes:
     lines = [
-        "CareScribe Invoice",
+        "CareCliQ Invoice",
         f"Invoice: {invoice.get('invoice_number', '')}",
         f"Recipient: {invoice.get('recipient_name', '')}",
         f"Status: {invoice.get('status', '')}",

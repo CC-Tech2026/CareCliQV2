@@ -28,7 +28,7 @@ const EVENT_CFG: Record<EventType, {
   dot: string;
 }> = {
   audit:    { icon: ClipboardCheck, labelKey: "hub.calendar.eventType.audit",    color: "#EF4444", bg: "#FEF2F2", dot: "#EF4444" },
-  training: { icon: BookOpen,       labelKey: "hub.calendar.eventType.training", color: PLUM,      bg: "#EDE9FF", dot: PLUM },
+  training: { icon: BookOpen,       labelKey: "hub.calendar.eventType.training", color: PLUM,      bg: "var(--cc-active-bg)", dot: PLUM },
   meeting:  { icon: Users,          labelKey: "hub.calendar.eventType.meeting",  color: "#0EA5E9", bg: "#E0F2FE", dot: "#0EA5E9" },
   review:   { icon: Target,         labelKey: "hub.calendar.eventType.review",   color: "#10B981", bg: "#D1FAE5", dot: "#10B981" },
 };
@@ -192,7 +192,7 @@ export function OrganizationCalendar() {
   }
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm overflow-hidden" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>{translate("hub.calendar.title")}</p>
@@ -200,7 +200,7 @@ export function OrganizationCalendar() {
           {isCoordinator && (
             <button
               onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors hover:bg-[#EDE9FF]"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-colors hover:bg-cc-active-bg"
               style={{ background: SOFT, color: PLUM }}
             >
               <Plus size={11} strokeWidth={2} /> {translate("hub.calendar.addEvent")}
@@ -225,7 +225,7 @@ export function OrganizationCalendar() {
             <div>
               <label className="block text-[11px] font-black mb-1" style={{ color: TEXT }}>{translate("hub.calendar.formTitle")}</label>
               <input
-                className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-[#3730A3] transition-colors"
+                className="w-full rounded-lg border px-3 py-2 text-[12px] outline-none focus:border-cc-plum transition-colors"
                 style={{ borderColor: BORDER }}
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -309,7 +309,7 @@ export function OrganizationCalendar() {
           <div className="flex items-center justify-between mb-2">
             <button
               onClick={() => setCalMonth((m) => subMonths(m, 1))}
-              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F8F8FE]"
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-cc-soft"
               style={{ color: MUTED }}
             >
               <ChevronLeft size={13} />
@@ -317,7 +317,7 @@ export function OrganizationCalendar() {
             <p className="text-[12px] font-black" style={{ color: TEXT }}>{format(calMonth, "MMMM yyyy")}</p>
             <button
               onClick={() => setCalMonth((m) => addMonths(m, 1))}
-              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-[#F8F8FE]"
+              className="h-6 w-6 flex items-center justify-center rounded transition-colors hover:bg-cc-soft"
               style={{ color: MUTED }}
             >
               <ChevronRight size={13} />
@@ -344,8 +344,8 @@ export function OrganizationCalendar() {
                   key={key}
                   type="button"
                   onClick={() => setSelectedDay(isSelected ? null : day)}
-                  className="flex flex-col items-center py-0.5 rounded-lg transition-colors hover:bg-[#F8F8FE]"
-                  style={{ background: isSelected ? "#EDE9FF" : "transparent", opacity: inMonth ? 1 : 0.3 }}
+                  className="flex flex-col items-center py-0.5 rounded-lg transition-colors hover:bg-cc-soft"
+                  style={{ background: isSelected ? "var(--cc-active-bg)" : "transparent", opacity: inMonth ? 1 : 0.3 }}
                 >
                   <span
                     className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold"

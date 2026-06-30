@@ -1,6 +1,6 @@
-"""AI service — CareScribe compliance engine backed by OpenAI GPT-4o-mini.
+"""AI service — CareCliQ compliance engine backed by OpenAI GPT-4o-mini.
 
-The CareScribe system prompt (CARESCRIBE_SYSTEM_PROMPT) is injected as the
+The CareCliQ system prompt (CARECLIQ_SYSTEM_PROMPT) is injected as the
 system role on every compliance-related call so every AI output is guaranteed
 to be NDIS-compliant, person-centred, and audit-ready.
 """
@@ -135,10 +135,10 @@ def _legal_record_text_or_raise(session_data: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# CareScribe Master System Prompt (from spec)
+# CareCliQ Master System Prompt (from spec)
 # ---------------------------------------------------------------------------
 
-CARESCRIBE_SYSTEM_PROMPT = """You are CareScribe — a 100% Compliance Engine with AI support designed to support Australian NDIS providers with accurate, safe, and compliant clinical documentation.
+CARECLIQ_SYSTEM_PROMPT = """You are CareCliQ — a 100% Compliance Engine with AI support designed to support Australian NDIS providers with accurate, safe, and compliant clinical documentation.
 
 Your responsibilities:
 
@@ -337,7 +337,7 @@ Provide one rewrite per flagged phrase, matching the index number."""
             message = anthropic_client.messages.create(
                 model="claude-3-5-haiku-20241022",
                 max_tokens=1024,
-                system=CARESCRIBE_SYSTEM_PROMPT,
+                system=CARECLIQ_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = message.content[0].text if message.content else ""
@@ -353,12 +353,12 @@ Provide one rewrite per flagged phrase, matching the index number."""
         except Exception as e:
             logger.warning(f"Claude RP enrichment failed, falling back to GPT: {e}")
 
-    # Fallback: GPT-4o-mini with CareScribe system prompt
+    # Fallback: GPT-4o-mini with CareCliQ system prompt
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=1024,
@@ -383,7 +383,7 @@ async def generate_session_analysis(
     rp_flags: list | None = None,
     prior_trajectory: dict[str, list[dict]] | None = None,
 ) -> dict:
-    """Run the full CareScribe compliance analysis on a session.
+    """Run the full CareCliQ compliance analysis on a session.
 
     Returns a dict matching the spec JSON format:
     {
@@ -468,7 +468,7 @@ Structured Fields Already Completed:
     total_budget = float(participant_data.get("total_budget") or 0)
     used_budget = float(participant_data.get("used_budget") or 0)
 
-    user_prompt = f"""Analyse this NDIS support session and return a full CareScribe compliance report.
+    user_prompt = f"""Analyse this NDIS support session and return a full CareCliQ compliance report.
 
 PARTICIPANT INFORMATION:
   Name: {participant_data.get('full_name', 'Unknown')}
@@ -556,7 +556,7 @@ If no measurable progress is documented, return progress_delta as an empty array
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
         max_tokens=1200,
@@ -631,7 +631,7 @@ Use person-first language, be professional and factual, and align with NDIS Acti
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=300,
@@ -692,7 +692,7 @@ async def check_compliance(session_data: dict) -> dict:
     session_type = (session_data.get("session_type") or "").strip()
     tags = session_data.get("tags") or []
 
-    prompt = f"""You are a CareScribe NDIS compliance specialist auditing session documentation.
+    prompt = f"""You are a CareCliQ NDIS compliance specialist auditing session documentation.
 
 Session Details:
 - Notes / structured text length: {len(effective_text)} characters
@@ -702,7 +702,7 @@ Session Details:
 - Session Type: {session_type or 'Not specified'}
 - Tags: {', '.join(tags) if tags else 'None'}
 
-Assess compliance using the CareScribe weighted scoring:
+Assess compliance using the CareCliQ weighted scoring:
   • Documentation completeness (30%): notes present, structured fields, detail sufficient
   • Goal alignment (25%): NDIS goals linked, progress documented
   • NDIS language compliance (20%): person-first, correct terminology
@@ -726,7 +726,7 @@ Respond with a JSON object:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=400,
@@ -804,7 +804,7 @@ Write in plain English. Be specific about what information is actually missing. 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=450,
@@ -905,7 +905,7 @@ Respond with JSON:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=700,
@@ -983,7 +983,7 @@ Respond with a JSON object:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=500,
@@ -1068,7 +1068,7 @@ Respond with a JSON object:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=800,
@@ -1184,7 +1184,7 @@ Respond with exactly:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=400,
@@ -1378,7 +1378,7 @@ Return ONLY valid JSON — no markdown, no explanation:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.15,
@@ -1459,7 +1459,7 @@ Return ONLY valid JSON — no markdown:
         resp = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,

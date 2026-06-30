@@ -132,8 +132,8 @@ def send_invitation_email(
     role: str,
 ) -> None:
     role_label = ROLE_LABELS.get(role, role.replace("_", " ").title())
-    org_label = organization_name or "CareScribe"
-    subject = f"You're invited to {org_label} on CareScribe"
+    org_label = organization_name or "CareCliQ"
+    subject = f"You're invited to {org_label} on CareCliQ"
     text_body = (
         f"You have been invited to join {org_label} as {role_label}.\n\n"
         f"Accept your invitation here:\n{invite_url}\n\n"
@@ -399,7 +399,7 @@ def _build_invitation_html(*, invite_url: str, organization_name: str, role_labe
   <body style="margin:0;background:#f7f4ff;font-family:Arial,sans-serif;color:#1E1640;">
     <div style="max-width:560px;margin:0 auto;padding:32px 20px;">
       <div style="background:#ffffff;border:1px solid #E2DEF2;border-radius:16px;padding:28px;">
-        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">CareScribe invitation</h1>
+        <h1 style="margin:0 0 12px;color:#5533CC;font-size:24px;">CareCliQ invitation</h1>
         <p style="font-size:15px;line-height:1.6;margin:0 0 18px;">
           You have been invited to join <strong>{safe_org}</strong> as <strong>{safe_role}</strong>.
         </p>

@@ -1,5 +1,5 @@
 """
-Static CareScribe 12-rule catalog with human-readable explanations for UI tooltips.
+Static CareCliQ 12-rule catalog with human-readable explanations for UI tooltips.
 
 DB guidance_text takes precedence when available via enrich_rule_results().
 """

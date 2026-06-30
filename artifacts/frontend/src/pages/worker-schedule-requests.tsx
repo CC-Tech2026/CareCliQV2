@@ -100,7 +100,7 @@ function RequestCard({ request }: { request: ScheduleRequest }) {
         </span>
       </div>
       {request.coordinator_notes && (
-        <p className="mt-2 text-xs rounded-lg bg-slate-50 p-2" style={{ color: TEXT }}>
+        <p className="mt-2 text-xs rounded-lg bg-cc-soft p-2" style={{ color: TEXT }}>
           {translate("scheduleRequests.coordinatorNotes")} {request.coordinator_notes}
         </p>
       )}
@@ -171,8 +171,7 @@ function SubmitButton({
       type="button"
       disabled={loading || disabled}
       onClick={onClick}
-      className="w-full rounded-full py-3 text-xs font-black text-white disabled:opacity-50"
-      style={{ background: PLUM }}
+      className="cc-btn-primary w-full cursor-pointer rounded-full py-3 text-xs font-black disabled:opacity-50"
     >
       {loading ? loadingLabel : label}
     </button>
@@ -259,7 +258,7 @@ export default function WorkerScheduleRequests() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 pb-10">
+    <div className="w-full space-y-5 pb-10">
       <header>
         <p className="text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: CORAL }}>{translate("common.supportWorker")}</p>
         <h1 className="mt-1 text-2xl font-black" style={{ color: TEXT }}>{translate("scheduleRequests.title")}</h1>
@@ -285,19 +284,19 @@ export default function WorkerScheduleRequests() {
         <FormCard title={translate("scheduleRequests.requestTimeOff")}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={translate("scheduleRequests.startDate")}>
-              <input type="date" className="w-full rounded-xl border px-3 py-2 text-sm" value={timeOff.start_date} onChange={(e) => setTimeOff((p) => ({ ...p, start_date: e.target.value }))} />
+              <input type="date" className="cc-field" value={timeOff.start_date} onChange={(e) => setTimeOff((p) => ({ ...p, start_date: e.target.value }))} />
             </Field>
             <Field label={translate("scheduleRequests.endDate")}>
-              <input type="date" className="w-full rounded-xl border px-3 py-2 text-sm" value={timeOff.end_date} onChange={(e) => setTimeOff((p) => ({ ...p, end_date: e.target.value }))} />
+              <input type="date" className="cc-field" value={timeOff.end_date} onChange={(e) => setTimeOff((p) => ({ ...p, end_date: e.target.value }))} />
             </Field>
           </div>
           <Field label={translate("scheduleRequests.reason")}>
-            <select className="w-full rounded-xl border px-3 py-2 text-sm" value={timeOff.reason_code} onChange={(e) => setTimeOff((p) => ({ ...p, reason_code: e.target.value }))}>
+            <select className="cc-field" value={timeOff.reason_code} onChange={(e) => setTimeOff((p) => ({ ...p, reason_code: e.target.value }))}>
               {REASON_KEYS.map((r) => <option key={r.value} value={r.value}>{translate(r.key)}</option>)}
             </select>
           </Field>
           <Field label={translate("scheduleRequests.notesOptional")}>
-            <textarea className="w-full rounded-xl border px-3 py-2 text-sm" rows={3} value={timeOff.worker_notes} onChange={(e) => setTimeOff((p) => ({ ...p, worker_notes: e.target.value }))} />
+            <textarea className="cc-field" rows={3} value={timeOff.worker_notes} onChange={(e) => setTimeOff((p) => ({ ...p, worker_notes: e.target.value }))} />
           </Field>
           <SubmitButton
             loading={timeOffMut.isPending}
@@ -312,7 +311,7 @@ export default function WorkerScheduleRequests() {
         <FormCard title={translate("scheduleRequests.preferredShift")}>
           <p className="text-xs font-medium" style={{ color: MUTED }}>{translate("scheduleRequests.preferredHint")}</p>
           <Field label={translate("scheduleRequests.participant")}>
-            <select className="w-full rounded-xl border px-3 py-2 text-sm" value={preferred.participant_id} onChange={(e) => setPreferred((p) => ({ ...p, participant_id: e.target.value }))}>
+            <select className="cc-field" value={preferred.participant_id} onChange={(e) => setPreferred((p) => ({ ...p, participant_id: e.target.value }))}>
               <option value="">{translate("scheduleRequests.selectParticipant")}</option>
               {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -321,7 +320,7 @@ export default function WorkerScheduleRequests() {
             <DayPicker selected={preferred.preferred_days} onChange={(days) => setPreferred((p) => ({ ...p, preferred_days: days }))} />
           </Field>
           <Field label={translate("scheduleRequests.note")}>
-            <textarea className="w-full rounded-xl border px-3 py-2 text-sm" rows={2} value={preferred.worker_notes} onChange={(e) => setPreferred((p) => ({ ...p, worker_notes: e.target.value }))} />
+            <textarea className="cc-field" rows={2} value={preferred.worker_notes} onChange={(e) => setPreferred((p) => ({ ...p, worker_notes: e.target.value }))} />
           </Field>
           <SubmitButton
             loading={preferredMut.isPending}
@@ -336,7 +335,7 @@ export default function WorkerScheduleRequests() {
       {tab === "shift_swap" && (
         <FormCard title={translate("scheduleRequests.offerSwap")}>
           <Field label={translate("scheduleRequests.shift")}>
-            <select className="w-full rounded-xl border px-3 py-2 text-sm" value={swap.shift_id} onChange={(e) => setSwap((p) => ({ ...p, shift_id: e.target.value }))}>
+            <select className="cc-field" value={swap.shift_id} onChange={(e) => setSwap((p) => ({ ...p, shift_id: e.target.value }))}>
               <option value="">{translate("scheduleRequests.selectShift")}</option>
               {(shiftsData?.shifts ?? []).map((s: WorkerShift) => (
                 <option key={s.id} value={s.id}>
@@ -346,7 +345,7 @@ export default function WorkerScheduleRequests() {
             </select>
           </Field>
           <Field label={translate("scheduleRequests.reason")}>
-            <textarea className="w-full rounded-xl border px-3 py-2 text-sm" rows={2} placeholder={translate("scheduleRequests.reasonPlaceholder")} value={swap.worker_notes} onChange={(e) => setSwap((p) => ({ ...p, worker_notes: e.target.value }))} />
+            <textarea className="cc-field" rows={2} placeholder={translate("scheduleRequests.reasonPlaceholder")} value={swap.worker_notes} onChange={(e) => setSwap((p) => ({ ...p, worker_notes: e.target.value }))} />
           </Field>
           <SubmitButton
             loading={swapMut.isPending}
@@ -361,13 +360,13 @@ export default function WorkerScheduleRequests() {
       {tab === "history" && (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            <select className="rounded-lg border px-2 py-1.5 text-xs font-bold" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+            <select className="cc-field text-xs font-bold rounded-lg py-1.5 px-2" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
               <option value="all">{translate("scheduleRequests.filter.allTypes")}</option>
               <option value="time_off">{translate("scheduleRequests.filter.timeOff")}</option>
               <option value="preferred_shift">{translate("scheduleRequests.filter.preferred")}</option>
               <option value="shift_swap">{translate("scheduleRequests.filter.swap")}</option>
             </select>
-            <select className="rounded-lg border px-2 py-1.5 text-xs font-bold" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <select className="cc-field text-xs font-bold rounded-lg py-1.5 px-2" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="all">{translate("scheduleRequests.filter.allStatuses")}</option>
               <option value="pending">{translate("scheduleRequests.status.pending")}</option>
               <option value="approved">{translate("scheduleRequests.status.approved")}</option>

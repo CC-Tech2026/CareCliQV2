@@ -420,7 +420,7 @@ async def save_session_with_ai(
         # Keep backward-compat alias so existing callers that check blocking_failures still work
         blocking_failures = block_failures
 
-        # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
+        # 2. Run the unified CareCliQ AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
         prior_trajectory = await _build_prior_trajectory(
@@ -508,7 +508,7 @@ async def save_session_with_ai(
         ai_insights_payload = {
             # Backward-compatible insight fields (used by session detail UI)
             **insights,
-            # Full CareScribe spec output
+            # Full CareCliQ spec output
             "session_summary": analysis.get("session_summary", ""),
             "ndis_mapping": analysis.get("ndis_mapping", {}),
             "compliance_spec": analysis.get("compliance", {}),

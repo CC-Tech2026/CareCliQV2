@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   ArrowRight,
-  UserRound,
   LayoutDashboard,
   Loader2,
   BarChart2,
@@ -39,8 +38,8 @@ const WORKSPACES: WorkspaceDef[] = [
     titleKey: "hub.workspace.worker.title",
     shortKey: "hub.workspace.worker.short",
     subtitleKey: "hub.workspace.worker.subtitle",
-    href: "/my-clients",
-    icon: UserRound,
+    href: "/dashboard",
+    icon: LayoutDashboard,
     allowedRoles: ["support_worker"],
     accentColor: PLUM,
   },
@@ -130,7 +129,7 @@ export function WorkspaceLauncher() {
   return (
     <>
       {isLaunching && <LaunchOverlay ws={ws} />}
-      <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
         <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
             Workspace
@@ -140,7 +139,7 @@ export function WorkspaceLauncher() {
           <button
             onClick={handleLaunch}
             disabled={!!launching}
-            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[#F8F8FE] disabled:pointer-events-none"
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-cc-soft disabled:pointer-events-none"
           >
             <div
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
@@ -186,7 +185,7 @@ function MDWorkspaceLauncher({
   return (
     <>
       {launching && <LaunchOverlay ws={launching} />}
-      <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+      <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
         <div className="px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
             MD Workspaces
@@ -201,7 +200,7 @@ function MDWorkspaceLauncher({
                 key={ws.href}
                 onClick={() => handleLaunch(ws)}
                 disabled={!!launching}
-                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[#F8F8FE] disabled:pointer-events-none"
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cc-soft disabled:pointer-events-none"
               >
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"

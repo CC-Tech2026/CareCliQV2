@@ -20,6 +20,7 @@ from .check_in_service import (
 from .session_service import _prepare_session_payload
 from .shift_validation_service import compute_shift_validation
 from .supabase_client import get_supabase_admin
+from ..core.timezone import APP_TIMEZONE, app_today, parse_shift_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -273,13 +274,11 @@ def validate_shift_scheduled_today(
     if not scheduled_start:
         return
     try:
-        start = datetime.fromisoformat(str(scheduled_start).replace("Z", "+00:00"))
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-        shift_day = start.date()
+        start = parse_shift_datetime(scheduled_start)
+        shift_day = start.astimezone(APP_TIMEZONE).date()
     except ValueError:
         return
-    if shift_day != (today or date.today()):
+    if shift_day != (today or app_today()):
         raise ShiftNotScheduledToday("Shift not scheduled for today")
 
 

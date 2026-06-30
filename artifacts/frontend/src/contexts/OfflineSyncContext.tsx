@@ -15,6 +15,7 @@ import {
   syncAllPendingItems,
   type SyncQueueItem,
 } from "@/lib/offline-sync-registry";
+import { purgeTutorialOfflineArtifacts } from "@/lib/tutorial-offline";
 import type { SyncItemResult } from "@/lib/sync-pending-shift-actions";
 
 export type SyncVisualState = "offline" | "syncing" | "synced";
@@ -71,7 +72,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   }, [online, queryClient, refresh]);
 
   useEffect(() => {
-    void refresh();
+    void purgeTutorialOfflineArtifacts().then(() => refresh());
     const onOnline = () => {
       setOnline(true);
       void retryAll();

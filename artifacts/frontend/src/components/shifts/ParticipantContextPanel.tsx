@@ -25,10 +25,10 @@ type Props = {
 type Tab = "medical" | "behaviour" | "activities" | "visits" | "communication";
 
 const SEVERITY_STYLES: Record<string, string> = {
-  anaphylactic: "bg-red-100 text-red-900 border-red-200",
-  severe: "bg-orange-100 text-orange-900 border-orange-200",
-  moderate: "bg-amber-100 text-amber-900 border-amber-200",
-  mild: "bg-slate-100 text-slate-700 border-slate-200",
+  anaphylactic: "cc-status-critical border",
+  severe: "border border-orange-200 bg-orange-50 text-orange-900 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300",
+  moderate: "cc-status-warning border",
+  mild: "border border-cc-border bg-cc-soft text-cc-muted",
 };
 
 function formatSynced(value?: string | null) {
@@ -84,7 +84,7 @@ export function ParticipantContextPanel({
   const activeTab = tabs.some((t) => t.id === tab) ? tab : tabs[0]?.id;
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -100,18 +100,18 @@ export function ParticipantContextPanel({
       {open && (
         <div className="border-t" style={{ borderColor: BORDER }}>
           {stale && (
-            <div className="mx-4 mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+            <div className="mx-4 mt-3 rounded-xl border cc-status-warning px-3 py-2 text-xs font-semibold">
               {translate("shift.participant.outdated")}
             </div>
           )}
 
           {anaphylactic.length > 0 && (
-            <div className="mx-4 mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2.5">
-              <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide text-red-800">
+            <div className="mx-4 mt-3 rounded-xl border-2 cc-status-critical px-3 py-2.5">
+              <p className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wide">
                 <AlertTriangle size={14} aria-hidden />
                 {translate("shift.participant.anaphylactic")}
               </p>
-              <ul className="mt-1 space-y-0.5 text-sm font-semibold text-red-900">
+              <ul className="mt-1 space-y-0.5 text-sm font-semibold">
                 {anaphylactic.map((a) => (
                   <li key={a.id || a.allergen}>{a.allergen}</li>
                 ))}
@@ -127,7 +127,7 @@ export function ParticipantContextPanel({
                 onClick={() => setTab(t.id)}
                 className={cn(
                   "shrink-0 rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
-                  activeTab === t.id ? "bg-[#3730A3] text-white" : "bg-[#F0EDFC] text-[#6D4BDA]",
+                  activeTab === t.id ? "bg-cc-plum text-white" : "bg-cc-active-bg text-cc-plum",
                 )}
               >
                 {t.label}
@@ -175,7 +175,7 @@ export function ParticipantContextPanel({
               <div className="space-y-2">
                 {hasBehaviour ? (
                   context!.behavioural_notes!.map((note, i) => (
-                    <div key={i} className="rounded-xl border border-[#E5E7EB] bg-[#F8F6FE] px-3 py-3">
+                    <div key={i} className="rounded-xl border border-cc-border bg-cc-soft px-3 py-3">
                       <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                         {note.title}
                       </p>
@@ -192,7 +192,7 @@ export function ParticipantContextPanel({
 
             {activeTab === "activities" && (
               hasActivities ? (
-                <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
+                <div className="rounded-xl bg-cc-soft px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Sparkles size={12} aria-hidden />
                     {translateParams("shift.participant.enjoys", { name: firstName })}
@@ -212,7 +212,7 @@ export function ParticipantContextPanel({
 
             {activeTab === "visits" && (
               hasVisits ? (
-                <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
+                <div className="rounded-xl bg-cc-soft px-3 py-3">
                   <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                     <Heart size={12} aria-hidden />
                     {translate("shift.participant.previousVisits")}
@@ -253,7 +253,7 @@ export function ParticipantContextPanel({
 
 function EmptyNote({ text }: { text: string }) {
   return (
-    <p className="rounded-xl bg-[#F8F6FE] px-3 py-4 text-sm font-medium" style={{ color: MUTED }}>
+    <p className="rounded-xl bg-cc-soft px-3 py-4 text-sm font-medium" style={{ color: MUTED }}>
       {text}
     </p>
   );
@@ -269,7 +269,7 @@ function InfoBlock({
   body: string;
 }) {
   return (
-    <div className="rounded-xl bg-[#F8F6FE] px-3 py-3">
+    <div className="rounded-xl bg-cc-soft px-3 py-3">
       <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
         <Icon size={12} aria-hidden />
         {label}

@@ -65,7 +65,7 @@ function NewsCard({
 
   return (
     <div
-      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-[#FAFAFA]"
+      className="flex gap-4 rounded-xl border p-4 transition-colors hover:bg-cc-soft"
       style={{ borderColor: BORDER }}
     >
       <div
@@ -166,7 +166,7 @@ export function NewsFeed() {
   }
 
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div
         className="flex items-center justify-between gap-3 px-6 py-4"

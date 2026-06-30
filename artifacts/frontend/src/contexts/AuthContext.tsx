@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth-session";
 import { clearPresentedNotifications } from "@/lib/worker-notification-presenter";
 import { storeAndApplySupabaseSession } from "@/lib/supabase";
+import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 
 export type UserRole = "support_coordinator" | "support_worker" | "allied_health" | "managing_director";
 export type AccountType = "independent_worker" | "allied_health" | "small_provider";
@@ -49,7 +50,6 @@ interface AuthContextType {
   updateToken: (newToken: string) => Promise<void>;
 }
 
-const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
 
 let _currentToken: string | null = null;
 let _currentOrgId: string | null = null;
@@ -290,8 +290,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.assign("/login");
       }
     };
-    window.addEventListener("carescribe:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("carescribe:unauthorized", handleUnauthorized);
+    window.addEventListener(CCQ_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(CCQ_UNAUTHORIZED_EVENT, handleUnauthorized);
   }, [clearSession, user?.id]);
 
   return (

@@ -181,7 +181,11 @@ export function ShiftTaskEvidencePanel({
       setSaveState("saving");
       if (tutorialDemo) {
         for (const row of batch) {
-          await saveTaskEvidence({ ...row, synced: false, upload_status: "pending" });
+          await saveTaskEvidence({
+            ...row,
+            synced: true,
+            upload_status: "uploaded",
+          });
         }
         setSaveState("saved");
         await loadRecords();

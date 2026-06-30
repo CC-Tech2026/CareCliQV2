@@ -9,6 +9,8 @@ services:
     environment:
       PYTHONPATH: /app
       PORT: "8000"
+      TZ: Australia/Adelaide
+      APP_TIMEZONE: Australia/Adelaide
     ports:
       - "8000:8000"
     expose:

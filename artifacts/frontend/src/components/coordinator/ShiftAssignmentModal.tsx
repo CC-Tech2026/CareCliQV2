@@ -1,12 +1,13 @@
 ﻿import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format, addHours } from "date-fns";
+import { format } from "date-fns";
 import { Link } from "wouter";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   assignShift,
+  createUnassignedShift,
   getCoordinatorCredentialAlerts,
   getCoordinatorWorkerCredentialStatus,
   checkParticipantGoalsAndTasks,
@@ -16,9 +17,15 @@ import {
   type NdisGoal,
   type ParticipantTask,
   type GoalsAndTasksValidation,
+  type AssignShiftResult,
 } from "@/services/coordinatorService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  datetimeLocalValueToUtcIso,
+  formatAppTime,
+  utcIsoToDatetimeLocalValue,
+} from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -124,15 +131,25 @@ export function ShiftAssignmentModal({
   );
 
   const assignMut = useMutation({
-    mutationFn: () =>
-      assignShift({
-        worker_id:       selectedWorkerId || undefined,
-        participant_id:  selectedParticipantId,
-        scheduled_start: scheduledStart,
-        scheduled_end:   scheduledEnd || undefined,
-        shift_type:      shiftType,
+    mutationFn: async (): Promise<AssignShiftResult> => {
+      const payload = {
+        participant_id: selectedParticipantId,
+        scheduled_start: datetimeLocalValueToUtcIso(scheduledStart),
+        scheduled_end: scheduledEnd ? datetimeLocalValueToUtcIso(scheduledEnd) : undefined,
+        shift_type: shiftType,
         selected_task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
-      }),
+      };
+      if (selectedWorkerId) {
+        return assignShift({ ...payload, worker_id: selectedWorkerId });
+      }
+      const created = await createUnassignedShift(payload);
+      return {
+        shift_id: created.shift_id,
+        shift: created.shift,
+        credential_status: { valid: true, missing_credentials: [], warning: null },
+        message: "Unassigned shift created",
+      };
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [orgId, "coordinator"] });
       toast({
@@ -165,8 +182,9 @@ export function ShiftAssignmentModal({
   const handleQuickEnd = () => {
     if (!scheduledStart) return;
     try {
-      const end = addHours(new Date(scheduledStart), 4);
-      setScheduledEnd(end.toISOString().slice(0, 16));
+      const startUtc = datetimeLocalValueToUtcIso(scheduledStart);
+      const endUtc = new Date(new Date(startUtc).getTime() + 4 * 60 * 60 * 1000).toISOString();
+      setScheduledEnd(utcIsoToDatetimeLocalValue(endUtc));
     } catch {}
   };
 
@@ -480,8 +498,8 @@ export function ShiftAssignmentModal({
                   [translate("common.worker"),      selectedWorkerData?.full_name ?? translate("coordinator.shiftAssign.unassigned")],
                   [translate("common.participant"), selectedParticipant.full_name],
                   [translate("coordinator.shiftAssign.type"),        translate(SHIFT_TYPE_KEYS[shiftType] ?? shiftType)],
-                  [translate("coordinator.shiftAssign.start"),       format(new Date(scheduledStart), "d MMM yyyy h:mm a")],
-                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), format(new Date(scheduledEnd), "d MMM yyyy h:mm a")] as [string, string]] : []),
+                  [translate("coordinator.shiftAssign.start"),       `${format(new Date(datetimeLocalValueToUtcIso(scheduledStart)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledStart))}`],
+                  ...(scheduledEnd ? [[translate("coordinator.shiftAssign.end"), `${format(new Date(datetimeLocalValueToUtcIso(scheduledEnd)), "d MMM yyyy")} ${formatAppTime(datetimeLocalValueToUtcIso(scheduledEnd))}`] as [string, string]] : []),
                   ...(selectedTaskIds.length > 0
                     ? [[
                         translate("coordinator.shiftAssign.tasksOptional").split(" (")[0],

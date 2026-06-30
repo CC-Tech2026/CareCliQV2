@@ -314,6 +314,8 @@ export const en: Dict = {
   // Toasts (shift actions)
   "toast.tutorialCheckIn": "Tutorial check-in",
   "toast.tutorialCheckInDesc": "Check-in preview complete — continue the walkthrough.",
+  "toast.tutorialRiskAck": "Tutorial risk acknowledgement",
+  "toast.tutorialRiskAckDesc": "Safety alerts acknowledged for this walkthrough — continue to clock in.",
   "toast.tutorialSession": "Tutorial session",
   "toast.tutorialSessionDesc": "Session preview started — continue the walkthrough.",
   "toast.tutorialShiftEnd": "Tutorial sign-off",
@@ -3690,7 +3692,7 @@ export const en: Dict = {
   "hub.workspace.opening": "Opening workspace…",
   "hub.workspace.worker.title": "Support Worker Workspace",
   "hub.workspace.worker.short": "My Workspace",
-  "hub.workspace.worker.subtitle": "Client visits, shift notes and compliance tracking.",
+  "hub.workspace.worker.subtitle": "Your daily overview, shifts and action items.",
   "hub.workspace.coordinator.title": "Support Coordinator Workspace",
   "hub.workspace.coordinator.short": "My Workspace",
   "hub.workspace.coordinator.subtitle": "Team oversight, NDIS plans and billing.",

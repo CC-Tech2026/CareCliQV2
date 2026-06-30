@@ -212,7 +212,7 @@ export default function WorkerMessages() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-5 pb-10 lg:grid-cols-[320px_1fr]">
+    <div className="grid w-full gap-5 pb-10 lg:grid-cols-[320px_1fr]">
       <header className="lg:col-span-2">
         <p className="hidden" style={{ color: CORAL }}>
           {translate("messages.title")}

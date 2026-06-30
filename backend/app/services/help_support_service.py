@@ -56,7 +56,7 @@ def get_support_config() -> dict[str, Any]:
         "support_phone": "1800 000 000",
         "support_email": "support@carecliq.com.au",
         "business_hours_json": {
-            "timezone": "Australia/Sydney",
+            "timezone": "Australia/Adelaide",
             "weekdays": "Mon–Fri 9:00–17:00 AEST",
         },
         "outside_hours_message": (

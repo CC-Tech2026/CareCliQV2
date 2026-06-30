@@ -1,4 +1,6 @@
 ﻿import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -6,7 +8,6 @@ import { useAccessibility } from "@/contexts/AccessibilityContext";
 const TEXT   = "var(--cc-text)";
 const MUTED  = "var(--cc-muted)";
 const BORDER = "var(--cc-border)";
-const SOFT   = "#F7F5FF";
 const PLUM   = "var(--cc-plum)";
 
 const ROLE_KEYS: Record<string, string> = {
@@ -28,8 +29,13 @@ function getInitials(name: string) {
 }
 
 export function HubLayout({ children }: { children: React.ReactNode }) {
-  const { translate } = useAccessibility();
+  const { translate, setThemeMode } = useAccessibility();
+  const { resolvedTheme } = useTheme();
   const { user } = useAuth();
+  const isDark =
+    resolvedTheme === "dark" ||
+    (!resolvedTheme && typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
   const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials    = getInitials(displayName);
   const role        = translate(ROLE_KEYS[user?.role ?? ""] ?? "hub.role.staffFallback");
@@ -44,17 +50,17 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: SOFT }}>
+    <div className="min-h-screen" style={{ background: "var(--cc-soft)", color: TEXT }}>
 
       {/* ── STICKY HEADER ─────────────────────────────── */}
       <header
-        className="sticky top-0 z-50 bg-white"
-        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 0 #E5E7EB" }}
+        className="sticky top-0 z-50"
+        style={{ background: "var(--cc-bg)", borderBottom: `1px solid ${BORDER}`, boxShadow: "var(--cc-shadow-sm)" }}
       >
         {/* Plum accent line */}
         <div style={{ height: 3, background: PLUM }} />
 
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="px-4">
           <div className="flex h-14 items-center justify-between">
 
             {/* LEFT — logo + org */}
@@ -76,8 +82,19 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
               </span>
             </div>
 
-            {/* RIGHT — role + name + avatar */}
+            {/* RIGHT — theme toggle + role + name + avatar */}
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
+                aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
+                className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-cc-soft"
+                style={{ borderColor: BORDER, color: MUTED }}
+              >
+                {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+              </button>
+
               <div className="hidden text-right sm:block">
                 <div className="text-[11px] font-semibold" style={{ color: MUTED }}>
                   {role}
@@ -100,7 +117,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── CONTENT ──────────────────────────────────── */}
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="px-4 py-8">
         {children}
       </main>
     </div>

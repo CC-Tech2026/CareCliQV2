@@ -8,8 +8,8 @@ import re
 import secrets
 from datetime import date, datetime, time, timezone
 from typing import Any, Optional
-from zoneinfo import ZoneInfo
 
+from ..core.timezone import APP_TIMEZONE as DEFAULT_TZ
 from .shift_service import (
     _enrich_worker_shift_card,
     _get_session_for_shift,
@@ -19,8 +19,6 @@ from .shift_service import (
 from .supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_TZ = ZoneInfo("Australia/Adelaide")
 
 PARTICIPANT_PALETTE = ["#5533CC", "#F03060", "#0EA5E9", "#10B981"]
 MULTIPLE_COLOUR = "#7A6A9E"
@@ -96,7 +94,7 @@ def list_shifts_for_calendar(
     """Shifts in inclusive date range for worker calendar views."""
     if end_date < start_date:
         return []
-    # Use org-local day boundaries (Adelaide) so morning shifts are not dropped from the range.
+    # Use org-local day boundaries (Australia/Adelaide) so morning shifts are not dropped from the range.
     start_local = datetime.combine(start_date, time.min, tzinfo=DEFAULT_TZ)
     end_local = datetime.combine(end_date, time(23, 59, 59), tzinfo=DEFAULT_TZ)
     start_iso = start_local.astimezone(timezone.utc).isoformat()

@@ -1,1 +1,1 @@
-"""CareScribe backend package."""
+"""CareCliQ backend package."""

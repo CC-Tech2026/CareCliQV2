@@ -6,6 +6,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from ..core.timezone import APP_TIMEZONE, parse_shift_datetime
+
 from ..core.config import settings
 from ..schemas.alert import AlertCreate
 from . import alert_service
@@ -673,7 +675,8 @@ def _format_shift_time(value: Any) -> str:
     if not value:
         return "TBC"
     try:
-        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return dt.astimezone(timezone.utc).strftime("%a %d %b %Y, %H:%M UTC")
+        dt = parse_shift_datetime(str(value))
+        local = dt.astimezone(APP_TIMEZONE)
+        return local.strftime("%a %d %b %Y, %H:%M %Z")
     except ValueError:
         return str(value)[:16]
