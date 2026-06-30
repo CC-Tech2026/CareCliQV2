@@ -2907,6 +2907,58 @@ class NdisGoalBody(BaseModel):
     related_task_ids: Optional[list[str]] = None
 
 
+def _sync_to_patient_goals(goal: dict[str, Any]) -> None:
+    """Mirror an ndis_goals row into patient_goals.
+
+    Worker-facing reads (goals_service.get_goals_for_participant,
+    shift_service._fetch_active_goals_for_participant) stay on
+    patient_goals to avoid touching code the support-worker side is
+    actively being developed against, so coordinator-created goals need
+    to land there too. Keyed on the patient_goals.ndis_goal_id backlink
+    (migration 075) — safe to call on every create/update/archive/complete.
+    """
+    goal_id = goal.get("id")
+    participant_id = goal.get("participant_id")
+    if not goal_id or not participant_id:
+        return
+    supabase = get_supabase_admin()
+    try:
+        plan_resp = (
+            supabase.table("ndis_plans")
+            .select("id")
+            .eq("patient_id", participant_id)
+            .eq("status", "active")
+            .order("plan_start", desc=True)
+            .limit(1)
+            .execute()
+        )
+        plan_rows = plan_resp.data or []
+        if not plan_rows:
+            return
+        plan_id = plan_rows[0].get("id")
+        if not plan_id:
+            return
+
+        goal_status = goal.get("status") or "active"
+        mirrored: dict[str, Any] = {
+            "plan_id": plan_id,
+            "ndis_goal_id": goal_id,
+            "title": goal.get("name"),
+            "description": goal.get("description") or goal.get("name"),
+            # patient_goals.category is constrained to general/core/capacity_building;
+            # ndis_goals.goal_area uses a different vocabulary (community/daily_living/
+            # social) that doesn't map cleanly, so mirrored rows default to 'general'.
+            "category": "general",
+            "target_date": goal.get("target_date"),
+            "why_it_matters": goal.get("success_criteria"),
+            "status": goal_status,
+            "is_achieved": goal_status == "completed",
+        }
+        supabase.table("patient_goals").upsert(mirrored, on_conflict="ndis_goal_id").execute()
+    except Exception as exc:
+        logger.warning("Failed to sync ndis_goal %s to patient_goals: %s", goal_id, exc)
+
+
 @router.get("/goals")
 async def list_coordinator_goals(
     participant_id: Optional[str] = Query(default=None),
@@ -2954,7 +3006,9 @@ async def create_ndis_goal(
     }
     try:
         resp = supabase.table("ndis_goals").insert(payload).execute()
-        return (resp.data or [payload])[0]
+        created = (resp.data or [payload])[0]
+        _sync_to_patient_goals(created)
+        return created
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal create failed: {exc}")
 
@@ -2981,7 +3035,9 @@ async def update_ndis_goal(
     }
     try:
         resp = supabase.table("ndis_goals").update(update).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [update])[0]
+        updated = (resp.data or [update])[0]
+        _sync_to_patient_goals(updated)
+        return updated
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal update failed: {exc}")
 
@@ -2997,7 +3053,9 @@ async def archive_ndis_goal(
     now = datetime.now(timezone.utc).isoformat()
     try:
         resp = supabase.table("ndis_goals").update({"status": "archived", "archived_at": now, "updated_at": now}).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [{}])[0]
+        archived = (resp.data or [{}])[0]
+        _sync_to_patient_goals(archived)
+        return archived
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal archive failed: {exc}")
 
@@ -3013,7 +3071,9 @@ async def complete_ndis_goal(
     now = datetime.now(timezone.utc).isoformat()
     try:
         resp = supabase.table("ndis_goals").update({"status": "completed", "completed_at": now, "updated_at": now}).eq("id", goal_id).eq("organization_id", org_id).execute()
-        return (resp.data or [{}])[0]
+        completed = (resp.data or [{}])[0]
+        _sync_to_patient_goals(completed)
+        return completed
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Goal complete failed: {exc}")
 
