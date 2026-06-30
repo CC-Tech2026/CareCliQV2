@@ -65,6 +65,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -231,12 +238,14 @@ function ParticipantForm({
   isPending,
   onCancel,
   submitLabel,
+  hasPlan = false,
 }: {
   form: ReturnType<typeof useForm<ParticipantFormValues>>;
   onSubmit: (data: ParticipantFormValues) => void;
   isPending: boolean;
   onCancel: () => void;
   submitLabel: string;
+  hasPlan?: boolean;
 }) {
   const { translate } = useAccessibility();
   return (
@@ -377,19 +386,28 @@ function ParticipantForm({
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="total_budget"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {hasPlan ? (
+            <FormItem>
+              <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
+              <p className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Managed via Set Up NDIS Plan
+              </p>
+            </FormItem>
+          ) : (
+            <FormField
+              control={form.control}
+              name="total_budget"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <FormField
             control={form.control}
             name="plan_start_date"
@@ -437,9 +455,11 @@ function ParticipantForm({
 
 function EditParticipantPanel({
   participant,
+  hasPlan,
   onSaved,
 }: {
   participant: any;
+  hasPlan: boolean;
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -506,6 +526,7 @@ function EditParticipantPanel({
             onSubmit={(data) => updateMutation.mutate(data)}
             isPending={updateMutation.isPending}
             onCancel={() => setOpen(false)}
+            hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
         </div>
@@ -562,6 +583,17 @@ function SetupPlanPanel({
   const existingBudgets = budget?.budgets ?? [];
   const usedCategoryKeys = new Set(existingBudgets.map((b) => b.category));
 
+  useEffect(() => {
+    if (!open) return;
+    planForm.reset({
+      plan_number: budget?.plan_number ?? "",
+      plan_start: budget?.plan_start ? String(budget.plan_start).slice(0, 10) : "",
+      plan_end: budget?.plan_end ? String(budget.plan_end).slice(0, 10) : "",
+      total_funding: Number(budget?.total_funding ?? 0),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, budget?.plan_id]);
+
   const categoriesQuery = useOrgQuery(["participant", participantId, "budget-categories"], {
     queryFn: () => jsonFetch<PlanBudgetCategoryOption[]>(`/api/participants/${participantId}/plan/budget-categories`),
     enabled: open && hasPlan,
@@ -613,185 +645,197 @@ function SetupPlanPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <PlusCircle className="h-3.5 w-3.5" /> {open ? translate("patients.closePlanSetup") : translate("patients.setupPlan")}
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen(true)}>
+        <PlusCircle className="h-3.5 w-3.5" /> {hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}
       </Button>
-      {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4 space-y-4">
-          <div>
-            <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.setupPlan")}</h4>
-            <Form {...planForm}>
-              <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={planForm.control}
-                    name="plan_number"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>{translate("patients.field.planReference")}</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. 2024-ABC-001" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={planForm.control}
-                    name="plan_start"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {translate("patients.field.planStart")} <span className="text-destructive">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={planForm.control}
-                    name="plan_end"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>
-                          {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={planForm.control}
-                    name="total_funding"
-                    render={({ field }) => (
-                      <FormItem className="col-span-2">
-                        <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={createPlan.isPending}>
-                    {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {translate("patients.savePlan")}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</DialogTitle>
+          </DialogHeader>
+          <Form {...planForm}>
+            <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={planForm.control}
+                  name="plan_number"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>{translate("patients.field.planReference")}</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. 2024-ABC-001" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_start"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {translate("patients.field.planStart")} <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_end"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="total_funding"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-          {hasPlan && (
-            <div className="border-t border-purple-100/60 pt-4">
-              <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
-              </p>
-
-              {existingBudgets.length > 0 && (
-                <div className="space-y-2 mb-3">
-                  {existingBudgets.map((b) => (
-                    <div
-                      key={b.category}
-                      className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-[12px] font-bold text-[#111827] truncate">{b.category_label || b.category}</p>
-                        <p className="text-[10px] text-[#6B7280]">
-                          {money(b.allocated)} allocated
-                          {b.overspent && <span className="ml-1.5 font-bold text-red-600">· Over budget</span>}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            if (!b.category) return;
-                            setEditingCategory(b.category);
-                            setCategoryDraft(b.category);
-                            setAmountDraft(String(b.allocated ?? 0));
-                          }}
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-red-600"
-                          disabled={deleteBudget.isPending}
-                          onClick={() => b.category && deleteBudget.mutate(b.category)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+              {!hasPlan && (
+                <div className="border-t border-purple-100/60 pt-4">
+                  <p className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
+                  </p>
+                  <p className="text-[12px] text-[#6B7280]">
+                    Save the plan details above first — category budgets can be added once the plan exists.
+                  </p>
                 </div>
               )}
 
-              <div className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
-                <Select
-                  value={categoryDraft}
-                  onValueChange={setCategoryDraft}
-                  disabled={!!editingCategory || categoriesQuery.isLoading}
-                >
-                  <SelectTrigger className="h-9 text-[12px]">
-                    <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableCategories
-                      .filter((c) => editingCategory === c.category || !usedCategoryKeys.has(c.category))
-                      .map((c) => (
-                        <SelectItem key={c.category} value={c.category}>
-                          {c.category_name}
-                        </SelectItem>
+              {hasPlan && (
+                <div className="border-t border-purple-100/60 pt-4">
+                  <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
+                  </p>
+
+                  {existingBudgets.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {existingBudgets.map((b) => (
+                        <div
+                          key={b.category}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-bold text-[#111827] truncate">{b.category_label || b.category}</p>
+                            <p className="text-[10px] text-[#6B7280]">
+                              {money(b.allocated)} allocated
+                              {b.overspent && <span className="ml-1.5 font-bold text-red-600">· Over budget</span>}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                if (!b.category) return;
+                                setEditingCategory(b.category);
+                                setCategoryDraft(b.category);
+                                setAmountDraft(String(b.allocated ?? 0));
+                              }}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-red-600"
+                              disabled={deleteBudget.isPending}
+                              onClick={() => b.category && deleteBudget.mutate(b.category)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
                       ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="Allocated amount"
-                  value={amountDraft}
-                  onChange={(e) => setAmountDraft(e.target.value)}
-                />
-                <div className="flex justify-end gap-2">
-                  {editingCategory && (
-                    <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
-                      Cancel
-                    </Button>
+                    </div>
                   )}
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
-                    onClick={() =>
-                      upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
-                    }
-                  >
-                    {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                    {editingCategory ? "Update" : "Add"} Category Budget
-                  </Button>
+
+                  <div className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
+                    <Select
+                      value={categoryDraft}
+                      onValueChange={setCategoryDraft}
+                      disabled={!!editingCategory || categoriesQuery.isLoading}
+                    >
+                      <SelectTrigger className="h-9 text-[12px]">
+                        <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCategories
+                          .filter((c) => editingCategory === c.category || !usedCategoryKeys.has(c.category))
+                          .map((c) => (
+                            <SelectItem key={c.category} value={c.category}>
+                              {c.category_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Allocated amount"
+                      value={amountDraft}
+                      onChange={(e) => setAmountDraft(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      {editingCategory && (
+                        <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
+                          Cancel
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
+                        onClick={() =>
+                          upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
+                        }
+                      >
+                        {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                        {editingCategory ? "Update" : "Add"} Category Budget
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+              )}
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createPlan.isPending}>
+                  {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {hasPlan ? "Update Plan" : translate("patients.savePlan")}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1032,11 +1076,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const goals = Array.isArray(participant.goals) ? participant.goals : [];
   const categoryBudgets = budget?.budgets ?? [];
   const hasCategoryBudgets = categoryBudgets.length > 0;
+  const hasPlan = !!budget?.plan_id;
   // Once per-category budgets exist, they are the source of truth — total_allocated/used/remaining
-  // are a computed rollup of those rows, not a separately-tracked figure.
+  // are a computed rollup of those rows, not a separately-tracked figure. Otherwise, the plan record
+  // (budget.total_funding) is authoritative once a plan exists — participant.total_budget is a legacy
+  // field that can drift from it (e.g. via the separate Edit participant panel) and is only trusted
+  // as a last resort when there's no plan at all.
   const totalBudget = hasCategoryBudgets
     ? Number(budget?.total_allocated ?? 0)
-    : Number(participant.total_budget ?? budget?.total_funding ?? 0);
+    : hasPlan
+      ? Number(budget?.total_funding ?? 0)
+      : Number(participant.total_budget ?? 0);
   const usedBudget = hasCategoryBudgets ? Number(budget?.total_used ?? 0) : Number(participant.used_budget ?? 0);
   const remainingBudget = hasCategoryBudgets
     ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
@@ -1112,6 +1162,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
           <div className="flex items-center gap-1.5 shrink-0">
             <EditParticipantPanel
               participant={participant}
+              hasPlan={hasPlan}
               onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
             />
             <SetupPlanPanel
