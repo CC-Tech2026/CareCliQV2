@@ -32,7 +32,7 @@ function InstructionBody({ body, sectionCritical }: { body: string; sectionCriti
             key={index}
             className={cn(
               "whitespace-pre-wrap text-sm leading-relaxed",
-              critical ? "font-black text-red-900" : "font-medium",
+              critical ? "font-black text-red-900 dark:text-red-300" : "font-medium",
             )}
             style={critical ? undefined : { color: TEXT }}
           >
@@ -52,7 +52,7 @@ function InstructionSection({ section, defaultOpen, translate, translateParams }
     <div
       className={cn(
         "overflow-hidden rounded-xl border",
-        critical ? "border-red-200 bg-red-50/80" : "border-[#E5E7EB] bg-[#F8F6FE]",
+        critical ? "cc-status-critical" : "border-cc-border bg-cc-soft",
       )}
     >
       <button
@@ -63,7 +63,7 @@ function InstructionSection({ section, defaultOpen, translate, translateParams }
         <p
           className={cn(
             "text-[10px] font-black uppercase tracking-wider",
-            critical ? "text-red-700" : undefined,
+            critical ? "text-red-700 dark:text-red-300" : undefined,
           )}
           style={critical ? undefined : { color: MUTED }}
         >
@@ -74,7 +74,7 @@ function InstructionSection({ section, defaultOpen, translate, translateParams }
       </button>
 
       {open && (
-        <div className="space-y-3 border-t px-3 py-3" style={{ borderColor: critical ? "#FECACA" : BORDER }}>
+        <div className="space-y-3 border-t border-cc-border px-3 py-3">
           <InstructionBody body={section.body} sectionCritical={critical} />
           {section.image_url && (
             <img
@@ -98,7 +98,7 @@ export function SupportInstructionsAccordion({ instructions, open = true, onTogg
   return (
     <section
       id={sectionId}
-      className="overflow-hidden rounded-2xl border bg-white shadow-sm"
+      className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm"
       style={{ borderColor: BORDER }}
     >
       <button

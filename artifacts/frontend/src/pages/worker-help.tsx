@@ -5,8 +5,6 @@ import { Loader2, Mail, MessageCircle, Phone, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WORKER_FAQ_FALLBACK } from "@/content/worker-faq-fallback";
-import { useWorkerTutorial } from "@/hooks/useWorkerTutorial";
-import { WORKER_TUTORIAL_STEPS } from "@/lib/worker-tutorial-steps";
 import { BORDER, CORAL, MUTED, PLUM, SOFT, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
@@ -19,7 +17,7 @@ import {
 } from "@/services/helpService";
 
 
-type Tab = "tutorial" | "faq" | "chat" | "issues";
+type Tab = "faq" | "chat" | "issues";
 
 function isWithinBusinessHours(config: SupportConfig | null): boolean {
   if (!config?.business_hours_json) return true;
@@ -96,7 +94,6 @@ export default function WorkerHelp() {
   const [config, setConfig] = useState<SupportConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const tutorial = useWorkerTutorial();
 
   useEffect(() => {
     let active = true;
@@ -130,7 +127,6 @@ export default function WorkerHelp() {
 
   const tabs: { id: Tab; label: string }[] = useMemo(
     () => [
-      { id: "tutorial", label: translate("help.tab.tutorial") },
       { id: "faq", label: translate("help.tab.faq") },
       { id: "chat", label: translate("help.tab.chat") },
       { id: "issues", label: translate("help.tab.issues") },
@@ -170,34 +166,6 @@ export default function WorkerHelp() {
       {loading && (
         <div className="flex justify-center py-12">
           <Loader2 className="h-7 w-7 animate-spin text-cc-plum" />
-        </div>
-      )}
-
-      {!loading && tab === "tutorial" && (
-        <div className="space-y-4 rounded-2xl border border-cc-border bg-cc-surface p-6">
-          <p className="text-sm" style={{ color: MUTED }}>
-            {translate("help.tutorial.intro")}
-          </p>
-          <Button className="rounded-xl" style={{ background: PLUM }} onClick={() => tutorial.replay()}>
-            {translate("help.tutorial.replay")}
-          </Button>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {WORKER_TUTORIAL_STEPS.map((step) => (
-              <button
-                key={step.key}
-                type="button"
-                onClick={() => tutorial.start(0, step.key)}
-                className="rounded-xl border border-cc-border p-4 text-left transition hover:bg-cc-bg"
-              >
-                <p className="text-sm font-black" style={{ color: TEXT }}>
-                  {step.title}
-                </p>
-                <p className="mt-1 text-xs" style={{ color: MUTED }}>
-                  {translate("help.tutorial.topicHint")}
-                </p>
-              </button>
-            ))}
-          </div>
         </div>
       )}
 

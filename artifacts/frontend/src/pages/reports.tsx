@@ -1046,7 +1046,7 @@ function ExportCentreSection() {
           scoreLabel(s.compliance_score ?? 0),
         ]),
       });
-      doc.save("carescribe-compliance-bundle.pdf");
+      doc.save("carecliq-compliance-bundle.pdf");
     }
 
     if (type === "session_csv") {
@@ -1064,7 +1064,7 @@ function ExportCentreSection() {
       const blob = new Blob([csv], { type: "text/csv" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
-      a.href = url; a.download = "carescribe-sessions.csv"; a.click();
+      a.href = url; a.download = "carecliq-sessions.csv"; a.click();
       URL.revokeObjectURL(url);
     }
 

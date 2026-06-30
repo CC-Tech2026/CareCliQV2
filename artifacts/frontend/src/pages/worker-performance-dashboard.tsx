@@ -32,7 +32,7 @@ export default function WorkerPerformanceDashboardPage() {
   const trend = data?.trend;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12">
+    <div className="w-full space-y-6 pb-12">
       <header>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("performance.eyebrow")}
@@ -188,10 +188,10 @@ export default function WorkerPerformanceDashboardPage() {
         </Link>
       )}
 
-      <div className="flex flex-wrap gap-4 text-center text-xs font-bold">
+      {/* <div className="flex flex-wrap gap-4 text-center text-xs font-bold">
         <Link href="/worker/shift-history" style={{ color: PLUM }}>{translate("performance.shiftHistory")}</Link>
         <Link href="/worker/training" style={{ color: PLUM }}>{translate("performance.trainingLink")}</Link>
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -102,7 +102,7 @@ function Panel({
   noPad?: boolean;
 }) {
   return (
-    <section className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <div
         className="flex items-center justify-between gap-4 px-6 py-4"
         style={{ borderBottom: `1px solid ${BORDER}` }}

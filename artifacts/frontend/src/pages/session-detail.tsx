@@ -549,7 +549,7 @@ export default function SessionDetail({ id }: { id?: string }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 max-w-5xl mx-auto p-4">
+      <div className="space-y-6 w-full p-4">
         <Skeleton className="h-12 w-1/3 animate-pulse bg-slate-200" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

@@ -1,4 +1,4 @@
-const DESKTOP_PREF_KEY = "carescribe_desktop_notifications";
+import { CCQ_DESKTOP_NOTIFICATIONS_KEY } from "@/lib/storage-keys";
 
 export type DesktopNotificationPermission = NotificationPermission | "unsupported";
 
@@ -13,7 +13,7 @@ export function getDesktopNotificationPermission(): DesktopNotificationPermissio
 
 export function isDesktopNotificationsEnabled(): boolean {
   try {
-    return localStorage.getItem(DESKTOP_PREF_KEY) === "true";
+    return localStorage.getItem(CCQ_DESKTOP_NOTIFICATIONS_KEY) === "true";
   } catch {
     return false;
   }
@@ -21,7 +21,7 @@ export function isDesktopNotificationsEnabled(): boolean {
 
 export function setDesktopNotificationsEnabled(enabled: boolean): void {
   try {
-    localStorage.setItem(DESKTOP_PREF_KEY, String(enabled));
+    localStorage.setItem(CCQ_DESKTOP_NOTIFICATIONS_KEY, String(enabled));
   } catch {
     /* noop */
   }

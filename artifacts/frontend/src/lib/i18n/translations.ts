@@ -314,6 +314,8 @@ export const en: Dict = {
   // Toasts (shift actions)
   "toast.tutorialCheckIn": "Tutorial check-in",
   "toast.tutorialCheckInDesc": "Check-in preview complete — continue the walkthrough.",
+  "toast.tutorialRiskAck": "Tutorial risk acknowledgement",
+  "toast.tutorialRiskAckDesc": "Safety alerts acknowledged for this walkthrough — continue to clock in.",
   "toast.tutorialSession": "Tutorial session",
   "toast.tutorialSessionDesc": "Session preview started — continue the walkthrough.",
   "toast.tutorialShiftEnd": "Tutorial sign-off",

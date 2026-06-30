@@ -59,7 +59,7 @@ export default function WorkerFeedbackPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-12">
+    <div className="w-full space-y-6 pb-12">
       <header className="flex items-center gap-3">
         <div
           className="flex h-12 w-12 items-center justify-center rounded-2xl"

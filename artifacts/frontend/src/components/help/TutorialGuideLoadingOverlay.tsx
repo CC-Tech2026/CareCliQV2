@@ -1,13 +1,14 @@
 import { Loader2 } from "lucide-react";
 import { useWorkerTutorial } from "@/contexts/WorkerTutorialContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+import { WORKER_TUTORIAL_ENABLED } from "@/lib/worker-tutorial-feature";
 
 /** Blocks scroll and clicks until the tutorial popover is on screen. */
 export function TutorialGuideLoadingOverlay() {
   const { isStepGuideBlocking } = useWorkerTutorial();
   const { translate } = useAccessibility();
 
-  if (!isStepGuideBlocking) return null;
+  if (!WORKER_TUTORIAL_ENABLED || !isStepGuideBlocking) return null;
 
   return (
     <div

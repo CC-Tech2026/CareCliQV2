@@ -75,7 +75,7 @@ export default function AuditPack() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `carescribe-audit-pack-${format(new Date(), "yyyy-MM-dd")}.json`;
+    a.download = `carecliq-audit-pack-${format(new Date(), "yyyy-MM-dd")}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [compliance.data, workers.data, flags.data, flagged.data]);

@@ -97,7 +97,7 @@ export default function WorkerOnboarding() {
   }
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-6 pb-10 lg:grid-cols-[1fr_360px]">
+    <div className="grid w-full gap-6 pb-10 lg:grid-cols-[1fr_360px]">
       <div className="space-y-6">
         <div>
           <p className="hidden" style={{ color: CORAL }}>{translate("onboarding.supportWorker")}</p>

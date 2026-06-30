@@ -119,7 +119,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-2xl mx-auto space-y-6 p-4 md:p-8">
+      <div className="w-full space-y-6 md:py-8">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-12 w-64 rounded-xl" />
         <Skeleton className="h-80 w-full rounded-2xl" />
@@ -130,7 +130,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
 
   if (!participant) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-20 px-4" style={{ color: T2 }}>
+      <div className="w-full text-center py-20 px-4" style={{ color: T2 }}>
         {translate("patients.notFound")}{" "}
         <button onClick={() => navigate("/patients")} className="underline font-medium" style={{ color: CORAL }}>
           {translate("patients.backToList")}
@@ -140,7 +140,7 @@ export default function ParticipantEdit({ id }: { id: string }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 p-4 md:p-8">
+    <div className="w-full space-y-6 md:py-8">
 
       {/* Breadcrumb - Touch-friendly tap targets */}
       <div className="flex flex-wrap items-center gap-2 text-[13px]">

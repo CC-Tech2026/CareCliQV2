@@ -173,6 +173,8 @@ export function launchTutorialStep(options: {
 
   const maybeReposition = (activeDriver: Driver, target: Element | null) => {
     if (!target || isTutorialBlockingModalOpen(step)) return;
+    // Repositioning against an animating dialog can loop refresh() and crash React.
+    if (step.key === "end_shift_review" || step.key === "shift_signature") return;
     const key = targetRectKey(target);
     if (key === lastPositionKey) return;
     lastPositionKey = key;
@@ -194,6 +196,7 @@ export function launchTutorialStep(options: {
 
   const onLayoutChange = () => {
     if (!activeDriverRef || skipRequested || autoAdvanced) return;
+    if (step.key === "end_shift_review" || step.key === "shift_signature") return;
     lastPositionKey = "";
     const target = resolveTarget();
     maybeReposition(activeDriverRef, target);
@@ -234,7 +237,9 @@ export function launchTutorialStep(options: {
           align: step.popoverAlign ?? "start",
           onPopoverRender: (popover, { driver: activeDriver }) => {
             activeDriverRef = activeDriver;
-            scrollTutorialTargetIntoView(resolveTarget());
+            if (step.key !== "end_shift_review" && step.key !== "shift_signature") {
+              scrollTutorialTargetIntoView(resolveTarget());
+            }
 
             if (popover.progress) {
               popover.progress.textContent = `Step ${stepIndex + 1} of ${WORKER_TUTORIAL_STEPS.length}`;

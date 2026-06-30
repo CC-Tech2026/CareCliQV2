@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import { WORKER_TUTORIAL_ENABLED } from "@/lib/worker-tutorial-feature";
 import { isTutorialSessionDismissed, TUTORIAL_IN_PROGRESS_KEY, useWorkerTutorial } from "@/contexts/WorkerTutorialContext";
 
 const IN_PROGRESS_KEY = TUTORIAL_IN_PROGRESS_KEY;
@@ -12,6 +13,7 @@ export function WorkerTutorialLauncher() {
   const tutorial = useWorkerTutorial();
 
   useEffect(() => {
+    if (!WORKER_TUTORIAL_ENABLED) return;
     if (user?.role !== "support_worker" || tutorial.loading) return;
     if (tutorial.progress.completed || tutorial.activeIndex !== null) return;
     if (isTutorialSessionDismissed()) return;

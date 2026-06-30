@@ -29,7 +29,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
   ];
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -46,12 +46,12 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
       {open && (
         <div className="space-y-2 border-t px-4 py-3" style={{ borderColor: BORDER }}>
           {emergency && (
-            <div className="rounded-xl border-2 border-rose-200 bg-rose-50 p-3">
-              <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700">
+            <div className="rounded-xl border-2 border-rose-200 bg-rose-50 p-3 dark:border-rose-500/30 dark:bg-rose-500/10">
+              <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 dark:text-rose-300">
                 <Phone size={12} aria-hidden />
                 {translate("shift.participant.emergency")}
               </dt>
-              <dd className="mt-1 text-sm font-bold text-rose-900">
+              <dd className="mt-1 text-sm font-bold text-rose-900 dark:text-rose-200">
                 {emergency.phone ? (
                   <a href={`tel:${emergency.phone}`} className="underline decoration-rose-400 underline-offset-2">
                     {emergency.text}
@@ -64,7 +64,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
           )}
 
           {caseManager?.name && (
-            <div className="rounded-xl border border-[#E5E7EB] bg-[#F0EDFC] p-3">
+            <div className="rounded-xl border border-cc-border bg-cc-active-bg p-3">
               <dt className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                 <UserCircle size={12} aria-hidden />
                 {translate("shift.participant.caseManager")}
@@ -86,7 +86,7 @@ export function ParticipantProfileCard({ profile, fallbackName, open = true, onT
 
           <dl className="grid gap-2 sm:grid-cols-2">
             {standardRows.map(({ label, value, href }) => (
-              <div key={label} className="rounded-xl bg-[#F8F6FE] p-3">
+              <div key={label} className="rounded-xl bg-cc-soft p-3">
                 <dt className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
                   {label}
                 </dt>

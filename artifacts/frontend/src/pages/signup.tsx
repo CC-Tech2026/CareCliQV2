@@ -1,6 +1,7 @@
 ﻿import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
+import { CCQ_TOKEN_KEY } from "@/lib/storage-keys";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
@@ -304,7 +305,7 @@ export default function Signup() {
       try {
         const result = await login(form.email, form.password);
         if (result.status === "authenticated") {
-          token = localStorage.getItem("carescribe_token");
+          token = localStorage.getItem(CCQ_TOKEN_KEY);
         }
       } catch (err) {
         setEmailVerify(true);

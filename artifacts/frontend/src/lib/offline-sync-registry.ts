@@ -15,6 +15,7 @@ import {
 import { syncAllQueuedShiftActions, type SyncItemResult } from "@/lib/sync-pending-shift-actions";
 import { listAllUnsyncedEvidence, type TaskEvidenceRecord } from "@/lib/task-evidence-storage";
 import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
+import { isTutorialSessionId } from "@/lib/tutorial-offline";
 import { syncSessionNotes } from "@/services/sessionNotesService";
 
 export type SyncQueueCategory =
@@ -132,14 +133,18 @@ export async function listSyncQueueItems(): Promise<SyncQueueItem[]> {
   const evidenceRows = await listAllUnsyncedEvidence();
   const pendingEvidence = evidenceRows.filter(
     (r) =>
-      !r.synced ||
-      r.upload_status === "pending" ||
-      r.upload_status === "uploading" ||
-      r.upload_status === "failed",
+      !isTutorialSessionId(r.session_id)
+      && (
+        !r.synced
+        || r.upload_status === "pending"
+        || r.upload_status === "uploading"
+        || r.upload_status === "failed"
+      ),
   );
   items.push(...groupEvidenceItems(pendingEvidence));
 
   for (const { sessionId, note } of listAllPendingSessionNotes()) {
+    if (isTutorialSessionId(sessionId)) continue;
     const sizeBytes = estimateNoteBytes(note);
     items.push({
       id: `note:${sessionId}:${note.note_id}`,
@@ -178,6 +183,7 @@ export async function syncPendingSessionNotes(): Promise<SyncItemResult[]> {
   const bySession = new Map<string, ReturnType<typeof loadPendingSessionNotes>>();
 
   for (const { sessionId, note } of listAllPendingSessionNotes()) {
+    if (isTutorialSessionId(sessionId)) continue;
     const bucket = bySession.get(sessionId) ?? [];
     bucket.push(note);
     bySession.set(sessionId, bucket);
@@ -225,6 +231,7 @@ export async function syncAllPendingItems(options?: {
     : [...new Set(evidenceRows.map((r) => r.session_id).filter(Boolean))];
 
   for (const sessionId of sessionIds) {
+    if (isTutorialSessionId(sessionId)) continue;
     const bytes = pendingUploadBytesForSession(sessionId, evidenceRows);
     if (!options?.skipMobileGuard && (await shouldDeferUploadForMobileData(bytes))) {
       results.push({

@@ -67,6 +67,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
+import { TUTORIAL_SESSION_ID } from "@/lib/tutorial-offline";
 import { cn } from "@/lib/utils";
 import {
   acknowledgeShiftRisks,
@@ -78,6 +79,7 @@ import {
   updateShiftTasks,
   type ClockInRequest,
   type ShiftTask,
+  type ShiftHealthAlert,
   type ShiftVisualState,
   type WorkerShift,
   type ParticipantProfile,
@@ -107,6 +109,9 @@ import {
   timerAnchorIso,
 } from "@/lib/shift-utils";
 import { markTaskNa, type NaReason } from "@/lib/shift-validation";
+import {
+  SHIFT_LIVE_PROGRESS_NOTE_ENABLED,
+} from "@/lib/shift-feature-flags";
 
 type Props = { id: string };
 
@@ -176,6 +181,23 @@ const TUTORIAL_DEMO_TASKS: ShiftTask[] = [
     order: 6,
     goal_id: "documentation_reporting",
     goal_title: "Documentation & Reporting",
+  },
+];
+
+const TUTORIAL_DEMO_HEALTH_ALERTS: ShiftHealthAlert[] = [
+  {
+    type: "allergy",
+    severity: "critical",
+    title: "Peanut allergy",
+    description: "Avoid all nut products. EpiPen in kitchen drawer.",
+    instructions: "Check all meals and snacks before serving.",
+  },
+  {
+    type: "falls_risk",
+    severity: "critical",
+    title: "Falls risk",
+    description: "Stand-by assist required on stairs and in wet areas.",
+    instructions: "Stay within arm's reach during transfers.",
   },
 ];
 
@@ -287,7 +309,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     orgId,
     shift,
     onTasksUpdated: setTasks,
-    onSessionStarted: () => setNotePanelOpen(true),
+    onSessionStarted: () => {
+      if (SHIFT_LIVE_PROGRESS_NOTE_ENABLED) setNotePanelOpen(true);
+    },
   });
 
   const {
@@ -358,7 +382,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       return;
     }
 
-    if (visualState === "session_active") {
+    if (visualState === "session_active" && SHIFT_LIVE_PROGRESS_NOTE_ENABLED) {
       setInstantSessionActive((active) => (active ? false : active));
       clearPendingStartSession(id);
       setNotePanelOpen((open) => (open ? open : true));
@@ -372,11 +396,24 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   ]);
 
   useEffect(() => {
-    if (!isTutorialDemo) return;
-    tutorial?.setFlowModalBlocking(validationOpen || signatureOpen);
-    // setFlowModalBlocking is a stable state setter from context
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- tutorial ref changes when context value updates
-  }, [isTutorialDemo, validationOpen, signatureOpen]);
+    if (!tutorial?.isTutorialMode) return;
+    if (validationOpen || signatureOpen) {
+      tutorial?.setFlowModalBlocking(true);
+      return;
+    }
+    const stepKey = tutorial?.activeStep?.key;
+    if (stepKey === "end_shift_review" || stepKey === "shift_signature") {
+      tutorial?.setFlowModalBlocking(true);
+      return;
+    }
+    tutorial?.setFlowModalBlocking(false);
+  }, [
+    tutorial?.isTutorialMode,
+    validationOpen,
+    signatureOpen,
+    tutorial?.activeStep?.key,
+    tutorial?.setFlowModalBlocking,
+  ]);
 
   useEffect(() => {
     if (!isTutorialDemo) return;
@@ -386,7 +423,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       return;
     }
     if (stepKey === "shift_signature" && !signatureOpen) {
-      setValidationOpen(false);
+      if (validationOpen) setValidationOpen(false);
       setSignatureOpen(true);
     }
   }, [isTutorialDemo, tutorial?.activeStep?.key, validationOpen, signatureOpen]);
@@ -574,13 +611,28 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       setAckConfirmOpen(false);
       invalidateShifts();
       await refetch();
+      if (isTutorialDemo) {
+        toast({
+          title: translate("toast.tutorialRiskAck"),
+          description: translate("toast.tutorialRiskAckDesc"),
+        });
+      }
     } catch (err) {
-      setAckChecked(false);
-      toast({
-        title: "Could not acknowledge risks",
-        description: (err as Error).message || "Please try again.",
-        variant: "destructive",
-      });
+      if (isTutorialDemo) {
+        setAckChecked(true);
+        setAckConfirmOpen(false);
+        toast({
+          title: translate("toast.tutorialRiskAck"),
+          description: translate("toast.tutorialRiskAckDesc"),
+        });
+      } else {
+        setAckChecked(false);
+        toast({
+          title: "Could not acknowledge risks",
+          description: (err as Error).message || "Please try again.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setBusy(null);
     }
@@ -598,6 +650,20 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       return;
     }
     if (shiftNeedsRiskAck(shift) && !ackChecked) {
+      setSafetyOpen(true);
+      toast({
+        title: "Acknowledge safety alerts first",
+        description: "Review and acknowledge participant risks before clocking in.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      isTutorialDemo
+      && displayVisualState === "scheduled"
+      && !shift.risks_acknowledged
+      && !ackChecked
+    ) {
       setSafetyOpen(true);
       toast({
         title: "Acknowledge safety alerts first",
@@ -635,7 +701,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       try {
         setTutorialSessionStartedAt(new Date().toISOString());
         setInstantSessionActive(true);
-        setNotePanelOpen(true);
+        if (SHIFT_LIVE_PROGRESS_NOTE_ENABLED) setNotePanelOpen(true);
         toast({
           title: translate("toast.tutorialSession"),
           description: translate("toast.tutorialSessionDesc"),
@@ -727,15 +793,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     if (isTutorialDemo) {
       setMandatoryAlertOpen(false);
       setNotePanelOpen(false);
+      setValidationOpen(true);
+      tutorial?.setFlowModalBlocking(true);
       if (tutorial?.activeStep?.key === "end_shift") {
-        setValidationOpen(true);
-        tutorial?.setFlowModalBlocking(true);
-        window.requestAnimationFrame(() => {
-          void tutorial?.nextStep();
-        });
-      } else {
-        setValidationOpen(true);
-        tutorial?.setFlowModalBlocking(true);
+        void tutorial.nextStep();
       }
       return;
     }
@@ -789,6 +850,25 @@ export default function MyShiftDetail({ id: idProp }: Props) {
         void tutorial.nextStep();
       }
     }
+  };
+
+  const handleValidationOpenChange = (open: boolean) => {
+    if (
+      !open
+      && isTutorialDemo
+      && (tutorial?.activeStep?.key === "end_shift_review"
+        || tutorial?.activeStep?.key === "shift_signature")
+    ) {
+      return;
+    }
+    setValidationOpen(open);
+  };
+
+  const handleSignatureOpenChange = (open: boolean) => {
+    if (!open && isTutorialDemo && tutorial?.activeStep?.key === "shift_signature") {
+      return;
+    }
+    setSignatureOpen(open);
   };
 
   const handleValidationEndShift = () => {
@@ -856,7 +936,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   }
 
   const isSessionActive = displayVisualState === "session_active";
-  const showLiveSession = isSessionActive && notePanelOpen && (!!shift.session_id || isTutorialDemo);
+  const showLiveSession =
+    SHIFT_LIVE_PROGRESS_NOTE_ENABLED
+    && isSessionActive
+    && notePanelOpen
+    && (!!shift.session_id || isTutorialDemo);
   const baseProfile = shift.profile ?? offlineContext?.profile;
   const displayProfile: ParticipantProfile = {
     ...baseProfile,
@@ -888,7 +972,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       : activeTasksForValidation;
   const incompleteMandatory = incompleteMandatoryTasks(activeTasksForValidation);
   const liveSessionId =
-    isTutorialDemo && isSessionActive ? "tutorial-session" : shift.session_id;
+    isTutorialDemo && isSessionActive ? TUTORIAL_SESSION_ID : shift.session_id;
   const workflow = (
     <ShiftWorkflow
       shift={shift}
@@ -954,7 +1038,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       {shift && (
         <ShiftSignatureModal
           open={signatureOpen}
-          onOpenChange={setSignatureOpen}
+          onOpenChange={handleSignatureOpenChange}
           shiftId={shift.id}
           busy={busy === "end"}
           tutorialDemo={isTutorialDemo}
@@ -965,11 +1049,11 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       {shift && (
         <EndShiftValidationModal
           open={validationOpen}
-          onOpenChange={setValidationOpen}
+          onOpenChange={handleValidationOpenChange}
           tasks={validationTasks}
           busy={busy === "end"}
           tutorialDemo={isTutorialDemo}
-          onCancel={() => setValidationOpen(false)}
+          onCancel={() => handleValidationOpenChange(false)}
           onAddEvidence={handleValidationAddEvidence}
           onMarkNa={(taskId, reason) => void handleMarkTaskNa(taskId, reason)}
           onEndAnyway={handleValidationEndAnyway}
@@ -1044,7 +1128,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           if (!open && !shift?.risks_acknowledged) setAckChecked(false);
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent data-tutorial="risk-ack-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Acknowledge safety alerts?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1063,80 +1147,79 @@ export default function MyShiftDetail({ id: idProp }: Props) {
     </>
   );
 
-  if (showLiveSession) {
-    return (
-      <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
-        <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
-        {showEvidenceBanner && (
-          <EvidenceSyncBanner
-            online={evidenceOnline}
-            snapshot={evidenceSync}
-            onRetry={() => void retryEvidenceSync()}
-            className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
-          />
-        )}
-        <Link href="/my-shifts">
-          <button
-            type="button"
-            className="flex shrink-0 items-center gap-2 text-sm font-bold transition hover:opacity-80"
-            style={{ color: PLUM }}
-          >
-            <ArrowLeft size={18} /> My Shifts
-          </button>
-        </Link>
-
-        <ShiftStageBanner
-          visualState={displayVisualState}
-          participantName={shift.participant_name}
-          elapsed={elapsed}
-        />
-
-        <ShiftSessionSplitLayout
-          className="min-h-0 flex-1"
-          left={workflow}
-          right={
-            <LiveProgressNotePanel
-              shiftId={shift.id}
-              participantName={shift.participant_name}
-              sessionId={liveSessionId}
-              tutorialDemo={isTutorialDemo}
-              onClose={() => setNotePanelOpen(false)}
-            />
-          }
-        />
-        {dialogs}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-4 pb-10" data-tutorial="shift-workspace">
-      <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
-      {showEvidenceBanner && (
-        <EvidenceSyncBanner
-          online={evidenceOnline}
-          snapshot={evidenceSync}
-          onRetry={() => void retryEvidenceSync()}
-          className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
-        />
+    <>
+      {showLiveSession ? (
+        <div className="flex h-[calc(100dvh-8.5rem)] min-h-[560px] w-full max-w-none flex-col gap-3">
+          <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+          {showEvidenceBanner && (
+            <EvidenceSyncBanner
+              online={evidenceOnline}
+              snapshot={evidenceSync}
+              onRetry={() => void retryEvidenceSync()}
+              className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
+            />
+          )}
+          <Link href="/my-shifts">
+            <button
+              type="button"
+              className="flex shrink-0 items-center gap-2 text-sm font-bold transition hover:opacity-80"
+              style={{ color: PLUM }}
+            >
+              <ArrowLeft size={18} /> My Shifts
+            </button>
+          </Link>
+
+          <ShiftStageBanner
+            visualState={displayVisualState}
+            participantName={shift.participant_name}
+            elapsed={elapsed}
+          />
+
+          <ShiftSessionSplitLayout
+            className="min-h-0 flex-1"
+            left={workflow}
+            right={
+              <LiveProgressNotePanel
+                shiftId={shift.id}
+                participantName={shift.participant_name}
+                sessionId={liveSessionId}
+                tutorialDemo={isTutorialDemo}
+                onClose={() => setNotePanelOpen(false)}
+              />
+            }
+          />
+        </div>
+      ) : (
+        <div className="space-y-4 pb-10" data-tutorial="shift-workspace">
+          <OfflineSyncBanner syncing={syncing || offlineSyncing} pendingCount={pendingCount + pendingClockInCount} className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl" />
+          {showEvidenceBanner && (
+            <EvidenceSyncBanner
+              online={evidenceOnline}
+              snapshot={evidenceSync}
+              onRetry={() => void retryEvidenceSync()}
+              className="-mx-4 rounded-none sm:mx-0 sm:rounded-xl"
+            />
+          )}
+          <Link href="/my-shifts">
+            <button
+              type="button"
+              className="flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
+              style={{ color: PLUM }}
+            >
+              <ArrowLeft size={18} /> My Shifts
+            </button>
+          </Link>
+          <ShiftStageBanner
+            visualState={displayVisualState}
+            participantName={shift.participant_name}
+            elapsed={elapsed}
+          />
+          {workflow}
+        </div>
       )}
-      <Link href="/my-shifts">
-        <button
-          type="button"
-          className="flex items-center gap-2 text-sm font-bold transition hover:opacity-80"
-          style={{ color: PLUM }}
-        >
-          <ArrowLeft size={18} /> My Shifts
-        </button>
-      </Link>
-      <ShiftStageBanner
-        visualState={displayVisualState}
-        participantName={shift.participant_name}
-        elapsed={elapsed}
-      />
-      {workflow}
       {dialogs}
-    </div>
+    </>
   );
 }
 
@@ -1251,15 +1334,31 @@ function ShiftWorkflow({
   const hasAlerts = shiftHasRiskAlerts(shift);
   const risksAcked = shift.risks_acknowledged ?? false;
   const needsRiskAck = shiftNeedsRiskAck(shift);
+  const effectiveRiskAcked = risksAcked || (Boolean(isTutorialDemo) && ackChecked);
+  const isSessionActive = visualState === "session_active";
+  const isClockedIn = visualState === "clocked_in";
+  const isCompleted = visualState === "completed";
+  const onRiskAckTutorialStep =
+    tutorial?.activeStep?.key === "risk_acknowledgement"
+    || tutorial?.activeStep?.key === "risk_acknowledgement_modal";
+  const tutorialPendingRiskAck =
+    Boolean(isTutorialDemo)
+    && onRiskAckTutorialStep
+    && visualState === "scheduled"
+    && !effectiveRiskAcked;
+  const showRiskAckPending = !isCompleted && !effectiveRiskAcked && (needsRiskAck || tutorialPendingRiskAck);
+  const riskAckAlerts =
+    shift.health_alerts?.length
+      ? shift.health_alerts
+      : (isTutorialDemo ? TUTORIAL_DEMO_HEALTH_ALERTS : []);
+  const showRiskAcknowledged =
+    !isCompleted && effectiveRiskAcked && (hasAlerts || isTutorialDemo);
   const showTasks =
     visualState === "clocked_in" ||
     visualState === "session_active";
   const serviceTag = (shift.service_category || "CORE").toUpperCase();
   const tagStyle = SERVICE_TAG_STYLES[serviceTag] ?? SERVICE_TAG_STYLES.CORE;
   const entryNote = shift.entry_instructions || shift.access_instructions;
-  const isSessionActive = visualState === "session_active";
-  const isClockedIn = visualState === "clocked_in";
-  const isCompleted = visualState === "completed";
   const pulseAvatar = avatarShouldPulse(visualState);
 
   useEffect(() => {
@@ -1267,7 +1366,18 @@ function ShiftWorkflow({
     if (stepKey === "task_evidence" || stepKey === "evidence_attach") {
       setTasksOpen(true);
     }
-  }, [tutorial?.activeStep?.key, setTasksOpen]);
+    if (stepKey === "risk_acknowledgement" || stepKey === "risk_acknowledgement_modal") {
+      setSafetyOpen(true);
+      if (stepKey === "risk_acknowledgement") {
+        requestAnimationFrame(() => {
+          document.getElementById("tutorial-risk-ack-checkbox")?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        });
+      }
+    }
+  }, [tutorial?.activeStep?.key, setTasksOpen, setSafetyOpen]);
 
   useEffect(() => {
     if (sessionFocus && isSessionActive) {
@@ -1281,7 +1391,7 @@ function ShiftWorkflow({
     isTutorialDemo && showTasks && resolvedTasks.length === 0 ? TUTORIAL_DEMO_TASKS : resolvedTasks;
   const feedSummary = taskFeedSummary(activeTasks);
   const checklistSessionId =
-    isTutorialDemo && isSessionActive ? "tutorial-session" : shift.session_id;
+    isTutorialDemo && isSessionActive ? TUTORIAL_SESSION_ID : shift.session_id;
 
   const directionsUrl = shift.participant_address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shift.participant_address)}`
@@ -1552,7 +1662,7 @@ function ShiftWorkflow({
           type="button"
           className="h-14 w-full rounded-2xl border-0 text-base font-black text-white shadow-md"
           style={{ background: "#F59E0B" }}
-          disabled={busy !== null || (needsRiskAck && !ackChecked)}
+          disabled={busy !== null || ((needsRiskAck || tutorialPendingRiskAck) && !effectiveRiskAcked)}
           data-tutorial="clock-in"
           onClick={onClockIn}
         >
@@ -1574,7 +1684,7 @@ function ShiftWorkflow({
             participantName={shift.participant_name}
             onStartSession={onStartSession}
             isLoading={busy === "start"}
-            disabled={(busy !== null && busy !== "start") || needsRiskAck}
+            disabled={(busy !== null && busy !== "start") || ((needsRiskAck || tutorialPendingRiskAck) && !effectiveRiskAcked)}
           />
           <button
             type="button"
@@ -1590,7 +1700,7 @@ function ShiftWorkflow({
 
       {isSessionActive && (
         <div className="space-y-3">
-          {!liveNoteOpen ? (
+          {SHIFT_LIVE_PROGRESS_NOTE_ENABLED && !liveNoteOpen ? (
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
@@ -1647,9 +1757,9 @@ function ShiftWorkflow({
         </div>
       )}
 
-      {needsRiskAck && !isCompleted && (
+      {showRiskAckPending && (
         <ParticipantRiskAcknowledgementSection
-          alerts={shift.health_alerts ?? []}
+          alerts={riskAckAlerts}
           open={safetyOpen}
           onToggle={() => setSafetyOpen(!safetyOpen)}
           ackChecked={ackChecked}
@@ -1660,9 +1770,9 @@ function ShiftWorkflow({
         />
       )}
 
-      {hasAlerts && risksAcked && (
+      {showRiskAcknowledged && (
         <ParticipantRiskAcknowledgementSection
-          alerts={shift.health_alerts ?? []}
+          alerts={riskAckAlerts}
           open={safetyOpen}
           onToggle={() => setSafetyOpen(!safetyOpen)}
           acknowledged

@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     smtp_username: str = os.environ.get("SMTP_USERNAME", "")
     smtp_password: str = os.environ.get("SMTP_PASSWORD", "")
     smtp_from_email: str = os.environ.get("SMTP_FROM_EMAIL", os.environ.get("SMTP_USERNAME", ""))
-    smtp_from_name: str = os.environ.get("SMTP_FROM_NAME", "CareScribe")
+    smtp_from_name: str = os.environ.get("SMTP_FROM_NAME", "CareCliQ")
     smtp_use_starttls: bool = os.environ.get("SMTP_USE_STARTTLS", "true").lower() == "true"
     email_queue_workers: int = int(os.environ.get("EMAIL_QUEUE_WORKERS", "1") or 1)
     email_queue_max_size: int = int(os.environ.get("EMAIL_QUEUE_MAX_SIZE", "1000") or 1000)

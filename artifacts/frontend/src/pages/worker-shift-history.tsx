@@ -580,7 +580,7 @@ export default function WorkerShiftHistoryPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-12 text-safe">
+    <div className="w-full space-y-6 pb-12 text-safe">
       <header>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
           {translate("nav.performance")}

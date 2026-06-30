@@ -97,7 +97,7 @@ export const WORKER_TUTORIAL_STEPS: TutorialStep[] = [
     requiresShift: true,
     popoverSide: "top",
     popoverAlign: "center",
-    showNext: true,
+    showNext: false,
     showSkip: false,
   },
   {

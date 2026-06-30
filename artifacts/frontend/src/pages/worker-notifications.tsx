@@ -95,7 +95,7 @@ export default function WorkerNotificationsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-5 pb-10">
+    <div className="w-full space-y-5 pb-10">
       <header>
         <p className="hidden" style={{ color: CORAL }}>
           {translate("nav.notifications")}

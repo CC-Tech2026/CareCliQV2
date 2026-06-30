@@ -1,8 +1,6 @@
 import { getDeviceId } from "@/lib/device-id";
 import { readStoredSession } from "@/lib/auth-session";
-
-const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
-const USER_KEY = "carescribe_user";
+import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
@@ -28,7 +26,7 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
-  const reauthToken = localStorage.getItem(REAUTH_TOKEN_KEY);
+  const reauthToken = localStorage.getItem(CCQ_REAUTH_TOKEN_KEY);
   if (reauthToken && !headers.has("x-reauth-token")) {
     headers.set("x-reauth-token", reauthToken);
   }
@@ -41,7 +39,7 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   }
   const response = await fetch(applyBaseUrl(input), { ...init, headers });
   if (response.status === 401) {
-    window.dispatchEvent(new CustomEvent("carescribe:unauthorized"));
+    window.dispatchEvent(new CustomEvent(CCQ_UNAUTHORIZED_EVENT));
   }
   return response;
 }

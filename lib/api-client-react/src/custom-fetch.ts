@@ -393,7 +393,7 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("carescribe:unauthorized"));
+      window.dispatchEvent(new CustomEvent("carecliq:unauthorized"));
     }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);

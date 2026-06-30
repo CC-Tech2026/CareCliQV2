@@ -84,19 +84,16 @@ function BriefBlock({
   tone: "amber" | "rose" | "yellow";
   children: React.ReactNode;
 }) {
-  const bg =
-    tone === "amber" ? "bg-amber-50 border-amber-100" :
-    tone === "rose" ? "bg-rose-50 border-rose-100" :
-    "bg-yellow-50 border-yellow-100";
+  const statusClass =
+    tone === "rose" ? "cc-status-critical" :
+    "cc-status-warning";
 
   return (
-    <div className={cn("rounded-xl border px-3 py-3", bg)}>
-      <p className="mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>
-        <Icon size={12} /> {title}
+    <div className={cn("rounded-xl border px-3 py-3", statusClass)}>
+      <p className="mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider opacity-90">
+        <Icon size={12} aria-hidden /> {title}
       </p>
-      <p className="text-sm font-medium leading-relaxed" style={{ color: TEXT }}>
-        {children}
-      </p>
+      <p className="text-sm font-medium leading-relaxed">{children}</p>
     </div>
   );
 }

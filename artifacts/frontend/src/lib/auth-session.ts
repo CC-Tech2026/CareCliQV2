@@ -1,8 +1,19 @@
-const TOKEN_KEY = "carescribe_token";
-const USER_KEY = "carescribe_user";
-const SUPABASE_SESSION_KEY = "carescribe_supabase_session";
-const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
-const REMEMBER_DEVICE_KEY = "carescribe_remember_device";
+import {
+  CCQ_REAUTH_TOKEN_KEY,
+  CCQ_REMEMBER_DEVICE_KEY,
+  CCQ_SUPABASE_SESSION_KEY,
+  CCQ_TOKEN_KEY,
+  CCQ_USER_KEY,
+  migrateLegacyCareScribeStorageKeys,
+} from "@/lib/storage-keys";
+
+migrateLegacyCareScribeStorageKeys();
+
+const TOKEN_KEY = CCQ_TOKEN_KEY;
+const USER_KEY = CCQ_USER_KEY;
+const SUPABASE_SESSION_KEY = CCQ_SUPABASE_SESSION_KEY;
+const REAUTH_TOKEN_KEY = CCQ_REAUTH_TOKEN_KEY;
+const REMEMBER_DEVICE_KEY = CCQ_REMEMBER_DEVICE_KEY;
 const RESTORE_CONTEXT_KEY = "ccq_auth_restore_context";
 
 export type AuthRestoreContext = {

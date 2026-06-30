@@ -1,13 +1,11 @@
 import { useCallback, useState } from "react";
+import { CCQ_REAUTH_TOKEN_KEY, CCQ_REAUTH_UNTIL_KEY } from "@/lib/storage-keys";
 import { ReAuthModal } from "@/components/auth/ReAuthModal";
 import { reauthenticate } from "@/services/securityService";
 
-const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
-const REAUTH_UNTIL_KEY = "carescribe_reauth_until";
-
 function hasFreshReauth() {
-  const token = localStorage.getItem(REAUTH_TOKEN_KEY);
-  const until = localStorage.getItem(REAUTH_UNTIL_KEY);
+  const token = localStorage.getItem(CCQ_REAUTH_TOKEN_KEY);
+  const until = localStorage.getItem(CCQ_REAUTH_UNTIL_KEY);
   return Boolean(token && until && new Date(until).getTime() > Date.now() + 5000);
 }
 
@@ -37,8 +35,8 @@ export function useReAuth() {
     setError(null);
     try {
       const result = await reauthenticate(password);
-      localStorage.setItem(REAUTH_TOKEN_KEY, result.reauth_token);
-      localStorage.setItem(REAUTH_UNTIL_KEY, result.reauthenticated_until);
+      localStorage.setItem(CCQ_REAUTH_TOKEN_KEY, result.reauth_token);
+      localStorage.setItem(CCQ_REAUTH_UNTIL_KEY, result.reauthenticated_until);
       setOpen(false);
       const next = pending;
       setPending(null);

@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search, Car, Accessibility,
+  Sun, Moon, Search, Car, Accessibility, HelpCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
@@ -72,7 +72,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       group: "Operations",
       items: [
         { href: "/coordinator/rostering", label: "Rostering",       icon: CalendarDays },
-        { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
+        // { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
         { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
         { href: "/billing",               label: "Invoices",        icon: CreditCard   },
       ],
@@ -95,17 +95,17 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
         { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
         { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
-        { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
+        // { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
       ],
     },
-    {
-      group: "Development",
-      items: [
-        { href: "/worker/travel",      label: "Travel Expenses", icon: Car           },
-        { href: "/worker/performance", label: "Performance",     icon: BarChart2     },
-        { href: "/worker/training",    label: "Training",        icon: GraduationCap },
-      ],
-    },
+    // {
+    //   group: "Development",
+    //   items: [
+    //     { href: "/worker/travel",       label: "Travel Expenses", icon: Car         },
+    //     { href: "/worker/performance",  label: "Performance",     icon: BarChart2   },
+    //     { href: "/worker/training",     label: "Training",        icon: GraduationCap },
+    //   ],
+    // },
     {
       group: "Safety & Resources",
       items: [
@@ -620,8 +620,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content canvas */}
-      <div className="flex-1 flex flex-col min-w-0 md:py-3 md:pr-3 h-full relative">
-        <div className="flex-1 flex flex-col min-h-0 bg-cc-surface md:rounded-[2.5rem] md:shadow-[0_8px_40px_rgba(106,64,125,0.06)] dark:md:shadow-[0_8px_40px_rgba(0,0,0,0.35)] overflow-hidden relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+        <div className="flex-1 flex flex-col min-h-0 bg-cc-surface overflow-hidden relative">
 
           {/* ── Mobile header ─────────────────────────────────────────────── */}
           <header
@@ -813,7 +813,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {isWorker && <NotificationBannerStack />}
 
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto px-5 md:px-7 py-6 safe-scroll-bottom md:pb-8">
+          <main className="flex-1 overflow-y-auto px-4 py-4 safe-scroll-bottom md:py-5">
             {children}
           </main>
 

@@ -173,7 +173,7 @@ export default function IncidentDetail({ id }: { id: string }) {
 
   if (!incident) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-20" style={{ color: "var(--cc-text)" }}>
+      <div className="w-full text-center py-20" style={{ color: "var(--cc-text)" }}>
         {translate("incidents.detail.notFound")}{" "}
         <button onClick={() => navigate("/incidents")} className="underline" style={{ color: "#F1738A" }}>
           {translate("incidents.detail.backToIncidents")}

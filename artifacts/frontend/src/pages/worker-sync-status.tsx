@@ -61,7 +61,7 @@ export default function WorkerSyncStatusPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-10 text-safe">
+    <div className="w-full space-y-6 pb-10 text-safe">
       <div>
         <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: PLUM }}>
           {translate("sync.page.eyebrow")}

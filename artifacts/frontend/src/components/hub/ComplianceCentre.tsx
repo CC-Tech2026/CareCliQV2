@@ -95,7 +95,7 @@ export function ComplianceCentre() {
   const high     = displayAlerts.filter((a) => a.severity === "high").length;
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>

@@ -760,7 +760,7 @@ function InlineSessionComposer({
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-[#FBFAFF] p-4">
-            <div className="mx-auto max-w-3xl space-y-3">
+            <div className="w-full space-y-3">
               <div className="mx-auto flex w-fit items-center gap-2 rounded-full border bg-white px-3 py-1 text-xs font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
                 {isListening && (
                   <span className="flex h-4 items-end gap-0.5" aria-hidden="true">
@@ -947,7 +947,7 @@ function InlineSessionComposer({
       {composerStep === "goals" && (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <div className="mx-auto max-w-3xl space-y-4">
+            <div className="w-full space-y-4">
               <p className="text-sm font-medium" style={{ color: MUTED }}>
                 {ended
                   ? translate("client.session.goalsPromptEnded")
@@ -1108,7 +1108,7 @@ function InlineSessionComposer({
       {composerStep === "choice" && (
         <>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            <div className="mx-auto max-w-3xl space-y-4">
+            <div className="w-full space-y-4">
               <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
                 <p className="text-xs font-black uppercase tracking-wider mb-1" style={{ color: PLUM }}>{translate("client.session.ndisPracticeStandard")}</p>
                 <p className="text-sm font-bold" style={{ color: TEXT }}>{translate("client.session.choiceControlStandard")}</p>
