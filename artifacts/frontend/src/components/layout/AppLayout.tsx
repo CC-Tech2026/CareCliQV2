@@ -70,10 +70,11 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Operations",
       items: [
-        { href: "/coordinator/rostering", label: "Rostering",       icon: CalendarDays },
-        // { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
-        { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
-        { href: "/billing",               label: "Invoices",        icon: CreditCard   },
+        { href: "/coordinator/rostering",          label: "Rostering",          icon: CalendarDays },
+        // { href: "/coordinator/travel",             label: "Travel Expenses",    icon: Car          },
+        { href: "/coordinator/live",               label: "Live Monitoring",    icon: Radio        },
+        { href: "/coordinator/shift-verification", label: "Shift Verification", icon: ClipboardList },
+        { href: "/billing",                        label: "Invoices",           icon: CreditCard   },
       ],
     },
     {

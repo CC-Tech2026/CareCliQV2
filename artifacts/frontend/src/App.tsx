@@ -37,6 +37,7 @@ import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
 import CoordinatorLivePage from "@/pages/coordinator-live";
 import AuditPack from "@/pages/audit-pack";
 import SessionReview from "@/pages/session-review";
+import CoordinatorShiftVerification from "@/pages/coordinator-shift-verification";
 import Credentials from "@/pages/credentials";
 import Toolkit from "@/pages/toolkit";
 import VerifyEmail from "@/pages/verify-email";
@@ -357,6 +358,12 @@ function Router() {
       <Route path="/session-review">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><SessionReview /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/shift-verification">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorShiftVerification /></AppLayout>
         </ProtectedRoute>
       </Route>
 

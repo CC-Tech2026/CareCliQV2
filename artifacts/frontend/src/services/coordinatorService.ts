@@ -1051,3 +1051,97 @@ export function deleteParticipantTask(taskId: string) {
     method: "DELETE",
   });
 }
+
+// ── Shift verification gate (Fix #6 — budget deduction review) ─────────────
+
+export type ShiftVerificationEvidenceCheck = {
+  compliance_score: number | null;
+  low_compliance: boolean;
+  tasks_completed: number | null;
+  tasks_total: number | null;
+  mandatory_total: number | null;
+  mandatory_with_evidence: number | null;
+  mandatory_without_evidence: number | null;
+  flagged_tasks: Array<Record<string, unknown>>;
+  flagged: boolean;
+};
+
+export type ShiftVerificationHoursCheck = {
+  status: "ok" | "flagged" | "unknown";
+  scheduled_minutes: number | null;
+  actual_minutes: number | null;
+  variance_pct: number | null;
+  flagged: boolean;
+  reason?: string | null;
+};
+
+export type ShiftVerificationForceEndedCheck = {
+  force_ended: boolean;
+  flagged: boolean;
+  reason?: string | null;
+};
+
+export type ShiftVerificationChecks = {
+  evidence: ShiftVerificationEvidenceCheck;
+  hours_sanity: ShiftVerificationHoursCheck;
+  force_ended: ShiftVerificationForceEndedCheck;
+  any_flagged: boolean;
+  computed_at: string;
+};
+
+export type ShiftVerificationQueueItem = {
+  shift_id: string;
+  participant_id?: string | null;
+  participant_name?: string | null;
+  worker_id?: string | null;
+  worker_name?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
+  duration_minutes?: number | null;
+  checks: ShiftVerificationChecks;
+};
+
+export type ShiftPriceItemOption = {
+  item_code: string;
+  name?: string | null;
+  description?: string | null;
+  unit?: string | null;
+  support_purpose?: string | null;
+  support_category?: string | null;
+  day_type?: string | null;
+  time_type?: string | null;
+  support_intensity?: string | null;
+  price_national?: number | null;
+};
+
+export type VerifyShiftResult = {
+  verification: Record<string, unknown> | null;
+  checks: ShiftVerificationChecks;
+  billed_amount: number;
+  hourly_rate_applied: number;
+  support_category: string;
+  new_used_amount: number;
+};
+
+export function getShiftVerificationQueue() {
+  return jsonFetch<ShiftVerificationQueueItem[]>("/api/coordinator/shifts/verification-queue");
+}
+
+export function getShiftPriceItemOptions(shiftId: string) {
+  return jsonFetch<ShiftPriceItemOption[]>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/price-items`
+  );
+}
+
+export function confirmShiftVerification(shiftId: string, priceItemCode: string) {
+  return jsonFetch<VerifyShiftResult>(
+    `/api/coordinator/shifts/${encodeURIComponent(shiftId)}/verify`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ price_item_code: priceItemCode }),
+    }
+  );
+}
