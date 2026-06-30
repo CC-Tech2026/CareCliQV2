@@ -4,7 +4,10 @@ import {
   Clock,
   Ear,
   Globe,
+  AlertTriangle,
   Heart,
+  Shield,
+  Sparkles,
   MessageCircle,
   ThumbsUp,
   type LucideIcon,
@@ -63,7 +66,7 @@ function PreferenceSection({
           type="button"
           className="flex w-full items-center justify-between px-3 py-2.5 text-left"
           onClick={() => setSectionOpen(!sectionOpen)}
-          aria-expanded={sectionOpen}
+          aria-expanded={sectionOpen ? "true" : "false"}
           aria-controls={bodyId}
           aria-label={prefAria}
         >
@@ -106,7 +109,7 @@ export function ParticipantPreferencesCard({ preferences, open = true, onToggle 
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
         onClick={onToggle}
-        aria-expanded={open}
+        aria-expanded={open ? "true" : "false"}
       >
         <span className="flex items-center gap-2 text-sm font-black" style={{ color: TEXT }}>
           <Heart size={16} style={{ color: PLUM }} aria-hidden />

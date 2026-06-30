@@ -55,10 +55,9 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "People & Care",
       items: [
-        { href: "/team",               label: "Team",            icon: Users          },
-        { href: "/patients",           label: "Participants",    icon: UserRound      },
-        { href: "/sessions",           label: "Shifts",          icon: CalendarDays   },
-        { href: "/coordinator-goals",  label: "Goals & Planning",icon: Target         },
+        { href: "/team",               label: "Team",         icon: Users        },
+        { href: "/patients",           label: "Participants", icon: UserRound    },
+        { href: "/sessions",           label: "Shifts",       icon: CalendarDays },
       ],
     },
     {
@@ -76,16 +75,14 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
         { href: "/coordinator/travel",    label: "Travel Expenses", icon: Car          },
         { href: "/coordinator/live",      label: "Live Monitoring", icon: Radio        },
         { href: "/billing",               label: "Invoices",        icon: CreditCard   },
-        { href: "/credentials",           label: "Credentials",     icon: BadgeCheck   },
-        { href: "/toolkit",               label: "Toolkit",         icon: Wrench       },
       ],
     },
     {
-      group: "Account",
+      group: "Resources",
       items: [
-        { href: "/worker/profile",  label: "My Profile", icon: UserRound   },
-        { href: "/worker/security", label: "Security",   icon: LockKeyhole },
-        { href: "/accessibility",   label: "Accessibility", icon: Accessibility },
+        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
+        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
+        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -104,31 +101,19 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
     {
       group: "Development",
       items: [
-        { href: "/worker/travel",       label: "Travel Expenses", icon: Car         },
-        { href: "/worker/performance",  label: "Performance",     icon: BarChart2   },
-        { href: "/worker/training",     label: "Training",        icon: GraduationCap },
+        { href: "/worker/travel",      label: "Travel Expenses", icon: Car           },
+        { href: "/worker/performance", label: "Performance",     icon: BarChart2     },
+        { href: "/worker/training",    label: "Training",        icon: GraduationCap },
       ],
     },
     {
-      group: "Safety",
+      group: "Safety & Resources",
       items: [
         { href: "/my-compliance", label: "My Compliance", icon: ShieldCheck   },
         { href: "/incidents",     label: "Incidents",     icon: AlertTriangle },
-      ],
-    },
-    {
-      group: "Resources",
-      items: [
-        { href: "/credentials", label: "Credentials", icon: BadgeCheck },
-        { href: "/toolkit",     label: "Toolkit",     icon: Wrench     },
-      ],
-    },
-    {
-      group: "Account",
-      items: [
-        { href: "/worker/profile",    label: "My Profile",      icon: UserRound   },
-        { href: "/worker/security",   label: "Security",        icon: LockKeyhole },
-        { href: "/accessibility",     label: "Accessibility", icon: Accessibility },
+        { href: "/credentials",   label: "Credentials",   icon: BadgeCheck    },
+        { href: "/toolkit",       label: "Toolkit",       icon: Wrench        },
+        { href: "/accessibility", label: "Accessibility", icon: Accessibility },
       ],
     },
   ],
@@ -189,34 +174,27 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
 // ── Topbar quick-nav tabs (shown when sidebar is collapsed) ───────────────────
 const TOPBAR_QUICKNAV: Record<NavRole, NavItem[]> = {
   support_coordinator: [
-    { href: "/dashboard",             label: "Dashboard",   icon: LayoutDashboard },
     { href: "/team",                  label: "Team",        icon: Users           },
     { href: "/patients",              label: "Participants", icon: UserRound      },
     { href: "/sessions",              label: "Shifts",      icon: CalendarDays    },
     { href: "/compliance",            label: "Compliance",  icon: ShieldCheck     },
     { href: "/coordinator/rostering", label: "Rostering",   icon: CalendarDays    },
-    { href: "/coordinator/live",      label: "Live",        icon: Radio           },
-    { href: "/incidents",             label: "Incidents",   icon: AlertTriangle   },
   ],
   support_worker: [
     { href: "/dashboard",    label: "Dashboard",  icon: LayoutDashboard },
     { href: "/my-shifts",    label: "My Shifts",  icon: Clock           },
     { href: "/my-clients",   label: "My Clients", icon: UserRound       },
-    { href: "/tasks",        label: "Tasks",      icon: ClipboardList   },
     { href: "/my-compliance",label: "Compliance", icon: ShieldCheck     },
   ],
   allied_health: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/patients",  label: "Caseload",  icon: UserRound       },
     { href: "/sessions",  label: "Sessions",  icon: CalendarDays    },
-    { href: "/incidents", label: "Incidents", icon: AlertTriangle   },
   ],
   managing_director: [
     { href: "/hub",           label: "Hub",       icon: LayoutDashboard },
     { href: "/md/executive",  label: "Executive", icon: BarChart2       },
-    { href: "/md/staff",      label: "Staff",     icon: UserCheck       },
     { href: "/md/compliance", label: "Compliance",icon: ShieldCheck     },
-    { href: "/md/financial",  label: "Financial", icon: DollarSign      },
   ],
 };
 
@@ -551,6 +529,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     try { return localStorage.getItem("sidebar-collapsed") === "true"; }
     catch { return false; }
   });
+  const [sidebarHovered, setSidebarHovered] = useState(false);
+  const isExpanded = !collapsed || sidebarHovered;
 
   const { settings } = useSettings();
   const { user, logout } = useAuth();
@@ -580,8 +560,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pageLabel     = pageLabelForPath(location, translate);
 
   const toggleCollapse = () => {
-    const next = !collapsed;
+    const next = isExpanded; // if currently expanded → pin collapsed; if collapsed → pin open
     setCollapsed(next);
+    if (next) setSidebarHovered(false);
     try { localStorage.setItem("sidebar-collapsed", String(next)); } catch { /* noop */ }
   };
 
@@ -598,15 +579,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className="hidden md:flex flex-col h-full shrink-0 transition-all duration-300 ease-in-out relative"
-        style={{ width: collapsed ? 64 : 220, borderRight: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
+        style={{ width: isExpanded ? 220 : 64, borderRight: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
+        onMouseEnter={() => collapsed && setSidebarHovered(true)}
+        onMouseLeave={() => setSidebarHovered(false)}
       >
-        <SidebarContents {...sharedProps} isDrawer={false} />
+        <SidebarContents {...sharedProps} collapsed={!isExpanded} isDrawer={false} />
 
         {/* Collapse handle — sits on the right border, always visible */}
         <button
           type="button"
           onClick={toggleCollapse}
-          title={collapsed ? translate("layout.sidebar.expand") : translate("layout.sidebar.collapse")}
+          title={isExpanded ? translate("layout.sidebar.collapse") : translate("layout.sidebar.expand")}
           className="absolute z-10 flex items-center justify-center transition-all duration-150 hover:scale-105 group"
           style={{
             right: -7,
@@ -629,9 +612,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             (e.currentTarget as HTMLButtonElement).style.color = MUTED;
           }}
         >
-          {collapsed
-            ? <ChevronRight size={9} strokeWidth={3} />
-            : <ChevronLeft  size={9} strokeWidth={3} />
+          {isExpanded
+            ? <ChevronLeft  size={9} strokeWidth={3} />
+            : <ChevronRight size={9} strokeWidth={3} />
           }
         </button>
       </aside>
@@ -710,7 +693,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* ── Center zone: pill tabs (collapsed) or page label (expanded) ── */}
             {collapsed ? (
-              <div className="flex items-center flex-1 gap-0.5 overflow-x-auto scrollbar-none px-1">
+              <div className="flex items-center flex-1 gap-0.5 overflow-x-hidden scrollbar-none px-1">
                 {topbarQuicknav.map((item) => {
                   const active = isActive(location, item.href);
                   const Icon = item.icon;

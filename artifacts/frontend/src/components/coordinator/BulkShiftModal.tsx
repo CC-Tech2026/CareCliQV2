@@ -37,6 +37,13 @@ const SHIFT_TYPE_LABELS: Record<string, string> = {
   respite_care:     "Respite Care",
 };
 
+const SHIFT_TYPE_KEYS: Record<string, string> = {
+  standard_support: "coordinator.bulkShift.shiftType.standardSupport",
+  community_access: "coordinator.bulkShift.shiftType.communityAccess",
+  allied_health:    "coordinator.bulkShift.shiftType.alliedHealth",
+  respite_care:     "coordinator.bulkShift.shiftType.respiteCare",
+};
+
 const DAYS_OF_WEEK = [
   { label: "Mon", value: 0 },
   { label: "Tue", value: 1 },
@@ -228,7 +235,7 @@ export function BulkShiftModal({ open, onOpenChange, participants, workers }: Bu
                   </SelectTrigger>
                   <SelectContent>
                     {Object.entries(SHIFT_TYPE_LABELS).map(([v]) => (
-                      <SelectItem key={v} value={v}>{translate(`coordinator.bulkShift.day.${["mon","tue","wed","thu","fri","sat","sun"][value]}`)}</SelectItem>
+                      <SelectItem key={v} value={v}>{translate(SHIFT_TYPE_KEYS[v])}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

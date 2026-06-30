@@ -21,8 +21,6 @@ function safeDate(value?: string | null) {
   try { return format(parseISO(value), "d MMM"); } catch { return value; }
 }
 
-import { useAccessibility } from "@/contexts/AccessibilityContext";
-
 function statusMeta(status: string | undefined, translate: (key: string) => string): { label: string; cls: string } {
   if (status === "compliant") return { label: translate("compliance.status.compliant"), cls: "border-emerald-200 bg-emerald-50 text-emerald-700" };
   if (status === "non_compliant") return { label: translate("compliance.status.nonCompliant"), cls: "border-red-200 bg-red-50 text-red-700" };
