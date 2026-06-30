@@ -657,7 +657,15 @@ export default function CoordinatorGoals() {
   // For Shift-Based Tasks tab
   const [selectedParticipantIdForShiftTasks, setSelectedParticipantIdForShiftTasks] = useState("");
   const [newShiftTaskModalOpen, setNewShiftTaskModalOpen] = useState(false);
-  
+  const { data: participantGoals = [], isLoading: participantGoalsLoading } = useOrgQuery<NdisGoal[]>(
+    ["ndis-goals", selectedParticipantIdForShiftTasks, orgId],
+    { queryFn: () => getNdisGoals({ participant_id: selectedParticipantIdForShiftTasks }), enabled: !!selectedParticipantIdForShiftTasks && tab === "shift-tasks" }
+  );
+  const { data: tasks = [], isLoading: shiftTasksLoading } = useOrgQuery<ParticipantTask[]>(
+    ["participant-tasks", selectedParticipantIdForShiftTasks, orgId],
+    { queryFn: () => getParticipantTasks(selectedParticipantIdForShiftTasks), enabled: !!selectedParticipantIdForShiftTasks && tab === "shift-tasks" }
+  );
+
   // For Plan Overview tab
   const [overviewParticipant, setOverviewParticipant] = useState("");
   // Legacy data
@@ -835,8 +843,8 @@ export default function CoordinatorGoals() {
                         <p className="font-bold text-sm" style={{ color: TEXT }}>{translate("coordinator.goals.createEditTitle")}</p>
                         <p className="text-xs mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.createEditHint")}</p>
                       </div>
-                    )}
-                  </>
+                    </div>
+                  </div>
                 )}
 
                 {/* Goal-Based Tasks view */}
@@ -945,7 +953,7 @@ export default function CoordinatorGoals() {
 
             {/* RIGHT: Goals with tasks panel */}
             <div className="flex flex-col overflow-hidden">
-              {selectedParticipantIdForTasks ? (
+              {selectedParticipantIdForShiftTasks ? (
                 <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col overflow-hidden" style={{ borderColor: BORDER, background: SOFT }}>
                   {taskGoalFormOpen ? (
                     <>
@@ -954,7 +962,7 @@ export default function CoordinatorGoals() {
                         goal={null}
                         participants={legacyData}
                         isModal={false}
-                        selectedParticipantId={selectedParticipantIdForTasks}
+                        selectedParticipantId={selectedParticipantIdForShiftTasks}
                         onClose={() => setTaskGoalFormOpen(false)}
                         onSaved={() => { 
                           setTaskGoalFormOpen(false); 
@@ -996,7 +1004,7 @@ export default function CoordinatorGoals() {
                               goal={goal}
                               tasks={tasks}
                               onTasksChanged={() => {
-                                qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForTasks, orgId] });
+                                qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForShiftTasks, orgId] });
                               }}
                             />
                           ))}
@@ -1012,8 +1020,8 @@ export default function CoordinatorGoals() {
                     <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.manageTasksTitle")}</p>
                     <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.manageTasksHint")}</p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

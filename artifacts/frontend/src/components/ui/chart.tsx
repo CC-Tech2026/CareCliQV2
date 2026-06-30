@@ -291,6 +291,8 @@ const ChartLegendContent = React.forwardRef<
             const key = `${nameKey || item.dataKey || "value"}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
+            const Icon = itemConfig?.icon as React.ComponentType<any> | undefined;
+
             return (
               <div
                 key={item.value}
@@ -298,8 +300,8 @@ const ChartLegendContent = React.forwardRef<
                   "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
                 )}
               >
-                {itemConfig?.icon && !hideIcon ? (
-                  <itemConfig.icon />
+                {Icon && !hideIcon ? (
+                  <Icon />
                 ) : (
                   <div
                     className="h-2 w-2 shrink-0 rounded-[2px]"
@@ -322,7 +324,7 @@ ChartLegendContent.displayName = "ChartLegend"
 function getPayloadConfigFromPayload(
   config: ChartConfig,
   payload: unknown,
-  key: string {
+  key: string) {
   if (typeof payload !== "object" || payload === null) {
     return undefined
   }
