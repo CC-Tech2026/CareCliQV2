@@ -128,6 +128,48 @@ async def resolve_price(
     }
 
 
+async def list_organization_categories(org_id: UUID | str) -> list[dict[str, Any]]:
+    """Distinct fundable categories from the org's currently-loaded NDIS pricing schedule.
+
+    Returns one entry per distinct category_number among the org's current
+    (not yet expired) price items. Empty list if the org hasn't loaded a
+    pricing schedule, OR if its loaded items simply don't carry a
+    category_number yet (true for all current data as of 2026-06 — the
+    live ndis_price_items table has no support_category_name column, and
+    category_number is unpopulated on every existing row; see the
+    plan_budgets foundation review for details). Callers fall back to the
+    legacy broad buckets in either case (funding_service.list_available_categories).
+    """
+    supabase = get_supabase_admin()
+    result = (
+        supabase.table("ndis_price_items")
+        .select("category_number, registration_group, support_purpose")
+        .eq("organization_id", str(org_id))
+        .is_("valid_to", "null")
+        .execute()
+    )
+
+    rows = result.data if isinstance(result.data, list) else []
+
+    seen: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        number = row.get("category_number")
+        if not number or number in seen:
+            continue
+        seen[number] = {
+            "category_number": number,
+            # ndis_price_items has no category-name column live — fall back to
+            # registration_group, else the bare number, until pricing data
+            # actually carries a category label.
+            "category_name": row.get("registration_group") or number,
+            "support_purpose": row.get("support_purpose") or "",
+        }
+
+    return sorted(seen.values(), key=lambda c: c["category_number"])
+
+
 async def get_item_history(
     item_code: str,
     org_id: UUID | str,

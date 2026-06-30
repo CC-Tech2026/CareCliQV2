@@ -6,11 +6,14 @@ Manages NDIS plan budgets, budget category tracking, and session cost calculatio
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import json
 import logging
 
 from .supabase_client import get_supabase_admin
+from . import ndis_pricing_service
+from ..core.ndis_categories import LEGACY_CATEGORIES, support_purpose_to_group
 
 logger = logging.getLogger(__name__)
 
@@ -371,14 +374,48 @@ async def create_or_update_plan(
     return _normalize_plan(rows[0])
 
 
+async def list_available_categories(org_id: str) -> List[Dict[str, Any]]:
+    """Fundable categories an org's coordinator can pick for a plan budget.
+
+    Prefers the org's actually-loaded NDIS pricing schedule (real, billable
+    categories) and only falls back to the 3 legacy broad buckets when the
+    org hasn't loaded one yet.
+    """
+    priced = await ndis_pricing_service.list_organization_categories(org_id)
+
+    if priced:
+        return [
+            {
+                "category": item["category_number"],
+                "category_name": item["category_name"],
+                "category_group": support_purpose_to_group(item["support_purpose"]),
+                "source": "pricing",
+            }
+            for item in priced
+        ]
+
+    return [
+        {
+            "category": key,
+            "category_name": meta["label"],
+            "category_group": meta["group"],
+            "source": "legacy",
+        }
+        for key, meta in LEGACY_CATEGORIES.items()
+    ]
+
+
 async def upsert_plan_budget(
     plan_id: str,
     category: str,
     allocated: float,
+    category_group: str,
+    category_name: str,
 ) -> Dict[str, Any]:
     """Upsert budget category for plan."""
 
     supabase = get_supabase_admin()
+    now = datetime.now(timezone.utc).isoformat()
 
     existing = (
         supabase.table("plan_budgets")
@@ -398,6 +435,9 @@ async def upsert_plan_budget(
             .update(
                 {
                     "allocated_amount": allocated,
+                    "category_group": category_group,
+                    "category_name": category_name,
+                    "updated_at": now,
                 }
             )
             .eq("id", row["id"])
@@ -410,8 +450,11 @@ async def upsert_plan_budget(
                 {
                     "plan_id": plan_id,
                     "category": category,
+                    "category_group": category_group,
+                    "category_name": category_name,
                     "allocated_amount": allocated,
                     "used_amount": 0.0,
+                    "updated_at": now,
                 }
             )
             .execute()
@@ -420,6 +463,22 @@ async def upsert_plan_budget(
     rows = _safe_rows(result.data)
 
     return rows[0] if rows else {}
+
+
+async def delete_plan_budget(plan_id: str, category: str) -> bool:
+    """Remove a budget category from a plan. Returns whether a row was deleted."""
+
+    supabase = get_supabase_admin()
+
+    result = (
+        supabase.table("plan_budgets")
+        .delete()
+        .eq("plan_id", plan_id)
+        .eq("category", category)
+        .execute()
+    )
+
+    return bool(_safe_rows(result.data))
 
 
 # ---------------------------------------------------------------------------
@@ -540,26 +599,26 @@ async def get_budget_summary(
 
         allocated = float(budget.get("allocated_amount") or 0)
         used = float(budget.get("used_amount") or 0)
+        category = budget.get("category", "")
 
         budget_items.append(
             {
-                "category": budget.get("category", ""),
-                "category_label": {
-                    "core": "Core Supports",
-                    "capacity_building": "Capacity Building",
-                    "capital": "Capital Supports",
-                }.get(
-                    budget.get("category", ""),
-                    str(budget.get("category", "")).title(),
-                ),
+                "category": category,
+                "category_label": budget.get("category_name")
+                or _CATEGORY_LABELS.get(category, str(category).title()),
+                "category_group": budget.get("category_group") or "core_supports",
                 "allocated": allocated,
                 "used": used,
                 "remaining": round(allocated - used, 2),
                 "percent_used": (
                     round((used / allocated) * 100, 1) if allocated > 0 else 0
                 ),
+                "overspent": used > allocated,
             }
         )
+
+    total_allocated = round(sum(b["allocated"] for b in budget_items), 2)
+    total_used = round(sum(b["used"] for b in budget_items), 2)
 
     return {
         "has_plan": True,
@@ -570,6 +629,11 @@ async def get_budget_summary(
         "status": plan.get("status"),
         "total_funding": plan.get("total_funding", 0),
         "budgets": budget_items,
+        # Rollup across categories — the source of truth for "Budget Remaining"
+        # style stat cards, distinct from total_funding (the plan's overall cap).
+        "total_allocated": total_allocated,
+        "total_used": total_used,
+        "total_remaining": round(total_allocated - total_used, 2),
     }
 
 

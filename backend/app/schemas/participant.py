@@ -122,9 +122,6 @@ class NDISPlanCreate(BaseModel):
     plan_end: date
     total_funding: float = 0.0
     status: Optional[str] = None          # auto-derived from dates if not supplied
-    core_budget: Optional[float] = None
-    capacity_budget: Optional[float] = None
-    capital_budget: Optional[float] = None
 
     @field_validator("plan_end")
     @classmethod
@@ -133,6 +130,16 @@ class NDISPlanCreate(BaseModel):
         if start and v <= start:
             raise ValueError("plan_end must be after plan_start")
         return v
+
+
+# Per-category plan budget CRUD. `category` is validated against the
+# organization's live fundable-category list at the service layer
+# (funding_service.list_available_categories), not via a fixed Literal —
+# the valid set is per-organization and depends on its loaded NDIS pricing
+# schedule, so it can't be enumerated statically here.
+class PlanBudgetCategoryUpsert(BaseModel):
+    category: str = Field(..., min_length=1)
+    allocated_amount: float = Field(ge=0)
 
 
 RiskLevel = Literal["low", "medium", "high"]

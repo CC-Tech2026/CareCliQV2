@@ -18,6 +18,7 @@ from ..schemas.participant import (
     NDISPlanCreate,
     ParticipantCreate,
     ParticipantUpdate,
+    PlanBudgetCategoryUpsert,
 )
 from ..schemas.progress import ParticipantProgressResponse
 from ..services import funding_service, participant_service, progress_service
@@ -405,23 +406,6 @@ async def create_participant_plan(
             plan_data,
         )
 
-        plan_id = plan.get("id")
-
-        if plan_id:
-            budget_updates = [
-                ("core", body.core_budget),
-                ("capacity_building", body.capacity_budget),
-                ("capital", body.capital_budget),
-            ]
-
-            for category, amount in budget_updates:
-                if amount and amount > 0:
-                    await funding_service.upsert_plan_budget(
-                        plan_id,
-                        category,
-                        amount,
-                    )
-
         from ..services.supabase_client import get_supabase_admin
 
         supabase = get_supabase_admin()
@@ -472,6 +456,119 @@ async def get_budget_summary(
     return await funding_service.get_budget_summary(
         participant_id,
     )
+
+
+@router.get("/{participant_id}/plan/budget-categories")
+async def get_plan_budget_categories(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Fundable categories available for this participant's organization.
+
+    Sourced from the org's loaded NDIS pricing schedule when one exists;
+    falls back to the 3 legacy broad buckets otherwise.
+    """
+
+    participant = await _require_participant_access(
+        participant_id,
+        current_user,
+    )
+
+    org_id = participant.get("organization_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Participant has no organization",
+        )
+
+    return await funding_service.list_available_categories(org_id)
+
+
+@router.post("/{participant_id}/plan/budgets", status_code=status.HTTP_201_CREATED)
+async def upsert_plan_budget_category(
+    participant_id: str,
+    body: PlanBudgetCategoryUpsert,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Add or update a funded category and its allocated amount on the
+    participant's NDIS plan. Part of the "Set Up NDIS Plan" flow.
+    """
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can edit plan budgets",
+        )
+
+    participant = await _require_participant_access(
+        participant_id,
+        current_user,
+    )
+
+    org_id = participant.get("organization_id")
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Participant has no organization",
+        )
+
+    available = await funding_service.list_available_categories(org_id)
+    matched = next((c for c in available if c["category"] == body.category), None)
+    if not matched:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"'{body.category}' is not a fundable category for this organization",
+        )
+
+    plan = await funding_service.get_latest_plan_for_participant(participant_id)
+    if not plan or not plan.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Set up the participant's NDIS plan before adding category budgets",
+        )
+
+    await funding_service.upsert_plan_budget(
+        plan["id"],
+        body.category,
+        body.allocated_amount,
+        category_group=matched["category_group"],
+        category_name=matched["category_name"],
+    )
+
+    return await funding_service.get_budget_summary(participant_id)
+
+
+@router.delete("/{participant_id}/plan/budgets/{category}")
+async def delete_plan_budget_category(
+    participant_id: str,
+    category: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a funded category from the participant's NDIS plan."""
+
+    if not is_coordinator_role(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only support coordinators can edit plan budgets",
+        )
+
+    await _require_participant_access(
+        participant_id,
+        current_user,
+    )
+
+    plan = await funding_service.get_latest_plan_for_participant(participant_id)
+    if not plan or not plan.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Participant has no NDIS plan",
+        )
+
+    await funding_service.delete_plan_budget(plan["id"], category)
+
+    return await funding_service.get_budget_summary(participant_id)
 
 
 @router.get("/{participant_id}/budget-usage")

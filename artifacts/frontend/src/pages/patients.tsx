@@ -22,6 +22,7 @@ import {
   Users,
   Edit,
   Edit2,
+  Trash2,
   DollarSign,
   PlusCircle,
   CheckCircle2,
@@ -90,11 +91,15 @@ const planSchema = z.object({
   plan_start: z.string().min(1, "Plan start date is required"),
   plan_end: z.string().min(1, "Plan end date is required"),
   total_funding: z.coerce.number().min(0),
-  core_budget: z.coerce.number().min(0).optional(),
-  capacity_budget: z.coerce.number().min(0).optional(),
-  capital_budget: z.coerce.number().min(0).optional(),
 });
 type PlanFormValues = z.infer<typeof planSchema>;
+
+type PlanBudgetCategoryOption = {
+  category: string;
+  category_name: string;
+  category_group: "core_supports" | "capacity_building" | "capital_supports";
+  source: "pricing" | "legacy";
+};
 
 type ParticipantRecord = {
   id: string;
@@ -135,18 +140,24 @@ type SessionRecord = {
 
 type BudgetSummary = {
   has_plan: boolean;
+  plan_id?: string;
   plan_number?: string;
   plan_start?: string | null;
   plan_end?: string | null;
   status?: string | null;
   total_funding?: number | string | null;
+  total_allocated?: number;
+  total_used?: number;
+  total_remaining?: number;
   budgets?: Array<{
     category?: string;
     category_label?: string;
+    category_group?: string;
     allocated?: number;
     used?: number;
     remaining?: number;
     percent_used?: number;
+    overspent?: boolean;
   }>;
 };
 
@@ -509,9 +520,11 @@ function EditParticipantPanel({
 
 function SetupPlanPanel({
   participantId,
+  budget,
   onSaved,
 }: {
   participantId: string;
+  budget?: BudgetSummary;
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -525,9 +538,6 @@ function SetupPlanPanel({
       plan_start: "",
       plan_end: "",
       total_funding: 0,
-      core_budget: 0,
-      capacity_budget: 0,
-      capital_budget: 0,
     },
   });
 
@@ -543,7 +553,59 @@ function SetupPlanPanel({
     },
     onSuccess: () => {
       toast({ title: translate("patients.toast.planSaved") });
-      setOpen(false);
+      onSaved();
+    },
+    onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
+  });
+
+  const hasPlan = !!budget?.plan_id;
+  const existingBudgets = budget?.budgets ?? [];
+  const usedCategoryKeys = new Set(existingBudgets.map((b) => b.category));
+
+  const categoriesQuery = useOrgQuery(["participant", participantId, "budget-categories"], {
+    queryFn: () => jsonFetch<PlanBudgetCategoryOption[]>(`/api/participants/${participantId}/plan/budget-categories`),
+    enabled: open && hasPlan,
+  });
+  const availableCategories = categoriesQuery.data ?? [];
+
+  const [categoryDraft, setCategoryDraft] = useState("");
+  const [amountDraft, setAmountDraft] = useState("");
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+
+  const resetCategoryDraft = () => {
+    setCategoryDraft("");
+    setAmountDraft("");
+    setEditingCategory(null);
+  };
+
+  const upsertBudget = useMutation({
+    mutationFn: async (payload: { category: string; allocated_amount: number }) => {
+      const res = await apiFetch(`/api/participants/${participantId}/plan/budgets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save category budget");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: translate("patients.toast.planSaved") });
+      resetCategoryDraft();
+      onSaved();
+    },
+    onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
+  });
+
+  const deleteBudget = useMutation({
+    mutationFn: async (category: string) => {
+      const res = await apiFetch(`/api/participants/${participantId}/plan/budgets/${encodeURIComponent(category)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to remove category budget");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: translate("patients.toast.planSaved") });
       onSaved();
     },
     onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
@@ -555,122 +617,179 @@ function SetupPlanPanel({
         <PlusCircle className="h-3.5 w-3.5" /> {open ? translate("patients.closePlanSetup") : translate("patients.setupPlan")}
       </Button>
       {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.setupPlan")}</h4>
-          <Form {...planForm}>
-            <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={planForm.control}
-                name="plan_number"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>{translate("patients.field.planReference")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 2024-ABC-001" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_start"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {translate("patients.field.planStart")} <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_end"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="total_funding"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="col-span-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
-                </p>
+        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4 space-y-4">
+          <div>
+            <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.setupPlan")}</h4>
+            <Form {...planForm}>
+              <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={planForm.control}
+                    name="plan_number"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>{translate("patients.field.planReference")}</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 2024-ABC-001" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={planForm.control}
+                    name="plan_start"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {translate("patients.field.planStart")} <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={planForm.control}
+                    name="plan_end"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={planForm.control}
+                    name="total_funding"
+                    render={({ field }) => (
+                      <FormItem className="col-span-2">
+                        <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createPlan.isPending}>
+                    {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {translate("patients.savePlan")}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </div>
+
+          {hasPlan && (
+            <div className="border-t border-purple-100/60 pt-4">
+              <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-1.5">
+                <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
+              </p>
+
+              {existingBudgets.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {existingBudgets.map((b) => (
+                    <div
+                      key={b.category}
+                      className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-bold text-[#111827] truncate">{b.category_label || b.category}</p>
+                        <p className="text-[10px] text-[#6B7280]">
+                          {money(b.allocated)} allocated
+                          {b.overspent && <span className="ml-1.5 font-bold text-red-600">· Over budget</span>}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            if (!b.category) return;
+                            setEditingCategory(b.category);
+                            setCategoryDraft(b.category);
+                            setAmountDraft(String(b.allocated ?? 0));
+                          }}
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-red-600"
+                          disabled={deleteBudget.isPending}
+                          onClick={() => b.category && deleteBudget.mutate(b.category)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
+                <Select
+                  value={categoryDraft}
+                  onValueChange={setCategoryDraft}
+                  disabled={!!editingCategory || categoriesQuery.isLoading}
+                >
+                  <SelectTrigger className="h-9 text-[12px]">
+                    <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableCategories
+                      .filter((c) => editingCategory === c.category || !usedCategoryKeys.has(c.category))
+                      .map((c) => (
+                        <SelectItem key={c.category} value={c.category}>
+                          {c.category_name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="Allocated amount"
+                  value={amountDraft}
+                  onChange={(e) => setAmountDraft(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  {editingCategory && (
+                    <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
+                    onClick={() =>
+                      upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
+                    }
+                  >
+                    {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                    {editingCategory ? "Update" : "Add"} Category Budget
+                  </Button>
+                </div>
               </div>
-              <FormField
-                control={planForm.control}
-                name="core_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.coreSupports")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capacity_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.capacityBuilding")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capital_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.capitalSupports")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {translate("patients.savePlan")}
-              </Button>
-            </div>
-            </form>
-          </Form>
+          )}
         </div>
       )}
     </div>
@@ -911,9 +1030,18 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const budget = budgetQuery.data;
   const complianceHistory = complianceQuery.data ?? [];
   const goals = Array.isArray(participant.goals) ? participant.goals : [];
-  const usedBudget = Number(participant.used_budget ?? 0);
-  const totalBudget = Number(participant.total_budget ?? budget?.total_funding ?? 0);
-  const remainingBudget = Math.max(totalBudget - usedBudget, 0);
+  const categoryBudgets = budget?.budgets ?? [];
+  const hasCategoryBudgets = categoryBudgets.length > 0;
+  // Once per-category budgets exist, they are the source of truth — total_allocated/used/remaining
+  // are a computed rollup of those rows, not a separately-tracked figure.
+  const totalBudget = hasCategoryBudgets
+    ? Number(budget?.total_allocated ?? 0)
+    : Number(participant.total_budget ?? budget?.total_funding ?? 0);
+  const usedBudget = hasCategoryBudgets ? Number(budget?.total_used ?? 0) : Number(participant.used_budget ?? 0);
+  const remainingBudget = hasCategoryBudgets
+    ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
+    : Math.max(totalBudget - usedBudget, 0);
+  const isOverspent = remainingBudget < 0;
   const scoredSessions = sessions.filter((session) => session.compliance_score != null);
   const averageCompliance = scoredSessions.length
     ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
@@ -927,9 +1055,9 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     },
     {
       label: translate("patients.metric.budgetRemaining"),
-      value: money(remainingBudget),
+      value: isOverspent ? `${money(remainingBudget)} · Over budget` : money(remainingBudget),
       icon: DollarSign,
-      tone: "bg-purple-50 text-[#3730A3] border-purple-100",
+      tone: isOverspent ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-[#3730A3] border-purple-100",
     },
     {
       label: translate("patients.tab.sessions"),
@@ -986,7 +1114,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
               participant={participant}
               onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
             />
-            <SetupPlanPanel participantId={id} onSaved={onRefreshList} />
+            <SetupPlanPanel
+              participantId={id}
+              budget={budget}
+              onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
+            />
           </div>
         </div>
 
@@ -1091,19 +1223,27 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     <p className="text-[12px] font-bold text-[#111827]">{budget.plan_number}</p>
                   </div>
                 )}
-                {/* Total / Used / Remaining */}
+                {/* Total / Used / Remaining — computed rollup of the category rows below once any exist */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    [translate("patients.budget.total"),     money(totalBudget || budget?.total_funding)],
-                    [translate("patients.budget.used"),      money(usedBudget)],
-                    [translate("patients.budget.remaining"), money(remainingBudget)],
-                  ].map(([lbl, val]) => (
-                    <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                    { lbl: translate("patients.budget.total"),     val: money(totalBudget || budget?.total_funding), flagged: false },
+                    { lbl: translate("patients.budget.used"),      val: money(usedBudget), flagged: false },
+                    { lbl: translate("patients.budget.remaining"), val: money(remainingBudget), flagged: isOverspent },
+                  ].map(({ lbl, val, flagged }) => (
+                    <div
+                      key={lbl}
+                      className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-white border-purple-100/60"}`}
+                    >
                       <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{lbl}</p>
-                      <p className="text-[12px] font-black text-[#111827] truncate">{val}</p>
+                      <p className={`text-[12px] font-black truncate ${flagged ? "text-red-700" : "text-[#111827]"}`}>{val}</p>
                     </div>
                   ))}
                 </div>
+                {isOverspent && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
+                    Plan is over budget — spending exceeds total allocated funding.
+                  </div>
+                )}
                 {/* Budget utilisation bar */}
                 {totalBudget > 0 && (
                   <div className="rounded-xl border border-purple-100/60 bg-white p-3">
@@ -1115,25 +1255,30 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     </div>
                     <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6] transition-all"
+                        className={`h-full rounded-full transition-all ${isOverspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
                         style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
                       />
                     </div>
                   </div>
                 )}
                 {/* Category breakdown */}
-                {(budget?.budgets ?? []).length > 0 && (
+                {hasCategoryBudgets && (
                   <div className="space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">{translate("patients.budget.byCategory")}</p>
-                    {(budget?.budgets ?? []).map((item) => (
-                      <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
+                    {categoryBudgets.map((item) => (
+                      <div
+                        key={item.category || item.category_label}
+                        className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
+                      >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-[12px] font-bold text-[#111827] truncate">{item.category_label || item.category}</span>
-                          <span className="text-[11px] font-black text-[#6B7280] shrink-0">{item.percent_used ?? 0}%</span>
+                          <span className={`text-[11px] font-black shrink-0 ${item.overspent ? "text-red-700" : "text-[#6B7280]"}`}>
+                            {item.overspent ? "Over budget" : `${item.percent_used ?? 0}%`}
+                          </span>
                         </div>
                         <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"
+                            className={`h-full rounded-full ${item.overspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
                             style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
                           />
                         </div>

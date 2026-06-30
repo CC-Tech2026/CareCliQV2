@@ -997,7 +997,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
         "medications, medical_alerts, current_conditions, "
         "case_manager_name, case_manager_phone, likes_dislikes, sensory_preferences, "
         "cultural_preferences, preferred_activities, communication_guidance, "
-        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes"
+        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes, goals"
     )
     try:
         resp = (
@@ -1063,6 +1063,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
             "previous_visit_notes": row.get("previous_visit_notes"),
             "previous_visit_notes_updated_at": row.get("previous_visit_notes_updated_at"),
             "communication_guidance": row.get("communication_guidance"),
+            "goals": row.get("goals") or [],
         },
         "context_synced_at": synced_at,
     }
@@ -1455,10 +1456,15 @@ def get_participant_profile_for_worker(
     ctx = _fetch_participant_context(str(shift.get("participant_id") or ""), organization_id)
     payload.update(ctx)
     _enrich_shift_participant_context(payload, shift)
+    participant_id = str(shift.get("participant_id") or "")
+    active_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
     return {
         "shift_id": shift_id,
         "participant_id": shift.get("participant_id"),
         "profile": payload.get("profile") or {},
+        "context": payload.get("context") or {},
+        "preferences": payload.get("preferences") or {},
+        "active_goals": active_goals or [],
         "context_synced_at": payload.get("context_synced_at"),
     }
 

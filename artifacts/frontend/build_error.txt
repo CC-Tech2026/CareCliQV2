@@ -1,0 +1,64 @@
+﻿
+> @workspace/frontend@0.0.0 build C:\Users\Chanm\OneDrive - University of South Australia\Desktop\Supabase-Python-Hub\artifacts\frontend
+> vite build --config vite.config.ts
+
+[36mvite v7.3.2 [32mbuilding client environment for production...[36m[39m
+transforming...
+node.exe : Found 1 warning while optimizing generated CSS:
+At C:\Users\Chanm\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Found 1 warning... generated CSS: 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+[2mÔöé   initial-value: 0;[22m
+[2mÔöé }[22m
+[2mÔöé[22m @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta
++Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap');
+[2mÔöå[22m        [33m[2m^--[22m @import rules must precede all rules 
+aside from @charset and @layer statements[39m
+[2mÔöå[22m
+[2mÔöé ::-webkit-scrollbar {[22m
+[2mÔöé   width: 5px;[22m
+
+[32mÔ£ô[39m 44 modules transformed.
+[31mÔ£ù[39m Build failed in 577ms
+[31merror during build:
+[31m[vite:esbuild] Transform failed with 1 error:
+C:/Users/Chanm/OneDrive - University of South Australia/Desktop/Supabase-Python
+-Hub/artifacts/frontend/src/pages/patients.tsx:1522:7: ERROR: Expected 
+identifier but found "/"[31m
+file: [36mC:/Users/Chanm/OneDrive - University of South Australia/Desktop/Supa
+base-Python-Hub/artifacts/frontend/src/pages/patients.tsx:1522:7[31m
+[33m
+[33mExpected identifier but found "/"[33m
+1520 |          )}
+1521 |  
+1522 |        </div>
+     |         ^
+1523 |          </>
+1524 |        )}
+[31m
+    at failureErrorWithLog (C:\Users\Chanm\OneDrive - University of South Austr
+alia\Desktop\Supabase-Python-Hub\node_modules\.pnpm\esbuild@0.27.3\node_modules
+\esbuild\lib\main.js:1467:15)
+    at C:\Users\Chanm\OneDrive - University of South Australia\Desktop\Supabase
+-Python-Hub\node_modules\.pnpm\esbuild@0.27.3\node_modules\esbuild\lib\main.js:
+736:50
+    at responseCallbacks.<computed> (C:\Users\Chanm\OneDrive - University of 
+South Australia\Desktop\Supabase-Python-Hub\node_modules\.pnpm\esbuild@0.27.3\n
+ode_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\Chanm\OneDrive - University of South Aust
+ralia\Desktop\Supabase-Python-Hub\node_modules\.pnpm\esbuild@0.27.3\node_module
+s\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\Chanm\OneDrive - University of South Aus
+tralia\Desktop\Supabase-Python-Hub\node_modules\.pnpm\esbuild@0.27.3\node_modul
+es\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)[39m
+ÔÇëELIFECYCLEÔÇë Command failed with exit code 1.
