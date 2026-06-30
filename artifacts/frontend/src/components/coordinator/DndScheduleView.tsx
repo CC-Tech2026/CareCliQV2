@@ -2,8 +2,9 @@
  * DndScheduleView — CARECLIQV2-235
  * Drag-and-drop week calendar: workers × hourly time slots.
  * Unassigned shifts panel (left) → drag to worker × hour cell.
+ * Features: Real-time availability visualization with color-coded status.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   DndContext,
@@ -17,7 +18,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { format, addDays, isToday, parseISO, differenceInMinutes } from "date-fns";
+import { format, addDays, isToday, parseISO, differenceInMinutes, getDay } from "date-fns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle, CheckCircle2, Clock, GripVertical,
@@ -27,10 +28,12 @@ import {
   assignExistingShift,
   getWorkerConflicts,
   unassignShift,
+  getWorkerAvailability,
   type CoordinatorShiftRecord,
   type WorkerStats,
   type ConflictItem,
   type AvailabilityStatus,
+  type WorkerAvailability,
 } from "@/services/coordinatorService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -142,25 +145,55 @@ function DroppableCell({
   hour,
   dayIso,
   children,
+  availabilityStatus,
 }: {
   workerId: string;
   hour: number;
   dayIso: string;
   children?: React.ReactNode;
+  availabilityStatus?: "available" | "unavailable" | "blackout";
 }) {
   const id = `${workerId}|${dayIso}|${hour}`;
   const { isOver, setNodeRef } = useDroppable({ id, data: { workerId, hour, dayIso } });
+  
+  // Determine background color based on availability
+  let bgColor = "transparent";
+  let borderColor = BORDER;
+  let opacity = 1;
+  
+  if (availabilityStatus === "blackout") {
+    bgColor = "#FEE2E2"; // Light red
+    borderColor = "#FECACA";
+    opacity = 0.6;
+  } else if (availabilityStatus === "unavailable") {
+    bgColor = "#FED7AA"; // Light orange
+    borderColor = "#FDBA74";
+    opacity = 0.7;
+  } else if (availabilityStatus === "available") {
+    bgColor = "#DCFCE7"; // Light green (subtle)
+    borderColor = "#BBFBEE";
+    opacity = 0.4;
+  }
+  
+  // Highlight when dragging over
+  if (isOver) {
+    bgColor = "#EDE9FF"; // Plum highlight
+    opacity = 1;
+  }
+  
   return (
     <div
       ref={setNodeRef}
       style={{
         minWidth: CELL_WIDTH,
         minHeight: ROW_HEIGHT,
-        background: isOver ? "#EDE9FF" : "transparent",
-        borderLeft: `1px solid ${BORDER}`,
-        transition: "background 0.1s",
+        background: bgColor,
+        borderLeft: `1px solid ${borderColor}`,
+        opacity,
+        transition: "background 0.1s, opacity 0.1s",
         position: "relative",
       }}
+      title={availabilityStatus === "blackout" ? "Blackout date" : availabilityStatus === "unavailable" ? "Outside working hours" : ""}
     >
       {children}
     </div>
@@ -327,6 +360,75 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
   const [pendingUnassign, setPendingUnassign] = useState<{
     shift: CoordinatorShiftRecord; workerName: string; warning?: string;
   } | null>(null);
+  const [workerAvailability, setWorkerAvailability] = useState<Record<string, WorkerAvailability & { blackout_dates?: Array<{ start_date: string; end_date: string }> }>>({});
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
+
+  // Fetch availability for all workers
+  useEffect(() => {
+    const fetchAvailabilities = async () => {
+      setLoadingAvailability(true);
+      try {
+        const availMap: typeof workerAvailability = {};
+        for (const worker of workers) {
+          try {
+            const data = await getWorkerAvailability(worker.id);
+            availMap[worker.id] = data;
+          } catch (err) {
+            console.warn(`Failed to fetch availability for worker ${worker.id}:`, err);
+          }
+        }
+        setWorkerAvailability(availMap);
+      } finally {
+        setLoadingAvailability(false);
+      }
+    };
+    
+    if (workers.length > 0) {
+      fetchAvailabilities();
+    }
+  }, [workers]);
+
+  // Helper: Check if worker is available at a specific time slot
+  const getAvailabilityStatus = (workerId: string, hour: number, dayIso: string): "available" | "unavailable" | "blackout" | undefined => {
+    const avail = workerAvailability[workerId];
+    if (!avail) return undefined;
+
+    // Parse the date to get day of week (1=Monday, 7=Sunday in date-fns)
+    try {
+      const date = parseISO(dayIso);
+      const dayOfWeek = getDay(date); // 0=Sunday, 1=Monday, ..., 6=Saturday
+      const carecliqDay = dayOfWeek === 0 ? 7 : dayOfWeek; // Convert to 1=Mon, 7=Sun
+
+      // Check blackout dates
+      if (avail.blackout_dates) {
+        for (const blackout of avail.blackout_dates) {
+          if (dayIso >= blackout.start_date && dayIso <= blackout.end_date) {
+            return "blackout";
+          }
+        }
+      }
+
+      // Check if worker works on this day
+      if (!avail.available_days || !avail.available_days.includes(carecliqDay)) {
+        return "unavailable";
+      }
+
+      // Check if time is within working hours
+      if (avail.day_start_time && avail.day_end_time) {
+        const timeStr = String(hour).padStart(2, "0") + ":00";
+        const timeEnd = String(hour + 1).padStart(2, "0") + ":00";
+        
+        // Compare times as strings (HH:MM format)
+        if (timeStr < avail.day_start_time || timeEnd > avail.day_end_time) {
+          return "unavailable";
+        }
+      }
+
+      return "available";
+    } catch {
+      return undefined;
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -491,11 +593,38 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
               <p className="mt-3 rounded-lg bg-[#F8F8FE] px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
                 Drag a shift card onto a worker row to assign.
               </p>
+              
+              {/* Availability Legend */}
+              <div className="mt-4 space-y-1.5 border-t pt-3" style={{ borderColor: BORDER }}>
+                <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Availability</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded" style={{ background: "#DCFCE7" }} />
+                    <span className="text-[10px]" style={{ color: MUTED }}>Available</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded" style={{ background: "#FED7AA" }} />
+                    <span className="text-[10px]" style={{ color: MUTED }}>Outside hours</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded" style={{ background: "#FEE2E2" }} />
+                    <span className="text-[10px]" style={{ color: MUTED }}>Blackout date</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Worker × time grid */}
-          <div className="flex-1 overflow-auto rounded-2xl border bg-white" style={{ borderColor: BORDER }}>
+          <div className="flex-1 overflow-auto rounded-2xl border bg-white relative" style={{ borderColor: BORDER }}>
+            {loadingAvailability && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/50">
+                <div className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 shadow-lg">
+                  <Loader2 size={14} className="animate-spin" style={{ color: PLUM }} />
+                  <span className="text-[12px] font-bold" style={{ color: TEXT }}>Loading availability...</span>
+                </div>
+              </div>
+            )}
             <table className="border-separate border-spacing-0">
               <thead>
                 <tr>
@@ -590,8 +719,9 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                           const sd = s.scheduled_start ? parseISO(s.scheduled_start) : null;
                           return sd ? sd.getHours() === h : false;
                         });
+                        const availStatus = getAvailabilityStatus(worker.id, h, dayIso);
                         return (
-                          <DroppableCell key={`${worker.id}-${dayIso}-${h}`} workerId={worker.id} hour={h} dayIso={dayIso}>
+                          <DroppableCell key={`${worker.id}-${dayIso}-${h}`} workerId={worker.id} hour={h} dayIso={dayIso} availabilityStatus={availStatus}>
                             {cellShift && (
                               <div
                                 className="absolute inset-0.5 flex items-center rounded-md overflow-hidden group"

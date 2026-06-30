@@ -14,25 +14,22 @@ ALTER TABLE IF EXISTS task_templates DROP CONSTRAINT IF EXISTS task_templates_li
 
 -- Step 2: Fix the participant_id reference (participants -> patients)
 -- Since this is a PK, we can't change it mid-migration, but we verify it references patients
-ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_participant_id_fkey 
-  FOREIGN KEY (participant_id) REFERENCES patients(id) ON DELETE CASCADE
-  ON CONFLICT DO NOTHING;
+ALTER TABLE IF EXISTS task_templates DROP CONSTRAINT IF EXISTS task_templates_participant_id_fkey;
+ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_participant_id_fkey
+  FOREIGN KEY (participant_id) REFERENCES patients(id) ON DELETE CASCADE;
 
 -- Step 3: Add corrected foreign keys
-ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_assigned_worker_id_fkey 
-  FOREIGN KEY (assigned_worker_id) REFERENCES users(id) ON DELETE SET NULL
-  ON CONFLICT DO NOTHING;
+ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_assigned_worker_id_fkey
+  FOREIGN KEY (assigned_worker_id) REFERENCES users(id) ON DELETE SET NULL;
 
-ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_linked_goal_id_fkey 
-  FOREIGN KEY (linked_goal_id) REFERENCES ndis_goals(id) ON DELETE SET NULL
-  ON CONFLICT DO NOTHING;
+ALTER TABLE IF EXISTS task_templates ADD CONSTRAINT task_templates_linked_goal_id_fkey
+  FOREIGN KEY (linked_goal_id) REFERENCES ndis_goals(id) ON DELETE SET NULL;
 
 -- Step 4: Fix task_instances if migration 068 was applied
 ALTER TABLE IF EXISTS task_instances DROP CONSTRAINT IF EXISTS task_instances_completed_by_fkey;
 
-ALTER TABLE IF EXISTS task_instances ADD CONSTRAINT task_instances_completed_by_fkey 
-  FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL
-  ON CONFLICT DO NOTHING;
+ALTER TABLE IF EXISTS task_instances ADD CONSTRAINT task_instances_completed_by_fkey
+  FOREIGN KEY (completed_by) REFERENCES users(id) ON DELETE SET NULL;
 
 -- ──────────────────────────────────────────────────────────────────────
 -- Create shift_assignments table (many-to-many: shifts ↔ workers)
@@ -60,30 +57,42 @@ CREATE TABLE IF NOT EXISTS public.shift_assignments (
   )),
   
   -- Audit trail
-  assigned_by uuid NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
+  -- Nullable: backend writes go through the service role, which has no
+  -- auth.uid() and (today) never sets shifts.updated_by, so a NOT NULL
+  -- requirement here would make the legacy-compat trigger below fail
+  -- every shift worker_id write.
+  assigned_by uuid REFERENCES public.users(id) ON DELETE RESTRICT,
   assigned_at timestamptz NOT NULL DEFAULT now(),
-  
+
   cancelled_by uuid REFERENCES public.users(id) ON DELETE SET NULL,
   cancelled_at timestamptz,
   reason text,  -- why assigned or cancelled
-  
+
   updated_at timestamptz NOT NULL DEFAULT now(),
-  
+
   -- Constraints
-  CONSTRAINT one_primary_per_shift UNIQUE (shift_id, role) WHERE role = 'primary',
   CONSTRAINT active_assignment_consistency CHECK (
     (status != 'cancelled' AND cancelled_at IS NULL AND cancelled_by IS NULL)
     OR (status = 'cancelled' AND cancelled_at IS NOT NULL)
   )
 );
 
-CREATE INDEX IF NOT EXISTS idx_shift_assignments_shift 
+-- Partial UNIQUE constraints can't be expressed inline on CREATE TABLE in
+-- Postgres (the WHERE clause requires a real index), so this is a separate
+-- unique index rather than a table CONSTRAINT. Scoped to non-terminal
+-- statuses so a completed/cancelled primary assignment doesn't block
+-- re-assigning a new primary worker to the same shift.
+CREATE UNIQUE INDEX IF NOT EXISTS one_primary_per_shift
+  ON public.shift_assignments (shift_id)
+  WHERE role = 'primary' AND status NOT IN ('completed', 'cancelled');
+
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_shift
   ON public.shift_assignments(shift_id);
-CREATE INDEX IF NOT EXISTS idx_shift_assignments_worker 
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_worker
   ON public.shift_assignments(worker_id);
-CREATE INDEX IF NOT EXISTS idx_shift_assignments_status 
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_status
   ON public.shift_assignments(status);
-CREATE INDEX IF NOT EXISTS idx_shift_assignments_role 
+CREATE INDEX IF NOT EXISTS idx_shift_assignments_role
   ON public.shift_assignments(role) WHERE status != 'cancelled';
 
 -- RLS for shift_assignments
@@ -132,30 +141,47 @@ CREATE POLICY shift_assignments_delete ON public.shift_assignments
 -- When a shift has worker_id set, keep shift_assignments in sync
 -- ──────────────────────────────────────────────────────────────────────
 
+-- The trigger declarations below only invoke this function when
+-- NEW.worker_id IS NOT NULL and (it's a fresh INSERT or the value
+-- changed), so the function itself doesn't need to re-check that — and
+-- critically, it must not reference OLD, since Postgres forbids OLD in
+-- any trigger that can fire on INSERT (no OLD row exists yet).
 CREATE OR REPLACE FUNCTION sync_shift_worker_to_assignments()
 RETURNS TRIGGER AS $$
 BEGIN
-  -- If shift.worker_id changed, update shift_assignments
-  IF NEW.worker_id IS NOT NULL AND (NEW.worker_id != OLD.worker_id OR OLD.worker_id IS NULL) THEN
-    -- Remove old primary assignment if exists
-    DELETE FROM shift_assignments 
-    WHERE shift_id = NEW.id AND role = 'primary' AND status != 'completed';
-    
-    -- Insert new primary assignment
-    INSERT INTO shift_assignments (shift_id, worker_id, role, status, assigned_by)
-    VALUES (NEW.id, NEW.worker_id, 'primary', 'assigned', COALESCE(NEW.updated_by, auth.uid()))
-    ON CONFLICT DO NOTHING;
-  END IF;
-  
+  -- Remove old primary assignment if exists
+  DELETE FROM shift_assignments
+  WHERE shift_id = NEW.id AND role = 'primary' AND status != 'completed';
+
+  -- Insert new primary assignment. assigned_by is nullable (see column
+  -- definition above) since service-role writes have no auth.uid() and
+  -- shifts.updated_by isn't set by the app today.
+  INSERT INTO shift_assignments (shift_id, worker_id, role, status, assigned_by)
+  VALUES (NEW.id, NEW.worker_id, 'primary', 'assigned', COALESCE(NEW.updated_by, auth.uid()))
+  ON CONFLICT DO NOTHING;
+
   RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL;
 
 DROP TRIGGER IF EXISTS shifts_sync_worker_to_assignments ON public.shifts;
-CREATE TRIGGER shifts_sync_worker_to_assignments
+DROP TRIGGER IF EXISTS shifts_sync_worker_to_assignments_insert ON public.shifts;
+DROP TRIGGER IF EXISTS shifts_sync_worker_to_assignments_update ON public.shifts;
+
+-- Split into separate INSERT/UPDATE triggers (rather than one combined
+-- "AFTER INSERT OR UPDATE" trigger) because the UPDATE branch's WHEN
+-- clause needs to reference OLD, and Postgres disallows referencing OLD
+-- in a WHEN clause for any trigger that also fires on INSERT.
+CREATE TRIGGER shifts_sync_worker_to_assignments_insert
+  AFTER INSERT ON public.shifts
+  FOR EACH ROW
+  WHEN (NEW.worker_id IS NOT NULL)
+  EXECUTE FUNCTION sync_shift_worker_to_assignments();
+
+CREATE TRIGGER shifts_sync_worker_to_assignments_update
   AFTER UPDATE ON public.shifts
   FOR EACH ROW
-  WHEN (NEW.worker_id IS DISTINCT FROM OLD.worker_id)
+  WHEN (NEW.worker_id IS NOT NULL AND NEW.worker_id IS DISTINCT FROM OLD.worker_id)
   EXECUTE FUNCTION sync_shift_worker_to_assignments();
 
 -- ──────────────────────────────────────────────────────────────────────
