@@ -892,15 +892,15 @@ export default function SessionDetail({ id }: { id?: string }) {
               </div>
               <div className="p-5">
                 <TranslationAuditView
-                  originalLanguageInput={session.original_language_input ?? undefined}
-                  translatedEnglishNote={session.translated_english_note ?? undefined}
-                  translationMetadata={session.translation_metadata as Record<string, unknown> | null}
-                  translationStatus={session.translation_status ?? undefined}
-                  translationProvider={session.translation_provider ?? undefined}
+                  originalLanguageInput={(session as ExtendedSession).original_language_input ?? undefined}
+                  translatedEnglishNote={(session as ExtendedSession).translated_english_note ?? undefined}
+                  translationMetadata={(session as ExtendedSession).translation_metadata as Record<string, unknown> | null}
+                  translationStatus={(session as ExtendedSession).translation_status ?? undefined}
+                  translationProvider={(session as ExtendedSession).translation_provider ?? undefined}
                 />
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Structured Clinical Note Fields */}
           {(() => {

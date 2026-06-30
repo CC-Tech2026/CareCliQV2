@@ -953,6 +953,11 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     .toUpperCase();
 
   const TABS = [
+    { id: "overview"    as const, label: "Overview",    icon: UserCircle   },
+    { id: "plan"        as const, label: "NDIS Plan",   icon: DollarSign   },
+    { id: "goals"       as const, label: "ParticipantGoals",       icon: Target       },
+    { id: "sessions"    as const, label: "Sessions",    icon: CalendarDays },
+    { id: "compliance"  as const, label: "Compliance",  icon: ShieldCheck  },
     { id: "overview"    as const, label: translate("patients.tab.overview"),    icon: UserCircle   },
     { id: "plan"        as const, label: translate("patients.tab.plan"),   icon: DollarSign   },
     ...(isCoordinator ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", icon: ClipboardList }] : [{ id: "goals" as const, label: translate("patients.tab.goals"), icon: Target }]),

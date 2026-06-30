@@ -692,3 +692,51 @@ async def get_compliance_audit_logs(
             e,
         )
         return []
+
+
+async def get_compliance_audit_logs_for_sessions(
+    session_ids: List[str],
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Fetch compliance audit logs for many sessions in one query."""
+
+    if not session_ids:
+        return {}
+
+    try:
+        supabase = get_supabase_admin()
+
+        result = (
+            supabase.table("compliance_audit_logs")
+            .select("*")
+            .in_("session_id", session_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        grouped: Dict[str, List[Dict[str, Any]]] = {session_id: [] for session_id in session_ids}
+
+        for row in _safe_rows(result.data):
+            session_id = row.get("session_id")
+            if not session_id:
+                continue
+
+            for field in ("failed_rules", "all_rules"):
+                value = row.get(field)
+
+                if isinstance(value, str):
+                    try:
+                        row[field] = json.loads(value)
+                    except Exception:
+                        row[field] = []
+
+            grouped.setdefault(str(session_id), []).append(row)
+
+        return grouped
+
+    except Exception as e:
+        logger.warning(
+            "Error fetching audit logs for sessions %s: %s",
+            session_ids,
+            e,
+        )
+        return {session_id: [] for session_id in session_ids}

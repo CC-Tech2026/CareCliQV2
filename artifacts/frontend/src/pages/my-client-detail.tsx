@@ -1265,9 +1265,9 @@ function IncidentReportModal({
         title: translate("client.incident.logged"),
         description: translate("client.incident.loggedDesc"),
         action: (
-          <button
+          <ToastAction
+            altText="View incidents"
             onClick={() => { onClose(); navigate("/incidents"); }}
-            className="inline-flex items-center gap-1.5 rounded-full border border-white/40 bg-white/20 px-3 py-1.5 text-xs font-black text-white hover:bg-white/30 transition"
           >
             <Siren size={12} />
             {translate("client.incident.viewIncidents")}
