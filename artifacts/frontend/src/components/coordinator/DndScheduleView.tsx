@@ -145,55 +145,25 @@ function DroppableCell({
   hour,
   dayIso,
   children,
-  availabilityStatus,
 }: {
   workerId: string;
   hour: number;
   dayIso: string;
   children?: React.ReactNode;
-  availabilityStatus?: "available" | "unavailable" | "blackout";
 }) {
   const id = `${workerId}|${dayIso}|${hour}`;
   const { isOver, setNodeRef } = useDroppable({ id, data: { workerId, hour, dayIso } });
-  
-  // Determine background color based on availability
-  let bgColor = "transparent";
-  let borderColor = BORDER;
-  let opacity = 1;
-  
-  if (availabilityStatus === "blackout") {
-    bgColor = "#FEE2E2"; // Light red
-    borderColor = "#FECACA";
-    opacity = 0.6;
-  } else if (availabilityStatus === "unavailable") {
-    bgColor = "#FED7AA"; // Light orange
-    borderColor = "#FDBA74";
-    opacity = 0.7;
-  } else if (availabilityStatus === "available") {
-    bgColor = "#DCFCE7"; // Light green (subtle)
-    borderColor = "#BBFBEE";
-    opacity = 0.4;
-  }
-  
-  // Highlight when dragging over
-  if (isOver) {
-    bgColor = "#EDE9FF"; // Plum highlight
-    opacity = 1;
-  }
-  
   return (
     <div
       ref={setNodeRef}
       style={{
         minWidth: CELL_WIDTH,
         minHeight: ROW_HEIGHT,
-        background: bgColor,
-        borderLeft: `1px solid ${borderColor}`,
-        opacity,
-        transition: "background 0.1s, opacity 0.1s",
+        background: isOver ? "#EDE9FF" : "transparent",
+        borderLeft: `1px solid ${BORDER}`,
+        transition: "background 0.1s",
         position: "relative",
       }}
-      title={availabilityStatus === "blackout" ? "Blackout date" : availabilityStatus === "unavailable" ? "Outside working hours" : ""}
     >
       {children}
     </div>
@@ -430,6 +400,41 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
     }
   };
 
+  // Helper: Get worker's availability status for the day and tooltip text
+  const getWorkerDayStatus = (workerId: string, dayIso: string): { status: "available" | "unavailable" | "partial"; tooltip: string } => {
+    const avail = workerAvailability[workerId];
+    if (!avail) return { status: "available", tooltip: "" };
+
+    try {
+      const date = parseISO(dayIso);
+      const dayOfWeek = getDay(date);
+      const carecliqDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+      // Check blackout dates
+      if (avail.blackout_dates) {
+        for (const blackout of avail.blackout_dates) {
+          if (dayIso >= blackout.start_date && dayIso <= blackout.end_date) {
+            return { status: "unavailable", tooltip: `Unavailable: ${blackout.reason || "Blackout date"}` };
+          }
+        }
+      }
+
+      // Check if worker works on this day
+      if (!avail.available_days || !avail.available_days.includes(carecliqDay)) {
+        return { status: "unavailable", tooltip: "Unavailable: Not scheduled this day" };
+      }
+
+      // If we get here, they're available (check hours if needed)
+      if (avail.day_start_time && avail.day_end_time) {
+        return { status: "available", tooltip: `Available: ${avail.day_start_time.slice(0, 5)}–${avail.day_end_time.slice(0, 5)}` };
+      }
+
+      return { status: "available", tooltip: "Available today" };
+    } catch {
+      return { status: "available", tooltip: "" };
+    }
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -593,25 +598,6 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
               <p className="mt-3 rounded-lg bg-[#F8F8FE] px-2 py-1.5 text-[10px] leading-relaxed" style={{ color: MUTED }}>
                 Drag a shift card onto a worker row to assign.
               </p>
-              
-              {/* Availability Legend */}
-              <div className="mt-4 space-y-1.5 border-t pt-3" style={{ borderColor: BORDER }}>
-                <p className="text-[9px] font-black uppercase tracking-widest" style={{ color: MUTED }}>Availability</p>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded" style={{ background: "#DCFCE7" }} />
-                    <span className="text-[10px]" style={{ color: MUTED }}>Available</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded" style={{ background: "#FED7AA" }} />
-                    <span className="text-[10px]" style={{ color: MUTED }}>Outside hours</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded" style={{ background: "#FEE2E2" }} />
-                    <span className="text-[10px]" style={{ color: MUTED }}>Blackout date</span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -683,7 +669,14 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                 </tr>
               </thead>
               <tbody>
-                {workers.slice(0, 20).map((worker) => (
+                {workers.slice(0, 20).map((worker) => {
+                  // Get availability status for today
+                  const todayIso = format(new Date(), "yyyy-MM-dd");
+                  const todayStatus = getWorkerDayStatus(worker.id, todayIso);
+                  const badgeColor = todayStatus.status === "available" ? "#16A34A" : "#DC2626";
+                  const badgeSymbol = todayStatus.status === "available" ? "●" : "○";
+
+                  return (
                   <tr key={worker.id}>
                     <td
                       className="sticky left-0 z-10 bg-white px-3 py-2"
@@ -697,9 +690,16 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                           {initials(worker.full_name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[11px] font-bold max-w-[100px]" style={{ color: TEXT }}>
-                            {worker.full_name.split(" ")[0]}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-[11px] font-bold max-w-[80px]" style={{ color: TEXT }}>
+                              {worker.full_name.split(" ")[0]}
+                            </p>
+                            <div
+                              title={todayStatus.tooltip}
+                              className="h-2 w-2 rounded-full shrink-0"
+                              style={{ background: badgeColor, cursor: "help" }}
+                            />
+                          </div>
                           {worker.avg_compliance != null && (
                             <p className="text-[10px]" style={{
                               color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626",
@@ -719,9 +719,8 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                           const sd = s.scheduled_start ? parseISO(s.scheduled_start) : null;
                           return sd ? sd.getHours() === h : false;
                         });
-                        const availStatus = getAvailabilityStatus(worker.id, h, dayIso);
                         return (
-                          <DroppableCell key={`${worker.id}-${dayIso}-${h}`} workerId={worker.id} hour={h} dayIso={dayIso} availabilityStatus={availStatus}>
+                          <DroppableCell key={`${worker.id}-${dayIso}-${h}`} workerId={worker.id} hour={h} dayIso={dayIso}>
                             {cellShift && (
                               <div
                                 className="absolute inset-0.5 flex items-center rounded-md overflow-hidden group"
@@ -751,7 +750,8 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                       });
                     })}
                   </tr>
-                ))}
+                  );
+                })}
                 {workers.length === 0 && (
                   <tr>
                     <td
