@@ -6,7 +6,7 @@ import {
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
   BarChart2, UserCheck, DollarSign, GraduationCap, LockKeyhole, Radio,
-  Sun, Moon, Search, Car,
+  Sun, Moon, Search, Car, Accessibility,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { NotificationBell, NotificationPanel } from "@/components/coordinator/NotificationPanel";
