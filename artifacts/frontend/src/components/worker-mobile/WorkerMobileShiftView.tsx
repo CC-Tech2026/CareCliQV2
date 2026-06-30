@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import { useLocation } from "wouter";
 import { Loader2, MapPin, Navigation, Phone } from "lucide-react";
 import { WM } from "@/lib/worker-mobile-tokens";
@@ -11,7 +11,10 @@ import {
 import type { ShiftTask, ShiftVisualState, WorkerShift } from "@/services/shiftService";
 import type { SessionNoteRecord } from "@/services/sessionNotesService";
 import { syncSessionNotes } from "@/services/sessionNotesService";
+import { newClientNoteId } from "@/lib/session-notes-storage";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
+import { ShiftTravelExpenseCard, type MileageDraftState } from "@/components/shifts/ShiftTravelExpenseCard";
+import { ShiftTransitExpenseCard } from "@/components/shifts/ShiftTransitExpenseCard";
 import { formatMobileSubmittedAt } from "@/lib/datetime";
 import { useGoalLinkedTaskComplianceNotes } from "@/hooks/useGoalLinkedTaskComplianceNotes";
 import { WorkerMobileIncidentSheet } from "./WorkerMobileIncidentSheet";
@@ -20,13 +23,13 @@ import { WorkerMobileReviewScreen } from "./WorkerMobileReviewScreen";
 import { WorkerMobileSessionScreen } from "./WorkerMobileSessionScreen";
 import { WorkerMobileSignatureScreen } from "./WorkerMobileSignatureScreen";
 import { WorkerMobileTopbar } from "./WorkerMobileTopbar";
-import { WorkerMobileShiftBackLink } from "./WorkerMobileShiftBackLink";
 import {
   formatShiftTimeRange,
   shiftDurationMinutes,
   formatDurationLabel,
   formatMobileShiftDuration,
   shiftNeedsRiskAck,
+  shiftHasRiskAlerts,
   resolveActiveShiftTasks,
 } from "@/lib/shift-utils";
 import type { ShiftSignature } from "@/services/complianceService";
@@ -53,6 +56,7 @@ type Props = {
   safetyOpen: boolean;
   setSafetyOpen: (v: boolean) => void;
   isTutorialDemo?: boolean;
+  mileageDraftRef?: MutableRefObject<MileageDraftState>;
 };
 
 export function WorkerMobileShiftView({
@@ -75,6 +79,7 @@ export function WorkerMobileShiftView({
   setSafetyOpen,
   isTutorialDemo,
   submissionComplete,
+  mileageDraftRef,
 }: Props) {
   const [, navigate] = useLocation();
   const [phase, setPhase] = useState<WorkerMobilePhase>(() => {
@@ -90,7 +95,13 @@ export function WorkerMobileShiftView({
 
   const activeTasks = resolveActiveShiftTasks(shift.tasks, tasks);
   const isSessionLike = visualState === "clocked_in" || visualState === "session_active";
-  const needsRiskAck = shiftNeedsRiskAck(shift) && !shift.risks_acknowledged;
+  const hasAlerts = shiftHasRiskAlerts(shift);
+  const risksAcked = shift.risks_acknowledged ?? false;
+  const needsRiskAck = shiftNeedsRiskAck(shift);
+  const effectiveRiskAcked = risksAcked || (Boolean(isTutorialDemo) && ackChecked);
+  const showRiskAckPending = visualState === "scheduled" && !effectiveRiskAcked && needsRiskAck;
+  const showRiskAcknowledged = visualState === "scheduled" && effectiveRiskAcked && hasAlerts;
+  const riskAckAlerts = shift.health_alerts ?? [];
   const showEnd = visualState === "session_active" && phase === "session";
   const isFullImmersive = phase !== "scheduled";
 
@@ -165,7 +176,7 @@ export function WorkerMobileShiftView({
     if (!sessionId) return;
     const now = new Date().toISOString();
     const note: SessionNoteRecord = {
-      note_id: `local-${Date.now()}`,
+      note_id: newClientNoteId(),
       session_id: sessionId,
       task_id: taskId,
       content,
@@ -272,7 +283,7 @@ export function WorkerMobileShiftView({
         participantName={shift.participant_name ?? "Participant"}
         busy={busy === "end"}
         tutorialDemo={isTutorialDemo}
-        onSigned={() => void handleSignatureComplete()}
+        onSigned={handleSignatureComplete}
         onBack={() => setPhase("review")}
       />
     );
@@ -299,12 +310,27 @@ export function WorkerMobileShiftView({
           onAddMissingNote={(taskId, content) => void handleAddMissingNote(taskId, content)}
           onSubmit={handleSubmit}
           onViewComplianceReport={() => setComplianceOpen(true)}
+          onOpenIncidentReport={(noteId, content) => openIncidentReport(noteId, content)}
         />
+        {incidentDraft && (
+          <WorkerMobileIncidentSheet
+            shiftId={shift.id}
+            participantId={shift.participant_id}
+            participantName={shift.participant_name}
+            sessionId={sessionId}
+            shiftAddress={shift.participant_address}
+            sourceNoteId={incidentDraft.noteId}
+            sourceNoteContent={incidentDraft.content}
+            onFiled={handleIncidentFiled}
+            onClose={() => setIncidentDraft(null)}
+          />
+        )}
         {complianceOpen && (
           <WorkerMobileComplianceReport
             score={compliance.score}
             rules={compliance.rules}
             onClose={() => setComplianceOpen(false)}
+            onOpenIncidentReport={() => openIncidentReport()}
           />
         )}
       </div>
@@ -314,8 +340,6 @@ export function WorkerMobileShiftView({
   if (phase === "scheduled" || visualState === "scheduled") {
     return (
       <div className="space-y-4 px-4 pb-8">
-        <WorkerMobileShiftBackLink className="py-1" />
-
         <div
           className="overflow-hidden rounded-2xl border"
           style={{ borderColor: WM.border, borderLeftWidth: 3, borderLeftColor: WM.purple, background: WM.surface }}
@@ -360,9 +384,9 @@ export function WorkerMobileShiftView({
           </div>
         </div>
 
-        {needsRiskAck && (
+        {showRiskAckPending && (
           <ParticipantRiskAcknowledgementSection
-            alerts={shift.health_alerts ?? []}
+            alerts={riskAckAlerts}
             open={safetyOpen}
             onToggle={() => setSafetyOpen(!safetyOpen)}
             ackChecked={ackChecked}
@@ -373,10 +397,34 @@ export function WorkerMobileShiftView({
           />
         )}
 
+        {showRiskAcknowledged && (
+          <ParticipantRiskAcknowledgementSection
+            alerts={riskAckAlerts}
+            open={safetyOpen}
+            onToggle={() => setSafetyOpen(!safetyOpen)}
+            acknowledged
+            acknowledgedAt={shift.risks_acknowledged_at}
+            acknowledgedByName={shift.risks_acknowledged_by_name}
+            ackChecked
+            busy={false}
+            onRequestAcknowledge={onRequestAcknowledge}
+            onUncheck={() => setAckChecked(false)}
+          />
+        )}
+
+        <ShiftTravelExpenseCard
+          shiftId={shift.id}
+          shiftStatus={shift.status}
+          clockedInAt={clockedInAt}
+          mileageDraftRef={mileageDraftRef}
+        />
+
+        <ShiftTransitExpenseCard shiftId={shift.id} shiftStatus={shift.status} />
+
         <button
           type="button"
           onClick={onClockIn}
-          disabled={busy !== null || (needsRiskAck && !ackChecked)}
+          disabled={busy !== null || (needsRiskAck && !effectiveRiskAcked)}
           className="flex h-[42px] w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white disabled:opacity-50"
           style={{ background: WM.amber }}
           data-tutorial="clock-in"
@@ -446,6 +494,7 @@ export function WorkerMobileShiftView({
           score={compliance.score}
           rules={compliance.rules}
           onClose={() => setComplianceOpen(false)}
+          onOpenIncidentReport={() => openIncidentReport()}
         />
       )}
     </div>

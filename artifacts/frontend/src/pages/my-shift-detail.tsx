@@ -31,6 +31,7 @@ import { EvidenceSyncBanner } from "@/components/shifts/EvidenceSyncBanner";
 import { useEvidenceSync } from "@/hooks/useEvidenceSync";
 import { SupportInstructionsAccordion } from "@/components/shifts/SupportInstructionsAccordion";
 import { ParticipantRiskAcknowledgementSection } from "@/components/shifts/ParticipantRiskAlerts";
+import { RiskAcknowledgementLoadingOverlay } from "@/components/shifts/RiskAcknowledgementLoadingOverlay";
 import { ParticipantProfileCard } from "@/components/shifts/ParticipantProfileCard";
 import { ParticipantPreferencesCard } from "@/components/shifts/ParticipantPreferencesCard";
 import { ParticipantContextPanel } from "@/components/shifts/ParticipantContextPanel";
@@ -568,6 +569,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
       await acknowledgeShiftRisks(shift.id);
       setAckChecked(true);
       setAckConfirmOpen(false);
+      setSafetyOpen(false);
       invalidateShifts();
       await refetch();
       if (isTutorialDemo) {
@@ -995,6 +997,8 @@ export default function MyShiftDetail({ id: idProp }: Props) {
 
   const dialogs = (
     <>
+      <RiskAcknowledgementLoadingOverlay open={busy === "ack"} />
+
       {shift && !isMobile && (
         <ShiftSignatureModal
           open={signatureOpen}
@@ -1103,7 +1107,10 @@ export default function MyShiftDetail({ id: idProp }: Props) {
             <AlertDialogCancel disabled={busy === "ack"}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="gap-2"
-              onClick={() => void handleAcknowledge()}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleAcknowledge();
+              }}
               disabled={busy === "ack"}
             >
               {busy === "ack" ? (
@@ -1154,6 +1161,7 @@ export default function MyShiftDetail({ id: idProp }: Props) {
           setSafetyOpen={setSafetyOpen}
           isTutorialDemo={isTutorialDemo}
           submissionComplete={mobileSubmitDone}
+          mileageDraftRef={mileageDraftRef}
         />
         {dialogs}
       </>

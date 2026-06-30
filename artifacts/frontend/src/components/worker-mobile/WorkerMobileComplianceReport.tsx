@@ -7,6 +7,7 @@ type Props = {
   score: number;
   rules: ComplianceRuleResult[];
   onClose: () => void;
+  onOpenIncidentReport?: () => void;
 };
 
 function RuleIcon({ status }: { status: ComplianceRuleResult["status"] }) {
@@ -32,7 +33,7 @@ function RuleIcon({ status }: { status: ComplianceRuleResult["status"] }) {
   );
 }
 
-export function WorkerMobileComplianceReport({ score, rules, onClose }: Props) {
+export function WorkerMobileComplianceReport({ score, rules, onClose, onOpenIncidentReport }: Props) {
   const attention = rules.filter((r) => r.status !== "pass").length;
 
   return (
@@ -89,14 +90,25 @@ export function WorkerMobileComplianceReport({ score, rules, onClose }: Props) {
                 <p className="mt-0.5 text-[11px] leading-relaxed" style={{ color: WM.muted }}>
                   {rule.message}
                 </p>
-                {rule.actionLabel && rule.actionHref && (
-                  <a
-                    href={rule.actionHref}
-                    className="mt-1 inline-block text-[11px] font-semibold"
-                    style={{ color: WM.pink }}
-                  >
-                    {rule.actionLabel}
-                  </a>
+                {rule.actionLabel && (rule.actionHref || onOpenIncidentReport) && (
+                  onOpenIncidentReport && rule.actionHref === "/incidents/new" ? (
+                    <button
+                      type="button"
+                      onClick={onOpenIncidentReport}
+                      className="mt-1 inline-block text-[11px] font-semibold"
+                      style={{ color: WM.pink }}
+                    >
+                      {rule.actionLabel}
+                    </button>
+                  ) : rule.actionHref ? (
+                    <a
+                      href={rule.actionHref}
+                      className="mt-1 inline-block text-[11px] font-semibold"
+                      style={{ color: WM.pink }}
+                    >
+                      {rule.actionLabel}
+                    </a>
+                  ) : null
                 )}
               </div>
             </div>

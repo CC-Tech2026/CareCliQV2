@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useState, useEffect, useMemo } from "react";
 import {
-  Menu, X, ChevronLeft, ChevronRight,
+  Menu, X, ChevronLeft, ChevronRight, ArrowLeft,
   LayoutDashboard, Users, UserRound, CalendarDays, Clock,
   ShieldCheck, Settings, AlertTriangle, FileBarChart2,
   CreditCard, LogOut, FileCheck2, BadgeCheck, Wrench, Target, ClipboardList,
@@ -633,9 +633,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             className="md:hidden safe-header-mobile flex items-center justify-between px-4 shrink-0 z-10"
             style={{ borderBottom: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
           >
-            <Link href="/dashboard" className="flex items-center py-1 active:opacity-75 transition-opacity">
-              <CareCliQLogoSm />
-            </Link>
+            {hideWorkerMobileBottomNav ? (
+              <Link
+                href="/my-shifts"
+                className="flex h-9 w-9 items-center justify-center rounded-full border active:opacity-75 transition-opacity"
+                style={{ borderColor: BORDER }}
+                aria-label={translate("shift.briefing.backToList")}
+              >
+                <ArrowLeft size={17} style={{ color: TEXT }} />
+              </Link>
+            ) : (
+              <Link href="/dashboard" className="flex items-center py-1 active:opacity-75 transition-opacity">
+                <CareCliQLogoSm />
+              </Link>
+            )}
 
             {/* Current page label */}
             {pageLabel && (

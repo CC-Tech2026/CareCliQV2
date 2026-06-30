@@ -20,6 +20,7 @@ type Props = {
   onAddMissingNote: (taskId: string, content: string) => void;
   onSubmit: () => void;
   onViewComplianceReport: () => void;
+  onOpenIncidentReport?: (noteId: string, content: string) => void;
 };
 
 function medicationTask(tasks: ShiftTask[]) {
@@ -46,6 +47,7 @@ export function WorkerMobileReviewScreen({
   onAddMissingNote,
   onSubmit,
   onViewComplianceReport,
+  onOpenIncidentReport,
 }: Props) {
   const medTask = medicationTask(tasks);
   const medMissing = Boolean(medTask && !hasMedicationNote(medTask, notes));
@@ -229,6 +231,7 @@ export function WorkerMobileReviewScreen({
                 flag={flag}
                 editable
                 onSave={onSaveNote}
+                onIncidentReport={onOpenIncidentReport}
               />
             );
           })}

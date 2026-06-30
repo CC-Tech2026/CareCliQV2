@@ -44,8 +44,8 @@ export function ShiftSignatureForm({
 
   const isMobile = variant === "mobile";
   const allChecked = checks.tasks && checks.safety && checks.incidents;
-  const isWaiting = submitting || completing;
-  const canSign = allChecked && hasStroke && !isWaiting && !busy;
+  const isWaiting = submitting || completing || Boolean(busy);
+  const canSign = allChecked && hasStroke && !isWaiting;
 
   useEffect(() => {
     onBlockingChange?.(isWaiting);
@@ -73,23 +73,26 @@ export function ShiftSignatureForm({
       });
       setSubmitting(false);
       setCompleting(true);
-      await Promise.resolve(onSigned());
+      await onSigned();
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (/already signed/i.test(message)) {
         setSubmitting(false);
         setCompleting(true);
-        await Promise.resolve(onSigned());
+        try {
+          await onSigned();
+        } catch {
+          setCompleting(false);
+        }
         return;
       }
+      setSubmitting(false);
+      setCompleting(false);
       toast({
         title: translate("shift.signature.saveFailed"),
         description: err instanceof Error ? err.message : translate("shift.signature.tryAgain"),
         variant: "destructive",
       });
-    } finally {
-      setSubmitting(false);
-      setCompleting(false);
     }
   }
 
@@ -117,9 +120,9 @@ export function ShiftSignatureForm({
             aria-hidden
           />
           <p className="text-sm font-bold" style={{ color: labelColor }}>
-            {completing ? translate("shift.signature.completing") : translate("shift.signature.confirm")}
+            {completing || busy ? translate("shift.signature.completing") : translate("shift.signature.confirm")}
           </p>
-          {completing && (
+          {(completing || busy) && (
             <p className="max-w-xs text-xs font-medium leading-relaxed" style={{ color: mutedColor }}>
               {translate("shift.signature.completingDesc")}
             </p>
@@ -177,7 +180,7 @@ export function ShiftSignatureForm({
           {isWaiting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {completing ? translate("shift.signature.completing") : translate("shift.signature.confirm")}
+              {completing || busy ? translate("shift.signature.completing") : translate("shift.signature.confirm")}
             </>
           ) : (
             translate("shift.signature.confirm")

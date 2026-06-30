@@ -2511,6 +2511,17 @@ def _goal_id_for_shift_task(shift: dict[str, Any], task_id: Optional[str]) -> Op
     return None
 
 
+def _coerce_client_note_id(raw: str | None) -> str | None:
+    """Normalize client note ids to UUID strings for shift_visit_notes.client_note_id."""
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError, TypeError):
+        return str(uuid.uuid4())
+
+
 def _note_payload_from_row(row: dict[str, Any]) -> dict[str, Any]:
     category = str(row.get("category") or "")
     note_type = "text"
@@ -2638,7 +2649,9 @@ def sync_session_notes(
         if task_id and not goal_id:
             goal_id = _goal_id_for_shift_task(shift, task_id)
 
-        client_note_id = str(item.get("note_id") or item.get("client_note_id") or "").strip() or None
+        client_note_id = _coerce_client_note_id(
+            str(item.get("note_id") or item.get("client_note_id") or "").strip() or None
+        )
         auto_saved_at = item.get("auto_saved_at") or now
         created_at = item.get("created_at") or now
         note_type = str(item.get("note_type") or "text").strip().lower()
