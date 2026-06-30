@@ -53,7 +53,7 @@ async def test_build_worker_landing_dashboard_composes_payload():
     today = [_shift()]
     upcoming = [_shift(id="shift-2", scheduled_start=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat())]
 
-    with patch.object(landing.shift_service, "list_shifts_for_worker", side_effect=[today, upcoming]), patch.object(
+    with patch.object(landing.shift_service, "list_shifts_for_worker", side_effect=[today, upcoming, []]), patch.object(
         landing.shift_service,
         "count_shifts_for_worker",
         return_value={"today": 1, "upcoming": 1, "completed": 0, "cancelled": 0},

@@ -2,16 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, ChevronDown, MessageSquare, Phone, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { compressImageFile } from "@/lib/task-evidence-storage";
+import { unlockPageInteraction } from "@/lib/unlock-page-interaction";
 import { listIncidents } from "@/services/incidentService";
 import { WorkerIncidentReportForm } from "@/components/shifts/WorkerIncidentReportForm";
 import { listShiftMessages, sendShiftOfficeMessage, type ShiftOfficeMessage } from "@/services/shiftService";
@@ -19,6 +13,9 @@ import { BORDER, MUTED, PLUM, TEXT } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 const DEFAULT_OFFICE_PHONE = "1300 000 000";
+
+const FIELD_SELECT =
+  "flex h-9 w-full rounded-md border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
 type IncidentListItem = {
   id: string;
@@ -39,6 +36,9 @@ type Props = {
   open?: boolean;
   onToggle?: () => void;
   officePhone?: string;
+  incidentFormOpen?: boolean;
+  onIncidentFormOpenChange?: (open: boolean) => void;
+  onIncidentSubmitted?: () => void;
 };
 
 export function DuringShiftAccordion({
@@ -50,12 +50,21 @@ export function DuringShiftAccordion({
   open = false,
   onToggle,
   officePhone,
+  incidentFormOpen,
+  onIncidentFormOpenChange,
+  onIncidentSubmitted,
 }: Props) {
   const { translate } = useAccessibility();
   const resolvedOfficePhone = (officePhone || DEFAULT_OFFICE_PHONE).replace(/\s/g, "");
   const { toast } = useToast();
 
-  const [showIncidentForm, setShowIncidentForm] = useState(false);
+  const [internalIncidentOpen, setInternalIncidentOpen] = useState(false);
+  const isIncidentControlled = onIncidentFormOpenChange !== undefined;
+  const showIncidentForm = isIncidentControlled ? Boolean(incidentFormOpen) : internalIncidentOpen;
+  const setShowIncidentForm = (next: boolean) => {
+    onIncidentFormOpenChange?.(next);
+    if (!isIncidentControlled) setInternalIncidentOpen(next);
+  };
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [incidentHistory, setIncidentHistory] = useState<IncidentListItem[]>([]);
 
@@ -81,6 +90,25 @@ export function DuringShiftAccordion({
   useEffect(() => {
     if (open) void loadHistory();
   }, [open, loadHistory]);
+
+  useEffect(() => {
+    if (!showIncidentForm && !showMessageForm) return;
+    unlockPageInteraction();
+  }, [showIncidentForm, showMessageForm]);
+
+  const toggleIncidentForm = () => {
+    unlockPageInteraction();
+    setShowIncidentForm(!showIncidentForm);
+    setShowMessageForm(false);
+  };
+
+  const toggleMessageForm = () => {
+    unlockPageInteraction();
+    setShowMessageForm(!showMessageForm);
+    setShowIncidentForm(false);
+  };
+
+  const panelExpanded = showIncidentForm || showMessageForm;
 
   const handleMessagePhotoPick = async (file: File | null) => {
     if (!file) return;
@@ -119,7 +147,10 @@ export function DuringShiftAccordion({
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
+    <section
+      className={cn("rounded-2xl border bg-cc-surface shadow-sm", panelExpanded ? "overflow-visible" : "overflow-hidden")}
+      style={{ borderColor: BORDER }}
+    >
       <button
         type="button"
         className="flex w-full items-center justify-between px-4 py-3.5 text-left"
@@ -142,9 +173,9 @@ export function DuringShiftAccordion({
                 "h-11 rounded-xl text-xs font-bold text-red-600",
                 showIncidentForm && "border-red-200 bg-red-50 text-red-700",
               )}
-              onClick={() => {
-                setShowIncidentForm(!showIncidentForm);
-                setShowMessageForm(false);
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleIncidentForm();
               }}
             >
               <AlertTriangle size={14} className="mr-1.5" />
@@ -157,9 +188,9 @@ export function DuringShiftAccordion({
                 "h-11 rounded-xl text-xs font-bold",
                 showMessageForm && "border-violet-200 bg-violet-50 text-violet-700",
               )}
-              onClick={() => {
-                setShowMessageForm(!showMessageForm);
-                setShowIncidentForm(false);
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMessageForm();
               }}
             >
               <MessageSquare size={14} className="mr-1.5" />
@@ -201,6 +232,7 @@ export function DuringShiftAccordion({
                 shiftAddress={shiftAddress}
                 onSubmitted={() => {
                   void loadHistory();
+                  onIncidentSubmitted?.();
                 }}
                 onCancel={() => setShowIncidentForm(false)}
               />
@@ -215,16 +247,16 @@ export function DuringShiftAccordion({
                   <X size={16} className="text-violet-600" />
                 </button>
               </div>
-              <Select value={messagePriority} onValueChange={(v) => setMessagePriority(v as typeof messagePriority)}>
-                <SelectTrigger className="bg-cc-surface">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="normal">{translate("shift.during.priority.normal")}</SelectItem>
-                  <SelectItem value="urgent">{translate("shift.during.priority.urgent")}</SelectItem>
-                  <SelectItem value="emergency">{translate("shift.during.priority.emergency")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={messagePriority}
+                onChange={(e) => setMessagePriority(e.target.value as typeof messagePriority)}
+                className={FIELD_SELECT}
+                aria-label={translate("shift.during.messageOffice")}
+              >
+                <option value="normal">{translate("shift.during.priority.normal")}</option>
+                <option value="urgent">{translate("shift.during.priority.urgent")}</option>
+                <option value="emergency">{translate("shift.during.priority.emergency")}</option>
+              </select>
               <Textarea
                 value={officeMessage}
                 onChange={(e) => setOfficeMessage(e.target.value)}

@@ -11,7 +11,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,8 +27,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { ShiftCompliancePanel } from "@/components/ShiftCompliancePanel";
 import { useOffline } from "@/context/OfflineContext";
 import { useColors } from "@/hooks/useColors";
+import { evaluateSessionTextCompliance, scoreColor } from "@workspace/worker-compliance";
 
 const ACTIVITIES = [
   { id: "personal_care", label: "Personal Care", icon: "heart" },
@@ -238,6 +240,16 @@ export default function LiveSessionScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
+  const endShiftCompliance = useMemo(
+    () =>
+      evaluateSessionTextCompliance(
+        [notes, ...voiceNotes].filter(Boolean).join("\n"),
+        participant?.full_name?.split(" ")[0],
+        activities.length,
+      ),
+    [notes, voiceNotes, participant?.full_name, activities.length],
+  );
+
   if (sessionLoading || participantLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
@@ -426,6 +438,11 @@ export default function LiveSessionScreen() {
 
         {/* SHIFT NOTES — always open, no modal */}
         <View style={[styles.sectionBlock, { borderBottomColor: colors.border }]}>
+          <ShiftCompliancePanel
+            notes={[notes, ...voiceNotes].filter(Boolean).join("\n")}
+            participantFirstName={participant?.full_name?.split(" ")[0]}
+            activitiesCount={activities.length}
+          />
           <Text style={[styles.sectionLabel, { fontFamily: "Inter_600SemiBold" }]}>
             SHIFT NOTES
           </Text>
@@ -565,7 +582,10 @@ export default function LiveSessionScreen() {
               {photos.length > 0 ? ` · ${photos.length} photos` : ""}
             </Text>
             <Text style={[styles.completeInfo, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Notes will be analysed for NDIS compliance automatically.
+              Compliance score: {endShiftCompliance.score}/100
+              {endShiftCompliance.rules.some((r) => r.status === "fail")
+                ? " — unresolved flags will notify your coordinator."
+                : " — notes will be analysed automatically."}
             </Text>
             <View style={styles.completeActions}>
               <Pressable

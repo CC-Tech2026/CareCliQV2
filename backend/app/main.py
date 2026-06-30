@@ -93,7 +93,7 @@ async def _apply_startup_migrations():
             ("organizations",        "organizations",           "id, owner_user_id, organization_name",                                        "organizations table OK",                "organizations table missing — run backend/supabase_patch_missing_tables.sql"),
             ("org_members",          "organization_members",    "id, user_id, organization_id, role",                                          "organization_members table OK",         "organization_members table missing — run backend/supabase_patch_missing_tables.sql"),
             ("invitations",          "invitations",             "id, organization_id, email, token, expires_at",                               "invitations table OK",                  "invitations table missing — run backend/supabase_patch_missing_tables.sql"),
-            ("patient_goals",        "patient_goals",           "id, plan_id, description",                                                    "patient_goals table OK",                "patient_goals table missing — run backend/supabase_setup.sql"),
+            ("ndis_goals",           "ndis_goals",              "id, participant_id, organization_id, name, status",                           "ndis_goals table OK",                   "ndis_goals table missing — run backend/supabase/migrations/044_realtime_goals_settings.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
             ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
             ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
@@ -133,7 +133,8 @@ async def _apply_startup_migrations():
                 migration_state.organization_members_table_missing = not ok
             elif key == "invitations":
                 migration_state.invitations_table_missing = not ok
-            elif key == "patient_goals":
+            elif key == "ndis_goals":
+                migration_state.ndis_goals_table_missing = not ok
                 migration_state.patient_goals_table_missing = not ok
             elif key == "practitioner_allocs":
                 migration_state.practitioner_allocations_table_missing = not ok
@@ -243,6 +244,7 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
         "organization_members_table_missing":         migration_state.organization_members_table_missing,
         "invitations_table_missing":                  migration_state.invitations_table_missing,
         "session_messages_table_missing":             migration_state.session_messages_table_missing,
+        "ndis_goals_table_missing":                   migration_state.ndis_goals_table_missing,
         "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
         "practitioner_allocations_table_missing":     migration_state.practitioner_allocations_table_missing,
         "progress_delta_column_missing":              migration_state.progress_delta_column_missing,
@@ -259,7 +261,7 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
             migration_state.organization_members_table_missing,
             migration_state.invitations_table_missing,
             migration_state.session_messages_table_missing,
-            migration_state.patient_goals_table_missing,
+            migration_state.ndis_goals_table_missing,
             migration_state.practitioner_allocations_table_missing,
             migration_state.progress_delta_column_missing,
             migration_state.shifts_table_missing,

@@ -1,5 +1,6 @@
-﻿import { useState } from "react";
+﻿import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { differenceInMinutes, format, parseISO } from "date-fns";
 import {
   ChevronDown,
   Clock3,
@@ -14,8 +15,8 @@ import {
   UserRound,
   Zap,
 } from "lucide-react";
-import { differenceInMinutes, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useWorkerTutorialOptional } from "@/hooks/useWorkerTutorial";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -40,11 +41,104 @@ import {
   shiftNeedsBriefing,
   shiftBriefingHref,
 } from "@/lib/shift-utils";
+import { appLocalDateKey } from "@/lib/datetime";
 
 const SERVICE_TAG_STYLES: Record<string, string> = {
   CORE: "bg-[#F0EDF8] text-[#3730A3] border-[#E5E7EB]",
   "CAPACITY BUILDING": "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
+
+function formatMobileShiftDateTime(start?: string, end?: string) {
+  if (!start) return "Time not set";
+  try {
+    const dateLabel = format(parseISO(`${appLocalDateKey(start)}T12:00:00`), "EEE d MMM");
+    const time = formatShiftTimeRange(start, end);
+    return `${dateLabel} · ${time}`;
+  } catch {
+    return formatShiftTimeRange(start, end);
+  }
+}
+
+function ShiftListCardMobile({
+  shift,
+  translate,
+  stateStyle,
+  pulse,
+  primaryActions,
+  isCompleted,
+  notesHref,
+}: {
+  shift: WorkerShift;
+  translate: (key: string) => string;
+  stateStyle: { avatar: string };
+  pulse: boolean;
+  primaryActions: ReactNode;
+  isCompleted: boolean;
+  notesHref: string;
+}) {
+  const isCancelled = shift.status === "cancelled";
+
+  return (
+    <article
+      className={cn(
+        "w-full overflow-hidden rounded-2xl border bg-white shadow-sm",
+        isCancelled && "opacity-75",
+      )}
+      style={{ borderColor: BORDER }}
+    >
+      <div className="p-4">
+        <Link href={`/my-shifts/${shift.id}`}>
+          <div className="flex items-start gap-3.5">
+            <div
+              className={cn(
+                "grid size-[3.25rem] shrink-0 place-items-center rounded-full text-sm font-black text-white",
+                pulse && "animate-pulse",
+              )}
+              style={{ background: stateStyle.avatar }}
+            >
+              {shiftInitials(shift.participant_name)}
+            </div>
+
+            <div className="min-w-0 flex-1 pt-0.5">
+              <h3
+                className={cn("text-[17px] font-black leading-tight", isCancelled && "line-through")}
+                style={{ color: TEXT }}
+              >
+                {shift.participant_name || translate("shifts.listCard.participant")}
+              </h3>
+              <p className="mt-1.5 text-[14px] font-semibold leading-snug" style={{ color: MUTED }}>
+                {formatMobileShiftDateTime(shift.scheduled_start, shift.scheduled_end)}
+              </p>
+              {shift.participant_address ? (
+                <p className="mt-1.5 text-[14px] font-medium leading-relaxed" style={{ color: MUTED }}>
+                  {shift.participant_address}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[14px] font-medium italic" style={{ color: MUTED }}>
+                  {translate("shift.map.noAddress")}
+                </p>
+              )}
+            </div>
+          </div>
+        </Link>
+
+        {primaryActions}
+
+        {isCompleted && (
+          <Link href={notesHref}>
+            <button
+              type="button"
+              className="mt-3 flex h-12 w-full items-center justify-center rounded-xl px-4 text-sm font-black text-white"
+              style={{ background: CORAL }}
+            >
+              {translate("shifts.listCard.completeNotes")}
+            </button>
+          </Link>
+        )}
+      </div>
+    </article>
+  );
+}
 
 type Props = { shift: WorkerShift };
 
@@ -129,6 +223,7 @@ export function ShiftListCard({ shift }: Props) {
   const { toast } = useToast();
   const tutorial = useWorkerTutorialOptional();
   const isTutorial = tutorial?.isTutorialMode ?? false;
+  const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -150,6 +245,9 @@ export function ShiftListCard({ shift }: Props) {
     : isSessionLive
       ? translate("shifts.listCard.resumeSession")
       : translate("shifts.listCard.startSession");
+  const mobilePrimaryButtonLabel = starting
+    ? translate("shifts.listCard.starting")
+    : translate("shifts.listCard.openShift");
   const stateStyle = isCancelled
     ? { border: "#FECACA", badge: "bg-red-50 text-red-700 border-red-200", label: translate("shifts.listCard.cancelled"), avatar: "#EF4444" }
     : (STATE_STYLES[shift.visual_state] ?? STATE_STYLES.scheduled);
@@ -283,6 +381,44 @@ export function ShiftListCard({ shift }: Props) {
     </div>
   );
 
+  const mobilePrimaryActions = isTodayActive && (
+    <div className="mt-3 flex gap-2">
+      <button
+        type="button"
+        disabled={starting}
+        className="inline-flex h-12 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white disabled:opacity-60"
+        style={{ background: PLUM }}
+        data-tutorial="start-session"
+        onClick={() => void handleSessionAction()}
+      >
+        <Zap size={16} />
+        {mobilePrimaryButtonLabel}
+      </button>
+      {mapsUrl && (
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={translate("shifts.listCard.directions")}
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border bg-white"
+          style={{ borderColor: BORDER, color: TEXT }}
+        >
+          <Navigation size={18} style={{ color: PLUM }} />
+        </a>
+      )}
+      {phone && (
+        <a
+          href={`tel:${phone.replace(/\s/g, "")}`}
+          aria-label={translate("shifts.listCard.call")}
+          className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border bg-white"
+          style={{ borderColor: BORDER, color: TEXT }}
+        >
+          <Phone size={18} style={{ color: PLUM }} />
+        </a>
+      )}
+    </div>
+  );
+
   const expandedBody = (
     <>
       {primaryActions}
@@ -348,6 +484,20 @@ export function ShiftListCard({ shift }: Props) {
       </div>
     </>
   );
+
+  if (isMobile) {
+    return (
+      <ShiftListCardMobile
+        shift={shift}
+        translate={translate}
+        stateStyle={stateStyle}
+        pulse={pulse}
+        primaryActions={mobilePrimaryActions}
+        isCompleted={isCompleted}
+        notesHref={notesHref}
+      />
+    );
+  }
 
   return (
     <article className="overflow-hidden rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>

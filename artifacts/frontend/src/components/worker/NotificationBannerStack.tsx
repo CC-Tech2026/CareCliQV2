@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { isSupabaseRealtimeConfigured } from "@/lib/supabase";
 import { X, AlertTriangle, Info, ChevronRight } from "lucide-react";
 import {
@@ -11,7 +12,7 @@ import {
   fetchNotifications,
   type UserNotification,
 } from "@/services/notificationService";
-import { isActiveBanner, shouldDismissBannerOnView } from "@/lib/notification-display";
+import { isActiveBanner, shouldDismissBannerOnView, shouldShowStickyBannerStack } from "@/lib/notification-display";
 import { resolveNotificationPath } from "@/lib/worker-notification-presenter";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -140,6 +141,7 @@ aria-label={translate("worker.notification.dismiss")}
 
 export function NotificationBannerStack() {
   const { translate } = useAccessibility();
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const orgId = user?.organizationId ?? "__no_org__";
   const qc = useQueryClient();
@@ -212,7 +214,7 @@ export function NotificationBannerStack() {
 
   const visibleBanners = banners.filter((n) => !hiddenBannerIds.has(n.id));
 
-  if (!visibleBanners.length) return null;
+  if (!shouldShowStickyBannerStack() || isMobile || !visibleBanners.length) return null;
 
   return (
     <section

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from ..core.access import get_user_id, get_user_organization_id
+from ..core.timezone import APP_TIMEZONE, app_today, shift_local_date
 from . import session_service, shift_service
 from .supabase_client import get_supabase_admin
 
@@ -199,6 +200,7 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
 
     today_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "today")
     upcoming_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "upcoming")
+    completed_shifts_raw = shift_service.list_shifts_for_worker(worker_id, org_id, "completed")
     counts = shift_service.count_shifts_for_worker(worker_id, org_id)
 
     today_summaries = [_shift_summary(shift) for shift in today_shifts_raw]
@@ -207,8 +209,15 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
     next_shift_raw = _pick_next_shift(today_shifts_raw, upcoming_shifts_raw)
     next_shift = _shift_summary(next_shift_raw) if next_shift_raw else None
 
-    completed_today = sum(1 for shift in today_shifts_raw if (shift.get("status") or "") == "completed")
-    minutes_scheduled = sum(_shift_duration_minutes(shift) for shift in today_shifts_raw)
+    today_iso = app_today()
+    completed_today_shifts = [
+        shift
+        for shift in completed_shifts_raw
+        if shift_local_date(shift.get("scheduled_start")) == today_iso
+    ]
+    completed_today = len(completed_today_shifts)
+    all_today_for_stats = today_shifts_raw + completed_today_shifts
+    minutes_scheduled = sum(_shift_duration_minutes(shift) for shift in all_today_for_stats)
 
     sessions = await session_service.get_all_sessions(500, current_user)
     incomplete = [s for s in sessions if s.get("status") not in {"completed", "cancelled"}]
@@ -231,15 +240,15 @@ async def build_worker_landing_dashboard(current_user: dict[str, Any]) -> dict[s
             "first_name": first_name,
         },
         "greeting_context": {
-            "date_label": date.today().strftime("%A, %d %B"),
-            "timezone": "UTC",
+            "date_label": app_today().strftime("%A, %d %B"),
+            "timezone": str(APP_TIMEZONE),
         },
         "today_shifts": today_summaries,
         "next_shift": next_shift,
         "action_items": action_items[:12],
         "compliance_alerts": compliance_alerts,
         "stats": {
-            "shifts_today": len(today_shifts_raw),
+            "shifts_today": len(all_today_for_stats),
             "completed_today": completed_today,
             "hours_scheduled_minutes": minutes_scheduled,
             "shift_counts": counts,

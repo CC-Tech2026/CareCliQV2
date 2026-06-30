@@ -5,7 +5,7 @@ from ..core.security import get_current_user
 from .security import require_recent_reauth
 from ..core.config import settings
 from ..schemas.incident import IncidentCreate, IncidentUpdate, WorkerIncidentCreate, IncidentCorrectionCreate, worker_status_label
-from ..services import audit_service, incident_service, participant_service, session_service
+from ..services import audit_service, incident_service, participant_service, session_service, shift_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
 from ..services.incident_pattern_service import get_incident_pattern_analysis
 from ..services.notification_service import notify_incident_reported, notify_incident_status_changed
@@ -103,10 +103,27 @@ async def create_worker_incident_report(
     org_id = user.get("organization_id")
     if not org_id:
         raise HTTPException(status_code=403, detail="Organization membership required")
-    if body.participant_id:
+
+    worker_id = user.get("sub")
+    if body.shift_id:
+        shift = shift_service.get_shift_by_id(str(body.shift_id))
+        if not shift:
+            raise HTTPException(status_code=404, detail="Shift not found")
+        if str(shift.get("worker_id") or "") != str(worker_id):
+            raise HTTPException(status_code=403, detail="You do not have access to this shift")
+        if str(shift.get("organization_id") or "") != str(org_id):
+            raise HTTPException(status_code=403, detail="Shift does not belong to your organisation")
+        shift_participant_id = shift.get("participant_id")
+        if not shift_participant_id:
+            raise HTTPException(status_code=400, detail="Shift has no participant")
+        if body.participant_id and str(body.participant_id) != str(shift_participant_id):
+            raise HTTPException(status_code=400, detail="participant_id does not match shift")
+        body = body.model_copy(update={"participant_id": str(shift_participant_id)})
+    elif body.participant_id:
         participant = await participant_service.get_participant_by_id(body.participant_id, user)
         if not participant:
             raise HTTPException(status_code=404, detail="Participant not found")
+
     if body.behaviour_subtype and body.worker_report_type != "participant_behaviour":
         raise HTTPException(status_code=422, detail="behaviour_subtype only applies to participant_behaviour")
     try:

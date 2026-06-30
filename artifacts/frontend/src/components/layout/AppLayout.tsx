@@ -17,6 +17,8 @@ import { ProfileDropdown } from "@/components/layout/ProfileDropdown";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/use-settings";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { isWorkerMobileShiftDetailPath } from "@/lib/worker-shift-routes";
 import { useGetUnreadAlerts } from "@workspace/api-client-react";
 import { CareCliQLogo, CareCliQLogoSm } from "@/components/CareCliQLogo";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -91,7 +93,7 @@ const SECTIONED_NAV: Record<NavRole, NavSection[]> = {
       group: "My Work",
       items: [
         { href: "/my-shifts",         label: "My Shifts",         icon: Clock         },
-        { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
+        // { href: "/calendar",          label: "Schedule",          icon: CalendarDays  },
         { href: "/worker/availability", label: "Availability",    icon: UserCheck     },
         { href: "/my-clients",        label: "My Clients",        icon: UserRound     },
         // { href: "/tasks",             label: "Tasks",             icon: ClipboardList },
@@ -443,7 +445,7 @@ function SidebarContents({
       {/* ── Quick "Report Incident" shortcut (support workers + coordinators only) ── */}
       {!compact && (role === "support_worker" || role === "support_coordinator") && (
         <div className="px-3 pb-2 shrink-0">
-          <Link href="/incident-new" onClick={onNav}>
+          <Link href="/incidents/new" onClick={onNav}>
             <div
               className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-[13px] font-black transition-all cursor-pointer hover:opacity-90 active:scale-[0.98]"
               style={{
@@ -558,6 +560,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navSections   = SECTIONED_NAV[userRole as NavRole]   ?? SECTIONED_NAV.support_worker;
   const topbarQuicknav = TOPBAR_QUICKNAV[userRole as NavRole] ?? TOPBAR_QUICKNAV.support_worker;
   const pageLabel     = pageLabelForPath(location, translate);
+  const isMobile      = useIsMobile();
+  const hideWorkerMobileBottomNav =
+    isWorker && isMobile && isWorkerMobileShiftDetailPath(location);
 
   const toggleCollapse = () => {
     const next = isExpanded; // if currently expanded → pin collapsed; if collapsed → pin open
@@ -813,7 +818,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {isWorker && <NotificationBannerStack />}
 
           {/* Page content */}
-          <main className="flex-1 overflow-y-auto px-4 py-4 safe-scroll-bottom md:py-5">
+          <main
+            className={cn(
+              "flex-1 overflow-y-auto md:py-5",
+              hideWorkerMobileBottomNav
+                ? "safe-scroll-no-bottom-nav px-0 py-0 md:px-4 md:py-4"
+                : "px-4 py-4 safe-scroll-bottom",
+            )}
+          >
             {children}
           </main>
 
@@ -834,6 +846,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
+      {!hideWorkerMobileBottomNav && (
       <nav
         className="md:hidden fixed bottom-0 left-0 right-0 z-30 flex items-stretch safe-nav-bottom"
         style={{ borderTop: `1px solid ${BORDER}`, background: "var(--cc-bg)" }}
@@ -880,6 +893,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      )}
 
       {/* ── Mobile drawer backdrop ─────────────────────────────────────── */}
       {drawerOpen && (

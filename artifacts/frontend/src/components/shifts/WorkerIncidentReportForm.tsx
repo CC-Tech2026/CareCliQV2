@@ -3,13 +3,6 @@ import { Camera, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { compressImageFile } from "@/lib/task-evidence-storage";
 import {
@@ -21,6 +14,9 @@ import {
 } from "@/services/incidentService";
 import { CORAL } from "@/lib/shift-utils";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
+
+const FIELD_SELECT =
+  "flex h-9 w-full rounded-md border border-cc-border bg-cc-surface px-3 py-2 text-sm text-cc-text shadow-sm focus:outline-none focus:ring-1 focus:ring-ring";
 
 const BEHAVIOUR_TEMPLATES: Record<string, { description: string; worker_actions?: string }> = {
   verbal: {
@@ -45,6 +41,12 @@ type Props = {
   participantName?: string;
   sessionId?: string | null;
   shiftAddress?: string;
+  initialReportType?: string;
+  initialBehaviourSubtype?: string;
+  initialSeverity?: string;
+  initialDescription?: string;
+  initialWorkerActions?: string;
+  variant?: "desktop" | "mobile";
   onSubmitted?: (referenceNumber?: string) => void;
   onCancel?: () => void;
 };
@@ -55,17 +57,23 @@ export function WorkerIncidentReportForm({
   participantName,
   sessionId,
   shiftAddress,
+  initialReportType = "safety_hazard",
+  initialBehaviourSubtype = "",
+  initialSeverity = "medium",
+  initialDescription = "",
+  initialWorkerActions = "",
+  variant = "desktop",
   onSubmitted,
   onCancel,
 }: Props) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const [reportType, setReportType] = useState("safety_hazard");
-  const [behaviourSubtype, setBehaviourSubtype] = useState<string>("");
-  const [severity, setSeverity] = useState("medium");
-  const [description, setDescription] = useState("");
-  const [workerActions, setWorkerActions] = useState("");
+  const [reportType, setReportType] = useState(initialReportType);
+  const [behaviourSubtype, setBehaviourSubtype] = useState<string>(initialBehaviourSubtype);
+  const [severity, setSeverity] = useState(initialSeverity);
+  const [description, setDescription] = useState(initialDescription);
+  const [workerActions, setWorkerActions] = useState(initialWorkerActions);
   const [participantPresent, setParticipantPresent] = useState<boolean | null>(null);
   const [participantHarmed, setParticipantHarmed] = useState<"yes" | "no" | "unknown" | "">("");
   const [incidentTime, setIncidentTime] = useState(() => new Date().toISOString().slice(0, 16));
@@ -75,6 +83,13 @@ export function WorkerIncidentReportForm({
 
   const descLen = description.trim().length;
   const canSubmit = descLen >= 20 && descLen <= 2000 && !submitting;
+  const isMobile = variant === "mobile";
+  const shellClass = isMobile
+    ? "space-y-3 rounded-xl border p-3"
+    : "space-y-3 rounded-xl border border-red-100 bg-red-50/40 p-3";
+  const shellStyle = isMobile
+    ? { borderColor: "var(--wm-border)", background: "var(--wm-surface)" }
+    : undefined;
 
   const applyBehaviourSubtype = (subtype: string) => {
     setBehaviourSubtype(subtype);
@@ -188,47 +203,48 @@ export function WorkerIncidentReportForm({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/40 p-3">
-      <Select value={reportType} onValueChange={setReportType}>
-        <SelectTrigger className="bg-cc-surface">
-          <SelectValue placeholder={translate("shift.incident.typePlaceholder")} />
-        </SelectTrigger>
-        <SelectContent>
-          {WORKER_REPORT_TYPES.map((t) => (
-            <SelectItem key={t.value} value={t.value}>
-              {t.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+    <div className={shellClass} style={shellStyle}>
+      <select
+        value={reportType}
+        onChange={(e) => setReportType(e.target.value)}
+        className={FIELD_SELECT}
+        aria-label={translate("shift.incident.typePlaceholder")}
+      >
+        {WORKER_REPORT_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>
+            {t.label}
+          </option>
+        ))}
+      </select>
 
       {reportType === "participant_behaviour" && (
-        <Select value={behaviourSubtype || undefined} onValueChange={applyBehaviourSubtype}>
-          <SelectTrigger className="bg-cc-surface">
-            <SelectValue placeholder={translate("shift.incident.behaviourPlaceholder")} />
-          </SelectTrigger>
-          <SelectContent>
-            {BEHAVIOUR_SUBTYPES.map((t) => (
-              <SelectItem key={t.value} value={t.value}>
-                {t.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <select
+          value={behaviourSubtype}
+          onChange={(e) => applyBehaviourSubtype(e.target.value)}
+          className={FIELD_SELECT}
+          aria-label={translate("shift.incident.behaviourPlaceholder")}
+        >
+          <option value="">{translate("shift.incident.behaviourPlaceholder")}</option>
+          {BEHAVIOUR_SUBTYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       )}
 
-      <Select value={severity} onValueChange={setSeverity}>
-        <SelectTrigger className="bg-cc-surface">
-          <SelectValue placeholder={translate("shift.incident.severityPlaceholder")} />
-        </SelectTrigger>
-        <SelectContent>
-          {WORKER_SEVERITIES.map((s) => (
-            <SelectItem key={s.value} value={s.value}>
-              {s.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <select
+        value={severity}
+        onChange={(e) => setSeverity(e.target.value)}
+        className={FIELD_SELECT}
+        aria-label={translate("shift.incident.severityPlaceholder")}
+      >
+        {WORKER_SEVERITIES.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </select>
 
       <Input
         type="datetime-local"
@@ -281,19 +297,17 @@ export function WorkerIncidentReportForm({
           ))}
         </div>
         {participantPresent && (
-          <Select
-            value={participantHarmed || undefined}
-            onValueChange={(v) => setParticipantHarmed(v as typeof participantHarmed)}
+          <select
+            value={participantHarmed}
+            onChange={(e) => setParticipantHarmed(e.target.value as typeof participantHarmed)}
+            className={FIELD_SELECT}
+            aria-label={translate("shift.incident.harmedPlaceholder")}
           >
-            <SelectTrigger className="bg-cc-surface">
-              <SelectValue placeholder={translate("shift.incident.harmedPlaceholder")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Yes</SelectItem>
-              <SelectItem value="no">No</SelectItem>
-              <SelectItem value="unknown">{translate("shift.incident.unknown")}</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value="">{translate("shift.incident.harmedPlaceholder")}</option>
+            <option value="yes">{translate("common.yes")}</option>
+            <option value="no">{translate("common.no")}</option>
+            <option value="unknown">{translate("shift.incident.unknown")}</option>
+          </select>
         )}
       </fieldset>
 

@@ -15,7 +15,7 @@ EXTRA = Path(__file__).resolve().parent / "extra-en-keys.json"
 def main() -> None:
     extra = json.loads(EXTRA.read_text(encoding="utf-8"))
     text = TRANSLATIONS_TS.read_text(encoding="utf-8")
-    m = re.search(r"(const en: Dict = \{.*?)(\n\};)", text, re.S)
+    m = re.search(r"(export const en: Dict = \{.*?)(\n\};)", text, re.S)
     if not m:
         raise SystemExit("Could not find en dict")
 

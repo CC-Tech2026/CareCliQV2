@@ -405,7 +405,7 @@ export function OrganizationCalendar() {
         {/* Upcoming events list */}
         <div style={{ borderTop: `1px solid ${BORDER}` }} className="mt-2">
           <p className="pt-3 pb-1 text-[10px] font-black uppercase tracking-widest" style={{ color: MUTED }}>
-            Upcoming Events
+            {translate("hub.calendar.upcoming")}
           </p>
           {loading ? (
             <div className="py-3 space-y-3">

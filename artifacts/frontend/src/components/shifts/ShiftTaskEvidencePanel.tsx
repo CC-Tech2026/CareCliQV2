@@ -21,11 +21,11 @@ import {
   buildRecordsFromShiftTask,
   compressImageFile,
   deleteTaskEvidence,
-  listTaskEvidence,
   newEvidenceId,
   saveTaskEvidence,
   type TaskEvidenceRecord,
 } from "@/lib/task-evidence-storage";
+import { listMergedSessionEvidence, mirrorTaskEvidenceToSessionNotes, SESSION_NOTES_UPDATED_EVENT } from "@/lib/merge-session-evidence";
 import { syncSessionEvidence } from "@/services/taskEvidenceService";
 import { syncEvidenceUploadQueue } from "@/lib/evidence-upload-queue";
 import type { ShiftTask } from "@/services/shiftService";
@@ -153,7 +153,7 @@ export function ShiftTaskEvidencePanel({
 
   const loadRecords = useCallback(async () => {
     try {
-      let rows = await listTaskEvidence(sessionId, task.task_id);
+      let rows = await listMergedSessionEvidence(sessionId, task.task_id);
       if (!rows.length) {
         const seeded = buildRecordsFromShiftTask(task, sessionId);
         if (seeded.length) {
@@ -205,6 +205,7 @@ export function ShiftTaskEvidencePanel({
           for (const row of textOnly) {
             await saveTaskEvidence({ ...row, synced: true, upload_status: "uploaded" });
           }
+          await mirrorTaskEvidenceToSessionNotes(sessionId, textOnly);
         }
 
         if (media.length) {
@@ -275,6 +276,16 @@ export function ShiftTaskEvidencePanel({
     window.addEventListener("online", handler);
     return () => window.removeEventListener("online", handler);
   }, [sessionId]);
+
+  useEffect(() => {
+    const handler = () => void loadRecords();
+    window.addEventListener(SESSION_NOTES_UPDATED_EVENT, handler);
+    window.addEventListener("task-evidence-updated", handler);
+    return () => {
+      window.removeEventListener(SESSION_NOTES_UPDATED_EVENT, handler);
+      window.removeEventListener("task-evidence-updated", handler);
+    };
+  }, [loadRecords]);
 
   const markEvidenceAdded = useCallback(() => {
     setEvidenceAddedFlash(true);

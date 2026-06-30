@@ -99,7 +99,7 @@ export function ComplianceCentre() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
-          Compliance
+          {translate("hub.compliance.title")}
         </p>
         <div className="flex gap-1.5">
           {loading && (
@@ -119,7 +119,7 @@ export function ComplianceCentre() {
           )}
           {!loading && !error && critical === 0 && high === 0 && displayAlerts.length === 0 && (
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
-              All clear
+              {translate("hub.compliance.allClear")}
             </span>
           )}
         </div>

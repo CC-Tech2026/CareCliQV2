@@ -174,10 +174,10 @@ export function NewsFeed() {
       >
         <div>
           <h2 className="text-[14px] font-black" style={{ color: TEXT }}>
-            News & Announcements
+            {translate("hub.news.title")}
           </h2>
           <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>
-            Policy updates, training and org-wide communications
+            {translate("hub.news.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-2">

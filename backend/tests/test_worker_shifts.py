@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from backend.app.core.timezone import app_today
 from backend.app.services import shift_service
 
 
@@ -65,6 +66,7 @@ def test_matches_filter_upcoming():
     [
         ("today", {}, True),
         ("today", {"status": "cancelled"}, False),
+        ("today", {"status": "completed"}, False),
         ("today", {"scheduled_start": "2020-01-01T09:00:00+00:00"}, False),
         ("upcoming", {"scheduled_start": "2099-06-01T09:00:00+00:00"}, True),
         ("upcoming", {"scheduled_start": "2099-06-01T09:00:00+00:00", "status": "completed"}, False),
@@ -103,7 +105,7 @@ def test_filter_shift_rows_returns_matching_subset():
         _sample_shift(id="s4", status="cancelled"),
     ]
     today_rows = shift_service.filter_shift_rows(rows, "today", today)
-    assert {r["id"] for r in today_rows} == {"s1", "s2"}
+    assert {r["id"] for r in today_rows} == {"s1"}
 
     completed_rows = shift_service.filter_shift_rows(rows, "completed", today)
     assert {r["id"] for r in completed_rows} == {"s2"}
@@ -120,7 +122,7 @@ def test_count_shifts_by_filter():
         _sample_shift(id="s5", scheduled_start=f"{future}T10:00:00+00:00"),
     ]
     counts = shift_service.count_shifts_by_filter(rows, today)
-    assert counts == {"today": 2, "upcoming": 2, "completed": 1, "cancelled": 1}
+    assert counts == {"today": 1, "upcoming": 2, "completed": 1, "cancelled": 1}
 
 
 def test_filter_performance_with_large_dataset():
@@ -158,7 +160,7 @@ def test_count_shifts_for_worker_uses_lightweight_rows(mock_fetch):
         "org-1",
         columns="status, scheduled_start",
     )
-    assert counts["today"] == 2
+    assert counts["today"] == 1
     assert counts["completed"] == 1
 
 
@@ -961,6 +963,22 @@ def test_validate_shift_scheduled_today_rejects_wrong_day():
     past = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
     with pytest.raises(shift_service.ShiftNotScheduledToday):
         shift_service.validate_shift_scheduled_today(past)
+
+
+def test_today_filter_matches_clock_in_adelaide_day():
+    """UTC prefix 'today' must not disagree with Adelaide clock-in validation."""
+    adelaide_today = app_today()
+    # Stored as naive UTC wall clock (the original bug pattern)
+    wrong_utc = f"{adelaide_today.isoformat()}T19:30:00+00:00"
+    shift = _sample_shift(scheduled_start=wrong_utc)
+    assert shift_service._matches_filter(shift, "today", adelaide_today) is False
+    with pytest.raises(shift_service.ShiftNotScheduledToday):
+        shift_service.validate_shift_scheduled_today(wrong_utc, today=adelaide_today)
+
+    correct_utc = f"{adelaide_today.isoformat()}T10:00:00+00:00"
+    good_shift = _sample_shift(scheduled_start=correct_utc)
+    assert shift_service._matches_filter(good_shift, "today", adelaide_today) is True
+    shift_service.validate_shift_scheduled_today(correct_utc, today=adelaide_today)
 
 
 def test_clock_in_raises_when_already_clocked():
