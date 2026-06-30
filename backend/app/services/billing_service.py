@@ -50,6 +50,7 @@ def _require_billing_role(user: dict) -> None:
 
 
 def _calculate_totals(line_items: list[dict]) -> tuple[list[dict], int, int, int]:
+    """Calculate line totals without resolving NDIS prices (sync only)."""
     cleaned: list[dict] = []
     subtotal = 0
     for item in line_items or []:
@@ -65,11 +66,59 @@ def _calculate_totals(line_items: list[dict]) -> tuple[list[dict], int, int, int
             "quantity": float(quantity),
             "unit_amount_cents": unit_amount_cents,
             "line_total_cents": line_total,
+            "item_code": item.get("item_code"),  # Pass through, may be None
+            "ndis_price_item_id": None,  # Will be resolved later if item_code is present
         })
     if not cleaned:
         raise HTTPException(status_code=422, detail="At least one invoice line item is required.")
     tax = 0
     return cleaned, subtotal, tax, subtotal + tax
+
+
+async def _resolve_ndis_prices_for_invoice(
+    line_items: list[dict],
+    org_id: str,
+) -> list[dict]:
+    """
+    Resolve NDIS item prices for line items that have item_code.
+    Updates ndis_price_item_id and unit_amount_cents if item_code is provided.
+    
+    Returns updated line items.
+    """
+    from . import ndis_pricing_service
+
+    for item in line_items:
+        if not item.get("item_code"):
+            # No item code, leave as-is (free-text manual line item)
+            continue
+
+        try:
+            # Resolve price for this item as of today
+            resolved = await ndis_pricing_service.resolve_price(
+                item_code=item.get("item_code"),
+                org_id=org_id,
+                location_type="national",
+            )
+
+            if resolved:
+                # Lock this line to the resolved price item version
+                item["ndis_price_item_id"] = resolved.get("id")
+                # Use resolved price if no unit_amount_cents was explicitly provided
+                if item.get("unit_amount_cents") is None:
+                    item["unit_amount_cents"] = int(resolved.get("effective_price", 0) * 100)
+                    # Recalculate line total with resolved price
+                    quantity = Decimal(str(item.get("quantity") or "1"))
+                    item["line_total_cents"] = int(
+                        (quantity * Decimal(item["unit_amount_cents"])).quantize(
+                            Decimal("1"), rounding=ROUND_HALF_UP
+                        )
+                    )
+        except Exception as e:
+            # If price resolution fails, continue with manual entry
+            # Don't fail invoice creation just because pricing lookup failed
+            pass
+
+    return line_items
 
 
 async def get_subscription(user: dict) -> dict:
@@ -213,6 +262,13 @@ async def create_invoice(user: dict, data: dict) -> dict:
     org_id = _require_org(user)
     await _verify_invoice_scope(user, data)
     line_items, subtotal, tax, total = _calculate_totals(data.get("line_items") or [])
+    
+    # Resolve NDIS prices for items with item_code
+    line_items = await _resolve_ndis_prices_for_invoice(line_items, org_id)
+    
+    # Recalculate totals in case prices were resolved
+    total_cents = sum(item.get("line_total_cents", 0) for item in line_items)
+    
     invoice_number = data.get("invoice_number") or f"CS-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{str(uuid4())[:8].upper()}"
     status_value = data.get("status") or "draft"
     if status_value not in INVOICE_STATUSES:
@@ -237,9 +293,9 @@ async def create_invoice(user: dict, data: dict) -> dict:
         "recipient_name": data.get("recipient_name") or "",
         "recipient_email": data.get("recipient_email") or None,
         "line_items": line_items,
-        "subtotal_cents": subtotal,
-        "tax_cents": tax,
-        "total_cents": total,
+        "subtotal_cents": total_cents,
+        "tax_cents": 0,
+        "total_cents": total_cents,
         "currency": data.get("currency") or "AUD",
         "status": status_value,
         "due_date": data.get("due_date") or None,
@@ -371,7 +427,7 @@ async def cancel_invoice(invoice_id: str, user: dict) -> dict:
 
 def _minimal_pdf_bytes(invoice: dict) -> bytes:
     lines = [
-        "CareScribe Invoice",
+        "CareCliQ Invoice",
         f"Invoice: {invoice.get('invoice_number', '')}",
         f"Recipient: {invoice.get('recipient_name', '')}",
         f"Status: {invoice.get('status', '')}",

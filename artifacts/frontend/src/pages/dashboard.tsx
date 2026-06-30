@@ -1,42 +1,59 @@
-import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+﻿import { Link } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import { useDashboardRealtime } from "@/hooks/useDashboardRealtime";
 import { format, parseISO } from "date-fns";
 import { useState, type ComponentType } from "react";
 import { ComplianceDetailCard } from "@/components/compliance/ComplianceDetailCard";
 import { ComplianceTrendChart } from "@/components/compliance/ComplianceTrendChart";
-import { getWorkerComplianceDetail } from "@/services/workerService";
+import { DashboardActionItems } from "@/components/dashboard/DashboardActionItems";
+import { DashboardComplianceAlerts } from "@/components/dashboard/DashboardComplianceAlerts";
+import { DashboardShiftsWidget } from "@/components/dashboard/DashboardShiftsWidget";
+import { DayShiftTimeline } from "@/components/dashboard/DayShiftTimeline";
+import { NextShiftCard } from "@/components/dashboard/NextShiftCard";
+import { DESIGN_SYSTEM as DS, getStatusColor } from "@/lib/design-system";
+import { PageHeader } from "@/components/healthcare/PageHeader";
 import {
   AlertTriangle,
+  ArrowRight,
   CalendarDays,
   CheckCircle2,
   ClipboardCheck,
   ClipboardList,
   FileText,
   ShieldCheck,
-  UserPlus,
   Users,
   BadgeCheck,
   GraduationCap,
+  LayoutDashboard,
+  TrendingUp,
 } from "lucide-react";
-import { InviteModal } from "@/components/InviteModal";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   getCoordinatorDashboard,
   getWorkerDashboard,
+  getWorkerLandingDashboard,
   type CoordinatorDashboard,
   type DashboardClient,
   type DashboardSession,
   type WorkerDashboard,
+  type WorkerLandingDashboard,
 } from "@/services/dashboardService";
-import { getCoordinatorFlaggedSessions, getCoordinatorCredentialAlerts } from "@/services/coordinatorService";
+import { getWorkerComplianceDetail } from "@/services/workerService";
+import {
+  getCoordinatorFlaggedSessions,
+  getCoordinatorCredentialAlerts,
+  type FlaggedSession,
+  type CredentialAlert,
+} from "@/services/coordinatorService";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+// Design system tokens (replaces hardcoded colors)
+const TEXT = DS.TEXT.primary;
+const MUTED = DS.TEXT.muted;
+const BORDER = DS.BORDER.light;
+const SOFT = DS.BACKGROUND.section;
+const PLUM = DS.BRAND.primary;
+const CORAL = DS.BRAND.secondary;
 
 function safeDate(value?: string | null, fallback = "Not recorded") {
   if (!value) return fallback;
@@ -48,10 +65,15 @@ function safeDate(value?: string | null, fallback = "Not recorded") {
 }
 
 function statusTone(status?: string) {
-  if (status === "compliant") return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "non_compliant") return "bg-red-50 text-red-700 border-red-200";
-  if (status === "draft") return "bg-slate-50 text-slate-600 border-slate-200";
-  return "bg-amber-50 text-amber-700 border-amber-200";
+  const tone =
+    status === "compliant"
+      ? "success"
+      : status === "non_compliant"
+        ? "critical"
+        : status === "draft"
+          ? "info"
+          : "warning";
+  return `border px-2.5 py-1 text-[11px] font-bold cc-status-${tone}`;
 }
 
 function DashboardStatCard({
@@ -70,17 +92,29 @@ function DashboardStatCard({
   captionColor?: string;
 }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section 
+      className="rounded-lg border bg-white p-4 transition-shadow hover:shadow-md"
+      style={{ 
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+          <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>
             {label}
           </p>
-          <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: valueColor }}>
+          <p className="mt-1.5 text-2xl font-black tracking-tight" style={{ color: valueColor }}>
             {value}
           </p>
         </div>
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
+        <div 
+          className="flex h-11 w-11 items-center justify-center rounded-lg"
+          style={{ 
+            background: DS.STATUS_BG.info,
+            color: DS.STATUS.info,
+          }}
+        >
           <Icon size={20} strokeWidth={2.5} />
         </div>
       </div>
@@ -92,28 +126,39 @@ function DashboardStatCard({
 }
 
 function ClientListCard({ clients }: { clients: DashboardClient[] }) {
+  const { translate, translateParams } = useAccessibility();
+
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
+    <section
+      className="rounded-lg border bg-white p-6"
+      style={{
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>Today's Clients</h2>
-        <Link href="/my-clients" className="text-sm font-bold" style={{ color: CORAL }}>My Clients</Link>
+        <h2 className="text-lg font-black" style={{ color: TEXT }}>{translate("dashboard.todaysClients")}</h2>
+        <Link href="/my-clients" className="text-sm font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>{translate("dashboard.myClients")}</Link>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {clients.length === 0 && (
-          <p className="rounded-lg bg-[#F5F3FC] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-            No assigned sessions are scheduled for today.
+          <p className="rounded-lg bg-[#F8F8FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+            {translate("dashboard.noClientsToday")}
           </p>
         )}
         {clients.map((client) => (
           <Link key={client.id} href={`/my-clients/${client.id}`}>
-            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#D8D0F0] hover:bg-[#F8F6FE]">
+            <div className="flex items-center gap-3 rounded-lg border border-transparent p-3 transition hover:border-[#C7D2FE] hover:bg-[#F8F6FE]">
               <div className="grid h-10 w-10 place-items-center rounded-full text-sm font-black text-white" style={{ background: PLUM }}>
                 {client.full_name?.split(" ").map((p) => p[0]).join("").slice(0, 2)}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black" style={{ color: TEXT }}>{client.full_name}</p>
                 <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
-                  {client.plan_management_type} · Last seen {safeDate(client.last_seen)}
+                  {client.plan_management_type} ·{" "}
+                  {client.last_seen
+                    ? translateParams("clients.lastSeenOn", { date: safeDate(client.last_seen) })
+                    : translate("clients.notSeenYet")}
                 </p>
               </div>
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusTone(client.compliance_status)}`}>
@@ -129,22 +174,28 @@ function ClientListCard({ clients }: { clients: DashboardClient[] }) {
 
 function SessionListCard({ title, sessions }: { title: string; sessions: DashboardSession[] }) {
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-      <h2 className="mb-4 text-lg font-black" style={{ color: TEXT }}>{title}</h2>
-      <div className="space-y-3">
-        {sessions.length === 0 && <p className="text-sm font-medium" style={{ color: MUTED }}>No records need attention.</p>}
+    <section
+      className="rounded-lg border bg-white p-5"
+      style={{
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
+      <h2 className="mb-3 text-sm font-black" style={{ color: TEXT }}>{title}</h2>
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-2">
+        {sessions.length === 0 && <p className="text-xs font-medium" style={{ color: MUTED }}>No records need attention.</p>}
         {sessions.map((session) => (
-          <div key={session.id} className="rounded-lg border p-3" style={{ borderColor: "#EEEAFB" }}>
+          <div key={session.id} className="rounded-lg border p-2.5" style={{ borderColor: "#EEEAFB" }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold" style={{ color: TEXT }}>
+                <p className="truncate text-xs font-bold" style={{ color: TEXT }}>
                   {session.participant_name || "Participant"}
                 </p>
                 <p className="text-xs font-medium capitalize" style={{ color: MUTED }}>
                   {safeDate(session.session_date)} · {(session.session_type || "session").replace("_", " ")}
                 </p>
               </div>
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${statusTone(session.compliance_status)}`}>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(session.compliance_status)}`}>
                 {session.compliance_score ?? "Draft"}
               </span>
             </div>
@@ -182,78 +233,595 @@ function statusLabel(session: DashboardSession) {
   return "Upcoming";
 }
 
-function CoordinatorTeamComplianceCard({ data }: { data: CoordinatorDashboard }) {
+// ── Shared empty state ────────────────────────────────────────────────────────
+function TabEmptyState({
+  icon: Icon,
+  message,
+  sub,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+  message: string;
+  sub: string;
+}) {
+  return (
+    <div className="flex flex-col items-center py-10 text-center">
+      <Icon size={28} className="mb-3" style={{ color: DS.STATUS.success }} />
+      <p className="text-sm font-black" style={{ color: TEXT }}>{message}</p>
+      <p className="mt-1 text-xs font-medium max-w-[260px]" style={{ color: MUTED }}>{sub}</p>
+    </div>
+  );
+}
+
+// ── Tab: Team Compliance ──────────────────────────────────────────────────────
+function ComplianceTabContent({ data }: { data: CoordinatorDashboard }) {
   const breakdown = data.team_compliance_breakdown ?? { compliant: 0, at_risk: 0, non_compliant: 0 };
-  const score = Math.max(0, Math.min(100, data.team_compliance_score || 0));
-  const status =
-    score >= 85 ? "Compliant" : score >= 60 ? "At Risk" : "Non-Compliant";
+  const score     = Math.max(0, Math.min(100, data.team_compliance_score || 0));
+  const status    = score >= 85 ? "Compliant" : score >= 60 ? "At Risk" : "Non-Compliant";
+  const total     = breakdown.compliant + breakdown.at_risk + breakdown.non_compliant;
+
+  const bands = [
+    { label: "Compliant",      value: breakdown.compliant,     color: "#059669", bg: "rgba(5,150,105,0.08)"  },
+    { label: "At Risk",        value: breakdown.at_risk,       color: "#D97706", bg: "rgba(217,119,6,0.08)"  },
+    { label: "Non-Compliant",  value: breakdown.non_compliant, color: "#DC2626", bg: "rgba(220,38,38,0.08)"  },
+  ];
 
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-black" style={{ color: TEXT }}>Team Compliance</h2>
-          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>Calculated from completed legal records.</p>
-        </div>
-        <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#FFE8EE", color: CORAL }}>
-          {score}/100
-        </span>
-      </div>
+    <div className="grid md:grid-cols-2 gap-5 items-start">
 
-      <div className="grid gap-6 md:grid-cols-[140px_1fr]">
-        <div
-          className="relative mx-auto grid h-28 w-28 place-items-center rounded-full"
-          style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #EEEAFB 0deg)` }}
-        >
-          <div className="grid h-20 w-20 place-items-center rounded-full bg-white">
-            <div className="text-center">
-              <span className="block text-2xl font-black" style={{ color: PLUM }}>{score}</span>
-              <span className="block text-[10px] font-bold uppercase" style={{ color: MUTED }}>score</span>
+      {/* LEFT — score ring + breakdown bars */}
+      <div className="space-y-4">
+        {/* Ring + numbers */}
+        <div className="flex items-center gap-5">
+          <div
+            className="relative shrink-0 grid h-20 w-20 place-items-center rounded-full"
+            style={{ background: `conic-gradient(${PLUM} ${score * 3.6}deg, #EEF2FF 0deg)` }}
+          >
+            <div className="grid h-13 w-13 place-items-center rounded-full bg-white" style={{ width: 52, height: 52 }}>
+              <div className="text-center">
+                <span className="block text-lg font-black leading-none" style={{ color: PLUM }}>{score}</span>
+                <span className="block text-[8px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>score</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="space-y-2 text-sm font-bold">
-          <div className="flex items-center justify-between gap-3">
-            <span style={{ color: MUTED }}>{status}</span>
-            <span className="text-emerald-600">{breakdown.compliant}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span style={{ color: MUTED }}>At Risk</span>
-            <span className="text-amber-600">{breakdown.at_risk}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span style={{ color: MUTED }}>Non-Compliant</span>
-            <span className="text-red-600">{breakdown.non_compliant}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <p className="mb-3 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
-          Workers Needing Attention
-        </p>
-        <div className="space-y-3">
-          {data.workers_needing_attention.length === 0 && (
-            <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
-              No worker compliance issues are currently open.
-            </p>
-          )}
-          {data.workers_needing_attention.slice(0, 4).map((worker) => (
-            <div key={worker.id} className="flex items-center gap-3 border-t pt-3 first:border-t-0 first:pt-0" style={{ borderColor: "#EEEAFB" }}>
-              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-black text-white" style={{ background: PLUM }}>
-                {initials(worker.full_name)}
+          <div className="flex-1 space-y-1.5">
+            {bands.map(({ label, value, color }) => (
+              <div key={label} className="flex items-center justify-between text-[13px]">
+                <span className="font-medium" style={{ color: MUTED }}>{label}</span>
+                <span className="font-black tabular-nums" style={{ color }}>{value}</span>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black" style={{ color: TEXT }}>{worker.full_name}</p>
-                <p className="truncate text-xs font-medium" style={{ color: MUTED }}>{worker.reason || "Compliance review required"}</p>
-              </div>
-              <span className="rounded-full px-3 py-1 text-[11px] font-black" style={{ background: "#FFE8EE", color: CORAL }}>
-                Review
+            ))}
+            <div className="pt-1">
+              <span
+                className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-black"
+                style={{
+                  background: DS.STATUS_BG[score >= 85 ? "success" : score >= 60 ? "warning" : "critical"],
+                  color: getStatusColor(status),
+                }}
+              >
+                {status} · {score}/100
               </span>
             </div>
-          ))}
+          </div>
         </div>
+
+        {/* Progress bars */}
+        {total > 0 && (
+          <div className="space-y-2">
+            {bands.map(({ label, value, color, bg }) => {
+              const pct = total > 0 ? Math.round((value / total) * 100) : 0;
+              return (
+                <div key={label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-medium" style={{ color: MUTED }}>{label}</span>
+                    <span className="text-[11px] font-black tabular-nums" style={{ color }}>{pct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: bg }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: color }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Link to full compliance page */}
+        <Link href="/compliance">
+          <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
+            View full compliance report <ArrowRight size={12} />
+          </span>
+        </Link>
+      </div>
+
+      {/* RIGHT — workers needing attention (fills the formerly empty half) */}
+      <div>
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
+          Workers needing attention
+        </p>
+        {data.workers_needing_attention.length === 0 ? (
+          <div className="rounded-xl px-4 py-5 text-center" style={{ background: DS.BACKGROUND.section }}>
+            <ShieldCheck size={22} className="mx-auto mb-1.5 opacity-30" style={{ color: PLUM }} />
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>All clear</p>
+            <p className="text-xs mt-0.5" style={{ color: MUTED }}>No compliance issues open.</p>
+          </div>
+        ) : (
+          <div className="divide-y" style={{ borderColor: BORDER }}>
+            {data.workers_needing_attention.slice(0, 7).map((worker) => (
+              <Link key={worker.id} href="/team">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                  <div
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-black text-white"
+                    style={{ background: PLUM }}
+                  >
+                    {initials(worker.full_name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black" style={{ color: TEXT }}>{worker.full_name}</p>
+                    <p className="truncate text-xs font-medium" style={{ color: MUTED }}>{worker.reason || "Compliance review required"}</p>
+                  </div>
+                  <ArrowRight size={13} className="shrink-0" style={{ color: MUTED }} />
+                </div>
+              </Link>
+            ))}
+            {data.workers_needing_attention.length > 7 && (
+              <Link href="/compliance">
+                <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
+                  View all {data.workers_needing_attention.length} workers →
+                </p>
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Flagged Sessions ─────────────────────────────────────────────────────
+function FlaggedTabContent({ sessions }: { sessions: FlaggedSession[] }) {
+  if (sessions.length === 0) {
+    return <TabEmptyState icon={CheckCircle2} message="All sessions reviewed" sub="No sessions are currently flagged for coordinator review." />;
+  }
+
+  const scored   = sessions.filter((s) => s.compliance_score != null);
+  const avgScore = scored.length > 0
+    ? Math.round(scored.reduce((sum, s) => sum + (s.compliance_score ?? 0), 0) / scored.length)
+    : null;
+  const critical = sessions.filter((s) => s.compliance_score != null && s.compliance_score < 60).length;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-5 items-start">
+      {/* LEFT — divide-y row list */}
+      <div>
+        <div className="divide-y" style={{ borderColor: BORDER }}>
+          {sessions.slice(0, 7).map((s) => {
+            const cs = s.compliance_score;
+            const scoreBg    = cs == null ? "#F3F4F6" : cs >= 85 ? "rgba(16,185,129,0.10)" : cs >= 60 ? "rgba(245,158,11,0.10)" : "rgba(239,68,68,0.10)";
+            const scoreColor = cs == null ? MUTED      : cs >= 85 ? "#059669"                : cs >= 60 ? "#D97706"                  : "#DC2626";
+            return (
+              <Link key={s.id} href="/session-review">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[10px] font-black text-white" style={{ background: PLUM }}>
+                    {initials(s.participant_name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black" style={{ color: TEXT }}>{s.participant_name || "Participant"}</p>
+                    <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
+                      {safeDate(s.session_date)} · {(s.session_type || "session").replace(/_/g, " ")}
+                      {s.review_note ? ` · "${s.review_note.slice(0, 30)}…"` : ""}
+                    </p>
+                  </div>
+                  {cs != null && (
+                    <span className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: scoreBg, color: scoreColor }}>
+                      {cs}%
+                    </span>
+                  )}
+                  <ArrowRight size={13} className="shrink-0" style={{ color: MUTED }} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        {sessions.length > 7 && (
+          <Link href="/session-review">
+            <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
+              View all {sessions.length} flagged sessions →
+            </p>
+          </Link>
+        )}
+      </div>
+
+      {/* RIGHT — summary panel */}
+      <div className="space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Overview</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl p-3 text-center" style={{ background: DS.BACKGROUND.section }}>
+            <p className="text-2xl font-black" style={{ color: PLUM }}>{sessions.length}</p>
+            <p className="text-[10px] font-medium mt-0.5" style={{ color: MUTED }}>Total flagged</p>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: critical > 0 ? "rgba(239,68,68,0.06)" : DS.BACKGROUND.section }}>
+            <p className="text-2xl font-black" style={{ color: critical > 0 ? "#DC2626" : MUTED }}>{critical}</p>
+            <p className="text-[10px] font-medium mt-0.5" style={{ color: MUTED }}>Below 60%</p>
+          </div>
+        </div>
+        {avgScore != null && (
+          <div className="rounded-xl px-4 py-3" style={{ background: DS.BACKGROUND.section }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[11px] font-medium" style={{ color: MUTED }}>Avg score</span>
+              <span className="text-[11px] font-black" style={{ color: avgScore >= 85 ? "#059669" : avgScore >= 60 ? "#D97706" : "#DC2626" }}>{avgScore}%</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(55,48,163,0.08)" }}>
+              <div className="h-full rounded-full" style={{ width: `${avgScore}%`, background: avgScore >= 85 ? "#059669" : avgScore >= 60 ? "#D97706" : "#DC2626" }} />
+            </div>
+          </div>
+        )}
+        <Link href="/session-review">
+          <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
+            Open session review <ArrowRight size={12} />
+          </span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Incidents ────────────────────────────────────────────────────────────
+function IncidentsTabContent({ incidents }: { incidents: Array<Record<string, unknown>> }) {
+  if (incidents.length === 0) {
+    return <TabEmptyState icon={CheckCircle2} message="No pending incidents" sub="All incidents have been resolved or no new reports filed." />;
+  }
+
+  const openCount     = incidents.filter((i) => { const s = String(i.status ?? ""); return s === "open" || s === "pending"; }).length;
+  const resolvedCount = incidents.length - openCount;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-5 items-start">
+      {/* LEFT — divide-y row list */}
+      <div>
+        <div className="divide-y" style={{ borderColor: BORDER }}>
+          {incidents.slice(0, 7).map((inc, idx) => {
+            const id          = String(inc.id ?? "");
+            const title       = String(inc.title ?? inc.type ?? inc.incident_type ?? "Incident report");
+            const dateVal     = String(inc.date ?? inc.incident_date ?? inc.created_at ?? "");
+            const status      = String(inc.status ?? "pending");
+            const participant = String(inc.participant_name ?? inc.participant ?? "");
+            const open        = status === "open" || status === "pending";
+            return (
+              <Link key={id || idx} href={id ? `/incidents/${id}` : "/incidents"}>
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.10)" }}>
+                    <AlertTriangle size={13} style={{ color: DS.STATUS.warning }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black" style={{ color: TEXT }}>{title}</p>
+                    <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
+                      {participant ? `${participant} · ` : ""}{safeDate(dateVal)}
+                    </p>
+                  </div>
+                  <span
+                    className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full capitalize"
+                    style={{
+                      background: open ? "rgba(245,158,11,0.10)" : "rgba(107,114,128,0.08)",
+                      color: open ? DS.STATUS.warning : MUTED,
+                    }}
+                  >
+                    {status}
+                  </span>
+                  <ArrowRight size={13} className="shrink-0" style={{ color: MUTED }} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        {incidents.length > 7 && (
+          <Link href="/incidents">
+            <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
+              View all {incidents.length} incidents →
+            </p>
+          </Link>
+        )}
+      </div>
+
+      {/* RIGHT — summary panel */}
+      <div className="space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Status breakdown</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl p-3 text-center" style={{ background: "rgba(245,158,11,0.06)" }}>
+            <p className="text-2xl font-black" style={{ color: DS.STATUS.warning }}>{openCount}</p>
+            <p className="text-[10px] font-medium mt-0.5" style={{ color: MUTED }}>Open / Pending</p>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: DS.BACKGROUND.section }}>
+            <p className="text-2xl font-black" style={{ color: resolvedCount > 0 ? "#059669" : MUTED }}>{resolvedCount}</p>
+            <p className="text-[10px] font-medium mt-0.5" style={{ color: MUTED }}>Resolved</p>
+          </div>
+        </div>
+        <div className="rounded-xl px-4 py-3" style={{ background: DS.BACKGROUND.section }}>
+          <p className="text-[11px] font-black mb-1" style={{ color: TEXT }}>{incidents.length} total incident{incidents.length !== 1 ? "s" : ""}</p>
+          <p className="text-[11px] font-medium leading-relaxed" style={{ color: MUTED }}>
+            All open incidents require coordinator review and documentation before closure.
+          </p>
+        </div>
+        <Link href="/incidents">
+          <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
+            View all incidents <ArrowRight size={12} />
+          </span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Credentials ──────────────────────────────────────────────────────────
+function CredentialsTabContent({ alerts }: { alerts: CredentialAlert[] }) {
+  if (alerts.length === 0) {
+    return <TabEmptyState icon={CheckCircle2} message="All credentials up to date" sub="No team credentials are expiring within 30 days." />;
+  }
+
+  const expiredCount  = alerts.filter((a) => {
+    const d = a.expiry_date ? Math.ceil((new Date(a.expiry_date).getTime() - Date.now()) / 86_400_000) : null;
+    return d !== null && d <= 0;
+  }).length;
+  const urgentCount   = alerts.filter((a) => {
+    const d = a.expiry_date ? Math.ceil((new Date(a.expiry_date).getTime() - Date.now()) / 86_400_000) : null;
+    return d !== null && d > 0 && d <= 14;
+  }).length;
+  const upcomingCount = alerts.length - expiredCount - urgentCount;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-5 items-start">
+      {/* LEFT — divide-y row list */}
+      <div>
+        <div className="divide-y" style={{ borderColor: BORDER }}>
+          {alerts.slice(0, 7).map((alert, idx) => {
+            const daysLeft   = alert.expiry_date
+              ? Math.ceil((new Date(alert.expiry_date).getTime() - Date.now()) / 86_400_000)
+              : null;
+            const expired    = daysLeft !== null && daysLeft <= 0;
+            const alertBg    = expired ? "rgba(239,68,68,0.08)"  : "rgba(245,158,11,0.08)";
+            const alertColor = expired ? DS.STATUS.critical       : DS.STATUS.warning;
+            return (
+              <Link key={alert.credential_id ?? idx} href="/credentials">
+                <div className="flex items-center gap-3 py-2.5 hover:bg-[#F8F8FE] rounded-lg px-2 -mx-2 transition cursor-pointer">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: alertBg }}>
+                    <BadgeCheck size={13} style={{ color: alertColor }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black" style={{ color: TEXT }}>{alert.full_name || "Team member"}</p>
+                    <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
+                      {alert.credential_type || alert.title || "Credential"} · Expires {safeDate(alert.expiry_date)}
+                    </p>
+                  </div>
+                  {daysLeft !== null && (
+                    <span
+                      className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap"
+                      style={{ background: alertBg, color: alertColor }}
+                    >
+                      {expired ? "Expired" : `${daysLeft}d left`}
+                    </span>
+                  )}
+                  <ArrowRight size={13} className="shrink-0" style={{ color: MUTED }} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        {alerts.length > 7 && (
+          <Link href="/credentials">
+            <p className="text-center text-xs font-black pt-3 pb-1 hover:opacity-75 transition" style={{ color: PLUM }}>
+              View all {alerts.length} expiring credentials →
+            </p>
+          </Link>
+        )}
+      </div>
+
+      {/* RIGHT — summary panel */}
+      <div className="space-y-3">
+        <p className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiry breakdown</p>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl p-3 text-center" style={{ background: expiredCount > 0 ? "rgba(239,68,68,0.06)" : DS.BACKGROUND.section }}>
+            <p className="text-xl font-black" style={{ color: expiredCount > 0 ? "#DC2626" : MUTED }}>{expiredCount}</p>
+            <p className="text-[9px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>Expired</p>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: urgentCount > 0 ? "rgba(245,158,11,0.06)" : DS.BACKGROUND.section }}>
+            <p className="text-xl font-black" style={{ color: urgentCount > 0 ? "#D97706" : MUTED }}>{urgentCount}</p>
+            <p className="text-[9px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>≤ 14 days</p>
+          </div>
+          <div className="rounded-xl p-3 text-center" style={{ background: DS.BACKGROUND.section }}>
+            <p className="text-xl font-black" style={{ color: MUTED }}>{upcomingCount}</p>
+            <p className="text-[9px] font-bold uppercase mt-0.5" style={{ color: MUTED }}>Upcoming</p>
+          </div>
+        </div>
+        {expiredCount > 0 && (
+          <div className="rounded-xl px-4 py-3" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)" }}>
+            <p className="text-[11px] font-black" style={{ color: "#DC2626" }}>
+              {expiredCount} credential{expiredCount !== 1 ? "s" : ""} already expired
+            </p>
+            <p className="text-[11px] font-medium mt-0.5" style={{ color: MUTED }}>
+              Workers with expired credentials cannot legally deliver services.
+            </p>
+          </div>
+        )}
+        <Link href="/credentials">
+          <span className="inline-flex items-center gap-1 text-[12px] font-black hover:opacity-75 transition" style={{ color: PLUM }}>
+            Manage credentials <ArrowRight size={12} />
+          </span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Training ─────────────────────────────────────────────────────────────
+function TrainingTabContent({
+  count,
+  alerts,
+}: {
+  count: number;
+  alerts: CredentialAlert[];
+}) {
+  const trainingAlerts = alerts.filter(
+    (a) =>
+      (a.credential_type || a.title || "").toLowerCase().includes("train") ||
+      (a.credential_type || a.title || "").toLowerCase().includes("cert") ||
+      (a.credential_type || a.title || "").toLowerCase().includes("course"),
+  );
+
+  if (count === 0 && trainingAlerts.length === 0) {
+    return <TabEmptyState icon={CheckCircle2} message="All training up to date" sub="No team members have overdue or upcoming training." />;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Summary banner */}
+      <div
+        className="flex items-center gap-3 rounded-xl px-4 py-3"
+        style={{ background: count > 0 ? "rgba(245,158,11,0.08)" : DS.BACKGROUND.section, borderColor: count > 0 ? "rgba(245,158,11,0.20)" : BORDER, border: "1px solid" }}
+      >
+        <GraduationCap size={18} style={{ color: count > 0 ? DS.STATUS.warning : DS.STATUS.success }} />
+        <div className="flex-1">
+          <p className="text-sm font-black" style={{ color: TEXT }}>
+            {count > 0 ? `${count} team member${count !== 1 ? "s" : ""} with training due` : "Training is up to date"}
+          </p>
+          <p className="text-xs font-medium" style={{ color: MUTED }}>Manage training records and certifications in the Toolkit</p>
+        </div>
+        <Link href="/toolkit">
+          <span className="text-xs font-black px-3 py-1.5 rounded-lg text-white transition hover:opacity-90" style={{ background: PLUM }}>
+            Open Toolkit
+          </span>
+        </Link>
+      </div>
+
+      {/* Training-type credential alerts */}
+      {trainingAlerts.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-2">
+          {trainingAlerts.slice(0, 6).map((alert, idx) => {
+            const daysLeft = alert.expiry_date
+              ? Math.ceil((new Date(alert.expiry_date).getTime() - Date.now()) / 86_400_000)
+              : null;
+            const urgent   = daysLeft !== null && daysLeft <= 14;
+            const expired  = daysLeft !== null && daysLeft <= 0;
+            return (
+              <Link key={alert.credential_id ?? idx} href="/toolkit">
+                <div
+                  className="flex items-center gap-3 p-3 rounded-xl border transition cursor-pointer hover:bg-[#F8F8FE]"
+                  style={{ borderColor: BORDER }}
+                >
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full" style={{ background: "rgba(245,158,11,0.08)" }}>
+                    <GraduationCap size={13} style={{ color: DS.STATUS.warning }} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black" style={{ color: TEXT }}>{alert.full_name || "Team member"}</p>
+                    <p className="truncate text-xs font-medium" style={{ color: MUTED }}>
+                      {alert.credential_type || alert.title}
+                    </p>
+                    <p className="text-[10px] font-medium mt-0.5" style={{ color: MUTED }}>
+                      {safeDate(alert.expiry_date)}
+                    </p>
+                  </div>
+                  {daysLeft !== null && (
+                    <span
+                      className="shrink-0 text-[10px] font-black px-2 py-0.5 rounded-full"
+                      style={{
+                        background: urgent ? "rgba(239,68,68,0.10)" : "rgba(245,158,11,0.10)",
+                        color: urgent ? DS.STATUS.critical : DS.STATUS.warning,
+                      }}
+                    >
+                      {expired ? "Expired" : `${daysLeft}d`}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Action Hub ───────────────────────────────────────────────────────────
+type ActionTabId = "compliance" | "flagged" | "incidents" | "credentials" | "training";
+
+function CoordinatorActionHub({ data }: { data: CoordinatorDashboard }) {
+  const [activeTab, setActiveTab] = useState<ActionTabId>("compliance");
+
+  const { data: flaggedSessions = [] } = useOrgQuery(["coordinator-flagged-sessions"], {
+    queryFn: getCoordinatorFlaggedSessions,
+    staleTime: 60_000,
+  });
+
+  const { data: credentialData } = useOrgQuery(["coordinator-credential-alerts"], {
+    queryFn: getCoordinatorCredentialAlerts,
+    staleTime: 5 * 60_000,
+  });
+
+  const flaggedCount    = flaggedSessions.length;
+  const incidentCount   = (data.incident_alerts ?? []).length;
+  const credentialCount = (credentialData?.alerts ?? (data.credential_alerts ?? [])).length;
+  const trainingCount   = credentialData?.training_due_count ?? 0;
+
+  const tabs: Array<{
+    id: ActionTabId;
+    label: string;
+    icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+    count: number | null;
+    level: "" | "warning" | "critical";
+  }> = [
+    { id: "compliance",  label: "Team Compliance",    icon: ShieldCheck,    count: null,           level: "" },
+    { id: "flagged",     label: "Flagged Sessions",   icon: ClipboardCheck, count: flaggedCount,    level: flaggedCount > 0    ? "critical" : "" },
+    { id: "incidents",   label: "Incidents",          icon: AlertTriangle,  count: incidentCount,   level: incidentCount > 0   ? "warning"  : "" },
+    { id: "credentials", label: "Credentials",        icon: BadgeCheck,     count: credentialCount, level: credentialCount > 0 ? "critical" : "" },
+    { id: "training",    label: "Training",           icon: GraduationCap,  count: trainingCount,   level: trainingCount > 0   ? "warning"  : "" },
+  ];
+
+  return (
+    <section className="rounded-xl border bg-white overflow-hidden" style={{ borderColor: BORDER }}>
+      {/* Tab bar — scrollable on mobile */}
+      <div className="flex border-b overflow-x-auto" style={{ borderColor: BORDER }}>
+        {tabs.map(({ id, label, icon: Icon, count, level }) => {
+          const active = activeTab === id;
+          const alert  = level === "critical" || level === "warning";
+          const fg     = level === "critical" ? DS.STATUS.critical : level === "warning" ? DS.STATUS.warning : active ? PLUM : MUTED;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className="flex items-center gap-1.5 px-4 py-3.5 text-[12px] font-black whitespace-nowrap border-b-2 transition-colors shrink-0"
+              style={{
+                borderBottomColor: active ? PLUM : "transparent",
+                color: active ? PLUM : alert ? fg : MUTED,
+                background: active ? "#F8F8FE" : "transparent",
+              }}
+            >
+              <Icon size={13} strokeWidth={2.5} />
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden">{label.split(" ")[0]}</span>
+              {count !== null && count > 0 && (
+                <span
+                  className="min-w-[17px] h-[17px] px-1 rounded-full text-[10px] font-black flex items-center justify-center text-white"
+                  style={{
+                    background: level === "critical" ? DS.STATUS.critical : level === "warning" ? DS.STATUS.warning : PLUM,
+                  }}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div className="px-4 py-3.5" key={activeTab}>
+        {activeTab === "compliance"  && <ComplianceTabContent  data={data} />}
+        {activeTab === "flagged"     && <FlaggedTabContent     sessions={flaggedSessions} />}
+        {activeTab === "incidents"   && <IncidentsTabContent   incidents={data.incident_alerts ?? []} />}
+        {activeTab === "credentials" && <CredentialsTabContent alerts={credentialData?.alerts ?? (data.credential_alerts as CredentialAlert[] | undefined) ?? []} />}
+        {activeTab === "training"    && <TrainingTabContent    count={trainingCount} alerts={credentialData?.alerts ?? []} />}
       </div>
     </section>
   );
@@ -268,7 +836,7 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
           {sessions.length} total
         </span>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {sessions.length === 0 && (
           <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
             No sessions are scheduled for today.
@@ -298,26 +866,32 @@ function CoordinatorSessionsCard({ sessions }: { sessions: DashboardSession[] })
 function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard["common_issues"] }) {
   const max = Math.max(...issues.map((issue) => issue.count), 1);
   return (
-    <section className="rounded-lg border bg-white p-6 shadow-sm" style={{ borderColor: BORDER }}>
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
-        <Link href="/compliance" className="text-sm font-bold" style={{ color: PLUM }}>View full report</Link>
+    <section
+      className="rounded-lg border bg-white p-5"
+      style={{
+        borderColor: BORDER,
+        boxShadow: DS.SHADOWS.card,
+      }}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-black" style={{ color: TEXT }}>Most Common Issues - Team</h2>
+        <Link href="/compliance" className="text-xs font-bold hover:opacity-75 transition-opacity" style={{ color: PLUM }}>View full report</Link>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-72 overflow-y-auto overscroll-y-contain pr-1 space-y-3">
         {issues.length === 0 && (
-          <p className="rounded-lg bg-[#F8F6FE] px-4 py-3 text-sm font-medium" style={{ color: MUTED }}>
+          <p className="rounded-lg px-4 py-3 text-sm font-medium" style={{ background: DS.BACKGROUND.section, color: MUTED }}>
             No recurring failed compliance rules have been recorded.
           </p>
         )}
         {issues.map((issue, index) => (
           <div key={issue.issue} className="grid grid-cols-[150px_1fr_32px] items-center gap-3 text-sm">
             <p className="truncate font-bold" style={{ color: TEXT }}>{issue.issue}</p>
-            <div className="h-2 overflow-hidden rounded-full bg-[#EEEAFB]">
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: DS.STATUS_BG.info }}>
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${Math.max(8, Math.round((issue.count / max) * 100))}%`,
-                  background: index === issues.length - 1 ? "#F8A51B" : PLUM,
+                  background: index === issues.length - 1 ? DS.STATUS.warning : PLUM,
                 }}
               />
             </div>
@@ -329,38 +903,118 @@ function CoordinatorCommonIssuesCard({ issues }: { issues: CoordinatorDashboard[
   );
 }
 
-function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
+function WorkerStatCard({
+  label,
+  value,
+  variant = "default",
+}: {
+  label: string;
+  value: number | string;
+  variant?: "default" | "warning" | "critical";
+}) {
+  const valueColor =
+    variant === "warning"
+      ? "var(--cc-status-warning)"
+      : variant === "critical"
+        ? "var(--cc-status-critical)"
+        : "var(--cc-plum)";
+  return (
+    <div
+      className="rounded-2xl border bg-cc-surface px-4 py-4 text-center shadow-sm transition-shadow hover:shadow-md"
+      style={{ borderColor: "var(--cc-border)" }}
+    >
+      <p className="text-2xl font-black" style={{ color: valueColor }}>{value}</p>
+      <p className="mt-1 text-xs font-semibold leading-tight" style={{ color: "var(--cc-muted)" }}>{label}</p>
+    </div>
+  );
+}
+
+function WorkerDashboardView({
+  data,
+  landing,
+}: {
+  data: WorkerDashboard;
+  landing: WorkerLandingDashboard | null;
+}) {
   const [trendDays, setTrendDays] = useState<7 | 30>(7);
+  const { user } = useAuth();
+  const { translate } = useAccessibility();
+  const firstName = (user?.full_name || "there").split(" ")[0];
+  const dateLabel = format(new Date(), "EEEE d MMMM");
+
   const complianceQuery = useOrgQuery(["worker", "compliance-detail", trendDays], {
     queryFn: () => getWorkerComplianceDetail(trendDays),
     staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const todayClients = data.today_clients.length ? data.today_clients : data.assigned_clients.slice(0, 4);
   const complianceDetail = complianceQuery.data;
+
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div className="space-y-5 pb-6">
+      {/* Greeting header — consistent with My Shifts page */}
+      <header className="flex items-start justify-between gap-3 pt-1">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Worker</p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+          <p className="hidden">
+            Support Worker
+          </p>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            {translate("dashboard.title")}
+          </h1>
+          <p className="mt-1 text-sm font-medium" style={{ color: MUTED }}>
+            {dateLabel}
+          </p>
         </div>
-        <Link href="/my-clients">
-          <button className="rounded-full px-5 py-3 text-sm font-black text-white shadow-sm" style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}>
-            Open My Clients
-          </button>
-        </Link>
+        <div className="shrink-0 pt-1">
+          <Link href="/my-clients">
+            <button
+              type="button"
+              className="flex h-11 items-center rounded-full px-4 text-xs font-black text-white shadow-sm transition hover:opacity-90"
+              style={{ background: PLUM }}
+            >
+              {translate("dashboard.myClients")}
+            </button>
+          </Link>
+        </div>
+      </header>
+
+      {/* Key stats — 2-col on mobile, 4-col on sm+ */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <WorkerStatCard label={translate("dashboard.sessionsToday")} value={data.sessions_today} />
+        <WorkerStatCard
+          label={translate("dashboard.notesDue")}
+          value={data.notes_due}
+          variant={data.notes_due > 0 ? "warning" : "default"}
+        />
+        <WorkerStatCard label={translate("dashboard.myClients")} value={data.assigned_clients.length} />
+        <WorkerStatCard
+          label={translate("dashboard.pendingFixes")}
+          value={data.pending_compliance_fixes.length}
+          variant={data.pending_compliance_fixes.length > 0 ? "critical" : "default"}
+        />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardStatCard label="My Sessions Today" value={data.sessions_today} caption="Worker-owned sessions only" icon={CalendarDays} />
-        <DashboardStatCard label="Notes Due" value={data.notes_due} caption="Draft or compliance-risk notes" icon={FileText} />
-        <DashboardStatCard label="My Clients" value={data.assigned_clients.length} caption="Assigned participants only" icon={Users} />
-        <DashboardStatCard label="Pending Fixes" value={data.pending_compliance_fixes.length} caption="Items needing review" icon={AlertTriangle} />
-      </div>
+      {landing && (
+        <>
+          <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <NextShiftCard shift={landing.next_shift} />
+            <DayShiftTimeline shifts={landing.today_shifts} nextShiftId={landing.next_shift?.id} />
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+            <DashboardShiftsWidget shifts={landing.today_shifts} />
+            <DashboardActionItems items={landing.action_items} />
+            <DashboardComplianceAlerts alerts={landing.compliance_alerts} />
+          </div>
+        </>
+      )}
 
       {complianceQuery.isLoading ? (
-        <div className="rounded-lg border bg-white p-6 text-sm font-bold shadow-sm" style={{ borderColor: BORDER, color: MUTED }}>
-          Loading compliance details...
+        <div
+          className="rounded-2xl border bg-white p-6 text-sm font-bold"
+          style={{ borderColor: BORDER, color: MUTED }}
+        >
+          {translate("dashboard.loadingCompliance")}
         </div>
       ) : complianceDetail ? (
         <ComplianceDetailCard
@@ -368,16 +1022,19 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
           status={complianceDetail.status}
           rules={complianceDetail.rules}
           failedRules={complianceDetail.failed_rules}
-          title="My Compliance Score"
+          title={translate("dashboard.complianceScore")}
           compact
         />
       ) : (
-        <div className="rounded-lg border bg-white p-6 text-sm font-bold text-red-600 shadow-sm" style={{ borderColor: BORDER }}>
-          Could not load compliance details.
+        <div
+          className="rounded-2xl border bg-white p-6 text-sm font-bold"
+          style={{ borderColor: BORDER, color: DS.STATUS.critical }}
+        >
+          {translate("dashboard.complianceLoadError")}
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         {complianceDetail && (
           <ComplianceTrendChart
             data={complianceDetail.trend}
@@ -388,155 +1045,88 @@ function WorkerDashboardView({ data }: { data: WorkerDashboard }) {
         <ClientListCard clients={todayClients} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <SessionListCard title="Incomplete Sessions" sessions={data.incomplete_sessions.slice(0, 6)} />
-        <SessionListCard title="Pending Compliance Fixes" sessions={data.pending_compliance_fixes.slice(0, 6)} />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <SessionListCard title={translate("dashboard.incompleteSessions")} sessions={data.incomplete_sessions.slice(0, 5)} />
+        <SessionListCard title={translate("dashboard.pendingCompliance")} sessions={data.pending_compliance_fixes.slice(0, 5)} />
       </div>
     </div>
   );
 }
 
-function CoordinatorQuickActionCards({ data }: { data: CoordinatorDashboard }) {
-  const { data: flaggedSessions = [] } = useOrgQuery(["coordinator-flagged-sessions"], {
-    queryFn: getCoordinatorFlaggedSessions,
-    staleTime: 60_000,
-  });
-
-  const { data: credentialData } = useOrgQuery(["coordinator-credential-alerts"], {
-    queryFn: getCoordinatorCredentialAlerts,
-    staleTime: 5 * 60_000,
-  });
-
-  const flaggedCount    = flaggedSessions.length;
-  const incidentCount   = (data.incident_alerts ?? []).length;
-  const credentialCount = (credentialData?.alerts ?? (data.credential_alerts ?? [])).length;
-  const trainingCount   = credentialData?.training_due_count ?? 0;
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Link href="/session-review">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Flagged Sessions</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: flaggedCount > 0 ? CORAL : "#059669" }}>{flaggedCount}</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: flaggedCount > 0 ? "#FFF0F3" : "#F0FDF4", color: flaggedCount > 0 ? CORAL : "#059669" }}>
-              <ClipboardCheck size={20} strokeWidth={2.5} />
-            </div>
-          </div>
-          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>Review queue →</p>
-        </div>
-      </Link>
-
-      <Link href="/incidents">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Pending Incidents</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: incidentCount > 0 ? "#D97706" : TEXT }}>{incidentCount}</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: incidentCount > 0 ? "#FFFBEB" : "#F5F3FC", color: incidentCount > 0 ? "#D97706" : MUTED }}>
-              <AlertTriangle size={20} strokeWidth={2.5} />
-            </div>
-          </div>
-          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>View incidents →</p>
-        </div>
-      </Link>
-
-      <Link href="/credentials">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Expiring Credentials</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: credentialCount > 0 ? "#DC2626" : TEXT }}>{credentialCount}</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: credentialCount > 0 ? "#FEF2F2" : "#F5F3FC", color: credentialCount > 0 ? "#DC2626" : MUTED }}>
-              <BadgeCheck size={20} strokeWidth={2.5} />
-            </div>
-          </div>
-          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>Check credentials →</p>
-        </div>
-      </Link>
-
-      <Link href="/toolkit">
-        <div className="group cursor-pointer rounded-xl border bg-white p-5 shadow-sm transition hover:border-[#5533CC]/40 hover:shadow-md" style={{ borderColor: BORDER }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>Training Due</p>
-              <p className="mt-2 text-3xl font-black tracking-tight" style={{ color: trainingCount > 0 ? "#D97706" : TEXT }}>{trainingCount}</p>
-            </div>
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg transition group-hover:scale-105" style={{ background: trainingCount > 0 ? "#FFFBEB" : "#F5F3FC", color: trainingCount > 0 ? "#D97706" : MUTED }}>
-              <GraduationCap size={20} strokeWidth={2.5} />
-            </div>
-          </div>
-          <p className="mt-3 text-sm font-bold transition" style={{ color: PLUM }}>View toolkit →</p>
-        </div>
-      </Link>
-    </div>
-  );
-}
 
 function CoordinatorDashboardView({ data }: { data: CoordinatorDashboard }) {
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const orgId = user?.organizationId ?? "__no_org__";
+  const teamParticipants = data.team_participants ?? data.participants ?? 0;
+  const sessionsThisWeek = data.sessions_this_week ?? data.todays_sessions.length;
+  const incidentsThisMonth = data.incidents_this_month ?? data.incident_alerts.length;
+  const workersNeedingSupport = data.workers_needing_support ?? data.workers_needing_attention.length;
+  const score = Math.max(0, Math.min(100, data.team_compliance_score || 0));
+
+  const metrics = [
+    { label: "Participants",    value: teamParticipants,        color: PLUM },
+    { label: "Sessions / week", value: sessionsThisWeek,        color: PLUM },
+    { label: "Compliance",      value: `${Math.round(score)}%`, color: score >= 85 ? DS.STATUS.success : score >= 60 ? DS.STATUS.warning : DS.STATUS.critical },
+    { label: "Incidents",       value: incidentsThisMonth,      color: incidentsThisMonth > 0 ? DS.STATUS.warning : PLUM },
+    { label: "Need support",    value: workersNeedingSupport,   color: workersNeedingSupport > 0 ? DS.STATUS.critical : PLUM },
+  ];
 
   return (
-    <>
-      <div className="mx-auto max-w-7xl space-y-6 pb-10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Support Coordinator</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
-          </div>
+    <div className="space-y-5 pb-8">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+          <p className="mt-0.5 text-sm font-medium" style={{ color: MUTED }}>
+            {format(new Date(), "EEEE, d MMMM yyyy")}
+          </p>
+        </div>
+        <Link href="/team">
           <button
             type="button"
-            onClick={() => setInviteOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 active:scale-[0.99]"
-            style={{ background: `linear-gradient(135deg, ${CORAL}, ${PLUM})` }}
+            className="flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-black text-white transition hover:opacity-90 shrink-0"
+            style={{ background: PLUM }}
           >
-            <UserPlus size={16} strokeWidth={2.5} />
-            Invite Worker
+            <Users size={15} strokeWidth={2.5} />
+            View Team
           </button>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <DashboardStatCard label="Active Workers" value={data.active_workers} caption="Current active child accounts" icon={Users} valueColor={PLUM} />
-          <DashboardStatCard label="Compliant Today" value={data.compliant_today} caption="Sessions passing today" icon={CheckCircle2} valueColor="#059669" />
-          <DashboardStatCard label="Notes At Risk" value={data.notes_at_risk} caption="Notes needing review" icon={ClipboardList} valueColor="#D97706" />
-          <DashboardStatCard label="RP Flags" value={data.rp_flags} caption="Restrictive practice flags" icon={AlertTriangle} valueColor={CORAL} />
-        </div>
-
-        <CoordinatorQuickActionCards data={data} />
-
-        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-          <CoordinatorTeamComplianceCard data={data} />
-          <CoordinatorSessionsCard sessions={data.todays_sessions} />
-        </div>
-
-        <CoordinatorCommonIssuesCard issues={data.common_issues} />
+        </Link>
       </div>
 
-      <InviteModal
-        open={inviteOpen}
-        onClose={() => setInviteOpen(false)}
-        onInviteSent={() => {
-          queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "coordinator"] });
-          queryClient.invalidateQueries({ queryKey: [orgId, "coordinator", "team"] });
-        }}
-      />
-    </>
+      {/* Metrics strip — single panel with internal dividers, no individual cards */}
+      <div className="flex rounded-xl border overflow-hidden overflow-x-auto" style={{ borderColor: BORDER }}>
+        {metrics.map((m, i) => (
+          <div
+            key={i}
+            className="flex-1 min-w-[110px] px-5 py-4"
+            style={{
+              borderRight: i < metrics.length - 1 ? `1px solid ${BORDER}` : undefined,
+              background: "var(--cc-surface)",
+            }}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.15em]" style={{ color: MUTED }}>{m.label}</p>
+            <p className="mt-2 text-2xl font-black" style={{ color: m.color }}>{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Action hub — tabbed inline panel */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_300px]">
+        <CoordinatorActionHub data={data} />
+        <CoordinatorSessionsCard sessions={data.todays_sessions} />
+      </div>
+
+      {/* Common issues */}
+      <CoordinatorCommonIssuesCard issues={data.common_issues} />
+    </div>
   );
 }
 
 function AlliedFallbackDashboard() {
   return (
-    <div className="mx-auto max-w-5xl space-y-6 pb-10">
+    <div className="space-y-5 pb-8">
       <div>
-        <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>Allied Health Professional</p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
+        <p className="hidden" style={{ color: CORAL }}>Allied Health Professional</p>
+        <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>Dashboard</h1>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/patients"><DashboardStatCard label="Caseload" value="Open" caption="View allocated participants" icon={Users} /></Link>
@@ -549,19 +1139,37 @@ function AlliedFallbackDashboard() {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const isWorker = user?.role === "support_worker";
+  useDashboardRealtime(isWorker);
+
   const workerQuery = useOrgQuery(["dashboard", "worker"], {
     queryFn: getWorkerDashboard,
-    enabled: user?.role === "support_worker",
+    enabled: isWorker,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const workerLandingQuery = useOrgQuery(["dashboard", "worker-landing"], {
+    queryFn: getWorkerLandingDashboard,
+    enabled: isWorker,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
   const coordinatorQuery = useOrgQuery(["dashboard", "coordinator"], {
     queryFn: getCoordinatorDashboard,
     enabled: user?.role === "support_coordinator",
   });
 
-  if (user?.role === "support_worker") {
+  if (isWorker) {
     if (workerQuery.isLoading) return <div className="p-6 text-sm font-bold" style={{ color: MUTED }}>Loading dashboard...</div>;
     if (workerQuery.error) return <div className="p-6 text-sm font-bold text-red-600">{(workerQuery.error as Error).message}</div>;
-    return <WorkerDashboardView data={workerQuery.data as WorkerDashboard} />;
+    return (
+      <WorkerDashboardView
+        data={workerQuery.data as WorkerDashboard}
+        landing={workerLandingQuery.data ?? null}
+      />
+    );
   }
 
   if (user?.role === "support_coordinator") {

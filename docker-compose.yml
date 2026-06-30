@@ -9,6 +9,8 @@ services:
     environment:
       PYTHONPATH: /app
       PORT: "8000"
+      TZ: Australia/Adelaide
+      APP_TIMEZONE: Australia/Adelaide
     ports:
       - "8000:8000"
     expose:
@@ -31,6 +33,12 @@ services:
     build:
       context: .
       dockerfile: artifacts/frontend/Dockerfile
+      args:
+        VITE_DEV_CONSOLE_PASSWORD: ${VITE_DEV_CONSOLE_PASSWORD:-}
+        SUPABASE_URL: ${SUPABASE_URL:-}
+        SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+        SUPABASE_REGION: ${SUPABASE_REGION:-ap-southeast-2}
+        SUPABASE_REGION_CHECK: ${SUPABASE_REGION_CHECK:-enabled}
     depends_on:
       backend:
         condition: service_healthy

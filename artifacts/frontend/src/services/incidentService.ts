@@ -1,8 +1,54 @@
 import { jsonFetch } from "@/services/http";
 
+export interface IncidentPhotoItem {
+  data: string;
+  description?: string;
+  captured_at?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+export const WORKER_REPORT_TYPES = [
+  { value: "safety_hazard", label: "Safety hazard" },
+  { value: "participant_behaviour", label: "Participant behaviour" },
+  { value: "equipment_damage", label: "Equipment damage" },
+  { value: "travel_accident", label: "Travel accident" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const BEHAVIOUR_SUBTYPES = [
+  { value: "verbal", label: "Verbal" },
+  { value: "physical", label: "Physical" },
+  { value: "property", label: "Property" },
+] as const;
+
+export const WORKER_SEVERITIES = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "emergency", label: "Emergency" },
+] as const;
+
+export interface WorkerIncidentPayload {
+  participant_id?: string;
+  session_id?: string;
+  shift_id?: string;
+  worker_report_type: string;
+  behaviour_subtype?: string;
+  severity: string;
+  description: string;
+  incident_date: string;
+  location?: string;
+  participant_present?: boolean;
+  participant_harmed?: "yes" | "no" | "unknown";
+  worker_actions?: string;
+  photo_items?: IncidentPhotoItem[];
+}
+
 export interface IncidentPayload {
   participant_id?: string;
   session_id?: string;
+  shift_id?: string;
   incident_type: string;
   severity: string;
   title: string;
@@ -13,10 +59,17 @@ export interface IncidentPayload {
   worker_actions?: string;
   incident_date: string;
   follow_up_required?: boolean;
+  escalate?: boolean;
+  photo_data?: string[];
+  photo_items?: IncidentPhotoItem[];
 }
 
-export function listIncidents<T = unknown>() {
-  return jsonFetch<T>("/api/incidents");
+export function listIncidents<T = unknown>(params?: { shift_id?: string; participant_id?: string }) {
+  const search = new URLSearchParams();
+  if (params?.shift_id) search.set("shift_id", params.shift_id);
+  if (params?.participant_id) search.set("participant_id", params.participant_id);
+  const qs = search.toString();
+  return jsonFetch<T>(`/api/incidents${qs ? `?${qs}` : ""}`);
 }
 
 export function getIncidentStats<T = unknown>() {
@@ -25,6 +78,24 @@ export function getIncidentStats<T = unknown>() {
 
 export function getIncident<T = unknown>(id: string) {
   return jsonFetch<T>(`/api/incidents/${id}`);
+}
+
+export function createWorkerIncident<T = unknown>(payload: WorkerIncidentPayload) {
+  return jsonFetch<T>("/api/incidents/worker-report", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addIncidentCorrection<T = unknown>(incidentId: string, note: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/corrections`, {
+    method: "POST",
+    body: JSON.stringify({ note }),
+  });
+}
+
+export function listIncidentCorrections<T = unknown>(incidentId: string) {
+  return jsonFetch<T>(`/api/incidents/${incidentId}/corrections`);
 }
 
 export function createIncident<T = unknown>(payload: IncidentPayload) {

@@ -1,12 +1,13 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Target } from "lucide-react";
 import type { GoalDetail } from "@/services/workerService";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const PLUM = "#5533CC";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
 
 function Section({
   title,
@@ -30,8 +31,8 @@ function Section({
   );
 }
 
-function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
-  const title = goal.title || goal.description || `Goal ${index + 1}`;
+function GoalCard({ goal, index, translate, translateParams }: { goal: GoalDetail; index: number; translate: (k: string) => string; translateParams: (k: string, p: Record<string, string>) => string }) {
+  const title = goal.title || goal.description || translateParams("goals.fallbackTitle", { n: String(index + 1) });
   const workerFocus = Array.isArray(goal.worker_focus) ? goal.worker_focus : [];
 
   return (
@@ -48,7 +49,7 @@ function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
             className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-black"
             style={{ background: PLUM, color: "#fff" }}
           >
-            Priority {goal.priority}
+{translateParams("goals.priority", { n: String(goal.priority) })}
           </span>
         )}
       </div>
@@ -59,7 +60,7 @@ function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
             className="text-[11px] font-black uppercase tracking-wider mb-1"
             style={{ color: MUTED }}
           >
-            Why This Goal Matters
+{translate("goals.whyMatters")}
           </p>
           <p className="text-sm font-medium leading-6" style={{ color: TEXT }}>
             {goal.why_it_matters}
@@ -73,7 +74,7 @@ function GoalCard({ goal, index }: { goal: GoalDetail; index: number }) {
             className="text-[11px] font-black uppercase tracking-wider mb-2"
             style={{ color: MUTED }}
           >
-            Worker Focus
+{translate("goals.workerFocus")}
           </p>
           <ul className="space-y-1">
             {workerFocus.map((item, i) => (
@@ -96,6 +97,7 @@ type Props = {
 };
 
 export function ActiveGoalsPanel({ goals = [], showCompletedToggle = true, compact = false }: Props) {
+  const { translate, translateParams } = useAccessibility();
   const [showCompleted, setShowCompleted] = useState(false);
 
   const activeGoals = goals.filter((g) => {
@@ -112,24 +114,24 @@ export function ActiveGoalsPanel({ goals = [], showCompletedToggle = true, compa
 
   if (goals.length === 0) {
     return (
-      <Section title="Active NDIS Goals" icon={Target}>
+      <Section title={translate("goals.title")} icon={Target}>
         <p className="text-sm font-medium" style={{ color: MUTED }}>
-          No goals recorded for this participant yet.
+          {translate("goals.none")}
         </p>
       </Section>
     );
   }
 
   return (
-    <Section title="Active NDIS Goals" icon={Target}>
+    <Section title={translate("goals.title")} icon={Target}>
       {activeGoals.length === 0 ? (
         <p className="text-sm font-medium mb-3" style={{ color: MUTED }}>
-          No active goals at this time.
+          {translate("goals.noneActive")}
         </p>
       ) : (
         <div className={compact ? "space-y-3" : "grid gap-3 sm:grid-cols-1 lg:grid-cols-1"}>
           {visibleGoals.map((goal, index) => (
-            <GoalCard key={String(goal.id || index)} goal={goal} index={index} />
+            <GoalCard key={String(goal.id || index)} goal={goal} index={index} translate={translate} translateParams={translateParams} />
           ))}
         </div>
       )}
@@ -143,8 +145,8 @@ export function ActiveGoalsPanel({ goals = [], showCompletedToggle = true, compa
         >
           {showCompleted ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           {showCompleted
-            ? "Hide completed goals"
-            : `Show ${completedGoals.length} completed goal${completedGoals.length !== 1 ? "s" : ""}`}
+            ? translate("goals.hideCompleted")
+            : translateParams(completedGoals.length === 1 ? "goals.showCompleted" : "goals.showCompletedPlural", { count: String(completedGoals.length) })}
         </button>
       )}
     </Section>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -24,25 +24,27 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
-const T2     = "#4A3D5A";
+const T2     = "#374151";
 const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD_SHADOW = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BORDER = "var(--cc-border)";
+const CARD_SHADOW = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 
 // ── Quick intents ─────────────────────────────────────────────────────────────
-const QUICK_INTENTS = [
-  "Improve mobility", "Pain management session", "Functional assessment",
-  "Behavior support", "Post-injury rehab", "Equipment training",
-];
+const QUICK_INTENT_KEYS = [
+  "sessions.new.intent.mobility", "sessions.new.intent.pain", "sessions.new.intent.assessment",
+  "sessions.new.intent.behaviour", "sessions.new.intent.rehab", "sessions.new.intent.equipment",
+] as const;
 
-const AVAILABLE_TAGS = [
-  "Pain", "Mobility", "Strength", "Communication", "Behavior", "Equipment", "Review",
-];
+const TAG_KEYS = [
+  "sessions.new.tag.pain", "sessions.new.tag.mobility", "sessions.new.tag.strength",
+  "sessions.new.tag.communication", "sessions.new.tag.behavior", "sessions.new.tag.equipment", "sessions.new.tag.review",
+] as const;
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 const sessionSchema = z.object({
@@ -88,6 +90,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SessionNew() {
+  const { translate } = useAccessibility();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -129,8 +132,8 @@ export default function SessionNew() {
         },
       },
       {
-        onSuccess: (res) => {
-          toast({ title: "Session Ready", description: startNow ? "Session opened for review" : "Session saved" });
+        onSuccess: (res: any) => {
+          toast({ title: translate("sessions.new.toast.ready"), description: startNow ? translate("sessions.new.toast.opened") : translate("sessions.new.toast.saved") });
           setLocation(`/sessions/${res.id}`);
         },
       },
@@ -140,15 +143,15 @@ export default function SessionNew() {
   const startDisabled = !!selectedParticipantId && selectedGoalIds.length === 0;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="space-y-6 pb-10">
 
       {/* ── Header ── */}
       <div>
         <h1 className="text-[24px] font-bold leading-tight tracking-tight" style={{ color: T1 }}>
-          Prepare Session
+          {translate("sessions.new.title")}
         </h1>
         <p className="text-[14px] mt-1" style={{ color: T2 }}>
-          Fast setup — minimal typing, smart assistance enabled.
+          {translate("sessions.new.subtitle")}
         </p>
       </div>
 
@@ -156,7 +159,7 @@ export default function SessionNew() {
         <form className="space-y-5">
 
           {/* ── Session Setup ── */}
-          <FormCard icon={<Activity size={16} />} title="Session Setup">
+          <FormCard icon={<Activity size={16} />} title={translate("sessions.new.setup")}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
               {/* Participant */}
@@ -165,17 +168,17 @@ export default function SessionNew() {
                 name="participant_id"
                 render={({ field }) => (
                   <FormItem className="md:col-span-2">
-                    <FieldLabel>Participant</FieldLabel>
+                    <FieldLabel>{translate("sessions.new.participant")}</FieldLabel>
                     <Select onValueChange={val => { field.onChange(val); setSelectedParticipantId(val); }}>
                       <SelectTrigger
                         disabled={isLoading}
                         className="rounded-xl h-[42px] text-[13px]"
                         style={{ borderColor: BORDER }}
                       >
-                        <SelectValue placeholder="Select participant…" />
+                        <SelectValue placeholder={translate("sessions.new.selectParticipant")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {participants?.map(p => (
+                        {participants?.map((p: any) => (
                           <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -190,7 +193,7 @@ export default function SessionNew() {
                 name="session_date"
                 render={({ field }) => (
                   <FormItem>
-                    <FieldLabel>Date</FieldLabel>
+                    <FieldLabel>{translate("sessions.new.date")}</FieldLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <button
@@ -199,7 +202,7 @@ export default function SessionNew() {
                           style={{ borderColor: BORDER, color: field.value ? T1 : T3 }}
                         >
                           <CalendarIcon size={14} style={{ color: T3 }} />
-                          {field.value ? format(field.value, "PPP") : "Pick date"}
+                          {field.value ? format(field.value, "PPP") : translate("sessions.new.pickDate")}
                         </button>
                       </PopoverTrigger>
                       <PopoverContent>
@@ -216,7 +219,7 @@ export default function SessionNew() {
                 name="session_time"
                 render={({ field }) => (
                   <FormItem>
-                    <FieldLabel>Time</FieldLabel>
+                    <FieldLabel>{translate("sessions.new.time")}</FieldLabel>
                     <div className="relative">
                       <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: T3 }} />
                       <Input
@@ -236,7 +239,7 @@ export default function SessionNew() {
                 name="duration_minutes"
                 render={({ field }) => (
                   <FormItem>
-                    <FieldLabel>Duration (minutes)</FieldLabel>
+                    <FieldLabel>{translate("sessions.new.duration")}</FieldLabel>
                     <Input
                       type="number"
                       {...field}
@@ -253,18 +256,18 @@ export default function SessionNew() {
                 name="session_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FieldLabel>Session Type</FieldLabel>
+                    <FieldLabel>{translate("sessions.new.sessionType")}</FieldLabel>
                     <Select onValueChange={field.onChange}>
                       <SelectTrigger
                         className="rounded-xl h-[42px] text-[13px]"
                         style={{ borderColor: BORDER }}
                       >
-                        <SelectValue placeholder="Select type…" />
+                        <SelectValue placeholder={translate("sessions.new.selectType")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Assessment">Assessment</SelectItem>
-                        <SelectItem value="Therapy">Therapy</SelectItem>
-                        <SelectItem value="Review">Review</SelectItem>
+                        <SelectItem value="Assessment">{translate("sessions.new.type.assessment")}</SelectItem>
+                        <SelectItem value="Therapy">{translate("sessions.new.type.therapy")}</SelectItem>
+                        <SelectItem value="Review">{translate("sessions.new.type.review")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormItem>
@@ -289,14 +292,14 @@ export default function SessionNew() {
               >
                 <div className="flex items-center gap-2.5">
                   <Target size={16} style={{ color: PLUM }} />
-                  <h2 className="text-[16px] font-semibold" style={{ color: T1 }}>NDIS Goals for This Session</h2>
+                  <h2 className="text-[16px] font-semibold" style={{ color: T1 }}>{translate("sessions.new.goalsTitle")}</h2>
                 </div>
                 {selectedGoalIds.length === 0 && (
                   <span
                     className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide"
                     style={{ background: "rgba(245,158,11,0.10)", color: "#D97706" }}
                   >
-                    Required
+                    {translate("common.required")}
                   </span>
                 )}
               </div>
@@ -309,7 +312,7 @@ export default function SessionNew() {
                   >
                     <AlertCircle size={14} className="shrink-0 mt-0.5" style={{ color: T3 }} />
                     <p className="text-[13px]" style={{ color: T2 }}>
-                      This participant has no active goals. Add goals on the participant profile before starting a session.
+                      {translate("sessions.new.noGoals")}
                     </p>
                   </div>
                 ) : (
@@ -339,7 +342,7 @@ export default function SessionNew() {
                     {selectedGoalIds.length === 0 && (
                       <p className="flex items-center gap-1.5 text-[12px] mt-2" style={{ color: "#D97706" }}>
                         <AlertCircle size={12} className="shrink-0" />
-                        Select at least one goal to meet NDIS documentation requirements.
+                        {translate("sessions.new.selectGoalHint")}
                       </p>
                     )}
                   </div>
@@ -349,16 +352,18 @@ export default function SessionNew() {
           )}
 
           {/* ── Intelligence layer ── */}
-          <FormCard icon={<Zap size={16} />} title="Session Intelligence" accent>
+          <FormCard icon={<Zap size={16} />} title={translate("sessions.new.intelligence")} accent>
             <div className="space-y-6">
 
               {/* Quick intents */}
               <div>
-                <FieldLabel>Quick Intent</FieldLabel>
+                <FieldLabel>{translate("sessions.new.quickIntent")}</FieldLabel>
                 <div className="flex flex-wrap gap-2">
-                  {QUICK_INTENTS.map(intent => (
+                  {QUICK_INTENT_KEYS.map(intentKey => {
+                    const intent = translate(intentKey);
+                    return (
                     <button
-                      key={intent}
+                      key={intentKey}
                       type="button"
                       onClick={() => form.setValue("session_focus", intent)}
                       className="px-3 py-1.5 rounded-full text-[12px] font-medium border transition-all duration-150 hover:-translate-y-0.5"
@@ -370,16 +375,16 @@ export default function SessionNew() {
                     >
                       {intent}
                     </button>
-                  ))}
+                  );})}
                 </div>
               </div>
 
               {/* Session focus */}
               <div>
-                <FieldLabel>Session Focus</FieldLabel>
+                <FieldLabel>{translate("sessions.new.sessionFocus")}</FieldLabel>
                 <SmartInput
                   id="session_focus"
-                  placeholder="e.g. improve mobility — or tap the mic to speak"
+                  placeholder={translate("sessions.new.sessionFocusPlaceholder")}
                   value={form.watch("session_focus") ?? ""}
                   onChange={v => form.setValue("session_focus", v)}
                 />
@@ -387,10 +392,10 @@ export default function SessionNew() {
 
               {/* Pre-session notes */}
               <div>
-                <FieldLabel>Pre-session Notes</FieldLabel>
+                <FieldLabel>{translate("sessions.new.preSessionNotes")}</FieldLabel>
                 <SmartTextarea
                   id="pre_session_notes"
-                  placeholder="Anything important to know before starting — or tap the mic to dictate in any language"
+                  placeholder={translate("sessions.new.preSessionNotesPlaceholder")}
                   rows={3}
                   value={form.watch("pre_session_notes") ?? ""}
                   onChange={v => form.setValue("pre_session_notes", v)}
@@ -399,13 +404,14 @@ export default function SessionNew() {
 
               {/* Tags */}
               <div>
-                <FieldLabel>Tags</FieldLabel>
+                <FieldLabel>{translate("sessions.new.tags")}</FieldLabel>
                 <div className="flex flex-wrap gap-2">
-                  {AVAILABLE_TAGS.map(tag => {
+                  {TAG_KEYS.map(tagKey => {
+                    const tag = translate(tagKey);
                     const active = form.watch("tags").includes(tag);
                     return (
                       <button
-                        key={tag}
+                        key={tagKey}
                         type="button"
                         onClick={() => {
                           const cur = form.getValues("tags");
@@ -435,7 +441,7 @@ export default function SessionNew() {
               className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-colors duration-150 hover:bg-[#F6F4FB]"
               style={{ borderColor: BORDER, color: T2 }}
             >
-              Cancel
+              {translate("common.cancel")}
             </button>
 
             <div className="flex items-center gap-3">
@@ -445,7 +451,7 @@ export default function SessionNew() {
                 className="px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition-all duration-150 hover:bg-[#F6F4FB]"
                 style={{ borderColor: BORDER, color: T2 }}
               >
-                Save Draft
+                {translate("sessions.new.saveDraft")}
               </button>
 
               <button
@@ -453,12 +459,12 @@ export default function SessionNew() {
                 data-testid="button-start-session"
                 onClick={form.handleSubmit(d => handleSubmit(d, true))}
                 disabled={startDisabled || createSessionMutation.isPending}
-                title={startDisabled ? "Select at least one participant goal before starting." : undefined}
+                title={startDisabled ? translate("sessions.new.startDisabled") : undefined}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-[13px] font-bold transition-all duration-200 hover:opacity-90 disabled:opacity-40"
-                style={{ background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)` }}
+                style={{ background: PLUM }}
               >
                 {createSessionMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                Start Session
+                {translate("sessions.new.startSession")}
               </button>
             </div>
           </div>

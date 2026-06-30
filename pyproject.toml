@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "aiofiles>=25.1.0",
     "anthropic>=0.40.0",
+    "apscheduler>=3.10.0",
     "fastapi>=0.136.1",
     "httpx>=0.28.1",
     "openai>=2.32.0",
@@ -17,4 +18,14 @@ dependencies = [
     "python-multipart>=0.0.27",
     "supabase>=2.29.0",
     "uvicorn[standard]>=0.46.0",
+    "pyotp>=2.9.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "reportlab>=4.2.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+storage-s3 = ["boto3>=1.34.0"]
+storage-azure = ["azure-storage-blob>=12.19.0"]
+storage-all = ["boto3>=1.34.0", "azure-storage-blob>=12.19.0"]

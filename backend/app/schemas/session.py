@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import date
 
+from .progress import ProgressDeltaEntry
+
 
 class GoalProgressNote(BaseModel):
     """Per-goal structured documentation captured during a session (SCRUM-226)."""
@@ -44,6 +46,7 @@ class SessionCreate(BaseModel):
     goal_progress_notes: Optional[List[GoalProgressNote]] = []
     # SCRUM-227: participant choice & control narrative
     participant_choice_control: Optional[str] = None
+    progress_delta: Optional[List[ProgressDeltaEntry]] = None
 
 
 class SessionUpdate(BaseModel):
@@ -89,3 +92,4 @@ class SessionUpdate(BaseModel):
     goal_progress_notes: Optional[List[GoalProgressNote]] = None
     # SCRUM-227: participant choice & control narrative
     participant_choice_control: Optional[str] = None
+    progress_delta: Optional[List[ProgressDeltaEntry]] = None

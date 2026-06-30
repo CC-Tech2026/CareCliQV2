@@ -2,10 +2,13 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
+from .services.email_queue import start_email_queue, stop_email_queue
+from .services.notification_scheduler import start_notification_scheduler, stop_notification_scheduler
+from .jobs import start_scheduler, stop_scheduler
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +57,25 @@ def _sync_check_column(supabase, table: str, columns: str) -> bool:
         return True  # assume OK on unknown errors
 
 
+async def _validate_supabase_region_startup():
+    """Block startup when hosted Supabase is not in ap-southeast-2 (Sydney)."""
+    import asyncio
+    from .core.config import settings
+    from .core.supabase_region import SupabaseRegionError, validate_supabase_region
+
+    try:
+        await asyncio.to_thread(
+            validate_supabase_region,
+            supabase_url=settings.supabase_url,
+            declared_region=settings.supabase_region or None,
+            access_token=settings.supabase_access_token or None,
+            region_check_mode=settings.supabase_region_check,
+        )
+    except SupabaseRegionError as exc:
+        logger.critical("%s", exc)
+        raise RuntimeError(str(exc)) from exc
+
+
 async def _apply_startup_migrations():
     """Verify schema on startup in parallel, set migration_state flags."""
     import asyncio
@@ -74,6 +96,10 @@ async def _apply_startup_migrations():
             ("patient_goals",        "patient_goals",           "id, plan_id, description",                                                    "patient_goals table OK",                "patient_goals table missing — run backend/supabase_setup.sql"),
             ("practitioner_allocs",  "practitioner_allocations","id, patient_id, user_id, allocated_role",                                     "practitioner_allocations table OK",     "practitioner_allocations table missing — run backend/supabase_setup.sql"),
             ("upcoming_review_date", "patients",                "upcoming_review_date",                                                        "patients.upcoming_review_date column OK", "patients.upcoming_review_date missing — run backend/supabase_setup.sql"),
+            ("progress_delta",     "sessions",                "progress_delta",                                                              "sessions.progress_delta column OK",     "sessions.progress_delta missing — run backend/supabase/migrations/028_progress_delta.sql"),
+            ("shifts",             "shifts",                  "id, organization_id, worker_id, scheduled_start, duration_minutes, status", "shifts table OK",                       "shifts table missing — run backend/supabase/migrations/029_shifts.sql"),
+            ("sessions_shift_id",  "sessions",                "shift_id",                                                                    "sessions.shift_id column OK",           "sessions.shift_id missing — run backend/supabase/migrations/029_shifts.sql"),
+            ("ai_detected_patterns", "ai_detected_patterns",  "id, organization_id, pattern_type, title, message",                           "ai_detected_patterns table OK",         "ai_detected_patterns missing — run backend/supabase/migrations/030_ai_detected_patterns.sql"),
         ]
 
         # Fire all probes in parallel via thread pool (supabase client is sync)
@@ -113,6 +139,14 @@ async def _apply_startup_migrations():
                 migration_state.practitioner_allocations_table_missing = not ok
             elif key == "upcoming_review_date":
                 migration_state.upcoming_review_date_column_missing = not ok
+            elif key == "progress_delta":
+                migration_state.progress_delta_column_missing = not ok
+            elif key == "shifts":
+                migration_state.shifts_table_missing = not ok
+            elif key == "sessions_shift_id":
+                migration_state.sessions_shift_id_column_missing = not ok
+            elif key == "ai_detected_patterns":
+                migration_state.ai_detected_patterns_table_missing = not ok
 
     except Exception as e:
         logger.warning(f"Startup migration check failed (non-critical): {e}")
@@ -120,8 +154,15 @@ async def _apply_startup_migrations():
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
+    await _validate_supabase_region_startup()
+    start_email_queue()
     await _apply_startup_migrations()
+    start_notification_scheduler()
+    start_scheduler()
     yield
+    stop_scheduler()
+    await stop_notification_scheduler()
+    stop_email_queue()
 
 
 app = FastAPI(
@@ -149,13 +190,23 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(plans.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(ai_suggestions.router)  # Uses /api/ai prefix internally
 app.include_router(compliance.router, prefix="/api")
 app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(billing.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")
+# worker_scheduling must register before worker — /worker/shifts/calendar must not match /shifts/{shift_id}
+app.include_router(worker_scheduling.router, prefix="/api")
+app.include_router(worker_performance.router, prefix="/api")
+app.include_router(worker_travel.router, prefix="/api")
+app.include_router(tasks.router, prefix="/api")
 app.include_router(worker.router, prefix="/api")
+app.include_router(privacy.router, prefix="/api")
+app.include_router(worker_help.router, prefix="/api")
+app.include_router(calendar_feed.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
 app.include_router(coordinator.router, prefix="/api")
 app.include_router(security.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
@@ -165,6 +216,9 @@ app.include_router(toolkit.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(hub.router, prefix="/api")
 app.include_router(md_onboarding.router, prefix="/api")
+app.include_router(ndis_pricing.router, prefix="/api")
+app.include_router(ndis_tasks.router, prefix="/api")
+app.include_router(budget_ledger.router)  # Uses internal /api/ledger prefix
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")
 
@@ -191,6 +245,10 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
         "session_messages_table_missing":             migration_state.session_messages_table_missing,
         "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
         "practitioner_allocations_table_missing":     migration_state.practitioner_allocations_table_missing,
+        "progress_delta_column_missing":              migration_state.progress_delta_column_missing,
+        "shifts_table_missing":                       migration_state.shifts_table_missing,
+        "sessions_shift_id_column_missing":           migration_state.sessions_shift_id_column_missing,
+        "ai_detected_patterns_table_missing":         migration_state.ai_detected_patterns_table_missing,
         "migration_sql_file":                         "backend/supabase_setup.sql",
         "patch_sql_file":                             "backend/supabase_patch_missing_tables.sql",
         "supabase_sql_editor":                        _MIGRATION_URL,
@@ -203,6 +261,10 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
             migration_state.session_messages_table_missing,
             migration_state.patient_goals_table_missing,
             migration_state.practitioner_allocations_table_missing,
+            migration_state.progress_delta_column_missing,
+            migration_state.shifts_table_missing,
+            migration_state.sessions_shift_id_column_missing,
+            migration_state.ai_detected_patterns_table_missing,
         ]),
     }
 

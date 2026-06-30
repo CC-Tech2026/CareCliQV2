@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import base64
+import logging
+import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import logging
-
+from .object_storage import upload_evidence_bytes
 from .supabase_client import get_supabase_admin
 from .documentation_normalization_service import normalize_documentation_for_legal_record
 from .compliance_engine import BLOCKING_TRANSLATION_STATUSES, COMPLIANCE_BLOCKED_MESSAGE
@@ -12,14 +15,19 @@ from ..core.access import can_access_session, is_coordinator_role, user_id
 from ..schemas.incident import (
     IncidentCreate,
     IncidentUpdate,
+    WorkerIncidentCreate,
     NDIS_NOTIFICATION_HOURS,
     PRACTICE_STANDARD_MAP,
+    WORKER_REPORT_TYPE_TO_INCIDENT,
     is_ndis_reportable,
+    map_worker_severity,
+    worker_status_label,
 )
 
 logger = logging.getLogger(__name__)
 
 TABLE = "incidents"
+DATA_URL_RE = re.compile(r"^data:(image/[\w.+-]+);base64,(.+)$", re.DOTALL)
 LEGAL_TEXT_FIELDS = (
     "title",
     "description",
@@ -28,6 +36,52 @@ LEGAL_TEXT_FIELDS = (
     "investigation_notes",
     "corrective_actions",
 )
+
+OPTIONAL_INCIDENT_COLUMNS = frozenset({
+    "original_language_input",
+    "detected_language",
+    "translated_english_report",
+    "compliance_input_text",
+    "translation_metadata",
+    "translation_status",
+    "translation_provider",
+    "translation_confidence",
+    "translation_error",
+    "translation_completed_at",
+})
+
+
+def _strip_unsupported_incident_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Drop legal-record / optional fields so insert works on lean schemas."""
+    return {k: v for k, v in payload.items() if k not in OPTIONAL_INCIDENT_COLUMNS}
+
+
+def _insert_incident_payload(supabase: Any, payload: dict[str, Any]) -> Any:
+    lean = _strip_unsupported_incident_fields(payload)
+    try:
+        return supabase.table(TABLE).insert(lean).execute()
+    except Exception as exc:
+        if not _is_missing_column_error(exc):
+            raise
+        # Last resort: drop shift photos/link columns if migration 041 not applied
+        fallback = {
+            k: v
+            for k, v in lean.items()
+            if k not in {"photo_urls", "photo_metadata", "shift_id", "escalate"}
+        }
+        logger.warning("Incident insert retry without shift/photo columns: %s", exc)
+        return supabase.table(TABLE).insert(fallback).execute()
+
+
+def _is_missing_column_error(exc: Exception) -> bool:
+    err = str(exc).lower()
+    return (
+        "pgrst" in err
+        or "does not exist" in err
+        or "42703" in err
+        or "could not find" in err
+        or "column of" in err
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +185,10 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
         and status != "closed"
     )
 
+    enriched["worker_status_label"] = worker_status_label(status)
+    sev = str(enriched.get("severity") or "medium").lower()
+    enriched["worker_severity_label"] = "Emergency" if sev == "critical" else sev.capitalize()
+
     return enriched
 
 
@@ -203,6 +261,7 @@ async def get_all_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
     org_id: Optional[str] = None,
     reporter_id: Optional[str] = None,
     current_user: Optional[dict] = None,
@@ -225,6 +284,9 @@ async def get_all_incidents(
 
     if participant_id:
         query = query.eq("participant_id", participant_id)
+
+    if shift_id:
+        query = query.eq("shift_id", shift_id)
 
     if org_id:
         query = query.eq("organization_id", org_id)
@@ -453,24 +515,16 @@ async def create_incident(
     supabase = get_supabase_admin()
 
     payload: dict[str, Any] = data.model_dump(
-        exclude_none=True
+        exclude_none=True,
+        exclude={"photo_data", "photo_items"},
     )
+    photo_data = list(data.photo_data or [])
+    photo_items = list(data.photo_items or [])
+    if photo_items and not photo_data:
+        photo_data = [item.data for item in photo_items if item.data]
 
-    try:
-        await _apply_legal_record_normalization(
-            payload,
-            payload,
-            current_user={"sub": user_id, "organization_id": org_id} if user_id or org_id else None,
-        )
-    except ValueError:
-        # Translation blocking is non-fatal for new incident creation.
-        # The incident is logged immediately so the safety record is preserved;
-        # translation can be applied later via an update.
-        logger.warning(
-            "Legal record normalization failed during incident creation — "
-            "proceeding without translation enrichment."
-        )
-
+    # Shift incident reports: save core fields only. Legal-record / translation
+    # columns are applied later on coordinator review (when present in DB).
     if org_id:
         payload["organization_id"] = org_id
     if user_id:
@@ -509,12 +563,37 @@ async def create_incident(
         datetime.now(timezone.utc).isoformat()
     )
 
-    result = (
-        supabase
-        .table(TABLE)
-        .insert(payload)
-        .execute()
-    )
+    if data.escalate:
+        payload["severity"] = "critical"
+
+    incident_id = str(uuid.uuid4())
+    payload["id"] = incident_id
+
+    if photo_data and org_id:
+        uploaded = _upload_incident_photos(
+            photo_data, str(org_id), incident_id, photo_items=photo_items, max_photos=6,
+        )
+        if uploaded:
+            payload["photo_urls"] = uploaded
+            metadata: list[dict[str, Any]] = []
+            for index, url in enumerate(uploaded):
+                item = photo_items[index] if index < len(photo_items) else None
+                meta: dict[str, Any] = {
+                    "url": url,
+                    "description": ((item.description if item else "") or "").strip() or None,
+                    "captured_at": (
+                        item.captured_at if item and item.captured_at
+                        else datetime.now(timezone.utc).isoformat()
+                    ),
+                }
+                if item and item.latitude is not None:
+                    meta["latitude"] = item.latitude
+                if item and item.longitude is not None:
+                    meta["longitude"] = item.longitude
+                metadata.append(meta)
+            payload["photo_metadata"] = metadata
+
+    result = _insert_incident_payload(supabase, payload)
 
     rows = _safe_rows(result.data)
 
@@ -524,6 +603,211 @@ async def create_incident(
         )
 
     return _enrich(rows[0])
+
+
+def _generate_reference_number(supabase: Any) -> Optional[str]:
+    try:
+        resp = supabase.rpc("generate_incident_reference_number").execute()
+        ref = resp.data
+        if isinstance(ref, str) and ref.strip():
+            return ref.strip()
+    except Exception as exc:
+        if not _is_missing_column_error(exc):
+            logger.warning("Reference number generation failed: %s", exc)
+    return None
+
+
+def _worker_report_title(body: WorkerIncidentCreate) -> str:
+    labels = {
+        "safety_hazard": "Safety hazard",
+        "participant_behaviour": "Participant behaviour",
+        "equipment_damage": "Equipment damage",
+        "travel_accident": "Travel accident",
+        "other": "Incident",
+    }
+    base = labels.get(body.worker_report_type, "Incident")
+    if body.behaviour_subtype:
+        return f"{base} ({body.behaviour_subtype})"
+    return base
+
+
+async def create_worker_incident(
+    body: WorkerIncidentCreate,
+    *,
+    org_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    incident_type = WORKER_REPORT_TYPE_TO_INCIDENT.get(
+        body.worker_report_type, "other",
+    )
+    internal_severity = map_worker_severity(body.severity)
+    participant_impact = None
+    if body.participant_harmed:
+        participant_impact = f"Participant harmed: {body.participant_harmed}"
+
+    create = IncidentCreate(
+        participant_id=body.participant_id,
+        session_id=body.session_id,
+        shift_id=body.shift_id,
+        title=_worker_report_title(body),
+        description=body.description.strip(),
+        incident_type=incident_type,
+        severity=internal_severity,
+        incident_date=body.incident_date,
+        location=body.location,
+        participant_impact=participant_impact,
+        worker_actions=body.worker_actions,
+        escalate=body.severity == "emergency",
+        photo_items=body.photo_items[:3] if body.photo_items else None,
+        worker_report_type=body.worker_report_type,
+        behaviour_subtype=body.behaviour_subtype,
+        participant_present=body.participant_present,
+        participant_harmed=body.participant_harmed,
+    )
+
+    supabase = get_supabase_admin()
+    payload: dict[str, Any] = create.model_dump(
+        exclude_none=True,
+        exclude={"photo_data", "photo_items"},
+    )
+    photo_items = list(create.photo_items or [])
+    photo_data = [item.data for item in photo_items if item.data]
+
+    payload["organization_id"] = org_id
+    payload["user_id"] = user_id
+    payload["created_by"] = user_id
+    payload["worker_report_type"] = body.worker_report_type
+    payload["behaviour_subtype"] = body.behaviour_subtype
+    payload["participant_present"] = body.participant_present
+    payload["participant_harmed"] = body.participant_harmed
+
+    for key in ("incident_date",):
+        if payload.get(key) is not None:
+            payload[key] = str(payload[key])
+
+    payload["ndis_reportable"] = is_ndis_reportable(incident_type, internal_severity)
+    payload["practice_standard"] = PRACTICE_STANDARD_MAP.get(
+        incident_type, "Standard 2.3 — Incident management",
+    )
+    payload["status"] = "reported"
+    payload["reported_date"] = datetime.now(timezone.utc).isoformat()
+
+    incident_id = str(uuid.uuid4())
+    payload["id"] = incident_id
+
+    ref = _generate_reference_number(supabase)
+    if ref:
+        payload["reference_number"] = ref
+
+    if photo_data and org_id:
+        uploaded = _upload_incident_photos(
+            photo_data, org_id, incident_id, photo_items=photo_items, max_photos=3,
+        )
+        if uploaded:
+            payload["photo_urls"] = uploaded
+            metadata: list[dict[str, Any]] = []
+            for index, url in enumerate(uploaded):
+                item = photo_items[index] if index < len(photo_items) else None
+                meta: dict[str, Any] = {
+                    "url": url,
+                    "captured_at": (
+                        item.captured_at if item and item.captured_at
+                        else datetime.now(timezone.utc).isoformat()
+                    ),
+                }
+                if item and item.latitude is not None:
+                    meta["latitude"] = item.latitude
+                if item and item.longitude is not None:
+                    meta["longitude"] = item.longitude
+                metadata.append(meta)
+            payload["photo_metadata"] = metadata
+
+    result = _insert_incident_payload(supabase, payload)
+    rows = _safe_rows(result.data)
+    if not rows:
+        raise ValueError("Incident insert returned no rows")
+    return _enrich(rows[0])
+
+
+async def add_incident_correction(
+    incident_id: str,
+    *,
+    worker_id: str,
+    org_id: str,
+    note: str,
+) -> dict[str, Any]:
+    supabase = get_supabase_admin()
+    existing = await get_incident_by_id(incident_id)
+    if not existing:
+        raise ValueError("Incident not found")
+    if str(existing.get("user_id") or "") != str(worker_id):
+        raise ValueError("Only the reporting worker can add a correction note")
+    row = {
+        "incident_id": incident_id,
+        "worker_id": worker_id,
+        "organization_id": org_id,
+        "note": note.strip(),
+    }
+    try:
+        resp = supabase.table("incident_corrections").insert(row).execute()
+        rows = _safe_rows(resp.data)
+        return rows[0] if rows else row
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            raise ValueError("Correction notes are not available — run database migrations.") from exc
+        raise
+
+
+async def list_incident_corrections(incident_id: str) -> list[dict[str, Any]]:
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("incident_corrections")
+            .select("*")
+            .eq("incident_id", incident_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return _safe_rows(resp.data)
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        raise
+
+
+def _upload_incident_photos(
+    photo_data: list[str],
+    org_id: str,
+    incident_id: str,
+    *,
+    photo_items: Optional[list[Any]] = None,
+    max_photos: int = 6,
+) -> list[str]:
+    urls: list[str] = []
+    for index, raw in enumerate(photo_data[:max_photos]):
+        if not raw or not isinstance(raw, str):
+            continue
+        mime = "image/jpeg"
+        payload = raw.strip()
+        match = DATA_URL_RE.match(payload)
+        if match:
+            mime = match.group(1)
+            payload = match.group(2)
+        try:
+            binary = base64.b64decode(payload, validate=False)
+        except Exception:
+            continue
+        if not binary:
+            continue
+        ext = "jpg" if "jpeg" in mime or "jpg" in mime else "png"
+        path = f"incidents/{org_id}/{incident_id}/{uuid.uuid4().hex}_{index}.{ext}"
+        try:
+            stored = upload_evidence_bytes(path, binary, mime)
+            if stored.file_url:
+                urls.append(stored.file_url)
+        except Exception as exc:
+            logger.warning("Incident photo upload failed: %s", exc)
+    return urls
 
 
 # ---------------------------------------------------------------------------

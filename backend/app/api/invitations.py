@@ -338,6 +338,17 @@ async def update_member_role(
 
     try:
         supabase = get_supabase_admin()
+        
+        # Safeguard: prevent demoting the last coordinator in the organization
+        if new_role != "support_coordinator":
+            members_query = supabase.table("organization_members").select("id, role").eq("organization_id", org_id).eq("is_active", True).execute()
+            other_coordinators = [m for m in (members_query.data or []) if m["id"] != member_id and m["role"] == "support_coordinator"]
+            if len(other_coordinators) == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot demote the last coordinator in the organization. Ensure at least one coordinator remains."
+                )
+        
         # Update organization_members (source of truth on login)
         member_row = supabase.table("organization_members").update({"role": new_role}).eq("id", member_id).eq("organization_id", org_id).returning("*").execute()
         if not (member_row.data or []):

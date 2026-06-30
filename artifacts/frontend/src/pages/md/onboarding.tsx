@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+﻿import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, GraduationCap, Users, CheckCircle2, Clock, AlertTriangle,
@@ -6,6 +6,7 @@ import {
   FileVideo, Link2, X, Loader2,
 } from "lucide-react";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -26,12 +27,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
 const GREEN  = "#10B981";
 const AMBER  = "#F59E0B";
 
@@ -370,7 +371,7 @@ function StageSheet({
                     type="checkbox"
                     checked={!!reqs[key]}
                     onChange={() => toggleReq(key)}
-                    className="h-4 w-4 rounded accent-[#5533CC]"
+                    className="h-4 w-4 rounded accent-[#3730A3]"
                   />
                   <span className="text-[13px] font-medium" style={{ color: TEXT }}>{label}</span>
                 </label>
@@ -404,7 +405,7 @@ function StageSheet({
                       type="checkbox"
                       checked={attachedIds.has(r.id)}
                       onChange={() => toggleAttach(r.id)}
-                      className="h-4 w-4 rounded accent-[#5533CC] shrink-0"
+                      className="h-4 w-4 rounded accent-[#3730A3] shrink-0"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{r.name}</p>
@@ -679,7 +680,7 @@ function BuilderTab() {
               className="rounded-lg border px-4 py-2 text-[12px] font-black transition"
               style={{
                 borderColor: selectedProgram?.id === p.id ? PLUM : BORDER,
-                background: selectedProgram?.id === p.id ? PLUM : "white",
+                background: selectedProgram?.id === p.id ? PLUM : "var(--cc-bg)",
                 color: selectedProgram?.id === p.id ? "#fff" : TEXT,
               }}
             >
@@ -1145,14 +1146,15 @@ function ApprovalsTab() {
   );
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview",  label: "Overview" },
-  { id: "builder",   label: "Builder" },
-  { id: "resources", label: "Resources" },
-  { id: "approvals", label: "Approvals" },
+const TAB_KEYS: { id: Tab; labelKey: string }[] = [
+  { id: "overview", labelKey: "md.onboarding.tab.overview" },
+  { id: "builder", labelKey: "md.onboarding.tab.builder" },
+  { id: "resources", labelKey: "md.onboarding.tab.resources" },
+  { id: "approvals", labelKey: "md.onboarding.tab.approvals" },
 ];
 
 export default function MDOnboardingPage() {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
 
@@ -1165,11 +1167,11 @@ export default function MDOnboardingPage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
-            <h1 className="text-xl font-black" style={{ color: TEXT }}>Onboarding Centre</h1>
-            <p className="text-[12px] font-medium" style={{ color: MUTED }}>Design programs, manage resources, track progress and approve completions</p>
+            <h1 className="text-xl font-black" style={{ color: TEXT }}>{translate("md.onboarding.title")}</h1>
+            <p className="text-[12px] font-medium" style={{ color: MUTED }}>{translate("md.onboarding.subtitle")}</p>
           </div>
           <div className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: SOFT, color: PLUM }}>
             <GraduationCap size={16} strokeWidth={2.5} />
@@ -1177,18 +1179,18 @@ export default function MDOnboardingPage() {
         </div>
 
         <div className="flex gap-1 rounded-xl p-1" style={{ background: SOFT }}>
-          {TABS.map((tab) => (
+          {TAB_KEYS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className="flex-1 rounded-lg py-2 text-[12px] font-black transition"
               style={{
-                background: activeTab === tab.id ? "#fff" : "transparent",
+                background: activeTab === tab.id ? "var(--cc-bg)" : "transparent",
                 color: activeTab === tab.id ? PLUM : MUTED,
                 boxShadow: activeTab === tab.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
               }}
             >
-              {tab.label}
+              {translate(tab.labelKey)}
             </button>
           ))}
         </div>

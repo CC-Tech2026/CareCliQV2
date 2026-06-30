@@ -125,6 +125,78 @@ def get_support_category(session_type: str) -> str:
     return "core"
 
 
+_CATEGORY_LABELS: Dict[str, str] = {
+    "core": "Core Supports",
+    "capacity_building": "Capacity Building",
+    "capital": "Capital Supports",
+}
+
+
+def resolve_session_budget_category(session: dict) -> str:
+    """Map session fields to plan_budgets.category (core | capacity_building | capital)."""
+    raw = str(session.get("support_category") or "").strip().lower()
+    if raw in ("core", "capacity_building", "capital"):
+        return raw
+    if "capacity" in raw:
+        return "capacity_building"
+    if "capital" in raw:
+        return "capital"
+    if "core" in raw:
+        return "core"
+    return get_support_category(str(session.get("session_type") or ""))
+
+
+def build_budget_alignment_context(
+    session: dict,
+    plan: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Build NDIS plan budget context for CARECLIQV2-36 compliance rules.
+
+    Returns None when the participant has no active plan (rules should be skipped).
+    """
+    if not plan:
+        return None
+
+    duration = int(session.get("duration_minutes") or 0)
+    session_type = str(session.get("session_type") or "")
+    cost_info = calculate_session_cost(duration, session_type)
+    category = resolve_session_budget_category(session)
+
+    raw_budgets = plan.get("plan_budgets")
+    budgets = [b for b in raw_budgets if isinstance(b, dict)] if isinstance(raw_budgets, list) else []
+
+    cat_budget: Optional[Dict[str, Any]] = None
+    for budget in budgets:
+        if str(budget.get("category") or "") == category:
+            cat_budget = budget
+            break
+
+    if not cat_budget:
+        return {
+            "has_plan": True,
+            "has_category_budget": False,
+            "category": category,
+            "category_label": _CATEGORY_LABELS.get(category, category.replace("_", " ").title()),
+            "session_cost": float(cost_info.get("cost") or 0),
+        }
+
+    allocated = float(cat_budget.get("allocated_amount") or 0)
+    used = float(cat_budget.get("used_amount") or 0)
+    remaining = round(allocated - used, 2)
+
+    return {
+        "has_plan": True,
+        "has_category_budget": allocated > 0,
+        "category": category,
+        "category_label": _CATEGORY_LABELS.get(category, category.replace("_", " ").title()),
+        "allocated": allocated,
+        "used": used,
+        "remaining": remaining,
+        "session_cost": float(cost_info.get("cost") or 0),
+        "percent_remaining": round((remaining / allocated) * 100, 1) if allocated > 0 else 0.0,
+    }
+
+
 def calculate_session_cost(
     duration_minutes: int,
     session_type: str,
@@ -189,6 +261,39 @@ async def get_plan_for_participant(
         return None
 
 
+async def get_latest_plan_for_participant(
+    participant_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Get the most recent NDIS plan regardless of status."""
+
+    try:
+        supabase = get_supabase_admin()
+
+        result = (
+            supabase.table("ndis_plans")
+            .select("*, plan_budgets(*)")
+            .eq("patient_id", participant_id)
+            .order("plan_start", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        rows = _safe_rows(result.data)
+
+        if not rows:
+            return None
+
+        return _normalize_plan(rows[0])
+
+    except Exception as e:
+        logger.warning(
+            "Could not fetch latest NDIS plan for %s: %s",
+            participant_id,
+            e,
+        )
+        return None
+
+
 async def get_all_plans_for_participant(
     participant_id: str,
 ) -> List[Dict[str, Any]]:
@@ -226,14 +331,14 @@ async def create_or_update_plan(
 
     supabase = get_supabase_admin()
 
-    payload = dict(plan_data)
+    payload = {k: v for k, v in dict(plan_data).items() if v is not None}
     payload["patient_id"] = participant_id
 
     for field in ("plan_start", "plan_end"):
         if payload.get(field):
             payload[field] = str(payload[field])[:10]
 
-    existing = await get_plan_for_participant(participant_id)
+    existing = await get_latest_plan_for_participant(participant_id)
 
     if existing:
         result = (
@@ -244,6 +349,17 @@ async def create_or_update_plan(
         )
     else:
         payload.setdefault("status", "active")
+
+        patient_resp = (
+            supabase.table("patients")
+            .select("organization_id")
+            .eq("id", participant_id)
+            .maybe_single()
+            .execute()
+        )
+        patient_row = patient_resp.data if patient_resp else None
+        if isinstance(patient_row, dict) and patient_row.get("organization_id"):
+            payload["organization_id"] = patient_row["organization_id"]
 
         result = supabase.table("ndis_plans").insert(payload).execute()
 
@@ -397,6 +513,9 @@ async def get_budget_summary(
     """Get participant budget summary."""
 
     plan = await get_plan_for_participant(participant_id)
+
+    if not plan:
+        plan = await get_latest_plan_for_participant(participant_id)
 
     if not plan:
         return {

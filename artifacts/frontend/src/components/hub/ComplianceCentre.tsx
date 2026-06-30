@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, Info, ShieldAlert } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { getHubComplianceAlerts, type HubComplianceAlert } from "@/services/hubService";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
-const PLUM   = "#5533CC";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
+const PLUM   = "var(--cc-plum)";
 
 type Severity = "critical" | "high" | "medium" | "info" | "positive";
 
@@ -17,19 +18,20 @@ const SEVERITY_CONFIG: Record<
   Severity,
   {
     icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
-    label: string;
+    labelKey: string;
     color: string;
     chip: string;
   }
 > = {
-  critical: { icon: ShieldAlert,   label: "Critical", color: "#EF4444", chip: "bg-red-50 text-red-700" },
-  high:     { icon: AlertTriangle, label: "High",     color: "#F97316", chip: "bg-orange-50 text-orange-700" },
-  medium:   { icon: Clock,         label: "Medium",   color: "#F59E0B", chip: "bg-amber-50 text-amber-700" },
-  info:     { icon: Info,          label: "Info",     color: "#3B82F6", chip: "bg-blue-50 text-blue-700" },
-  positive: { icon: CheckCircle2,  label: "Clear",    color: "#10B981", chip: "bg-emerald-50 text-emerald-700" },
+  critical: { icon: ShieldAlert,   labelKey: "hub.compliance.severity.critical", color: "#EF4444", chip: "bg-red-50 text-red-700" },
+  high:     { icon: AlertTriangle, labelKey: "hub.compliance.severity.high",     color: "#F97316", chip: "bg-orange-50 text-orange-700" },
+  medium:   { icon: Clock,         labelKey: "hub.compliance.severity.medium",   color: "#F59E0B", chip: "bg-amber-50 text-amber-700" },
+  info:     { icon: Info,          labelKey: "hub.compliance.severity.info",     color: "#3B82F6", chip: "bg-blue-50 text-blue-700" },
+  positive: { icon: CheckCircle2,  labelKey: "hub.compliance.severity.clear",    color: "#10B981", chip: "bg-emerald-50 text-emerald-700" },
 };
 
 function AlertRow({ alert }: { alert: HubComplianceAlert }) {
+  const { translate } = useAccessibility();
   const cfg     = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.info;
   const Icon    = cfg.icon;
   const dueDate = alert.due_date ? parseISO(alert.due_date) : null;
@@ -59,19 +61,20 @@ function AlertRow({ alert }: { alert: HubComplianceAlert }) {
             className="mt-0.5 text-[10px] font-semibold"
             style={{ color: isOverdue ? "#EF4444" : MUTED }}
           >
-            {isOverdue ? "Overdue — " : "Due "}{format(dueDate, "d MMM yyyy")}
+            {isOverdue ? translate("hub.compliance.overdue") : translate("hub.compliance.due")}{format(dueDate, "d MMM yyyy")}
           </p>
         )}
       </div>
 
       <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${cfg.chip}`}>
-        {cfg.label}
+        {translate(cfg.labelKey)}
       </span>
     </div>
   );
 }
 
 export function ComplianceCentre() {
+  const { translate, translateParams } = useAccessibility();
   const [alerts,  setAlerts]  = useState<HubComplianceAlert[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(false);
@@ -92,7 +95,7 @@ export function ComplianceCentre() {
   const high     = displayAlerts.filter((a) => a.severity === "high").length;
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm" style={{ borderColor: BORDER }}>
+    <div className="rounded-2xl border bg-cc-surface shadow-sm" style={{ borderColor: BORDER }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
         <p className="text-[10px] font-black uppercase tracking-[0.2em]" style={{ color: MUTED }}>
@@ -106,12 +109,12 @@ export function ComplianceCentre() {
           )}
           {!loading && !error && critical > 0 && (
             <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-700">
-              {critical} critical
+              {translateParams("hub.compliance.critical", { count: String(critical) })}
             </span>
           )}
           {!loading && !error && high > 0 && (
             <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-black text-orange-700">
-              {high} high
+              {translateParams("hub.compliance.high", { count: String(high) })}
             </span>
           )}
           {!loading && !error && critical === 0 && high === 0 && displayAlerts.length === 0 && (
@@ -138,13 +141,13 @@ export function ComplianceCentre() {
         ) : error ? (
           <div className="py-6 text-center">
             <AlertTriangle size={18} className="mx-auto mb-2" style={{ color: "#F97316" }} />
-            <p className="text-[12px] font-bold" style={{ color: TEXT }}>Could not load compliance data</p>
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>{translate("hub.compliance.loadFailed")}</p>
           </div>
         ) : displayAlerts.length === 0 ? (
           <div className="py-6 text-center">
             <CheckCircle2 size={18} className="mx-auto mb-2" style={{ color: "#10B981" }} />
-            <p className="text-[12px] font-bold" style={{ color: TEXT }}>All credentials are current</p>
-            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>No issues to report.</p>
+            <p className="text-[12px] font-bold" style={{ color: TEXT }}>{translate("hub.compliance.allCurrent")}</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: MUTED }}>{translate("hub.compliance.noIssues")}</p>
           </div>
         ) : (
           <div>
@@ -153,7 +156,7 @@ export function ComplianceCentre() {
             ))}
             {displayAlerts.length > 5 && (
               <p className="py-3 text-[11px] font-bold" style={{ color: PLUM }}>
-                +{displayAlerts.length - 5} more alerts
+                {translateParams("hub.compliance.moreAlerts", { count: String(displayAlerts.length - 5) })}
               </p>
             )}
           </div>

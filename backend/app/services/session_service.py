@@ -33,6 +33,8 @@ OPTIONAL_SESSION_COLUMNS = {
     "translation_completed_at",
     "legal_record_text",
     "display_notes",
+    "progress_delta",
+    "shift_id",
 }
 
 
@@ -164,6 +166,16 @@ def _normalize(row: Dict[str, Any]) -> Dict[str, Any]:
 
         out[field] = value
 
+    progress_delta = out.get("progress_delta")
+    if isinstance(progress_delta, str):
+        try:
+            progress_delta = json.loads(progress_delta)
+        except Exception:
+            progress_delta = None
+    if progress_delta is not None and not isinstance(progress_delta, list):
+        progress_delta = [progress_delta] if isinstance(progress_delta, dict) else None
+    out["progress_delta"] = progress_delta
+
     ai_insights = out.get("ai_insights")
 
     if isinstance(ai_insights, str):
@@ -202,6 +214,9 @@ def _prepare_session_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     ):
         if field in out and isinstance(out[field], list):
             out[field] = json.dumps(out[field])
+
+    if "progress_delta" in out and isinstance(out["progress_delta"], list):
+        out["progress_delta"] = json.dumps(out["progress_delta"])
 
     if "participant_id" in out:
         out["patient_id"] = out.pop("participant_id")
@@ -328,6 +343,61 @@ async def get_sessions_by_participant(
     ]
 
     return [_normalize(r) for r in rows]
+
+
+def _normalize_progress_delta_entries(raw: Any) -> list[dict[str, Any]]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return []
+    if isinstance(raw, dict):
+        return [raw]
+    if isinstance(raw, list):
+        return [item for item in raw if isinstance(item, dict)]
+    return []
+
+
+async def get_prior_progress_sessions(
+    participant_id: str,
+    goal_ids: list[str],
+    exclude_session_id: str | None,
+    current_user: Optional[dict],
+    limit: int = 5,
+) -> dict[str, list[dict[str, Any]]]:
+    """Last N completed sessions with progress_delta, keyed by goal_id (CARECLIQV2-79)."""
+    sessions = await get_sessions_by_participant(participant_id, current_user)
+    completed = [
+        s for s in sessions
+        if str(s.get("status") or "").lower() == "completed"
+        and str(s.get("id") or "") != str(exclude_session_id or "")
+        and s.get("progress_delta")
+    ]
+    completed.sort(key=lambda s: str(s.get("session_date") or ""), reverse=True)
+
+    by_goal: dict[str, list[dict[str, Any]]] = {gid: [] for gid in goal_ids}
+    for session in completed:
+        session_id = str(session.get("id") or "")
+        session_date = str(session.get("session_date") or "")
+        goals_in_session = set(str(g) for g in (session.get("goals_addressed") or []))
+        for entry in _normalize_progress_delta_entries(session.get("progress_delta")):
+            goal_id = str(entry.get("goal_id") or "")
+            if goal_ids and goal_id not in goal_ids and goal_id not in goals_in_session:
+                continue
+            target_goals = [goal_id] if goal_id else list(goal_ids)
+            for gid in target_goals:
+                if gid not in by_goal:
+                    by_goal.setdefault(gid, [])
+                if len(by_goal[gid]) >= limit:
+                    continue
+                by_goal[gid].append({
+                    "session_id": session_id,
+                    "session_date": session_date,
+                    "progress_delta": entry,
+                })
+    return by_goal
 
 
 async def get_all_sessions(

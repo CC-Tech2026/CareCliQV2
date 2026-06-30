@@ -1,0 +1,195 @@
+"""Background notification jobs — shift reminders, credentials, task alerts (CARECLIQV2-261/263)."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from ..core.config import settings
+from .notification_service import (
+    get_reminder_offsets_minutes,
+    notify_certification_expiry,
+    notify_shift_reminder,
+)
+from .supabase_client import get_supabase_admin
+from .task_reminder_service import run_task_reminder_pass
+
+logger = logging.getLogger(__name__)
+
+_scheduler_task: Optional[asyncio.Task] = None
+
+
+def _is_missing_schema_error(exc: Exception) -> bool:
+    err = str(exc).lower()
+    return (
+        "does not exist" in err
+        or "42703" in err
+        or "pgrst" in err
+        or "could not find" in err
+    )
+
+
+async def _shifts_in_reminder_window(minutes_before: int) -> list[dict]:
+    now = datetime.now(timezone.utc)
+    target = now + timedelta(minutes=minutes_before)
+    window_start = target - timedelta(minutes=7)
+    window_end = target + timedelta(minutes=7)
+
+    try:
+        result = (
+            get_supabase_admin()
+            .table("shifts")
+            .select(
+                "id, organization_id, worker_id, participant_id, participant_name, "
+                "scheduled_start, status, clocked_in_at"
+            )
+            .gte("scheduled_start", window_start.isoformat())
+            .lt("scheduled_start", window_end.isoformat())
+            .eq("status", "scheduled")
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return []
+        logger.warning("Shift reminder query failed: %s", exc)
+        return []
+
+
+async def run_shift_reminder_pass() -> int:
+    """Notify workers at configured offsets (default 60 and 30 minutes before start)."""
+    sent = 0
+    seen_workers: set[str] = set()
+
+    for minutes_before in (
+        settings.shift_reminder_minutes_first,
+        settings.shift_reminder_minutes_second,
+    ):
+        rows = await _shifts_in_reminder_window(minutes_before)
+        for shift in rows:
+            worker_id = str(shift.get("worker_id") or "")
+            if worker_id and worker_id not in seen_workers:
+                first_m, second_m = get_reminder_offsets_minutes(worker_id)
+                if minutes_before not in (first_m, second_m):
+                    continue
+            try:
+                outcome = await notify_shift_reminder(shift=shift, minutes_before=minutes_before)
+                if outcome and any(outcome.get(k) for k in ("in_app", "email", "push")):
+                    sent += 1
+                    if worker_id:
+                        seen_workers.add(worker_id)
+            except Exception as exc:
+                logger.warning(
+                    "Shift reminder failed for shift %s (%sm): %s",
+                    shift.get("id"),
+                    minutes_before,
+                    exc,
+                )
+    return sent
+
+
+async def run_credential_expiry_pass() -> int:
+    """Notify workers when their own credentials are expiring or expired."""
+    today = date.today()
+    warn_until = today + timedelta(days=30)
+
+    try:
+        result = (
+            get_supabase_admin()
+            .table("credentials")
+            .select("id, user_id, organization_id, title, credential_type, expiry_date, status")
+            .in_("status", ["expiring", "expired", "valid"])
+            .lte("expiry_date", warn_until.isoformat())
+            .execute()
+        )
+        rows = result.data or []
+    except Exception as exc:
+        if _is_missing_schema_error(exc):
+            return 0
+        logger.warning("Credential expiry query failed: %s", exc)
+        return 0
+
+    sent = 0
+    for row in rows:
+        user_id = str(row.get("user_id") or "")
+        if not user_id:
+            continue
+        expiry_raw = row.get("expiry_date")
+        if not expiry_raw:
+            continue
+        try:
+            expiry_date = date.fromisoformat(str(expiry_raw)[:10])
+        except ValueError:
+            continue
+        if expiry_date > warn_until:
+            continue
+        status = "expired" if expiry_date < today else "expiring"
+        title = row.get("title") or row.get("credential_type") or "Credential"
+        try:
+            outcome = await notify_certification_expiry(
+                user_id=user_id,
+                org_id=str(row.get("organization_id") or "") or None,
+                credential_title=str(title),
+                expiry_date=expiry_date.isoformat(),
+                status=status,
+                credential_id=str(row.get("id") or title),
+            )
+            if outcome.get("in_app") or outcome.get("email") or outcome.get("push"):
+                sent += 1
+        except Exception as exc:
+            logger.warning("Credential expiry notify failed for %s: %s", row.get("id"), exc)
+    return sent
+
+
+async def run_notification_pass() -> dict[str, int]:
+    shift_count, credential_count, task_count = await asyncio.gather(
+        run_shift_reminder_pass(),
+        run_credential_expiry_pass(),
+        run_task_reminder_pass(),
+    )
+    return {
+        "shift_reminders": shift_count,
+        "credential_expiry": credential_count,
+        "task_reminders": task_count,
+    }
+
+
+async def _scheduler_loop() -> None:
+    interval = max(5, settings.notification_scheduler_interval_minutes) * 60
+    logger.info(
+        "Notification scheduler started (every %s min, shift reminders at %s/%s min)",
+        settings.notification_scheduler_interval_minutes,
+        settings.shift_reminder_minutes_first,
+        settings.shift_reminder_minutes_second,
+    )
+    while True:
+        try:
+            stats = await run_notification_pass()
+            if any(stats.values()):
+                logger.info("Notification pass complete: %s", stats)
+        except Exception as exc:
+            logger.warning("Notification scheduler pass failed: %s", exc)
+        await asyncio.sleep(interval)
+
+
+def start_notification_scheduler() -> None:
+    global _scheduler_task
+    if not settings.notification_scheduler_enabled:
+        return
+    if _scheduler_task and not _scheduler_task.done():
+        return
+    _scheduler_task = asyncio.create_task(_scheduler_loop())
+
+
+async def stop_notification_scheduler() -> None:
+    global _scheduler_task
+    if not _scheduler_task:
+        return
+    _scheduler_task.cancel()
+    try:
+        await _scheduler_task
+    except asyncio.CancelledError:
+        pass
+    _scheduler_task = None

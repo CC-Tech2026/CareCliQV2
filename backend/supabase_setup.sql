@@ -158,6 +158,9 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='note_completed_at') THEN
         ALTER TABLE sessions ADD COLUMN note_completed_at TIMESTAMPTZ;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='progress_delta') THEN
+        ALTER TABLE sessions ADD COLUMN progress_delta JSONB;
+    END IF;
 END $$;
 
 -- Per-session compliance rule results table (upsert target: session_id + rule_id)

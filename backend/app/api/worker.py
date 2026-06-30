@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
-from datetime import date, timedelta
-from typing import Any, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, Literal, Optional
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
 from ..schemas.session import GoalProgressNote, SessionCreate
-from ..services import audit_service, funding_service, goals_service, participant_service, session_service
+from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
+from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
+from ..services import shift_signature_service
+from ..services.evidence_access_service import verify_and_download_evidence
 from ..services.compliance_rules_catalog import enrich_rule_results, get_rules_catalog
+from ..services.notification_service import notify_office_worker_message
 from ..services.supabase_client import get_supabase_admin
 
 
 router = APIRouter(prefix="/worker", tags=["worker"])
+logger = logging.getLogger(__name__)
 
 
 class WorkerSessionCreate(BaseModel):
@@ -44,6 +51,140 @@ class WorkerNoteCreate(BaseModel):
     session_type: str = "progress_note"
     duration_minutes: int = Field(default=1, ge=1)
     goals_addressed: list[str] = Field(default_factory=list)
+
+
+class ShiftTaskItem(BaseModel):
+    task_id: str
+    type: str = "default"
+    label: str
+    description: str = ""
+    completed: bool = False
+    completed_at: Optional[str] = None
+    checked_at: Optional[str] = None
+    evidence_status: Optional[str] = None
+    evidence_added_at: Optional[str] = None
+    evidence_ids: Optional[list[str]] = None
+    has_photo: Optional[bool] = None
+    has_voice: Optional[bool] = None
+    has_text_notes: Optional[bool] = None
+    note: str = ""
+    context_note: str = ""
+    order: int = 0
+    mandatory: Optional[bool] = None
+    goal_id: Optional[str] = None
+    goal_title: Optional[str] = None
+    outcome_tip: Optional[str] = None
+    photo_evidence: Optional[str] = None
+    voice_evidence: Optional[str] = None
+    photo_thumbnails: Optional[list[str]] = None
+    voice_duration_seconds: Optional[int] = None
+    marked_na: Optional[bool] = None
+    na_reason: Optional[str] = None
+    na_marked_at: Optional[str] = None
+
+
+class ShiftTasksUpdate(BaseModel):
+    tasks: list[ShiftTaskItem]
+
+
+class CustomTaskCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=120)
+
+
+class EndShiftBody(BaseModel):
+    force: bool = False
+
+
+class ShiftSignatureBody(BaseModel):
+    confirm_tasks_accurate: bool
+    confirm_safety_followed: bool
+    confirm_no_unreported_incidents: bool
+    signature_svg: str = Field(min_length=1)
+    signature_png_data_url: str = Field(min_length=1)
+
+
+class ClockInLocationBody(BaseModel):
+    lat: float
+    lng: float
+    accuracy: Optional[float] = None
+
+
+class ClockInBody(BaseModel):
+    method: Literal["gps", "qr"]
+    location: Optional[ClockInLocationBody] = None
+    qr_token: Optional[str] = None
+    client_timestamp: Optional[str] = None
+    claimed_km: Optional[float] = Field(default=None, gt=0, le=2000)
+
+
+class TaskEvidenceItem(BaseModel):
+    evidence_id: str
+    task_id: str
+    session_id: str
+    type: str
+    content: str
+    goal_id: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    file_size_bytes: Optional[int] = None
+    created_at: str
+    synced: bool = False
+
+
+class TaskEvidenceSyncBody(BaseModel):
+    evidence: list[TaskEvidenceItem]
+
+
+class ShiftVisitNoteCreate(BaseModel):
+    content: str = Field(min_length=1)
+    category: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class SessionNoteItem(BaseModel):
+    note_id: str = Field(min_length=1)
+    session_id: Optional[str] = None
+    task_id: Optional[str] = None
+    goal_id: Optional[str] = None
+    content: str = Field(min_length=1)
+    created_at: Optional[str] = None
+    auto_saved_at: Optional[str] = None
+    synced: bool = False
+    note_type: Optional[str] = None
+    file_name: Optional[str] = None
+    attachment_urls: Optional[list[str]] = None
+
+
+class SessionNotesSyncBody(BaseModel):
+    notes: list[SessionNoteItem]
+
+
+class ShiftOfficeMessageCreate(BaseModel):
+    message: str = Field(min_length=1)
+    priority: Literal["normal", "urgent", "emergency"] = "normal"
+    attachment_data: Optional[list[str]] = None
+
+
+class MessageReplyCreate(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class UploadEvidenceMeta(BaseModel):
+    evidence_id: str
+    task_id: str
+    type: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    goal_id: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    created_at: str
+    content: Optional[str] = None
+
+
+class UploadEvidenceBody(BaseModel):
+    session_id: str
+    evidence: list[UploadEvidenceMeta]
+    files: dict[str, str] = {}
 
 
 def _require_worker(user: dict) -> None:
@@ -444,3 +585,976 @@ async def create_my_client_note(
         after_state={"participant_id": participant_id, "session_type": body.session_type},
     )
     return _session_payload(session)
+
+
+@router.get("/shifts")
+async def worker_shifts(
+    filter: str = Query(default="today", alias="filter"),
+    current_user: dict = Depends(get_current_user),
+):
+    """List shifts for the authenticated support worker (CARECLIQV2-116)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    shifts = shift_service.list_shifts_for_worker(worker_id, org_id, filter)
+    return {"shifts": shifts, "filter": filter}
+
+
+@router.get("/shifts/counts")
+async def worker_shift_counts(current_user: dict = Depends(get_current_user)):
+    """Per-filter shift counts for My Shifts tabs (CARECLIQV2-133)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    counts = shift_service.count_shifts_for_worker(worker_id, org_id)
+    return {"counts": counts}
+
+
+@router.get("/shifts/{shift_id}")
+async def worker_shift_detail(shift_id: str, current_user: dict = Depends(get_current_user)):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.get_shift_detail_for_worker(shift_id, worker_id, org_id)
+    except shift_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return shift
+
+
+@router.get("/shifts/{shift_id}/participant-risks")
+async def worker_shift_participant_risks(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Structured safety alerts for a shift (CARECLIQV2-158)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_risks_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.get("/shifts/{shift_id}/support-instructions")
+async def worker_shift_support_instructions(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Category-based support instructions for a shift (CARECLIQV2-157)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_support_instructions_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.get("/shifts/{shift_id}/participant-profile")
+async def worker_shift_participant_profile(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Read-only participant profile for an assigned shift (CARECLIQV2-195)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_profile_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.get("/shifts/{shift_id}/participant-preferences")
+async def worker_shift_participant_preferences(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Read-only participant preferences for an assigned shift (CARECLIQV2-196)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_participant_preferences_for_worker(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.post("/shifts/{shift_id}/clock-in")
+async def worker_clock_in(
+    shift_id: str,
+    body: ClockInBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Clock in to a shift with GPS/QR verification (CARECLIQV2-197)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    location = body.location.model_dump() if body.location else None
+    try:
+        shift = shift_service.clock_in_shift(
+            shift_id,
+            worker_id,
+            org_id,
+            method=body.method,
+            location=location,
+            qr_token=body.qr_token,
+            client_timestamp=body.client_timestamp,
+        )
+    except shift_service.ShiftAlreadyClockedIn as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except shift_service.ShiftNotScheduledToday as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        message = str(exc)
+        status_code = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if any(
+                phrase in message.lower()
+                for phrase in ("too early", "too far", "window closed", "requires", "invalid qr", "qr code")
+            )
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=status_code, detail=message)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    action_type = (
+        "worker.shift.checked_in_verified"
+        if body and body.method
+        else "worker.shift.clocked_in"
+    )
+    await audit_service.log_action(
+        action_type=action_type,
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={
+            "method": body.method if body else None,
+            "verified": shift.get("clock_in_verified"),
+        },
+    )
+    await travel_expense_service.auto_save_mileage_on_clock_in(
+        shift_id=shift_id,
+        worker_id=worker_id,
+        organization_id=org_id,
+        participant_address=shift.get("participant_address"),
+        claimed_km_override=body.claimed_km,
+    )
+    return shift
+
+
+@router.patch("/shifts/{shift_id}/tasks")
+async def worker_update_shift_tasks(
+    shift_id: str,
+    body: ShiftTasksUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Persist task checklist changes (CARECLIQV2-134)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    tasks = [task.model_dump() for task in body.tasks]
+    try:
+        shift = shift_service.update_shift_tasks(shift_id, worker_id, org_id, tasks)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return shift
+
+
+@router.post("/shifts/{shift_id}/tasks/custom", status_code=status.HTTP_201_CREATED)
+async def worker_add_custom_task(
+    shift_id: str,
+    body: CustomTaskCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.add_custom_shift_task(shift_id, worker_id, org_id, body.label)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return shift
+
+
+@router.delete("/shifts/{shift_id}/tasks/{task_id}")
+async def worker_delete_custom_task(
+    shift_id: str,
+    task_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a worker-added custom task from the shift checklist."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.delete_custom_shift_task(shift_id, worker_id, org_id, task_id)
+    except ValueError as exc:
+        message = str(exc)
+        if "not found" in message.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=message)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return shift
+
+
+class BriefingAlertAckBody(BaseModel):
+    alert_id: str
+
+
+class BriefingCompleteBody(BaseModel):
+    scrolled_to_bottom: bool = True
+
+
+@router.get("/shifts/{shift_id}/briefing")
+async def worker_shift_briefing(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Pre-shift briefing payload (CARECLIQV2-267)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        return briefing_service.get_briefing_for_worker(shift_id, worker_id, org_id)
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+
+@router.post("/shifts/{shift_id}/briefing/acknowledge-alert")
+async def worker_acknowledge_briefing_alert(
+    shift_id: str,
+    body: BriefingAlertAckBody,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        payload = briefing_service.acknowledge_briefing_alert(
+            shift_id, body.alert_id, worker_id, org_id
+        )
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.briefing_alert_acknowledged",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        details={"alert_id": body.alert_id},
+    )
+    return payload
+
+
+@router.post("/shifts/{shift_id}/briefing/complete")
+async def worker_complete_briefing(
+    shift_id: str,
+    body: BriefingCompleteBody,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    from ..services import briefing_service
+
+    try:
+        payload = briefing_service.complete_briefing(
+            shift_id,
+            worker_id,
+            org_id,
+            scrolled_to_bottom=body.scrolled_to_bottom,
+        )
+    except briefing_service.ShiftAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.briefing_completed",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return payload
+
+
+@router.post("/shifts/{shift_id}/acknowledge-risks")
+async def worker_acknowledge_risks(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Log risk acknowledgement before shift start (CARECLIQV2-158)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.acknowledge_shift_risks(shift_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await audit_service.log_action(
+        action_type="worker.shift.risks_acknowledged",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return shift
+
+
+from ..schemas.safety_protocol import SafetyProtocolAcknowledge
+from ..services import safety_protocol_service
+
+
+async def _worker_can_access_participant(
+    participant_id: str,
+    current_user: dict,
+) -> bool:
+    participant = await participant_service.get_participant_by_id(participant_id, current_user)
+    if participant:
+        return True
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    return shift_service.worker_has_shift_for_participant(
+        participant_id,
+        str(worker_id or ""),
+        str(org_id or ""),
+    )
+
+
+@router.get("/participants/{participant_id}/safety-protocol")
+async def worker_get_safety_protocol(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Participant safety protocols for worker (read-only)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    protocol = safety_protocol_service.get_protocol(participant_id, str(org_id or ""))
+    return safety_protocol_service.enrich_protocol_for_worker(protocol, worker_id=worker_id)
+
+
+@router.post("/participants/{participant_id}/safety-protocol/acknowledge")
+async def worker_acknowledge_safety_protocol(
+    participant_id: str,
+    body: SafetyProtocolAcknowledge,
+    current_user: dict = Depends(get_current_user),
+):
+    """Log mandatory safety card acknowledgement."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not await _worker_can_access_participant(participant_id, current_user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+    try:
+        result = safety_protocol_service.acknowledge_protocol(
+            worker_id=worker_id,
+            participant_id=participant_id,
+            organization_id=str(org_id or ""),
+            content_version=body.content_version,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    await audit_service.log_action(
+        action_type="worker.safety_protocol.acknowledged",
+        entity_type="participant",
+        entity_id=participant_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"content_version": body.content_version},
+    )
+    return result
+
+
+@router.post("/shifts/{shift_id}/start-session")
+async def worker_start_session(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Start an active session from a clocked-in shift (CARECLIQV2-116 comment 10051)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.start_shift_session(shift_id, worker_id, org_id, current_user)
+    except ValueError as exc:
+        message = str(exc)
+        if "Participant" in message:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=message)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+
+    session_id = shift.get("session_id")
+    await audit_service.log_action(
+        action_type="worker.shift.session_started",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"session_id": str(session_id)},
+    )
+    return shift
+
+
+@router.post("/shifts/{shift_id}/clock-out")
+async def worker_clock_out(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Clock out without starting a session (CARECLIQV2-127)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.clock_out_without_session(shift_id, worker_id, org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await audit_service.log_action(
+        action_type="worker.shift.clocked_out",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return shift
+
+
+@router.post("/shifts/{shift_id}/end-shift")
+async def worker_end_shift(
+    shift_id: str,
+    background_tasks: BackgroundTasks,
+    body: EndShiftBody = EndShiftBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """End shift and complete linked session (CARECLIQV2-156)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        shift = shift_service.end_shift(shift_id, worker_id, org_id, force=body.force)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    await audit_service.log_action(
+        action_type="worker.shift.ended",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"session_id": shift.get("session_id")},
+    )
+
+    async def _auto_summary_and_notify() -> None:
+        from ..services import shift_pdf_export_service
+
+        try:
+            shift_pdf_export_service.run_auto_shift_summary_export(shift_id, worker_id, org_id)
+            await shift_pdf_export_service.notify_shift_summary_ready(worker_id, shift_id)
+        except Exception as exc:
+            logger.warning("auto shift summary failed for %s: %s", shift_id, exc)
+
+    async def _process_task_handover() -> None:
+        """Process task handover when shift ends."""
+        try:
+            from ..services.task_management_service import get_task_management_service
+            service = get_task_management_service()
+            await service.process_shift_handover(shift_id)
+            logger.info(f"Task handover processed for shift {shift_id}")
+        except Exception as exc:
+            logger.warning(f"Task handover failed for shift {shift_id}: {exc}")
+
+    background_tasks.add_task(_auto_summary_and_notify)
+    background_tasks.add_task(_process_task_handover)
+    return shift
+
+
+@router.post("/sessions/{session_id}/upload-evidence")
+async def worker_upload_session_evidence(
+    session_id: str,
+    body: UploadEvidenceBody,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload task evidence media to object storage (CARECLIQV2-230)."""
+    _require_worker(current_user)
+    if body.session_id != session_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id mismatch")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    try:
+        result = evidence_upload_service.upload_session_evidence_media(
+            session_id=session_id,
+            worker_id=worker_id,
+            organization_id=org_id,
+            evidence_items=[item.model_dump() for item in body.evidence],
+            files=body.files,
+            uploaded_by=worker_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "exceeds" in msg.lower() or "mb limit" in msg.lower():
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=msg) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg) from exc
+    except Exception as exc:
+        logger.exception("upload-evidence failed for session %s", session_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc) or "Evidence upload failed",
+        ) from exc
+
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    await audit_service.log_action(
+        action_type="worker.session.evidence_uploaded",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"uploaded_count": len(result.get("uploaded_evidence") or [])},
+    )
+    return result
+
+
+@router.get("/sessions/{session_id}/notes")
+async def worker_list_session_notes(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List session progress notes (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    notes = shift_service.list_session_notes(session_id, worker_id, org_id)
+    if notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    return notes
+
+
+@router.post("/sessions/{session_id}/notes")
+async def worker_sync_session_notes(
+    session_id: str,
+    body: SessionNotesSyncBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Sync session/task-linked notes from the worker client (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    items = [item.model_dump() for item in body.notes]
+    for item in items:
+        if item.get("session_id") and item["session_id"] != session_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="session_id mismatch")
+    result = shift_service.sync_session_notes(session_id, worker_id, org_id, items)
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    await audit_service.log_action(
+        action_type="worker.session.notes_synced",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"synced_count": len(result.get("notes") or [])},
+    )
+    return result
+
+
+@router.delete("/sessions/{session_id}/notes/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def worker_delete_session_note(
+    session_id: str,
+    note_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a session note (CARECLIQV2-231)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    deleted = shift_service.delete_session_note(session_id, note_id, worker_id, org_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+    await audit_service.log_action(
+        action_type="worker.session.note_deleted",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"note_id": note_id},
+    )
+    return None
+
+
+@router.post("/sessions/{session_id}/evidence")
+async def worker_sync_task_evidence(
+    session_id: str,
+    body: TaskEvidenceSyncBody,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Sync task-specific evidence captured during a shift session (CARECLIQV2-228)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    evidence = [item.model_dump() for item in body.evidence]
+    result = shift_service.sync_session_task_evidence(
+        session_id,
+        worker_id,
+        org_id,
+        evidence,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    if not result:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    await audit_service.log_action(
+        action_type="worker.session.evidence_synced",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"synced_count": len(result.get("synced_ids") or [])},
+    )
+    return result
+
+
+@router.get("/shifts/{shift_id}/notes")
+async def worker_list_shift_notes(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """List visit/daily notes for a shift (CARECLIQV2-209)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    notes = shift_service.list_shift_visit_notes(shift_id, worker_id, org_id)
+    if notes is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return notes
+
+
+@router.post("/shifts/{shift_id}/notes", status_code=status.HTTP_201_CREATED)
+async def worker_create_shift_note(
+    shift_id: str,
+    body: ShiftVisitNoteCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a visit/daily note during a shift (CARECLIQV2-209)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        note = shift_service.create_shift_visit_note(
+            shift_id,
+            worker_id,
+            org_id,
+            content=body.content,
+            category=body.category,
+            session_id=body.session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return note
+
+
+@router.get("/shifts/{shift_id}/messages")
+async def worker_list_shift_messages(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """List office messages for a shift (CARECLIQV2-213)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    messages = shift_service.list_shift_office_messages(shift_id, worker_id, org_id)
+    if messages is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return messages
+
+
+@router.post("/shifts/{shift_id}/messages", status_code=status.HTTP_201_CREATED)
+async def worker_create_shift_message(
+    shift_id: str,
+    body: ShiftOfficeMessageCreate,
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send a message to office during a shift (CARECLIQV2-213)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    try:
+        row = shift_service.create_shift_office_message(
+            shift_id,
+            worker_id,
+            org_id,
+            message=body.message,
+            priority=body.priority,
+            attachment_data=body.attachment_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    background_tasks.add_task(
+        notify_office_worker_message,
+        org_id=org_id,
+        shift_id=shift_id,
+        worker_id=worker_id,
+        message=body.message,
+        priority=body.priority,
+    )
+    return row
+
+
+@router.get("/shifts/{shift_id}/location")
+async def worker_shift_location(shift_id: str, current_user: dict = Depends(get_current_user)):
+    """Navigation and location details for a shift (CARECLIQV2-214)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    payload = shift_service.get_shift_location_details(shift_id, worker_id, org_id)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+    return payload
+
+
+@router.get("/messages")
+async def get_worker_messages(
+    limit: int = Query(default=50, le=200),
+    unread_only: bool = Query(default=False),
+    current_user: dict = Depends(get_current_user),
+):
+    """Get coordinator messages for the support worker (CARECLIQV2-XXX)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    try:
+        # Get coordinator messages and credential reminders targeted at this worker
+        query = (
+            supabase.table("alerts")
+            .select("id, alert_type, title, message, severity, is_read, created_at, patient_id, session_id")
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+        )
+        if unread_only:
+            query = query.eq("is_read", False)
+        
+        result = query.execute()
+        return {
+            "messages": result.data or [],
+            "count": len(result.data or []),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch messages: {exc}")
+
+
+@router.post("/messages/{message_id}/read")
+async def mark_worker_message_read(
+    message_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Mark a coordinator message as read."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    try:
+        # Verify this alert exists and is targeted at this worker
+        msg = (
+            supabase.table("alerts")
+            .select("id")
+            .eq("id", message_id)
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        if not msg.data:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Mark as read
+        supabase.table("alerts").update({"is_read": True}).eq("id", message_id).execute()
+        return {"success": True, "message_id": message_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to mark message as read: {exc}")
+
+
+@router.post("/messages/{message_id}/reply")
+async def reply_to_message(
+    message_id: str,
+    body: MessageReplyCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Worker sends a reply to a coordinator message.
+    
+    Args:
+        message_id: ID of the original message to reply to
+        body: Request body with 'message' field containing the reply text
+        current_user: Authenticated user details
+    
+    Returns:
+        Success response with new reply message ID
+    """
+    _require_worker(current_user)
+    
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    supabase = get_supabase_admin()
+    
+    reply_text = body.message.strip()
+    if not reply_text:
+        raise HTTPException(status_code=400, detail="Reply message cannot be empty")
+    
+    try:
+        # Verify the original message exists and is targeted at this worker
+        original_msg = (
+            supabase.table("alerts")
+            .select("id, recipient_user_id, patient_id, session_id")
+            .eq("id", message_id)
+            .eq("organization_id", org_id)
+            .eq("recipient_user_id", worker_id)
+            .maybe_single()
+            .execute()
+        )
+        if not original_msg.data:
+            raise HTTPException(status_code=404, detail="Original message not found")
+        
+        # Get coordinator who sent the original message
+        # For now, we'll create the reply as a new alert for all coordinators in the org
+        # In a real scenario, you'd track who sent the original message
+        
+        # Create reply alert
+        reply_id = str(uuid4())
+        reply_alert = {
+            "id": reply_id,
+            "organization_id": org_id,
+            "alert_type": "worker_reply",
+            "title": f"Reply from Worker",
+            "message": reply_text,
+            "severity": "medium",
+            "is_read": False,
+            "patient_id": original_msg.data.get("patient_id"),
+            "session_id": original_msg.data.get("session_id"),
+            "sender_user_id": worker_id,  # Track who replied
+            "related_message_id": message_id,  # Link to original message
+        }
+        
+        supabase.table("alerts").insert(reply_alert).execute()
+        
+        return {"success": True, "reply_id": reply_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send reply: {exc}")
+
+
+@router.post("/shifts/{shift_id}/sign")
+async def worker_sign_shift(
+    shift_id: str,
+    body: ShiftSignatureBody,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Submit digital signature before ending shift (CARECLIQV2-270)."""
+    _require_worker(current_user)
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    device_id = request.headers.get("x-device-id")
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    try:
+        result = shift_signature_service.submit_shift_signature(
+            shift_id,
+            worker_id,
+            org_id,
+            confirm_tasks_accurate=body.confirm_tasks_accurate,
+            confirm_safety_followed=body.confirm_safety_followed,
+            confirm_no_unreported_incidents=body.confirm_no_unreported_incidents,
+            signature_svg=body.signature_svg,
+            signature_png_data_url=body.signature_png_data_url,
+            device_id=device_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await audit_service.log_action(
+        action_type="worker.shift.signed",
+        entity_type="shift",
+        entity_id=shift_id,
+        user_id=worker_id,
+        organization_id=org_id,
+    )
+    return result
+
+
+@router.get("/sessions/{session_id}/evidence-metadata")
+async def worker_list_evidence_metadata(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Chain-of-custody metadata for session evidence (CARECLIQV2-271)."""
+    _require_worker(current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_id = get_user_id(current_user)
+    try:
+        resp = (
+            get_supabase_admin()
+            .table("sessions")
+            .select("id, worker_id, support_worker_id, owner_user_id, created_by, organization_id")
+            .eq("id", session_id)
+            .maybe_single()
+            .execute()
+        )
+        session = resp.data if resp else None
+    except Exception:
+        session = None
+    if not session or str(session.get("organization_id")) != str(org_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    owner_ids = {
+        str(session.get("worker_id") or ""),
+        str(session.get("support_worker_id") or ""),
+        str(session.get("owner_user_id") or ""),
+        str(session.get("created_by") or ""),
+    }
+    if worker_id not in owner_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
+    items = list_session_evidence_metadata(session_id, org_id)
+    return {"evidence": [i for i in items if str(i.get("uploaded_by")) == str(worker_id)]}
+
+
+@router.get("/evidence/{evidence_id}/download")
+async def worker_download_evidence(
+    evidence_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download evidence with integrity verification (CARECLIQV2-271)."""
+    _require_worker(current_user)
+    user_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    meta = get_evidence_metadata(evidence_id)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    if str(meta.get("uploaded_by")) != str(user_id):
+        raise HTTPException(status_code=403, detail="You can only download your own evidence uploads")
+    file_bytes, metadata = await verify_and_download_evidence(
+        evidence_id, request, user_id, org_id
+    )
+    from fastapi.responses import Response
+
+    mime = metadata.get("mime_type") or "application/octet-stream"
+    return Response(content=file_bytes, media_type=mime)

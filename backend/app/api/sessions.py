@@ -3,18 +3,20 @@ from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from ..schemas.session import SessionCreate, SessionUpdate, MessageCreate
-from ..services import session_service, ai_service, alert_service, funding_service, message_service
-from ..services.compliance_engine import run_compliance_check, check_budget_not_exceeded
+from ..services import session_service, ai_service, alert_service, funding_service, message_service, shift_service
+from ..services.compliance_engine import run_compliance_check
 from ..services.compliance_engine import ComplianceBlockedError, COMPLIANCE_BLOCKED_MESSAGE
 from ..services import participant_service
 from ..services.settings_service import get_physical_exam_session_types
 from ..services.embedding_pipeline import run_session_embedding_pipeline
 from ..schemas.alert import AlertCreate
 from ..core.security import get_current_user
-from ..core.access import get_user_organization_id
+from ..core.access import get_user_organization_id, get_user_id
+from ..services import audit_service
 from .security import require_recent_reauth
 import logging
 import json
+import mimetypes
 import os
 import uuid
 
@@ -42,12 +44,88 @@ class SaveWithAIBody(BaseModel):
     acknowledged_warn_rules: List[str] = []
 
 
+class WorkerLocationBody(BaseModel):
+    lat: float
+    lng: float
+
+
+class StartSessionBody(BaseModel):
+    startedAt: Optional[str] = None
+    workerLocation: Optional[WorkerLocationBody] = None
+
+
+class PreviewProgressBody(BaseModel):
+    """Optional draft note content — used before PATCH on approve (CARECLIQV2-78)."""
+    notes: Optional[str] = None
+    activities_performed: Optional[str] = None
+    outcomes: Optional[str] = None
+    participant_response: Optional[str] = None
+    progress_toward_goals: Optional[str] = None
+    goals_addressed: Optional[List[str]] = None
+
+
+class UploadEvidenceMeta(BaseModel):
+    evidence_id: str
+    task_id: str
+    type: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    mime_type: Optional[str] = None
+    goal_id: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    created_at: str
+    content: Optional[str] = None
+
+
+class UploadEvidenceBody(BaseModel):
+    session_id: str
+    evidence: List[UploadEvidenceMeta]
+    files: dict[str, str] = {}
+
+
 def _effective_tier(rule: dict) -> str:
     """Return enforcement_tier for a rule result, falling back to is_blocking."""
     tier = rule.get("enforcement_tier")
     if tier in ("block", "warn", "info"):
         return tier
     return "block" if rule.get("is_blocking") else "info"
+
+
+def _resolve_goal_ids(session: dict, participant: dict | None) -> list[str]:
+    raw = session.get("goals_addressed") or []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            raw = []
+    goal_ids = [str(g) for g in raw if g]
+    if goal_ids:
+        return goal_ids
+    if participant:
+        for g in participant.get("goals") or []:
+            if isinstance(g, dict) and g.get("id"):
+                goal_ids.append(str(g["id"]))
+    return goal_ids[:5]
+
+
+async def _build_prior_trajectory(
+    session: dict,
+    participant: dict | None,
+    participant_id: str | None,
+    current_user: dict,
+) -> dict[str, list[dict]]:
+    if not participant_id:
+        return {}
+    goal_ids = _resolve_goal_ids(session, participant)
+    if not goal_ids:
+        return {}
+    return await session_service.get_prior_progress_sessions(
+        participant_id=participant_id,
+        goal_ids=goal_ids,
+        exclude_session_id=str(session.get("id") or ""),
+        current_user=current_user,
+        limit=5,
+    )
 
 
 def _attachment_url(bucket, path: str) -> Optional[str]:
@@ -85,8 +163,18 @@ async def _persist_session_attachment(
 ) -> dict:
     from ..services.supabase_client import get_supabase_admin
 
-    if file.content_type not in ALLOWED_ATTACHMENT_TYPES:
-        raise HTTPException(status_code=415, detail="Unsupported attachment type")
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if not content_type:
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        content_type = (guessed or "application/octet-stream").lower()
+    if content_type not in ALLOWED_ATTACHMENT_TYPES:
+        if content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        else:
+            raise HTTPException(
+                status_code=415,
+                detail=f"Unsupported attachment type: {file.content_type or 'unknown'}",
+            )
 
     contents = await file.read()
     if len(contents) == 0:
@@ -100,21 +188,39 @@ async def _persist_session_attachment(
     path = f"{session.get('organization_id')}/{session_id}/{storage_name}"
     bucket = supabase.storage.from_(ATTACHMENT_BUCKET)
 
-    bucket.upload(path, contents, {"content-type": file.content_type, "upsert": "false"})
+    try:
+        bucket.upload(path, contents, {"content-type": content_type, "upsert": "false"})
+    except Exception as exc:
+        logger.exception("Attachment storage upload failed for session %s: %s", session_id, exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Could not upload attachment. Ensure the session-attachments storage bucket exists.",
+        ) from exc
     url = _attachment_url(bucket, path)
 
     record = {
         "session_id": session_id,
         "organization_id": session.get("organization_id"),
-        "uploaded_by": current_user.get("sub"),
+        "uploaded_by": get_user_id(current_user),
         "file_name": original_name,
         "file_path": path,
         "public_url": url,
-        "mime_type": file.content_type,
+        "mime_type": content_type,
         "size_bytes": len(contents),
         "attachment_type": attachment_type,
     }
-    result = supabase.table("session_attachments").insert(record).execute()
+    try:
+        result = supabase.table("session_attachments").insert(record).execute()
+    except Exception as exc:
+        logger.exception("session_attachments insert failed for session %s: %s", session_id, exc)
+        try:
+            bucket.remove([path])
+        except Exception:
+            logger.warning("Could not clean up uploaded attachment after DB insert failure")
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save attachment record. Run migration 006 or supabase_patch_features.sql.",
+        ) from exc
     if not result.data:
         try:
             bucket.remove([path])
@@ -165,6 +271,43 @@ async def get_session(session_id: str, current_user: dict = Depends(get_current_
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.post("/{session_id}/start")
+async def start_session(
+    session_id: str,
+    body: StartSessionBody = StartSessionBody(),
+    current_user: dict = Depends(get_current_user),
+):
+    """Start an active session (CARECLIQV2-244)."""
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    worker_location = body.workerLocation.model_dump() if body.workerLocation else None
+    try:
+        result = shift_service.start_session_by_id(
+            session_id,
+            worker_id,
+            org_id,
+            started_at=body.startedAt,
+            worker_location=worker_location,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        message = str(exc)
+        if "not found" in message.lower():
+            raise HTTPException(status_code=404, detail=message)
+        raise HTTPException(status_code=409, detail=message)
+
+    await audit_service.log_action(
+        action_type="session.started",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"startedAt": result.get("session", {}).get("startedAt")},
+    )
+    return result
 
 
 @router.patch("/{session_id}")
@@ -246,7 +389,24 @@ async def save_session_with_ai(
             existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
         custom_physical_types = await get_physical_exam_session_types()
-        rules_result = run_compliance_check(session_for_analysis, participant, existing_sessions, custom_physical_types)
+
+        budget_context = None
+        if participant_id:
+            plan = await funding_service.get_plan_for_participant(participant_id)
+            budget_context = funding_service.build_budget_alignment_context(
+                session_for_analysis, plan
+            )
+
+        duration_context = shift_service.build_duration_consistency_context(session_for_analysis)
+
+        rules_result = run_compliance_check(
+            session_for_analysis,
+            participant,
+            existing_sessions,
+            custom_physical_types,
+            budget_context=budget_context,
+            duration_context=duration_context,
+        )
 
         # Three-tier failure classification.
         # block  → hard-stop; status never advances regardless of acknowledgements
@@ -260,12 +420,19 @@ async def save_session_with_ai(
         # Keep backward-compat alias so existing callers that check blocking_failures still work
         blocking_failures = block_failures
 
-        # 2. Run the unified CareScribe AI analysis (single GPT call, spec JSON output)
+        # 2. Run the unified CareCliQ AI analysis (single GPT call, spec JSON output)
         #    Pass RP flags already detected by the rules engine so the AI is aware
         rp_flags_for_ai: list[dict] = rules_result.get("rp_flags", [])
-        analysis = await ai_service.generate_session_analysis(
-            session_for_analysis, participant_data, rp_flags=rp_flags_for_ai
+        prior_trajectory = await _build_prior_trajectory(
+            session, participant, participant_id, current_user
         )
+        analysis = await ai_service.generate_session_analysis(
+            session_for_analysis,
+            participant_data,
+            rp_flags=rp_flags_for_ai,
+            prior_trajectory=prior_trajectory,
+        )
+        progress_delta = analysis.get("progress_delta")
 
         # AI spec compliance score (from weighted 5-dimension breakdown)
         ai_spec_score = float((analysis.get("compliance") or {}).get("score") or 0)
@@ -341,7 +508,7 @@ async def save_session_with_ai(
         ai_insights_payload = {
             # Backward-compatible insight fields (used by session detail UI)
             **insights,
-            # Full CareScribe spec output
+            # Full CareCliQ spec output
             "session_summary": analysis.get("session_summary", ""),
             "ndis_mapping": analysis.get("ndis_mapping", {}),
             "compliance_spec": analysis.get("compliance", {}),
@@ -374,6 +541,8 @@ async def save_session_with_ai(
             "voice_input": voice_input,
             "incident_language_detected": incident_language_detected,
         }
+        if progress_delta is not None:
+            updates["progress_delta"] = json.dumps(progress_delta)
         # Only advance to "completed" when no block-tier failures AND all warn-tier
         # failures have been explicitly acknowledged by the worker.
         if not block_failures and not unacked_warn_failures:
@@ -568,16 +737,23 @@ async def save_session_with_ai(
                     ),
                 ))
 
-            # Budget check runs separately (not part of R1–R12 NDIS rules)
-            budget_result = check_budget_not_exceeded(session, participant)
-            if budget_result["status"] in ("warning", "fail") and participant_id:
+            for rule in rules_result.get("rules", []):
+                code = rule.get("rule")
+                if code not in ("budget_exceeded", "budget_warning"):
+                    continue
+                if code == "budget_exceeded" and rule.get("status") != "fail":
+                    continue
+                if code == "budget_warning" and rule.get("status") != "warning":
+                    continue
+                if not participant_id:
+                    continue
                 await alert_service.create_alert(AlertCreate(
                     participant_id=participant_id,
                     session_id=session_id,
                     alert_type="budget",
-                    severity="high" if budget_result["status"] == "fail" else "medium",
-                    title="Budget Alert",
-                    message=budget_result["message"],
+                    severity="high" if code == "budget_exceeded" else "medium",
+                    title="NDIS Budget Exceeded" if code == "budget_exceeded" else "NDIS Budget Low",
+                    message=rule.get("message") or "NDIS plan budget advisory",
                 ))
         except Exception as side_e:
             logger.warning(f"Alert creation failed (non-critical): {side_e}")
@@ -597,6 +773,7 @@ async def save_session_with_ai(
                 "checked_at": compliance_checked_at,
             },
             "insights": insights,
+            "progress_delta": progress_delta,
         }
     except HTTPException:
         raise
@@ -605,6 +782,81 @@ async def save_session_with_ai(
     except Exception as e:
         logger.error(f"Error in save-with-ai: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{session_id}/preview-progress")
+async def preview_session_progress(
+    session_id: str,
+    body: Optional[PreviewProgressBody] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Dry-run progress_delta extraction for the approval modal (CARECLIQV2-78)."""
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    participant_id = session.get("participant_id") or session.get("patient_id")
+    participant = None
+    if participant_id:
+        participant = await participant_service.get_participant_by_id(participant_id, current_user)
+
+    participant_data = {
+        "full_name": participant.get("full_name", "") if participant else session.get("participant_name", ""),
+        "ndis_number": participant.get("ndis_number", "") if participant else session.get("participant_ndis", ""),
+        "goals": participant.get("goals") if participant else [],
+    }
+
+    draft = body or PreviewProgressBody()
+    structured_parts = [
+        draft.activities_performed or session.get("activities_performed") or "",
+        draft.outcomes or session.get("outcomes") or "",
+        draft.participant_response or session.get("participant_response") or "",
+        draft.progress_toward_goals or session.get("progress_toward_goals") or "",
+    ]
+    structured_text = "\n".join(p.strip() for p in structured_parts if str(p).strip())
+    free_notes = (draft.notes or session.get("notes") or "").strip()
+    combined_notes = f"{structured_text}\n\n{free_notes}".strip() if structured_text and free_notes else (structured_text or free_notes)
+
+    compliance_input_text = (
+        combined_notes
+        or session.get("compliance_input_text")
+        or session.get("translated_english_note")
+        or ""
+    ).strip()
+    if not compliance_input_text:
+        return {"progress_delta": None, "delta_summaries": []}
+
+    session_for_analysis = {
+        **session,
+        "notes": compliance_input_text,
+        "activities_performed": draft.activities_performed or session.get("activities_performed") or "",
+        "outcomes": draft.outcomes or session.get("outcomes") or "",
+        "participant_response": draft.participant_response or session.get("participant_response") or "",
+        "progress_toward_goals": draft.progress_toward_goals or session.get("progress_toward_goals") or "",
+    }
+    if draft.goals_addressed:
+        session_for_analysis["goals_addressed"] = draft.goals_addressed
+
+    try:
+        prior_trajectory = await _build_prior_trajectory(
+            session, participant, participant_id, current_user
+        )
+        analysis = await ai_service.generate_session_analysis(
+            session_for_analysis,
+            participant_data,
+            rp_flags=[],
+            prior_trajectory=prior_trajectory,
+        )
+        progress_delta = analysis.get("progress_delta")
+        summaries = [
+            str(e.get("delta_summary"))
+            for e in (progress_delta or [])
+            if isinstance(e, dict) and e.get("delta_summary")
+        ]
+        return {"progress_delta": progress_delta, "delta_summaries": summaries}
+    except Exception as exc:
+        logger.warning("preview-progress failed (non-critical): %s", exc)
+        return {"progress_delta": None, "delta_summaries": []}
 
 
 @router.get("/{session_id}/compliance")
@@ -982,6 +1234,56 @@ async def delete_session_attachment(
         logger.warning("Attachment storage delete failed: %s", exc)
     supabase.table("session_attachments").delete().eq("id", attachment_id).execute()
     return None
+
+
+@router.post("/{session_id}/upload-evidence")
+async def upload_session_evidence(
+    session_id: str,
+    body: UploadEvidenceBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload task evidence media (photo/voice) to object storage (CARECLIQV2-230)."""
+    from ..services import evidence_upload_service
+
+    if body.session_id != session_id:
+        raise HTTPException(status_code=400, detail="session_id mismatch")
+
+    session = await session_service.get_session_by_id(session_id, current_user)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+
+    try:
+        result = evidence_upload_service.upload_session_evidence_media(
+            session_id=session_id,
+            worker_id=worker_id,
+            organization_id=org_id,
+            evidence_items=[item.model_dump() for item in body.evidence],
+            files=body.files,
+            uploaded_by=worker_id,
+            ip_address=None,  # Request object not available in this context
+            user_agent=None,
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "exceeds" in msg.lower() or "mb limit" in msg.lower():
+            raise HTTPException(status_code=413, detail=msg) from exc
+        raise HTTPException(status_code=400, detail=msg) from exc
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    await audit_service.log_action(
+        action_type="session.evidence_uploaded",
+        entity_type="session",
+        entity_id=session_id,
+        user_id=worker_id,
+        organization_id=org_id,
+        after_state={"uploaded_count": len(result.get("uploaded_evidence") or [])},
+    )
+    return result
 
 
 @router.post("/{session_id}/upload-photo")

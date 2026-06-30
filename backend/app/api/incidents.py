@@ -3,10 +3,12 @@ from typing import Optional
 from ..core.access import is_coordinator_role, is_support_worker
 from ..core.security import get_current_user
 from .security import require_recent_reauth
-from ..schemas.incident import IncidentCreate, IncidentUpdate
+from ..core.config import settings
+from ..schemas.incident import IncidentCreate, IncidentUpdate, WorkerIncidentCreate, IncidentCorrectionCreate, worker_status_label
 from ..services import audit_service, incident_service, participant_service, session_service
 from ..services.embedding_pipeline import run_incident_embedding_pipeline
 from ..services.incident_pattern_service import get_incident_pattern_analysis
+from ..services.notification_service import notify_incident_reported, notify_incident_status_changed
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,7 @@ async def list_incidents(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     participant_id: Optional[str] = None,
+    shift_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
     org_id = user.get("organization_id")
@@ -36,7 +39,7 @@ async def list_incidents(
     reporter_id = user.get("sub") if is_support_worker(user) else None
 
     return await incident_service.get_all_incidents(
-        limit, status, severity, participant_id,
+        limit, status, severity, participant_id, shift_id,
         org_id=org_id,
         reporter_id=reporter_id,
         current_user=user,
@@ -86,6 +89,99 @@ async def get_incident(incident_id: str, user: dict = Depends(get_current_user))
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
     return incident
+
+
+@router.post("/worker-report", status_code=201)
+async def create_worker_incident_report(
+    body: WorkerIncidentCreate,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
+    """Worker incident report from shift (CARECLIQV2-265)."""
+    if not is_support_worker(user):
+        raise HTTPException(status_code=403, detail="Support worker access required")
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required")
+    if body.participant_id:
+        participant = await participant_service.get_participant_by_id(body.participant_id, user)
+        if not participant:
+            raise HTTPException(status_code=404, detail="Participant not found")
+    if body.behaviour_subtype and body.worker_report_type != "participant_behaviour":
+        raise HTTPException(status_code=422, detail="behaviour_subtype only applies to participant_behaviour")
+    try:
+        result = await incident_service.create_worker_incident(
+            body, org_id=org_id, user_id=user.get("sub"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    incident_id = result.get("id", "")
+    ref = result.get("reference_number")
+    is_emergency = body.severity == "emergency"
+
+    background_tasks.add_task(
+        notify_incident_reported,
+        org_id=org_id,
+        incident_id=incident_id,
+        title=f"Incident reported: {result.get('title') or 'Worker report'}",
+        message=(body.description or "")[:500],
+        severity=result.get("severity") or "medium",
+        participant_id=str(body.participant_id) if body.participant_id else None,
+        session_id=str(body.session_id) if body.session_id else None,
+        escalate=is_emergency,
+        reference_number=ref,
+        is_emergency=is_emergency,
+    )
+
+    if ref and user.get("sub"):
+        from ..services.email_service import queue_worker_notification_email
+        from ..services.notification_service import _lookup_user_email
+
+        email = _lookup_user_email(str(user.get("sub")))
+        if email:
+            action_url = f"{settings.frontend_base_url.rstrip('/')}/incidents/{incident_id}"
+            background_tasks.add_task(
+                queue_worker_notification_email,
+                to_email=email,
+                subject=f"Incident reported — {ref}",
+                title=f"Incident reference {ref}",
+                message=body.description[:800],
+                action_url=action_url,
+            )
+
+    return result
+
+
+@router.post("/{incident_id}/corrections", status_code=201)
+async def add_incident_correction(
+    incident_id: str,
+    body: IncidentCorrectionCreate,
+    user: dict = Depends(get_current_user),
+):
+    """Append a correction note to an immutable worker incident report."""
+    org_id = user.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization membership required")
+    if not is_support_worker(user):
+        raise HTTPException(status_code=403, detail="Support worker access required")
+    try:
+        return await incident_service.add_incident_correction(
+            incident_id,
+            worker_id=user.get("sub"),
+            org_id=org_id,
+            note=body.note,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/{incident_id}/corrections")
+async def list_incident_corrections(incident_id: str, user: dict = Depends(get_current_user)):
+    incident = await incident_service.get_incident_by_id(incident_id, current_user=user)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return await incident_service.list_incident_corrections(incident_id)
 
 
 @router.post("", status_code=201)
@@ -141,6 +237,22 @@ async def create_incident(
                 worker_id=user.get("sub"),
             )
 
+        severity = str(result.get("severity") or body.severity or "medium")
+        if body.escalate or severity in ("high", "critical"):
+            severity = "critical" if body.escalate else severity
+
+        background_tasks.add_task(
+            notify_incident_reported,
+            org_id=org_id,
+            incident_id=incident_id,
+            title=f"Incident reported: {result.get('title') or body.title}",
+            message=(body.description or "")[:500],
+            severity=severity,
+            participant_id=str(body.participant_id) if body.participant_id else None,
+            session_id=str(body.session_id) if body.session_id else None,
+            escalate=bool(body.escalate),
+        )
+
         return result
     except ValueError as e:
         if "Compliance blocked" in str(e):
@@ -163,6 +275,11 @@ async def update_incident(
         raise HTTPException(status_code=404, detail="Incident not found")
     if not is_coordinator_role(user) and existing.get("user_id") != user.get("sub"):
         raise HTTPException(status_code=403, detail="Access denied")
+    if is_support_worker(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Incident reports cannot be edited. Add a correction note instead.",
+        )
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if updates.get("status") in {"closed", "resolved", "reported"} or updates.get("ndis_reported_at"):
         require_recent_reauth(request, user)
@@ -174,6 +291,16 @@ async def update_incident(
         raise HTTPException(status_code=400, detail=str(e))
     if not updated:
         raise HTTPException(status_code=404, detail="Incident not found")
+    if updates.get("status") and existing.get("status") != updated.get("status"):
+        reporter_id = existing.get("user_id")
+        if reporter_id:
+            await notify_incident_status_changed(
+                worker_id=str(reporter_id),
+                org_id=str(user.get("organization_id") or ""),
+                incident_id=incident_id,
+                reference_number=updated.get("reference_number"),
+                status_label=worker_status_label(str(updated.get("status") or "")),
+            )
     await audit_service.log_action(
         action_type="incident.updated",
         entity_type="incident",

@@ -1,4 +1,4 @@
-"""Strict, server-side access helpers for CareScribe records."""
+"""Strict, server-side access helpers for CareCliQ records."""
 
 from __future__ import annotations
 

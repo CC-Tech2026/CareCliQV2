@@ -46,7 +46,7 @@ The old key is immediately invalidated when you regenerate in Supabase. Confirm 
 
 ### 5. Rotate anon key (if also compromised)
 
-Repeat steps 1–3 for the **anon key** (`SUPABASE_ANON_KEY` / `VITE_SUPABASE_ANON_KEY`). Note: the anon key is safe to expose publicly but should still be rotated if compromised.
+Repeat steps 1–3 for the **anon key** (`SUPABASE_ANON_KEY`). Note: the anon key is safe to expose publicly but should still be rotated if compromised.
 
 ---
 

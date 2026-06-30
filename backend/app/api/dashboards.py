@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter, defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,7 +15,10 @@ from ..core.access import (
     is_support_worker,
 )
 from ..core.security import get_current_user
-from ..services import billing_service, participant_service, session_service
+from ..services import billing_service, incident_service, participant_service, session_service
+from ..services.dashboard_landing_service import build_worker_landing_dashboard
+from ..services.travel_time_service import estimate_travel_time
+from ..services import shift_service
 from ..services.supabase_client import get_supabase_admin
 
 
@@ -244,6 +247,47 @@ async def worker_dashboard(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/worker-landing")
+async def worker_landing_dashboard(current_user: dict = Depends(get_current_user)):
+    """Aggregated support worker landing page payload (CARECLIQV2-104)."""
+    if not is_support_worker(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker dashboard access required.")
+    return await build_worker_landing_dashboard(current_user)
+
+
+@router.get("/worker-landing/travel-time")
+async def worker_landing_travel_time(
+    shift_id: str,
+    origin_lat: float | None = None,
+    origin_lng: float | None = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Travel time estimate for the worker's next shift destination (CARECLIQV2-114)."""
+    if not is_support_worker(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker dashboard access required.")
+
+    worker_id = get_user_id(current_user)
+    org_id = get_user_organization_id(current_user)
+    if not worker_id or not org_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required.")
+
+    shift = shift_service.get_shift_detail_for_worker(shift_id, worker_id, org_id)
+    if not shift:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Shift not found")
+
+    address = (shift.get("participant_address") or "").strip()
+    travel = await estimate_travel_time(
+        address,
+        origin_lat=origin_lat,
+        origin_lng=origin_lng,
+    )
+    return {
+        "shift_id": shift_id,
+        "destination_address": address or None,
+        **travel,
+    }
+
+
 @router.get("/coordinator")
 async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
     if not is_coordinator_role(current_user):
@@ -255,7 +299,10 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
     participants = await participant_service.get_all_participants(current_user)
     sessions = await session_service.get_all_sessions(1000, current_user)
     today = _today_iso()
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    month_start = date.today().replace(day=1).isoformat()
     todays_sessions = [s for s in sessions if _date_part(s.get("session_date")) == today]
+    sessions_this_week = [s for s in sessions if _date_part(s.get("session_date")) >= week_ago]
     scored_today = [s for s in todays_sessions if s.get("compliance_score") is not None]
     compliant_today = sum(1 for s in scored_today if float(s.get("compliance_score")) >= 85)
     notes_at_risk = sum(1 for s in sessions if _needs_compliance_fix(s))
@@ -303,18 +350,38 @@ async def coordinator_dashboard(current_user: dict = Depends(get_current_user)):
                 "reason": "Compliance review required" if low_score else "Notes need attention",
             })
 
+    try:
+        incident_rows = await incident_service.get_all_incidents(1000, org_id=org_id, current_user=current_user)
+        incidents_this_month = [row for row in incident_rows if _date_part(row.get("incident_date")) >= month_start]
+    except Exception:
+        incidents_this_month = []
+
     return {
         "active_workers": len(active_workers),
         "compliant_today": compliant_today,
         "notes_at_risk": notes_at_risk,
         "rp_flags": rp_flags,
+        "team_participants": len(participants),
+        "sessions_this_week": len(sessions_this_week),
+        "incidents_this_month": len(incidents_this_month),
+        "workers_needing_support": len(workers_needing_attention),
         "team_compliance_score": _average_score(sessions),
         "team_compliance_breakdown": team_compliance_breakdown,
         "workers_needing_attention": workers_needing_attention[:12],
         "todays_sessions": [_session_summary(s) for s in todays_sessions[:20]],
         "common_issues": _common_issues(sessions),
         "credential_alerts": [],
-        "incident_alerts": [],
+        "incident_alerts": [
+            {
+                "id": row.get("id"),
+                "participant_name": row.get("participant_name"),
+                "incident_date": row.get("incident_date"),
+                "severity": row.get("severity"),
+                "status": row.get("status"),
+                "title": row.get("title"),
+            }
+            for row in incidents_this_month[:12]
+        ],
         "participants": len(participants),
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

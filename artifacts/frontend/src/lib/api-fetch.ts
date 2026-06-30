@@ -1,6 +1,6 @@
-const TOKEN_KEY = "carescribe_token";
-const REAUTH_TOKEN_KEY = "carescribe_reauth_token";
-const USER_KEY = "carescribe_user";
+import { getDeviceId } from "@/lib/device-id";
+import { readStoredSession } from "@/lib/auth-session";
+import { CCQ_REAUTH_TOKEN_KEY, CCQ_UNAUTHORIZED_EVENT } from "@/lib/storage-keys";
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
 function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
@@ -10,30 +10,36 @@ function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
   return input;
 }
 
+function readStoredUserOrgId(): string | undefined {
+  try {
+    const { userJson } = readStoredSession();
+    const userObj = userJson ? JSON.parse(userJson) : null;
+    return userObj?.organizationId;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  const token = localStorage.getItem(TOKEN_KEY);
+  const { token } = readStoredSession();
   if (token && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${token}`);
   }
-  const reauthToken = localStorage.getItem(REAUTH_TOKEN_KEY);
+  const reauthToken = localStorage.getItem(CCQ_REAUTH_TOKEN_KEY);
   if (reauthToken && !headers.has("x-reauth-token")) {
     headers.set("x-reauth-token", reauthToken);
   }
-  // CCQ-112: secondary org-id header for belt-and-suspenders enforcement
   if (!headers.has("x-organisation-id")) {
-    try {
-      const stored = localStorage.getItem(USER_KEY);
-      const userObj = stored ? JSON.parse(stored) : null;
-      const orgId: string | undefined = userObj?.organizationId;
-      if (orgId) headers.set("x-organisation-id", orgId);
-    } catch {
-      // non-critical — server-side middleware is the primary guard
-    }
+    const orgId = readStoredUserOrgId();
+    if (orgId) headers.set("x-organisation-id", orgId);
+  }
+  if (!headers.has("x-device-id")) {
+    headers.set("x-device-id", getDeviceId());
   }
   const response = await fetch(applyBaseUrl(input), { ...init, headers });
   if (response.status === 401) {
-    window.dispatchEvent(new CustomEvent("carescribe:unauthorized"));
+    window.dispatchEvent(new CustomEvent(CCQ_UNAUTHORIZED_EVENT));
   }
   return response;
 }

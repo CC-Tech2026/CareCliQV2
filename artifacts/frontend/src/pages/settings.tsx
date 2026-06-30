@@ -1,9 +1,16 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+﻿import { useRef, useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getStoredSignature, saveSignature, clearSignature } from "@/lib/signature-store";
 import {
   PenLine,
@@ -24,43 +31,66 @@ import {
   UserMinus,
   ChevronDown,
   Copy,
+  Bell,
+  LockKeyhole,
+  MonitorSmartphone,
+  Pencil,
+  QrCode,
+  AlertTriangle,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import QRCode from "react-qr-code";
+import { PasswordInput } from "@/components/PasswordInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { InviteModal } from "@/components/InviteModal";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { apiFetch } from "@/lib/api-fetch";
 import { useReAuth } from "@/hooks/useReAuth";
+import { Link } from "wouter";
 import {
   useGetPractitionerSettings,
   useSavePractitionerSettings,
 } from "@workspace/api-client-react";
 import { AvatarPicker, AvatarDisplay } from "@/components/AvatarPicker";
+import {
+  disableMfa,
+  getLoginHistory,
+  getMfaStatus,
+  listSessions,
+  listTrustedDevices,
+  logoutOtherSessions,
+  renameSession,
+  renameTrustedDevice,
+  revokeTrustedDevice,
+  startTotpEnrollment,
+  verifyTotpEnrollment,
+  type LoginHistoryEntry,
+  type MfaStatus,
+  type TrustedDevice,
+  type UserSession,
+} from "@/services/securityService";
 
 // ---------------------------------------------------------------------------
-// ABN validation
+// ABN validation — 11 digits only (optional field)
 // ---------------------------------------------------------------------------
-function isValidABN(abn: string): boolean {
+function isValidABNFormat(abn: string): boolean {
   const digits = abn.replace(/\s/g, "");
-  if (!/^\d{11}$/.test(digits)) return false;
-  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
-  const d = digits.split("").map(Number);
-  d[0] -= 1;
-  const sum = d.reduce((acc, v, i) => acc + v * weights[i], 0);
-  return sum % 89 === 0;
+  return digits === "" || /^\d{11}$/.test(digits);
 }
 
 // ---------------------------------------------------------------------------
 // Sidebar nav items
 // ---------------------------------------------------------------------------
-type SectionId = "account" | "provider" | "defaults" | "compliance" | "team";
+type SectionId = "account" | "provider" | "defaults" | "compliance" | "notifications" | "team";
 
-const NAV_ITEMS: { id: SectionId; label: string; icon: React.ComponentType<{ className?: string }>; coordinatorOnly?: boolean }[] = [
-  { id: "account",    label: "Account",          icon: User        },
-  { id: "provider",   label: "Provider",          icon: Building2   },
-  { id: "defaults",   label: "Session Defaults",  icon: Settings2   },
-  { id: "compliance", label: "Compliance",        icon: ShieldCheck },
-  { id: "team",       label: "Team",              icon: Users2, coordinatorOnly: true },
+const NAV_ITEMS: { id: SectionId; labelKey: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; coordinatorOnly?: boolean }[] = [
+  { id: "account",       labelKey: "settings.nav.account",          icon: User        },
+  { id: "provider",      labelKey: "settings.nav.provider",          icon: Building2   },
+  { id: "defaults",      labelKey: "settings.nav.defaults",          icon: Settings2   },
+  { id: "compliance",    labelKey: "settings.nav.compliance",        icon: ShieldCheck },
+  { id: "notifications", labelKey: "settings.nav.notifications",     icon: Bell, coordinatorOnly: true },
+  { id: "team",          labelKey: "settings.nav.team",              icon: Users2, coordinatorOnly: true },
 ];
 
 // ---------------------------------------------------------------------------
@@ -80,8 +110,8 @@ function SettingRow({
   return (
     <div className="flex items-center justify-between gap-6 px-4 py-4 hover:bg-[#F8F6FE] transition-colors rounded-xl group">
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold" style={{ color: "#1E1640" }}>{title}</p>
-        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
+        <p className="text-[14px] font-semibold" style={{ color: "var(--cc-text)" }}>{title}</p>
+        <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
@@ -99,7 +129,7 @@ function Section({
 }: {
   title: string;
   description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   children: React.ReactNode;
 }) {
   return (
@@ -107,13 +137,13 @@ function Section({
       <div className="flex items-center gap-3.5 pb-1">
         <div
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ background: "linear-gradient(135deg, rgba(85,51,204,0.12), rgba(85,51,204,0.06))" }}
+          style={{ background: "rgba(55,48,163,0.09)" }}
         >
-          <Icon className="h-[18px] w-[18px]" />
+          <Icon className="h-[18px] w-[18px]" style={{ color: "#3730A3" }} />
         </div>
         <div>
-          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>{title}</h2>
-          <p className="text-[12px] leading-relaxed" style={{ color: "#7A6A9E" }}>{description}</p>
+          <h2 className="text-[18px] font-bold tracking-tight" style={{ color: "var(--cc-text)" }}>{title}</h2>
+          <p className="text-[12px] leading-relaxed" style={{ color: "var(--cc-muted)" }}>{description}</p>
         </div>
       </div>
       {children}
@@ -138,18 +168,18 @@ function PanelCard({
       className={cn("bg-white rounded-2xl overflow-hidden", className)}
       style={{
         border: "1px solid #EBE5F6",
-        boxShadow: "0 2px 12px rgba(85,51,204,0.05), 0 1px 3px rgba(0,0,0,0.03)",
+        boxShadow: "0 2px 12px rgba(55,48,163,0.05), 0 1px 3px rgba(0,0,0,0.03)",
       }}
     >
       {label && (
         <div
           className="px-5 py-3 border-b flex items-center gap-2"
           style={{
-            background: "linear-gradient(to right, rgba(85,51,204,0.05), transparent)",
+            background: "transparent",
             borderColor: "#EBE5F6",
           }}
         >
-          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#5533CC" }}>{label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: "#3730A3" }}>{label}</p>
         </div>
       )}
       <div className="p-5">{children}</div>
@@ -167,7 +197,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  support_coordinator: { bg: "rgba(85,51,204,0.1)",   color: "#5533CC" },
+  support_coordinator: { bg: "rgba(55,48,163,0.1)",   color: "#3730A3" },
   allied_health:       { bg: "rgba(16,185,129,0.1)",  color: "#047857" },
   support_worker:      { bg: "rgba(100,116,139,0.1)", color: "#475569" },
 };
@@ -190,8 +220,637 @@ interface PendingInvite {
   token?: string;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CARECLIQV2-241 — Notification Preferences section
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NOTIF_EVENTS: { key: string; label: string; description: string }[] = [
+  { key: "worker_clocked_in",    label: "Worker Clocked In",         description: "Notified when a worker clocks in to a shift" },
+  { key: "session_started",      label: "Session Started",           description: "Notified when a session begins" },
+  { key: "session_completed",    label: "Session Completed",         description: "Notified when a session is finalised" },
+  { key: "no_session_started",   label: "No Session Started (Alert)",description: "Alert when worker is clocked in but no session after 30 min" },
+  { key: "shift_assigned",       label: "Shift Assigned",            description: "Notified when you assign a shift to a worker" },
+  { key: "low_compliance",       label: "Low Compliance",            description: "Alert when a session has low compliance score" },
+  { key: "worker_offline",       label: "Worker Offline",            description: "Alert when a worker goes offline mid-shift" },
+  { key: "feedback_received",    label: "Feedback Received",         description: "Notified when a participant submits feedback" },
+];
+
+const NOTIF_CHANNELS = ["in_app", "email", "sms"] as const;
+type NotifChannel = (typeof NOTIF_CHANNELS)[number];
+
+const CHANNEL_LABELS: Record<NotifChannel, string> = { in_app: "In-App", email: "Email", sms: "SMS" };
+
+type NotifPrefs = {
+  events: Record<string, Record<NotifChannel, boolean>>;
+  quiet_hours_enabled: boolean;
+  quiet_from: string;
+  quiet_to: string;
+};
+
+function defaultPrefs(): NotifPrefs {
+  const events: Record<string, Record<NotifChannel, boolean>> = {};
+  for (const e of NOTIF_EVENTS) {
+    events[e.key] = { in_app: true, email: false, sms: false };
+  }
+  return { events, quiet_hours_enabled: false, quiet_from: "22:00", quiet_to: "07:00" };
+}
+
+function NotificationsSection() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const { translate } = useAccessibility();
+  const [prefs, setPrefs] = useState<NotifPrefs>(defaultPrefs());
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetch("/api/users/me/notification-preferences?device_id=web")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.notification_events) {
+          const events = { ...defaultPrefs().events };
+          for (const ev of (data.notification_events as Array<{ event_type: string; channel: string; is_enabled: boolean }>)) {
+            if (events[ev.event_type] && NOTIF_CHANNELS.includes(ev.channel as NotifChannel)) {
+              events[ev.event_type][ev.channel as NotifChannel] = ev.is_enabled;
+            }
+          }
+          setPrefs((p) => ({
+            ...p, events,
+            quiet_hours_enabled: data.quiet_hours_enabled ?? false,
+            quiet_from: data.quiet_from ?? "22:00",
+            quiet_to: data.quiet_to ?? "07:00",
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const notification_events = Object.entries(prefs.events).flatMap(([event_type, channels]) =>
+        Object.entries(channels).map(([channel, is_enabled]) => ({ event_type, channel, is_enabled }))
+      );
+      await apiFetch("/api/users/me/notification-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_id: "web",
+          notification_events,
+          quiet_hours_enabled: prefs.quiet_hours_enabled,
+          quiet_from: prefs.quiet_from,
+          quiet_to: prefs.quiet_to,
+        }),
+      });
+      toast({ title: translate("settings.toast.notificationsSaved") });
+    } catch {
+      toast({ variant: "destructive", title: translate("settings.toast.saveFailed") });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleEvent(eventKey: string, channel: NotifChannel) {
+    setPrefs((p) => ({
+      ...p,
+      events: {
+        ...p.events,
+        [eventKey]: { ...p.events[eventKey], [channel]: !p.events[eventKey][channel] },
+      },
+    }));
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
+        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingPreferences")}
+      </div>
+    );
+  }
+
+  return (
+    <Section
+      title={translate("settings.notifications.title")}
+      description={translate("settings.notifications.subtitle")}
+      icon={Bell}
+    >
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto rounded-xl" style={{ border: "1px solid #E5E7EB" }}>
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr style={{ background: "var(--cc-soft)" }}>
+              <th className="px-4 py-2.5 text-left font-black text-[11px] uppercase tracking-widest" style={{ color: "var(--cc-muted)" }}>Event</th>
+              {NOTIF_CHANNELS.map((ch) => (
+                <th key={ch} className="px-4 py-2.5 text-center font-black text-[11px] uppercase tracking-widest w-24" style={{ color: "var(--cc-muted)" }}>
+                  {CHANNEL_LABELS[ch]}
+                  {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1 py-0.5 bg-gray-200 text-gray-500">always</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {NOTIF_EVENTS.map((ev, i) => (
+              <tr key={ev.key} style={{ background: i % 2 === 0 ? "var(--cc-surface)" : "var(--cc-soft)" }}>
+                <td className="px-4 py-3">
+                  <p className="font-semibold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
+                  <p className="text-[11px]" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
+                </td>
+                {NOTIF_CHANNELS.map((ch) => (
+                  <td key={ch} className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
+                      checked={prefs.events[ev.key]?.[ch] ?? false}
+                      disabled={ch === "in_app"}
+                      onChange={() => toggleEvent(ev.key, ch)}
+                      className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Card View (sm, md only) */}
+      <div className="md:hidden space-y-3">
+        {NOTIF_EVENTS.map((ev) => (
+          <div key={ev.key} className="rounded-xl p-4 border transition-colors" style={{ borderColor: "rgba(232,213,232,0.5)", background: "var(--cc-bg)" }}>
+            {/* Event name & description */}
+            <div className="mb-3">
+              <p className="text-[13px] font-bold" style={{ color: "var(--cc-text)" }}>{ev.label}</p>
+              <p className="text-[12px] mt-1" style={{ color: "var(--cc-muted)" }}>{ev.description}</p>
+            </div>
+
+            {/* Channel toggles */}
+            <div className="space-y-2.5">
+              {NOTIF_CHANNELS.map((ch) => (
+                <div key={ch} className="flex items-center justify-between gap-2">
+                  <label className="text-[12px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {CHANNEL_LABELS[ch]}
+                    {ch === "in_app" && <span className="ml-1 text-[9px] font-semibold rounded-full px-1.5 py-0.5 bg-gray-200 text-gray-500">always on</span>}
+                  </label>
+                  <input
+                    type="checkbox"
+                    title={`Toggle ${CHANNEL_LABELS[ch]} notifications for ${ev.description}`}
+                    checked={prefs.events[ev.key]?.[ch] ?? false}
+                    disabled={ch === "in_app"}
+                    onChange={() => toggleEvent(ev.key, ch)}
+                    className="w-4 h-4 accent-[#3730A3] cursor-pointer disabled:cursor-default disabled:opacity-60"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quiet hours */}
+      <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "var(--cc-soft)", border: "1px solid #E5E7EB" }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-bold text-[14px]" style={{ color: "var(--cc-text)" }}>Quiet Hours</p>
+            <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>Suppress non-critical notifications during these hours</p>
+          </div>
+          <Switch checked={prefs.quiet_hours_enabled} onCheckedChange={(v) => setPrefs((p) => ({ ...p, quiet_hours_enabled: v }))} />
+        </div>
+        {prefs.quiet_hours_enabled && (
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>From</label>
+              <input
+                type="time"
+                title="Quiet hours start time"
+                value={prefs.quiet_from}
+                onChange={(e) => setPrefs((p) => ({ ...p, quiet_from: e.target.value }))}
+                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                style={{ border: "1px solid #E5E7EB" }}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold" style={{ color: "var(--cc-muted)" }}>To</label>
+              <input
+                type="time"
+                title="Quiet hours end time"
+                value={prefs.quiet_to}
+                onChange={(e) => setPrefs((p) => ({ ...p, quiet_to: e.target.value }))}
+                className="h-9 rounded-xl px-3 text-[13px] outline-none"
+                style={{ border: "1px solid #E5E7EB" }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Save */}
+      <div className="flex justify-end pt-2">
+        <Button
+          className="rounded-2xl px-8"
+          style={{ background: "var(--cc-plum)", color: "#fff" }}
+          disabled={saving}
+          onClick={save}
+        >
+          {saving ? <><Loader2 size={14} className="animate-spin mr-2" /> Saving…</> : "Save Preferences"}
+        </Button>
+      </div>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Security Section — available to all roles
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SecuritySection() {
+  const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
+  const { requireReAuth, modal } = useReAuth();
+
+  function formatWhen(value?: string | null) {
+    if (!value) return translate("common.emDash");
+    try {
+      return formatDistanceToNow(new Date(value), { addSuffix: true });
+    } catch {
+      return value;
+    }
+  }
+
+  const [loading, setLoading] = useState(true);
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus | null>(null);
+  const [trustedDevices, setTrustedDevices] = useState<TrustedDevice[]>([]);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
+
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollSecret, setEnrollSecret] = useState<string | null>(null);
+  const [enrollOtpAuthUrl, setEnrollOtpAuthUrl] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [enrollCode, setEnrollCode] = useState("");
+  const [enrollBusy, setEnrollBusy] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableBusy, setDisableBusy] = useState(false);
+
+  const [logoutOthersPassword, setLogoutOthersPassword] = useState("");
+  const [logoutOthersBusy, setLogoutOthersBusy] = useState(false);
+
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameKind, setRenameKind] = useState<"device" | "session" | null>(null);
+
+  const loadSecurityData = useCallback(async () => {
+    const [status, devices, activeSessions, history] = await Promise.all([
+      getMfaStatus(),
+      listTrustedDevices(),
+      listSessions(),
+      getLoginHistory(),
+    ]);
+    setMfaStatus(status);
+    setTrustedDevices(devices);
+    setSessions(activeSessions);
+    setLoginHistory(history);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    loadSecurityData()
+      .catch(() => {
+        if (!active) return;
+        toast({ title: translate("security.loadFailed"), variant: "destructive" });
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [loadSecurityData, toast]);
+
+  async function handleStartEnrollment() {
+    setEnrollBusy(true);
+    try {
+      const payload = await startTotpEnrollment();
+      setEnrollSecret(payload.secret);
+      setEnrollOtpAuthUrl(payload.otpauth_url);
+      setEnrolling(true);
+      setEnrollCode("");
+      setRecoveryCodes(null);
+    } catch (error) {
+      toast({ title: translate("security.start2faFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  async function handleVerifyEnrollment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!enrollCode.trim()) return;
+    setEnrollBusy(true);
+    try {
+      const result = await verifyTotpEnrollment(enrollCode.trim());
+      setRecoveryCodes(result.recovery_codes);
+      setMfaStatus({ enabled: true, method: "totp", phone: null });
+      setEnrolling(false);
+      setEnrollSecret(null);
+      setEnrollCode("");
+      toast({ title: translate("security.twoFactorEnabled"), description: translate("security.twoFactorEnabledHint") });
+    } catch (error) {
+      toast({ title: translate("security.verifyFailed"), description: error instanceof Error ? error.message : translate("security.verifyFailedHint"), variant: "destructive" });
+    } finally {
+      setEnrollBusy(false);
+    }
+  }
+
+  async function handleDisableMfa(event: React.FormEvent) {
+    event.preventDefault();
+    if (!disablePassword) return;
+    setDisableBusy(true);
+    try {
+      await requireReAuth(async () => {
+        await disableMfa(disablePassword);
+        return true;
+      });
+      setMfaStatus({ enabled: false, method: null, phone: null });
+      setDisablePassword("");
+      toast({ title: translate("security.twoFactorDisabled") });
+    } catch { /* requireReAuth handles cancellation */ } finally {
+      setDisableBusy(false);
+    }
+  }
+
+  async function handleRevokeDevice(deviceId: string) {
+    try {
+      await requireReAuth(async () => {
+        await revokeTrustedDevice(deviceId);
+        await loadSecurityData();
+        return true;
+      });
+      toast({ title: translate("security.deviceRemoved") });
+    } catch { /* noop */ }
+  }
+
+  async function handleLogoutOthers(event: React.FormEvent) {
+    event.preventDefault();
+    if (!logoutOthersPassword) return;
+    setLogoutOthersBusy(true);
+    try {
+      await logoutOtherSessions(logoutOthersPassword);
+      setLogoutOthersPassword("");
+      await loadSecurityData();
+      toast({ title: translate("security.signOutOthersSuccess") });
+    } catch (error) {
+      toast({ title: translate("security.signOutOthersFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
+    } finally {
+      setLogoutOthersBusy(false);
+    }
+  }
+
+  async function submitRename() {
+    if (!renamingId || !renameKind || !renameValue.trim()) return;
+    try {
+      if (renameKind === "device") {
+        await renameTrustedDevice(renamingId, renameValue.trim());
+      } else {
+        await renameSession(renamingId, renameValue.trim());
+      }
+      setRenamingId(null);
+      setRenameKind(null);
+      setRenameValue("");
+      await loadSecurityData();
+      toast({ title: translate("security.nameUpdated") });
+    } catch (error) {
+      toast({ title: translate("security.renameFailed"), description: error instanceof Error ? error.message : translate("toast.tryAgain"), variant: "destructive" });
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-10 text-sm" style={{ color: "var(--cc-muted)" }}>
+        <Loader2 size={14} className="animate-spin" /> {translate("settings.loadingSecurity")}
+      </div>
+    );
+  }
+
+  return (
+    <Section
+      title={translate("security.title")}
+      description={translate("security.subtitle")}
+      icon={LockKeyhole}
+    >
+      {modal}
+
+      {/* QR code dialog */}
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{translate("security.scanQr")}</DialogTitle>
+            <DialogDescription>{translate("security.qrDescription")}</DialogDescription>
+          </DialogHeader>
+          {enrollOtpAuthUrl && (
+            <div className="flex justify-center rounded-xl bg-white p-5 ring-1 ring-[#E5E7EB]">
+              <QRCode value={enrollOtpAuthUrl} size={200} bgColor="#FFFFFF" fgColor="#111827" />
+            </div>
+          )}
+          <p className="text-center text-xs" style={{ color: "var(--cc-muted)" }}>{translate("security.qrManualHint")}</p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename dialog */}
+      <Dialog open={!!renamingId} onOpenChange={(open) => { if (!open) { setRenamingId(null); setRenameKind(null); setRenameValue(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{renameKind === "device" ? translate("security.renameDevice") : translate("settings.renameSession")}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} className="rounded-xl" autoFocus />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setRenamingId(null); setRenameKind(null); setRenameValue(""); }}>{translate("common.cancel")}</Button>
+              <Button size="sm" className="rounded-xl" style={{ background: "var(--cc-plum)" }} onClick={() => void submitRename()} disabled={!renameValue.trim()}>{translate("common.save")}</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Two-factor authentication */}
+      <PanelCard label={translate("security.twoFactor")}>
+        {recoveryCodes && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-bold text-amber-900">{translate("security.recoveryCodes")}</p>
+            <p className="mt-1 text-sm text-amber-800">{translate("security.recoveryCodesHint")}</p>
+            <div className="mt-4 grid grid-cols-2 gap-2 font-mono text-sm text-[#111827] sm:grid-cols-4">
+              {recoveryCodes.map((code) => (
+                <div key={code} className="rounded-lg bg-white px-3 py-2 text-center">{code}</div>
+              ))}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="mt-3 rounded-xl gap-2"
+              onClick={() => { void navigator.clipboard.writeText(recoveryCodes.join("\n")); toast({ title: translate("security.codesCopied") }); }}>
+              <Copy className="h-3.5 w-3.5" /> {translate("security.copyCodes")}
+            </Button>
+          </div>
+        )}
+
+        {!mfaStatus?.enabled ? (
+          enrolling && enrollSecret ? (
+            <form onSubmit={handleVerifyEnrollment} className="space-y-4">
+              <div className="rounded-xl bg-[#F8F8FE] p-4">
+                <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.setupAuthenticator")}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.setupAuthenticatorHint")}</p>
+                <div className="mt-3 flex items-stretch gap-2">
+                  <code className="flex-1 break-all rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#3730A3]">{enrollSecret}</code>
+                  <button type="button" onClick={() => setQrOpen(true)} aria-label={translate("security.showQrAria")} title={translate("security.showQrTitle")}
+                    className="flex min-w-[48px] items-center justify-center rounded-xl border bg-white px-3 hover:bg-[#EEF2FF]" style={{ borderColor: "var(--cc-border)" }}>
+                    <QrCode className="h-5 w-5 text-[#3730A3]" />
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-totp-code">{translate("security.totpCode")}</Label>
+                <Input id="sec-totp-code" value={enrollCode} onChange={(e) => setEnrollCode(e.target.value)}
+                  inputMode="numeric" autoComplete="one-time-code" className="rounded-xl max-w-[200px] tracking-widest" placeholder={translate("security.totpPlaceholder")} />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={() => { setEnrolling(false); setEnrollSecret(null); setEnrollOtpAuthUrl(null); setQrOpen(false); setEnrollCode(""); }}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={enrollBusy || !enrollCode.trim()} className="rounded-xl" style={{ background: "var(--cc-plum)" }}>
+                  {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.verifyEnable")}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>Add an extra layer of protection with an authenticator app (Google Authenticator, Authy, 1Password).</p>
+              <Button type="button" onClick={() => void handleStartEnrollment()} disabled={enrollBusy} className="rounded-xl gap-2" style={{ background: "var(--cc-plum)" }}>
+                {enrollBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                {translate("security.enableAuthenticator")}
+              </Button>
+            </div>
+          )
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "#166534" }}>
+              <Check className="h-4 w-4" /> {translate("security.twoFactorActive")}
+            </div>
+            <form onSubmit={handleDisableMfa} className="max-w-md space-y-3 border-t pt-4" style={{ borderColor: "var(--cc-border)" }}>
+              <p className="text-sm" style={{ color: "var(--cc-muted)" }}>{translate("security.disableTwoFactorHint")}</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="sec-disable-mfa">{translate("profile.currentPassword")}</Label>
+                <PasswordInput id="sec-disable-mfa" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} className="rounded-xl max-w-sm" />
+              </div>
+              <Button type="submit" variant="outline" disabled={disableBusy || !disablePassword} className="rounded-xl border-red-200 text-red-700 hover:bg-red-50">
+                {disableBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.disableTwoFactor")}
+              </Button>
+            </form>
+          </div>
+        )}
+      </PanelCard>
+
+      {/* Trusted devices */}
+      <PanelCard label={translate("security.trustedDevices")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.trustedDevicesHint")}</p>
+        {trustedDevices.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("security.noTrustedDevices")}</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {trustedDevices.map((device) => (
+              <div key={device.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {device.device_name}
+                    {device.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.thisDevice")}</span>}
+                  </p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {translateParams("security.trustedUntil", { os: device.os_name, when: formatWhen(device.trusted_until) })}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" className="rounded-lg h-8"
+                    onClick={() => { setRenamingId(device.id); setRenameKind("device"); setRenameValue(device.device_name); }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="rounded-lg h-8 border-red-200 text-red-700 hover:bg-red-50"
+                    onClick={() => void handleRevokeDevice(device.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </PanelCard>
+
+      {/* Active sessions */}
+      <PanelCard label={translate("security.activeSessions")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.sessionsHint")}</p>
+        {sessions.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("settings.noActiveSessions")}</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {sessions.map((session) => (
+              <div key={session.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>
+                    {session.device_name}
+                    {session.is_current && <span className="ml-2 rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[11px] font-bold text-[#3730A3]">{translate("security.currentSession")}</span>}
+                  </p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {translateParams("security.sessionLocation", { city: session.city || translate("security.unknownCity"), country: session.country || translate("security.unknownCountry"), when: formatWhen(session.last_active_at) })}
+                  </p>
+                </div>
+                <Button type="button" size="sm" variant="outline" className="rounded-lg h-8"
+                  onClick={() => { setRenamingId(session.id); setRenameKind("session"); setRenameValue(session.device_name); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <form onSubmit={handleLogoutOthers} className="mt-4 border-t pt-4 max-w-md space-y-3" style={{ borderColor: "var(--cc-border)" }}>
+          <p className="text-sm font-semibold" style={{ color: "var(--cc-text)" }}>{translate("security.signOutAllOthers")}</p>
+          <div className="space-y-1.5">
+            <Label htmlFor="sec-logout-others">{translate("security.confirmPassword")}</Label>
+            <PasswordInput id="sec-logout-others" value={logoutOthersPassword} onChange={(e) => setLogoutOthersPassword(e.target.value)} className="rounded-xl max-w-sm" />
+          </div>
+          <Button type="submit" variant="outline" disabled={logoutOthersBusy || !logoutOthersPassword} className="rounded-xl">
+            {logoutOthersBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : translate("security.signOutOthers")}
+          </Button>
+        </form>
+      </PanelCard>
+
+      {/* Recent sign-ins */}
+      <PanelCard label={translate("security.recentSignIns")}>
+        <p className="text-[12px] mb-3" style={{ color: "var(--cc-muted)" }}>{translate("security.recentSignInsHint")}</p>
+        {loginHistory.length === 0 ? (
+          <p className="text-sm py-1" style={{ color: "var(--cc-muted)" }}>{translate("security.noSignInHistory")}</p>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "rgba(232,213,232,0.4)" }}>
+            {loginHistory.slice(0, 10).map((entry) => (
+              <div key={entry.id} className="flex flex-wrap items-center justify-between gap-3 py-3"
+                style={{ borderColor: entry.is_suspicious ? "rgba(190,24,93,0.2)" : undefined }}>
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: "var(--cc-text)" }}>{entry.device_name}</p>
+                  <p className="text-[12px]" style={{ color: "var(--cc-muted)" }}>
+                    {entry.location_label} · {formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+                {entry.is_suspicious ? (
+                  <span className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">
+                    <AlertTriangle className="h-3 w-3" /> {translate("security.unusualSignIn")}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+      </PanelCard>
+    </Section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Settings() {
   const { toast } = useToast();
+  const { translate, translateParams } = useAccessibility();
   const { user, token: authToken } = useAuth();
   const { requireReAuth, modal } = useReAuth();
   const isCoordinator = user?.role === "support_coordinator";
@@ -249,7 +908,6 @@ export default function Settings() {
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const fetchTeam = useCallback(async () => {
@@ -278,9 +936,9 @@ export default function Settings() {
     try {
       await requireReAuth(() => apiFetch(`/api/invitations/revoke/${id}`, { method: "DELETE" }));
       setInvites((prev) => prev.filter((i) => i.id !== id));
-      toast({ title: "Invitation revoked" });
+      toast({ title: translate("settings.toast.inviteRevoked") });
     } catch {
-      toast({ title: "Failed to revoke invitation", variant: "destructive" });
+      toast({ title: translate("settings.toast.inviteRevokeFailed"), variant: "destructive" });
     }
   };
 
@@ -290,9 +948,9 @@ export default function Settings() {
     try {
       await requireReAuth(() => apiFetch(`/api/invitations/members/${memberId}`, { method: "DELETE" }));
       setMembers((prev) => prev.filter((m) => m.id !== memberId));
-      toast({ title: "Member removed" });
+      toast({ title: translate("settings.toast.memberRemoved") });
     } catch {
-      toast({ title: "Failed to remove member", variant: "destructive" });
+      toast({ title: translate("settings.toast.memberRemoveFailed"), variant: "destructive" });
     }
   };
 
@@ -307,9 +965,9 @@ export default function Settings() {
         })
       );
       setMembers((prev) => prev.map((m) => m.id === memberId ? { ...m, role: newRole } : m));
-      toast({ title: "Role updated", description: `Role changed to ${ROLE_LABELS[newRole] ?? newRole}` });
+      toast({ title: translate("settings.toast.roleUpdated"), description: translateParams("settings.toast.roleUpdatedDesc", { role: ROLE_LABELS[newRole] ?? newRole }) });
     } catch {
-      toast({ title: "Failed to update role", variant: "destructive" });
+      toast({ title: translate("settings.toast.roleUpdateFailed"), variant: "destructive" });
     }
   };
 
@@ -445,15 +1103,15 @@ export default function Settings() {
         });
       } catch {
         toast({
-          title: "Saved locally",
-          description: "Signature saved to this device. Server sync failed — it will retry next time you open Settings.",
+          title: translate("settings.toast.savedLocally"),
+          description: translate("settings.toast.savedLocallyDesc"),
           variant: "destructive",
         });
         return;
       }
       toast({
-        title: "Signature saved",
-        description: "Your signature is now synced and will appear on all PDF reports across all devices.",
+        title: translate("settings.toast.signatureSaved"),
+        description: translate("settings.toast.signatureSavedDesc"),
       });
     },
     [saveToServer, serverSettings, toast]
@@ -486,7 +1144,7 @@ export default function Settings() {
     } catch {
       // server sync failed — signature already cleared locally
     }
-    toast({ title: "Signature removed", description: "PDF reports will show the placeholder sign-here box." });
+    toast({ title: translate("settings.toast.signatureRemoved"), description: translate("settings.toast.signatureRemovedDesc") });
   }, [clearCanvas, saveToServer, serverSettings, toast]);
 
   // ── File upload ────────────────────────────────────────────────────────────
@@ -494,11 +1152,11 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== "image/png" && file.type !== "image/jpeg") {
-      toast({ title: "Invalid file type", description: "Please upload a PNG or JPG image.", variant: "destructive" });
+      toast({ title: translate("settings.toast.invalidFileType"), description: translate("settings.toast.invalidFileTypeDesc"), variant: "destructive" });
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "File too large", description: "Please upload an image smaller than 2 MB.", variant: "destructive" });
+      toast({ title: translate("settings.toast.fileTooLarge"), description: translate("settings.toast.fileTooLargeDesc"), variant: "destructive" });
       return;
     }
     const reader = new FileReader();
@@ -512,7 +1170,7 @@ export default function Settings() {
     try {
       await saveToServer({ data: { avatarId: newId ?? null } });
     } catch {
-      toast({ title: "Could not save avatar", variant: "destructive" });
+      toast({ title: translate("settings.toast.avatarSaveFailed"), variant: "destructive" });
     }
   };
 
@@ -521,31 +1179,31 @@ export default function Settings() {
     setIsSavingPract(true);
     try {
       await saveToServer({ data: { name: practName.trim() || null, credentials: practCredentials.trim() || null } });
-      toast({ title: "Practitioner details saved" });
+      toast({ title: translate("settings.toast.practitionerSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save practitioner details.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.practitionerSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingPract(false);
     }
   };
 
   const abnDigits = abn.replace(/\s/g, "");
-  const abnValid = abnDigits === "" || isValidABN(abn);
-  const abnHas11Digits = abnDigits.length === 11;
-  const abnError = abnHas11Digits && !isValidABN(abn);
-  const abnShowValid = abnHas11Digits && isValidABN(abn);
+  const abnHas11Digits = /^\d{11}$/.test(abnDigits);
+  const abnValid = isValidABNFormat(abn);
+  const abnError = abnDigits.length > 0 && abnDigits.length >= 11 && !abnHas11Digits;
+  const abnShowValid = abnHas11Digits;
 
   const handleSaveProvider = async () => {
     if (!abnValid) {
-      toast({ title: "Invalid ABN", description: "Please enter a valid 11-digit Australian Business Number.", variant: "destructive" });
+      toast({ title: translate("settings.toast.invalidAbn"), description: translate("settings.toast.invalidAbnDesc"), variant: "destructive" });
       return;
     }
     setIsSavingProvider(true);
     try {
       await saveToServer({ data: { provider: { businessName: businessName.trim() || null, abn: abn.replace(/\s/g, "") || null } } });
-      toast({ title: "Provider information saved" });
+      toast({ title: translate("settings.toast.providerSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save provider information.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.providerSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingProvider(false);
     }
@@ -555,9 +1213,9 @@ export default function Settings() {
     setIsSavingDefaults(true);
     try {
       await saveToServer({ data: { sessionDefaults: { defaultDuration: defaultDuration ? Number(defaultDuration) : null, autoStartTimer, enableVoice } } });
-      toast({ title: "Session defaults saved" });
+      toast({ title: translate("settings.toast.defaultsSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save session defaults.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.defaultsSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingDefaults(false);
     }
@@ -578,9 +1236,9 @@ export default function Settings() {
           },
         },
       });
-      toast({ title: "Compliance requirements saved" });
+      toast({ title: translate("settings.toast.complianceSaved") });
     } catch {
-      toast({ title: "Save failed", description: "Could not save compliance requirements.", variant: "destructive" });
+      toast({ title: translate("settings.toast.saveFailed"), description: translate("settings.toast.complianceSaveFailed"), variant: "destructive" });
     } finally {
       setIsSavingCompliance(false);
     }
@@ -591,7 +1249,7 @@ export default function Settings() {
     if (!trimmed) return;
     const lower = trimmed.toLowerCase();
     if (physicalExamSessionTypes.some((t) => t.toLowerCase() === lower)) {
-      toast({ title: "Already in the list", description: `"${trimmed}" is already configured.` });
+      toast({ title: translate("settings.toast.alreadyInList"), description: translateParams("settings.toast.alreadyInListDesc", { name: trimmed }) });
       return;
     }
     setPhysicalExamSessionTypes((prev) => [...prev, trimmed]);
@@ -610,7 +1268,7 @@ export default function Settings() {
   const LoadingRow = () => (
     <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
       <Loader2 className="h-4 w-4 animate-spin" />
-      <span>Loading settings…</span>
+      <span>{translate("settings.loading")}</span>
     </div>
   );
 
@@ -623,38 +1281,38 @@ export default function Settings() {
       <div
         className="rounded-2xl px-6 py-4 flex items-center gap-4"
         style={{
-          background: "linear-gradient(135deg, rgba(85,51,204,0.07) 0%, rgba(240,48,96,0.03) 100%)",
-          border: "1px solid rgba(85,51,204,0.1)",
+          background: "rgba(55,48,163,0.06)",
+          border: "1px solid rgba(55,48,163,0.1)",
         }}
       >
         <div
           className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
-          style={{ background: "rgba(85,51,204,0.1)" }}
+          style={{ background: "rgba(55,48,163,0.1)" }}
         >
-          <Settings2 className="h-5 w-5" style={{ color: "#5533CC" }} />
+          <Settings2 className="h-5 w-5" style={{ color: "#3730A3" }} />
         </div>
         <div>
-          <h1 className="text-[18px] font-bold tracking-tight" style={{ color: "#1E1640" }}>Workspace Settings</h1>
-          <p className="text-[12px] mt-0.5" style={{ color: "#7A6A9E" }}>
-            Manage your account, provider details, session defaults and compliance rules
+          <h1 className="text-xl font-black tracking-tight" style={{ color: "var(--cc-plum)" }}>{translate("settings.title")}</h1>
+          <p className="text-[12px] mt-0.5" style={{ color: "var(--cc-muted)" }}>
+            {translate("settings.subtitle")}
           </p>
         </div>
       </div>
 
       {/* ── Mobile nav (outside flex row — stacks vertically on mobile) ────── */}
       <div className="md:hidden flex gap-1.5 overflow-x-auto pb-1">
-        {visibleNavItems.map(({ id, label, icon: Icon }) => (
+        {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveSection(id)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold whitespace-nowrap transition-all shrink-0"
             style={{
-              background: activeSection === id ? "#5533CC" : "rgba(85,51,204,0.06)",
-              color: activeSection === id ? "white" : "#4A3D5A",
+              background: activeSection === id ? "#3730A3" : "rgba(55,48,163,0.06)",
+              color: activeSection === id ? "white" : "#374151",
             }}
           >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
+            <Icon className="h-3.5 w-3.5" style={{ color: activeSection === id ? "white" : "#6B7280" }} />
+            {translate(labelKey)}
           </button>
         ))}
       </div>
@@ -662,33 +1320,33 @@ export default function Settings() {
       <div className="flex gap-6">
 
       {/* ── Sticky sidebar ──────────────────────────────────────────────────── */}
-      <aside className="hidden md:flex flex-col w-52 shrink-0">
+      <aside className="hidden lg:flex flex-col w-52 shrink-0">
         <div
           className="sticky top-0 rounded-2xl p-2.5 space-y-0.5"
           style={{
-            background: "white",
+            background: "var(--cc-bg)",
             border: "1px solid #EBE5F6",
-            boxShadow: "0 2px 12px rgba(85,51,204,0.05)",
+            boxShadow: "0 2px 12px rgba(55,48,163,0.05)",
           }}
         >
-          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "#7A6A9E" }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest px-3 pt-1.5 pb-2.5" style={{ color: "var(--cc-muted)" }}>
             Navigation
           </p>
-          {visibleNavItems.map(({ id, label, icon: Icon }) => (
+          {visibleNavItems.map(({ id, labelKey, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-semibold transition-all duration-150 text-left"
               style={{
-                background: activeSection === id ? "#5533CC" : "transparent",
-                color: activeSection === id ? "white" : "#4A3D5A",
+                background: activeSection === id ? "#3730A3" : "transparent",
+                color: activeSection === id ? "white" : "#374151",
               }}
             >
               <Icon
                 className="h-4 w-4 shrink-0"
-                style={{ color: activeSection === id ? "white" : "#7A6A9E" }}
+                style={{ color: activeSection === id ? "white" : "#6B7280" }}
               />
-              {label}
+              {translate(labelKey)}
             </button>
           ))}
         </div>
@@ -700,12 +1358,12 @@ export default function Settings() {
         {/* ── Account section ─────────────────────────────────────────────── */}
         {activeSection === "account" && (
           <Section
-            title="Account"
-            description="Your practitioner identity and digital signature for NDIS audit reports."
+            title={translate("settings.account.title")}
+            description={translate("settings.account.subtitle")}
             icon={User}
           >
             {/* Signature card */}
-            <PanelCard label="Digital Signature">
+            <PanelCard label={translate("settings.signature.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -714,7 +1372,7 @@ export default function Settings() {
                     <div className="rounded-xl p-4" style={{ background: "rgba(22,163,74,0.07)", border: "1px solid rgba(22,163,74,0.2)" }}>
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[12px] font-semibold flex items-center gap-1.5" style={{ color: "#16A34A" }}>
-                          <Check className="h-3.5 w-3.5" /> Signature saved
+                          <Check className="h-3.5 w-3.5" /> {translate("settings.signature.saved")}
                         </span>
                         <Button
                           variant="ghost"
@@ -723,7 +1381,7 @@ export default function Settings() {
                           onClick={handleClear}
                           disabled={isSaving}
                         >
-                          <Trash2 className="h-3 w-3" /> Remove
+                          <Trash2 className="h-3 w-3" /> {translate("common.remove")}
                         </Button>
                       </div>
                       <div className="bg-white rounded-xl p-3 flex items-center justify-center h-20" style={{ border: "1px solid rgba(22,163,74,0.15)" }}>
@@ -735,10 +1393,10 @@ export default function Settings() {
                   <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "draw" | "upload")}>
                     <TabsList className="w-full rounded-lg h-9">
                       <TabsTrigger value="draw" className="flex-1 gap-1.5 text-xs">
-                        <PenLine className="h-3.5 w-3.5" /> Draw
+                        <PenLine className="h-3.5 w-3.5" /> {translate("settings.signature.draw")}
                       </TabsTrigger>
                       <TabsTrigger value="upload" className="flex-1 gap-1.5 text-xs">
-                        <Upload className="h-3.5 w-3.5" /> Upload Image
+                        <Upload className="h-3.5 w-3.5" /> {translate("settings.signature.upload")}
                       </TabsTrigger>
                     </TabsList>
 
@@ -748,7 +1406,7 @@ export default function Settings() {
                       </p>
                       <div
                         className={cn("rounded-xl border-2 border-dashed overflow-hidden cursor-crosshair bg-white transition-colors")}
-                        style={{ borderColor: hasDrawing ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
+                        style={{ borderColor: hasDrawing ? "rgba(55,48,163,0.35)" : "rgba(232,213,232,0.7)", touchAction: "none" }}
                       >
                         <canvas
                           ref={canvasRef}
@@ -767,11 +1425,11 @@ export default function Settings() {
                       </div>
                       <div className="flex gap-2">
                         <Button variant="outline" size="sm" className="gap-1.5" onClick={clearCanvas} disabled={!hasDrawing}>
-                          <RotateCcw className="h-3.5 w-3.5" /> Clear
+                          <RotateCcw className="h-3.5 w-3.5" /> {translate("settings.signature.clear")}
                         </Button>
                         <Button size="sm" className="gap-1.5 ml-auto" onClick={saveDrawn} disabled={!hasDrawing || isSaving || isLoadingSettings}>
                           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                          Save Signature
+                          {translate("settings.signature.save")}
                         </Button>
                       </div>
                     </TabsContent>
@@ -782,7 +1440,7 @@ export default function Settings() {
                       </p>
                       <div
                         className="rounded-xl border-2 border-dashed flex flex-col items-center justify-center py-8 cursor-pointer transition-colors bg-white hover:bg-[#F6F4FB]"
-                        style={{ borderColor: uploadPreview ? "rgba(84,34,105,0.35)" : "rgba(232,213,232,0.7)" }}
+                        style={{ borderColor: uploadPreview ? "rgba(55,48,163,0.35)" : "rgba(232,213,232,0.7)" }}
                         onClick={() => fileInputRef.current?.click()}
                       >
                         {uploadPreview ? (
@@ -795,7 +1453,7 @@ export default function Settings() {
                           </>
                         )}
                       </div>
-                      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFileChange} />
+                      <input ref={fileInputRef} type="file" accept="image/png,image/jpeg" title="Upload profile photo (PNG or JPG, max 2 MB)" className="hidden" onChange={handleFileChange} />
                       <div className="flex gap-2">
                         {uploadPreview && (
                           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { setUploadPreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
@@ -804,7 +1462,7 @@ export default function Settings() {
                         )}
                         <Button size="sm" className="gap-1.5 ml-auto" onClick={saveUploaded} disabled={!uploadPreview || isSaving || isLoadingSettings}>
                           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                          Save Signature
+                          {translate("settings.signature.save")}
                         </Button>
                       </div>
                     </TabsContent>
@@ -818,14 +1476,14 @@ export default function Settings() {
             </PanelCard>
 
             {/* Practitioner details card */}
-            <PanelCard label="Practitioner Details">
+            <PanelCard label={translate("settings.practitioner.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Full Name</Label>
+                      <Label htmlFor="pract-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.fullName")}</Label>
                       <Input
                         id="pract-name"
                         value={practName}
@@ -835,7 +1493,7 @@ export default function Settings() {
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Credentials</Label>
+                      <Label htmlFor="pract-credentials" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.practitioner.credentials")}</Label>
                       <Input
                         id="pract-credentials"
                         value={practCredentials}
@@ -848,7 +1506,7 @@ export default function Settings() {
                   <div className="flex justify-end">
                     <Button size="sm" onClick={handleSavePractitioner} disabled={isSavingPract} className="gap-1.5 min-w-[110px]">
                       {isSavingPract ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Save Details
+                      {translate("settings.practitioner.save")}
                     </Button>
                   </div>
                 </div>
@@ -856,7 +1514,7 @@ export default function Settings() {
             </PanelCard>
 
             {/* Avatar picker card */}
-            <PanelCard label="Profile Avatar">
+            <PanelCard label={translate("settings.avatar.label")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -867,14 +1525,14 @@ export default function Settings() {
                       sizePx={56}
                       fallback={
                         <div className="h-14 w-14 rounded-full flex items-center justify-center border-2 border-dashed"
-                          style={{ background: "rgba(84,34,105,0.06)", borderColor: "rgba(84,34,105,0.2)", color: "rgba(84,34,105,0.3)" }}>
+                          style={{ background: "rgba(55,48,163,0.06)", borderColor: "rgba(55,48,163,0.2)", color: "rgba(55,48,163,0.3)" }}>
                           <User className="h-6 w-6" />
                         </div>
                       }
                     />
                     <div>
                       <p className="text-[14px] font-medium" style={{ color: "#1C1626" }}>
-                        {avatarId ? "Avatar selected" : "No avatar chosen"}
+                        {avatarId ? translate("settings.avatar.selected") : translate("settings.avatar.none")}
                       </p>
                       <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: "#7A6A8A" }}>
                         Choose a character below. It appears in your sidebar instead of your initials. Saves automatically.
@@ -891,17 +1549,17 @@ export default function Settings() {
         {/* ── Provider section ─────────────────────────────────────────────── */}
         {activeSection === "provider" && (
           <Section
-            title="Provider"
-            description="Your registered NDIS provider business details. These appear on PDF audit reports and invoices."
+            title={translate("settings.provider.title")}
+            description={translate("settings.provider.subtitle")}
             icon={Building2}
           >
-            <PanelCard label="Business Information">
+            <PanelCard label={translate("settings.provider.businessInfo")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>Business Name</Label>
+                    <Label htmlFor="business-name" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>{translate("settings.provider.businessName")}</Label>
                     <Input
                       id="business-name"
                       value={businessName}
@@ -911,7 +1569,7 @@ export default function Settings() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                    <Label htmlFor="abn" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
                       ABN <span className="font-normal" style={{ color: "#7A6A8A" }}>(Australian Business Number)</span>
                     </Label>
                     <Input
@@ -937,7 +1595,7 @@ export default function Settings() {
                   <div className="flex justify-end pt-1">
                     <Button size="sm" onClick={handleSaveProvider} disabled={isSavingProvider || abnError} className="gap-1.5 min-w-[130px]">
                       {isSavingProvider ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Save Provider Info
+                      {translate("settings.provider.save")}
                     </Button>
                   </div>
                 </div>
@@ -949,16 +1607,16 @@ export default function Settings() {
         {/* ── Session Defaults section ─────────────────────────────────────── */}
         {activeSection === "defaults" && (
           <Section
-            title="Session Defaults"
-            description="Default settings applied automatically when you start a new live session."
+            title={translate("settings.defaults.title")}
+            description={translate("settings.defaults.subtitle")}
             icon={Settings2}
           >
-            <PanelCard label="Duration">
+            <PanelCard label={translate("settings.defaults.duration")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-1.5">
-                  <Label htmlFor="default-duration" className="text-[12px] font-medium" style={{ color: "#4A3D5A" }}>
+                  <Label htmlFor="default-duration" className="text-[12px] font-medium" style={{ color: "var(--cc-text)" }}>
                     Default Duration <span className="font-normal" style={{ color: "#7A6A8A" }}>(minutes)</span>
                   </Label>
                   <Input
@@ -976,7 +1634,7 @@ export default function Settings() {
               )}
             </PanelCard>
 
-            <PanelCard label="Automation">
+            <PanelCard label={translate("settings.defaults.automation")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1001,7 +1659,7 @@ export default function Settings() {
               <div className="flex justify-end">
                 <Button size="sm" onClick={handleSaveDefaults} disabled={isSavingDefaults} className="gap-1.5 min-w-[120px]">
                   {isSavingDefaults ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Save Defaults
+                  {translate("settings.defaults.save")}
                 </Button>
               </div>
             )}
@@ -1011,11 +1669,11 @@ export default function Settings() {
         {/* ── Compliance section ───────────────────────────────────────────── */}
         {activeSection === "compliance" && (
           <Section
-            title="Compliance"
-            description="Enforce documentation standards before a session can be approved. These checks run alongside the built-in NDIS compliance engine."
+            title={translate("settings.compliance.title")}
+            description={translate("settings.compliance.subtitle")}
             icon={ShieldCheck}
           >
-            <PanelCard label="Required Before Approval">
+            <PanelCard label={translate("settings.compliance.required")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
@@ -1042,12 +1700,12 @@ export default function Settings() {
               )}
             </PanelCard>
 
-            <PanelCard label="Session Types Requiring Physical Examination">
+            <PanelCard label={translate("settings.compliance.physicalExam")}>
               {isLoadingSettings ? (
                 <LoadingRow />
               ) : (
                 <div className="space-y-4">
-                  <p className="text-[12px] leading-relaxed" style={{ color: "#4A3D5A" }}>
+                  <p className="text-[12px] leading-relaxed" style={{ color: "var(--cc-text)" }}>
                     When a session's type matches one of the names below, the compliance engine will warn if no body examination markers have been recorded.
                     Names are matched case-insensitively. This list <strong>replaces</strong> the built-in defaults — leave it empty to keep using the built-in set (physiotherapy, OT, therapy, rehab, etc.).
                   </p>
@@ -1059,13 +1717,13 @@ export default function Settings() {
                         <span
                           key={i}
                           className="inline-flex items-center gap-1 rounded-full text-[12px] font-medium px-2.5 py-1"
-                          style={{ background: "rgba(84,34,105,0.08)", color: "#542269", border: "1px solid rgba(84,34,105,0.2)" }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3", border: "1px solid rgba(55,48,163,0.2)" }}
                         >
                           {type}
                           <button
                             type="button"
                             onClick={() => handleRemoveSessionType(i)}
-                            className="ml-0.5 hover:text-red-500 transition-colors" style={{ color: "rgba(84,34,105,0.5)" }}
+                            className="ml-0.5 hover:text-red-500 transition-colors" style={{ color: "rgba(55,48,163,0.5)" }}
                             aria-label={`Remove ${type}`}
                           >
                             <X className="h-3 w-3" />
@@ -1112,7 +1770,7 @@ export default function Settings() {
                       variant="ghost"
                       size="sm"
                       className="text-[12px] gap-1 hover:text-[#1C1626]"
-                      style={{ color: "#4A3D5A" }}
+                      style={{ color: "var(--cc-text)" }}
                       onClick={handleResetToDefaults}
                     >
                       <RotateCcw className="h-3 w-3" /> Reset to defaults
@@ -1127,25 +1785,25 @@ export default function Settings() {
                 <div className="flex justify-end">
                   <Button size="sm" onClick={handleSaveCompliance} disabled={isSavingCompliance} className="gap-1.5 min-w-[140px]">
                     {isSavingCompliance ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                    Save Requirements
+                    {translate("settings.compliance.save")}
                   </Button>
                 </div>
 
                 <div
                   className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
                   style={{
-                    background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
-                    border: "1px solid rgba(85,51,204,0.12)",
-                    borderLeft: "3px solid #5533CC",
+                    background: "rgba(55,48,163,0.04)",
+                    border: "1px solid rgba(55,48,163,0.12)",
+                    borderLeft: "3px solid #3730A3",
                   }}
                 >
-                  <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How compliance requirements work</p>
-                  <p style={{ color: "#4A3D5A" }}>
+                  <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How compliance requirements work</p>
+                  <p style={{ color: "var(--cc-text)" }}>
                     These toggles add enforcement gates on top of the built-in NDIS compliance scoring. When a rule is enabled, the
                     Approve &amp; Save action is blocked with a clear message if the requirement is not met. The gate fires before the session
                     review modal opens, so practitioners are prompted to complete the missing documentation immediately.
                   </p>
-                  <p style={{ color: "#4A3D5A" }}>
+                  <p style={{ color: "var(--cc-text)" }}>
                     The built-in engine always runs regardless of these toggles and tracks participant linkage, duration, activities, clinical notes,
                     photo evidence, and goal linkage.
                   </p>
@@ -1155,15 +1813,19 @@ export default function Settings() {
           </Section>
         )}
 
-        {/* ── Team section (support coordinator only) ─────────────────────── */}
+        {/* ── Notifications section (coordinator only) ─────────────────────── */}
+        {activeSection === "notifications" && isCoordinator && (
+          <NotificationsSection />
+        )}
+
         {activeSection === "team" && isCoordinator && (
           <Section
-            title="Team"
-            description="Manage your organisation's staff members and invite new practitioners."
+            title={translate("settings.team.title")}
+            description={translate("settings.team.subtitle")}
             icon={Users2}
           >
             {/* Active members */}
-            <PanelCard label="Active Members">
+            <PanelCard label={translate("settings.team.activeMembers")}>
               {loadingTeam ? (
                 <div className="flex items-center gap-2 text-[13px] py-4" style={{ color: "#7A6A8A" }}>
                   <Loader2 className="h-4 w-4 animate-spin" /> Loading members…
@@ -1181,22 +1843,23 @@ export default function Settings() {
                         {/* Avatar */}
                         <div
                           className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
-                          style={{ background: "rgba(85,51,204,0.08)", color: "#5533CC" }}
+                          style={{ background: "rgba(55,48,163,0.08)", color: "#3730A3" }}
                         >
                           {(m.full_name || m.email || "?")[0].toUpperCase()}
                         </div>
 
                         {/* Name + email */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>
                             {m.full_name || "(No name)"}
                           </p>
-                          <p className="text-[11px] truncate" style={{ color: "#7A6A9E" }}>{m.email}</p>
+                          <p className="text-[11px] truncate" style={{ color: "var(--cc-muted)" }}>{m.email}</p>
                         </div>
 
                         {/* Role selector — prevent changing own role */}
                         {m.user_id !== user?.id ? (
                           <select
+                            title="User role"
                             value={m.role}
                             onChange={(e) => handleChangeRole(m.id, e.target.value)}
                             className="text-[11px] font-semibold px-2 py-0.5 rounded-full border-0 outline-none cursor-pointer shrink-0"
@@ -1216,7 +1879,7 @@ export default function Settings() {
                         )}
 
                         {/* Joined date */}
-                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "#7A6A9E" }}>
+                        <span className="text-[11px] shrink-0 hidden sm:block" style={{ color: "var(--cc-muted)" }}>
                           Joined {m.joined_at ? new Date(m.joined_at).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
                         </span>
 
@@ -1239,7 +1902,7 @@ export default function Settings() {
             </PanelCard>
 
             {/* Pending invitations */}
-            <PanelCard label="Pending Invitations">
+            <PanelCard label={translate("settings.team.pendingInvites")}>
               {invites.length === 0 ? (
                 <p className="text-[13px] py-3 text-center" style={{ color: "#7A6A8A" }}>
                   No pending invitations.
@@ -1253,8 +1916,8 @@ export default function Settings() {
                     return (
                       <div key={inv.id} className="flex items-center gap-3 py-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold truncate" style={{ color: "#1E1640" }}>{inv.email}</p>
-                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#7A6A9E" }}>
+                          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--cc-text)" }}>{inv.email}</p>
+                          <p className="text-[11px]" style={{ color: expired ? "#dc2626" : "#6B7280" }}>
                             {expired ? "Expired" : "Expires"} {expires.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
                           </p>
                         </div>
@@ -1270,7 +1933,7 @@ export default function Settings() {
                           onClick={() => copyInviteLink(inv)}
                           title="Copy invite link"
                           className="p-1.5 rounded-lg transition-colors hover:bg-[#F0EDF9] shrink-0"
-                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#7A6A9E" }}
+                          style={{ color: copiedToken === inv.id ? "#22c55e" : "#6B7280" }}
                         >
                           {copiedToken === inv.id ? <Check size={13} /> : <Copy size={13} />}
                         </button>
@@ -1293,31 +1956,28 @@ export default function Settings() {
 
             {/* Invite button */}
             <div className="flex justify-end">
-              <Button
-                onClick={() => setShowInviteModal(true)}
-                className="gap-2 rounded-xl"
-              >
-                <Plus size={15} /> Invite Staff Member
-              </Button>
+              <Link href="/team" className="inline-flex items-center gap-2 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-sm font-medium">
+                <Plus size={15} /> {translate("settings.team.inviteStaff")}
+              </Link>
             </div>
 
             {/* Explainer */}
             <div
               className="rounded-2xl p-4 text-[12px] leading-relaxed space-y-2"
               style={{
-                background: "linear-gradient(135deg, rgba(85,51,204,0.04), rgba(85,51,204,0.02))",
-                border: "1px solid rgba(85,51,204,0.12)",
-                borderLeft: "3px solid #5533CC",
+                background: "rgba(55,48,163,0.04)",
+                border: "1px solid rgba(55,48,163,0.12)",
+                borderLeft: "3px solid #3730A3",
               }}
             >
-              <p className="font-bold text-[13px]" style={{ color: "#1E1640" }}>How staff invitations work</p>
-              <p style={{ color: "#4A3D5A" }}>
+              <p className="font-bold text-[13px]" style={{ color: "var(--cc-text)" }}>How staff invitations work</p>
+              <p style={{ color: "var(--cc-text)" }}>
                 Inviting a staff member generates a secure token link (7-day expiry). The invitee
                 clicks the link, sets their password, and is immediately added to your organisation
                 with the role you selected. Their access is scoped to only the participants and sessions
                 your org allocates to them.
               </p>
-              <p style={{ color: "#4A3D5A" }}>
+              <p style={{ color: "var(--cc-text)" }}>
                 Email delivery is not yet configured — copy and share the link manually. Pending invitations
                 can be revoked at any time before they are accepted.
               </p>
@@ -1328,13 +1988,6 @@ export default function Settings() {
       </main>
 
       </div>{/* end flex gap-6 */}
-
-      {/* ── Invite modal ────────────────────────────────────────────────────── */}
-      <InviteModal
-        open={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        onInviteSent={fetchTeam}
-      />
 
     </div>
   );

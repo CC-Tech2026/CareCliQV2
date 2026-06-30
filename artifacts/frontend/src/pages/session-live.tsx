@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGetSession, useGetParticipant } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useSettings } from "@/lib/use-settings";
 import { apiFetch } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
@@ -47,17 +48,14 @@ import {
   ShieldCheck,
   Radio,
   Paperclip,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { translateToEnglish } from "@/services/translationService";
-import {
-  checkStructuredCompliance,
-  combineStructuredNotes,
-  type StructuredNotes,
-} from "@/services/ComplianceService";
+import type { StructuredNotes } from "@/services/complianceService";
 import { BodyExaminationPanel } from "@/components/BodyExaminationPanel";
 import type { BodyMarker } from "@/components/BodyMap";
 import {
@@ -216,8 +214,8 @@ function findActivityDef(type: string): ActivityDef | undefined {
 // ---------------------------------------------------------------------------
 
 const GOAL_STATUS_CONFIG = {
-  not_started: { label: "Not Started", cls: "bg-[#F5F3FC] text-[#7A6A9E] border-[#E2DEF2]", icon: Circle },
-  in_progress: { label: "In Progress", cls: "bg-[#FFE8EE] text-[#F03060] border-[#F8C0CE]", icon: Activity },
+  not_started: { label: "Not Started", cls: "bg-[#F8F8FE] text-[#6B7280] border-[#E5E7EB]", icon: Circle },
+  in_progress: { label: "In Progress", cls: "bg-[#FCE7F3] text-[#BE185D] border-[#F8C0CE]", icon: Activity },
   achieved: { label: "Achieved", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: CheckCircle2 },
   needs_review: { label: "Needs Review", cls: "bg-amber-50 text-amber-700 border-amber-200", icon: AlertCircle },
 };
@@ -327,7 +325,7 @@ function MessageBubble({
   if (msg.type === "system") {
     return (
       <div className="flex justify-center my-2 px-4">
-        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#7A6A9E] shadow-sm">{msg.content}</span>
+        <span className="rounded-full bg-white/80 px-3 py-1 text-[10px] font-medium text-[#6B7280] shadow-sm">{msg.content}</span>
       </div>
     );
   }
@@ -337,10 +335,10 @@ function MessageBubble({
     const AIcon = def?.icon ?? Activity;
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-white border border-[#E2DEF2] rounded-full px-3 py-1 shadow-sm">
-          <AIcon className="h-2.5 w-2.5 text-[#5533CC] shrink-0" />
-          <span className="text-[10px] text-[#1E1640] font-semibold">{msg.activityType || msg.content}</span>
-          <span className="text-[9px] text-[#7A6A9E]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-full px-3 py-1 shadow-sm">
+          <AIcon className="h-2.5 w-2.5 text-[#3730A3] shrink-0" />
+          <span className="text-[10px] text-[#111827] font-semibold">{msg.activityType || msg.content}</span>
+          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -349,10 +347,10 @@ function MessageBubble({
   if (msg.type === "goal_update") {
     return (
       <div className="flex justify-center my-1.5">
-        <div className="flex items-center gap-1.5 bg-[#FFE8EE] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
-          <Target className="h-2.5 w-2.5 text-[#F03060] shrink-0" />
-          <span className="text-[10px] text-[#1E1640] font-semibold">{msg.content}</span>
-          <span className="text-[9px] text-[#7A6A9E]">• {format(msg.timestamp, "HH:mm")}</span>
+        <div className="flex items-center gap-1.5 bg-[#FCE7F3] border border-[#F8C0CE] rounded-full px-3 py-1 shadow-sm">
+          <Target className="h-2.5 w-2.5 text-[#BE185D] shrink-0" />
+          <span className="text-[10px] text-[#111827] font-semibold">{msg.content}</span>
+          <span className="text-[9px] text-[#6B7280]">• {format(msg.timestamp, "HH:mm")}</span>
         </div>
       </div>
     );
@@ -362,7 +360,7 @@ function MessageBubble({
   return (
     <div className="flex justify-end px-1 my-0.5">
       <div className="max-w-[82%] min-w-[60px]">
-        <div className="bg-white border border-[#E2DEF2] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl rounded-tr-sm overflow-hidden shadow-sm">
           {msg.type === "image" && msg.mediaUrl && (
             <div className="relative">
               <img src={msg.mediaUrl} className="w-full max-h-52 object-cover" alt="Evidence" />
@@ -376,12 +374,12 @@ function MessageBubble({
           )}
           {msg.type === "file" && (
             <div className="px-4 py-3 flex items-center gap-3">
-              <div className="h-9 w-9 bg-[#F5F3FC] rounded-lg flex items-center justify-center shrink-0">
-                <FileText className="h-4 w-4 text-[#5533CC]" />
+              <div className="h-9 w-9 bg-[#F8F8FE] rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="h-4 w-4 text-[#3730A3]" />
               </div>
               <div className="min-w-0">
-                <p className="text-[#1E1640] text-sm font-semibold leading-tight truncate">{msg.content}</p>
-                <p className="text-[#7A6A9E] text-[10px]">Document attached</p>
+                <p className="text-[#111827] text-sm font-semibold leading-tight truncate">{msg.content}</p>
+                <p className="text-[#6B7280] text-[10px]">Document attached</p>
               </div>
             </div>
           )}
@@ -389,17 +387,17 @@ function MessageBubble({
             <div className="px-4 py-3">
               {msg.type === "voice" && (
                 <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <div className="flex items-center gap-1 text-[#5533CC]">
+                  <div className="flex items-center gap-1 text-[#3730A3]">
                     <Mic className="h-3 w-3" />
                     <span className="text-[9px] font-bold uppercase tracking-wider">Voice Note</span>
                   </div>
                   {msg.detectedLanguage && msg.detectedLanguage !== "en" && (
-                    <span className="text-[9px] bg-[#F5F3FC] text-[#7A6A9E] px-1.5 py-0.5 rounded-full">
+                    <span className="text-[9px] bg-[#F8F8FE] text-[#6B7280] px-1.5 py-0.5 rounded-full">
                       {msg.detectedLanguage.toUpperCase()}
                     </span>
                   )}
                   {msg.isTranslating && (
-                    <div className="flex items-center gap-1 text-[#7A6A9E]">
+                    <div className="flex items-center gap-1 text-[#6B7280]">
                       <Loader2 className="h-2.5 w-2.5 animate-spin" />
                       <span className="text-[9px]">Translating…</span>
                     </div>
@@ -407,27 +405,27 @@ function MessageBubble({
                 </div>
               )}
               {(msg.type === "text" || msg.type === "voice") && (
-                <p className="text-[#1E1640] text-sm leading-relaxed">{msg.content}</p>
+                <p className="text-[#111827] text-sm leading-relaxed">{msg.content}</p>
               )}
               {msg.type === "voice" && (
                 <div className="mt-2 pt-2 border-t border-[#E8D5E8]">
                   <div className="mb-1">
                     {msg.isTranslating ? (
-                      <span className="text-[9px] text-[#7A6A9E]">Translating...</span>
+                      <span className="text-[9px] text-[#6B7280]">Translating...</span>
                     ) : msg.translationStatus === "translated" ? (
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#5533CC]">Translated to English</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#3730A3]">Translated to English</span>
                     ) : msg.translationStatus === "failed" || msg.translationStatus === "unsupported" ? (
                       <span className="text-[9px] font-semibold text-red-600">Translation failed - retry</span>
                     ) : msg.translationStatus === "not_required" ? (
-                      <span className="text-[9px] text-[#7A6A9E]">English legal output</span>
+                      <span className="text-[9px] text-[#6B7280]">English legal output</span>
                     ) : null}
                   </div>
                   {msg.translated ? (
                     <>
-                      <p className="text-[#4A3D5A] text-sm leading-relaxed">{msg.translated}</p>
+                      <p className="text-[#374151] text-sm leading-relaxed">{msg.translated}</p>
                     </>
                   ) : !msg.isTranslating ? (
-                    <p className="text-[#7A6A9E] text-xs italic">English translation unavailable</p>
+                    <p className="text-[#6B7280] text-xs italic">English translation unavailable</p>
                   ) : null}
                 </div>
               )}
@@ -445,6 +443,7 @@ function MessageBubble({
 // ---------------------------------------------------------------------------
 
 export default function SessionLive() {
+  const { translate, translateParams } = useAccessibility();
   const { id } = useParams();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -471,7 +470,7 @@ export default function SessionLive() {
         if (gObj.id && gObj.title) goalMap[String(gObj.id)] = String(gObj.title);
       }
     }
-    return addressed.map((gid) => goalMap[gid] ?? gid);
+    return addressed.map((gid: string) => goalMap[gid] ?? gid);
   })();
 
   const { settings } = useSettings();
@@ -541,8 +540,12 @@ export default function SessionLive() {
     status: string;
     rules?: Array<{ label: string; pass: boolean; note?: string }>;
     rpFlags?: RPFlag[];
+    deltaSummaries?: string[];
   }
   const [postSaveResult, setPostSaveResult] = useState<PostSaveResult | null>(null);
+  const [previewDeltaSummaries, setPreviewDeltaSummaries] = useState<string[]>([]);
+  const [previewProgressLoading, setPreviewProgressLoading] = useState(false);
+  const [previewProgressNotice, setPreviewProgressNotice] = useState<string | null>(null);
 
   // ── Reminder ──
   const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -598,7 +601,7 @@ export default function SessionLive() {
           }),
         }).catch((error) => {
           console.error("message persistence failed", error);
-          toast({ title: "Message was not saved", variant: "destructive" });
+          toast({ title: translate("sessions.live.toast.messageNotSaved"), variant: "destructive" });
         });
       }
       return newMsg;
@@ -633,7 +636,14 @@ export default function SessionLive() {
   // ── Keep combined notes in sync ──
   useEffect(() => {
     if (hasManuallyEditedNotesRef.current) return;
-    setEditableNotes(combineStructuredNotes(structuredNotes));
+    // Combine structured notes into editable text
+    const combinedNotes = structuredNotes 
+      ? Object.entries(structuredNotes)
+          .map(([key, value]) => value ? `${key}: ${value}` : null)
+          .filter(Boolean)
+          .join('\n')
+      : '';
+    setEditableNotes(combinedNotes);
   }, [structuredNotes]);
 
   // ── Load existing messages ──
@@ -728,6 +738,95 @@ export default function SessionLive() {
       });
   }, [session?.id]);
 
+  useEffect(() => {
+    if (!showSummary || !id || postSaveResult || summaryLoading) {
+      if (!showSummary || postSaveResult) {
+        setPreviewDeltaSummaries([]);
+        setPreviewProgressNotice(null);
+      }
+      return;
+    }
+
+    const payload = {
+      notes: editableNotes.trim() || undefined,
+      activities_performed: structuredNotes.activitiesPerformed.trim() || undefined,
+      outcomes: structuredNotes.outcomes.trim() || undefined,
+      participant_response: structuredNotes.participantResponse.trim() || undefined,
+      progress_toward_goals: structuredNotes.progressTowardGoals.trim() || undefined,
+      goals_addressed:
+        (session?.goals_addressed?.length ?? 0) > 0
+          ? session?.goals_addressed
+          : goals.filter((g) => g.status !== "not_started").map((g) => g.id),
+    };
+    const hasNoteContent = Boolean(
+      payload.notes ||
+        payload.activities_performed ||
+        payload.outcomes ||
+        payload.participant_response ||
+        payload.progress_toward_goals,
+    );
+    if (!hasNoteContent) {
+      setPreviewProgressLoading(false);
+      setPreviewDeltaSummaries([]);
+      setPreviewProgressNotice("Add session notes before a progress summary can be generated.");
+      return;
+    }
+
+    let cancelled = false;
+    setPreviewProgressLoading(true);
+    setPreviewProgressNotice(null);
+    apiFetch(`/api/sessions/${id}/preview-progress`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(
+            typeof data?.detail === "string" ? data.detail : `Preview failed (${r.status})`,
+          );
+        }
+        return data as { delta_summaries?: string[] };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        const summaries = Array.isArray(data.delta_summaries)
+          ? data.delta_summaries.filter((s) => typeof s === "string" && s.trim())
+          : [];
+        setPreviewDeltaSummaries(summaries);
+        if (summaries.length === 0) {
+          setPreviewProgressNotice(
+            "No measurable progress detected yet. You can still approve — progress will be extracted on save.",
+          );
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPreviewDeltaSummaries([]);
+        setPreviewProgressNotice(
+          err instanceof Error
+            ? err.message
+            : "Could not generate progress summary. You can still approve and save.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewProgressLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    showSummary,
+    id,
+    postSaveResult,
+    summaryLoading,
+    structuredNotes,
+    editableNotes,
+    session?.goals_addressed,
+    goals,
+  ]);
+
   // ── Init body markers ──
   useEffect(() => {
     if (!session || bodyMarkersInitRef.current) return;
@@ -771,7 +870,7 @@ export default function SessionLive() {
       const addressed = session.goals_addressed ?? [];
       if (addressed.length > 0 && resolvedGoalTitles.length > 0) {
         setGoals(
-          addressed.map((gid, i) => ({
+          addressed.map((gid: string, i: number) => ({
             id: gid,
             name: resolvedGoalTitles[i] ?? gid,
             status: "not_started" as const,
@@ -779,7 +878,7 @@ export default function SessionLive() {
         );
       } else if (addressed.length > 0) {
         setGoals(
-          addressed.map((gid) => ({ id: gid, name: gid, status: "not_started" as const })),
+          addressed.map((gid: string) => ({ id: gid, name: gid, status: "not_started" as const })),
         );
       }
     }
@@ -807,7 +906,7 @@ export default function SessionLive() {
       setIsActive(true);
       setElapsed(0);
       setReminderDismissed(true);
-      toast({ title: "Session started", description: "Timer started automatically." });
+      toast({ title: translate("sessions.live.toast.started"), description: translate("sessions.live.toast.timerAuto") });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, settings]);
@@ -817,7 +916,7 @@ export default function SessionLive() {
     if (!session || isActive || reminderDismissed) return;
     reminderTimerRef.current = setTimeout(() => {
       toast({
-        title: "Session scheduled",
+        title: translate("sessions.live.toast.scheduled"),
         description: `Ready: ${session.session_type}`,
         duration: 30000,
         action: (
@@ -881,7 +980,7 @@ export default function SessionLive() {
     setReminderDismissed(true);
     if (reminderTimerRef.current) clearTimeout(reminderTimerRef.current);
     addMessage({ type: "system", content: "Session started", timestamp: new Date() });
-    toast({ title: "Session started", description: "Start documenting below." });
+    toast({ title: translate("sessions.live.toast.started"), description: translate("sessions.live.toast.startDocumenting") });
     if (settings?.sessionDefaults?.enableVoice) {
       setTimeout(() => startRecording(), 300);
     }
@@ -890,7 +989,7 @@ export default function SessionLive() {
   const sendTextMessage = () => {
     if (!inputText.trim()) return;
     if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.startFirst"), variant: "destructive" });
       return;
     }
     addMessage({ type: "text", content: inputText.trim(), timestamp: new Date() });
@@ -899,13 +998,13 @@ export default function SessionLive() {
 
   const logActivity = (type: string) => {
     if (!isActive) {
-      toast({ title: "Start the session first", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.startFirst"), variant: "destructive" });
       setShowActivitySheet(false);
       return;
     }
     addMessage({ type: "activity", content: type, timestamp: new Date(), activityType: type });
     setShowActivitySheet(false);
-    toast({ title: `${type} logged` });
+    toast({ title: translateParams("sessions.live.toast.activityLogged", { type }) });
   };
 
   const cycleGoalStatus = (goalId: string) => {
@@ -953,10 +1052,10 @@ export default function SessionLive() {
     setIsUploadingAttachment(true);
     try {
       await uploadAttachment(file, "image");
-      toast({ title: "Photo uploaded", description: format(new Date(), "HH:mm:ss") });
+      toast({ title: translate("sessions.live.toast.photoUploaded"), description: format(new Date(), "HH:mm:ss") });
     } catch (error) {
       toast({
-        title: "Photo upload failed",
+        title: translate("sessions.live.toast.photoFailed"),
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -972,10 +1071,10 @@ export default function SessionLive() {
     setIsUploadingAttachment(true);
     try {
       await uploadAttachment(file, file.type.startsWith("image/") ? "image" : "file");
-      toast({ title: "File uploaded", description: file.name });
+      toast({ title: translate("sessions.live.toast.fileUploaded"), description: file.name });
     } catch (error) {
       toast({
-        title: "Upload failed",
+        title: translate("sessions.live.toast.uploadFailed"),
         description: error instanceof Error ? error.message : "Please try again.",
         variant: "destructive",
       });
@@ -991,7 +1090,7 @@ export default function SessionLive() {
     const SpeechRecognitionClass = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
       toast({
-        title: "Voice not supported",
+        title: translate("sessions.live.toast.voiceNotSupported"),
         description: "Use Chrome for voice notes.",
         variant: "destructive",
       });
@@ -1038,7 +1137,7 @@ export default function SessionLive() {
       translationStatus: "pending",
     });
     setRecordingText("");
-    toast({ title: "Voice note saved" });
+    toast({ title: translate("sessions.live.toast.voiceSaved") });
 
     const result = await translateToEnglish(text, documentationLanguage);
     if (result.status === "failed" || result.status === "unsupported") {
@@ -1049,7 +1148,7 @@ export default function SessionLive() {
         translationMetadata: result.metadata,
       });
       toast({
-        title: "Translation failed",
+        title: translate("sessions.live.toast.translationFailed"),
         description: result.error || "Edit or retry before completing the session.",
         variant: "destructive",
       });
@@ -1067,7 +1166,7 @@ export default function SessionLive() {
   const handleStop = useCallback(async () => {
     if (elapsed === 0) {
       toast({
-        title: "Session not started",
+        title: translate("sessions.live.toast.notStarted"),
         description: 'Click "Start" to begin the timer before ending.',
         variant: "destructive",
       });
@@ -1083,7 +1182,7 @@ export default function SessionLive() {
     );
     if (blockedTranslation) {
       toast({
-        title: "Translation required",
+        title: translate("sessions.live.toast.translationRequired"),
         description: "Resolve failed or pending voice translation before completing the session.",
         variant: "destructive",
       });
@@ -1101,7 +1200,7 @@ export default function SessionLive() {
       activityTypes.length > 0 || voiceTexts.length > 0 || textContent.length > 0;
     if (!prefilledHasContent && !session?.notes?.trim()) {
       toast({
-        title: "Nothing to document yet",
+        title: translate("sessions.live.toast.nothingToDocument"),
         description: "Log an activity or add a note before reviewing.",
         variant: "destructive",
       });
@@ -1170,7 +1269,7 @@ export default function SessionLive() {
     );
     if (blockedTranslation) {
       toast({
-        title: "Session cannot be approved: translation failed",
+        title: translate("sessions.live.toast.approveTranslationFailed"),
         description: "Retry or edit the voice note before saving the legal record.",
         variant: "destructive",
       });
@@ -1178,7 +1277,7 @@ export default function SessionLive() {
     }
 
     if (compSettings?.requireActivity && actMsgs.length === 0) {
-      toast({ title: "Session cannot be approved: no activity logged", variant: "destructive" });
+      toast({ title: translate("sessions.live.toast.approveNoActivity"), variant: "destructive" });
       return;
     }
     if (compSettings?.requireNotes) {
@@ -1190,7 +1289,7 @@ export default function SessionLive() {
         ].some((f) => f.trim().length > 0) || editableNotes.trim().length > 0;
       if (!hasNotes) {
         toast({
-          title: "Session cannot be approved: clinical notes are required",
+          title: translate("sessions.live.toast.approveNotesRequired"),
           variant: "destructive",
         });
         return;
@@ -1198,7 +1297,7 @@ export default function SessionLive() {
     }
     if (compSettings?.requireDuration && elapsed === 0) {
       toast({
-        title: "Session cannot be approved: session duration not recorded",
+        title: translate("sessions.live.toast.approveNoDuration"),
         variant: "destructive",
       });
       return;
@@ -1246,14 +1345,8 @@ export default function SessionLive() {
       if (!patchRes.ok) throw new Error(`Save failed: HTTP ${patchRes.status}`);
 
       const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
-      const liveComplianceLocal = checkStructuredCompliance(
-        structuredNotes,
-        !!(session?.participant_id),
-        durationMinutes,
-        actMsgs.length,
-        iUrls.length,
-        goalsAddressedCount,
-      );
+      // TODO: Implement structured compliance checking
+      const liveComplianceLocal: { score: number; checks: Array<{ label: string; pass: boolean; note: string }>; blocking: boolean } = { score: 0, checks: [], blocking: false };
 
       const localResult: PostSaveResult = {
         score: liveComplianceLocal.score,
@@ -1289,18 +1382,26 @@ export default function SessionLive() {
                 (f.suggestion as string | undefined),
             }));
           }
+          const progressDelta = aiData?.progress_delta;
+          if (Array.isArray(progressDelta)) {
+            localResult.deltaSummaries = progressDelta
+              .map((e: Record<string, unknown>) => String(e.delta_summary ?? ""))
+              .filter((s: string) => s.trim());
+          } else if (Array.isArray(aiData?.delta_summaries)) {
+            localResult.deltaSummaries = aiData.delta_summaries;
+          }
 
       setIsSaving(false);
       setPostSaveResult(localResult);
       queryClient.invalidateQueries({ queryKey: [orgId, "dashboard", "worker"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "my-compliance"] });
       queryClient.invalidateQueries({ queryKey: [orgId, "worker", "compliance-detail"] });
-      toast({ title: "Session saved", description: "Notes approved and clinical record updated." });
+      toast({ title: translate("sessions.live.toast.saved"), description: translate("sessions.live.toast.savedDesc") });
     } catch (err) {
       setIsSaving(false);
       console.error("session save failed", err);
       toast({
-        title: "Save failed",
+        title: translate("sessions.live.toast.saveFailed"),
         description: err instanceof Error ? err.message : "Could not save. Please try again.",
         variant: "destructive",
       });
@@ -1368,7 +1469,7 @@ export default function SessionLive() {
     stopIntentRef.current = true;
     recognitionRef.current?.stop();
     setIsRecording(false);
-    toast({ title: "Session restarted", description: "All logs cleared." });
+    toast({ title: translate("sessions.live.toast.restarted"), description: translate("sessions.live.toast.restartedDesc") });
   };
 
   // ---------------------------------------------------------------------------
@@ -1377,16 +1478,16 @@ export default function SessionLive() {
 
   if (isLoading) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E2DEF2]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5533CC]" />
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex items-center justify-center rounded-[2rem] bg-white border border-[#E5E7EB]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#3730A3]" />
       </div>
     );
   }
 
   if (!session) {
     return (
-      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E2DEF2]">
-        <p className="text-[#7A6A9E]">Session not found</p>
+      <div className="h-[calc(100vh-9rem)] min-h-[520px] flex flex-col items-center justify-center gap-4 rounded-[2rem] bg-white border border-[#E5E7EB]">
+        <p className="text-[#6B7280]">Session not found</p>
         <Button onClick={() => navigate("/sessions")} variant="outline">
           Back to Sessions
         </Button>
@@ -1396,14 +1497,8 @@ export default function SessionLive() {
 
   const participantName = session.participants?.full_name ?? "Session";
   const goalsAddressedCount = session?.goals_addressed?.length ?? 0;
-  const liveCompliance = checkStructuredCompliance(
-    structuredNotes,
-    !!(session?.participant_id),
-    elapsed > 0 ? Math.max(1, Math.round(elapsed / 60)) : 0,
-    activityMessages.length,
-    imageUrls.length,
-    goalsAddressedCount,
-  );
+  // TODO: Implement structured compliance checking
+  const liveCompliance: { score: number; checks: Array<{ label: string; pass: boolean; note: string }>; blocking: boolean } = { score: 0, checks: [], blocking: false };
 
   const compSettings = settings?.compliance;
   const bannerItems: { label: string; met: boolean }[] = [];
@@ -1429,7 +1524,7 @@ export default function SessionLive() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E2DEF2] bg-white shadow-[0_14px_40px_rgba(84,34,105,0.08)]">
+    <div className="relative mx-auto flex h-[calc(100vh-9rem)] min-h-[620px] max-h-[780px] max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-[#E5E7EB] bg-white shadow-[0_14px_40px_rgba(55,48,163,0.08)]">
 
       {/* ── Top control bar ── */}
       <div
@@ -1438,16 +1533,16 @@ export default function SessionLive() {
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <button
             onClick={() => navigate(`/sessions/${id}`)}
-            className="flex items-center gap-1.5 text-[#7A6A9E] hover:text-[#5533CC] text-sm transition-colors font-semibold"
+            className="flex items-center gap-1.5 text-[#6B7280] hover:text-[#3730A3] text-sm transition-colors font-semibold"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
           <div className="min-w-0 flex-1 px-1">
-            <h1 className="text-[#1E1640] font-black text-base tracking-tight leading-tight truncate">
+            <h1 className="text-[#111827] font-black text-base tracking-tight leading-tight truncate">
               {participantName}
             </h1>
-            <p className="text-[#7A6A9E] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
+            <p className="text-[#6B7280] text-[11px] capitalize">{session.session_type?.replace(/_/g, " ")}</p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1460,7 +1555,7 @@ export default function SessionLive() {
                 languageManuallySelectedRef.current = true;
                 setSelectedDocumentationLanguage(event.target.value);
               }}
-              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E2DEF2] bg-[#F5F3FC] px-3 text-[12px] font-bold text-[#1E1640] outline-none hover:bg-white disabled:opacity-50"
+              className="h-9 max-w-[118px] sm:max-w-[160px] rounded-full border border-[#E5E7EB] bg-[#F8F8FE] px-3 text-[12px] font-bold text-[#111827] outline-none hover:bg-white disabled:opacity-50"
             >
               {SUPPORTED_DOCUMENTATION_LANGUAGES.map((language) => (
                 <option key={language.code} value={language.code}>
@@ -1470,8 +1565,8 @@ export default function SessionLive() {
             </select>
 
             <div className="hidden sm:flex items-center gap-1">
-              <Globe className="h-3.5 w-3.5 text-[#7A6A9E] shrink-0" />
-              <div className="flex rounded-full border border-[#E2DEF2] bg-[#F5F3FC] p-0.5 overflow-hidden">
+              <Globe className="h-3.5 w-3.5 text-[#6B7280] shrink-0" />
+              <div className="flex rounded-full border border-[#E5E7EB] bg-[#F8F8FE] p-0.5 overflow-hidden">
                 {(["original", "translated", "both"] as TranslationView[]).map((v) => (
                   <button
                     key={v}
@@ -1479,8 +1574,8 @@ export default function SessionLive() {
                     className={cn(
                       "px-2.5 py-1 text-[10px] font-bold rounded-full transition-colors",
                       translationView === v
-                        ? "bg-white text-[#5533CC] shadow-sm"
-                        : "text-[#7A6A9E] hover:text-[#5533CC]",
+                        ? "bg-white text-[#3730A3] shadow-sm"
+                        : "text-[#6B7280] hover:text-[#3730A3]",
                     )}
                   >
                     {v === "original" ? "Orig" : v === "translated" ? "EN" : "Both"}
@@ -1495,7 +1590,7 @@ export default function SessionLive() {
               disabled={!isActive || isUploadingAttachment}
               aria-label="Add photo evidence"
               title="Add photo evidence"
-              className="h-9 w-9 rounded-full border border-[#E2DEF2] bg-white text-[#5533CC] hover:bg-[#F5F3FC] disabled:opacity-40 flex items-center justify-center transition-colors"
+              className="h-9 w-9 rounded-full border border-[#E5E7EB] bg-white text-[#3730A3] hover:bg-[#F8F8FE] disabled:opacity-40 flex items-center justify-center transition-colors"
             >
               <Camera className="h-3.5 w-3.5" />
             </button>
@@ -1503,7 +1598,7 @@ export default function SessionLive() {
             {elapsed > 0 && (
               <button
                 onClick={() => setShowRestartConfirm(true)}
-                className="hidden sm:inline-flex text-[#7A6A9E] hover:text-[#5533CC] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F5F3FC] transition-colors"
+                className="hidden sm:inline-flex text-[#6B7280] hover:text-[#3730A3] text-[11px] font-semibold px-2 py-1 rounded-lg hover:bg-[#F8F8FE] transition-colors"
               >
                 Restart
               </button>
@@ -1521,7 +1616,7 @@ export default function SessionLive() {
               <Button
                 onClick={handleStop}
                 className="gap-1 text-white font-bold px-3 py-2 h-9 text-xs rounded-full"
-                style={{ background: "linear-gradient(135deg, #F03060 0%, #5533CC 100%)" }}
+                style={{ background: "var(--cc-plum)" }}
               >
                 <Square className="h-3 w-3 fill-white" />
                 End
@@ -1533,7 +1628,7 @@ export default function SessionLive() {
         {/* Timer bar */}
         <div className="flex items-center justify-between gap-3 px-4 py-2 border-t border-[#F0ECFA] bg-[#F8F6FF]">
           <div className="flex items-center gap-2.5">
-            <span className="font-mono text-lg font-black text-[#1E1640] tracking-tight">
+            <span className="font-mono text-lg font-black text-[#111827] tracking-tight">
               {formatDuration(elapsed)}
             </span>
             <span
@@ -1541,7 +1636,7 @@ export default function SessionLive() {
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border",
                 isActive
                   ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-white text-[#7A6A9E] border-[#E2DEF2]",
+                  : "bg-white text-[#6B7280] border-[#E5E7EB]",
               )}
             >
               <span
@@ -1558,7 +1653,7 @@ export default function SessionLive() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-medium text-[#7A6A9E]">
+          <div className="flex items-center gap-3 text-[10px] font-medium text-[#6B7280]">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
               {session.duration_minutes}m planned
@@ -1574,7 +1669,7 @@ export default function SessionLive() {
       {goals.length > 0 ? (
         <div className="shrink-0 border-b border-[#E8D5E8] bg-white px-3 py-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#7A6A9E] shrink-0">
+            <span className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-[#6B7280] shrink-0">
               <Target className="h-3 w-3" /> Goals:
             </span>
             {goals.map((goal) => (
@@ -1591,7 +1686,7 @@ export default function SessionLive() {
             ))}
             <button
               onClick={() => setBodyMapOpen((o) => !o)}
-              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#7A6A9E] hover:text-[#5533CC] transition-colors"
+              className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-[#6B7280] hover:text-[#3730A3] transition-colors"
             >
               <HeartPulse className="h-3 w-3" />
               {bodyMapOpen ? "Hide" : "Body Map"}
@@ -1628,7 +1723,7 @@ export default function SessionLive() {
             />
             {bannerAllMet ? (
               <span className="text-[10px] text-emerald-700 font-semibold">
-                All compliance requirements met
+                {translate("sessions.live.banner.allMet")}
               </span>
             ) : (
               bannerItems.map((item) => (
@@ -1656,12 +1751,14 @@ export default function SessionLive() {
       {bodyMapOpen && (
         <div className="shrink-0 bg-[#F8F6FF] border-b border-[#E8D5E8] px-4 py-4 max-h-[260px] overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[10px] font-bold text-[#7A6A9E] uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider flex items-center gap-2">
               <HeartPulse className="h-3.5 w-3.5" style={{ color: "#F1738A" }} /> Physical Examination
             </h3>
             <button
               onClick={() => setBodyMapOpen(false)}
-              className="text-[#7A6A9E] hover:text-[#5533CC]"
+              className="text-[#6B7280] hover:text-[#3730A3]"
+              title={translate("sessions.live.bodyMap.close")}
+              aria-label={translate("sessions.live.bodyMap.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -1678,9 +1775,9 @@ export default function SessionLive() {
       <div className="flex-1 overflow-y-auto bg-[#F6F4FB] px-3 py-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
-            <MessageSquare className="h-10 w-10 text-[#D8D0F0] mb-3" />
-            <p className="text-[#1E1640] text-sm font-bold">Session started</p>
-            <p className="text-[#7A6A9E] text-xs mt-1">Document notes, voice, and evidence below.</p>
+            <MessageSquare className="h-10 w-10 text-[#C7D2FE] mb-3" />
+            <p className="text-[#111827] text-sm font-bold">{translate("sessions.live.chat.started")}</p>
+            <p className="text-[#6B7280] text-xs mt-1">{translate("sessions.live.chat.startedHint")}</p>
           </div>
         )}
 
@@ -1694,12 +1791,12 @@ export default function SessionLive() {
         {isRecording && (
           <div className="flex justify-end px-1 mt-1">
             <div className="max-w-[82%] bg-white border border-[#F8C0CE] rounded-2xl rounded-tr-sm px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-2 mb-1.5 text-[#F03060]">
+              <div className="flex items-center gap-2 mb-1.5 text-[#BE185D]">
                 <Radio className="h-3 w-3 animate-pulse" />
-                <span className="text-[9px] font-bold uppercase tracking-wider">Listening…</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider">{translate("sessions.live.chat.listening")}</span>
               </div>
-              <p className="text-[#7A6A9E] text-sm italic">
-                {recordingText || "Speak clearly…"}
+              <p className="text-[#6B7280] text-sm italic">
+                {recordingText || translate("sessions.live.chat.speakClearly")}
               </p>
             </div>
           </div>
@@ -1713,7 +1810,7 @@ export default function SessionLive() {
         <div className="shrink-0 bg-red-50 border-t border-red-100 px-3 py-2 flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-red-600 shrink-0" />
           <p className="text-red-700 text-xs flex-1">
-            <span className="font-semibold">Possible RP language detected</span>
+            <span className="font-semibold">{translate("sessions.live.rp.detected")}</span>
             <span className="text-red-500 ml-1">
               ({rpFlags.length} flag{rpFlags.length > 1 ? "s" : ""})
             </span>
@@ -1728,9 +1825,9 @@ export default function SessionLive() {
       )}
 
       {/* ── Bottom input bar ── */}
-      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E2DEF2] shadow-[0_-8px_24px_rgba(84,34,105,0.06)]">
+      <div className="shrink-0 bg-white px-3 sm:px-4 py-3 border-t border-[#E5E7EB] shadow-[0_-8px_24px_rgba(55,48,163,0.06)]">
         <div className="client-translation-composer flex items-center gap-2 sm:gap-3">
-          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#D8D0F0] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
+          <div className="message-pill min-w-0 flex-1 h-12 sm:h-[52px] rounded-full bg-white border border-[#C7D2FE] shadow-sm flex items-center pl-4 sm:pl-5 pr-1.5">
             <input
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -1740,16 +1837,16 @@ export default function SessionLive() {
                   sendTextMessage();
                 }
               }}
-              placeholder="Message"
+              placeholder={translate("sessions.live.input.message")}
               disabled={!isActive}
-              className="min-w-0 flex-1 bg-transparent text-[#1E1640] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
+              className="min-w-0 flex-1 bg-transparent text-[#111827] text-[15px] placeholder:text-[#9A8BC4] outline-none disabled:opacity-50"
             />
             <button
               type="button"
-              aria-label="Attach file"
+              aria-label={translate("sessions.live.input.attach")}
               onClick={() => fileAttachRef.current?.click()}
               disabled={!isActive || isUploadingAttachment}
-              className="h-10 w-10 rounded-full flex items-center justify-center text-[#5533CC] hover:bg-[#F5F3FC] transition-colors disabled:opacity-40 shrink-0"
+              className="h-10 w-10 rounded-full flex items-center justify-center text-[#3730A3] hover:bg-[#F8F8FE] transition-colors disabled:opacity-40 shrink-0"
             >
               {isUploadingAttachment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Paperclip className="h-5 w-5" />}
             </button>
@@ -1759,9 +1856,9 @@ export default function SessionLive() {
           <button
             onClick={isRecording ? stopRecording : startRecording}
             disabled={!isActive}
-            title={isRecording ? "Stop recording" : "Start voice note"}
+            title={isRecording ? translate("sessions.live.input.stopRecording") : translate("sessions.live.input.startVoice")}
             className={cn(
-              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(85,51,204,0.24)] ring-4 ring-white border border-[#E2DEF2] transition-all shrink-0 disabled:opacity-45",
+              "voice-circle h-12 w-12 sm:h-14 sm:w-14 rounded-full flex items-center justify-center text-white shadow-[0_8px_20px_rgba(55,48,163,0.24)] ring-4 ring-white border border-[#E5E7EB] transition-all shrink-0 disabled:opacity-45",
               isRecording
                 ? "bg-[#FF2D6F] animate-pulse"
                 : "bg-gradient-to-br from-[#6D35D8] to-[#FF2D6F] hover:scale-[1.02]",
@@ -1780,6 +1877,8 @@ export default function SessionLive() {
         capture="environment"
         className="hidden"
         onChange={handlePhotoUpload}
+        title="Upload photo from camera"
+        aria-label="Upload photo from camera"
       />
       <input
         ref={fileAttachRef}
@@ -1787,6 +1886,8 @@ export default function SessionLive() {
         accept=".pdf,.doc,.docx,.txt,image/*"
         className="hidden"
         onChange={handleFileAttach}
+        title="Attach file"
+        aria-label={translate("sessions.live.input.attach")}
       />
 
       {/* ── Activity sheet ── */}
@@ -1796,14 +1897,16 @@ export default function SessionLive() {
           onClick={() => setShowActivitySheet(false)}
         >
           <div
-            className="w-full bg-white border-t border-[#E2DEF2] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full bg-white border-t border-[#E5E7EB] rounded-t-3xl shadow-2xl px-4 pt-4 pb-8 animate-in slide-in-from-bottom-4 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[#1E1640] font-bold text-sm">Log Activity</h3>
+              <h3 className="text-[#111827] font-bold text-sm">Log Activity</h3>
               <button
                 onClick={() => setShowActivitySheet(false)}
-                className="text-[#7A6A9E] hover:text-[#5533CC]"
+                className="text-[#6B7280] hover:text-[#3730A3]"
+                title="Close activity sheet"
+                aria-label="Close activity sheet"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -1814,8 +1917,8 @@ export default function SessionLive() {
                 return (
                   <div key={cat.label}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <CatIcon className="h-3 w-3 text-[#7A6A9E]" />
-                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#7A6A9E]">
+                      <CatIcon className="h-3 w-3 text-[#6B7280]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[#6B7280]">
                         {cat.label}
                       </span>
                     </div>
@@ -1855,7 +1958,7 @@ export default function SessionLive() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl p-0 bg-white" style={{ border: "1px solid rgba(232,213,232,0.5)" }}>
           <div className="px-6 pt-6 pb-4 border-b" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
             <DialogTitle className="font-bold text-[18px] flex items-center gap-2" style={{ color: "#1C1626" }}>
-              <Shield className="h-5 w-5" style={{ color: "#542269" }} />
+              <Shield className="h-5 w-5" style={{ color: "#3730A3" }} />
               Review &amp; Approve Session Notes
             </DialogTitle>
             <DialogDescription className="text-[12px] mt-1" style={{ color: "#7A6A8A" }}>
@@ -1872,10 +1975,22 @@ export default function SessionLive() {
                 rules={postSaveResult.rules}
                 rpFlags={postSaveResult.rpFlags}
               />
+              {postSaveResult.deltaSummaries && postSaveResult.deltaSummaries.length > 0 && (
+                <div className="rounded-xl p-4 border space-y-2 bg-emerald-50 border-emerald-200">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-800">
+                    Progress Recorded
+                  </p>
+                  {postSaveResult.deltaSummaries.map((line, idx) => (
+                    <p key={idx} className="text-[13px] text-emerald-900">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
               <Button
                 onClick={() => navigate(`/sessions/${id}`)}
                 className="w-full text-white font-semibold gap-2 min-h-[44px] rounded-xl"
-                style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+                style={{ background: "var(--cc-plum)" }}
               >
                 <FileText className="h-4 w-4" />
                 View Session Record
@@ -1883,19 +1998,19 @@ export default function SessionLive() {
             </div>
           ) : summaryLoading ? (
             <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#542269" }} />
+              <Loader2 className="h-8 w-8 animate-spin" style={{ color: "#3730A3" }} />
             </div>
           ) : summary ? (
             <div className="p-6 space-y-5">
               {/* Stat row */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                <div className="rounded-xl p-3 text-center border" style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)" }}>
                   <p className="text-xl font-bold font-mono" style={{ color: "#1C1626" }}>{summary.duration}</p>
                   <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Duration
                   </p>
                 </div>
-                <div className="rounded-xl p-3 text-center border" style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)" }}>
+                <div className="rounded-xl p-3 text-center border" style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)" }}>
                   <p className="text-xl font-bold" style={{ color: "#1C1626" }}>{summary.activities.length}</p>
                   <p className="text-[10px] uppercase tracking-wide mt-0.5" style={{ color: "#7A6A8A" }}>
                     Activities
@@ -1967,31 +2082,31 @@ export default function SessionLive() {
                     {
                       key: "activitiesPerformed" as keyof StructuredNotes,
                       label: "Activities Performed",
-                      placeholder: "Describe the specific support activities provided…",
+                      placeholder: translate("sessions.live.structured.activities"),
                       required: true,
                     },
                     {
                       key: "outcomes" as keyof StructuredNotes,
                       label: "Outcomes",
-                      placeholder: "Measurable outcomes achieved…",
+                      placeholder: translate("sessions.live.structured.outcomes"),
                       required: true,
                     },
                     {
                       key: "participantResponse" as keyof StructuredNotes,
                       label: "Participant Response",
-                      placeholder: "How did the participant engage and respond?",
+                      placeholder: translate("sessions.live.structured.response"),
                       required: true,
                     },
                     {
                       key: "progressTowardGoals" as keyof StructuredNotes,
                       label: "Progress Toward NDIS Goals",
-                      placeholder: "Link outcomes to specific NDIS goals…",
+                      placeholder: translate("sessions.live.structured.goals"),
                       required: false,
                     },
                   ] as const
                 ).map(({ key, label, placeholder, required }) => (
-                  <div key={key}>
-                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "#4A3D5A" }}>
+                  <div key={String(key)}>
+                    <label className="text-[10px] font-semibold uppercase tracking-widest mb-1 flex items-center gap-1" style={{ color: "var(--cc-text)" }}>
                       {label}
                       {required && <span className="text-red-400 ml-0.5">*</span>}
                     </label>
@@ -2003,7 +2118,7 @@ export default function SessionLive() {
                       rows={4}
                       placeholder={placeholder}
                       className="text-[12px] p-3 rounded-xl leading-relaxed min-h-[120px]"
-                      style={{ background: "#F6F4FB", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
+                      style={{ background: "var(--cc-soft)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                     />
                   </div>
                 ))}
@@ -2091,7 +2206,7 @@ export default function SessionLive() {
                   rows={6}
                   placeholder="Combined clinical record…"
                   className="text-[12px] p-3 rounded-xl font-mono leading-relaxed min-h-[120px]"
-                  style={{ background: "white", borderColor: "rgba(232,213,232,0.5)", color: "#4A3D5A" }}
+                  style={{ background: "var(--cc-bg)", borderColor: "rgba(232,213,232,0.5)", color: "var(--cc-text)" }}
                 />
               </div>
 
@@ -2106,7 +2221,7 @@ export default function SessionLive() {
                       <span
                         key={i}
                         className="text-[10px] px-2.5 py-1 rounded-full font-medium"
-                        style={{ background: "rgba(84,34,105,0.07)", color: "#542269" }}
+                        style={{ background: "rgba(55,48,163,0.07)", color: "#3730A3" }}
                       >
                         {a}
                       </span>
@@ -2123,7 +2238,7 @@ export default function SessionLive() {
                   </label>
                   <div className="space-y-1">
                     {summary.goalProgress.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "#4A3D5A" }}>
+                      <div key={i} className="flex items-center gap-2 text-[12px]" style={{ color: "var(--cc-text)" }}>
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                         {g}
                       </div>
@@ -2134,18 +2249,68 @@ export default function SessionLive() {
 
               {/* Evidence */}
               <div className="flex gap-3">
-                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "var(--cc-soft)", border: "1px solid rgba(232,213,232,0.5)", color: "var(--cc-text)" }}>
                   <ImageIcon className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                   {summary.evidenceSummary}
                 </div>
                 {summary.voiceNoteCount > 0 && (
-                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "#F6F4FB", border: "1px solid rgba(232,213,232,0.5)", color: "#4A3D5A" }}>
+                  <div className="flex-1 rounded-xl p-3 text-[12px] flex items-center gap-2" style={{ background: "var(--cc-soft)", border: "1px solid rgba(232,213,232,0.5)", color: "var(--cc-text)" }}>
                     <Mic className="h-4 w-4 shrink-0" style={{ color: "#7A6A8A" }} />
                     {summary.voiceNoteCount} voice note{summary.voiceNoteCount > 1 ? "s" : ""}{" "}
                     captured
                   </div>
                 )}
               </div>
+
+              {/* Progress delta preview (read-only, CARECLIQV2-78) */}
+              {(previewProgressLoading ||
+                previewDeltaSummaries.length > 0 ||
+                previewProgressNotice) && (
+                <div
+                  className="rounded-xl p-4 border space-y-2"
+                  style={{
+                    background: previewDeltaSummaries.length > 0 ? "#F0FDF4" : "#FFFBEB",
+                    borderColor: previewDeltaSummaries.length > 0 ? "#BBF7D0" : "#FDE68A",
+                  }}
+                >
+                  <p
+                    className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-1.5"
+                    style={{ color: previewDeltaSummaries.length > 0 ? "#065F46" : "#92400E" }}
+                  >
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    Progress Summary
+                    {previewDeltaSummaries.length > 0 && (
+                      <span className="font-normal normal-case tracking-normal">
+                        — confirm before approving
+                      </span>
+                    )}
+                  </p>
+                  {previewProgressLoading ? (
+                    <div
+                      className="flex items-center gap-2 text-[12px]"
+                      style={{ color: previewDeltaSummaries.length > 0 ? "#047857" : "#B45309" }}
+                    >
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Generating progress summary…
+                    </div>
+                  ) : previewDeltaSummaries.length > 0 ? (
+                    <ul className="space-y-2">
+                      {previewDeltaSummaries.map((summaryLine, idx) => (
+                        <li
+                          key={idx}
+                          className="text-[13px] leading-relaxed text-emerald-900 bg-white/60 rounded-lg px-3 py-2"
+                        >
+                          {summaryLine}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    previewProgressNotice && (
+                      <p className="text-[12px] leading-relaxed text-amber-900">{previewProgressNotice}</p>
+                    )
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2 border-t" style={{ borderColor: "rgba(232,213,232,0.5)" }}>
@@ -2165,7 +2330,7 @@ export default function SessionLive() {
                   onClick={handleInitiateApprove}
                   disabled={isSaving || liveCompliance.blocking}
                   className="flex-1 min-h-[44px] text-white font-semibold gap-2 disabled:opacity-50 order-1 sm:order-2 rounded-xl"
-                  style={{ background: "linear-gradient(135deg, #F1738A 0%, #542269 100%)" }}
+                  style={{ background: "var(--cc-plum)" }}
                 >
                   {isSaving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

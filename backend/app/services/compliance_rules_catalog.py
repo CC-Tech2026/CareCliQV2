@@ -1,5 +1,5 @@
 """
-Static CareScribe 12-rule catalog with human-readable explanations for UI tooltips.
+Static CareCliQ 12-rule catalog with human-readable explanations for UI tooltips.
 
 DB guidance_text takes precedence when available via enrich_rule_results().
 """
@@ -107,9 +107,47 @@ RULE_CATALOG: dict[str, dict[str, str]] = {
             "\"participant demonstrated\", \"participant engaged\", \"participant declined\"."
         ),
     },
+    "budget_exceeded": {
+        "label": "NDIS budget exceeded",
+        "category": "funding",
+        "explanation": (
+            "The estimated cost of this session exceeds the participant's remaining NDIS plan budget "
+            "for the support category. Review funding before claiming."
+        ),
+    },
+    "budget_warning": {
+        "label": "NDIS budget low",
+        "category": "funding",
+        "explanation": (
+            "The participant's NDIS plan budget for this support category is within 10% of being fully "
+            "utilised. Consider plan review or coordinator escalation."
+        ),
+    },
+    "duration_consistency_warning": {
+        "label": "Duration mismatch (advisory)",
+        "category": "documentation",
+        "explanation": (
+            "The documented session duration differs from the linked shift's actual duration by more than "
+            "30 minutes. Review for accuracy; score is not affected."
+        ),
+    },
+    "duration_consistency_error": {
+        "label": "Duration mismatch (significant)",
+        "category": "documentation",
+        "explanation": (
+            "The documented session duration differs from the linked shift's actual duration by more than "
+            "60 minutes. This reduces the compliance score and should be corrected or explained."
+        ),
+    },
 }
 
 RULE_ORDER = [f"R{i}" for i in range(1, 13)]
+SUPPLEMENTAL_RULE_ORDER = [
+    "budget_exceeded",
+    "budget_warning",
+    "duration_consistency_warning",
+    "duration_consistency_error",
+]
 
 
 def get_rules_catalog() -> list[dict[str, Any]]:
@@ -160,5 +198,18 @@ def enrich_rule_results(rules: list[dict] | None) -> list[dict[str, Any]]:
                 "is_blocking": db_row.get("is_blocking", False),
                 "enforcement_tier": db_row.get("enforcement_tier"),
             })
+
+    for code in SUPPLEMENTAL_RULE_ORDER:
+        result = by_code.get(code)
+        if not result:
+            continue
+        static = RULE_CATALOG.get(code, {})
+        db_row = db_configs.get(code) or {}
+        enriched.append({
+            **result,
+            "label": result.get("label") or db_row.get("name") or static.get("label") or code,
+            "category": db_row.get("category") or static.get("category") or "funding",
+            "explanation": db_row.get("guidance_text") or static.get("explanation") or "",
+        })
 
     return enriched

@@ -1,4 +1,5 @@
-import { format, parseISO } from "date-fns";
+﻿import { format, parseISO } from "date-fns";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import {
   CartesianGrid,
   Line,
@@ -10,9 +11,9 @@ import {
   YAxis,
 } from "recharts";
 
-const PLUM = "#5533CC";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
+const PLUM = "var(--cc-plum)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
 
 export type ComplianceTrendPoint = {
   date: string;
@@ -37,6 +38,7 @@ export function ComplianceTrendChart({
   days: 7 | 30;
   onDaysChange?: (days: 7 | 30) => void;
 }) {
+  const { translate, translateParams } = useAccessibility();
   const chartData = data.map((point) => ({
     ...point,
     score: point.avg_score,
@@ -44,12 +46,12 @@ export function ComplianceTrendChart({
   }));
 
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
+    <section className="rounded-lg border bg-cc-surface p-5 shadow-sm" style={{ borderColor: BORDER }} aria-label={translate("compliance.trend")}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black" style={{ color: "#1E1640" }}>Compliance History</h3>
+          <h3 className="text-sm font-black" style={{ color: "var(--cc-text)" }}>{translate("compliance.trendChart.title")}</h3>
           <p className="text-xs font-medium" style={{ color: MUTED }}>
-            Daily average score over the last {days} days
+            {translateParams("compliance.trendChart.subtitle", { days: String(days) })}
           </p>
         </div>
         {onDaysChange && (
@@ -65,7 +67,7 @@ export function ComplianceTrendChart({
                   color: days === option ? "#fff" : MUTED,
                 }}
               >
-                {option}d
+                {translate(option === 7 ? "compliance.trendChart.days7" : "compliance.trendChart.days30")}
               </button>
             ))}
           </div>
@@ -74,13 +76,13 @@ export function ComplianceTrendChart({
 
       <div className="h-52 w-full">
         {chartData.every((point) => point.score == null) ? (
-          <div className="flex h-full items-center justify-center rounded-lg bg-[#F8F6FE] text-sm font-medium" style={{ color: MUTED }}>
-            No scored sessions in this period yet.
+          <div className="flex h-full items-center justify-center rounded-lg bg-cc-soft text-sm font-medium" style={{ color: MUTED }}>
+            {translate("compliance.trendChart.empty")}
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EEEAFB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--cc-ring-track)" />
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 11, fill: MUTED }}
@@ -95,11 +97,11 @@ export function ComplianceTrendChart({
               />
               <ReferenceLine y={85} stroke="#10B981" strokeDasharray="4 4" />
               <Tooltip
-                formatter={(value: number) => [`${value}%`, "Avg score"]}
+                formatter={(value: number) => [`${value}%`, translate("compliance.trendChart.avgScore")]}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as ComplianceTrendPoint & { label: string } | undefined;
                   if (!row) return "";
-                  return `${row.label} · ${row.session_count} session${row.session_count === 1 ? "" : "s"}`;
+                  return `${row.label} · ${translateParams("compliance.trendChart.sessions", { count: String(row.session_count) })}`;
                 }}
                 contentStyle={{
                   borderRadius: 12,

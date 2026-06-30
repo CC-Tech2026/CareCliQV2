@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ..core.security import get_current_user
-from ..services import session_service, participant_service, funding_service, ai_service
+from ..services import session_service, participant_service, funding_service, ai_service, shift_service
 from ..services.compliance_engine import (
     COMPLIANCE_BLOCKED_MESSAGE,
     ComplianceBlockedError,
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 @router.get("/rules")
 async def list_compliance_rules(current_user: dict = Depends(get_current_user)):
-    """Return the CareScribe 12-rule catalog with explanations for UI tooltips."""
+    """Return the CareCliQ 12-rule catalog with explanations for UI tooltips."""
     return {"rules": get_rules_catalog()}
 
 
@@ -47,8 +47,23 @@ async def run_compliance(session_id: str, current_user: dict = Depends(get_curre
         existing_sessions = await session_service.get_sessions_by_participant(participant_id, current_user)
 
     custom_physical_types = await get_physical_exam_session_types()
+
+    budget_context = None
+    if participant_id:
+        plan = await funding_service.get_plan_for_participant(participant_id)
+        budget_context = funding_service.build_budget_alignment_context(session, plan)
+
+    duration_context = shift_service.build_duration_consistency_context(session)
+
     try:
-        rules_result = run_compliance_check(session, participant, existing_sessions, custom_physical_types)
+        rules_result = run_compliance_check(
+            session,
+            participant,
+            existing_sessions,
+            custom_physical_types,
+            budget_context=budget_context,
+            duration_context=duration_context,
+        )
     except ComplianceBlockedError:
         raise HTTPException(status_code=422, detail=COMPLIANCE_BLOCKED_MESSAGE)
     score = rules_result["score"]

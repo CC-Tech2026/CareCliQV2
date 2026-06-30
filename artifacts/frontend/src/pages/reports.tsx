@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { format, parseISO, differenceInDays, isAfter, subDays } from "date-fns";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { apiFetch as authenticatedFetch } from "@/lib/api-fetch";
 import { jsonFetch } from "@/services/http";
 import { useToast } from "@/hooks/use-toast";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { useReAuth } from "@/hooks/useReAuth";
 import {
@@ -26,13 +27,13 @@ import {
 } from "lucide-react";
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const PLUM   = "#542269";
+const PLUM   = "var(--cc-plum)";
 const CORAL  = "#F1738A";
 const T1     = "#1C1626";
-const T2     = "#4A3D5A";
+const T2     = "#374151";
 const T3     = "#7A6A8A";
-const BORDER = "rgba(232,213,232,0.5)";
-const CARD   = "0 1px 4px rgba(84,34,105,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
+const BORDER = "var(--cc-border)";
+const CARD   = "0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px rgba(232,213,232,0.5)";
 const BG     = "#F7F5FC";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -61,13 +62,15 @@ function legalNoteText(s: any) {
 }
 
 function ComplianceBadge({ score }: { score?: number | null }) {
+  const { translate } = useAccessibility();
   if (score == null) return (
     <span className="inline-flex items-center text-[11px] font-bold px-2.5 h-5 rounded-full"
-      style={{ background: "rgba(122,106,138,0.08)", color: T3 }}>Draft</span>
+      style={{ background: "rgba(122,106,138,0.08)", color: T3 }}>{translate("reports.status.draft")}</span>
   );
+  const labelKey = score >= 85 ? "reports.status.compliant" : score >= 60 ? "reports.status.atRisk" : "reports.status.nonCompliant";
   return (
     <span className="inline-flex items-center text-[11px] font-bold px-2.5 h-5 rounded-full"
-      style={{ background: scoreBg(score), color: scoreColor(score) }}>{scoreLabel(score)} · {Math.round(score)}%</span>
+      style={{ background: scoreBg(score), color: scoreColor(score) }}>{translate(labelKey)} · {Math.round(score)}%</span>
   );
 }
 
@@ -128,6 +131,7 @@ function EmptyState({ icon: Icon, title, sub }: { icon: React.ElementType; title
 }
 
 function ClinicalReportGenerator() {
+  const { translate } = useAccessibility();
   const { data: participants = [] } = useGetParticipants();
   const { data: history = [], refetch } = useOrgQuery<any[]>(["report-history"], {
     queryFn: async () => {
@@ -144,7 +148,7 @@ function ClinicalReportGenerator() {
 
   async function generateReport() {
     if (!participantId) {
-      toast({ title: "Select a participant", variant: "destructive" });
+      toast({ title: translate("reports.toast.selectParticipant"), variant: "destructive" });
       return;
     }
     setBusy(true);
@@ -157,13 +161,13 @@ function ClinicalReportGenerator() {
       if (!response) return;
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || "Could not generate report");
-      toast({ title: "Report generated", description: payload.title });
+      toast({ title: translate("reports.toast.reportGenerated"), description: payload.title });
       refetch();
       if (payload.file_url) window.open(payload.file_url, "_blank", "noopener,noreferrer");
     } catch (error) {
       toast({
-        title: "Report generation failed",
-        description: error instanceof Error ? error.message : "Please try again.",
+        title: translate("reports.toast.reportFailed"),
+        description: error instanceof Error ? error.message : translate("toast.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -175,25 +179,27 @@ function ClinicalReportGenerator() {
     <>
       {modal}
       <Card className="mb-6">
-        <CardHeader title="Allied Health Report Generator" />
+        <CardHeader title={translate("reports.generator.title")} />
         <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
           <div>
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Participant</p>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>{translate("reports.generator.participant")}</p>
             <select
+              title="Participant"
               value={participantId}
               onChange={(event) => setParticipantId(event.target.value)}
               className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
               style={{ borderColor: BORDER, color: T1 }}
             >
-              <option value="">Select participant</option>
+              <option value="">{translate("reports.generator.selectParticipant")}</option>
               {(participants as any[]).map((participant) => (
                 <option key={participant.id} value={participant.id}>{participant.full_name}</option>
               ))}
             </select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Report type</p>
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: T3 }}>{translate("reports.generator.reportType")}</p>
             <select
+              title="Report type"
               value={reportType}
               onChange={(event) => setReportType(event.target.value)}
               className="h-10 w-full rounded-xl border bg-white px-3 text-sm"
@@ -209,13 +215,13 @@ function ClinicalReportGenerator() {
           </div>
           <Button onClick={generateReport} disabled={busy || !participantId} className="gap-2 rounded-xl">
             {busy ? <Clock className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
-            Generate PDF
+            {translate("reports.generator.generatePdf")}
           </Button>
         </div>
         <div className="border-t px-5 py-4" style={{ borderColor: BORDER }}>
-          <p className="mb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: T3 }}>Saved report history</p>
+          <p className="mb-3 text-[12px] font-bold uppercase tracking-wider" style={{ color: T3 }}>{translate("reports.generator.history")}</p>
           {history.length === 0 ? (
-            <p className="text-[12px]" style={{ color: T3 }}>No generated reports yet.</p>
+            <p className="text-[12px]" style={{ color: T3 }}>{translate("reports.generator.noHistory")}</p>
           ) : (
             <div className="grid gap-2">
               {history.slice(0, 5).map((report: any) => (
@@ -242,15 +248,15 @@ function ClinicalReportGenerator() {
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 const TABS = [
-  { id: "hub",        label: "Documentation Hub",  icon: LayoutDashboard  },
-  { id: "sessions",   label: "Session Reports",     icon: FileText         },
-  { id: "incidents",  label: "Incident Reports",    icon: AlertTriangle    },
-  { id: "notes",      label: "Participant Notes",   icon: BookOpen         },
-  { id: "compliance", label: "Compliance Reports",  icon: ShieldCheck      },
-  { id: "audit",      label: "Audit Readiness",     icon: ShieldAlert      },
-  { id: "ai",         label: "AI Insights & Flags", icon: Brain            },
-  { id: "templates",  label: "Templates & Forms",   icon: Layout           },
-  { id: "export",     label: "Export Centre",       icon: FileDown         },
+  { id: "hub",        labelKey: "reports.tabs.hub",        icon: LayoutDashboard  },
+  { id: "sessions",   labelKey: "reports.tabs.sessions",   icon: FileText         },
+  { id: "incidents",  labelKey: "reports.tabs.incidents",  icon: AlertTriangle    },
+  { id: "notes",      labelKey: "reports.tabs.notes",      icon: BookOpen         },
+  { id: "compliance", labelKey: "reports.tabs.compliance", icon: ShieldCheck      },
+  { id: "audit",      labelKey: "reports.tabs.audit",      icon: ShieldAlert      },
+  { id: "ai",         labelKey: "reports.tabs.ai",         icon: Brain            },
+  { id: "templates",  labelKey: "reports.tabs.templates",  icon: Layout           },
+  { id: "export",     labelKey: "reports.tabs.export",     icon: FileDown         },
 ] as const;
 type TabId = typeof TABS[number]["id"];
 
@@ -258,6 +264,7 @@ type TabId = typeof TABS[number]["id"];
 // 1. DOCUMENTATION HUB
 // ─────────────────────────────────────────────────────────────────────────────
 function HubSection() {
+  const { translate } = useAccessibility();
   const { data: sessions = [] } = useGetSessions({ limit: 100 });
   const { data: alerts = [] }   = useGetUnreadAlerts();
   const { data: rawOv }         = useGetComplianceOverview();
@@ -280,19 +287,19 @@ function HubSection() {
     <div className="space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Sessions needing notes"   value={missingNotes.length}      icon={FileText}      color={CORAL}     />
-        <StatCard label="Audit risks detected"      value={auditRisks.length}         icon={ShieldAlert}   color="#DC2626"   />
-        <StatCard label="Open incidents"            value={iStats?.open ?? (incidents.filter((i: any) => i.status !== "closed" && i.status !== "resolved").length)} icon={AlertTriangle} color="#D97706" />
-        <StatCard label="Compliance score"          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "—"} icon={ShieldCheck} color="#16A34A" />
+        <StatCard label={translate("reports.hub.sessionsNeedingNotes")}   value={missingNotes.length}      icon={FileText}      color={CORAL}     />
+        <StatCard label={translate("reports.hub.auditRisks")}      value={auditRisks.length}         icon={ShieldAlert}   color="#DC2626"   />
+        <StatCard label={translate("reports.hub.openIncidents")}            value={iStats?.open ?? (incidents.filter((i: any) => i.status !== "closed" && i.status !== "resolved").length)} icon={AlertTriangle} color="#D97706" />
+        <StatCard label={translate("reports.hub.complianceScore")}          value={ov?.average_score != null ? `${Math.round(ov.average_score)}%` : "—"} icon={ShieldCheck} color="#16A34A" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Incomplete session notes */}
         <Card>
-          <CardHeader title="Incomplete Session Notes"
-            action={<Link href="/sessions"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>View all →</span></Link>} />
+          <CardHeader title={translate("reports.hub.incompleteNotes")}
+            action={<Link href="/sessions"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} →</span></Link>} />
           {missingNotes.length === 0
-            ? <EmptyState icon={CheckCircle2} title="All notes complete" sub="No sessions with missing documentation in the last 14 days." />
+            ? <EmptyState icon={CheckCircle2} title={translate("reports.hub.allNotesComplete")} sub={translate("reports.hub.allNotesCompleteHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {missingNotes.slice(0, 6).map((s: any) => (
                   <Link key={s.id} href={`/sessions/${s.id}`}>
@@ -302,14 +309,14 @@ function HubSection() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>
-                          {s.participant_name ?? "Unknown participant"}
+                          {s.participant_name ?? translate("reports.unknownParticipant")}
                         </p>
                         <p className="text-[11px]" style={{ color: T3 }}>
                           {format(parseISO(s.session_date), "MMM d")} · {(s.session_type ?? "session").replace(/_/g, " ")}
                         </p>
                       </div>
                       <span className="text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0"
-                        style={{ background: "rgba(241,115,138,0.1)", color: CORAL }}>Missing</span>
+                        style={{ background: "rgba(241,115,138,0.1)", color: CORAL }}>{translate("reports.hub.missing")}</span>
                     </div>
                   </Link>
                 ))}
@@ -319,10 +326,10 @@ function HubSection() {
 
         {/* Compliance alerts feed */}
         <Card>
-          <CardHeader title="Compliance Alerts"
-            action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>View all →</span></Link>} />
+          <CardHeader title={translate("reports.hub.complianceAlerts")}
+            action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.viewAll")} →</span></Link>} />
           {(alerts as any[]).length === 0
-            ? <EmptyState icon={ShieldCheck} title="No active alerts" sub="Your compliance posture looks good. No unread alerts." />
+            ? <EmptyState icon={ShieldCheck} title={translate("reports.hub.noAlerts")} sub={translate("reports.hub.noAlertsHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {(alerts as any[]).slice(0, 6).map((a: any) => {
                   const isHigh = a.severity === "high" || a.severity === "critical";
@@ -346,9 +353,9 @@ function HubSection() {
 
       {/* Recent activity timeline */}
       <Card>
-        <CardHeader title="Recent Session Activity" />
+        <CardHeader title={translate("reports.hub.recentActivity")} />
         {recentActivity.length === 0
-          ? <EmptyState icon={Clock} title="No recent sessions" sub="Session activity will appear here as sessions are recorded." />
+          ? <EmptyState icon={Clock} title={translate("reports.hub.noRecentSessions")} sub={translate("reports.hub.noRecentSessionsHint")} />
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {recentActivity.map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
@@ -358,7 +365,7 @@ function HubSection() {
                       <p className="text-[18px] font-black leading-none" style={{ color: T2 }}>{format(parseISO(s.session_date), "d")}</p>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "Unknown"}</p>
+                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>{(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min</p>
                     </div>
                     <ComplianceBadge score={s.compliance_score} />
@@ -377,6 +384,7 @@ function HubSection() {
 // 2. SESSION REPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 function SessionReportsSection() {
+  const { translate } = useAccessibility();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const { data: sessions = [], isLoading } = useGetSessions({ limit: 200 });
@@ -399,15 +407,15 @@ function SessionReportsSection() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T3 }} />
-          <Input placeholder="Search sessions…" value={search} onChange={e => setSearch(e.target.value)}
+          <Input placeholder={translate("reports.sessions.search")} value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {[["all","All"],["compliant","Compliant"],["at_risk","At Risk"],["non_compliant","Non-Compliant"],["draft","Draft"]].map(([v, l]) => (
+          {[["all","reports.filter.all"],["compliant","reports.status.compliant"],["at_risk","reports.status.atRisk"],["non_compliant","reports.status.nonCompliant"],["draft","reports.status.draft"]].map(([v, l]) => (
             <button key={v} onClick={() => setFilter(v)}
               className="px-3 h-9 rounded-xl text-[12px] font-semibold border transition-all"
-              style={{ background: filter === v ? PLUM : "white", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
-              {l}
+              style={{ background: filter === v ? PLUM : "var(--cc-bg)", color: filter === v ? "white" : T2, borderColor: filter === v ? PLUM : BORDER }}>
+              {translate(l)}
             </button>
           ))}
         </div>
@@ -417,7 +425,7 @@ function SessionReportsSection() {
         {isLoading
           ? <div className="p-6 space-y-3">{[1,2,3,4].map(i => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
           : filtered.length === 0
-          ? <EmptyState icon={FileText} title="No sessions found" sub="Adjust your filters or search query to find sessions." />
+          ? <EmptyState icon={FileText} title={translate("reports.sessions.empty")} sub={translate("reports.sessions.emptyHint")} />
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
@@ -426,7 +434,7 @@ function SessionReportsSection() {
                       <p className="text-[11px] font-bold" style={{ color: T3 }}>{format(parseISO(s.session_date), "dd MMM yyyy")}</p>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? "Unknown"}</p>
+                      <p className="text-[13px] font-semibold truncate" style={{ color: T1 }}>{s.participant_name ?? translate("reports.unknown")}</p>
                       <p className="text-[11px]" style={{ color: T3 }}>
                         {(s.session_type ?? "session").replace(/_/g, " ")} · {s.duration_minutes ?? "—"} min
                       </p>
@@ -447,6 +455,7 @@ function SessionReportsSection() {
 // 3. INCIDENT REPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 function IncidentReportsSection() {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const { data: incidents = [], isLoading } = useOrgQuery<any[]>(["incidents"], { queryFn: () => apiFetch<any[]>("/incidents") });
@@ -464,21 +473,21 @@ function IncidentReportsSection() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total incidents"    value={stats?.total ?? incidents.length} icon={ClipboardList} color={PLUM}      />
-        <StatCard label="Open incidents"     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   />
-        <StatCard label="NDIS reportable"    value={stats?.ndis_pending ?? 0}          icon={AlertTriangle} color="#EA580C"   />
-        <StatCard label="Critical severity"  value={critical}                           icon={Siren}         color="#DC2626"   />
+        <StatCard label={translate("reports.incidents.total")}    value={stats?.total ?? incidents.length} icon={ClipboardList} color={PLUM}      />
+        <StatCard label={translate("reports.hub.openIncidents")}     value={stats?.open  ?? open}              icon={Clock}         color="#D97706"   />
+        <StatCard label={translate("reports.incidents.ndisReportable")}    value={stats?.ndis_pending ?? 0}          icon={AlertTriangle} color="#EA580C"   />
+        <StatCard label={translate("reports.incidents.critical")}  value={critical}                           icon={Siren}         color="#DC2626"   />
       </div>
 
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T3 }} />
-          <Input placeholder="Search incidents…" value={search} onChange={e => setSearch(e.target.value)}
+          <Input placeholder={translate("reports.incidents.search")} value={search} onChange={e => setSearch(e.target.value)}
             className="pl-9 h-9 text-[13px] rounded-xl border-[rgba(232,213,232,0.8)]" />
         </div>
         <Button onClick={() => navigate("/incidents/new")} size="sm" className="shrink-0"
           style={{ background: PLUM, color: "white" }}>
-          <Plus size={14} className="mr-1.5" />New Incident
+          <Plus size={14} className="mr-1.5" />{translate("reports.incidents.new")}
         </Button>
       </div>
 
@@ -486,7 +495,7 @@ function IncidentReportsSection() {
         {isLoading
           ? <div className="p-6 space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
           : filtered.length === 0
-          ? <EmptyState icon={CheckCircle2} title="No incidents found" sub="No incidents have been reported yet, or none match your search." />
+          ? <EmptyState icon={CheckCircle2} title={translate("reports.incidents.empty")} sub={translate("reports.incidents.emptyHint")} />
           : <div className="divide-y" style={{ borderColor: BORDER }}>
               {filtered.map((inc: any) => (
                 <Link key={inc.id} href={`/incidents/${inc.id}`}>
@@ -513,6 +522,7 @@ function IncidentReportsSection() {
 // 4. PARTICIPANT NOTES
 // ─────────────────────────────────────────────────────────────────────────────
 function ParticipantNotesSection() {
+  const { translate } = useAccessibility();
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { data: participants = [] } = useGetParticipants();
@@ -534,11 +544,11 @@ function ParticipantNotesSection() {
       {/* Participant list */}
       <div className="lg:col-span-2">
         <Card className="h-full flex flex-col">
-          <CardHeader title="Participants" />
+          <CardHeader title={translate("reports.notes.participants")} />
           <div className="p-3 border-b" style={{ borderColor: BORDER }}>
             <div className="relative">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: T3 }} />
-              <Input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)}
+              <Input placeholder={translate("reports.notes.search")} value={search} onChange={e => setSearch(e.target.value)}
                 className="pl-8 h-8 text-[12px] rounded-lg border-[rgba(232,213,232,0.8)]" />
             </div>
           </div>
@@ -566,13 +576,13 @@ function ParticipantNotesSection() {
       <div className="lg:col-span-3">
         {!selected
           ? <Card className="h-full flex items-center justify-center">
-              <EmptyState icon={Users} title="Select a participant" sub="Choose a participant on the left to view their notes and session history." />
+              <EmptyState icon={Users} title={translate("reports.notes.selectParticipant")} sub={translate("reports.notes.selectParticipantHint")} />
             </Card>
           : <Card className="h-full flex flex-col">
               <CardHeader title={`${selectedPart?.full_name ?? "Participant"} — Care Notes`}
-                action={<Link href={`/patients`}><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>View profile →</span></Link>} />
+                action={<Link href={`/patients`}><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.notes.viewProfile")} →</span></Link>} />
               {partSessions.length === 0
-                ? <EmptyState icon={BookOpen} title="No session notes yet" sub="Session documentation for this participant will appear here." />
+                ? <EmptyState icon={BookOpen} title={translate("reports.notes.empty")} sub={translate("reports.notes.emptyHint")} />
                 : <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: BORDER }}>
                     {partSessions.map((s: any) => (
                       <Link key={s.id} href={`/sessions/${s.id}`}>
@@ -603,7 +613,7 @@ function ParticipantNotesSection() {
                             </div>
                           )}
                           {!legalNoteText(s) && (
-                            <p className="text-[12px] mt-1.5 italic" style={{ color: CORAL }}>No notes recorded</p>
+                            <p className="text-[12px] mt-1.5 italic" style={{ color: CORAL }}>{translate("reports.notes.noNotes")}</p>
                           )}
                         </div>
                       </Link>
@@ -621,6 +631,7 @@ function ParticipantNotesSection() {
 // 5. COMPLIANCE REPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 function ComplianceReportsSection() {
+  const { translate } = useAccessibility();
   const { data: rawOv, isLoading } = useGetComplianceOverview();
   const ov = rawOv as any;
   const sessions: any[] = ov?.sessions ?? [];
@@ -647,15 +658,15 @@ function ComplianceReportsSection() {
         ? <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1,2,3,4].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
         : <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total sessions"    value={ov?.total_sessions ?? 0}    icon={FileText}      color={PLUM}      />
-            <StatCard label="Compliant"         value={ov?.compliant ?? 0}          icon={CheckCircle2}  color="#16A34A"   />
-            <StatCard label="At risk"           value={ov?.at_risk ?? 0}            icon={Clock}         color="#D97706"   />
-            <StatCard label="Non-compliant"     value={ov?.non_compliant ?? 0}      icon={XCircle}       color="#DC2626"   />
+            <StatCard label={translate("reports.compliance.totalSessions")}    value={ov?.total_sessions ?? 0}    icon={FileText}      color={PLUM}      />
+            <StatCard label={translate("reports.status.compliant")}         value={ov?.compliant ?? 0}          icon={CheckCircle2}  color="#16A34A"   />
+            <StatCard label={translate("reports.status.atRisk")}           value={ov?.at_risk ?? 0}            icon={Clock}         color="#D97706"   />
+            <StatCard label={translate("reports.status.nonCompliant")}     value={ov?.non_compliant ?? 0}      icon={XCircle}       color="#DC2626"   />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
             <Card>
-              <CardHeader title="Organisation Compliance Score" />
+              <CardHeader title={translate("reports.compliance.orgScore")} />
               <div className="flex flex-col items-center py-8 gap-4">
                 <svg width="140" height="140" className="-rotate-90">
                   <circle cx="70" cy="70" r="52" fill="none" stroke={`${PLUM}14`} strokeWidth="12" />
@@ -666,7 +677,7 @@ function ComplianceReportsSection() {
                 </svg>
                 <div className="text-center -mt-20 pb-8">
                   <p className="text-[36px] font-black leading-none" style={{ color: scoreColor(score) }}>{Math.round(score)}</p>
-                  <p className="text-[12px] font-bold uppercase tracking-wide mt-0.5" style={{ color: T3 }}>out of 100</p>
+                  <p className="text-[12px] font-bold uppercase tracking-wide mt-0.5" style={{ color: T3 }}>{translate("reports.compliance.outOf100")}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-4 w-full px-6">
                   {[
@@ -684,9 +695,9 @@ function ComplianceReportsSection() {
             </Card>
 
             <Card>
-              <CardHeader title="Most Common Issues" />
+              <CardHeader title={translate("reports.compliance.commonIssues")} />
               {commonIssues.length === 0
-                ? <EmptyState icon={CheckCircle2} title="No recurring issues" sub="All compliance checks are currently passing." />
+                ? <EmptyState icon={CheckCircle2} title={translate("reports.compliance.noIssues")} sub={translate("reports.compliance.noIssuesHint")} />
                 : <div className="p-5 space-y-4">
                     {commonIssues.map(([issue, count]) => {
                       const pct = sessions.length > 0 ? (count / sessions.length) * 100 : 0;
@@ -706,10 +717,10 @@ function ComplianceReportsSection() {
           </div>
 
           <Card>
-            <CardHeader title="Session Audit Log"
-              action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>Full compliance centre →</span></Link>} />
+            <CardHeader title={translate("reports.compliance.auditLog")}
+              action={<Link href="/compliance"><span className="text-[12px] font-semibold cursor-pointer" style={{ color: PLUM }}>{translate("reports.compliance.fullCentre")} →</span></Link>} />
             {sessions.length === 0
-              ? <EmptyState icon={FileBarChart2} title="No session data" sub="Session compliance data will appear here once sessions are reviewed." />
+              ? <EmptyState icon={FileBarChart2} title={translate("reports.compliance.noData")} sub={translate("reports.compliance.noDataHint")} />
               : <div className="divide-y" style={{ borderColor: BORDER }}>
                   {sessions.slice(0, 8).map((s: any) => (
                     <Link key={s.session_id} href={`/sessions/${s.session_id}`}>
@@ -738,6 +749,7 @@ function ComplianceReportsSection() {
 // 6. AUDIT READINESS
 // ─────────────────────────────────────────────────────────────────────────────
 function AuditReadinessSection() {
+  const { translate } = useAccessibility();
   const { data: rawOv } = useGetComplianceOverview();
   const { data: sessions = [] } = useGetSessions({ limit: 200 });
   const ov = rawOv as any;
@@ -770,7 +782,7 @@ function AuditReadinessSection() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-widest mb-4"
             style={{ background: readiness >= 80 ? "rgba(22,163,74,0.1)" : "rgba(245,158,11,0.1)", color: readiness >= 80 ? "#16A34A" : "#D97706" }}>
             {readiness >= 80 ? <CheckCircle2 size={12} /> : <Clock size={12} />}
-            {readiness >= 80 ? "Audit Ready" : "In Progress"}
+            {readiness >= 80 ? translate("reports.audit.ready") : translate("reports.audit.inProgress")}
           </div>
           <p className="text-[56px] font-black leading-none" style={{ color: readiness >= 80 ? "#16A34A" : scoreColor(readiness) }}>
             {readiness}%
@@ -789,7 +801,7 @@ function AuditReadinessSection() {
 
       {/* Checklist */}
       <Card>
-        <CardHeader title="Audit Readiness Checklist" />
+        <CardHeader title={translate("reports.audit.checklist")} />
         <div className="divide-y" style={{ borderColor: BORDER }}>
           {checks.map((c, i) => (
             <div key={i} className="flex items-center gap-4 px-5 py-3.5">
@@ -823,6 +835,7 @@ function AuditReadinessSection() {
 // 7. AI INSIGHTS & FLAGS
 // ─────────────────────────────────────────────────────────────────────────────
 function AIInsightsSection() {
+  const { translate } = useAccessibility();
   const { data: alerts = [] }   = useGetUnreadAlerts();
   const { data: sessions = [] } = useGetSessions({ limit: 100 });
   const { data: participants = [] } = useGetParticipants();
@@ -837,17 +850,17 @@ function AIInsightsSection() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard label="Unread AI alerts"       value={(alerts as any[]).length} icon={Brain}         color={PLUM}    />
-        <StatCard label="Non-compliant sessions" value={nonCompliant.length}       icon={ShieldAlert}   color="#DC2626" />
-        <StatCard label="Risk-flagged participants" value={highRisk.length}        icon={AlertTriangle} color="#D97706" />
+        <StatCard label={translate("reports.ai.unreadAlerts")}       value={(alerts as any[]).length} icon={Brain}         color={PLUM}    />
+        <StatCard label={translate("reports.ai.nonCompliantSessions")} value={nonCompliant.length}       icon={ShieldAlert}   color="#DC2626" />
+        <StatCard label={translate("reports.ai.riskParticipants")} value={highRisk.length}        icon={AlertTriangle} color="#D97706" />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Alert feed */}
         <Card>
-          <CardHeader title="AI Compliance Alerts" />
+          <CardHeader title={translate("reports.ai.alerts")} />
           {sortedAlerts.length === 0
-            ? <EmptyState icon={Sparkles} title="No active AI flags" sub="All sessions and participants currently clear of AI-detected compliance risks." />
+            ? <EmptyState icon={Sparkles} title={translate("reports.ai.noFlags")} sub={translate("reports.ai.noFlagsHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {sortedAlerts.map((a: any) => {
                   const isHigh = a.severity === "high" || a.severity === "critical";
@@ -884,9 +897,9 @@ function AIInsightsSection() {
 
         {/* Risk participants */}
         <Card>
-          <CardHeader title="Risk-Flagged Participants" />
+          <CardHeader title={translate("reports.ai.riskTitle")} />
           {highRisk.length === 0
-            ? <EmptyState icon={Users} title="No risk flags" sub="No participants are currently flagged as medium or high risk." />
+            ? <EmptyState icon={Users} title={translate("reports.ai.noRisk")} sub={translate("reports.ai.noRiskHint")} />
             : <div className="divide-y" style={{ borderColor: BORDER }}>
                 {highRisk.map((p: any) => (
                   <Link key={p.id} href="/patients">
@@ -909,7 +922,7 @@ function AIInsightsSection() {
           {nonCompliant.length > 0 && (
             <>
               <div className="px-5 py-2.5 border-t" style={{ borderColor: BORDER, background: BG }}>
-                <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: T3 }}>Non-compliant sessions</p>
+                <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: T3 }}>{translate("reports.ai.nonCompliantTitle")}</p>
               </div>
               {nonCompliant.slice(0, 4).map((s: any) => (
                 <Link key={s.id} href={`/sessions/${s.id}`}>
@@ -955,13 +968,14 @@ const BADGE_COLORS: Record<string, [string, string]> = {
 };
 
 function TemplatesSection() {
+  const { translate } = useAccessibility();
   const [, navigate] = useLocation();
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-[16px] font-bold" style={{ color: T1 }}>NDIS-Compliant Templates</h3>
-          <p className="text-[12px] mt-0.5" style={{ color: T3 }}>Pre-built templates aligned with NDIS quality and safeguards standards.</p>
+          <h3 className="text-[16px] font-bold" style={{ color: T1 }}>{translate("reports.templates.title")}</h3>
+          <p className="text-[12px] mt-0.5" style={{ color: T3 }}>{translate("reports.templates.subtitle")}</p>
         </div>
       </div>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -985,7 +999,7 @@ function TemplatesSection() {
                   onClick={() => navigate("/sessions/new")}
                   className="flex-1 h-8 rounded-lg text-[12px] font-semibold text-white transition-all hover:opacity-90"
                   style={{ background: PLUM }}>
-                  Use template
+                  {translate("reports.templates.use")}
                 </button>
               </div>
             </Card>
@@ -1000,6 +1014,7 @@ function TemplatesSection() {
 // 9. EXPORT CENTRE
 // ─────────────────────────────────────────────────────────────────────────────
 function ExportCentreSection() {
+  const { translate } = useAccessibility();
   const [exporting, setExporting] = useState<string | null>(null);
   const [done, setDone] = useState<string[]>([]);
   const { data: sessions = [] } = useGetSessions({ limit: 200 });
@@ -1031,7 +1046,7 @@ function ExportCentreSection() {
           scoreLabel(s.compliance_score ?? 0),
         ]),
       });
-      doc.save("carescribe-compliance-bundle.pdf");
+      doc.save("carecliq-compliance-bundle.pdf");
     }
 
     if (type === "session_csv") {
@@ -1049,7 +1064,7 @@ function ExportCentreSection() {
       const blob = new Blob([csv], { type: "text/csv" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
-      a.href = url; a.download = "carescribe-sessions.csv"; a.click();
+      a.href = url; a.download = "carecliq-sessions.csv"; a.click();
       URL.revokeObjectURL(url);
     }
 
@@ -1065,9 +1080,9 @@ function ExportCentreSection() {
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-[16px] font-bold" style={{ color: T1 }}>Export Centre</h3>
+        <h3 className="text-[16px] font-bold" style={{ color: T1 }}>{translate("reports.export.title")}</h3>
         <p className="text-[12px] mt-0.5" style={{ color: T3 }}>
-          Generate audit-ready, timestamped exports. All exports include NDIS provider metadata.
+          {translate("reports.export.subtitle")}
         </p>
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
@@ -1097,10 +1112,10 @@ function ExportCentreSection() {
                     borderColor: isDone ? "rgba(22,163,74,0.2)" : `${e.color}30`,
                   }}>
                   {isExp
-                    ? <><span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />Generating…</>
+                    ? <><span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />{translate("reports.export.generating")}</>
                     : isDone
-                    ? <><CheckCircle2 size={14} />Downloaded</>
-                    : <><Download size={14} />Generate & Download</>
+                    ? <><CheckCircle2 size={14} />{translate("reports.export.downloaded")}</>
+                    : <><Download size={14} />{translate("reports.export.generateDownload")}</>
                   }
                 </button>
               </div>
@@ -1109,7 +1124,7 @@ function ExportCentreSection() {
         })}
       </div>
       <Card>
-        <CardHeader title="Export Notes" />
+        <CardHeader title={translate("reports.export.notesTitle")} />
         <div className="p-5 space-y-2">
           {[
             "All exports are timestamped with the generation date and CareCliQ version.",
@@ -1132,6 +1147,7 @@ function ExportCentreSection() {
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Reports() {
+  const { translate } = useAccessibility();
   const [activeTab, setActiveTab] = useState<TabId>("hub");
 
   const SECTION_MAP: Record<TabId, React.ReactNode> = {
@@ -1149,16 +1165,15 @@ export default function Reports() {
   const activeTab_ = TABS.find(t => t.id === activeTab)!;
 
   return (
-    <div className="w-full min-h-full" style={{ background: BG }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div className="space-y-6 pb-10">
 
         {/* Page header */}
         <div className="mb-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Reports &amp; Documentation
           </p>
-          <h1 className="text-[26px] sm:text-[30px] font-black tracking-tight" style={{ color: PLUM }}>
-            {activeTab_.label}
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            {translate(activeTab_.labelKey)}
           </h1>
         </div>
 
@@ -1176,7 +1191,7 @@ export default function Reports() {
                     )}
                     style={{ color: active ? PLUM : T2, borderRight: active ? `2px solid ${PLUM}` : "2px solid transparent" }}>
                     <Icon size={15} style={{ color: active ? PLUM : T3 }} />
-                    <span className="truncate">{t.label}</span>
+                    <span className="truncate">{translate(t.labelKey)}</span>
                   </button>
                 );
               })}
@@ -1193,12 +1208,12 @@ export default function Reports() {
                   <button key={t.id} onClick={() => setActiveTab(t.id)}
                     className="flex items-center gap-1.5 px-3 h-8 rounded-xl text-[11px] font-semibold whitespace-nowrap transition-all border"
                     style={{
-                      background: active ? PLUM : "white",
+                      background: active ? PLUM : "var(--cc-bg)",
                       color: active ? "white" : T2,
                       borderColor: active ? PLUM : BORDER,
                     }}>
                     <Icon size={12} />
-                    {t.label}
+                    {translate(t.labelKey)}
                   </button>
                 );
               })}
@@ -1211,7 +1226,6 @@ export default function Reports() {
             {SECTION_MAP[activeTab]}
           </main>
         </div>
-      </div>
     </div>
   );
 }

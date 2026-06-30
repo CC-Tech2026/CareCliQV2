@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CareScribe",
+    "name": "CareCliQ",
     "slug": "mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,7 +22,8 @@
       }
     },
     "android": {
-      "permissions": ["CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"]
+      "permissions": ["CAMERA", "RECORD_AUDIO", "READ_EXTERNAL_STORAGE"],
+      "useNextNotificationsApi": true
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -37,9 +38,17 @@
       "expo-font",
       "expo-web-browser",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#5533CC",
+          "sounds": []
+        }
+      ],
+      [
         "expo-av",
         {
-          "microphonePermission": "Allow CareScribe to access your microphone to record voice notes during sessions."
+          "microphonePermission": "Allow CareCliQ to access your microphone to record voice notes during sessions."
         }
       ]
     ],

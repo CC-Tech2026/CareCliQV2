@@ -53,6 +53,12 @@ _RULE_DEFAULTS: dict[str, dict] = {
     "R10": {"severity": "high",   "is_active": True, "is_blocking": True,  "enforcement_tier": "block"},
     "R11": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
     "R12": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
+    # CARECLIQV2-36 — NDIS plan budget alignment (supplemental, not R1–R12)
+    "budget_exceeded": {"severity": "high",   "is_active": True, "is_blocking": False, "enforcement_tier": "warn"},
+    "budget_warning":  {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
+    # CARECLIQV2-35 — shift vs session duration consistency (supplemental)
+    "duration_consistency_warning": {"severity": "medium", "is_active": True, "is_blocking": False, "enforcement_tier": "info"},
+    "duration_consistency_error":   {"severity": "high",   "is_active": True, "is_blocking": False, "enforcement_tier": "warn"},
 }
 
 
@@ -990,7 +996,184 @@ def check_participant_response_language(session: dict, config: dict | None = Non
 
 
 # ---------------------------------------------------------------------------
-# Budget check (not part of R1–R12; called separately for alerts)
+# CARECLIQV2-36 — NDIS plan budget alignment (supplemental rules)
+# ---------------------------------------------------------------------------
+
+def check_budget_alignment(budget_context: Optional[dict]) -> list[dict]:
+    """Return budget_exceeded / budget_warning rules for rules_result.
+
+    Skipped (empty list) when participant has no NDIS plan or no category budget row.
+    """
+    if not budget_context or not budget_context.get("has_plan"):
+        return []
+    if not budget_context.get("has_category_budget"):
+        return []
+
+    category_label = budget_context.get("category_label") or budget_context.get("category", "")
+    allocated = float(budget_context.get("allocated") or 0)
+    remaining = float(budget_context.get("remaining") or 0)
+    session_cost = float(budget_context.get("session_cost") or 0)
+    percent_remaining = float(budget_context.get("percent_remaining") or 0)
+
+    rules: list[dict] = []
+
+    if session_cost > remaining:
+        rules.append({
+            "rule": "budget_exceeded",
+            "label": "NDIS budget exceeded",
+            "status": "fail",
+            "message": (
+                f"Session cost ${session_cost:,.2f} exceeds remaining {category_label} "
+                f"budget of ${remaining:,.2f} (allocated ${allocated:,.2f})"
+            ),
+            "severity": "high",
+            "enforcement_tier": "warn",
+            "category": "funding",
+        })
+        return rules
+
+    if allocated > 0 and percent_remaining <= 10:
+        rules.append({
+            "rule": "budget_warning",
+            "label": "NDIS budget low",
+            "status": "warning",
+            "message": (
+                f"{category_label} budget is at {percent_remaining:.0f}% remaining "
+                f"(${remaining:,.2f} of ${allocated:,.2f}) after this session"
+            ),
+            "severity": "medium",
+            "enforcement_tier": "info",
+            "category": "funding",
+        })
+
+    return rules
+
+
+# ---------------------------------------------------------------------------
+# CARECLIQV2-35 — Session vs shift duration consistency (supplemental rules)
+# ---------------------------------------------------------------------------
+
+_DURATION_WARNING_THRESHOLD = 30
+_DURATION_ERROR_THRESHOLD = 60
+_DURATION_ERROR_SCORE_PENALTY = 10.0
+
+
+def check_duration_consistency(duration_context: Optional[dict]) -> list[dict]:
+    """Return duration_consistency_warning / duration_consistency_error when shift_id is set.
+
+    Skipped when session has no shift_id or shift duration is unavailable.
+    """
+    if not duration_context:
+        return []
+
+    deviation = int(duration_context.get("deviation_minutes") or 0)
+    session_mins = int(duration_context.get("session_duration_minutes") or 0)
+    shift_mins = int(duration_context.get("shift_duration_minutes") or 0)
+
+    if shift_mins <= 0:
+        return []
+
+    if deviation <= _DURATION_WARNING_THRESHOLD:
+        return []
+
+    if deviation <= _DURATION_ERROR_THRESHOLD:
+        return [{
+            "rule": "duration_consistency_warning",
+            "label": "Duration mismatch (advisory)",
+            "status": "warning",
+            "message": (
+                f"Session duration ({session_mins} min) differs from shift actual "
+                f"({shift_mins} min) by {deviation} minutes"
+            ),
+            "severity": "medium",
+            "enforcement_tier": "info",
+            "category": "documentation",
+            "deviation_minutes": deviation,
+        }]
+
+    return [{
+        "rule": "duration_consistency_error",
+        "label": "Duration mismatch (significant)",
+        "status": "fail",
+        "message": (
+            f"Session duration ({session_mins} min) differs from shift actual "
+            f"({shift_mins} min) by {deviation} minutes (>{_DURATION_ERROR_THRESHOLD} min threshold)"
+        ),
+        "severity": "high",
+        "enforcement_tier": "warn",
+        "category": "documentation",
+        "deviation_minutes": deviation,
+    }]
+
+
+def _apply_supplemental_rule_metadata(rules: list[dict], rule_configs: dict) -> list[dict]:
+    """Stamp DB defaults onto supplemental compliance rules."""
+    stamped: list[dict] = []
+    for result in rules:
+        rule_code = str(result.get("rule") or "")
+        row = rule_configs.get(rule_code) or _RULE_DEFAULTS.get(rule_code, {})
+        if row.get("is_active") is False:
+            continue
+        if row.get("severity"):
+            result["severity"] = row["severity"]
+        result["is_blocking"] = row.get("is_blocking", False)
+        default_tier = _RULE_DEFAULTS.get(rule_code, {}).get("enforcement_tier", "info")
+        result["enforcement_tier"] = row.get("enforcement_tier") or result.get("enforcement_tier") or default_tier
+        stamped.append(result)
+    return stamped
+
+
+def collect_budget_rule_alerts_from_sessions(sessions: list[dict]) -> list[dict]:
+    """Aggregate budget_exceeded / budget_warning entries for coordinator dashboards."""
+    alerts: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+
+    for session in sessions:
+        if not isinstance(session, dict):
+            continue
+        insights = session.get("ai_insights")
+        if isinstance(insights, str):
+            try:
+                insights = json.loads(insights)
+            except Exception:
+                insights = {}
+        if not isinstance(insights, dict):
+            continue
+        rules_result = insights.get("rules_result")
+        if not isinstance(rules_result, dict):
+            continue
+        for rule in rules_result.get("rules") or []:
+            if not isinstance(rule, dict):
+                continue
+            code = str(rule.get("rule") or "")
+            if code not in ("budget_exceeded", "budget_warning"):
+                continue
+            status = str(rule.get("status") or "")
+            if code == "budget_exceeded" and status != "fail":
+                continue
+            if code == "budget_warning" and status != "warning":
+                continue
+            session_id = str(session.get("id") or session.get("session_id") or "")
+            key = (session_id, code)
+            if key in seen:
+                continue
+            seen.add(key)
+            participant = session.get("participants") if isinstance(session.get("participants"), dict) else {}
+            alerts.append({
+                "session_id": session_id or None,
+                "participant_id": session.get("participant_id") or session.get("patient_id"),
+                "participant_name": session.get("participant_name") or participant.get("full_name"),
+                "session_date": session.get("session_date"),
+                "rule": code,
+                "status": status,
+                "severity": rule.get("severity"),
+                "message": rule.get("message"),
+            })
+    return alerts
+
+
+# ---------------------------------------------------------------------------
+# Budget check (legacy participant-level; kept for backward-compatible alerts)
 # ---------------------------------------------------------------------------
 
 def check_budget_not_exceeded(
@@ -1048,6 +1231,8 @@ def run_compliance_check(
     participant: Optional[dict] = None,
     existing_sessions: Optional[List[dict]] = None,
     custom_physical_types: Optional[List[str]] = None,  # retained for API compat
+    budget_context: Optional[dict] = None,
+    duration_context: Optional[dict] = None,
 ) -> dict:
     """
     Run all 12 NDIS compliance rules (R1–R12) and RP detection against a session.
@@ -1129,12 +1314,29 @@ def run_compliance_check(
         result["enforcement_tier"] = row.get("enforcement_tier") or default_tier
         rules.append(result)
 
+    # CARECLIQV2-36 — NDIS plan budget alignment (skipped when no plan in budget_context)
+    budget_rules = _apply_supplemental_rule_metadata(
+        check_budget_alignment(budget_context),
+        rule_configs,
+    )
+    rules.extend(budget_rules)
+
+    # CARECLIQV2-35 — shift duration consistency (skipped when no shift_id)
+    duration_rules = _apply_supplemental_rule_metadata(
+        check_duration_consistency(duration_context),
+        rule_configs,
+    )
+    rules.extend(duration_rules)
+
     total = len(rules)
     passed = sum(1 for r in rules if r["status"] == "pass")
     warnings = sum(1 for r in rules if r["status"] == "warning")
     failed = sum(1 for r in rules if r["status"] == "fail")
 
     score = round((passed + warnings * 0.5) / total * 100, 1) if total else 0.0
+
+    if any(r.get("rule") == "duration_consistency_error" for r in rules):
+        score = max(0.0, round(score - _DURATION_ERROR_SCORE_PENALTY, 1))
 
     rp_flags = detect_restrictive_practices(session, phrases=_cfg("R10").get("categories"))
     rp_categories = list({f["category"] for f in rp_flags}) if rp_flags else []

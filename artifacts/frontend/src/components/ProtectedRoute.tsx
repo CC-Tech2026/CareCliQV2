@@ -1,6 +1,8 @@
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type { UserRole } from "@/contexts/AuthContext";
+import { saveAuthRestoreContext } from "@/lib/auth-session";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -18,11 +20,11 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-const ROLE_LABELS: Record<UserRole, string> = {
-  support_coordinator: "Support Coordinator (CareCliQ Parent)",
-  support_worker: "Support Worker (CareCliQ Child)",
-  allied_health: "Allied Health Professional (CareCliQ Pro)",
-  managing_director: "Managing Director (CareCliQ Executive)",
+const ROLE_LABEL_KEYS: Record<UserRole, string> = {
+  support_coordinator: "protected.role.supportCoordinator",
+  support_worker: "protected.role.supportWorker",
+  allied_health: "protected.role.alliedHealth",
+  managing_director: "protected.role.managingDirector",
 };
 
 /**
@@ -40,11 +42,13 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuth();
   const [location] = useLocation();
+  const { translate, translateParams } = useAccessibility();
 
   /**
    * Not logged in
    */
   if (!isAuthenticated || !user) {
+    saveAuthRestoreContext(`${location}${window.location.search || ""}`);
     return <Redirect to="/login" />;
   }
 
@@ -52,7 +56,7 @@ export function ProtectedRoute({
     return <Redirect to="/verify-email" />;
   }
 
-  const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/settings"];
+  const profileGatePaths = ["/verify-email", "/profile-completion", "/worker-onboarding", "/worker/profile", "/settings"];
   const isProfileGatePath = profileGatePaths.some((path) => location === path || location.startsWith(path + "/"));
   const needsRoleProfile =
     (user.role === "support_worker" || user.role === "allied_health") &&
@@ -84,32 +88,28 @@ export function ProtectedRoute({
      */
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-sm text-center">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-cc-surface p-8 shadow-sm text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-3xl">
             🔒
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">
-            Restricted Access
+            {translate("protected.title")}
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-gray-500">
-            Your account role (
-            <span className="font-medium text-gray-700">
-              {ROLE_LABELS[user.role]}
-            </span>
-            ) does not have permission to access this section.
+            {translateParams("protected.description", {
+              role: translate(ROLE_LABEL_KEYS[user.role]),
+            })}
           </p>
 
           <div className="mt-6 rounded-xl bg-amber-50 border border-amber-100 p-4 text-left">
             <h2 className="text-sm font-semibold text-amber-900">
-              Why am I seeing this?
+              {translate("protected.whyTitle")}
             </h2>
 
             <p className="mt-2 text-sm text-amber-800 leading-6">
-              CareCliQ uses role-based access controls to protect participant
-              privacy, compliance records, and sensitive organisational
-              information.
+              {translate("protected.whyDescription")}
             </p>
           </div>
 
@@ -117,7 +117,7 @@ export function ProtectedRoute({
             onClick={() => window.history.back()}
             className="mt-6 inline-flex items-center justify-center rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
           >
-            Go Back
+            {translate("protected.goBack")}
           </button>
         </div>
       </div>

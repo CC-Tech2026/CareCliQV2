@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { IdleTimeoutModal } from "@/components/auth/IdleTimeoutModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
+import { captureCurrentRestoreContext } from "@/lib/auth-session";
 
 const IDLE_EXCLUDED_PATHS = [
   "/login",
@@ -9,11 +10,12 @@ const IDLE_EXCLUDED_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/accept-invite",
+  "/account/secure",
 ];
 
 export function AuthSessionGuards() {
   const [location, setLocation] = useLocation();
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user } = useAuth();
   const enabled =
     isAuthenticated &&
     !IDLE_EXCLUDED_PATHS.some((path) => location === path || location.startsWith(path + "/"));
@@ -21,6 +23,7 @@ export function AuthSessionGuards() {
   const idle = useIdleTimeout({
     enabled,
     onTimeout: () => {
+      captureCurrentRestoreContext(user?.id);
       logout();
       setLocation("/login");
     },

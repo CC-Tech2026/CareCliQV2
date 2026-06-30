@@ -1,10 +1,11 @@
-"""AI service — CareScribe compliance engine backed by OpenAI GPT-4o-mini.
+"""AI service — CareCliQ compliance engine backed by OpenAI GPT-4o-mini.
 
-The CareScribe system prompt (CARESCRIBE_SYSTEM_PROMPT) is injected as the
+The CareCliQ system prompt (CARECLIQ_SYSTEM_PROMPT) is injected as the
 system role on every compliance-related call so every AI output is guaranteed
 to be NDIS-compliant, person-centred, and audit-ready.
 """
 from openai import OpenAI
+from typing import Any
 from ..core.config import settings
 import json
 import os
@@ -47,6 +48,78 @@ class TranslationProviderFailure(RuntimeError):
 BLOCKING_TRANSLATION_STATUSES = {"failed", "unsupported", "pending"}
 LEGAL_RECORD_REQUIRED_MESSAGE = "Compliance blocked: English legal record is missing or translation failed."
 
+VALID_PROMPT_LEVELS = frozenset({"full", "partial", "independent"})
+_PRIOR_TRAJECTORY_MAX_CHARS = 1600  # ~400 tokens
+
+
+def parse_progress_delta(raw) -> list[dict] | None:
+    """Validate GPT progress_delta output; return None on malformed data (never blocks save)."""
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            logger.warning("progress_delta parse failed: invalid JSON string")
+            return None
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        logger.warning("progress_delta parse failed: expected list or object")
+        return None
+
+    cleaned: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        entry: dict = {}
+        if item.get("goal_id"):
+            entry["goal_id"] = str(item["goal_id"])
+        prompt = str(item.get("prompt_level") or "").strip().lower()
+        if prompt in VALID_PROMPT_LEVELS:
+            entry["prompt_level"] = prompt
+        try:
+            rating = item.get("independence_rating")
+            if rating is not None:
+                rating_int = int(rating)
+                if 1 <= rating_int <= 5:
+                    entry["independence_rating"] = rating_int
+        except (TypeError, ValueError):
+            pass
+        if item.get("skill_step"):
+            entry["skill_step"] = str(item["skill_step"]).strip()[:500]
+        if item.get("delta_summary"):
+            entry["delta_summary"] = str(item["delta_summary"]).strip()[:2000]
+        if entry:
+            cleaned.append(entry)
+
+    return cleaned or None
+
+
+def format_prior_trajectory_context(prior_by_goal: dict[str, list[dict]]) -> str:
+    """Compact prior-session trajectory for GPT prompt (CARECLIQV2-79)."""
+    if not prior_by_goal:
+        return ""
+    lines = ["PRIOR TRAJECTORY (based on past session records):"]
+    for goal_id, sessions in prior_by_goal.items():
+        if not sessions:
+            continue
+        lines.append(f"Goal {goal_id}:")
+        for row in sessions[:5]:
+            delta = row.get("progress_delta") or {}
+            date = row.get("session_date") or "unknown date"
+            prompt = delta.get("prompt_level") or "n/a"
+            rating = delta.get("independence_rating", "n/a")
+            summary = (delta.get("delta_summary") or "")[:120]
+            lines.append(
+                f"  {date}: prompt={prompt}, independence={rating}"
+                + (f' — "{summary}"' if summary else "")
+            )
+    text = "\n".join(lines)
+    if len(text) > _PRIOR_TRAJECTORY_MAX_CHARS:
+        return text[:_PRIOR_TRAJECTORY_MAX_CHARS] + "\n[truncated]"
+    return text
+
 
 def _legal_record_text_or_raise(session_data: dict) -> str:
     """Return the English legal record text, failing closed on raw/source notes."""
@@ -62,10 +135,10 @@ def _legal_record_text_or_raise(session_data: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# CareScribe Master System Prompt (from spec)
+# CareCliQ Master System Prompt (from spec)
 # ---------------------------------------------------------------------------
 
-CARESCRIBE_SYSTEM_PROMPT = """You are CareScribe — a 100% Compliance Engine with AI support designed to support Australian NDIS providers with accurate, safe, and compliant clinical documentation.
+CARECLIQ_SYSTEM_PROMPT = """You are CareCliQ — a 100% Compliance Engine with AI support designed to support Australian NDIS providers with accurate, safe, and compliant clinical documentation.
 
 Your responsibilities:
 
@@ -264,7 +337,7 @@ Provide one rewrite per flagged phrase, matching the index number."""
             message = anthropic_client.messages.create(
                 model="claude-3-5-haiku-20241022",
                 max_tokens=1024,
-                system=CARESCRIBE_SYSTEM_PROMPT,
+                system=CARECLIQ_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw = message.content[0].text if message.content else ""
@@ -280,12 +353,12 @@ Provide one rewrite per flagged phrase, matching the index number."""
         except Exception as e:
             logger.warning(f"Claude RP enrichment failed, falling back to GPT: {e}")
 
-    # Fallback: GPT-4o-mini with CareScribe system prompt
+    # Fallback: GPT-4o-mini with CareCliQ system prompt
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=1024,
@@ -308,8 +381,9 @@ async def generate_session_analysis(
     session_data: dict,
     participant_data: dict,
     rp_flags: list | None = None,
+    prior_trajectory: dict[str, list[dict]] | None = None,
 ) -> dict:
-    """Run the full CareScribe compliance analysis on a session.
+    """Run the full CareCliQ compliance analysis on a session.
 
     Returns a dict matching the spec JSON format:
     {
@@ -386,13 +460,15 @@ Structured Fields Already Completed:
   Outcomes: {existing_structured['outcomes'] or 'Not entered'}
   Progress Toward Goals: {existing_structured['progress_toward_goals'] or 'Not entered'}"""
 
+    prior_context = format_prior_trajectory_context(prior_trajectory or {})
+
     # Estimate cost context
     duration = int(session_data.get("duration_minutes") or 0)
     session_type = session_data.get("session_type") or "Support"
     total_budget = float(participant_data.get("total_budget") or 0)
     used_budget = float(participant_data.get("used_budget") or 0)
 
-    user_prompt = f"""Analyse this NDIS support session and return a full CareScribe compliance report.
+    user_prompt = f"""Analyse this NDIS support session and return a full CareCliQ compliance report.
 
 PARTICIPANT INFORMATION:
   Name: {participant_data.get('full_name', 'Unknown')}
@@ -411,6 +487,15 @@ SESSION INFORMATION:
 
 {notes_section}
 {rp_context}
+{prior_context}
+
+PROGRESS EXTRACTION (NDIS terminology):
+For each goal addressed this session, extract measurable progress signals into progress_delta.
+- prompt_level: full | partial | independent (support prompting required)
+- independence_rating: integer 1-5 (1=full support, 5=independent)
+- skill_step: brief skill acquisition stage label
+- delta_summary: plain-language change vs prior sessions when prior trajectory is available
+Reference prior trajectory when present (e.g. "improvement from full to partial prompting").
 
 SCORING INSTRUCTIONS:
 Calculate compliance.score (0-100) using these EXACT weights:
@@ -453,15 +538,25 @@ Return ONLY this JSON (no markdown, no explanation):
   "key_observations": ["specific clinical observation"],
   "concerns": ["clinical concern if any"],
   "next_session_recommendations": ["specific recommendation"],
-  "progress_trend": "improving | stable | declining"
+  "progress_trend": "improving | stable | declining",
+  "progress_delta": [
+    {{
+      "goal_id": "goal id when known",
+      "prompt_level": "full | partial | independent",
+      "independence_rating": 1,
+      "skill_step": "skill acquisition step",
+      "delta_summary": "plain-language progress vs prior sessions"
+    }}
+  ]
 }}
 
-If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty."""
+If structured_notes are already completed above, preserve them exactly (do not rewrite). Only generate them if fields are empty.
+If no measurable progress is documented, return progress_delta as an empty array []."""
 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
         max_tokens=1200,
@@ -495,6 +590,7 @@ If structured_notes are already completed above, preserve them exactly (do not r
     result.setdefault("next_session_recommendations", [])
     result.setdefault("progress_trend", "stable")
     result.setdefault("summary", result.get("session_summary", ""))
+    result["progress_delta"] = parse_progress_delta(result.get("progress_delta"))
 
     return result
 
@@ -535,7 +631,7 @@ Use person-first language, be professional and factual, and align with NDIS Acti
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=300,
@@ -596,7 +692,7 @@ async def check_compliance(session_data: dict) -> dict:
     session_type = (session_data.get("session_type") or "").strip()
     tags = session_data.get("tags") or []
 
-    prompt = f"""You are a CareScribe NDIS compliance specialist auditing session documentation.
+    prompt = f"""You are a CareCliQ NDIS compliance specialist auditing session documentation.
 
 Session Details:
 - Notes / structured text length: {len(effective_text)} characters
@@ -606,7 +702,7 @@ Session Details:
 - Session Type: {session_type or 'Not specified'}
 - Tags: {', '.join(tags) if tags else 'None'}
 
-Assess compliance using the CareScribe weighted scoring:
+Assess compliance using the CareCliQ weighted scoring:
   • Documentation completeness (30%): notes present, structured fields, detail sufficient
   • Goal alignment (25%): NDIS goals linked, progress documented
   • NDIS language compliance (20%): person-first, correct terminology
@@ -630,7 +726,7 @@ Respond with a JSON object:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=400,
@@ -708,7 +804,7 @@ Write in plain English. Be specific about what information is actually missing. 
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=450,
@@ -720,18 +816,50 @@ Write in plain English. Be specific about what information is actually missing. 
     return result
 
 
-async def improve_note(notes: str, failed_rules: list[dict], rp_flags: list[dict] | None = None) -> dict:
+async def improve_note(
+    notes: str,
+    failed_rules: list[dict],
+    rp_flags: list[dict] | None = None,
+    participant_id: str | None = None,
+    organisation_id: str | None = None,
+) -> dict:
     """Generate an improved clinical note that fixes all failed compliance rules.
 
-    Returns:
-        improved_note: str  — full rewrite of the note
-        rule_suggestions: list[{rule, issue, suggestion}]  — per-rule targeted fixes
+    When participant context is available, retrieves high-scoring past notes via RAG
+    (CARECLIQV2-33) so suggestions reference participant-specific documentation.
     """
     if not notes or not notes.strip():
         return {
             "improved_note": "",
             "rule_suggestions": [],
         }
+
+    rag_context = ""
+    if participant_id and organisation_id:
+        try:
+            from .rag_service import retrieve_high_scoring_participant_notes
+
+            past_notes = await retrieve_high_scoring_participant_notes(
+                participant_id=participant_id,
+                organisation_id=organisation_id,
+                query_text=notes[:500],
+                min_score=85.0,
+                k=3,
+            )
+            if past_notes:
+                snippets = []
+                for n in past_notes:
+                    date = n.get("session_date") or "prior session"
+                    score = n.get("compliance_score")
+                    content = (n.get("content") or "")[:400]
+                    snippets.append(f"[{date}, score={score}]: {content}")
+                rag_context = (
+                    "\n\nHIGH-SCORING PAST SESSION RECORDS FOR THIS PARTICIPANT "
+                    "(based on past session records — use for participant-specific context):\n"
+                    + "\n".join(snippets)
+                )
+        except Exception as rag_err:
+            logger.warning("RAG context for note improvement failed (non-critical): %s", rag_err)
 
     rules_text = "\n".join([
         f"- {r.get('rule', '').replace('_', ' ').title()}: {r.get('message', '')}"
@@ -751,9 +879,10 @@ ORIGINAL NOTE:
 {notes[:2000]}
 
 FAILED COMPLIANCE RULES:
-{rules_text}{rp_text}
+{rules_text}{rp_text}{rag_context}
 
 Requirements for the improved note:
+- When past session records are provided, reference participant-specific context (e.g. "Jordan previously demonstrated…")
 - Use objective, observable, third-person language (no "I think", "seems", "probably")
 - Use person-first language (e.g. "participant" not "the disabled person")
 - Include what was done (activities), how the participant responded, and what was achieved (outcome)
@@ -776,7 +905,7 @@ Respond with JSON:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=700,
@@ -854,7 +983,7 @@ Respond with a JSON object:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=500,
@@ -939,7 +1068,7 @@ Respond with a JSON object:
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         max_tokens=800,
@@ -958,36 +1087,65 @@ Respond with a JSON object:
 # Real-time Note Assessment (4-criteria scoring matrix)
 # ---------------------------------------------------------------------------
 
+def has_measurable_progress_delta(raw: Any) -> bool:
+    """True when progress_delta contains at least one measurable entry (CARECLIQV2-75)."""
+    entries = parse_progress_delta(raw)
+    if not entries:
+        return False
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("delta_summary") or "").strip():
+            return True
+        if entry.get("prompt_level"):
+            return True
+        if entry.get("independence_rating") is not None:
+            return True
+        if (entry.get("skill_step") or "").strip():
+            return True
+    return False
+
+
 async def assess_note(
     note_text: str,
     session_started: bool,
     goals: list[dict],
+    progress_delta: Any = None,
 ) -> dict:
     """Score a clinical note entry against the NDIS compliance matrix.
 
-    Criteria and weights (spec §4):
-      • Timestamp/session check-in  +25%  (heuristic — session started flag)
-      • Semantic NDIS goal connection +35% (AI)
-      • Documented support outcome   +25% (AI)
-      • Next-step/routine action     +15% (AI)
+    Criteria and weights (CARECLIQV2-75):
+      • Timestamp/session check-in       +20
+      • Semantic NDIS goal connection    +28
+      • Documented support outcome       +20
+      • Next-step/routine action         +12
+      • Progress Evidence (progress_delta) +20
 
-    Returns:
-      score (0-100), is_ready_for_billing (score >= 75),
-      breakdown dict with per-criteria scores and labels.
+    Without measurable progress_delta the score is hard-capped at 80.
+    is_ready_for_billing remains at score >= 75.
     """
-    # Criterion A — Timestamp / session check-in (heuristic, no AI needed)
-    score_a = 25 if session_started else 0
+    score_a = 20 if session_started else 0
+    progress_pass = has_measurable_progress_delta(progress_delta)
+    score_e = 20 if progress_pass else 0
 
-    # Short-circuit: nothing useful to assess if the note is too short
     if len(note_text.strip()) < 15:
+        total = min(score_a + score_e, 80) if not progress_pass else score_a + score_e
         return {
-            "score": score_a,
-            "is_ready_for_billing": False,
+            "score": total,
+            "is_ready_for_billing": total >= 75,
+            "progress_capped": not progress_pass and total >= 80,
             "breakdown": {
-                "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in"},
-                "goal":     {"score": 0, "max": 35, "label": "Semantic NDIS goal connection"},
-                "outcome":  {"score": 0, "max": 25, "label": "Documented support outcome"},
-                "nextstep": {"score": 0, "max": 15, "label": "Next-step / routine action"},
+                "checkin": {"score": score_a, "max": 20, "label": "Session active check-in", "pass": session_started},
+                "goal": {"score": 0, "max": 28, "label": "Semantic NDIS goal connection", "pass": False},
+                "outcome": {"score": 0, "max": 20, "label": "Documented support outcome", "pass": False},
+                "nextstep": {"score": 0, "max": 12, "label": "Next-step / routine action", "pass": False},
+                "progress_evidence": {
+                    "score": score_e,
+                    "max": 20,
+                    "label": "Progress Evidence",
+                    "pass": progress_pass,
+                    "feedback": "Measurable progress evidence present." if progress_pass else "No measurable progress evidence in progress_delta.",
+                },
             },
             "feedback": "Note is too short to assess — add more detail.",
         }
@@ -1006,19 +1164,19 @@ CLINICAL NOTE:
 \"\"\"{note_text}\"\"\"
 
 SCORING CRITERIA:
-1. "goal_score" (0-35): Does the note semantically reference or address any of the participant's NDIS goals? Award up to 35 based on specificity and clarity.
-2. "outcome_score" (0-25): Does the note document a measurable or observable support outcome (e.g. what was achieved, participant's response)? Award up to 25.
-3. "nextstep_score" (0-15): Does the note mention a follow-up action, next routine step, or plan for the next session? Award up to 15.
+1. "goal_score" (0-28): Does the note semantically reference or address any of the participant's NDIS goals? Award up to 28 based on specificity and clarity.
+2. "outcome_score" (0-20): Does the note document a measurable or observable support outcome (e.g. what was achieved, participant's response)? Award up to 20.
+3. "nextstep_score" (0-12): Does the note mention a follow-up action, next routine step, or plan for the next session? Award up to 12.
 
 For each criterion also provide a one-sentence "feedback" explaining the score.
 
 Respond with exactly:
 {{
-  "goal_score": <int 0-35>,
+  "goal_score": <int 0-28>,
   "goal_feedback": "<sentence>",
-  "outcome_score": <int 0-25>,
+  "outcome_score": <int 0-20>,
   "outcome_feedback": "<sentence>",
-  "nextstep_score": <int 0-15>,
+  "nextstep_score": <int 0-12>,
   "nextstep_feedback": "<sentence>"
 }}"""
 
@@ -1026,7 +1184,7 @@ Respond with exactly:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             max_tokens=400,
@@ -1038,21 +1196,59 @@ Respond with exactly:
         logger.warning("assess_note AI call failed: %s", exc)
         r = {"goal_score": 0, "goal_feedback": "", "outcome_score": 0, "outcome_feedback": "", "nextstep_score": 0, "nextstep_feedback": ""}
 
-    score_b = max(0, min(35, int(r.get("goal_score", 0))))
-    score_c = max(0, min(25, int(r.get("outcome_score", 0))))
-    score_d = max(0, min(15, int(r.get("nextstep_score", 0))))
-    total   = score_a + score_b + score_c + score_d
+    score_b = max(0, min(28, int(r.get("goal_score", 0))))
+    score_c = max(0, min(20, int(r.get("outcome_score", 0))))
+    score_d = max(0, min(12, int(r.get("nextstep_score", 0))))
+    total = score_a + score_b + score_c + score_d + score_e
+    if not progress_pass:
+        total = min(total, 80)
 
     return {
         "score": total,
         "is_ready_for_billing": total >= 75,
+        "progress_capped": not progress_pass and (score_a + score_b + score_c + score_d) > 80,
         "breakdown": {
-            "checkin":  {"score": score_a, "max": 25, "label": "Session active check-in",       "feedback": "Session is active — timestamp check passed." if session_started else "Session not yet started."},
-            "goal":     {"score": score_b, "max": 35, "label": "Semantic NDIS goal connection",  "feedback": r.get("goal_feedback", "")},
-            "outcome":  {"score": score_c, "max": 25, "label": "Documented support outcome",    "feedback": r.get("outcome_feedback", "")},
-            "nextstep": {"score": score_d, "max": 15, "label": "Next-step / routine action",    "feedback": r.get("nextstep_feedback", "")},
+            "checkin": {
+                "score": score_a,
+                "max": 20,
+                "label": "Session active check-in",
+                "pass": session_started,
+                "feedback": "Session is active — timestamp check passed." if session_started else "Session not yet started.",
+            },
+            "goal": {
+                "score": score_b,
+                "max": 28,
+                "label": "Semantic NDIS goal connection",
+                "pass": score_b >= 14,
+                "feedback": r.get("goal_feedback", ""),
+            },
+            "outcome": {
+                "score": score_c,
+                "max": 20,
+                "label": "Documented support outcome",
+                "pass": score_c >= 10,
+                "feedback": r.get("outcome_feedback", ""),
+            },
+            "nextstep": {
+                "score": score_d,
+                "max": 12,
+                "label": "Next-step / routine action",
+                "pass": score_d >= 6,
+                "feedback": r.get("nextstep_feedback", ""),
+            },
+            "progress_evidence": {
+                "score": score_e,
+                "max": 20,
+                "label": "Progress Evidence",
+                "pass": progress_pass,
+                "feedback": (
+                    "Measurable progress evidence present in progress_delta."
+                    if progress_pass
+                    else "No measurable progress evidence — score capped at 80%."
+                ),
+            },
         },
-        "feedback": "Ready for billing." if total >= 75 else f"Score {total}/100 — add goal references, outcomes, and next steps to reach billing threshold.",
+        "feedback": "Ready for billing." if total >= 75 else f"Score {total}/100 — add goal references, outcomes, next steps, and progress evidence to reach billing threshold.",
     }
 
 
@@ -1182,7 +1378,7 @@ Return ONLY valid JSON — no markdown, no explanation:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.15,
@@ -1263,7 +1459,7 @@ Return ONLY valid JSON — no markdown:
         resp = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "system", "content": CARECLIQ_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
@@ -1280,3 +1476,122 @@ Return ONLY valid JSON — no markdown:
         "past_strategies": raw.get("past_strategies") or fallback["past_strategies"],
         "recommendations": raw.get("recommendations") or fallback["recommendations"],
     }
+
+
+async def generate_task_suggestions(
+    task_title: str,
+    context: str,
+    participant_name: str,
+) -> dict:
+    """Generate alternative task title suggestions using AI.
+    
+    Args:
+        task_title: The task title entered by user
+        context: Context like "for goal: X" or "for core support"
+        participant_name: Name of the participant
+        
+    Returns:
+        {"suggestions": [list of 3-5 alternative task titles]}
+    """
+    if not _openai_configured():
+        return {"suggestions": []}
+    
+    user_prompt = f"""Generate 4 alternative, specific, and action-oriented task titles for supporting {participant_name}.
+    
+Current title: "{task_title}"
+Context: {context}
+
+Requirements:
+- Each title should be clear, specific, and focus on what the worker will DO
+- Titles should be suitable for NDIS support workers
+- Start with action verbs like "Prompt", "Support", "Assist", "Help", "Guide", "Encourage"
+- Between 3-8 words each
+- Include specific details where relevant
+
+Return ONLY valid JSON (no markdown):
+{{
+  "suggestions": ["Title 1", "Title 2", "Title 3", "Title 4"]
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+        result = _json.loads(resp.choices[0].message.content or "{}")
+        return result
+    except Exception as exc:
+        logger.warning("generate_task_suggestions AI call failed: %s", exc)
+        return {"suggestions": []}
+
+
+async def generate_task_instructions(
+    task_title: str,
+    task_purpose: str,
+    goal_name: str = None,
+    goal_description: str = None,
+    participant_name: str = None,
+) -> dict:
+    """Generate instruction suggestions for a task using AI.
+    
+    Args:
+        task_title: The task title
+        task_purpose: Either "core" or "goal"
+        goal_name: Name of linked goal (if purpose is "goal")
+        goal_description: Description of linked goal
+        participant_name: Name of participant
+        
+    Returns:
+        {"suggestions": [list of 3-5 instruction options]}
+    """
+    if not _openai_configured():
+        return {"suggestions": []}
+    
+    goal_context = ""
+    if task_purpose == "goal" and goal_name:
+        goal_context = f"\nLinked NDIS Goal: {goal_name}"
+        if goal_description:
+            goal_context += f"\nGoal details: {goal_description}"
+    
+    user_prompt = f"""Generate 3-4 specific, practical instruction options for support workers doing the following task for {participant_name}.
+    
+Task: "{task_title}"
+Purpose: {"Supporting a linked NDIS goal" if task_purpose == "goal" else "Core support (not linked to a specific goal"}
+{goal_context}
+
+Requirements:
+- Instructions should be specific and actionable
+- Include WHO should do it (e.g., worker, participant)
+- Include HOW to do it (step-by-step or techniques)
+- Include WHY it matters for {participant_name}
+- Be person-centered and strengths-based
+- Suitable for training support workers
+- 1-3 sentences per instruction
+
+Return ONLY valid JSON (no markdown):
+{{
+  "suggestions": ["Instruction 1", "Instruction 2", "Instruction 3"]
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+        )
+        result = _json.loads(resp.choices[0].message.content or "{}")
+        return result
+    except Exception as exc:
+        logger.warning("generate_task_instructions AI call failed: %s", exc)
+        return {"suggestions": []}

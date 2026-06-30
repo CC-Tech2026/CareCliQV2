@@ -15,3 +15,7 @@ session_messages_table_missing: bool = False
 patient_goals_table_missing: bool = False
 practitioner_allocations_table_missing: bool = False
 upcoming_review_date_column_missing: bool = False
+progress_delta_column_missing: bool = False
+shifts_table_missing: bool = False
+sessions_shift_id_column_missing: bool = False
+ai_detected_patterns_table_missing: bool = False

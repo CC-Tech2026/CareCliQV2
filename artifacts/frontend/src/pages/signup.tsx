@@ -1,7 +1,9 @@
-import { useState, useCallback } from "react";
+﻿import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api-fetch";
+import { CCQ_TOKEN_KEY } from "@/lib/storage-keys";
 import { useAuth, type AccountType } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -11,13 +13,57 @@ import {
   EyeOff,
   CheckCircle2,
 } from "lucide-react";
+import { AuthThemeToggle } from "@/components/auth/AuthThemeToggle";
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const BLUSH = "#F8C0CE";
-const BORDER = "#D8D0F0";
-const BG = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const BORDER = "var(--auth-input-border)";
+const BG = "var(--auth-input-bg)";
+
+// ── Password Strength Indicator ───────────────────────────────────────────────
+function PasswordStrengthBar({ password, t }: { password: string; t: (key: string) => string }) {
+  const getScore = (pwd: string): number => {
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (pwd.length >= 12) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) score++;
+    return Math.min(score, 4);
+  };
+
+  const score = getScore(password);
+  const colors = ["#EF4444", "#F97316", "#FBBF24", "#22C55E"];
+  const labels = [
+    t("auth.signup.passwordWeak"),
+    t("auth.signup.passwordFair"),
+    t("auth.signup.passwordGood"),
+    t("auth.signup.passwordStrong"),
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-1.5">
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            className="flex-1 h-1.5 rounded-full transition-all duration-300"
+            style={{
+              background: i < score ? colors[score - 1] : "#E5E7EB",
+            }}
+          />
+        ))}
+      </div>
+      {password && (
+        <p className="text-[11px] font-medium" style={{ color: colors[Math.max(score - 1, 0)] }}>
+          {labels[Math.max(score - 1, 0)]}
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface FormData {
@@ -42,7 +88,7 @@ interface FormData {
 }
 
 const EMPTY: FormData = {
-  account_type: "",
+  account_type: "small_provider",
   full_name: "",
   email: "",
   password: "",
@@ -73,6 +119,8 @@ function StyledInput({
   autoComplete,
   error,
   required = true,
+  showPasswordLabel,
+  hidePasswordLabel,
 }: {
   name?: string;
   type?: string;
@@ -83,30 +131,47 @@ function StyledInput({
   autoComplete?: string;
   error?: boolean;
   required?: boolean;
+  showPasswordLabel?: string;
+  hidePasswordLabel?: string;
 }) {
   const [focused, setFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === "password";
+  const inputType = isPassword ? (showPassword ? "text" : "password") : type;
 
   return (
-    <input
-      name={name}
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      disabled={disabled}
-      autoComplete={autoComplete}
-      required={required}
-      spellCheck={false}
-      className="w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200"
-      style={{
-        background: BG,
-        border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
-        color: "#1E1640",
-        WebkitAppearance: "none",
-      }}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-    />
+    <div className="relative">
+      <input
+        name={name}
+        type={inputType}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete={autoComplete}
+        required={required}
+        spellCheck={false}
+        className={`w-full h-11 px-4 rounded-xl text-[16px] md:text-[14px] font-medium outline-none transition-all duration-200${isPassword ? " pr-11" : ""}`}
+        style={{
+          background: BG,
+          border: `1.5px solid ${error ? "#EF4444" : focused ? CORAL : BORDER}`,
+          color: "var(--cc-text)",
+          WebkitAppearance: "none",
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+      />
+      {isPassword ? (
+        <button
+          type="button"
+          aria-label={showPassword ? hidePasswordLabel : showPasswordLabel}
+          onClick={() => setShowPassword((value) => !value)}
+          className="absolute right-4 top-1/2 -translate-y-1/2 text-cc-muted"
+        >
+          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -141,7 +206,7 @@ function StyledSelect({
       style={{
         background: BG,
         border: `1.5px solid ${focused ? CORAL : BORDER}`,
-        color: "#1E1640",
+        color: "var(--cc-text)",
         WebkitAppearance: "none",
       }}
       onFocus={() => setFocused(true)}
@@ -178,10 +243,10 @@ export default function Signup() {
   const { login, updateUser, updateToken } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { translate: t, translateParams } = useAccessibility();
 
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(EMPTY);
-  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [emailVerify, setEmailVerify] = useState(false);
 
@@ -192,24 +257,7 @@ export default function Signup() {
     }));
   }, []);
 
-  const STEP_LABELS = ["Account Type", "Your Details", "Organisation"];
-
-  const TYPES = [
-    {
-      value: "small_provider" as AccountType,
-      title: "Disability Support Business",
-      sub: "Support Coordinator, Team Leader, Service Manager, Business Owner or Director managing a team",
-      dot: PLUM,
-      badge: "Most common",
-    },
-    {
-      value: "allied_health" as AccountType,
-      title: "Allied Health Professional",
-      sub: "OT, Speech Pathologist, Physiotherapist, Behaviour Support Practitioner",
-      dot: "#9B5DE5",
-      badge: null,
-    },
-  ] as const;
+  const STEP_LABELS = [t("auth.signup.step.details"), t("auth.signup.step.organisation")];
 
   function step1Valid() {
     return (
@@ -221,17 +269,7 @@ export default function Signup() {
   }
 
   function step2Valid() {
-    if (form.account_type === "allied_health") {
-      return (
-        form.ah_profession_type !== "" && form.ah_registration_status !== ""
-      );
-    }
-
-    if (form.account_type === "small_provider") {
-      return form.sp_organisation_name.trim() !== "";
-    }
-
-    return false;
+    return form.sp_organisation_name.trim() !== "";
   }
 
   async function handleSubmit(e?: React.FormEvent) {
@@ -258,16 +296,17 @@ export default function Signup() {
       if (!res.ok) {
         const errBody = await res
           .json()
-          .catch(() => ({ detail: "Registration failed" }));
-        throw new Error(errBody.detail || "Registration failed");
+          .catch(() => ({ detail: t("auth.signup.error.registrationFailed") }));
+        throw new Error(errBody.detail || t("auth.signup.error.registrationFailed"));
       }
 
       let token: string | null = null;
 
       try {
-        const u = await login(form.email, form.password);
-
-        token = u ? localStorage.getItem("carescribe_token") : null;
+        const result = await login(form.email, form.password);
+        if (result.status === "authenticated") {
+          token = localStorage.getItem(CCQ_TOKEN_KEY);
+        }
       } catch (err) {
         setEmailVerify(true);
         setStep(3);
@@ -302,10 +341,8 @@ export default function Signup() {
               !onboardingData.org_created
             ) {
               toast({
-                title: "Database migration required",
-                description:
-                  "Your account is ready but organisation setup needs the database migration. " +
-                  "Run supabase_setup.sql in your Supabase SQL editor to activate multi-tenant features.",
+                title: t("auth.signup.toast.migrationTitle"),
+                description: t("auth.signup.toast.migrationDesc"),
                 variant: "destructive",
               });
             }
@@ -320,8 +357,8 @@ export default function Signup() {
       setStep(3);
     } catch (err) {
       toast({
-        title: "Sign up failed",
-        description: err instanceof Error ? err.message : "Please try again.",
+        title: t("auth.signup.error.failed"),
+        description: err instanceof Error ? err.message : t("auth.signup.error.tryAgain"),
         variant: "destructive",
       });
     } finally {
@@ -336,9 +373,12 @@ export default function Signup() {
 
   return (
     <div
-      className="h-screen w-screen flex bg-[#F5F3FC] overflow-hidden"
+      className="relative h-screen w-screen flex overflow-hidden bg-[var(--auth-shell-bg)] text-cc-text"
       style={{ animation: "authPageEnter 0.3s ease-out" }}
     >
+      <div className="absolute top-4 right-4 z-30 sm:top-5 sm:right-5">
+        <AuthThemeToggle />
+      </div>
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -346,64 +386,92 @@ export default function Signup() {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @keyframes stepSlideIn {
+          from { opacity: 0; transform: translateX(16px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        .step-content {
+          animation: stepSlideIn 0.28s ease-out;
+        }
       `,
         }}
       />
       {/* LEFT */}
-      <div className="hidden md:flex md:w-1/2 relative h-full overflow-hidden">
+      <div
+        className="hidden md:flex md:w-1/2 relative h-full overflow-hidden flex-col justify-between p-12"
+        style={{ background: "var(--auth-marketing-bg)" }}
+      >
+        {/* Subtle radial glow */}
         <div
-          className="absolute inset-0 z-0 pointer-events-none bg-cover bg-center"
-          style={{
-            backgroundImage: `url('/signup_welcome.jpg')`,
-          }}
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "var(--auth-marketing-glow)" }}
         />
 
-        <div
-          className="absolute inset-0 z-0 pointer-events-none"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(30,22,64,0.85) 0%, rgba(85,51,204,0.5) 50%, rgba(240,48,96,0.4) 100%)",
-          }}
-        />
-
-        <div
-          className="absolute inset-0 z-0 opacity-10 pointer-events-none"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        <div className="relative z-10 flex flex-col justify-between h-full">
           <div>
             <img
               src="/carecliQ_logo.png"
               alt="CareCliQ"
-              className="max-w-[250px]"
+              className="max-w-[200px]"
             />
-
-            <p className="mt-3 text-xs font-black tracking-[0.18em] uppercase text-[#FFD2DA]">
-              NDIS Compliance Made Easy
+            <p className="mt-3 text-[11px] font-black tracking-[0.2em] uppercase" style={{ color: "var(--auth-marketing-muted)" }}>
+              {t("auth.signup.marketing.tagline")}
             </p>
           </div>
 
           <div>
-            <h1 className="text-5xl font-black text-white leading-tight">
-              Write beautiful notes,
+            <h1 className="text-[42px] font-black leading-[1.15] tracking-tight" style={{ color: "var(--auth-headline)" }}>
+              {t("auth.signup.marketing.headline1")}
               <br />
-              <span className="text-[#FFD2DA]">minus the heavy paperwork.</span>
+              <span style={{ color: "var(--auth-accent)" }}>{t("auth.signup.marketing.headline2")}</span>
             </h1>
-
-            <p className="mt-5 text-white/90 max-w-md leading-relaxed">
-              Manage your participants, support workers, compliance, and NDIS
-              documentation — all in one place built for Australian disability
-              support businesses.
+            <p className="mt-5 leading-relaxed max-w-[380px]" style={{ color: "var(--auth-marketing-body)" }}>
+              {t("auth.signup.marketing.description")}
             </p>
+
+            <div className="mt-10 flex items-center gap-6">
+              <div>
+                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>24 hr</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.noteDeadline")}</p>
+              </div>
+              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
+              <div>
+                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>100%</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.complianceTracked")}</p>
+              </div>
+              <div className="h-10 w-px" style={{ background: "var(--auth-stat-card-border)" }} />
+              <div>
+                <p className="text-2xl font-black" style={{ color: "var(--auth-stat-value)" }}>AU</p>
+                <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--auth-marketing-muted)" }}>{t("auth.signup.marketing.ndisRegistered")}</p>
+              </div>
+            </div>
+
+            {/* People / social proof */}
+            <div className="mt-8 flex items-center gap-3">
+              <div className="flex -space-x-2">
+                {[
+                  { initials: "SC", bg: "#3730A3" },
+                  { initials: "OT", bg: "#0D7C66" },
+                  { initials: "TL", bg: "#7B3F9E" },
+                  { initials: "PM", bg: "#1A6FA8" },
+                ].map((a) => (
+                  <div
+                    key={a.initials}
+                    className="h-8 w-8 rounded-full border-2 flex items-center justify-center text-[10px] font-black text-white"
+                    style={{ background: a.bg, borderColor: "var(--auth-form-bg)" }}
+                  >
+                    {a.initials}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[13px] font-medium" style={{ color: "var(--auth-headline)" }}>
+                {t("auth.signup.marketing.joinedBy")}
+              </p>
+            </div>
           </div>
 
-          <div className="text-white/70 text-xs font-bold tracking-wider">
-            © 2026 CARESCRIBE
+          <div className="text-[11px] font-bold tracking-wider" style={{ color: "var(--auth-marketing-muted)" }}>
+            {t("auth.signup.marketing.copyright")}
           </div>
         </div>
       </div>
@@ -411,20 +479,20 @@ export default function Signup() {
       {/* RIGHT */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-4 sm:p-8 md:p-12 lg:px-20">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2 justify-center mb-5 bg-white px-4 py-2.5 rounded-2xl border border-[#D8D0F0]/60">
+          <div className="flex items-center gap-2 justify-center mb-5 px-4 py-2.5 rounded-2xl border bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {STEP_LABELS.map((l, i) => (
               <div key={l} className="flex-1 flex flex-col items-center gap-1">
                 <div
                   className="h-1 w-full rounded-full"
                   style={{
-                    background: i <= step ? PLUM : "#E5E7EB",
+                    background: i + 1 <= step ? PLUM : "var(--cc-border)",
                   }}
                 />
 
                 <span
                   className="text-[9px] font-bold uppercase"
                   style={{
-                    color: i <= step ? PLUM : "#9CA3AF",
+                    color: i + 1 <= step ? PLUM : "var(--cc-muted)",
                   }}
                 >
                   {l.split(" ")[0]}
@@ -433,108 +501,7 @@ export default function Signup() {
             ))}
           </div>
 
-          <div className="w-full min-h-0 pointer-events-auto bg-white rounded-[2rem] px-5 py-6 sm:p-8 shadow-[0_16px_48px_-12px_rgba(84,34,105,0.08)] border border-[#E8D5E8]/50 overflow-y-auto">
-            {/* STEP 0 */}
-            {step === 0 && (
-              <div className="space-y-4">
-                <div>
-                  <h2
-                    className="text-[22px] font-black"
-                    style={{ color: PLUM }}
-                  >
-                    Create your account
-                  </h2>
-
-                  <p className="text-sm text-[#9B6FAB]">
-                    Choose the option that best describes how you'll use
-                    CareCliQ
-                  </p>
-                </div>
-
-                <div
-                  className="rounded-xl px-4 py-3 text-[12px] leading-relaxed"
-                  style={{
-                    background: `${PLUM}08`,
-                    border: `1px solid ${PLUM}20`,
-                    color: PLUM,
-                  }}
-                >
-                  <span className="font-bold">Support worker?</span>{" "}
-                  <span style={{ color: "#7A6A9E" }}>
-                    Workers are invited by their organisation — ask your manager
-                    to send you an invite link instead of signing up here.
-                  </span>
-                </div>
-
-                {TYPES.map((t) => {
-                  const sel = form.account_type === t.value;
-
-                  return (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => updateField("account_type", t.value)}
-                      className="w-full text-left p-4 rounded-2xl border-2 transition-all"
-                      style={{
-                        borderColor: sel ? t.dot : BORDER,
-                        background: sel ? `${t.dot}10` : "white",
-                      }}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className="mt-1.5 h-3 w-3 shrink-0 rounded-full"
-                          style={{
-                            background: sel ? t.dot : BORDER,
-                          }}
-                        />
-
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-black">{t.title}</p>
-                            {"badge" in t && t.badge && (
-                              <span
-                                className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide"
-                                style={{
-                                  background: `${t.dot}18`,
-                                  color: t.dot,
-                                }}
-                              >
-                                {t.badge}
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-sm text-[#7A6A9E]">{t.sub}</p>
-                        </div>
-
-                        {sel && (
-                          <CheckCircle2
-                            size={18}
-                            className="shrink-0"
-                            style={{
-                              color: t.dot,
-                            }}
-                          />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  disabled={!form.account_type}
-                  className="w-full h-12 rounded-xl text-white font-black disabled:opacity-40"
-                  style={{
-                    background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
-                  }}
-                >
-                  Continue
-                </button>
-              </div>
-            )}
-
+          <div className="w-full min-h-0 pointer-events-auto rounded-[2rem] px-5 py-6 sm:p-8 shadow-[var(--cc-shadow-md)] border overflow-y-auto bg-[var(--auth-form-bg)]" style={{ borderColor: "var(--auth-card-border)" }}>
             {/* STEP 1 */}
             {step === 1 && (
               <form
@@ -545,94 +512,104 @@ export default function Signup() {
                     setStep(2);
                   }
                 }}
-                className="space-y-4"
+                className="space-y-4 step-content"
               >
                 <div>
                   <h2
                     className="text-[22px] font-black"
                     style={{ color: PLUM }}
                   >
-                    Create account
+                    {t("auth.signup.title")}
                   </h2>
 
-                  <p className="text-sm text-[#9B6FAB]">
-                    You'll use these to sign in
+                  <p className="text-sm" style={{ color: "var(--cc-muted)" }}>
+                    {t("auth.signup.subtitle")}
                   </p>
                 </div>
 
                 <div>
-                  <Label>Full name</Label>
+                  <Label>{t("auth.signup.fullName")}</Label>
 
                   <StyledInput
                     name="full_name"
                     value={form.full_name}
                     onChange={(v) => updateField("full_name", v)}
-                    placeholder="Jane Smith"
+                    placeholder={t("auth.signup.namePlaceholder")}
                     autoComplete="name"
                   />
                 </div>
 
                 <div>
-                  <Label>Email</Label>
+                  <Label>{t("auth.signup.email")}</Label>
 
                   <StyledInput
                     name="email"
                     type="email"
                     value={form.email}
                     onChange={(v) => updateField("email", v)}
-                    placeholder="you@example.com"
+                    placeholder={t("auth.signup.emailPlaceholder")}
                     autoComplete="email"
                   />
                 </div>
 
                 <div>
-                  <Label>Password</Label>
-
-                  <div className="relative">
-                    <StyledInput
-                      name="password"
-                      type={showPass ? "text" : "password"}
-                      value={form.password}
-                      onChange={(v) => updateField("password", v)}
-                      placeholder="Minimum 8 characters"
-                      autoComplete="new-password"
-                      error={short}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setShowPass((p) => !p)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2"
-                    >
-                      {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
+                  <Label>{t("auth.signup.password")}</Label>
+                  <StyledInput
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={(v) => updateField("password", v)}
+                    placeholder={t("auth.signup.passwordPlaceholder")}
+                    autoComplete="new-password"
+                    error={short}
+                    showPasswordLabel={t("auth.signup.showPassword")}
+                    hidePasswordLabel={t("auth.signup.hidePassword")}
+                  />
+                  {form.password && (
+                    <div className="mt-2.5">
+                      <PasswordStrengthBar password={form.password} t={t} />
+                    </div>
+                  )}
                 </div>
 
                 <div>
-                  <Label>Confirm password</Label>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Label>{t("auth.signup.confirmPassword")}</Label>
+                    {form.confirm_password && (
+                      <span
+                        className="text-[11px] font-bold"
+                        style={{
+                          color: mismatch ? "#EF4444" : "#22C55E",
+                        }}
+                      >
+                        {mismatch ? t("auth.signup.passwordMismatch") : t("auth.signup.passwordMatch")}
+                      </span>
+                    )}
+                  </div>
 
                   <StyledInput
                     name="confirm_password"
                     type="password"
                     value={form.confirm_password}
                     onChange={(v) => updateField("confirm_password", v)}
-                    placeholder="Repeat password"
+                    placeholder={t("auth.signup.confirmPlaceholder")}
                     error={mismatch}
+                    showPasswordLabel={t("auth.signup.showPassword")}
+                    hidePasswordLabel={t("auth.signup.hidePassword")}
                   />
                 </div>
 
                 <div className="flex gap-3 pt-3">
                   <button
                     type="button"
-                    onClick={() => setStep(0)}
+                    onClick={() => navigate("/login")}
                     className="h-11 px-5 rounded-xl border font-black"
                     style={{
                       borderColor: BORDER,
                       color: PLUM,
                     }}
                   >
-                    Back
+                    {t("auth.signup.back")}
                   </button>
 
                   <button
@@ -640,10 +617,10 @@ export default function Signup() {
                     disabled={!step1Valid()}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40"
                     style={{
-                      background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                      background: PLUM,
                     }}
                   >
-                    Continue
+                    {t("auth.signup.continue")}
                   </button>
                 </div>
               </form>
@@ -651,12 +628,13 @@ export default function Signup() {
 
             {/* STEP 2 */}
             {step === 2 && (
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 step-content">
                 {form.account_type === "allied_health" && (
                   <AlliedHealthFields
                     form={form}
                     updateField={updateField}
                     disabled={busy}
+                    t={t}
                   />
                 )}
 
@@ -665,6 +643,7 @@ export default function Signup() {
                     form={form}
                     updateField={updateField}
                     disabled={busy}
+                    t={t}
                   />
                 )}
 
@@ -678,7 +657,7 @@ export default function Signup() {
                       color: PLUM,
                     }}
                   >
-                    Back
+                    {t("auth.signup.back")}
                   </button>
 
                   <button
@@ -686,17 +665,17 @@ export default function Signup() {
                     disabled={!step2Valid() || busy}
                     className="flex-1 h-11 rounded-xl text-white font-black disabled:opacity-40 flex items-center justify-center gap-2"
                     style={{
-                      background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                      background: PLUM,
                     }}
                   >
                     {busy ? (
                       <>
                         <Loader2 className="animate-spin" />
-                        Setting up...
+                        {t("auth.signup.settingUp")}
                       </>
                     ) : (
                       <>
-                        Complete Setup
+                        {t("auth.signup.completeSetup")}
                         <ArrowRight size={16} />
                       </>
                     )}
@@ -707,7 +686,7 @@ export default function Signup() {
 
             {/* STEP 3 */}
             {step === 3 && (
-              <div className="text-center py-6">
+              <div className="text-center py-6 step-content">
                 <CheckCircle2
                   size={70}
                   style={{
@@ -720,16 +699,17 @@ export default function Signup() {
                   className="text-[24px] font-black mt-5"
                   style={{ color: PLUM }}
                 >
-                  {emailVerify ? "Check your email" : "You're all set!"}
+                  {emailVerify ? t("auth.signup.checkEmail") : t("auth.signup.allSet")}
                 </h2>
 
-                <p className="text-[#9B6FAB] mt-2">
+                <p className="mt-2" style={{ color: "var(--cc-muted)" }}>
                   {emailVerify
-                    ? `We sent a verification email to ${form.email}`
-                    : "Your account is ready."}
+                    ? translateParams("auth.signup.verificationSent", { email: form.email })
+                    : t("auth.signup.accountReady")}
                 </p>
 
                 <button
+                  type="button"
                   onClick={() =>
                     navigate(
                       emailVerify
@@ -741,14 +721,14 @@ export default function Signup() {
                   }
                   className="mt-6 w-full h-11 rounded-xl text-white font-black"
                   style={{
-                    background: `linear-gradient(135deg, ${CORAL} 0%, ${PLUM} 100%)`,
+                    background: PLUM,
                   }}
                 >
                   {emailVerify
-                    ? "Go to Login"
+                    ? t("auth.signup.goToLogin")
                     : form.account_type === "small_provider"
-                      ? "Set Up Your Organisation"
-                      : "Go to Dashboard"}
+                      ? t("auth.signup.setupOrganisation")
+                      : t("auth.signup.goToDashboard")}
                 </button>
               </div>
             )}
@@ -758,16 +738,16 @@ export default function Signup() {
           {step < 3 && (
             <p
               className="text-center text-[13px] font-medium mt-5 pb-1"
-              style={{ color: "#7A6A9E" }}
+              style={{ color: "var(--cc-muted)" }}
             >
-              Already have an account?{" "}
+              {t("auth.signup.hasAccount")}{" "}
               <button
                 type="button"
                 onClick={() => navigate("/login")}
                 className="font-black transition-all duration-200 hover:opacity-75 focus:outline-none focus-visible:underline rounded"
                 style={{ color: CORAL }}
               >
-                Sign In
+                {t("auth.signup.signIn")}
               </button>
             </p>
           )}
@@ -806,86 +786,86 @@ function buildPayload(form: FormData) {
 }
 
 // ── Allied Health ─────────────────────────────────────────────────────────────
-function AlliedHealthFields({ form, updateField, disabled }: any) {
+function AlliedHealthFields({ form, updateField, disabled, t }: { form: FormData; updateField: (f: keyof FormData, v: string) => void; disabled?: boolean; t: (key: string) => string }) {
   return (
     <>
       <div>
-        <Label>Profession</Label>
+        <Label>{t("auth.signup.field.profession")}</Label>
 
         <StyledSelect
           name="ah_profession_type"
           value={form.ah_profession_type}
           onChange={(v) => updateField("ah_profession_type", v)}
-          placeholder="Select profession..."
+          placeholder={t("auth.signup.placeholder.selectProfession")}
           disabled={disabled}
           options={[
             {
               value: "occupational_therapist",
-              label: "Occupational Therapist",
+              label: t("auth.signup.profession.occupationalTherapist"),
             },
-            { value: "speech_pathologist", label: "Speech Pathologist" },
-            { value: "physiotherapist", label: "Physiotherapist" },
+            { value: "speech_pathologist", label: t("auth.signup.profession.speechPathologist") },
+            { value: "physiotherapist", label: t("auth.signup.profession.physiotherapist") },
             {
               value: "behaviour_support",
-              label: "Behaviour Support Practitioner",
+              label: t("auth.signup.profession.behaviourSupport"),
             },
-            { value: "social_worker", label: "Social Worker" },
-            { value: "psychologist", label: "Psychologist" },
+            { value: "social_worker", label: t("auth.signup.profession.socialWorker") },
+            { value: "psychologist", label: t("auth.signup.profession.psychologist") },
           ]}
         />
       </div>
 
       <div>
-        <Label>Registration status</Label>
+        <Label>{t("auth.signup.field.registrationStatus")}</Label>
 
         <StyledSelect
           name="ah_registration_status"
           value={form.ah_registration_status}
           onChange={(v) => updateField("ah_registration_status", v)}
-          placeholder="Select status..."
+          placeholder={t("auth.signup.placeholder.selectStatus")}
           disabled={disabled}
           options={[
-            { value: "ahpra_registered", label: "AHPRA Registered" },
-            { value: "ndis_registered", label: "NDIS Registered Provider" },
-            { value: "unregistered", label: "Unregistered" },
+            { value: "ahpra_registered", label: t("auth.signup.status.ahpraRegistered") },
+            { value: "ndis_registered", label: t("auth.signup.status.ndisRegistered") },
+            { value: "unregistered", label: t("auth.signup.status.unregistered") },
           ]}
         />
       </div>
 
       <div>
-        <Label>AHPRA / Provider number</Label>
+        <Label>{t("auth.signup.field.providerNumber")}</Label>
 
         <StyledInput
           name="ah_provider_number"
           value={form.ah_provider_number}
           onChange={(v) => updateField("ah_provider_number", v)}
-          placeholder="e.g. OCC0001234"
+          placeholder={t("auth.signup.placeholder.providerNumber")}
           disabled={disabled}
           required={false}
         />
       </div>
 
       <div>
-        <Label>Specialties</Label>
+        <Label>{t("auth.signup.field.specialties")}</Label>
 
         <StyledInput
           name="ah_specialties"
           value={form.ah_specialties}
           onChange={(v) => updateField("ah_specialties", v)}
-          placeholder="e.g. Autism, acquired brain injury"
+          placeholder={t("auth.signup.placeholder.specialties")}
           disabled={disabled}
           required={false}
         />
       </div>
 
       <div>
-        <Label>Clinic / Employer name</Label>
+        <Label>{t("auth.signup.field.clinicName")}</Label>
 
         <StyledInput
           name="ah_clinic_name"
           value={form.ah_clinic_name}
           onChange={(v) => updateField("ah_clinic_name", v)}
-          placeholder="Clinic or employer"
+          placeholder={t("auth.signup.placeholder.clinic")}
           disabled={disabled}
           required={false}
         />
@@ -895,102 +875,102 @@ function AlliedHealthFields({ form, updateField, disabled }: any) {
 }
 
 // ── Small Provider ────────────────────────────────────────────────────────────
-function SmallProviderFields({ form, updateField, disabled }: any) {
+function SmallProviderFields({ form, updateField, disabled, t }: { form: FormData; updateField: (f: keyof FormData, v: string) => void; disabled?: boolean; t: (key: string) => string }) {
   return (
     <>
       <div>
-        <Label>Organisation Name</Label>
+        <Label>{t("auth.signup.field.organisationName")}</Label>
 
         <StyledInput
           name="sp_organisation_name"
           value={form.sp_organisation_name}
           onChange={(v) => updateField("sp_organisation_name", v)}
-          placeholder="Care Partners Ltd"
+          placeholder={t("auth.signup.placeholder.organisation")}
           disabled={disabled}
         />
       </div>
 
       <div>
-        <Label>Provider type</Label>
+        <Label>{t("auth.signup.field.providerType")}</Label>
 
         <StyledSelect
           name="sp_provider_type"
           value={form.sp_provider_type}
           onChange={(v) => updateField("sp_provider_type", v)}
-          placeholder="Select type..."
+          placeholder={t("auth.signup.placeholder.selectType")}
           disabled={disabled}
           required={false}
           options={[
-            { value: "registered_ndis", label: "Registered NDIS Provider" },
-            { value: "unregistered", label: "Unregistered Provider" },
-            { value: "plan_management", label: "Plan Management Provider" },
-            { value: "support_coord", label: "Support Coordination Provider" },
+            { value: "registered_ndis", label: t("auth.signup.providerType.registeredNdis") },
+            { value: "unregistered", label: t("auth.signup.providerType.unregistered") },
+            { value: "plan_management", label: t("auth.signup.providerType.planManagement") },
+            { value: "support_coord", label: t("auth.signup.providerType.supportCoord") },
           ]}
         />
       </div>
 
       <div>
-        <Label>Registration status</Label>
+        <Label>{t("auth.signup.field.registrationStatus")}</Label>
 
         <StyledSelect
           name="sp_registration_status"
           value={form.sp_registration_status}
           onChange={(v) => updateField("sp_registration_status", v)}
-          placeholder="Select status..."
+          placeholder={t("auth.signup.placeholder.selectStatus")}
           disabled={disabled}
           required={false}
           options={[
-            { value: "registered", label: "Registered with NDIS Commission" },
-            { value: "unregistered", label: "Unregistered" },
-            { value: "in_progress", label: "Registration in Progress" },
+            { value: "registered", label: t("auth.signup.regStatus.registered") },
+            { value: "unregistered", label: t("auth.signup.status.unregistered") },
+            { value: "in_progress", label: t("auth.signup.regStatus.inProgress") },
           ]}
         />
       </div>
 
       <div>
-        <Label>Team size</Label>
+        <Label>{t("auth.signup.field.teamSize")}</Label>
 
         <StyledSelect
           name="sp_team_size"
           value={form.sp_team_size}
           onChange={(v) => updateField("sp_team_size", v)}
-          placeholder="Select size..."
+          placeholder={t("auth.signup.placeholder.selectSize")}
           disabled={disabled}
           required={false}
           options={[
-            { value: "1_5", label: "1–5 staff" },
-            { value: "5_20", label: "5–20 staff" },
-            { value: "20_plus", label: "20+ staff" },
+            { value: "1_5", label: t("auth.signup.teamSize.1_5") },
+            { value: "5_20", label: t("auth.signup.teamSize.5_20") },
+            { value: "20_plus", label: t("auth.signup.teamSize.20_plus") },
           ]}
         />
       </div>
 
       <div>
-        <Label>Active participant volume</Label>
+        <Label>{t("auth.signup.field.participantVolume")}</Label>
 
         <StyledSelect
           name="sp_participant_volume"
           value={form.sp_participant_volume}
           onChange={(v) => updateField("sp_participant_volume", v)}
-          placeholder="Approx. number of participants..."
+          placeholder={t("auth.signup.placeholder.participantCount")}
           disabled={disabled}
           required={false}
           options={[
-            { value: "1_10", label: "1–10 participants" },
-            { value: "10_50", label: "10–50 participants" },
-            { value: "50_plus", label: "50+ participants" },
+            { value: "1_10", label: t("auth.signup.participantVolume.1_10") },
+            { value: "10_50", label: t("auth.signup.participantVolume.10_50") },
+            { value: "50_plus", label: t("auth.signup.participantVolume.50_plus") },
           ]}
         />
       </div>
 
       <div>
-        <Label>Contact number</Label>
+        <Label>{t("auth.signup.field.contactNumber")}</Label>
 
         <StyledInput
           name="sp_contact_number"
           value={form.sp_contact_number}
           onChange={(v) => updateField("sp_contact_number", v)}
-          placeholder="02 xxxx xxxx"
+          placeholder={t("auth.signup.placeholder.contact")}
           disabled={disabled}
           required={false}
         />

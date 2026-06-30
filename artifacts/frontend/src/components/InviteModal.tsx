@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
 import {
   Dialog,
@@ -39,26 +40,21 @@ import { useReAuth } from "@/hooks/useReAuth";
 const ROLE_OPTIONS = [
   {
     value: "support_worker",
-    label: "Support Worker",
-    desc: "Access to allocated participants and own sessions/incidents only.",
-    access:
-      "Own clients · Own notes · Own incidents · Own credentials",
+    labelKey: "hub.invite.role.supportWorker",
+    descKey: "hub.invite.role.supportWorkerDesc",
+    accessKey: "hub.invite.role.supportWorkerAccess",
   },
-
   {
     value: "allied_health",
-    label: "Allied Health Professional",
-    desc: "Clinical documentation, body map coding, and therapy reporting.",
-    access:
-      "Clinical reports · Body maps · Therapy documentation",
+    labelKey: "hub.invite.role.alliedHealth",
+    descKey: "hub.invite.role.alliedHealthDesc",
+    accessKey: "hub.invite.role.alliedHealthAccess",
   },
-
   {
     value: "support_coordinator",
-    label: "Support Coordinator",
-    desc: "Full organisation oversight, compliance, billing, and reports.",
-    access:
-      "Organisation oversight · Billing · Compliance · Team management",
+    labelKey: "hub.invite.role.coordinator",
+    descKey: "hub.invite.role.coordinatorDesc",
+    accessKey: "hub.invite.role.coordinatorAccess",
   },
 ] as const;
 
@@ -91,6 +87,7 @@ export function InviteModal({
   const { requireReAuth, modal } = useReAuth();
 
   const { toast } = useToast();
+  const { translate } = useAccessibility();
 
   const [email, setEmail] = useState("");
 
@@ -134,9 +131,8 @@ export function InviteModal({
 
     if (!validateEmail(cleanedEmail)) {
       toast({
-        title: "Invalid email address",
-        description:
-          "Please enter a valid staff email.",
+        title: translate("hub.invite.invalidEmail"),
+        description: translate("hub.invite.invalidEmailDesc"),
         variant: "destructive",
       });
 
@@ -183,7 +179,7 @@ export function InviteModal({
         throw new Error(
           payload?.detail ||
             payload?.message ||
-            "Unable to create invitation."
+            translate("hub.invite.unableToCreate")
         );
       }
 
@@ -192,22 +188,22 @@ export function InviteModal({
       const deliveryStatus = payload?.email_delivery?.status;
 
       toast({
-        title: deliveryStatus === "queued" ? "Invitation sent" : "Invitation created",
+        title: deliveryStatus === "queued" ? translate("hub.invite.sent") : translate("hub.invite.created"),
         description:
           deliveryStatus === "queued"
-            ? "The secure invite link was emailed automatically."
-            : "Secure invitation link generated. Copy it if email is not configured.",
+            ? translate("hub.invite.sentDesc")
+            : translate("hub.invite.createdDesc"),
       });
 
       onInviteSent?.();
     } catch (error) {
       toast({
-        title: "Invitation failed",
+        title: translate("hub.invite.failed"),
 
         description:
           error instanceof Error
             ? error.message
-            : "Unexpected server error",
+            : translate("hub.invite.unexpectedError"),
 
         variant: "destructive",
       });
@@ -229,7 +225,7 @@ export function InviteModal({
       setCopied(true);
 
       toast({
-        title: "Invite link copied",
+        title: translate("hub.invite.linkCopied"),
       });
 
       setTimeout(() => {
@@ -237,11 +233,8 @@ export function InviteModal({
       }, 2500);
     } catch {
       toast({
-        title: "Copy failed",
-
-        description:
-          "Unable to copy invite link.",
-
+        title: translate("hub.invite.copyFailed"),
+        description: translate("hub.invite.copyFailedDesc"),
         variant: "destructive",
       });
     }
@@ -258,22 +251,19 @@ export function InviteModal({
       >
         <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg text-[#1E1640]">
+          <DialogTitle className="flex items-center gap-2 text-lg text-[#111827]">
             <UserPlus
               size={18}
-              className="text-[#5533CC]"
+              className="text-[#3730A3]"
             />
 
             {result
-              ? "Invitation Created"
-              : "Invite Staff Member"}
+              ? translate("hub.invite.titleCreated")
+              : translate("hub.invite.title")}
           </DialogTitle>
 
           <DialogDescription>
-            Securely invite team members to
-            CareCliQ with role-based access
-            permissions and organisation-level
-            controls.
+            {translate("hub.invite.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -284,14 +274,14 @@ export function InviteModal({
                 htmlFor="invite-email"
                 className="text-xs font-medium"
               >
-                Staff Email Address
+                {translate("hub.invite.emailLabel")}
               </Label>
 
               <Input
                 id="invite-email"
                 type="email"
                 autoComplete="email"
-                placeholder="worker@example.com.au"
+                placeholder={translate("hub.invite.emailPlaceholder")}
                 value={email}
                 disabled={busy}
                 onChange={(e) =>
@@ -311,7 +301,7 @@ export function InviteModal({
 
             <div className="space-y-1.5">
               <Label className="text-xs font-medium">
-                Staff Role
+                {translate("hub.invite.roleLabel")}
               </Label>
 
               <Select
@@ -329,7 +319,7 @@ export function InviteModal({
                       key={option.value}
                       value={option.value}
                     >
-                      {option.label}
+                      {translate(option.labelKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -337,22 +327,22 @@ export function InviteModal({
 
               {selectedRole && (
                 <div className="rounded-xl border border-violet-100 bg-violet-50 px-4 py-3">
-                  <p className="text-xs font-medium text-[#1E1640]">
-                    {selectedRole.label}
+                  <p className="text-xs font-medium text-[#111827]">
+                    {translate(selectedRole.labelKey)}
                   </p>
 
                   <p className="mt-1 text-[11px] leading-relaxed text-[#6C5B8A]">
-                    {selectedRole.desc}
+                    {translate(selectedRole.descKey)}
                   </p>
 
-                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#5533CC]">
+                  <div className="mt-3 flex items-start gap-2 text-[11px] text-[#3730A3]">
                     <ShieldCheck
                       size={13}
                       className="mt-0.5 shrink-0"
                     />
 
                     <span>
-                      {selectedRole.access}
+                      {translate(selectedRole.accessKey)}
                     </span>
                   </div>
                 </div>
@@ -360,11 +350,9 @@ export function InviteModal({
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
-              Invitation links expire after{" "}
-              <strong>7 days</strong>.
-              Access permissions are enforced
-              automatically based on the assigned
-              role and organisation policies.
+              {translate("hub.invite.expiryNote")}{" "}
+              <strong>{translate("hub.invite.expiryDays")}</strong>.{" "}
+              {translate("hub.invite.expirySuffix")}
             </div>
           </div>
         ) : (
@@ -378,32 +366,28 @@ export function InviteModal({
               <div>
                 <p className="text-sm font-semibold text-gray-900">
                   {result.email_delivery?.status === "queued"
-                    ? "Invitation emailed"
-                    : "Invitation created"}
+                    ? translate("hub.invite.emailed")
+                    : translate("hub.invite.created")}
                 </p>
 
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {result.email} —{" "}
-                  {ROLE_OPTIONS.find(
-                    (r) =>
-                      r.value === result.role
-                  )?.label ?? result.role}
+                  {translate(ROLE_OPTIONS.find((r) => r.value === result.role)?.labelKey ?? result.role)}
                 </p>
               </div>
             </div>
 
             {result.email_delivery && result.email_delivery.status !== "queued" && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-900">
-                Automatic email status: <strong>{result.email_delivery.status}</strong>.
-                {" "}
-                {result.email_delivery.message || "Copy and share the link manually."}
+                {translate("hub.invite.emailStatus")} <strong>{result.email_delivery.status}</strong>.{" "}
+                {result.email_delivery.message || translate("hub.invite.copyManually")}
               </div>
             )}
 
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-xs font-medium">
                 <Link2 size={12} />
-                Secure Invite Link
+                {translate("hub.invite.secureLink")}
               </Label>
 
               <div className="flex gap-2">
@@ -437,8 +421,7 @@ export function InviteModal({
               </div>
 
               <p className="text-[11px] text-muted-foreground">
-                Share this link securely with the
-                invited staff member.
+                {translate("hub.invite.shareLink")}
               </p>
             </div>
           </div>
@@ -453,7 +436,7 @@ export function InviteModal({
                 className="rounded-xl"
                 disabled={busy}
               >
-                Cancel
+                {translate("common.cancel")}
               </Button>
 
               <Button
@@ -473,8 +456,8 @@ export function InviteModal({
                 )}
 
                 {busy
-                  ? "Creating..."
-                  : "Create Invitation"}
+                  ? translate("hub.invite.creating")
+                  : translate("hub.invite.createInvitation")}
               </Button>
             </>
           ) : (
@@ -484,14 +467,14 @@ export function InviteModal({
                 onClick={resetState}
                 className="rounded-xl"
               >
-                Send Another
+                {translate("hub.invite.sendAnother")}
               </Button>
 
               <Button
                 onClick={handleClose}
                 className="rounded-xl"
               >
-                Done
+                {translate("hub.invite.done")}
               </Button>
             </>
           )}

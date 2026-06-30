@@ -42,6 +42,10 @@ export type CoordinatorDashboard = {
   compliant_today: number;
   notes_at_risk: number;
   rp_flags: number;
+  team_participants?: number;
+  sessions_this_week?: number;
+  incidents_this_month?: number;
+  workers_needing_support?: number;
   team_compliance_score: number;
   team_compliance_breakdown?: {
     compliant: number;
@@ -65,6 +69,93 @@ export type CoordinatorDashboard = {
 
 export function getWorkerDashboard() {
   return jsonFetch<WorkerDashboard>("/api/dashboard/worker");
+}
+
+export type DashboardShiftSummary = {
+  id: string;
+  participant_id?: string;
+  participant_name: string;
+  scheduled_start?: string;
+  scheduled_end?: string;
+  date_label?: string | null;
+  time_label?: string | null;
+  status: string;
+  visual_state: string;
+  participant_address?: string | null;
+  duration_minutes?: number;
+  has_risk_alerts?: boolean;
+  risks_acknowledged?: boolean;
+};
+
+export type DashboardActionItem = {
+  id: string;
+  kind: string;
+  title: string;
+  detail?: string;
+  severity: "critical" | "high" | "medium" | "low" | string;
+  action_url?: string;
+  reference_id?: string;
+};
+
+export type DashboardComplianceAlert = {
+  id: string;
+  title: string;
+  detail?: string;
+  severity: "critical" | "high" | "medium" | "info" | string;
+  due_date?: string | null;
+  action_label?: string;
+  action_url?: string;
+  source?: string;
+};
+
+export type WorkerLandingDashboard = {
+  worker: {
+    id: string;
+    full_name: string;
+    first_name: string;
+  };
+  greeting_context: {
+    date_label: string;
+    timezone: string;
+  };
+  today_shifts: DashboardShiftSummary[];
+  next_shift: DashboardShiftSummary | null;
+  action_items: DashboardActionItem[];
+  compliance_alerts: DashboardComplianceAlert[];
+  stats: {
+    shifts_today: number;
+    completed_today: number;
+    hours_scheduled_minutes: number;
+    shift_counts: Record<string, number>;
+  };
+  generated_at: string;
+};
+
+export type TravelTimeEstimate = {
+  shift_id?: string;
+  destination_address?: string | null;
+  available: boolean;
+  reason?: string | null;
+  navigation_url?: string | null;
+  duration_text?: string | null;
+  duration_seconds?: number | null;
+  distance_text?: string | null;
+};
+
+export function getWorkerLandingDashboard() {
+  return jsonFetch<WorkerLandingDashboard>("/api/dashboard/worker-landing");
+}
+
+export function getWorkerLandingTravelTime(
+  shiftId: string,
+  origin?: { lat: number; lng: number },
+) {
+  const params = new URLSearchParams({ shift_id: shiftId });
+  if (origin) {
+    params.set("origin_lat", String(origin.lat));
+    params.set("origin_lng", String(origin.lng));
+  }
+  return jsonFetch<TravelTimeEstimate>(`/api/dashboard/worker-landing/travel-time?${params.toString()}`);
 }
 
 export function getCoordinatorDashboard() {

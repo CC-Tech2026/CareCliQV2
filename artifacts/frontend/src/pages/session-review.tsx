@@ -1,7 +1,8 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { Link } from "wouter";
 import { format, parseISO } from "date-fns";
 import {
@@ -19,13 +20,13 @@ import {
 } from "@/services/coordinatorService";
 import { jsonFetch } from "@/services/http";
 
-const PLUM   = "#5533CC";
-const CORAL  = "#F03060";
-const T1     = "#1E1640";
-const T2     = "#4A3D5A";
-const T3     = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F5F3FC";
+const PLUM   = "var(--cc-plum)";
+const CORAL  = "var(--cc-coral)";
+const T1     = "#111827";
+const T2     = "#374151";
+const T3     = "#6B7280";
+const BORDER = "var(--cc-border)";
+const SOFT   = "var(--cc-soft)";
 
 function safeDate(v?: string | null, fmt = "d MMM yyyy") {
   if (!v) return "—";
@@ -33,11 +34,12 @@ function safeDate(v?: string | null, fmt = "d MMM yyyy") {
   catch { return v; }
 }
 
-function complianceTone(score?: number | null) {
-  if (score == null) return { label: "Draft", color: T3, bg: `${PLUM}0A` };
-  if (score >= 85) return { label: `Compliant · ${score}%`, color: "#16A34A", bg: "rgba(22,163,74,0.07)" };
-  if (score >= 60) return { label: `At Risk · ${score}%`,   color: "#D97706", bg: "rgba(245,158,11,0.07)" };
-  return              { label: `Non-Compliant · ${score}%`, color: "#DC2626", bg: "rgba(239,68,68,0.07)" };
+function useComplianceTone(score?: number | null) {
+  const { translate, translateParams } = useAccessibility();
+  if (score == null) return { label: translate("sessions.review.severity.draft"), color: T3, bg: `${PLUM}0A` };
+  if (score >= 85) return { label: translateParams("sessions.review.severity.compliant", { score: String(score) }), color: "#16A34A", bg: "rgba(22,163,74,0.07)" };
+  if (score >= 60) return { label: translateParams("sessions.review.severity.atRisk", { score: String(score) }), color: "#D97706", bg: "rgba(245,158,11,0.07)" };
+  return { label: translateParams("sessions.review.severity.nonCompliant", { score: String(score) }), color: "#DC2626", bg: "rgba(239,68,68,0.07)" };
 }
 
 type RuleResult = { rule: string; passed: boolean; warning?: boolean; message?: string };
@@ -79,6 +81,7 @@ interface SendBackModalProps {
   onSent: () => void;
 }
 function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
+  const { translate } = useAccessibility();
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -92,10 +95,10 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
     try {
       await flagSessionForReview(sessionId, true, note.trim());
       qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
-      toast({ title: "Session sent back", description: "The worker will see your note." });
+      toast({ title: translate("sessions.review.toast.sentBack"), description: translate("sessions.review.toast.sentBackDesc") });
       onSent();
     } catch {
-      toast({ title: "Failed to send back", variant: "destructive" });
+      toast({ title: translate("sessions.review.toast.sendBackFailed"), variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -105,19 +108,19 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-md rounded-xl border bg-white shadow-xl" style={{ borderColor: BORDER }}>
         <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: BORDER }}>
-          <h3 className="text-base font-black" style={{ color: T1 }}>Send Back to Worker</h3>
-          <button onClick={onClose} className="rounded-lg p-1 hover:bg-gray-100">
+          <h3 className="text-base font-black" style={{ color: T1 }}>{translate("sessions.review.sendBackTitle")}</h3>
+          <button onClick={onClose} title={translate("common.close")} className="rounded-lg p-1 hover:bg-gray-100">
             <X size={16} style={{ color: T3 }} />
           </button>
         </div>
         <div className="p-5 space-y-3">
           <p className="text-sm font-medium" style={{ color: T2 }}>
-            Add a note explaining what the worker needs to fix. The session will remain flagged.
+            {translate("sessions.review.sendBackBody")}
           </p>
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Please add more detail to the outcome section and re-link the support goals…"
+            placeholder={translate("sessions.review.sendBackPlaceholder")}
             rows={4}
             className="w-full rounded-lg border px-3 py-2.5 text-sm font-medium resize-none focus:outline-none focus:ring-2"
             style={{ borderColor: BORDER, color: T1, "--tw-ring-color": PLUM } as React.CSSProperties}
@@ -125,7 +128,7 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
         </div>
         <div className="flex justify-end gap-2 border-t px-5 py-3" style={{ borderColor: BORDER }}>
           <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-bold transition hover:bg-gray-50" style={{ borderColor: BORDER, color: T2 }}>
-            Cancel
+            {translate("common.cancel")}
           </button>
           <button
             onClick={handleSend}
@@ -134,7 +137,7 @@ function SendBackModal({ sessionId, onClose, onSent }: SendBackModalProps) {
             style={{ background: CORAL }}
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            Send Back
+            {translate("sessions.review.sendBack")}
           </button>
         </div>
       </div>
@@ -149,6 +152,7 @@ interface SessionCardProps {
   onApproved: () => void;
 }
 function SessionCard({ session, selected, onToggle, onApproved }: SessionCardProps) {
+  const { translate } = useAccessibility();
   const [expanded, setExpanded]       = useState(false);
   const [showAi, setShowAi]           = useState(false);
   const [sendBackOpen, setSendBackOpen] = useState(false);
@@ -161,7 +165,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   const { data: detail }     = useSessionDetail(session.id, expanded);
   const { data: aiData, isFetching: aiFetching } = useAiSuggestions(session.id, showAi);
 
-  const tone = complianceTone(session.compliance_score);
+  const tone = useComplianceTone(session.compliance_score);
 
   const rulesRaw = useMemo(() => {
     if (!detail) return [];
@@ -193,10 +197,10 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
     try {
       await approveSession(session.id);
       qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
-      toast({ title: "Session approved", description: "Removed from the review queue." });
+      toast({ title: translate("sessions.review.toast.approved"), description: translate("sessions.review.toast.approvedDesc") });
       onApproved();
     } catch {
-      toast({ title: "Approval failed", variant: "destructive" });
+      toast({ title: translate("sessions.review.toast.approvalFailed"), variant: "destructive" });
     } finally {
       setApproving(false);
     }
@@ -205,20 +209,20 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
   return (
     <>
       <div
-        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#5533CC]" : ""}`}
+        className={`rounded-xl border bg-white shadow-sm transition-all ${selected ? "border-[#3730A3]" : ""}`}
         style={{ borderColor: selected ? PLUM : BORDER }}
       >
         {/* ── Card header ── */}
         <div className="flex items-start gap-3 px-5 py-4">
           <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
-            <Checkbox checked={selected} onCheckedChange={onToggle} aria-label="Select session" />
+            <Checkbox checked={selected} onCheckedChange={onToggle} aria-label={translate("sessions.review.selectAll")} />
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Flag size={13} className="text-[#F03060] shrink-0" />
+              <Flag size={13} className="text-[#BE185D] shrink-0" />
               <span className="text-[13px] font-black" style={{ color: T1 }}>
-                {session.participant_name || "Participant"}
+                {session.participant_name || translate("common.participant")}
               </span>
               <span className="text-[11px] font-medium" style={{ color: T3 }}>
                 {safeDate(session.session_date)} · {(session.session_type || "session").replace(/_/g, " ")}
@@ -248,7 +252,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
               style={{ background: "#059669" }}
             >
               {approving ? <Loader2 size={12} className="animate-spin" /> : <ThumbsUp size={12} />}
-              Approve
+              {translate("sessions.review.approve")}
             </button>
             <button
               onClick={() => setSendBackOpen(true)}
@@ -256,7 +260,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
               style={{ borderColor: CORAL, color: CORAL }}
             >
               <Send size={12} />
-              Send Back
+              {translate("sessions.review.sendBack")}
             </button>
             <button
               onClick={() => setExpanded((v) => !v)}
@@ -274,7 +278,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
             {/* Notes preview */}
             <div>
               <p className="mb-1.5 text-[10px] font-black uppercase tracking-widest" style={{ color: T3 }}>
-                Session Notes
+                {translate("sessions.review.sessionNotes")}
               </p>
               <div className="rounded-lg border px-3 py-2.5 text-sm font-medium whitespace-pre-wrap max-h-36 overflow-y-auto"
                 style={{ borderColor: BORDER, color: T2, background: SOFT }}>
@@ -286,7 +290,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
             {rulesRaw.length > 0 && (
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest" style={{ color: T3 }}>
-                  Compliance Rules
+                  {translate("sessions.review.complianceRules")}
                 </p>
                 <div className="space-y-1.5">
                   {rulesRaw.map((r) => (
@@ -314,7 +318,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
                 style={{ color: PLUM }}
               >
                 {aiFetching ? <Loader2 size={12} className="animate-spin" /> : <ClipboardList size={12} />}
-                {showAi ? "Hide" : "Load"} AI Fix Suggestions
+                {showAi ? translate("sessions.review.hideAi") : translate("sessions.review.loadAi")}
               </button>
               {showAi && aiData && (
                 <div className="mt-2 rounded-lg border px-4 py-3 space-y-2"
@@ -334,7 +338,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
             <div className="flex justify-end">
               <Link href={`/sessions/${session.id}`}>
                 <button className="text-xs font-bold transition hover:opacity-80" style={{ color: PLUM }}>
-                  Open Full Session →
+                  {translate("sessions.review.openFull")}
                 </button>
               </Link>
             </div>
@@ -354,6 +358,7 @@ function SessionCard({ session, selected, onToggle, onApproved }: SessionCardPro
 }
 
 export default function SessionReview() {
+  const { translate, translateParams } = useAccessibility();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkApproving, setBulkApproving] = useState(false);
   const { toast } = useToast();
@@ -393,32 +398,32 @@ export default function SessionReview() {
       await Promise.all(ids.map((id) => approveSession(id)));
       qc.invalidateQueries({ queryKey: [orgId, "coordinator-flagged-sessions"] });
       toast({
-        title: `${ids.length} session${ids.length > 1 ? "s" : ""} approved`,
-        description: "Removed from the review queue.",
+        title: translateParams(ids.length > 1 ? "sessions.review.toast.bulkApprovedPlural" : "sessions.review.toast.bulkApproved", { count: String(ids.length) }),
+        description: translate("sessions.review.toast.approvedDesc"),
       });
       setSelected(new Set());
     } catch {
-      toast({ title: "Bulk approval partially failed", variant: "destructive" });
+      toast({ title: translate("sessions.review.toast.bulkFailed"), variant: "destructive" });
     } finally {
       setBulkApproving(false);
     }
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 pb-10">
+    <div className="space-y-6 pb-10">
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em]" style={{ color: CORAL }}>
+          <p className="hidden" style={{ color: CORAL }}>
             Quality & Safety
           </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight" style={{ color: PLUM }}>
-            Session Review Queue
+          <h1 className="text-xl font-black tracking-tight" style={{ color: PLUM }}>
+            {translate("sessions.review.title")}
           </h1>
           <p className="mt-1 text-sm font-medium" style={{ color: T3 }}>
             {isLoading
-              ? "Loading flagged sessions…"
-              : `${sessions.length} session${sessions.length !== 1 ? "s" : ""} awaiting review`}
+              ? translate("sessions.review.loading")
+              : translateParams(sessions.length !== 1 ? "sessions.review.awaitingPlural" : "sessions.review.awaiting", { count: String(sessions.length) })}
           </p>
         </div>
 
@@ -427,12 +432,12 @@ export default function SessionReview() {
             onClick={handleBulkApprove}
             disabled={bulkApproving}
             className="inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-black text-white shadow-sm transition hover:opacity-95 disabled:opacity-60"
-            style={{ background: `linear-gradient(135deg, #059669, #047857)` }}
+            style={{ background: "#059669" }}
           >
             {bulkApproving
               ? <Loader2 size={16} className="animate-spin" />
               : <CheckCircle2 size={16} strokeWidth={2.5} />}
-            Bulk Approve ({selected.size})
+            {translateParams("sessions.review.bulkApprove", { count: String(selected.size) })}
           </button>
         )}
       </div>
@@ -443,10 +448,10 @@ export default function SessionReview() {
           <Checkbox
             checked={allSelected}
             onCheckedChange={toggleAll}
-            aria-label="Select all sessions"
+            aria-label={translate("sessions.review.selectAll")}
           />
           <span className="text-xs font-bold" style={{ color: T3 }}>
-            {someSelected ? `${selected.size} of ${sessions.length} selected` : "Select all"}
+            {someSelected ? translateParams("sessions.review.selectedOf", { selected: String(selected.size), total: String(sessions.length) }) : translate("sessions.review.selectAllLabel")}
           </span>
         </div>
       )}
@@ -457,10 +462,10 @@ export default function SessionReview() {
           {[1, 2, 3].map((i) => (
             <div key={i} className="rounded-xl border bg-white p-5 shadow-sm animate-pulse" style={{ borderColor: BORDER }}>
               <div className="flex gap-3">
-                <div className="h-4 w-4 rounded bg-[#E2DEF2]" />
+                <div className="h-4 w-4 rounded bg-[#E5E7EB]" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-48 rounded bg-[#E2DEF2]" />
-                  <div className="h-3 w-32 rounded bg-[#E2DEF2]" />
+                  <div className="h-4 w-48 rounded bg-[#E5E7EB]" />
+                  <div className="h-3 w-32 rounded bg-[#E5E7EB]" />
                 </div>
               </div>
             </div>
@@ -474,16 +479,16 @@ export default function SessionReview() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: SOFT }}>
             <CheckCircle2 size={32} style={{ color: PLUM }} />
           </div>
-          <h2 className="text-xl font-black" style={{ color: T1 }}>All clear!</h2>
+          <h2 className="text-xl font-black" style={{ color: T1 }}>{translate("sessions.review.allClear")}</h2>
           <p className="mt-2 max-w-xs text-sm font-medium" style={{ color: T3 }}>
-            No sessions are currently flagged for review. They'll appear here when workers flag issues or compliance scores drop.
+            {translate("sessions.review.empty")}
           </p>
           <Link href="/sessions">
             <button
               className="mt-6 rounded-full px-5 py-2.5 text-sm font-black text-white"
               style={{ background: PLUM }}
             >
-              View All Sessions
+              {translate("sessions.review.viewAll")}
             </button>
           </Link>
         </div>

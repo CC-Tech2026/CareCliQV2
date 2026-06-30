@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -18,7 +19,8 @@ from ..schemas.participant import (
     ParticipantCreate,
     ParticipantUpdate,
 )
-from ..services import funding_service, participant_service
+from ..schemas.progress import ParticipantProgressResponse
+from ..services import funding_service, participant_service, progress_service
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +141,24 @@ async def get_participant(
         participant_id,
         current_user,
     )
+
+
+@router.get("/{participant_id}/progress", response_model=ParticipantProgressResponse)
+async def get_participant_progress(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Per-goal progress trajectories and plan renewal readiness (CARECLIQV2-76)."""
+    from ..core.access import is_support_worker
+
+    if is_support_worker(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Support workers cannot access participant progress trajectories",
+        )
+
+    await _require_participant_access(participant_id, current_user)
+    return await progress_service.get_participant_progress(participant_id, current_user)
 
 
 @router.put("/{participant_id}")
@@ -375,8 +395,9 @@ async def create_participant_plan(
         "plan_start": str(body.plan_start),
         "plan_end": str(body.plan_end),
         "total_funding": body.total_funding,
-        "status": body.status,
     }
+    if body.status:
+        plan_data["status"] = body.status
 
     try:
         plan = await funding_service.create_or_update_plan(
@@ -400,6 +421,18 @@ async def create_participant_plan(
                         category,
                         amount,
                     )
+
+        from ..services.supabase_client import get_supabase_admin
+
+        supabase = get_supabase_admin()
+        patient_update: dict[str, object] = {
+            "plan_start_date": str(body.plan_start),
+            "plan_end_date": str(body.plan_end),
+            "total_budget": body.total_funding,
+        }
+        plan_status = body.status or plan.get("status") or "active"
+        patient_update["plan_status"] = plan_status
+        supabase.table("patients").update(patient_update).eq("id", participant_id).execute()
 
         return await funding_service.get_budget_summary(
             participant_id,
@@ -564,3 +597,277 @@ async def update_restricted_clinical(
         return result.data[0] if result.data else update_data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+
+
+# ── Shift context (Coordinator authoring — CARECLIQV2-295) ─────────────────────
+
+class AllergyItem(BaseModel):
+    id: Optional[str] = None
+    allergen: str
+    severity: str = "mild"
+    notes: Optional[str] = None
+
+
+class BehaviouralNoteItem(BaseModel):
+    title: str = "Behavioural note"
+    body: str
+
+
+class ShiftContextUpdate(BaseModel):
+    preferred_name: Optional[str] = None
+    case_manager_name: Optional[str] = None
+    case_manager_phone: Optional[str] = None
+    emergency_contact: Optional[dict] = None
+    likes_dislikes: Optional[str] = None
+    sensory_preferences: Optional[str] = None
+    cultural_preferences: Optional[str] = None
+    communication_preferences: Optional[str] = None
+    communication_guidance: Optional[str] = None
+    preferred_activities: Optional[list[str]] = None
+    previous_visit_notes: Optional[str] = None
+    current_conditions: Optional[str] = None
+    behavioural_notes: Optional[list[BehaviouralNoteItem]] = None
+    allergies: Optional[list[AllergyItem]] = None
+    background_summary: Optional[str] = None
+    briefing_alerts: Optional[list[str]] = None
+
+
+@router.get("/{participant_id}/shift-context")
+async def get_shift_context(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Coordinator view of participant shift-context fields."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services import briefing_service
+    from ..services.shift_service import _fetch_participant_context
+    from ..services.supabase_client import get_supabase_admin
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    ctx = _fetch_participant_context(participant_id, org_id)
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    try:
+        supabase = get_supabase_admin()
+        patient_resp = (
+            supabase.table("patients")
+            .select("background_summary, background_summary_updated_at")
+            .eq("id", participant_id)
+            .limit(1)
+            .execute()
+        )
+        patient_row = (patient_resp.data or [{}])[0]
+        ctx["background_summary"] = patient_row.get("background_summary")
+        ctx["background_summary_updated_at"] = patient_row.get("background_summary_updated_at")
+        ctx["briefing_alerts"] = [
+            row.get("alert_text") or ""
+            for row in briefing_service.list_participant_briefing_alerts(participant_id, org_id)
+        ]
+    except Exception:
+        ctx.setdefault("briefing_alerts", [])
+    return ctx
+
+
+@router.patch("/{participant_id}/shift-context")
+async def update_shift_context(
+    participant_id: str,
+    body: ShiftContextUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update participant shift-context fields — coordinator only."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services.supabase_client import get_supabase_admin
+
+    supabase = get_supabase_admin()
+    org_id = str(get_user_organization_id(current_user) or "")
+    now = datetime.utcnow().isoformat() + "Z"
+
+    patient_fields = {
+        k: v
+        for k, v in {
+            "preferred_name": body.preferred_name,
+            "case_manager_name": body.case_manager_name,
+            "case_manager_phone": body.case_manager_phone,
+            "emergency_contact": body.emergency_contact,
+            "likes_dislikes": body.likes_dislikes,
+            "sensory_preferences": body.sensory_preferences,
+            "cultural_preferences": body.cultural_preferences,
+            "communication_preferences": body.communication_preferences,
+            "communication_guidance": body.communication_guidance,
+            "preferred_activities": body.preferred_activities,
+            "current_conditions": body.current_conditions,
+            "behavioural_notes": (
+                [n.model_dump() for n in body.behavioural_notes]
+                if body.behavioural_notes is not None
+                else None
+            ),
+        }.items()
+        if v is not None
+    }
+    if body.previous_visit_notes is not None:
+        patient_fields["previous_visit_notes"] = body.previous_visit_notes
+        patient_fields["previous_visit_notes_updated_at"] = now
+
+    if body.background_summary is not None:
+        from ..services import briefing_service
+
+        try:
+            briefing_service.update_participant_background_summary(
+                participant_id, org_id, body.background_summary
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if body.briefing_alerts is not None:
+        from ..services import briefing_service
+
+        try:
+            briefing_service.save_participant_briefing_alerts(
+                participant_id, org_id, body.briefing_alerts
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if patient_fields:
+        try:
+            supabase.table("patients").update(patient_fields).eq("id", participant_id).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Update failed: {e}") from e
+
+    if body.allergies is not None:
+        try:
+            supabase.table("participant_allergies").delete().eq(
+                "participant_id", participant_id
+            ).eq("organization_id", org_id).execute()
+            for item in body.allergies:
+                supabase.table("participant_allergies").insert({
+                    "participant_id": participant_id,
+                    "organization_id": org_id,
+                    "allergen": item.allergen,
+                    "severity": item.severity,
+                    "notes": item.notes,
+                    "updated_at": now,
+                }).execute()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Allergy update failed: {e}") from e
+
+    from ..services import briefing_service
+    from ..services.shift_service import _fetch_participant_context
+
+    ctx = _fetch_participant_context(participant_id, org_id)
+    try:
+        patient_resp = (
+            supabase.table("patients")
+            .select("background_summary, background_summary_updated_at")
+            .eq("id", participant_id)
+            .limit(1)
+            .execute()
+        )
+        patient_row = (patient_resp.data or [{}])[0]
+        ctx["background_summary"] = patient_row.get("background_summary")
+        ctx["background_summary_updated_at"] = patient_row.get("background_summary_updated_at")
+        ctx["briefing_alerts"] = [
+            row.get("alert_text") or ""
+            for row in briefing_service.list_participant_briefing_alerts(participant_id, org_id)
+        ]
+    except Exception:
+        ctx.setdefault("briefing_alerts", [])
+    return ctx
+
+
+# ── Safety protocols (coordinator authoring) ───────────────────────────────────
+
+from ..schemas.safety_protocol import SafetyProtocolUpdate
+from ..services import safety_protocol_service
+
+
+@router.get("/{participant_id}/safety-protocol")
+async def get_safety_protocol(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    return safety_protocol_service.get_protocol(participant_id, org_id)
+
+
+@router.put("/{participant_id}/safety-protocol")
+async def update_safety_protocol(
+    participant_id: str,
+    body: SafetyProtocolUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    try:
+        return safety_protocol_service.upsert_protocol(
+            participant_id,
+            org_id,
+            body,
+            updated_by=current_user.get("sub"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class CheckInCodeCreate(BaseModel):
+    label: str = "Primary location"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@router.get("/{participant_id}/check-in-codes")
+async def list_check_in_codes(
+    participant_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List active QR check-in codes for a participant (CARECLIQV2-200)."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_organization_id
+    from ..services.check_in_service import list_participant_check_in_codes
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    return list_participant_check_in_codes(participant_id, org_id)
+
+
+@router.post("/{participant_id}/check-in-codes", status_code=status.HTTP_201_CREATED)
+async def create_check_in_code(
+    participant_id: str,
+    body: CheckInCodeCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate a QR check-in code for a participant location (CARECLIQV2-200)."""
+    if not is_coordinator_role(current_user):
+        raise HTTPException(status_code=403, detail="Support coordinator access required.")
+    await _require_participant_access(participant_id, current_user)
+    from ..core.access import get_user_id, get_user_organization_id
+    from ..services.check_in_service import create_participant_check_in_code
+
+    org_id = str(get_user_organization_id(current_user) or "")
+    try:
+        return create_participant_check_in_code(
+            participant_id,
+            org_id,
+            label=body.label,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            created_by=get_user_id(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

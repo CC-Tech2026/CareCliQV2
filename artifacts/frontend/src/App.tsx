@@ -33,7 +33,8 @@ import MyClientDetail from "@/pages/my-client-detail";
 import MyCompliance from "@/pages/my-compliance";
 import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
-import CoordinatorGoals from "@/pages/coordinator-goals";
+import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
+import CoordinatorLivePage from "@/pages/coordinator-live";
 import AuditPack from "@/pages/audit-pack";
 import SessionReview from "@/pages/session-review";
 import Credentials from "@/pages/credentials";
@@ -48,7 +49,34 @@ import MDStaffPage from "@/pages/md/staff";
 import MDCompliancePage from "@/pages/md/compliance";
 import MDFinancialPage from "@/pages/md/financial";
 import MDOnboardingPage from "@/pages/md/onboarding";
-import { useAuth } from "@/contexts/AuthContext";
+import DevProgressTestPage from "@/pages/dev-progress-test";
+import SessionLive from "@/pages/session-live";
+import MyShifts from "@/pages/my-shifts";
+import MyShiftDetail from "@/pages/my-shift-detail";
+import MyShiftBriefing from "@/pages/my-shift-briefing";
+import WorkerScheduleCalendar from "@/pages/worker-schedule-calendar";
+import WorkerScheduleRequests from "@/pages/worker-schedule-requests";
+import WorkerAvailabilityPage from "@/pages/worker-availability";
+import WorkerMessages from "@/pages/worker-messages";
+import WorkerNotificationsPage from "@/pages/worker-notifications";
+import Tasks from "@/pages/tasks";
+import WorkerProfile from "@/pages/worker-profile";
+import WorkerSecurity from "@/pages/worker-security";
+import WorkerPrivacy from "@/pages/worker-privacy";
+import WorkerSyncStatus from "@/pages/worker-sync-status";
+import WorkerHelp from "@/pages/worker-help";
+import WorkerShiftHistory from "@/pages/worker-shift-history";
+import WorkerPerformanceDashboard from "@/pages/worker-performance-dashboard";
+import WorkerTraining from "@/pages/worker-training";
+import WorkerFeedback from "@/pages/worker-feedback";
+import WorkerTravelExpenses from "@/pages/worker-travel-expenses";
+import CoordinatorTravelExpenses from "@/pages/coordinator-travel-expenses";
+import WorkerAccessibility from "@/pages/worker-accessibility";
+import AccountSecure from "@/pages/account-secure";
+import { OfflineSyncProvider } from "@/contexts/OfflineSyncContext";
+import { WorkerTutorialProvider } from "@/contexts/WorkerTutorialContext";
+import { WorkerTutorialLauncher } from "@/components/help/WorkerTutorialLauncher";
+import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 
 // All authenticated roles
 const ALL_ROLES = ["support_coordinator", "support_worker", "allied_health", "managing_director"] as const;
@@ -63,11 +91,6 @@ const WORKER_ROLES = ["support_worker"] as const;
 // Managing Director only
 const MD_ROLES = ["managing_director"] as const;
 
-function LegacyLiveRedirect({ sessionId }: { sessionId: string }) {
-  const { user } = useAuth();
-  return <Redirect to={user?.role === "support_worker" ? "/my-clients" : `/sessions/${sessionId}`} />;
-}
-
 function Router() {
   return (
     <Switch>
@@ -77,6 +100,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/signup" component={Signup} />
       <Route path="/accept-invite" component={AcceptInvite} />
+      <Route path="/account/secure" component={AccountSecure} />
       <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
       <Route path="/verify-email">
@@ -170,6 +194,118 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/worker/shift-history">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerShiftHistory /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/travel">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTravelExpenses /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/accessibility">
+        <Redirect to="/accessibility" />
+      </Route>
+
+      <Route path="/accessibility">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><WorkerAccessibility /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/performance">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPerformanceDashboard /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/training">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerTraining /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/feedback/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><WorkerFeedback /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/calendar">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleCalendar /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/requests">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerScheduleRequests /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-shifts/:id/briefing">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyShiftBriefing /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/my-shifts/:id">
+        {(params) => (
+          <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+            <AppLayout><MyShiftDetail id={params.id} /></AppLayout>
+          </ProtectedRoute>
+        )}
+      </Route>
+
+      <Route path="/my-shifts">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><MyShifts /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/tasks">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><Tasks /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/messages">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerMessages /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/availability">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerAvailabilityPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/help">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerHelp /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/sync-status">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerSyncStatus /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/notifications">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerNotificationsPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/worker-ndis-plan">
         <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
           <AppLayout><WorkerNdisPlan /></AppLayout>
@@ -194,9 +330,21 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
-      <Route path="/coordinator-goals">
+      <Route path="/coordinator/rostering">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorGoals /></AppLayout>
+          <AppLayout><CoordinatorRosteringPage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/live">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorLivePage /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/coordinator/travel">
+        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
+          <AppLayout><CoordinatorTravelExpenses /></AppLayout>
         </ProtectedRoute>
       </Route>
 
@@ -250,7 +398,7 @@ function Router() {
       <Route path="/sessions/:id/live">
         {(params) => (
           <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
-            <LegacyLiveRedirect sessionId={params.id} />
+            <SessionLive />
           </ProtectedRoute>
         )}
       </Route>
@@ -311,10 +459,34 @@ function Router() {
         </ProtectedRoute>
       </Route>
 
+      <Route path="/worker/profile">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><WorkerProfile /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/security">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <AppLayout><WorkerSecurity /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/worker/privacy">
+        <ProtectedRoute allowedRoles={[...WORKER_ROLES]}>
+          <AppLayout><WorkerPrivacy /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
       {/* ── Settings — all roles (workers can manage their own settings) ─── */}
       <Route path="/settings">
         <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
           <AppLayout><Settings /></AppLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/dev/progress-test">
+        <ProtectedRoute allowedRoles={[...ALL_ROLES]}>
+          <DevProgressTestPage />
         </ProtectedRoute>
       </Route>
 
@@ -328,11 +500,18 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AuthSessionGuards />
-            <Router />
-          </WouterRouter>
-          <Toaster />
+          <AccessibilityProvider>
+            <OfflineSyncProvider>
+              <WorkerTutorialProvider>
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <WorkerTutorialLauncher />
+                  <AuthSessionGuards />
+                  <Router />
+                </WouterRouter>
+              </WorkerTutorialProvider>
+            </OfflineSyncProvider>
+            <Toaster />
+          </AccessibilityProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

@@ -1,12 +1,13 @@
-import { useAuth } from "@/contexts/AuthContext";
+﻿import { useAuth } from "@/contexts/AuthContext";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 import { CalendarDays, FileText, ShieldCheck, TrendingUp } from "lucide-react";
 
-const PLUM = "#5533CC";
-const CORAL = "#F03060";
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
+const PLUM = "var(--cc-plum)";
+const CORAL = "var(--cc-coral)";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
 
 interface KPICardProps {
   label: string;
@@ -19,7 +20,7 @@ interface KPICardProps {
 function KPICard({ label, value, caption, icon: Icon, valueColor = PLUM }: KPICardProps) {
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl border bg-white p-5 shadow-sm"
+      className="flex flex-col gap-3 rounded-2xl border bg-cc-surface p-5 shadow-sm"
       style={{ borderColor: BORDER }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -48,44 +49,45 @@ function KPICard({ label, value, caption, icon: Icon, valueColor = PLUM }: KPICa
 
 export function WorkerKPIs() {
   const { user } = useAuth();
-  const firstName = user?.full_name?.split(" ")[0] || "You";
+  const { translate, translateParams } = useAccessibility();
+  const firstName = user?.full_name?.split(" ")[0] || translate("hub.workerKpis.you");
 
   return (
     <section>
       <div className="mb-4">
         <h2 className="text-lg font-black" style={{ color: TEXT }}>
-          {firstName}'s Performance
+          {translateParams("hub.workerKpis.title", { name: firstName })}
         </h2>
         <p className="mt-0.5 text-[12px] font-medium" style={{ color: MUTED }}>
-          Your personal KPIs this month
+          {translate("hub.workerKpis.subtitle")}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <KPICard
-          label="Sessions This Week"
+          label={translate("hub.workerKpis.sessionsWeek")}
           value={12}
-          caption="3 more than last week"
+          caption={translate("hub.workerKpis.sessionsCaption")}
           icon={CalendarDays}
           valueColor={PLUM}
         />
         <KPICard
-          label="Notes Completed"
+          label={translate("hub.workerKpis.notesCompleted")}
           value={10}
-          caption="2 drafts still open"
+          caption={translate("hub.workerKpis.notesCaption")}
           icon={FileText}
           valueColor="#0EA5E9"
         />
         <KPICard
-          label="Compliance Score"
+          label={translate("hub.workerKpis.complianceScore")}
           value="94%"
-          caption="Above org average (88%)"
+          caption={translate("hub.workerKpis.complianceCaption")}
           icon={ShieldCheck}
           valueColor="#10B981"
         />
         <KPICard
-          label="Goal Progress"
+          label={translate("hub.workerKpis.goalProgress")}
           value="87%"
-          caption="Participant goals on track"
+          caption={translate("hub.workerKpis.goalCaption")}
           icon={TrendingUp}
           valueColor={CORAL}
         />

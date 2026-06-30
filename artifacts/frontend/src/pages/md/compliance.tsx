@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ShieldCheck, AlertTriangle, ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
@@ -6,12 +6,13 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from "recharts";
 import { HubLayout } from "@/components/layout/HubLayout";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const TEXT = "#1E1640";
-const MUTED = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT = "#F5F3FC";
-const PLUM = "#5533CC";
+const TEXT = "var(--cc-text)";
+const MUTED = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const SOFT = "var(--cc-soft)";
+const PLUM = "var(--cc-plum)";
 const AMBER = "#F59E0B";
 
 interface MDData {
@@ -29,11 +30,11 @@ interface TrendPoint {
   session_count: number;
 }
 
-function AuditCheckItem({ label, status }: { label: string; status: "ok" | "warn" | "pending" }) {
+function AuditCheckItem({ label, status, translate }: { label: string; status: "ok" | "warn" | "pending"; translate: (k: string) => string }) {
   const config = {
-    ok: { Icon: CheckCircle, color: "#10B981", text: "Complete" },
-    warn: { Icon: AlertTriangle, color: "#F59E0B", text: "Needs Review" },
-    pending: { Icon: Clock, color: MUTED, text: "Pending" },
+    ok: { Icon: CheckCircle, color: "#10B981", textKey: "md.compliance.audit.complete" },
+    warn: { Icon: AlertTriangle, color: "#F59E0B", textKey: "md.compliance.audit.review" },
+    pending: { Icon: Clock, color: MUTED, textKey: "md.compliance.audit.pending" },
   }[status];
   const Icon = config.Icon;
   return (
@@ -41,13 +42,14 @@ function AuditCheckItem({ label, status }: { label: string; status: "ok" | "warn
       <span className="text-[12px] font-semibold" style={{ color: TEXT }}>{label}</span>
       <div className="flex items-center gap-1.5">
         <Icon size={13} strokeWidth={2.5} style={{ color: config.color }} />
-        <span className="text-[11px] font-black" style={{ color: config.color }}>{config.text}</span>
+        <span className="text-[11px] font-black" style={{ color: config.color }}>{translate(config.textKey)}</span>
       </div>
     </div>
   );
 }
 
 export default function MDCompliancePage() {
+  const { translate, translateParams } = useAccessibility();
   const [, navigate] = useLocation();
   const [data, setData] = useState<MDData | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -85,7 +87,7 @@ export default function MDCompliancePage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-black transition-colors hover:bg-white"
             style={{ color: MUTED, background: SOFT }}
           >
-            <ArrowLeft size={13} strokeWidth={2.5} /> Hub
+            <ArrowLeft size={13} strokeWidth={2.5} /> {translate("md.backToHub")}
           </button>
           <div>
             <h1 className="text-xl font-black" style={{ color: TEXT }}>Compliance Dashboard</h1>
@@ -103,7 +105,7 @@ export default function MDCompliancePage() {
         ) : error || !data ? (
           <div className="rounded-2xl border p-8 text-center" style={{ borderColor: BORDER }}>
             <AlertTriangle size={28} className="mx-auto mb-3" style={{ color: "#F97316" }} />
-            <p className="font-black" style={{ color: TEXT }}>Could not load compliance data</p>
+            <p className="font-black" style={{ color: TEXT }}>{translate("md.compliance.loadFailed")}</p>
           </div>
         ) : (
           <>
@@ -129,7 +131,7 @@ export default function MDCompliancePage() {
               ].map(({ label, value, color }) => (
                 <div key={label} className="rounded-xl border bg-white p-4 shadow-sm" style={{ borderColor: BORDER }}>
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] mb-2" style={{ color: MUTED }}>{label}</p>
-                  <p className="text-3xl font-black" style={{ color }}>{value}</p>
+                  <p className="text-xl font-black" style={{ color }}>{value}</p>
                   {totalSessions > 0 && (
                     <p className="mt-1 text-[11px] font-medium" style={{ color: MUTED }}>
                       {Math.round((value / totalSessions) * 100)}% of total
@@ -157,7 +159,7 @@ export default function MDCompliancePage() {
               </section>
             )}
 
-            {/* Common Issues (rule breakdown proxy) */}
+            {/* {translate("md.compliance.commonIssues")} (rule breakdown proxy) */}
             {data.common_issues.length > 0 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
                 <h2 className="mb-1 text-[14px] font-black" style={{ color: TEXT }}>Most Common Compliance Issues</h2>
@@ -188,7 +190,7 @@ export default function MDCompliancePage() {
             {/* Worker Rankings */}
             {data.worker_rankings.length > 0 && (
               <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Worker Compliance Rankings</h2>
+                <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.compliance.workerRankings")}</h2>
                 <div className="space-y-2">
                   {data.worker_rankings.slice(0, 15).map((w, i) => (
                     <div key={w.id} className="flex items-center gap-3 rounded-lg px-3 py-2" style={{ background: SOFT }}>
@@ -220,24 +222,27 @@ export default function MDCompliancePage() {
               </section>
             )}
 
-            {/* Audit Readiness */}
+            {/* {translate("md.compliance.auditReadiness")} */}
             <section className="rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: BORDER }}>
-              <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>Audit Readiness Checklist</h2>
+              <h2 className="mb-3 text-[14px] font-black" style={{ color: TEXT }}>{translate("md.compliance.auditReadiness")} Checklist</h2>
               <div className="space-y-2">
                 <AuditCheckItem
+                  translate={translate}
                   label="Session documentation complete"
                   status={data.team_compliance_breakdown.non_compliant === 0 ? "ok" : "warn"}
                 />
                 <AuditCheckItem
+                  translate={translate}
                   label="Compliance score at target"
                   status={data.compliance_score >= data.compliance_target ? "ok" : "warn"}
                 />
                 <AuditCheckItem
+                  translate={translate}
                   label="Compliance alerts resolved"
                   status={data.org_alerts.filter((a) => a.severity === "high").length === 0 ? "ok" : "warn"}
                 />
-                <AuditCheckItem label="Worker certifications current" status="pending" />
-                <AuditCheckItem label="Training records up to date" status="pending" />
+                <AuditCheckItem translate={translate} label="Worker certifications current" status="pending" />
+                <AuditCheckItem translate={translate} label="Training records up to date" status="pending" />
               </div>
               <div className="mt-4 rounded-xl px-4 py-3" style={{ background: SOFT }}>
                 <p className="text-[11px] font-medium" style={{ color: MUTED }}>

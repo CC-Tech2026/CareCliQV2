@@ -1,19 +1,21 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
+import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiFetch } from "@/lib/api-fetch";
+import { useAccessibility } from "@/contexts/AccessibilityContext";
 
-const TEXT   = "#1E1640";
-const MUTED  = "#7A6A9E";
-const BORDER = "#E2DEF2";
-const SOFT   = "#F7F5FF";
-const PLUM   = "#5533CC";
+const TEXT   = "var(--cc-text)";
+const MUTED  = "var(--cc-muted)";
+const BORDER = "var(--cc-border)";
+const PLUM   = "var(--cc-plum)";
 
-const ROLE_LABEL: Record<string, string> = {
-  support_worker:     "Support Worker",
-  support_coordinator:"Support Coordinator",
-  managing_director:  "Managing Director",
-  allied_health:      "Allied Health",
-  admin:              "Administrator",
+const ROLE_KEYS: Record<string, string> = {
+  support_worker: "hub.role.supportWorker",
+  support_coordinator: "hub.role.supportCoordinator",
+  managing_director: "hub.role.managingDirector",
+  allied_health: "hub.role.alliedHealth",
+  admin: "hub.role.admin",
 };
 
 function getInitials(name: string) {
@@ -27,10 +29,16 @@ function getInitials(name: string) {
 }
 
 export function HubLayout({ children }: { children: React.ReactNode }) {
+  const { translate, setThemeMode } = useAccessibility();
+  const { resolvedTheme } = useTheme();
   const { user } = useAuth();
-  const displayName = user?.full_name || user?.email || "Staff Member";
+  const isDark =
+    resolvedTheme === "dark" ||
+    (!resolvedTheme && typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  const toggleTheme = () => setThemeMode(isDark ? "light" : "dark");
+  const displayName = user?.full_name || user?.email || translate("hub.role.staffFallback");
   const initials    = getInitials(displayName);
-  const role        = ROLE_LABEL[user?.role ?? ""] ?? "Staff Member";
+  const role        = translate(ROLE_KEYS[user?.role ?? ""] ?? "hub.role.staffFallback");
 
   const [orgName, setOrgName] = useState<string | null>(null);
 
@@ -42,17 +50,17 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen" style={{ background: SOFT }}>
+    <div className="min-h-screen" style={{ background: "var(--cc-soft)", color: TEXT }}>
 
       {/* ── STICKY HEADER ─────────────────────────────── */}
       <header
-        className="sticky top-0 z-50 bg-white"
-        style={{ borderBottom: `1px solid ${BORDER}`, boxShadow: "0 1px 0 0 #E2DEF2" }}
+        className="sticky top-0 z-50"
+        style={{ background: "var(--cc-bg)", borderBottom: `1px solid ${BORDER}`, boxShadow: "var(--cc-shadow-sm)" }}
       >
         {/* Plum accent line */}
         <div style={{ height: 3, background: PLUM }} />
 
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="px-4">
           <div className="flex h-14 items-center justify-between">
 
             {/* LEFT — logo + org */}
@@ -70,12 +78,23 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
                 className="hidden text-[13px] font-semibold sm:block"
                 style={{ color: TEXT }}
               >
-                {orgName ?? "Organisation Hub"}
+                {orgName ?? translate("hub.orgFallback")}
               </span>
             </div>
 
-            {/* RIGHT — role + name + avatar */}
+            {/* RIGHT — theme toggle + role + name + avatar */}
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                title={isDark ? translate("layout.theme.lightMode") : translate("layout.theme.darkMode")}
+                aria-label={isDark ? translate("layout.theme.switchToLight") : translate("layout.theme.switchToDark")}
+                className="h-8 w-8 rounded-xl border flex items-center justify-center transition-colors hover:bg-cc-soft"
+                style={{ borderColor: BORDER, color: MUTED }}
+              >
+                {isDark ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
+              </button>
+
               <div className="hidden text-right sm:block">
                 <div className="text-[11px] font-semibold" style={{ color: MUTED }}>
                   {role}
@@ -87,7 +106,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
 
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-black"
-                style={{ background: "#EDEAFF", color: PLUM }}
+                style={{ background: "var(--cc-active-bg)", color: PLUM }}
               >
                 {initials}
               </div>
@@ -98,7 +117,7 @@ export function HubLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* ── CONTENT ──────────────────────────────────── */}
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="px-4 py-8">
         {children}
       </main>
     </div>

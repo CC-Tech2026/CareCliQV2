@@ -207,6 +207,7 @@ ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS practitioner_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS created_by UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS owner_user_id UUID;
 ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS progress_delta JSONB;
 
 -- 7. Add coordinator_id to users (org hierarchy: which coordinator a worker reports to)
 -- NULL = no coordinator assigned yet (valid for coordinators, MDs, and unlinked workers).
@@ -292,8 +293,94 @@ DO $$ BEGIN ALTER TABLE public.announcements              ADD COLUMN IF NOT EXIS
 DO $$ BEGIN ALTER TABLE public.incidents                  ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE public.session_messages           ADD COLUMN IF NOT EXISTS organization_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
 
--- ── 10. is_active / role guards on users ─────────────────────────────────────
+-- ── 11. CARECLIQV2-87 — shifts table + sessions.shift_id ─────────────────────
+DO $$ BEGIN
+    CREATE TABLE IF NOT EXISTS public.shifts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id UUID NOT NULL,
+        session_id UUID,
+        worker_id UUID,
+        participant_id UUID,
+        scheduled_start TIMESTAMPTZ NOT NULL DEFAULT now(),
+        scheduled_end TIMESTAMPTZ NOT NULL DEFAULT now(),
+        clocked_in_at TIMESTAMPTZ,
+        clocked_out_at TIMESTAMPTZ,
+        duration_minutes INTEGER,
+        participant_name TEXT,
+        participant_dob DATE,
+        participant_gender TEXT,
+        participant_address TEXT,
+        participant_phone TEXT,
+        allergies TEXT,
+        health_flags TEXT,
+        health_alerts TEXT,
+        visit_notes TEXT,
+        access_instructions TEXT,
+        coordinator_notes TEXT,
+        entry_instructions TEXT,
+        active_goals TEXT[],
+        status TEXT NOT NULL DEFAULT 'scheduled',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clocked_in_at TIMESTAMPTZ; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS clocked_out_at TIMESTAMPTZ; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS duration_minutes INTEGER; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS participant_name TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS participant_dob DATE; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS participant_gender TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS participant_address TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS participant_phone TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS allergies TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS health_flags TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS health_alerts TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS visit_notes TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS access_instructions TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS support_instructions JSONB NOT NULL DEFAULT '[]'::jsonb; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS coordinator_notes TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS entry_instructions TEXT; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS active_goals TEXT[]; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'scheduled'; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now(); EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE public.shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now(); EXCEPTION WHEN undefined_table THEN NULL; END $$;
+
+DO $$ BEGIN ALTER TABLE public.sessions ADD COLUMN IF NOT EXISTS shift_id UUID; EXCEPTION WHEN undefined_table THEN NULL; END $$;
+DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_shifts_org_worker_scheduled ON public.shifts (organization_id, worker_id, scheduled_start DESC); EXCEPTION WHEN others THEN NULL; END $$;
+
+-- ── 12. CARECLIQV2-34 — ai_detected_patterns ───────────────────────────────────
+DO $$ BEGIN
+    CREATE TABLE IF NOT EXISTS public.ai_detected_patterns (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        organization_id UUID NOT NULL,
+        pattern_type TEXT NOT NULL,
+        severity TEXT NOT NULL DEFAULT 'medium',
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        worker_id UUID,
+        participant_id UUID,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        detected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        dismissed_at TIMESTAMPTZ,
+        dismissed_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- ── 13. is_active / role guards on users ─────────────────────────────────────
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role       TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_active  BOOLEAN DEFAULT TRUE;
+
+-- ── 14. Run full migration for compliance tables ────
+-- See: backend/supabase/migrations/058_compliance_privacy_signature.sql
+
+-- ── 15. Worker help / FAQ / known issues (CARECLIQV2-273) ────
+-- See: backend/supabase/migrations/059_worker_help_support.sql
+-- Apply that file in Supabase SQL editor for shift_signatures, privacy tables,
+-- and evidence metadata extensions.
 
 -- Done! Re-run your backend after applying this patch.

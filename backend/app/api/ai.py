@@ -49,6 +49,21 @@ class AssessNoteRequest(BaseModel):
     participant_id: Optional[str] = None
     session_started: bool = False
     goals: Optional[List[dict]] = None
+    progress_delta: Optional[List[dict]] = None
+
+
+class TaskSuggestionsRequest(BaseModel):
+    task_title: str
+    context: str
+    participant_name: str
+
+
+class TaskInstructionsRequest(BaseModel):
+    task_title: str
+    task_purpose: str
+    goal_name: Optional[str] = None
+    goal_description: Optional[str] = None
+    participant_name: str
 
 
 @router.post("/insight")
@@ -129,12 +144,20 @@ async def improve_note_endpoint(
     notes = (body.get("notes") or "").strip()
     failed_rules = body.get("failed_rules") or []
     rp_flags = body.get("rp_flags") or []
+    participant_id = body.get("participant_id")
 
     if not notes:
         raise HTTPException(status_code=422, detail="notes field is required")
 
     try:
-        result = await ai_service.improve_note(notes, failed_rules, rp_flags)
+        org_id = current_user.get("organization_id")
+        result = await ai_service.improve_note(
+            notes,
+            failed_rules,
+            rp_flags,
+            participant_id=participant_id,
+            organisation_id=org_id,
+        )
         return result
     except Exception as e:
         logger.error(f"Improve-note error: {str(e)}")
@@ -227,18 +250,27 @@ async def comply_incident_endpoint(
 
 @router.post("/assess-note")
 async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_current_user)):
-    """Real-time 4-criteria compliance scoring for a clinical note entry.
+    """Real-time 5-criteria compliance scoring for a clinical note entry (CARECLIQV2-75).
 
-    Criteria (from NDIS spec):
-      +25% Timestamp/session check-in
-      +35% Semantic NDIS goal connection
-      +25% Documented support outcome text
-      +15% Next-step / routine action logged
+    Criteria:
+      +20 Session active check-in
+      +28 Semantic NDIS goal connection
+      +20 Documented support outcome
+      +12 Next-step / routine action
+      +20 Progress Evidence (progress_delta)
 
-    Returns score (0-100), is_ready_for_billing, and per-criterion breakdown.
-    If score >= 75 and session_id provided, patches is_ready_for_billing on the session.
+    Without progress_delta the score is capped at 80. Billing threshold remains 75.
     """
     goals: list[dict] = body.goals or []
+    progress_delta = body.progress_delta
+
+    if body.session_id and progress_delta is None:
+        try:
+            session = await session_service.get_session_by_id(body.session_id, current_user)
+            if session:
+                progress_delta = session.get("progress_delta")
+        except Exception:
+            pass
 
     # If participant_id supplied but no goals, try to fetch from patient_goals table
     if body.participant_id and not goals:
@@ -258,6 +290,7 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
             note_text=body.note_text,
             session_started=body.session_started,
             goals=goals,
+            progress_delta=progress_delta,
         )
     except Exception as e:
         logger.error(f"Assess-note error: {str(e)}")
@@ -286,3 +319,61 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
             logger.warning("Failed to flag is_ready_for_billing on session %s: %s", body.session_id, exc)
 
     return result
+
+
+@router.post("/task-suggestions")
+async def get_task_suggestions(
+    body: TaskSuggestionsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI-powered alternative task title suggestions.
+    
+    Args:
+        task_title: The task title entered by user
+        context: Context like "for goal: X" or "for core support"
+        participant_name: Name of the participant
+        
+    Returns:
+        {"suggestions": [list of alternative task titles]}
+    """
+    try:
+        result = await ai_service.generate_task_suggestions(
+            task_title=body.task_title,
+            context=body.context,
+            participant_name=body.participant_name,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/task-instructions")
+async def get_task_instructions(
+    body: TaskInstructionsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI-powered instruction suggestions for a task.
+    
+    Args:
+        task_title: The task title
+        task_purpose: Either "core" or "goal"
+        goal_name: Name of linked goal (if purpose is "goal")
+        goal_description: Description of linked goal
+        participant_name: Name of participant
+        
+    Returns:
+        {"suggestions": [list of instruction options]}
+    """
+    try:
+        result = await ai_service.generate_task_instructions(
+            task_title=body.task_title,
+            task_purpose=body.task_purpose,
+            goal_name=body.goal_name,
+            goal_description=body.goal_description,
+            participant_name=body.participant_name,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task instructions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

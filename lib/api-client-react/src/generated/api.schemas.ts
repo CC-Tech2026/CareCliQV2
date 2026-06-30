@@ -170,6 +170,11 @@ export interface Session {
   /** Whether restrictive practice language was detected in this session */
   restrictive_practice_detected?: boolean | null;
   participants?: SessionParticipants;
+  original_language_input?: string | null;
+  translated_english_note?: string | null;
+  translation_metadata?: Record<string, unknown> | null;
+  translation_status?: string | null;
+  translation_provider?: string | null;
 }
 
 export interface CreateSessionBody {
