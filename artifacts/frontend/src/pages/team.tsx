@@ -86,9 +86,7 @@ export default function Team() {
     queryFn: getCoordinatorCredentialAlerts,
   });
 
-  const participants = useGetParticipants({
-    query: { enabled: isAuthenticated && !!user?.organizationId },
-  });
+  const participants = useGetParticipants();
 
   const deactivateMut = useMutation({
     mutationFn: (id: string) => deactivateWorker(id),

@@ -322,7 +322,8 @@ ChartLegendContent.displayName = "ChartLegend"
 function getPayloadConfigFromPayload(
   config: ChartConfig,
   payload: unknown,
-  key: string {
+  key: string
+) {
   if (typeof payload !== "object" || payload === null) {
     return undefined
   }

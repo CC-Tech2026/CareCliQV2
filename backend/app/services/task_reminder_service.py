@@ -56,6 +56,55 @@ def _mandatory_incomplete(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [t for t in _incomplete_tasks(tasks) if _is_mandatory(t)]
 
 
+def _instances_to_tasks(instances: list[dict], shift_start: Optional[datetime]) -> list[dict]:
+    """Convert task_instances rows into the reminder-evaluation task format."""
+    tasks = []
+    for inst in instances:
+        template = inst.get("task_templates") or {}
+        label = template.get("title") or inst.get("id", "")[:8]
+        is_mandatory = template.get("requirement_level", "mandatory") == "mandatory"
+
+        scheduled_at = None
+        due_end = inst.get("due_window_end")
+        if due_end and shift_start is not None:
+            try:
+                parts = str(due_end).split(":")
+                scheduled_at = shift_start.replace(
+                    hour=int(parts[0]),
+                    minute=int(parts[1]) if len(parts) > 1 else 0,
+                    second=0,
+                    microsecond=0,
+                )
+            except (ValueError, IndexError, TypeError):
+                pass
+
+        tasks.append({
+            "task_id": inst.get("id", ""),
+            "label": label,
+            "completed": inst.get("status") in ("completed", "missed", "carried_over"),
+            "marked_na": False,
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+            "reminder_minutes": 15,
+            "mandatory": is_mandatory,
+        })
+    return tasks
+
+
+def _fetch_instances_for_shift(shift_id: str, shift_start: Optional[datetime]) -> list[dict]:
+    try:
+        result = (
+            get_supabase_admin()
+            .table("task_instances")
+            .select("id, status, due_window_start, due_window_end, task_templates(title, requirement_level)")
+            .eq("shift_id", shift_id)
+            .execute()
+        )
+        return _instances_to_tasks(result.data or [], shift_start)
+    except Exception as exc:
+        logger.warning("Failed to fetch task instances for shift %s: %s", shift_id, exc)
+        return []
+
+
 async def evaluate_shift_task_reminders(shift: dict[str, Any]) -> int:
     """Evaluate one active shift; returns count of alerts sent."""
     if shift.get("status") not in ("in_progress", "clocked_in") and not shift.get("clocked_in_at"):
@@ -68,12 +117,13 @@ async def evaluate_shift_task_reminders(shift: dict[str, Any]) -> int:
         return 0
 
     now = datetime.now(timezone.utc)
-    tasks = shift.get("tasks") or []
     silence_optional = _optional_silenced(shift_id)
     sent = 0
 
     shift_start = _parse_dt(shift.get("clocked_in_at") or shift.get("scheduled_start"))
     shift_end = _parse_dt(shift.get("scheduled_end"))
+
+    tasks = shift.get("tasks") or _fetch_instances_for_shift(shift_id, shift_start)
 
     for task in tasks:
         task_id = str(task.get("task_id") or task.get("label") or "")
@@ -148,7 +198,6 @@ async def evaluate_shift_task_reminders(shift: dict[str, Any]) -> int:
                 reference_key=ref,
                 banner_style="orange",
             )
-            shift["ending_soon_alert_sent_at"] = now.isoformat()
             sent += 1
             if len(mandatory_left) > 2:
                 await _notify_coordinators_task_escalation(
@@ -156,15 +205,6 @@ async def evaluate_shift_task_reminders(shift: dict[str, Any]) -> int:
                     shift_id=shift_id,
                     message=f"Worker has {len(mandatory_left)} mandatory tasks incomplete with 15 minutes left on shift.",
                 )
-
-    if sent:
-        try:
-            get_supabase_admin().table("shifts").update(
-                {"tasks": tasks, "updated_at": now.isoformat()}
-            ).eq("id", shift_id).execute()
-        except Exception as exc:
-            if not _is_missing_schema_error(exc):
-                logger.warning("Failed to persist task reminder state: %s", exc)
 
     return sent
 
@@ -200,7 +240,7 @@ async def run_task_reminder_pass() -> int:
             .table("shifts")
             .select(
                 "id, organization_id, worker_id, scheduled_start, scheduled_end, "
-                "clocked_in_at, status, tasks, ending_soon_alert_sent_at"
+                "clocked_in_at, status"
             )
             .gte("scheduled_start", window_start)
             .in_("status", ["in_progress", "clocked_in"])

@@ -19,11 +19,9 @@ export function TaskManagementView({ participantId, onCreateNew, onEditTemplate 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Fetch task templates for participant
-  const { data: templates = [], isLoading } = useQuery({
+  const { data: templates = [], isLoading } = useQuery<TaskTemplate[]>({
     queryKey: ["tasks", "templates", participantId],
-    queryFn: async () => {
-      return jsonFetch(`/api/tasks/templates/participant/${participantId}`);
-    },
+    queryFn: () => jsonFetch<TaskTemplate[]>(`/api/tasks/templates/participant/${participantId}`),
   });
 
   // Pause template mutation

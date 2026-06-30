@@ -589,10 +589,9 @@ export default function MyShiftDetail({ id: idProp }: Props) {
   const handleClockIn = () => {
     if (!shift) return;
     if (shift.requires_safety_ack) {
-      void openSafetyPage(true);
       toast({
-        title: translate("toast.safetyCardRequired"),
-        description: translate("toast.safetyCardRequiredDesc"),
+        title: "Safety card required",
+        description: "Please acknowledge the safety card before clocking in.",
         variant: "destructive",
       });
       return;

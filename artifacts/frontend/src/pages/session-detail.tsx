@@ -53,7 +53,7 @@ import {
   Calendar, Clock, Activity, FileText, CheckCircle2, ShieldAlert, Sparkles,
   Loader2, Brain, AlertTriangle, Upload, Image as ImageIcon, XCircle,
   RefreshCw, Lightbulb, Shield, TrendingUp, DollarSign, Download, Tags, Target,
-  Flag, FlagOff,
+  Flag, FlagOff, ArrowLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api-fetch";
@@ -708,8 +708,11 @@ export default function SessionDetail({ id }: { id?: string }) {
 
         {/* Top bar control utilities */}
         <div className="flex gap-2 flex-wrap items-center">
-          <Link href="/patients">
-            <Button variant="outline" size="sm">{translate("sessions.detail.viewParticipant")}</Button>
+          <Link href={participantId ? `/patients?id=${participantId}&tab=sessions` : "/patients"}>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {translate("sessions.detail.viewParticipant")}
+            </Button>
           </Link>
           {isCoordinator && !(session as unknown as { review_flag?: boolean }).review_flag && (
             <Button

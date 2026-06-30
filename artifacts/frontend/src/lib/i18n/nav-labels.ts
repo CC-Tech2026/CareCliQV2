@@ -8,7 +8,6 @@ const SHARED_NAV_KEYS: Record<string, string> = {
   "/team": "nav.team",
   "/patients": "nav.participants",
   "/sessions": "nav.sessions",
-  "/coordinator-goals": "nav.goalsPlanning",
   "/compliance": "nav.complianceCentre",
   "/audit-pack": "nav.auditPack",
   "/incidents": "nav.incidents",
@@ -87,7 +86,6 @@ export function groupLabelForName(
 const ROUTE_LABEL_KEYS: [string, string][] = [
   ["/coordinator/rostering", "nav.rostering"],
   ["/coordinator/live", "nav.liveMonitoring"],
-  ["/coordinator-goals", "nav.goalsPlanning"],
   ["/session-new", "nav.newShift"],
   ["/session/", "nav.shiftDetail"],
   ["/sessions", "nav.sessions"],

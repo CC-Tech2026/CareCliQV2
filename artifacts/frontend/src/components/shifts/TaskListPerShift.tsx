@@ -45,7 +45,7 @@ export function TaskListPerShift({ shiftId, participantId }: Props) {
   const { data: instances = [], isLoading, error } = useQuery({
     queryKey: ["tasks", "shifts", shiftId],
     queryFn: async () => {
-      const response = await jsonFetch(`/api/tasks/shifts/${shiftId}/instances`);
+      const response = await jsonFetch<TaskInstance[]>(`/api/tasks/shifts/${shiftId}/instances`);
       // Sort: pending first, then by priority (high > medium > low), then by created_at
       return response.sort((a: TaskInstance, b: TaskInstance) => {
         const statusOrder = { pending: 0, carried_over: 1, completed: 2, missed: 3 };

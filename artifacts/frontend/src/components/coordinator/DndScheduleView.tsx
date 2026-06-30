@@ -609,6 +609,8 @@ export function DndScheduleView({ weekStart, shifts, workers, onRefresh }: DndSc
                                   onClick={() => handleUnassignClick(cellShift)}
                                   className="mr-1 hidden h-4 w-4 shrink-0 items-center justify-center rounded group-hover:flex"
                                   style={{ background: "var(--cc-bg)", color: MUTED }}
+                                  title="Remove assignment"
+                                  aria-label="Remove shift assignment"
                                 >
                                   <Minus size={8} />
                                 </button>

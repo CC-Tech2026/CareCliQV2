@@ -66,29 +66,16 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
     setLoadingAISuggestion(true);
     try {
       // Get title suggestion
-      const titleResponse = await jsonFetch("/api/tasks/ai/task-title-suggestion", {
-        method: "POST",
-        search: {
-          participant_id: participantId,
-          shift_type: primaryShiftType,
-          category,
-        },
-      });
+      const titleParams = new URLSearchParams({ participant_id: participantId, shift_type: primaryShiftType, category });
+      const titleResponse = await jsonFetch<{ suggestion: string | null }>(`/api/tasks/ai/task-title-suggestion?${titleParams}`, { method: "POST" });
 
       if (titleResponse.suggestion) {
         setTitle(titleResponse.suggestion);
       }
 
       // Get metadata suggestions (priority, evidence)
-      const metadataResponse = await jsonFetch("/api/tasks/ai/task-suggestion", {
-        method: "GET",
-        search: {
-          participant_id: participantId,
-          shift_type: primaryShiftType,
-          category,
-          lookback_days: 30,
-        },
-      });
+      const metaParams = new URLSearchParams({ participant_id: participantId, shift_type: primaryShiftType, category, lookback_days: "30" });
+      const metadataResponse = await jsonFetch<{ suggestion_text: string | null; evidence_recommendation: EvidenceRequired | null }>(`/api/tasks/ai/task-suggestion?${metaParams}`);
 
       if (metadataResponse.evidence_recommendation) {
         setEvidenceRequired(metadataResponse.evidence_recommendation);
@@ -226,6 +213,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
                   setAiSuggestionApplied(false); // Reset to re-fetch suggestions
                 }}
                 className="w-full rounded border-2 border-green-300 bg-white px-3 py-2 text-gray-700"
+                aria-label="Task category selection"
               >
                 <option value="personal_care">Personal Care</option>
                 <option value="medication">Medication</option>
@@ -270,6 +258,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
                   className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                  aria-label="Task priority level"
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -287,6 +276,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
                   value={evidenceRequired}
                   onChange={(e) => setEvidenceRequired(e.target.value as EvidenceRequired)}
                   className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                  aria-label="Evidence required for task completion"
                 >
                   <option value="none">None</option>
                   <option value="notes">Notes only</option>
@@ -305,6 +295,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
                   value={recurrenceType}
                   onChange={(e) => setRecurrenceType(e.target.value as RecurrenceType)}
                   className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                  aria-label="Task recurrence type"
                 >
                   <option value="one_off">One-off</option>
                   <option value="recurring">Recurring</option>
@@ -322,6 +313,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
                     value={recurrenceFrequency}
                     onChange={(e) => setRecurrenceFrequency(e.target.value as RecurrenceFrequency)}
                     className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                    aria-label="Task recurrence frequency"
                   >
                     <option value="">Select frequency</option>
                     <option value="daily">Daily</option>

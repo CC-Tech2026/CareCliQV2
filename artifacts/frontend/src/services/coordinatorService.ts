@@ -842,6 +842,7 @@ export type NdisGoal = {
   created_by?: string;
   name: string;
   goal_area: "daily_living" | "community" | "health" | "social" | "employment" | "other";
+  support_category?: string | null;
   description?: string | null;
   target_date?: string | null;
   success_criteria?: string | null;
@@ -995,14 +996,23 @@ export function checkParticipantGoalsAndTasks(participantId: string) {
 /** Get all tasks for a participant (across all goals) */
 export type ParticipantTask = {
   id: string;
-  goal_id: string;
-  goal_name: string;
+  goal_id?: string | null;
+  goal_name?: string | null;
   participant_id: string;
   name: string;
   description?: string | null;
   frequency?: string;
   status: "pending" | "in_progress" | "completed";
   is_mandatory?: boolean;
+  support_category?: string | null;
+  shift_type?: string | null;  // morning, afternoon, night, anytime
+  category?: string | null;  // personal_care, medication, etc.
+  priority?: string | null;  // low, medium, high
+  // NDIS professional fields
+  evidence_required?: string | null;  // none, photo, notes, photo_and_notes
+  is_recurring?: boolean;
+  frequency_pattern?: string | null;  // every_morning_shift, every_afternoon_shift, etc.
+  frequency_metadata?: Record<string, any> | null;  // days_of_week, custom schedule, etc.
   created_at?: string;
 };
 

@@ -68,7 +68,7 @@ export function TaskCompletionModal({ isOpen, onClose, instanceId, onSuccess }: 
         completion_notes: completionNotes,
       };
 
-      const response = await jsonFetch(`/api/tasks/instances/${instanceId}/complete`, {
+      const response = await jsonFetch<{ missing_evidence?: string[] }>(`/api/tasks/instances/${instanceId}/complete`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       });
@@ -156,6 +156,8 @@ export function TaskCompletionModal({ isOpen, onClose, instanceId, onSuccess }: 
                 <button
                   onClick={handleRemovePhoto}
                   className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+                  title="Remove photo"
+                  aria-label="Remove evidence photo"
                 >
                   <X className="h-4 w-4" />
                 </button>

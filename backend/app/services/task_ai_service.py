@@ -41,14 +41,14 @@ async def suggest_task_description(
         supabase = get_supabase_admin()
         
         # Get participant name and recent task history
-        participant = await supabase.table("participants").select("name").eq(
+        participant = await supabase.table("patients").select("full_name").eq(
             "id", participant_id
         ).single().execute()
-        
+
         if not participant.data:
             return None
-        
-        participant_name = participant.data.get("name", "Participant")
+
+        participant_name = participant.data.get("full_name", "Participant")
         
         # Get recent completed tasks for this participant in same category
         query = f"Tasks completed by {participant_name} for {category.replace('_', ' ')}"
@@ -211,14 +211,14 @@ async def suggest_goal_description(
         supabase = get_supabase_admin()
         
         # Get participant info
-        participant = await supabase.table("participants").select(
-            "name,date_of_birth"
+        participant = await supabase.table("patients").select(
+            "full_name,date_of_birth"
         ).eq("id", participant_id).single().execute()
-        
+
         if not participant.data:
             return None
-        
-        participant_name = participant.data.get("name", "Participant")
+
+        participant_name = participant.data.get("full_name", "Participant")
         
         # Retrieve past goals and related sessions
         similar_goals = await retrieve_similar_sessions(

@@ -52,6 +52,20 @@ class AssessNoteRequest(BaseModel):
     progress_delta: Optional[List[dict]] = None
 
 
+class TaskSuggestionsRequest(BaseModel):
+    task_title: str
+    context: str
+    participant_name: str
+
+
+class TaskInstructionsRequest(BaseModel):
+    task_title: str
+    task_purpose: str
+    goal_name: Optional[str] = None
+    goal_description: Optional[str] = None
+    participant_name: str
+
+
 @router.post("/insight")
 async def get_insights(body: InsightRequest, current_user: dict = Depends(get_current_user)):
     participant = await participant_service.get_participant_by_id(body.participant_id, current_user)
@@ -305,3 +319,61 @@ async def assess_note(body: AssessNoteRequest, current_user: dict = Depends(get_
             logger.warning("Failed to flag is_ready_for_billing on session %s: %s", body.session_id, exc)
 
     return result
+
+
+@router.post("/task-suggestions")
+async def get_task_suggestions(
+    body: TaskSuggestionsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI-powered alternative task title suggestions.
+    
+    Args:
+        task_title: The task title entered by user
+        context: Context like "for goal: X" or "for core support"
+        participant_name: Name of the participant
+        
+    Returns:
+        {"suggestions": [list of alternative task titles]}
+    """
+    try:
+        result = await ai_service.generate_task_suggestions(
+            task_title=body.task_title,
+            context=body.context,
+            participant_name=body.participant_name,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task suggestions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/task-instructions")
+async def get_task_instructions(
+    body: TaskInstructionsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate AI-powered instruction suggestions for a task.
+    
+    Args:
+        task_title: The task title
+        task_purpose: Either "core" or "goal"
+        goal_name: Name of linked goal (if purpose is "goal")
+        goal_description: Description of linked goal
+        participant_name: Name of participant
+        
+    Returns:
+        {"suggestions": [list of instruction options]}
+    """
+    try:
+        result = await ai_service.generate_task_instructions(
+            task_title=body.task_title,
+            task_purpose=body.task_purpose,
+            goal_name=body.goal_name,
+            goal_description=body.goal_description,
+            participant_name=body.participant_name,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task instructions error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

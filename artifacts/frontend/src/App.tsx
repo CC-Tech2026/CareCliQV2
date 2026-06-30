@@ -34,7 +34,6 @@ import MyCompliance from "@/pages/my-compliance";
 import WorkerNdisPlan from "@/pages/worker-ndis-plan";
 import Team from "@/pages/team";
 import CoordinatorRosteringPage from "@/pages/coordinator-rostering";
-import CoordinatorGoals from "@/pages/coordinator-goals";
 import CoordinatorLivePage from "@/pages/coordinator-live";
 import AuditPack from "@/pages/audit-pack";
 import SessionReview from "@/pages/session-review";
@@ -346,12 +345,6 @@ function Router() {
       <Route path="/coordinator/travel">
         <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
           <AppLayout><CoordinatorTravelExpenses /></AppLayout>
-        </ProtectedRoute>
-      </Route>
-
-      <Route path="/coordinator-goals">
-        <ProtectedRoute allowedRoles={[...COORDINATOR_ROLES]}>
-          <AppLayout><CoordinatorGoals /></AppLayout>
         </ProtectedRoute>
       </Route>
 

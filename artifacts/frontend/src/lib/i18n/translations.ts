@@ -2224,7 +2224,8 @@ export const en: Dict = {
   "sessions.live.structured.response": "How did the participant engage and respond?",
   "sessions.live.structured.goals": "Link outcomes to specific NDIS goals…",
 
-  "auditPack.subtitle": "NDIS audit pack — all session records for your organisation",
+  "auditPack.title": "Audit Pack",
+  "auditPack.subtitle": "All sessions and compliance data, ready for NDIS audit.",
   "auditPack.export": "Export Audit Pack",
   "auditPack.stat.teamCompliance": "Team compliance",
   "auditPack.stat.sessionRecords": "Session records",
@@ -3255,72 +3256,6 @@ export const en: Dict = {
   "md.onboarding.tab.resources": "Resources",
   "md.onboarding.tab.approvals": "Approvals",
   "md.onboarding.loadFailed": "Could not load onboarding data",
-};
-import { vi } from "./locales/vi";
-import { ar } from "./locales/ar";
-import { zhHans } from "./locales/zhHans";
-
-export const TRANSLATIONS: Record<AppLanguage, Dict> = {
-  en,
-  vi,
-  ar,
-  "zh-Hans": zhHans,
-};
-
-export function t(lang: AppLanguage, key: string): string {
-  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS.en[key] ?? key;
-}
-
-/** Interpolate `{name}`-style placeholders in translated strings. */
-export function tParams(lang: AppLanguage, key: string, params: Record<string, string>): string {
-  let value = t(lang, key);
-  for (const [k, v] of Object.entries(params)) {
-    value = value.replaceAll(`{${k}}`, v);
-  }
-  return value;
-}
-
-/** Map worker nav href → translation key */
-export const WORKER_NAV_KEYS: Record<string, string> = {
-  "/dashboard": "nav.dashboard",
-  "/my-shifts": "nav.shifts",
-  "/calendar": "nav.schedule",
-  "/my-clients": "nav.clients",
-  "/worker/notifications": "nav.notifications",
-  "/my-compliance": "nav.compliance",
-  "/worker/performance": "nav.performance",
-  "/worker/shift-history": "nav.shiftHistory",
-  "/worker/travel": "nav.travel",
-  "/worker/training": "nav.training",
-  "/incidents": "nav.incidents",
-  "/worker/help": "nav.help",
-  "/credentials": "nav.credentials",
-  "/toolkit": "nav.toolkit",
-  "/worker/profile": "nav.profile",
-  "/accessibility": "nav.accessibility",
-  "/worker/accessibility": "nav.accessibility",
-  "/worker/security": "nav.security",
-  "/worker/availability": "nav.availability",
-  "/tasks": "nav.tasks",
-  "/settings": "nav.settings",
-  "/incident-new": "nav.reportIncident",
-  "/worker/sync-status": "sync.page.eyebrow",
-};
-
-export const WORKER_GROUP_KEYS: Record<string, string> = {
-  "My Work": "nav.group.myWork",
-  Development: "nav.group.development",
-  Safety: "nav.group.safety",
-  Resources: "nav.group.resources",
-  Account: "nav.group.account",
-};
-
-export const WORKER_BOTTOM_NAV_KEYS: Record<string, string> = {
-  "/dashboard": "nav.home",
-  "/my-shifts": "nav.shifts",
-  "/my-clients": "nav.clients",
-  "/my-compliance": "nav.compliance",
-
   // ── Coordinator: task templates & management ─────────────────
   "coordinator.taskTemplate.editTitle": "Edit Task Template",
   "coordinator.taskTemplate.newTitle": "New Task Template",
@@ -3990,5 +3925,69 @@ export const WORKER_BOTTOM_NAV_KEYS: Record<string, string> = {
   "clinical.bodyMap.zone.right_achilles": "Right Achilles",
   "clinical.bodyMap.zone.left_heel": "Left Heel",
   "clinical.bodyMap.zone.right_heel": "Right Heel",
+};
+import { vi } from "./locales/vi";
+import { ar } from "./locales/ar";
+import { zhHans } from "./locales/zhHans";
 
+export const TRANSLATIONS: Record<AppLanguage, Dict> = {
+  en,
+  vi,
+  ar,
+  "zh-Hans": zhHans,
+};
+
+export function t(lang: AppLanguage, key: string): string {
+  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS.en[key] ?? key;
+}
+
+/** Interpolate `{name}`-style placeholders in translated strings. */
+export function tParams(lang: AppLanguage, key: string, params: Record<string, string>): string {
+  let value = t(lang, key);
+  for (const [k, v] of Object.entries(params)) {
+    value = value.replaceAll(`{${k}}`, v);
+  }
+  return value;
+}
+
+/** Map worker nav href → translation key */
+export const WORKER_NAV_KEYS: Record<string, string> = {
+  "/dashboard": "nav.dashboard",
+  "/my-shifts": "nav.shifts",
+  "/calendar": "nav.schedule",
+  "/my-clients": "nav.clients",
+  "/worker/notifications": "nav.notifications",
+  "/my-compliance": "nav.compliance",
+  "/worker/performance": "nav.performance",
+  "/worker/shift-history": "nav.shiftHistory",
+  "/worker/travel": "nav.travel",
+  "/worker/training": "nav.training",
+  "/incidents": "nav.incidents",
+  "/worker/help": "nav.help",
+  "/credentials": "nav.credentials",
+  "/toolkit": "nav.toolkit",
+  "/worker/profile": "nav.profile",
+  "/accessibility": "nav.accessibility",
+  "/worker/accessibility": "nav.accessibility",
+  "/worker/security": "nav.security",
+  "/worker/availability": "nav.availability",
+  "/tasks": "nav.tasks",
+  "/settings": "nav.settings",
+  "/incident-new": "nav.reportIncident",
+  "/worker/sync-status": "sync.page.eyebrow",
+};
+
+export const WORKER_GROUP_KEYS: Record<string, string> = {
+  "My Work": "nav.group.myWork",
+  Development: "nav.group.development",
+  Safety: "nav.group.safety",
+  Resources: "nav.group.resources",
+  Account: "nav.group.account",
+};
+
+export const WORKER_BOTTOM_NAV_KEYS: Record<string, string> = {
+  "/dashboard": "nav.home",
+  "/my-shifts": "nav.shifts",
+  "/my-clients": "nav.clients",
+  "/my-compliance": "nav.compliance",
 };

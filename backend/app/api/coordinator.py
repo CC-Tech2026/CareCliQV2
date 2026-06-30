@@ -2889,6 +2889,7 @@ class NdisGoalBody(BaseModel):
     participant_id: str
     name: str
     goal_area: str = "daily_living"
+    support_category: Optional[str] = None
     description: Optional[str] = None
     target_date: Optional[str] = None
     success_criteria: Optional[str] = None
@@ -2931,6 +2932,7 @@ async def create_ndis_goal(
         "created_by": get_user_id(current_user),
         "name": body.name,
         "goal_area": body.goal_area,
+        "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
         "success_criteria": body.success_criteria,
@@ -2959,6 +2961,7 @@ async def update_ndis_goal(
     update: dict[str, Any] = {
         "name": body.name,
         "goal_area": body.goal_area,
+        "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
         "success_criteria": body.success_criteria,
@@ -3212,6 +3215,16 @@ class ParticipantTaskPayload(BaseModel):
     frequency: Optional[str] = None
     status: str = "pending"
     is_mandatory: bool = False
+    support_category: Optional[str] = None
+    # Detailed task fields for shift management and invoicing
+    shift_type: Optional[str] = None  # morning, afternoon, night, anytime
+    category: Optional[str] = None  # personal_care, medication, domestic_assistance, community_access, transport, other
+    priority: Optional[str] = None  # low, medium, high
+    # NDIS professional fields
+    evidence_required: Optional[str] = None  # none, photo, notes, photo_and_notes
+    is_recurring: Optional[bool] = False
+    frequency_pattern: Optional[str] = None  # every_morning_shift, every_afternoon_shift, every_night_shift, daily_all_shifts, specific_days_of_week, custom
+    frequency_metadata: Optional[dict] = None  # JSON metadata for frequency (days_of_week, custom schedule, etc.)
 
 
 @router.get("/participants/{participant_id}/goals-and-tasks-validation")
@@ -3306,6 +3319,7 @@ async def list_participant_tasks(
                 "frequency": task.get("frequency"),
                 "status": task.get("status"),
                 "is_mandatory": task.get("is_mandatory"),
+                "support_category": task.get("support_category"),
                 "completed_at": task.get("completed_at"),
                 "created_at": task.get("created_at"),
             })
@@ -3354,6 +3368,14 @@ async def create_participant_task(
             "frequency": body.frequency,
             "status": body.status,
             "is_mandatory": body.is_mandatory,
+            "support_category": body.support_category,
+            "shift_type": body.shift_type,
+            "category": body.category,
+            "priority": body.priority,
+            "evidence_required": body.evidence_required or "none",
+            "is_recurring": body.is_recurring or False,
+            "frequency_pattern": body.frequency_pattern,
+            "frequency_metadata": body.frequency_metadata,
             "created_at": now,
             "updated_at": now,
         }

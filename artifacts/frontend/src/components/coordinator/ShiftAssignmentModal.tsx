@@ -51,6 +51,7 @@ interface ShiftAssignmentModalProps {
   onOpenChange: (open: boolean) => void;
   worker?: WorkerStats | null;
   workers?: WorkerStats[];
+  initialParticipantId?: string;
 }
 
 export function ShiftAssignmentModal({
@@ -58,6 +59,7 @@ export function ShiftAssignmentModal({
   onOpenChange,
   worker,
   workers = [],
+  initialParticipantId,
 }: ShiftAssignmentModalProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -67,7 +69,7 @@ export function ShiftAssignmentModal({
   const orgId = user?.organizationId ?? "__no_org__";
 
   const [selectedWorkerId,      setSelectedWorkerId]      = useState(worker?.id ?? "");
-  const [selectedParticipantId, setSelectedParticipantId] = useState("");
+  const [selectedParticipantId, setSelectedParticipantId] = useState(initialParticipantId ?? "");
   const [scheduledStart,        setScheduledStart]        = useState("");
   const [scheduledEnd,          setScheduledEnd]          = useState("");
   const [shiftType,             setShiftType]             = useState("standard_support");
@@ -76,6 +78,10 @@ export function ShiftAssignmentModal({
   useEffect(() => {
     if (worker?.id) setSelectedWorkerId(worker.id);
   }, [worker?.id, open]);
+
+  useEffect(() => {
+    if (initialParticipantId) setSelectedParticipantId(initialParticipantId);
+  }, [initialParticipantId, open]);
 
   const participants   = useGetParticipants();
   const credAlertsQuery = useOrgQuery([orgId, "coordinator-credential-alerts"], {
@@ -319,7 +325,7 @@ export function ShiftAssignmentModal({
                   {hasGoalsTasksError && (
                     <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
                       This participant needs at least one NDIS goal with at least one task before creating a shift.{" "}
-                      <Link href="/coordinator-goals" className="font-bold underline" style={{ color: PLUM }}>
+                      <Link href="/patients" className="font-bold underline" style={{ color: PLUM }}>
                         Set up goals now →
                       </Link>
                     </p>

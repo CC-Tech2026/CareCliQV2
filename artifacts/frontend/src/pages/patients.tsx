@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import {
+  getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
+  getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
+  type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
+} from "@/services/coordinatorService";
+import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -8,13 +14,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO } from "date-fns";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   Search,
   UserPlus,
   Loader2,
   Users,
   Edit,
+  Edit2,
   DollarSign,
   PlusCircle,
   CheckCircle2,
@@ -24,6 +31,13 @@ import {
   UserCircle,
   Target,
   Lock,
+  Heart,
+  Sparkles,
+  Wand2,
+  BarChart2,
+  Archive,
+  X,
+  CalendarClock,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -34,6 +48,7 @@ import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
 import { apiFetch } from "@/lib/api-fetch";
+import { jsonFetch } from "@/services/http";
 import {
   Select,
   SelectContent,
@@ -193,15 +208,6 @@ function complianceTone(score?: number | null) {
 
 function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
   return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
-}
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await apiFetch(path);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string; message?: string }).detail ?? (err as { message?: string }).message ?? `Request failed with ${res.status}`);
-  }
-  return res.json() as Promise<T>;
 }
 
 // ---------------------------------------------------------------------------
@@ -675,26 +681,136 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
+type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "shift_context" | "restricted";
+
+function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
   const participantQuery = useOrgQuery(["participant", id], {
-    queryFn: () => fetchJson<ParticipantRecord>(`/api/participants/${id}`),
+    queryFn: () => jsonFetch<ParticipantRecord>(`/api/participants/${id}`),
   });
   const sessionsQuery = useOrgQuery(["participant", id, "sessions"], {
-    queryFn: () => fetchJson<SessionRecord[]>(`/api/sessions/participant/${id}`),
+    queryFn: () => jsonFetch<SessionRecord[]>(`/api/sessions/participant/${id}`),
   });
   const budgetQuery = useOrgQuery(["participant", id, "budget-summary"], {
-    queryFn: () => fetchJson<BudgetSummary>(`/api/participants/${id}/budget-summary`),
+    queryFn: () => jsonFetch<BudgetSummary>(`/api/participants/${id}/budget-summary`),
   });
   const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
-    queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
+    queryFn: () => jsonFetch<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
 
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
+  const qc = useQueryClient();
+
+  // Assign Shift — coordinator only
+  const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const workersQuery = useOrgQuery<WorkerStats[]>(["coordinator-worker-stats"], {
+    queryFn: getCoordinatorWorkerStats,
+    enabled: isCoordinator,
+  });
+
+  // Goals & Tasks — coordinator only
+  const ndisGoalsQuery = useOrgQuery<NdisGoal[]>(["participant", id, "ndis-goals"], {
+    queryFn: () => getNdisGoals({ participant_id: id }),
+    enabled: isCoordinator,
+  });
+  const ndisGoals = ndisGoalsQuery.data ?? [];
+
+  const participantTasksQuery = useOrgQuery<ParticipantTask[]>(["participant", id, "participant-tasks"], {
+    queryFn: () => getParticipantTasks(id),
+    enabled: isCoordinator,
+  });
+  const participantTasks = participantTasksQuery.data ?? [];
+
+  const [progressGoalId, setProgressGoalId] = useState<string | null>(null);
+  const goalProgressQuery = useOrgQuery<GoalProgressResponse>(
+    ["goal-progress", progressGoalId ?? "__none__"],
+    { queryFn: () => getGoalProgress(progressGoalId!), enabled: !!progressGoalId }
+  );
+
+  const createGoalMut = useMutation({
+    mutationFn: (payload: NdisGoalPayload) => createNdisGoal(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      setCreateMode(null);
+      setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to create goal", variant: "destructive" }),
+  });
+
+  const editGoalMut = useMutation({
+    mutationFn: ({ goalId, payload }: { goalId: string; payload: NdisGoalPayload }) => updateNdisGoal(goalId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      setCreateMode(null); setEditingGoal(null);
+      setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to update goal", variant: "destructive" }),
+  });
+
+  const archiveGoalMut = useMutation({
+    mutationFn: archiveNdisGoal,
+    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onError: () => toastFn({ title: "Failed to archive goal", variant: "destructive" }),
+  });
+
+  const completeGoalMut = useMutation({
+    mutationFn: completeNdisGoal,
+    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onError: () => toastFn({ title: "Failed to complete goal", variant: "destructive" }),
+  });
+
+  const createTaskMut = useMutation({
+    mutationFn: (payload: Omit<ParticipantTaskPayload, "status">) =>
+      createParticipantTask(id, { ...payload, status: "pending" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
+      setCreateMode(null);
+      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to create task", variant: "destructive" }),
+  });
+
+  const deleteTaskMut = useMutation({
+    mutationFn: deleteParticipantTask,
+    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] }); },
+    onError: () => toastFn({ title: "Failed to delete task", variant: "destructive" }),
+  });
+
+  const suggestGoalDescription = async () => {
+    if (!goalTitle.trim()) return;
+    setGoalDescriptionLoading(true); setGoalDescriptionAiApplied(false);
+    try {
+      const params = new URLSearchParams({ participant_id: id, goal_title: goalTitle.trim() });
+      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
+      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
+      const data = await res.json() as { suggestion: string | null };
+      if (data.suggestion) { setGoalDescription(data.suggestion); setGoalDescriptionAiApplied(true); toastFn({ title: "Description suggested", description: "Review and edit the AI-suggested text." }); }
+      else toastFn({ title: "No suggestion available", description: "Write a description manually." });
+    } catch (err) {
+      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
+      console.error("suggestGoalDescription error:", err);
+    } finally { setGoalDescriptionLoading(false); }
+  };
+
+  const suggestTaskInstructions = async () => {
+    if (!taskTitle.trim()) return;
+    setTaskInstructionsLoading(true); setTaskInstructionsAiApplied(false);
+    try {
+      const params = new URLSearchParams({ participant_id: id, goal_title: taskTitle.trim() });
+      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
+      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
+      const data = await res.json() as { suggestion: string | null };
+      if (data.suggestion) { setTaskInstructions(data.suggestion); setTaskInstructionsAiApplied(true); toastFn({ title: "Instructions suggested", description: "Review and edit the AI-suggested text." }); }
+      else toastFn({ title: "No suggestion available", description: "Write instructions manually." });
+    } catch (err) {
+      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
+      console.error("suggestTaskInstructions error:", err);
+    } finally { setTaskInstructionsLoading(false); }
+  };
 
   const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
-    queryFn: () => fetchJson<{
+    queryFn: () => jsonFetch<{
       restricted_behavioural_notes: string | null;
       behaviour_support_plan: string | null;
       medications: string | null;
@@ -735,7 +851,40 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
     onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "shift_context" | "restricted">("overview");
+  const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
+
+  // Form state for creating / editing goals & tasks
+  const [createMode, setCreateMode] = useState<'goal' | 'edit_goal' | 'tasks' | null>(null);
+  const [editingGoal, setEditingGoal] = useState<NdisGoal | null>(null);
+  const [showArchivedGoals, setShowArchivedGoals] = useState(false);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalCategory, setGoalCategory] = useState('daily_living');
+  const [goalSupportCategory, setGoalSupportCategory] = useState('');
+  const [goalDescription, setGoalDescription] = useState('');
+  const [goalTargetDate, setGoalTargetDate] = useState('');
+  const [goalSuccessCriteria, setGoalSuccessCriteria] = useState('');
+  const [goalDescriptionLoading, setGoalDescriptionLoading] = useState(false);
+  const [goalDescriptionAiApplied, setGoalDescriptionAiApplied] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskTitleSuggestions, setTaskTitleSuggestions] = useState<string[]>([]);
+  const [taskTitleLoading, setTaskTitleLoading] = useState(false);
+  const [taskInstructions, setTaskInstructions] = useState('');
+  const [taskInstructionsSuggestions, setTaskInstructionsSuggestions] = useState<string[]>([]);
+  const [taskSupportCategory, setTaskSupportCategory] = useState('');
+  const [taskInstructionsLoading, setTaskInstructionsLoading] = useState(false);
+  const [taskInstructionsAiApplied, setTaskInstructionsAiApplied] = useState(false);
+  const [taskTitleAiApplied, setTaskTitleAiApplied] = useState(false);
+  const [taskPurpose, setTaskPurpose] = useState<'core' | 'goal'>('core');
+  const [linkedGoalId, setLinkedGoalId] = useState<string | null>(null);
+  const [isMandatory, setIsMandatory] = useState(true);
+  // Detailed task fields for proper invoice management & shift assignment
+  const [taskShiftType, setTaskShiftType] = useState<'morning' | 'afternoon' | 'night' | 'anytime'>('morning');
+  const [taskCategory, setTaskCategory] = useState<'personal_care' | 'medication' | 'domestic_assistance' | 'community_access' | 'transport' | 'other'>('personal_care');
+  const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  // NDIS professional fields
+  const [taskEvidenceRequired, setTaskEvidenceRequired] = useState<'none' | 'photo' | 'notes' | 'photo_and_notes'>('none');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
 
   if (participantQuery.isLoading) {
     return (
@@ -806,11 +955,11 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   const TABS = [
     { id: "overview"    as const, label: translate("patients.tab.overview"),    icon: UserCircle   },
     { id: "plan"        as const, label: translate("patients.tab.plan"),   icon: DollarSign   },
-    { id: "goals"       as const, label: translate("patients.tab.goals"),       icon: Target       },
-    { id: "sessions"    as const, label: translate("patients.tab.sessions"),    icon: CalendarDays },
+    ...(isCoordinator ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", icon: ClipboardList }] : [{ id: "goals" as const, label: translate("patients.tab.goals"), icon: Target }]),
+    { id: "sessions"    as const, label: "Shift History", icon: CalendarDays },
     { id: "compliance"  as const, label: translate("patients.tab.compliance"),  icon: ShieldCheck  },
     ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: translate("patients.tab.restricted"), icon: Lock }] : []),
+    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
   ];
 
   return (
@@ -1004,6 +1153,697 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           </section>
         )}
 
+        {/* GOALS & TASKS TAB (Coordinator) */}
+        {activeTab === "goals_tasks" && isCoordinator && (() => {
+          const AREA_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+            daily_living: { bg: "#EFF6FF", color: "#1D4ED8", label: "Daily Living" },
+            community:    { bg: "#F0FDF4", color: "#15803D", label: "Community"    },
+            health:       { bg: "#FEF2F2", color: "#DC2626", label: "Health"       },
+            social:       { bg: "#FDF4FF", color: "#7E22CE", label: "Social"       },
+            employment:   { bg: "#FFFBEB", color: "#D97706", label: "Employment"   },
+            other:        { bg: "#F3F4F6", color: "#6B7280", label: "Other"        },
+          };
+
+          type SupportCatMeta = { label: string; group: "core" | "cb" | "capital"; groupLabel: string; bg: string; color: string };
+          const SUPPORT_CATS: Record<string, SupportCatMeta> = {
+            core_daily_activities:   { label: "Daily Activities",          group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_transport:          { label: "Transport",                 group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_consumables:        { label: "Consumables",               group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_social_community:   { label: "Social & Community",        group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            cb_support_coordination: { label: "Support Coordination",      group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_daily_living:         { label: "Daily Living Skills",       group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_health_wellbeing:     { label: "Health & Wellbeing",        group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_social_skills:        { label: "Social & Community Skills", group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_employment:           { label: "Employment",                group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_learning:             { label: "Improved Learning",         group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            capital_assistive_tech:  { label: "Assistive Technology",      group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
+            capital_home_mods:       { label: "Home Modifications",        group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
+          };
+
+          const SUPPORT_GROUP_HEADERS: Record<"core" | "cb" | "capital", { label: string; color: string }> = {
+            core:    { label: "Core Supports",     color: "#1D4ED8" },
+            cb:      { label: "Capacity Building", color: "#15803D" },
+            capital: { label: "Capital Supports",  color: "#7E22CE" },
+          };
+
+          function SupportCategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+            const groups: ("core" | "cb" | "capital")[] = ["core", "cb", "capital"];
+            return (
+              <div className="space-y-2">
+                {groups.map((group) => {
+                  const keys = Object.entries(SUPPORT_CATS).filter(([, m]) => m.group === group).map(([k]) => k);
+                  const hdr = SUPPORT_GROUP_HEADERS[group];
+                  return (
+                    <div key={group}>
+                      <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: hdr.color }}>{hdr.label}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {keys.map((k) => {
+                          const m = SUPPORT_CATS[k];
+                          const active = value === k;
+                          return (
+                            <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
+                              className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                              style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          const activeGoals = ndisGoals.filter((g) => g.status === "active");
+          const doneGoals   = ndisGoals.filter((g) => g.status !== "active");
+
+          const startEditGoal = (goal: NdisGoal) => {
+            setEditingGoal(goal);
+            setGoalTitle(goal.name);
+            setGoalCategory(goal.goal_area);
+            setGoalSupportCategory(goal.support_category ?? "");
+            setGoalDescription(goal.description ?? "");
+            setGoalTargetDate(goal.target_date ?? "");
+            setGoalSuccessCriteria(goal.success_criteria ?? "");
+            setGoalDescriptionAiApplied(false);
+            setCreateMode("edit_goal");
+          };
+          const cancelGoalForm = () => { setCreateMode(null); setEditingGoal(null); setGoalDescriptionAiApplied(false); };
+
+          const goalFormContent = (
+            <div className="rounded-xl border border-purple-100 bg-white shadow-sm p-5 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-[14px] font-bold text-[#111827]">{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</h4>
+                  <p className="text-[11px] text-[#6B7280] mt-0.5">{participant.full_name}</p>
+                </div>
+                <button type="button" onClick={cancelGoalForm} title="Close" aria-label="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={15} className="text-[#9CA3AF]" /></button>
+              </div>
+
+              {/* Goal name */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Goal name *</label>
+                <input
+                  value={goalTitle}
+                  onChange={(e) => { setGoalTitle(e.target.value); setGoalDescriptionAiApplied(false); }}
+                  placeholder="e.g. Increase independence in morning routine"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400"
+                />
+                {goalTitle.trim() && (
+                  <div className="flex items-center justify-between pt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={11} className="text-purple-400" />
+                      <button type="button" onClick={suggestGoalDescription} disabled={goalDescriptionLoading}
+                        className="text-[11px] text-purple-600 hover:text-purple-800 font-semibold disabled:opacity-60">
+                        {goalDescriptionLoading ? <><Loader2 size={10} className="animate-spin inline mr-1" />Generating…</> : "Suggest description"}
+                      </button>
+                    </div>
+                    {goalDescriptionAiApplied && <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* NDIS area — outcome domain */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">NDIS outcome area</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.entries(AREA_COLORS) as [string, { bg: string; color: string; label: string }][]).map(([area, m]) => (
+                    <button key={area} type="button" onClick={() => setGoalCategory(area)}
+                      className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                      style={{ background: goalCategory === area ? m.color : m.bg, color: goalCategory === area ? "#fff" : m.color }}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* NDIS support category — funding line */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">
+                  NDIS support category <span className="text-red-500">*</span>
+                  <span className="ml-1.5 normal-case font-normal text-[#9CA3AF]">— which funded budget line does this goal draw from?</span>
+                </label>
+                <SupportCategoryPicker value={goalSupportCategory} onChange={setGoalSupportCategory} />
+                {!goalSupportCategory && goalTitle.trim() && (
+                  <p className="text-[10px] text-amber-600 font-semibold">Select a support category to link this goal to the funded plan.</p>
+                )}
+              </div>
+
+              {/* Description + target date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Description</label>
+                  <textarea value={goalDescription}
+                    onChange={(e) => { setGoalDescription(e.target.value); setGoalDescriptionAiApplied(false); }}
+                    placeholder={goalDescriptionLoading ? "Generating AI description…" : "What does achieving this goal look like?"}
+                    rows={3}
+                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 focus:ring-purple-400 transition-colors ${goalDescriptionAiApplied ? "border-emerald-200 bg-emerald-50/30" : "border-gray-200"}`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Success criteria</label>
+                  <textarea value={goalSuccessCriteria} onChange={(e) => setGoalSuccessCriteria(e.target.value)}
+                    placeholder="How will we know this goal is achieved?" rows={2}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 focus:ring-purple-400" />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="goal-target-date" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Target date</label>
+                  <input id="goal-target-date" type="date" title="Target date" value={goalTargetDate}
+                    onChange={(e) => setGoalTargetDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400" />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={cancelGoalForm}
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                <button type="button"
+                  disabled={!goalTitle.trim() || createGoalMut.isPending || editGoalMut.isPending}
+                  onClick={() => {
+                    const payload: NdisGoalPayload = {
+                      participant_id: id, name: goalTitle.trim(),
+                      goal_area: goalCategory as NdisGoal["goal_area"],
+                      description: goalDescription || null,
+                      target_date: goalTargetDate || null,
+                      success_criteria: goalSuccessCriteria || null,
+                      related_task_ids: [], status: "active",
+                    };
+                    if (createMode === "edit_goal" && editingGoal) editGoalMut.mutate({ goalId: editingGoal.id, payload });
+                    else createGoalMut.mutate(payload);
+                  }}
+                  className="flex-1 rounded-lg bg-[#3730A3] py-2.5 text-[12px] font-bold text-white hover:bg-[#312E81] disabled:opacity-50">
+                  {(createGoalMut.isPending || editGoalMut.isPending) ? "Saving…" : createMode === "edit_goal" ? "Update goal" : "Create goal"}
+                </button>
+              </div>
+            </div>
+          );
+
+          const taskFormContent = (
+            <div className="rounded-xl border border-purple-200 bg-white shadow-md p-6 space-y-5">
+              <div className="flex items-start justify-between pb-4 border-b border-purple-100">
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#111827]">Create New Task</h3>
+                  <p className="text-[12px] text-[#6B7280] mt-1">Setting up support for <span className="font-semibold">{participant.full_name}</span></p>
+                </div>
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }} title="Close" aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"><X size={16} className="text-[#9CA3AF]" /></button>
+              </div>
+
+              {/* PURPOSE SELECTION - FIRST FIELD */}
+              <div className="space-y-2">
+                <label className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">What is this task for?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setTaskPurpose("goal")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
+                      taskPurpose === "goal" 
+                        ? "border-purple-400 bg-purple-50 text-purple-700" 
+                        : "border-gray-200 bg-white text-[#6B7280] hover:border-purple-300"
+                    }`}>
+                    <Target size={14} /> Supports a goal
+                  </button>
+                  <button type="button" onClick={() => { setTaskPurpose("core"); setLinkedGoalId(null); }}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
+                      taskPurpose === "core" 
+                        ? "border-blue-400 bg-blue-50 text-blue-700" 
+                        : "border-gray-200 bg-white text-[#6B7280] hover:border-blue-300"
+                    }`}>
+                    <Heart size={14} /> Core support
+                  </button>
+                </div>
+                {taskPurpose === "core" && (
+                  <p className="text-[11px] text-[#6B7280]">Routine support like personal care, medication, or domestic assistance — not tied to a specific goal milestone. Most tasks are this.</p>
+                )}
+              </div>
+
+              {/* GOAL SELECTOR - CONDITIONAL */}
+              {taskPurpose === "goal" && (
+                <div className="space-y-1.5">
+                  <label htmlFor="task-linked-goal" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Linked goal *</label>
+                  <select id="task-linked-goal" title="Link task to goal" value={linkedGoalId ?? ""}
+                    onChange={(e) => setLinkedGoalId(e.target.value || null)}
+                    className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                    <option value="">Select a goal…</option>
+                    {activeGoals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* TASK TITLE */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Task title *</label>
+                <input value={taskTitle} onChange={(e) => { setTaskTitle(e.target.value); setTaskTitleAiApplied(false); }}
+                  placeholder="e.g. Prompt independent dressing"
+                  className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 transition-colors ${
+                    taskTitleAiApplied ? "border-emerald-200 bg-emerald-50/40 focus:ring-emerald-400" : "border-gray-200 focus:ring-purple-400"
+                  }`} />
+                {taskTitleAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
+              </div>
+
+              {/* AI INSTRUCTIONS BOX */}
+              {taskTitle.trim() && (
+                <div className="p-3 bg-purple-50/60 rounded-lg border border-purple-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={13} className="text-purple-600" />
+                      <span className="text-[12px] font-semibold text-purple-900">AI suggestion</span>
+                    </div>
+                    {!taskInstructionsAiApplied && (
+                      <button type="button" onClick={async () => {
+                        setTaskInstructionsLoading(true);
+                        try {
+                          const goal = linkedGoalId ? activeGoals.find(g => g.id === linkedGoalId) : null;
+                          const response = await jsonFetch<{ suggestions: string[] }>('/api/ai/task-instructions', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              task_title: taskTitle.trim(),
+                              task_purpose: taskPurpose,
+                              goal_name: goal?.name,
+                              goal_description: goal?.description,
+                              participant_name: participant.full_name,
+                            }),
+                          });
+                          setTaskInstructionsSuggestions(response.suggestions || []);
+                        } catch (err) {
+                          console.error('Failed to get instruction suggestions:', err);
+                        } finally {
+                          setTaskInstructionsLoading(false);
+                        }
+                      }} disabled={taskInstructionsLoading}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 disabled:opacity-60">
+                        {taskInstructionsLoading ? <>Generating…</> : <>Suggest instructions</>}
+                      </button>
+                    )}
+                  </div>
+                  {taskInstructionsSuggestions.length > 0 && (
+                    <div className="space-y-1.5">
+                      {taskInstructionsSuggestions.map((suggestion, idx) => (
+                        <div key={idx} className="p-2 rounded-lg bg-white border border-purple-100 flex items-start justify-between gap-2 hover:bg-purple-50/40 transition-colors">
+                          <p className="text-[11px] text-[#374151] flex-1 leading-snug">{suggestion}</p>
+                          <button type="button" onClick={() => { setTaskInstructions(suggestion); setTaskInstructionsAiApplied(true); setTaskInstructionsSuggestions([]); }}
+                            className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded bg-purple-600 text-white hover:bg-purple-700 whitespace-nowrap">
+                            Use
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TASK CATEGORY */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Task category</label>
+                <select value={taskCategory} onChange={(e) => setTaskCategory(e.target.value as any)} title="Select task category for invoice management"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                  <option value="personal_care">Personal care</option>
+                  <option value="medication">Medication</option>
+                  <option value="domestic_assistance">Domestic assistance</option>
+                  <option value="community_access">Community access</option>
+                  <option value="transport">Transport</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* PRIORITY */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Priority</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'low', label: 'Low', color: 'blue' },
+                    { id: 'medium', label: 'Medium', color: 'amber' },
+                    { id: 'high', label: 'High', color: 'red' }
+                  ].map(p => (
+                    <button key={p.id} type="button" onClick={() => setTaskPriority(p.id as any)}
+                      className={`flex-1 px-3 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
+                        taskPriority === p.id 
+                          ? `border-${p.color}-400 bg-${p.color}-50 text-${p.color}-700` 
+                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SHIFT TYPE - DETAILED */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Shift type <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'morning', label: 'Morning', icon: 'ti-sunrise' },
+                    { id: 'afternoon', label: 'Afternoon', icon: 'ti-sun' },
+                    { id: 'night', label: 'Night', icon: 'ti-moon' },
+                    { id: 'anytime', label: 'Anytime', icon: 'ti-clock' }
+                  ].map(shift => (
+                    <button key={shift.id} type="button" onClick={() => setTaskShiftType(shift.id as any)}
+                      className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-colors ${
+                        taskShiftType === shift.id 
+                          ? "border-orange-400 bg-orange-50 text-orange-700" 
+                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                      }`}>
+                      <i className={`ti ${shift.icon} text-sm`} />
+                      {shift.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#9CA3AF]">Shifts are critical for invoice management and task assignment</p>
+              </div>
+
+              {/* EVIDENCE TRACKING - NDIS COMPLIANCE */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Evidence required on completion</label>
+                <select value={taskEvidenceRequired} onChange={(e) => setTaskEvidenceRequired(e.target.value as any)} title="Select evidence required for task completion"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                  <option value="none">No evidence needed</option>
+                  <option value="photo">Photo</option>
+                  <option value="notes">Notes</option>
+                  <option value="photo_and_notes">Photo and notes</option>
+                </select>
+                <p className="text-[10px] text-[#9CA3AF]">Specifies what documentation workers must provide to verify task completion</p>
+              </div>
+
+              {/* RECURRING TASK SUPPORT */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Repeats</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="repeats" checked={!isRecurring} onChange={() => setIsRecurring(false)} className="rounded" />
+                    One-off
+                  </label>
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="repeats" checked={isRecurring} onChange={() => setIsRecurring(true)} className="rounded" />
+                    Recurring
+                  </label>
+                </div>
+              </div>
+
+              {/* FREQUENCY OPTIONS - CONDITIONAL */}
+              {isRecurring && (
+                <div className="space-y-1.5 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Frequency</label>
+                  <select value={frequencyPattern} onChange={(e) => setFrequencyPattern(e.target.value as any)} title="Select task recurrence pattern"
+                    className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-blue-400">
+                    <option value="every_morning_shift">Every Morning shift</option>
+                    <option value="every_afternoon_shift">Every Afternoon shift</option>
+                    <option value="every_night_shift">Every Night shift</option>
+                    <option value="daily_all_shifts">Daily, regardless of shift</option>
+                    <option value="specific_days_of_week">Specific days of the week</option>
+                    <option value="custom">Custom schedule</option>
+                  </select>
+                </div>
+              )}
+
+              {/* REQUIREMENT */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Requirement</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="requirement" checked={isMandatory} onChange={() => setIsMandatory(true)} className="rounded" />
+                    Mandatory
+                  </label>
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="requirement" checked={!isMandatory} onChange={() => setIsMandatory(false)} className="rounded" />
+                    Optional
+                  </label>
+                </div>
+              </div>
+
+              {/* NOTES FOR WORKER */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Notes for support worker</label>
+                <textarea value={taskInstructions} onChange={(e) => { setTaskInstructions(e.target.value); setTaskInstructionsAiApplied(false); }}
+                  placeholder="Any instructions the worker needs to know"
+                  rows={2}
+                  className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 transition-colors ${
+                    taskInstructionsAiApplied ? "border-emerald-200 bg-emerald-50/40 focus:ring-emerald-400" : "border-gray-200 focus:ring-purple-400"
+                  }`}
+                />
+                {taskInstructionsAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }}
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                <button type="button" disabled={!taskTitle.trim() || createTaskMut.isPending}
+                  onClick={() => createTaskMut.mutate({
+                    name: taskTitle.trim(),
+                    description: taskInstructions || null,
+                    goal_id: taskPurpose === "goal" ? linkedGoalId : null,
+                    is_mandatory: isMandatory,
+                    shift_type: taskShiftType,
+                    category: taskCategory,
+                    priority: taskPriority,
+                    evidence_required: taskEvidenceRequired,
+                    is_recurring: isRecurring,
+                    frequency_pattern: isRecurring ? frequencyPattern : null,
+                  })}
+                  className="flex-1 rounded-lg bg-purple-600 py-2.5 text-[12px] font-bold text-white hover:bg-purple-700 disabled:opacity-50">
+                  {createTaskMut.isPending ? "Creating…" : "Create task"}
+                </button>
+              </div>
+            </div>
+          );
+
+          return (
+            <section className="space-y-4">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#111827]">Goals & Tasks</h3>
+                  <p className="text-[12px] text-[#6B7280] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button"
+                    onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); }}
+                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
+                    + Goal
+                  </button>
+                  <button type="button"
+                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); }}
+                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    + Task
+                  </button>
+                  <button type="button" onClick={() => setShiftModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    <CalendarClock size={13} /> Assign Shift
+                  </button>
+                </div>
+              </div>
+
+              {/* Goal / task create-edit forms */}
+              {(createMode === "goal" || createMode === "edit_goal") && goalFormContent}
+              {createMode === "tasks" && taskFormContent}
+
+              {/* Loading */}
+              {ndisGoalsQuery.isLoading && (
+                <div className="flex items-center gap-2 py-4 text-[13px] text-[#6B7280]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
+              )}
+
+              {/* Empty state */}
+              {!ndisGoalsQuery.isLoading && activeGoals.length === 0 && createMode !== "goal" && (
+                <div className="rounded-lg border border-purple-100/60 bg-purple-50/40 p-6 text-center">
+                  <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
+                  <p className="text-[13px] font-bold text-[#111827]">No active goals</p>
+                  <p className="text-[12px] text-[#6B7280] mt-1">Click <strong>+ Goal</strong> to create the first NDIS goal for {participant.full_name}.</p>
+                </div>
+              )}
+
+              {/* Active goals */}
+              {activeGoals.map((goal) => {
+                const goalTasks = participantTasks.filter((t) => t.goal_id === goal.id);
+                const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
+                const progressData = progressGoalId === goal.id ? goalProgressQuery.data : undefined;
+                const progressLoading = progressGoalId === goal.id && goalProgressQuery.isLoading;
+                const pct = progressData && progressData.sessions_count > 0
+                  ? Math.round((progressData.evidence_count / progressData.sessions_count) * 100) : 0;
+
+                return (
+                  <div key={goal.id} className="rounded-lg border border-purple-100/60 bg-white">
+                    {/* Goal header */}
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                      <div className="flex items-start gap-2 min-w-0 flex-1">
+                        <Target size={15} className="shrink-0 mt-0.5 text-[#3730A3]" />
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-[#111827] leading-snug">{goal.name}</p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>
+                              {areaStyle.label}
+                            </span>
+                            <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
+                          </div>
+                          {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2">{goal.description}</p>}
+                          {goal.success_criteria && (
+                            <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6B7280]">
+                              <span className="font-bold text-[#374151]">Success: </span>{goal.success_criteria}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                        <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); }}
+                          className="px-2 py-1 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
+                          + Task
+                        </button>
+                        <button type="button" onClick={() => startEditGoal(goal)}
+                          className="p-1.5 rounded hover:bg-gray-100" title="Edit goal">
+                          <Edit2 size={12} className="text-[#6B7280]" />
+                        </button>
+                        <button type="button" onClick={() => completeGoalMut.mutate(goal.id)} disabled={completeGoalMut.isPending}
+                          className="p-1.5 rounded hover:bg-green-50" title="Mark completed">
+                          <CheckCircle2 size={12} className="text-[#059669]" />
+                        </button>
+                        <button type="button" onClick={() => archiveGoalMut.mutate(goal.id)} disabled={archiveGoalMut.isPending}
+                          className="p-1.5 rounded hover:bg-gray-100" title="Archive goal">
+                          <Archive size={12} className="text-[#6B7280]" />
+                        </button>
+                        <button type="button"
+                          onClick={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}
+                          className="p-1.5 rounded hover:bg-purple-50" title="View progress">
+                          <BarChart2 size={12} className={progressGoalId === goal.id ? "text-[#3730A3]" : "text-[#6B7280]"} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress panel */}
+                    {progressGoalId === goal.id && (
+                      <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
+                        {progressLoading && <p className="text-[12px] text-[#6B7280] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
+                        {progressData && (
+                          <div className="space-y-3">
+                            <p className="text-[11px] font-black uppercase tracking-widest text-[#6B7280]">Progress — Last 30 Days</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {([["Sessions", progressData.sessions_count], ["With Evidence", progressData.evidence_count], ["Evidence Rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
+                                <div key={l} className="rounded-lg px-3 py-2 bg-white border border-purple-100/60 text-center">
+                                  <p className="text-[15px] font-black text-[#3730A3]">{v}</p>
+                                  <p className="text-[9px] font-semibold text-[#6B7280]">{l}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-[10px] font-semibold mb-1 text-[#6B7280]"><span>Evidence rate</span><span>{pct}%</span></div>
+                              <div className="h-1.5 rounded-full overflow-hidden bg-purple-100">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#22C55E" : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
+                              </div>
+                            </div>
+                            {progressData.sessions.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">Recent Sessions</p>
+                                {progressData.sessions.slice(0, 4).map((s) => (
+                                  <div key={s.id} className="flex items-center justify-between rounded-lg px-3 py-1.5 bg-white text-[11px] border border-purple-100/60">
+                                    <span className="text-[#374151]">{s.session_date}</span>
+                                    <div className="flex items-center gap-2">
+                                      {s.notes && <span className="text-[#059669]">✓ Notes</span>}
+                                      {s.compliance_score != null && <span className={s.compliance_score >= 80 ? "text-[#059669]" : "text-[#D97706]"}>{s.compliance_score}%</span>}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tasks under this goal */}
+                    {goalTasks.length > 0 && (
+                      <div className="border-t border-purple-100/60 divide-y divide-gray-100">
+                        {goalTasks.map((task) => (
+                          <div key={task.id} className="flex items-center justify-between px-4 py-2.5 pl-9">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CheckCircle2 size={13} className="shrink-0 text-[#059669]" />
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
+                                {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                              <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
+                                className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {goalTasks.length === 0 && (
+                      <div className="border-t border-purple-100/60 px-4 py-2.5 pl-9">
+                        <p className="text-[11px] text-[#9CA3AF] italic">No tasks yet — click + Task to add one</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Core support tasks (no goal) */}
+              {(() => {
+                const coreTasks = participantTasks.filter((t) => !t.goal_id);
+                if (coreTasks.length === 0) return null;
+                return (
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest px-1">Core support — not linked to a goal</h4>
+                    <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+                      {coreTasks.map((task) => (
+                        <div key={task.id} className="flex items-center justify-between px-4 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <ClipboardList size={13} className="shrink-0 text-[#6B7280]" />
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
+                              {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                            <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
+                              className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Archived / completed goals */}
+              {doneGoals.length > 0 && (
+                <div className="space-y-1">
+                  <button type="button" onClick={() => setShowArchivedGoals((v) => !v)}
+                    className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B7280] hover:text-[#374151] px-1">
+                    <Archive size={12} />
+                    {showArchivedGoals ? "Hide" : "Show"} archived & completed ({doneGoals.length})
+                  </button>
+                  {showArchivedGoals && (
+                    <div className="space-y-1">
+                      {doneGoals.map((goal) => {
+                        const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
+                        return (
+                          <div key={goal.id} className="rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold text-[#374151] truncate">{goal.name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>{areaStyle.label}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${goal.status === "completed" ? "bg-green-50 text-green-700" : "bg-gray-100 text-[#6B7280]"}`}>
+                                  {goal.status === "completed" ? "Completed" : "Archived"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })()}
+
         {/* GOALS TAB */}
         {activeTab === "goals" && (
           <section className="rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
@@ -1052,11 +1892,17 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.sessionHistory")}</h4>
+                <h4 className="text-[13px] font-black text-[#111827]">Shift History</h4>
+                <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
+                  {sessions.length}
+                </span>
               </div>
-              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
-                {sessions.length}
-              </span>
+              {isCoordinator && (
+                <button type="button" onClick={() => setShiftModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                  <CalendarClock size={13} /> Assign Shift
+                </button>
+              )}
             </div>
             {sessionsQuery.isLoading ? (
               <div className="space-y-2">
@@ -1065,8 +1911,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             ) : sessions.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
                 <CalendarDays className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.sessions.empty")}</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.sessions.emptyHint")}</p>
+                <p className="text-[13px] font-semibold text-[#111827]">No shifts yet</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">Shifts with this participant will appear here.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1249,6 +2095,15 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         )}
 
       </div>
+
+      {isCoordinator && (
+        <ShiftAssignmentModal
+          open={shiftModalOpen}
+          onOpenChange={setShiftModalOpen}
+          workers={workersQuery.data ?? []}
+          initialParticipantId={id}
+        />
+      )}
     </div>
   );
 }
@@ -1271,6 +2126,19 @@ export default function Patients() {
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+
+  // Deep-link support: "Back to Participant" from session/shift detail pages
+  // passes ?id=<participantId>&tab=<tab> so the coordinator lands back on the
+  // exact participant + tab they came from instead of the bare list.
+  const deepLinkQuery = useSearch();
+  const deepLinkId = new URLSearchParams(deepLinkQuery).get("id");
+  const deepLinkTab = new URLSearchParams(deepLinkQuery).get("tab") as ParticipantDetailTab | null;
+  useEffect(() => {
+    if (deepLinkId) {
+      setSelectedId(deepLinkId);
+      setShowMobileDetail(true);
+    }
+  }, [deepLinkId]);
 
   const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
 
@@ -1509,7 +2377,7 @@ export default function Patients() {
               {translate("patients.backToList")}
             </button>
             <div className="flex-1 overflow-y-auto">
-              <ParticipantDetail id={selectedId} onRefreshList={refetch} />
+              <ParticipantDetail key={selectedId} id={selectedId} onRefreshList={refetch} initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined} />
             </div>
           </>
         ) : (

@@ -2,7 +2,7 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks
+from .api import auth, participants, sessions, alerts, plans, reports, ai, compliance, budget_api, incidents, assignments, billing, dashboards, worker, coordinator, security, users, onboarding, credentials, toolkit, settings, hub, md_onboarding, ndis_pricing, ndis_tasks, notifications, budget_ledger, privacy, worker_help, worker_scheduling, worker_performance, worker_travel, calendar_feed, tasks, ai_suggestions
 from .core.security import get_current_user
 from .middleware.org_context import OrgContextMiddleware
 from .services import migration_state
@@ -190,6 +190,7 @@ app.include_router(alerts.router, prefix="/api")
 app.include_router(plans.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(ai.router, prefix="/api")
+app.include_router(ai_suggestions.router)  # Uses /api/ai prefix internally
 app.include_router(compliance.router, prefix="/api")
 app.include_router(budget_api.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
@@ -216,6 +217,7 @@ app.include_router(settings.router, prefix="/api")
 app.include_router(hub.router, prefix="/api")
 app.include_router(md_onboarding.router, prefix="/api")
 app.include_router(ndis_pricing.router, prefix="/api")
+app.include_router(ndis_tasks.router, prefix="/api")
 app.include_router(budget_ledger.router)  # Uses internal /api/ledger prefix
 from .api import invitations as invitations_api
 app.include_router(invitations_api.router, prefix="/api")

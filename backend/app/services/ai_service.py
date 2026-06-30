@@ -1476,3 +1476,122 @@ Return ONLY valid JSON — no markdown:
         "past_strategies": raw.get("past_strategies") or fallback["past_strategies"],
         "recommendations": raw.get("recommendations") or fallback["recommendations"],
     }
+
+
+async def generate_task_suggestions(
+    task_title: str,
+    context: str,
+    participant_name: str,
+) -> dict:
+    """Generate alternative task title suggestions using AI.
+    
+    Args:
+        task_title: The task title entered by user
+        context: Context like "for goal: X" or "for core support"
+        participant_name: Name of the participant
+        
+    Returns:
+        {"suggestions": [list of 3-5 alternative task titles]}
+    """
+    if not _openai_configured():
+        return {"suggestions": []}
+    
+    user_prompt = f"""Generate 4 alternative, specific, and action-oriented task titles for supporting {participant_name}.
+    
+Current title: "{task_title}"
+Context: {context}
+
+Requirements:
+- Each title should be clear, specific, and focus on what the worker will DO
+- Titles should be suitable for NDIS support workers
+- Start with action verbs like "Prompt", "Support", "Assist", "Help", "Guide", "Encourage"
+- Between 3-8 words each
+- Include specific details where relevant
+
+Return ONLY valid JSON (no markdown):
+{{
+  "suggestions": ["Title 1", "Title 2", "Title 3", "Title 4"]
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=300,
+            response_format={"type": "json_object"},
+        )
+        result = _json.loads(resp.choices[0].message.content or "{}")
+        return result
+    except Exception as exc:
+        logger.warning("generate_task_suggestions AI call failed: %s", exc)
+        return {"suggestions": []}
+
+
+async def generate_task_instructions(
+    task_title: str,
+    task_purpose: str,
+    goal_name: str = None,
+    goal_description: str = None,
+    participant_name: str = None,
+) -> dict:
+    """Generate instruction suggestions for a task using AI.
+    
+    Args:
+        task_title: The task title
+        task_purpose: Either "core" or "goal"
+        goal_name: Name of linked goal (if purpose is "goal")
+        goal_description: Description of linked goal
+        participant_name: Name of participant
+        
+    Returns:
+        {"suggestions": [list of 3-5 instruction options]}
+    """
+    if not _openai_configured():
+        return {"suggestions": []}
+    
+    goal_context = ""
+    if task_purpose == "goal" and goal_name:
+        goal_context = f"\nLinked NDIS Goal: {goal_name}"
+        if goal_description:
+            goal_context += f"\nGoal details: {goal_description}"
+    
+    user_prompt = f"""Generate 3-4 specific, practical instruction options for support workers doing the following task for {participant_name}.
+    
+Task: "{task_title}"
+Purpose: {"Supporting a linked NDIS goal" if task_purpose == "goal" else "Core support (not linked to a specific goal"}
+{goal_context}
+
+Requirements:
+- Instructions should be specific and actionable
+- Include WHO should do it (e.g., worker, participant)
+- Include HOW to do it (step-by-step or techniques)
+- Include WHY it matters for {participant_name}
+- Be person-centered and strengths-based
+- Suitable for training support workers
+- 1-3 sentences per instruction
+
+Return ONLY valid JSON (no markdown):
+{{
+  "suggestions": ["Instruction 1", "Instruction 2", "Instruction 3"]
+}}"""
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": CARESCRIBE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.7,
+            max_tokens=500,
+            response_format={"type": "json_object"},
+        )
+        result = _json.loads(resp.choices[0].message.content or "{}")
+        return result
+    except Exception as exc:
+        logger.warning("generate_task_instructions AI call failed: %s", exc)
+        return {"suggestions": []}
