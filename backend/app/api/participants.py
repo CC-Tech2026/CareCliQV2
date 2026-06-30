@@ -475,7 +475,7 @@ async def get_compliance_history(
     """
 
     from ..services.funding_service import (
-        get_compliance_audit_logs,
+        get_compliance_audit_logs_for_sessions,
     )
     from ..services.session_service import (
         get_sessions_by_participant,
@@ -491,19 +491,24 @@ async def get_compliance_history(
         current_user,
     )
 
+    session_ids = [session["id"] for session in sessions[:20] if session.get("id")]
+    if not session_ids:
+        return []
+
+    audit_logs_by_session = await get_compliance_audit_logs_for_sessions(session_ids)
+
     history = []
 
     for session in sessions[:20]:
-        logs = await get_compliance_audit_logs(
-            session["id"],
-        )
+        session_id = session.get("id")
+        logs = audit_logs_by_session.get(str(session_id), [])
 
         if not logs:
             continue
 
         history.append(
             {
-                "session_id": session["id"],
+                "session_id": session_id,
                 "session_date": session.get("session_date"),
                 "session_type": session.get("session_type"),
                 "latest_audit": logs[0],
