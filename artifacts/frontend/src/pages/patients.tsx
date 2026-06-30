@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
+import {
+  getNdisGoals, createNdisGoal, archiveNdisGoal, completeNdisGoal, updateNdisGoal, getGoalProgress,
+  getParticipantTasks, createParticipantTask, deleteParticipantTask, getCoordinatorWorkerStats,
+  type NdisGoal, type NdisGoalPayload, type ParticipantTask, type ParticipantTaskPayload, type GoalProgressResponse, type WorkerStats,
+} from "@/services/coordinatorService";
+import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { useGetParticipants } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
@@ -8,13 +14,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format, parseISO } from "date-fns";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   Search,
   UserPlus,
   Loader2,
   Users,
   Edit,
+  Edit2,
+  Trash2,
   DollarSign,
   PlusCircle,
   CheckCircle2,
@@ -24,6 +32,13 @@ import {
   UserCircle,
   Target,
   Lock,
+  Heart,
+  Sparkles,
+  Wand2,
+  BarChart2,
+  Archive,
+  X,
+  CalendarClock,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -34,6 +49,7 @@ import { SmartInput } from "@/components/SmartInput";
 import { TranslationAuditView } from "@/components/TranslationAuditView";
 import { ParticipantShiftContextEditor } from "@/components/participants/ParticipantShiftContextEditor";
 import { apiFetch } from "@/lib/api-fetch";
+import { jsonFetch } from "@/services/http";
 import {
   Select,
   SelectContent,
@@ -49,6 +65,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -75,11 +98,15 @@ const planSchema = z.object({
   plan_start: z.string().min(1, "Plan start date is required"),
   plan_end: z.string().min(1, "Plan end date is required"),
   total_funding: z.coerce.number().min(0),
-  core_budget: z.coerce.number().min(0).optional(),
-  capacity_budget: z.coerce.number().min(0).optional(),
-  capital_budget: z.coerce.number().min(0).optional(),
 });
 type PlanFormValues = z.infer<typeof planSchema>;
+
+type PlanBudgetCategoryOption = {
+  category: string;
+  category_name: string;
+  category_group: "core_supports" | "capacity_building" | "capital_supports";
+  source: "pricing" | "legacy";
+};
 
 type ParticipantRecord = {
   id: string;
@@ -120,18 +147,24 @@ type SessionRecord = {
 
 type BudgetSummary = {
   has_plan: boolean;
+  plan_id?: string;
   plan_number?: string;
   plan_start?: string | null;
   plan_end?: string | null;
   status?: string | null;
   total_funding?: number | string | null;
+  total_allocated?: number;
+  total_used?: number;
+  total_remaining?: number;
   budgets?: Array<{
     category?: string;
     category_label?: string;
+    category_group?: string;
     allocated?: number;
     used?: number;
     remaining?: number;
     percent_used?: number;
+    overspent?: boolean;
   }>;
 };
 
@@ -195,15 +228,6 @@ function normalizeGoalTitle(goal: Record<string, unknown>, index: number) {
   return String(goal.title || goal.description || goal.name || `Goal ${index + 1}`);
 }
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const res = await apiFetch(path);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { detail?: string; message?: string }).detail ?? (err as { message?: string }).message ?? `Request failed with ${res.status}`);
-  }
-  return res.json() as Promise<T>;
-}
-
 // ---------------------------------------------------------------------------
 // Add / Edit Participant Form Component
 // ---------------------------------------------------------------------------
@@ -214,12 +238,14 @@ function ParticipantForm({
   isPending,
   onCancel,
   submitLabel,
+  hasPlan = false,
 }: {
   form: ReturnType<typeof useForm<ParticipantFormValues>>;
   onSubmit: (data: ParticipantFormValues) => void;
   isPending: boolean;
   onCancel: () => void;
   submitLabel: string;
+  hasPlan?: boolean;
 }) {
   const { translate } = useAccessibility();
   return (
@@ -360,19 +386,28 @@ function ParticipantForm({
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="total_budget"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
-                <FormControl>
-                  <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          {hasPlan ? (
+            <FormItem>
+              <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
+              <p className="rounded-md border border-dashed border-muted-foreground/30 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Managed via Set Up NDIS Plan
+              </p>
+            </FormItem>
+          ) : (
+            <FormField
+              control={form.control}
+              name="total_budget"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{translate("patients.field.totalBudget")}</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} data-testid="input-total-budget" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <FormField
             control={form.control}
             name="plan_start_date"
@@ -420,9 +455,11 @@ function ParticipantForm({
 
 function EditParticipantPanel({
   participant,
+  hasPlan,
   onSaved,
 }: {
   participant: any;
+  hasPlan: boolean;
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -489,6 +526,7 @@ function EditParticipantPanel({
             onSubmit={(data) => updateMutation.mutate(data)}
             isPending={updateMutation.isPending}
             onCancel={() => setOpen(false)}
+            hasPlan={hasPlan}
             submitLabel={translate("patients.saveChanges")}
           />
         </div>
@@ -503,9 +541,11 @@ function EditParticipantPanel({
 
 function SetupPlanPanel({
   participantId,
+  budget,
   onSaved,
 }: {
   participantId: string;
+  budget?: BudgetSummary;
   onSaved: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -519,9 +559,6 @@ function SetupPlanPanel({
       plan_start: "",
       plan_end: "",
       total_funding: 0,
-      core_budget: 0,
-      capacity_budget: 0,
-      capital_budget: 0,
     },
   });
 
@@ -537,7 +574,70 @@ function SetupPlanPanel({
     },
     onSuccess: () => {
       toast({ title: translate("patients.toast.planSaved") });
-      setOpen(false);
+      onSaved();
+    },
+    onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
+  });
+
+  const hasPlan = !!budget?.plan_id;
+  const existingBudgets = budget?.budgets ?? [];
+  const usedCategoryKeys = new Set(existingBudgets.map((b) => b.category));
+
+  useEffect(() => {
+    if (!open) return;
+    planForm.reset({
+      plan_number: budget?.plan_number ?? "",
+      plan_start: budget?.plan_start ? String(budget.plan_start).slice(0, 10) : "",
+      plan_end: budget?.plan_end ? String(budget.plan_end).slice(0, 10) : "",
+      total_funding: Number(budget?.total_funding ?? 0),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, budget?.plan_id]);
+
+  const categoriesQuery = useOrgQuery(["participant", participantId, "budget-categories"], {
+    queryFn: () => jsonFetch<PlanBudgetCategoryOption[]>(`/api/participants/${participantId}/plan/budget-categories`),
+    enabled: open && hasPlan,
+  });
+  const availableCategories = categoriesQuery.data ?? [];
+
+  const [categoryDraft, setCategoryDraft] = useState("");
+  const [amountDraft, setAmountDraft] = useState("");
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+
+  const resetCategoryDraft = () => {
+    setCategoryDraft("");
+    setAmountDraft("");
+    setEditingCategory(null);
+  };
+
+  const upsertBudget = useMutation({
+    mutationFn: async (payload: { category: string; allocated_amount: number }) => {
+      const res = await apiFetch(`/api/participants/${participantId}/plan/budgets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save category budget");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: translate("patients.toast.planSaved") });
+      resetCategoryDraft();
+      onSaved();
+    },
+    onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
+  });
+
+  const deleteBudget = useMutation({
+    mutationFn: async (category: string) => {
+      const res = await apiFetch(`/api/participants/${participantId}/plan/budgets/${encodeURIComponent(category)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to remove category budget");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: translate("patients.toast.planSaved") });
       onSaved();
     },
     onError: () => toast({ title: translate("patients.toast.planSaveFailed"), variant: "destructive" }),
@@ -545,128 +645,197 @@ function SetupPlanPanel({
 
   return (
     <div>
-      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen((prev) => !prev)}>
-        <PlusCircle className="h-3.5 w-3.5" /> {open ? translate("patients.closePlanSetup") : translate("patients.setupPlan")}
+      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setOpen(true)}>
+        <PlusCircle className="h-3.5 w-3.5" /> {hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}
       </Button>
-      {open && (
-        <div className="mt-3 rounded-2xl border border-purple-100/70 bg-[#FDFCFF] p-4">
-          <h4 className="mb-3 text-[13px] font-black text-[#111827]">{translate("patients.setupPlan")}</h4>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{hasPlan ? "Edit Plan Details" : translate("patients.setupPlan")}</DialogTitle>
+          </DialogHeader>
           <Form {...planForm}>
             <form onSubmit={planForm.handleSubmit((d) => createPlan.mutate(d))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={planForm.control}
-                name="plan_number"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>{translate("patients.field.planReference")}</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 2024-ABC-001" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_start"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {translate("patients.field.planStart")} <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="plan_end"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="total_funding"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="col-span-2">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
-                  <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
-                </p>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={planForm.control}
+                  name="plan_number"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>{translate("patients.field.planReference")}</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. 2024-ABC-001" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_start"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {translate("patients.field.planStart")} <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="plan_end"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        {translate("patients.field.planEnd")} <span className="text-destructive">*</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={planForm.control}
+                  name="total_funding"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>{translate("patients.field.totalFunding")}</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder={translate("patients.placeholder.totalBudget")} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <FormField
-                control={planForm.control}
-                name="core_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.coreSupports")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capacity_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.capacityBuilding")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={planForm.control}
-                name="capital_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{translate("patients.field.capitalSupports")}</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createPlan.isPending}>
-                {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {translate("patients.savePlan")}
-              </Button>
-            </div>
+
+              {!hasPlan && (
+                <div className="border-t border-purple-100/60 pt-4">
+                  <p className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
+                  </p>
+                  <p className="text-[12px] text-[#6B7280]">
+                    Save the plan details above first — category budgets can be added once the plan exists.
+                  </p>
+                </div>
+              )}
+
+              {hasPlan && (
+                <div className="border-t border-purple-100/60 pt-4">
+                  <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-1.5">
+                    <DollarSign className="h-4 w-4" /> {translate("patients.budgetByCategory")}
+                  </p>
+
+                  {existingBudgets.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {existingBudgets.map((b) => (
+                        <div
+                          key={b.category}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-purple-100/60 bg-white p-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-bold text-[#111827] truncate">{b.category_label || b.category}</p>
+                            <p className="text-[10px] text-[#6B7280]">
+                              {money(b.allocated)} allocated
+                              {b.overspent && <span className="ml-1.5 font-bold text-red-600">· Over budget</span>}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                if (!b.category) return;
+                                setEditingCategory(b.category);
+                                setCategoryDraft(b.category);
+                                setAmountDraft(String(b.allocated ?? 0));
+                              }}
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-red-600"
+                              disabled={deleteBudget.isPending}
+                              onClick={() => b.category && deleteBudget.mutate(b.category)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 rounded-xl border border-dashed border-purple-200 p-3">
+                    <Select
+                      value={categoryDraft}
+                      onValueChange={setCategoryDraft}
+                      disabled={!!editingCategory || categoriesQuery.isLoading}
+                    >
+                      <SelectTrigger className="h-9 text-[12px]">
+                        <SelectValue placeholder={categoriesQuery.isLoading ? "Loading categories…" : "Select category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCategories
+                          .filter((c) => editingCategory === c.category || !usedCategoryKeys.has(c.category))
+                          .map((c) => (
+                            <SelectItem key={c.category} value={c.category}>
+                              {c.category_name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Allocated amount"
+                      value={amountDraft}
+                      onChange={(e) => setAmountDraft(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      {editingCategory && (
+                        <Button type="button" variant="outline" size="sm" onClick={resetCategoryDraft}>
+                          Cancel
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!categoryDraft || amountDraft === "" || upsertBudget.isPending}
+                        onClick={() =>
+                          upsertBudget.mutate({ category: categoryDraft, allocated_amount: Number(amountDraft) })
+                        }
+                      >
+                        {upsertBudget.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                        {editingCategory ? "Update" : "Add"} Category Budget
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={createPlan.isPending}>
+                  {createPlan.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {hasPlan ? "Update Plan" : translate("patients.savePlan")}
+                </Button>
+              </DialogFooter>
             </form>
           </Form>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -675,26 +844,136 @@ function SetupPlanPanel({
 // Participant Detail Wrapper Component
 // ---------------------------------------------------------------------------
 
-function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: () => void }) {
+type ParticipantDetailTab = "overview" | "plan" | "goals" | "goals_tasks" | "sessions" | "compliance" | "shift_context" | "restricted";
+
+function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRefreshList: () => void; initialTab?: ParticipantDetailTab }) {
   const { translate, translateParams } = useAccessibility();
   const participantQuery = useOrgQuery(["participant", id], {
-    queryFn: () => fetchJson<ParticipantRecord>(`/api/participants/${id}`),
+    queryFn: () => jsonFetch<ParticipantRecord>(`/api/participants/${id}`),
   });
   const sessionsQuery = useOrgQuery(["participant", id, "sessions"], {
-    queryFn: () => fetchJson<SessionRecord[]>(`/api/sessions/participant/${id}`),
+    queryFn: () => jsonFetch<SessionRecord[]>(`/api/sessions/participant/${id}`),
   });
   const budgetQuery = useOrgQuery(["participant", id, "budget-summary"], {
-    queryFn: () => fetchJson<BudgetSummary>(`/api/participants/${id}/budget-summary`),
+    queryFn: () => jsonFetch<BudgetSummary>(`/api/participants/${id}/budget-summary`),
   });
   const complianceQuery = useOrgQuery(["participant", id, "compliance-history"], {
-    queryFn: () => fetchJson<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
+    queryFn: () => jsonFetch<ComplianceHistoryItem[]>(`/api/participants/${id}/compliance-history`),
   });
 
   const { user } = useAuth();
   const isCoordinator = user?.role === "support_coordinator";
+  const qc = useQueryClient();
+
+  // Assign Shift — coordinator only
+  const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const workersQuery = useOrgQuery<WorkerStats[]>(["coordinator-worker-stats"], {
+    queryFn: getCoordinatorWorkerStats,
+    enabled: isCoordinator,
+  });
+
+  // Goals & Tasks — coordinator only
+  const ndisGoalsQuery = useOrgQuery<NdisGoal[]>(["participant", id, "ndis-goals"], {
+    queryFn: () => getNdisGoals({ participant_id: id }),
+    enabled: isCoordinator,
+  });
+  const ndisGoals = ndisGoalsQuery.data ?? [];
+
+  const participantTasksQuery = useOrgQuery<ParticipantTask[]>(["participant", id, "participant-tasks"], {
+    queryFn: () => getParticipantTasks(id),
+    enabled: isCoordinator,
+  });
+  const participantTasks = participantTasksQuery.data ?? [];
+
+  const [progressGoalId, setProgressGoalId] = useState<string | null>(null);
+  const goalProgressQuery = useOrgQuery<GoalProgressResponse>(
+    ["goal-progress", progressGoalId ?? "__none__"],
+    { queryFn: () => getGoalProgress(progressGoalId!), enabled: !!progressGoalId }
+  );
+
+  const createGoalMut = useMutation({
+    mutationFn: (payload: NdisGoalPayload) => createNdisGoal(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      setCreateMode(null);
+      setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to create goal", variant: "destructive" }),
+  });
+
+  const editGoalMut = useMutation({
+    mutationFn: ({ goalId, payload }: { goalId: string; payload: NdisGoalPayload }) => updateNdisGoal(goalId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] });
+      setCreateMode(null); setEditingGoal(null);
+      setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalDescriptionAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to update goal", variant: "destructive" }),
+  });
+
+  const archiveGoalMut = useMutation({
+    mutationFn: archiveNdisGoal,
+    onSuccess: () => { toastFn({ title: "Goal archived" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onError: () => toastFn({ title: "Failed to archive goal", variant: "destructive" }),
+  });
+
+  const completeGoalMut = useMutation({
+    mutationFn: completeNdisGoal,
+    onSuccess: () => { toastFn({ title: "Goal marked complete" }); qc.invalidateQueries({ queryKey: ["participant", id, "ndis-goals"] }); },
+    onError: () => toastFn({ title: "Failed to complete goal", variant: "destructive" }),
+  });
+
+  const createTaskMut = useMutation({
+    mutationFn: (payload: Omit<ParticipantTaskPayload, "status">) =>
+      createParticipantTask(id, { ...payload, status: "pending" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
+      setCreateMode(null);
+      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false);
+    },
+    onError: () => toastFn({ title: "Failed to create task", variant: "destructive" }),
+  });
+
+  const deleteTaskMut = useMutation({
+    mutationFn: deleteParticipantTask,
+    onSuccess: () => { toastFn({ title: "Task deleted" }); qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] }); },
+    onError: () => toastFn({ title: "Failed to delete task", variant: "destructive" }),
+  });
+
+  const suggestGoalDescription = async () => {
+    if (!goalTitle.trim()) return;
+    setGoalDescriptionLoading(true); setGoalDescriptionAiApplied(false);
+    try {
+      const params = new URLSearchParams({ participant_id: id, goal_title: goalTitle.trim() });
+      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
+      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
+      const data = await res.json() as { suggestion: string | null };
+      if (data.suggestion) { setGoalDescription(data.suggestion); setGoalDescriptionAiApplied(true); toastFn({ title: "Description suggested", description: "Review and edit the AI-suggested text." }); }
+      else toastFn({ title: "No suggestion available", description: "Write a description manually." });
+    } catch (err) {
+      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
+      console.error("suggestGoalDescription error:", err);
+    } finally { setGoalDescriptionLoading(false); }
+  };
+
+  const suggestTaskInstructions = async () => {
+    if (!taskTitle.trim()) return;
+    setTaskInstructionsLoading(true); setTaskInstructionsAiApplied(false);
+    try {
+      const params = new URLSearchParams({ participant_id: id, goal_title: taskTitle.trim() });
+      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
+      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
+      const data = await res.json() as { suggestion: string | null };
+      if (data.suggestion) { setTaskInstructions(data.suggestion); setTaskInstructionsAiApplied(true); toastFn({ title: "Instructions suggested", description: "Review and edit the AI-suggested text." }); }
+      else toastFn({ title: "No suggestion available", description: "Write instructions manually." });
+    } catch (err) {
+      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
+      console.error("suggestTaskInstructions error:", err);
+    } finally { setTaskInstructionsLoading(false); }
+  };
 
   const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
-    queryFn: () => fetchJson<{
+    queryFn: () => jsonFetch<{
       restricted_behavioural_notes: string | null;
       behaviour_support_plan: string | null;
       medications: string | null;
@@ -735,7 +1014,40 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
     onError: () => toastFn({ title: translate("patients.toast.saveFailed"), variant: "destructive" }),
   });
-  const [activeTab, setActiveTab] = useState<"overview" | "plan" | "goals" | "sessions" | "compliance" | "shift_context" | "restricted">("overview");
+  const [activeTab, setActiveTab] = useState<ParticipantDetailTab>(initialTab ?? "overview");
+
+  // Form state for creating / editing goals & tasks
+  const [createMode, setCreateMode] = useState<'goal' | 'edit_goal' | 'tasks' | null>(null);
+  const [editingGoal, setEditingGoal] = useState<NdisGoal | null>(null);
+  const [showArchivedGoals, setShowArchivedGoals] = useState(false);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalCategory, setGoalCategory] = useState('daily_living');
+  const [goalSupportCategory, setGoalSupportCategory] = useState('');
+  const [goalDescription, setGoalDescription] = useState('');
+  const [goalTargetDate, setGoalTargetDate] = useState('');
+  const [goalSuccessCriteria, setGoalSuccessCriteria] = useState('');
+  const [goalDescriptionLoading, setGoalDescriptionLoading] = useState(false);
+  const [goalDescriptionAiApplied, setGoalDescriptionAiApplied] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskTitleSuggestions, setTaskTitleSuggestions] = useState<string[]>([]);
+  const [taskTitleLoading, setTaskTitleLoading] = useState(false);
+  const [taskInstructions, setTaskInstructions] = useState('');
+  const [taskInstructionsSuggestions, setTaskInstructionsSuggestions] = useState<string[]>([]);
+  const [taskSupportCategory, setTaskSupportCategory] = useState('');
+  const [taskInstructionsLoading, setTaskInstructionsLoading] = useState(false);
+  const [taskInstructionsAiApplied, setTaskInstructionsAiApplied] = useState(false);
+  const [taskTitleAiApplied, setTaskTitleAiApplied] = useState(false);
+  const [taskPurpose, setTaskPurpose] = useState<'core' | 'goal'>('core');
+  const [linkedGoalId, setLinkedGoalId] = useState<string | null>(null);
+  const [isMandatory, setIsMandatory] = useState(true);
+  // Detailed task fields for proper invoice management & shift assignment
+  const [taskShiftType, setTaskShiftType] = useState<'morning' | 'afternoon' | 'night' | 'anytime'>('morning');
+  const [taskCategory, setTaskCategory] = useState<'personal_care' | 'medication' | 'domestic_assistance' | 'community_access' | 'transport' | 'other'>('personal_care');
+  const [taskPriority, setTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  // NDIS professional fields
+  const [taskEvidenceRequired, setTaskEvidenceRequired] = useState<'none' | 'photo' | 'notes' | 'photo_and_notes'>('none');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
 
   if (participantQuery.isLoading) {
     return (
@@ -762,9 +1074,24 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   const budget = budgetQuery.data;
   const complianceHistory = complianceQuery.data ?? [];
   const goals = Array.isArray(participant.goals) ? participant.goals : [];
-  const usedBudget = Number(participant.used_budget ?? 0);
-  const totalBudget = Number(participant.total_budget ?? budget?.total_funding ?? 0);
-  const remainingBudget = Math.max(totalBudget - usedBudget, 0);
+  const categoryBudgets = budget?.budgets ?? [];
+  const hasCategoryBudgets = categoryBudgets.length > 0;
+  const hasPlan = !!budget?.plan_id;
+  // Once per-category budgets exist, they are the source of truth — total_allocated/used/remaining
+  // are a computed rollup of those rows, not a separately-tracked figure. Otherwise, the plan record
+  // (budget.total_funding) is authoritative once a plan exists — participant.total_budget is a legacy
+  // field that can drift from it (e.g. via the separate Edit participant panel) and is only trusted
+  // as a last resort when there's no plan at all.
+  const totalBudget = hasCategoryBudgets
+    ? Number(budget?.total_allocated ?? 0)
+    : hasPlan
+      ? Number(budget?.total_funding ?? 0)
+      : Number(participant.total_budget ?? 0);
+  const usedBudget = hasCategoryBudgets ? Number(budget?.total_used ?? 0) : Number(participant.used_budget ?? 0);
+  const remainingBudget = hasCategoryBudgets
+    ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
+    : Math.max(totalBudget - usedBudget, 0);
+  const isOverspent = remainingBudget < 0;
   const scoredSessions = sessions.filter((session) => session.compliance_score != null);
   const averageCompliance = scoredSessions.length
     ? Math.round(scoredSessions.reduce((sum, session) => sum + Number(session.compliance_score ?? 0), 0) / scoredSessions.length)
@@ -778,15 +1105,15 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
     },
     {
       label: translate("patients.metric.budgetRemaining"),
-      value: money(remainingBudget),
+      value: isOverspent ? `${money(remainingBudget)} · Over budget` : money(remainingBudget),
       icon: DollarSign,
-      tone: "bg-cc-active-bg text-cc-plum border-cc-border",
+      tone: isOverspent ? "bg-red-50 text-red-700 border-red-200" : "bg-purple-50 text-[#3730A3] border-purple-100",
     },
     {
       label: translate("patients.tab.sessions"),
       value: String(sessions.length),
       icon: CalendarDays,
-      tone: "cc-status-info border",
+      tone: "bg-sky-50 text-sky-700 border-sky-100",
     },
     {
       label: translate("patients.tab.compliance"),
@@ -806,18 +1133,18 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
   const TABS = [
     { id: "overview"    as const, label: translate("patients.tab.overview"),    icon: UserCircle   },
     { id: "plan"        as const, label: translate("patients.tab.plan"),   icon: DollarSign   },
-    { id: "goals"       as const, label: translate("patients.tab.goals"),       icon: Target       },
-    { id: "sessions"    as const, label: translate("patients.tab.sessions"),    icon: CalendarDays },
+    ...(isCoordinator ? [{ id: "goals_tasks" as const, label: "Goals & Tasks", icon: ClipboardList }] : [{ id: "goals" as const, label: translate("patients.tab.goals"), icon: Target }]),
+    { id: "sessions"    as const, label: "Shift History", icon: CalendarDays },
     { id: "compliance"  as const, label: translate("patients.tab.compliance"),  icon: ShieldCheck  },
     ...(isCoordinator ? [{ id: "shift_context" as const, label: translate("patients.tab.shiftContext"), icon: Users }] : []),
-    ...(isCoordinator ? [{ id: "restricted" as const, label: translate("patients.tab.restricted"), icon: Lock }] : []),
+    ...(isCoordinator ? [{ id: "restricted" as const, label: "Clinical Records", icon: Lock }] : []),
   ];
 
   return (
     <div className="flex flex-col min-h-full">
 
       {/* ── Sticky header ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 bg-cc-surface border-b border-cc-border px-5 pt-5 pb-0">
+      <div className="sticky top-0 z-10 bg-white border-b border-purple-100/60 px-5 pt-5 pb-0">
 
         {/* Avatar + name + action buttons */}
         <div className="flex items-center gap-3 pb-4">
@@ -835,14 +1162,19 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
           <div className="flex items-center gap-1.5 shrink-0">
             <EditParticipantPanel
               participant={participant}
+              hasPlan={hasPlan}
               onSaved={() => { participantQuery.refetch(); onRefreshList(); }}
             />
-            <SetupPlanPanel participantId={id} onSaved={onRefreshList} />
+            <SetupPlanPanel
+              participantId={id}
+              budget={budget}
+              onSaved={() => { participantQuery.refetch(); budgetQuery.refetch(); onRefreshList(); }}
+            />
           </div>
         </div>
 
         {/* NDIS number + plan dates */}
-        <p className="text-[11px] text-cc-muted ml-[52px] -mt-2 mb-3 leading-relaxed">
+        <p className="text-[11px] text-[#6B7280] ml-[52px] -mt-2 mb-3 leading-relaxed">
           {translateParams("patients.ndisLine", { number: participant.ndis_number || translate("patients.notRecorded") })}
           {participant.plan_start_date && participant.plan_end_date && (
             <> &middot; Plan {safeFormat(participant.plan_start_date)} – {safeFormat(participant.plan_end_date)}</>
@@ -876,8 +1208,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-bold border-b-2 whitespace-nowrap transition-colors shrink-0 ${
                   active
-                    ? "border-cc-plum text-cc-plum"
-                    : "border-transparent text-cc-muted hover:text-cc-text hover:border-cc-border"
+                    ? "border-[#3730A3] text-[#3730A3]"
+                    : "border-transparent text-[#6B7280] hover:text-[#111827] hover:border-[#E5E7EB]"
                 }`}
               >
                 <Icon size={13} strokeWidth={active ? 2.5 : 2} />
@@ -942,19 +1274,27 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     <p className="text-[12px] font-bold text-[#111827]">{budget.plan_number}</p>
                   </div>
                 )}
-                {/* Total / Used / Remaining */}
+                {/* Total / Used / Remaining — computed rollup of the category rows below once any exist */}
                 <div className="grid grid-cols-3 gap-2">
                   {[
-                    [translate("patients.budget.total"),     money(totalBudget || budget?.total_funding)],
-                    [translate("patients.budget.used"),      money(usedBudget)],
-                    [translate("patients.budget.remaining"), money(remainingBudget)],
-                  ].map(([lbl, val]) => (
-                    <div key={lbl} className="rounded-lg bg-white border border-purple-100/60 px-3 py-2">
+                    { lbl: translate("patients.budget.total"),     val: money(totalBudget || budget?.total_funding), flagged: false },
+                    { lbl: translate("patients.budget.used"),      val: money(usedBudget), flagged: false },
+                    { lbl: translate("patients.budget.remaining"), val: money(remainingBudget), flagged: isOverspent },
+                  ].map(({ lbl, val, flagged }) => (
+                    <div
+                      key={lbl}
+                      className={`rounded-lg border px-3 py-2 ${flagged ? "bg-red-50 border-red-200" : "bg-white border-purple-100/60"}`}
+                    >
                       <p className="text-[9px] font-black uppercase tracking-wider text-[#6B7280] leading-none mb-1">{lbl}</p>
-                      <p className="text-[12px] font-black text-[#111827] truncate">{val}</p>
+                      <p className={`text-[12px] font-black truncate ${flagged ? "text-red-700" : "text-[#111827]"}`}>{val}</p>
                     </div>
                   ))}
                 </div>
+                {isOverspent && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-bold text-red-700">
+                    Plan is over budget — spending exceeds total allocated funding.
+                  </div>
+                )}
                 {/* Budget utilisation bar */}
                 {totalBudget > 0 && (
                   <div className="rounded-xl border border-purple-100/60 bg-white p-3">
@@ -966,25 +1306,30 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                     </div>
                     <div className="h-2 rounded-full bg-[#EEEAFB] overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6] transition-all"
+                        className={`h-full rounded-full transition-all ${isOverspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
                         style={{ width: `${Math.min(100, Math.round((usedBudget / totalBudget) * 100))}%` }}
                       />
                     </div>
                   </div>
                 )}
                 {/* Category breakdown */}
-                {(budget?.budgets ?? []).length > 0 && (
+                {hasCategoryBudgets && (
                   <div className="space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-[#6B7280]">{translate("patients.budget.byCategory")}</p>
-                    {(budget?.budgets ?? []).map((item) => (
-                      <div key={item.category || item.category_label} className="rounded-xl border border-purple-100/60 bg-white p-3">
+                    {categoryBudgets.map((item) => (
+                      <div
+                        key={item.category || item.category_label}
+                        className={`rounded-xl border p-3 ${item.overspent ? "border-red-200 bg-red-50" : "border-purple-100/60 bg-white"}`}
+                      >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="text-[12px] font-bold text-[#111827] truncate">{item.category_label || item.category}</span>
-                          <span className="text-[11px] font-black text-[#6B7280] shrink-0">{item.percent_used ?? 0}%</span>
+                          <span className={`text-[11px] font-black shrink-0 ${item.overspent ? "text-red-700" : "text-[#6B7280]"}`}>
+                            {item.overspent ? "Over budget" : `${item.percent_used ?? 0}%`}
+                          </span>
                         </div>
                         <div className="h-1.5 rounded-full bg-[#EEEAFB] overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"
+                            className={`h-full rounded-full ${item.overspent ? "bg-red-500" : "bg-gradient-to-r from-[#3730A3] to-[#8B5CF6]"}`}
                             style={{ width: `${Math.min(100, Math.max(0, item.percent_used ?? 0))}%` }}
                           />
                         </div>
@@ -1003,6 +1348,698 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             )}
           </section>
         )}
+
+        {/* GOALS & TASKS TAB (Coordinator) */}
+        {activeTab === "goals_tasks" && isCoordinator && (() => {
+          const AREA_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+            daily_living: { bg: "#EFF6FF", color: "#1D4ED8", label: "Daily Living" },
+            community:    { bg: "#F0FDF4", color: "#15803D", label: "Community"    },
+            health:       { bg: "#FEF2F2", color: "#DC2626", label: "Health"       },
+            social:       { bg: "#FDF4FF", color: "#7E22CE", label: "Social"       },
+            employment:   { bg: "#FFFBEB", color: "#D97706", label: "Employment"   },
+            other:        { bg: "#F3F4F6", color: "#6B7280", label: "Other"        },
+          };
+
+          type SupportCatMeta = { label: string; group: "core" | "cb" | "capital"; groupLabel: string; bg: string; color: string };
+          const SUPPORT_CATS: Record<string, SupportCatMeta> = {
+            core_daily_activities:   { label: "Daily Activities",          group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_transport:          { label: "Transport",                 group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_consumables:        { label: "Consumables",               group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            core_social_community:   { label: "Social & Community",        group: "core",    groupLabel: "Core Supports",       bg: "#EFF6FF", color: "#1D4ED8" },
+            cb_support_coordination: { label: "Support Coordination",      group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_daily_living:         { label: "Daily Living Skills",       group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_health_wellbeing:     { label: "Health & Wellbeing",        group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_social_skills:        { label: "Social & Community Skills", group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_employment:           { label: "Employment",                group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            cb_learning:             { label: "Improved Learning",         group: "cb",      groupLabel: "Capacity Building",   bg: "#F0FDF4", color: "#15803D" },
+            capital_assistive_tech:  { label: "Assistive Technology",      group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
+            capital_home_mods:       { label: "Home Modifications",        group: "capital", groupLabel: "Capital Supports",    bg: "#FDF4FF", color: "#7E22CE" },
+          };
+
+          const SUPPORT_GROUP_HEADERS: Record<"core" | "cb" | "capital", { label: string; color: string }> = {
+            core:    { label: "Core Supports",     color: "#1D4ED8" },
+            cb:      { label: "Capacity Building", color: "#15803D" },
+            capital: { label: "Capital Supports",  color: "#7E22CE" },
+          };
+
+          function SupportCategoryPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+            const groups: ("core" | "cb" | "capital")[] = ["core", "cb", "capital"];
+            return (
+              <div className="space-y-2">
+                {groups.map((group) => {
+                  const keys = Object.entries(SUPPORT_CATS).filter(([, m]) => m.group === group).map(([k]) => k);
+                  const hdr = SUPPORT_GROUP_HEADERS[group];
+                  return (
+                    <div key={group}>
+                      <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: hdr.color }}>{hdr.label}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {keys.map((k) => {
+                          const m = SUPPORT_CATS[k];
+                          const active = value === k;
+                          return (
+                            <button key={k} type="button" onClick={() => onChange(active ? "" : k)}
+                              className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                              style={{ background: active ? m.color : m.bg, color: active ? "#fff" : m.color }}>
+                              {m.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          const activeGoals = ndisGoals.filter((g) => g.status === "active");
+          const doneGoals   = ndisGoals.filter((g) => g.status !== "active");
+
+          const startEditGoal = (goal: NdisGoal) => {
+            setEditingGoal(goal);
+            setGoalTitle(goal.name);
+            setGoalCategory(goal.goal_area);
+            setGoalSupportCategory(goal.support_category ?? "");
+            setGoalDescription(goal.description ?? "");
+            setGoalTargetDate(goal.target_date ?? "");
+            setGoalSuccessCriteria(goal.success_criteria ?? "");
+            setGoalDescriptionAiApplied(false);
+            setCreateMode("edit_goal");
+          };
+          const cancelGoalForm = () => { setCreateMode(null); setEditingGoal(null); setGoalDescriptionAiApplied(false); };
+
+          const goalFormContent = (
+            <div className="rounded-xl border border-purple-100 bg-white shadow-sm p-5 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-[14px] font-bold text-[#111827]">{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</h4>
+                  <p className="text-[11px] text-[#6B7280] mt-0.5">{participant.full_name}</p>
+                </div>
+                <button type="button" onClick={cancelGoalForm} title="Close" aria-label="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={15} className="text-[#9CA3AF]" /></button>
+              </div>
+
+              {/* Goal name */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Goal name *</label>
+                <input
+                  value={goalTitle}
+                  onChange={(e) => { setGoalTitle(e.target.value); setGoalDescriptionAiApplied(false); }}
+                  placeholder="e.g. Increase independence in morning routine"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400"
+                />
+                {goalTitle.trim() && (
+                  <div className="flex items-center justify-between pt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={11} className="text-purple-400" />
+                      <button type="button" onClick={suggestGoalDescription} disabled={goalDescriptionLoading}
+                        className="text-[11px] text-purple-600 hover:text-purple-800 font-semibold disabled:opacity-60">
+                        {goalDescriptionLoading ? <><Loader2 size={10} className="animate-spin inline mr-1" />Generating…</> : "Suggest description"}
+                      </button>
+                    </div>
+                    {goalDescriptionAiApplied && <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* NDIS area — outcome domain */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">NDIS outcome area</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.entries(AREA_COLORS) as [string, { bg: string; color: string; label: string }][]).map(([area, m]) => (
+                    <button key={area} type="button" onClick={() => setGoalCategory(area)}
+                      className="px-3 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                      style={{ background: goalCategory === area ? m.color : m.bg, color: goalCategory === area ? "#fff" : m.color }}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* NDIS support category — funding line */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">
+                  NDIS support category <span className="text-red-500">*</span>
+                  <span className="ml-1.5 normal-case font-normal text-[#9CA3AF]">— which funded budget line does this goal draw from?</span>
+                </label>
+                <SupportCategoryPicker value={goalSupportCategory} onChange={setGoalSupportCategory} />
+                {!goalSupportCategory && goalTitle.trim() && (
+                  <p className="text-[10px] text-amber-600 font-semibold">Select a support category to link this goal to the funded plan.</p>
+                )}
+              </div>
+
+              {/* Description + target date */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Description</label>
+                  <textarea value={goalDescription}
+                    onChange={(e) => { setGoalDescription(e.target.value); setGoalDescriptionAiApplied(false); }}
+                    placeholder={goalDescriptionLoading ? "Generating AI description…" : "What does achieving this goal look like?"}
+                    rows={3}
+                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 focus:ring-purple-400 transition-colors ${goalDescriptionAiApplied ? "border-emerald-200 bg-emerald-50/30" : "border-gray-200"}`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Success criteria</label>
+                  <textarea value={goalSuccessCriteria} onChange={(e) => setGoalSuccessCriteria(e.target.value)}
+                    placeholder="How will we know this goal is achieved?" rows={2}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 focus:ring-purple-400" />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="goal-target-date" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Target date</label>
+                  <input id="goal-target-date" type="date" title="Target date" value={goalTargetDate}
+                    onChange={(e) => setGoalTargetDate(e.target.value)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400" />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={cancelGoalForm}
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                <button type="button"
+                  disabled={!goalTitle.trim() || createGoalMut.isPending || editGoalMut.isPending}
+                  onClick={() => {
+                    const payload: NdisGoalPayload = {
+                      participant_id: id, name: goalTitle.trim(),
+                      goal_area: goalCategory as NdisGoal["goal_area"],
+                      support_category: goalSupportCategory || null,
+                      description: goalDescription || null,
+                      target_date: goalTargetDate || null,
+                      success_criteria: goalSuccessCriteria || null,
+                      related_task_ids: [], status: "active",
+                    };
+                    if (createMode === "edit_goal" && editingGoal) editGoalMut.mutate({ goalId: editingGoal.id, payload });
+                    else createGoalMut.mutate(payload);
+                  }}
+                  className="flex-1 rounded-lg bg-[#3730A3] py-2.5 text-[12px] font-bold text-white hover:bg-[#312E81] disabled:opacity-50">
+                  {(createGoalMut.isPending || editGoalMut.isPending) ? "Saving…" : createMode === "edit_goal" ? "Update goal" : "Create goal"}
+                </button>
+              </div>
+            </div>
+          );
+
+          const taskFormContent = (
+            <div className="rounded-xl border border-purple-200 bg-white shadow-md p-6 space-y-5">
+              <div className="flex items-start justify-between pb-4 border-b border-purple-100">
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#111827]">Create New Task</h3>
+                  <p className="text-[12px] text-[#6B7280] mt-1">Setting up support for <span className="font-semibold">{participant.full_name}</span></p>
+                </div>
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }} title="Close" aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"><X size={16} className="text-[#9CA3AF]" /></button>
+              </div>
+
+              {/* PURPOSE SELECTION - FIRST FIELD */}
+              <div className="space-y-2">
+                <label className="text-[12px] font-semibold text-[#374151] uppercase tracking-wide">What is this task for?</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setTaskPurpose("goal")}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
+                      taskPurpose === "goal" 
+                        ? "border-purple-400 bg-purple-50 text-purple-700" 
+                        : "border-gray-200 bg-white text-[#6B7280] hover:border-purple-300"
+                    }`}>
+                    <Target size={14} /> Supports a goal
+                  </button>
+                  <button type="button" onClick={() => { setTaskPurpose("core"); setLinkedGoalId(null); }}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-[12px] font-bold transition-colors ${
+                      taskPurpose === "core" 
+                        ? "border-blue-400 bg-blue-50 text-blue-700" 
+                        : "border-gray-200 bg-white text-[#6B7280] hover:border-blue-300"
+                    }`}>
+                    <Heart size={14} /> Core support
+                  </button>
+                </div>
+                {taskPurpose === "core" && (
+                  <p className="text-[11px] text-[#6B7280]">Routine support like personal care, medication, or domestic assistance — not tied to a specific goal milestone. Most tasks are this.</p>
+                )}
+              </div>
+
+              {/* GOAL SELECTOR - CONDITIONAL */}
+              {taskPurpose === "goal" && (
+                <div className="space-y-1.5">
+                  <label htmlFor="task-linked-goal" className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Linked goal *</label>
+                  <select id="task-linked-goal" title="Link task to goal" value={linkedGoalId ?? ""}
+                    onChange={(e) => setLinkedGoalId(e.target.value || null)}
+                    className="w-full rounded-lg border border-purple-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                    <option value="">Select a goal…</option>
+                    {activeGoals.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* TASK TITLE */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Task title *</label>
+                <input value={taskTitle} onChange={(e) => { setTaskTitle(e.target.value); setTaskTitleAiApplied(false); }}
+                  placeholder="e.g. Prompt independent dressing"
+                  className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 transition-colors ${
+                    taskTitleAiApplied ? "border-emerald-200 bg-emerald-50/40 focus:ring-emerald-400" : "border-gray-200 focus:ring-purple-400"
+                  }`} />
+                {taskTitleAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
+              </div>
+
+              {/* AI INSTRUCTIONS BOX */}
+              {taskTitle.trim() && (
+                <div className="p-3 bg-purple-50/60 rounded-lg border border-purple-200 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={13} className="text-purple-600" />
+                      <span className="text-[12px] font-semibold text-purple-900">AI suggestion</span>
+                    </div>
+                    {!taskInstructionsAiApplied && (
+                      <button type="button" onClick={async () => {
+                        setTaskInstructionsLoading(true);
+                        try {
+                          const goal = linkedGoalId ? activeGoals.find(g => g.id === linkedGoalId) : null;
+                          const response = await jsonFetch<{ suggestions: string[] }>('/api/ai/task-instructions', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              task_title: taskTitle.trim(),
+                              task_purpose: taskPurpose,
+                              goal_name: goal?.name,
+                              goal_description: goal?.description,
+                              participant_name: participant.full_name,
+                            }),
+                          });
+                          setTaskInstructionsSuggestions(response.suggestions || []);
+                        } catch (err) {
+                          console.error('Failed to get instruction suggestions:', err);
+                        } finally {
+                          setTaskInstructionsLoading(false);
+                        }
+                      }} disabled={taskInstructionsLoading}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 disabled:opacity-60">
+                        {taskInstructionsLoading ? <>Generating…</> : <>Suggest instructions</>}
+                      </button>
+                    )}
+                  </div>
+                  {taskInstructionsSuggestions.length > 0 && (
+                    <div className="space-y-1.5">
+                      {taskInstructionsSuggestions.map((suggestion, idx) => (
+                        <div key={idx} className="p-2 rounded-lg bg-white border border-purple-100 flex items-start justify-between gap-2 hover:bg-purple-50/40 transition-colors">
+                          <p className="text-[11px] text-[#374151] flex-1 leading-snug">{suggestion}</p>
+                          <button type="button" onClick={() => { setTaskInstructions(suggestion); setTaskInstructionsAiApplied(true); setTaskInstructionsSuggestions([]); }}
+                            className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded bg-purple-600 text-white hover:bg-purple-700 whitespace-nowrap">
+                            Use
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TASK CATEGORY */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Task category</label>
+                <select value={taskCategory} onChange={(e) => setTaskCategory(e.target.value as any)} title="Select task category for invoice management"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                  <option value="personal_care">Personal care</option>
+                  <option value="medication">Medication</option>
+                  <option value="domestic_assistance">Domestic assistance</option>
+                  <option value="community_access">Community access</option>
+                  <option value="transport">Transport</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* PRIORITY */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Priority</label>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'low', label: 'Low', color: 'blue' },
+                    { id: 'medium', label: 'Medium', color: 'amber' },
+                    { id: 'high', label: 'High', color: 'red' }
+                  ].map(p => (
+                    <button key={p.id} type="button" onClick={() => setTaskPriority(p.id as any)}
+                      className={`flex-1 px-3 py-2 rounded-lg border text-[12px] font-semibold transition-colors ${
+                        taskPriority === p.id 
+                          ? `border-${p.color}-400 bg-${p.color}-50 text-${p.color}-700` 
+                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                      }`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SHIFT TYPE - DETAILED */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Shift type <span className="text-red-500">*</span></label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'morning', label: 'Morning', icon: 'ti-sunrise' },
+                    { id: 'afternoon', label: 'Afternoon', icon: 'ti-sun' },
+                    { id: 'night', label: 'Night', icon: 'ti-moon' },
+                    { id: 'anytime', label: 'Anytime', icon: 'ti-clock' }
+                  ].map(shift => (
+                    <button key={shift.id} type="button" onClick={() => setTaskShiftType(shift.id as any)}
+                      className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg border text-[10px] font-semibold transition-colors ${
+                        taskShiftType === shift.id 
+                          ? "border-orange-400 bg-orange-50 text-orange-700" 
+                          : "border-gray-200 bg-white text-[#6B7280] hover:border-gray-300"
+                      }`}>
+                      <i className={`ti ${shift.icon} text-sm`} />
+                      {shift.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#9CA3AF]">Shifts are critical for invoice management and task assignment</p>
+              </div>
+
+              {/* EVIDENCE TRACKING - NDIS COMPLIANCE */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Evidence required on completion</label>
+                <select value={taskEvidenceRequired} onChange={(e) => setTaskEvidenceRequired(e.target.value as any)} title="Select evidence required for task completion"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400">
+                  <option value="none">No evidence needed</option>
+                  <option value="photo">Photo</option>
+                  <option value="notes">Notes</option>
+                  <option value="photo_and_notes">Photo and notes</option>
+                </select>
+                <p className="text-[10px] text-[#9CA3AF]">Specifies what documentation workers must provide to verify task completion</p>
+              </div>
+
+              {/* RECURRING TASK SUPPORT */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Repeats</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="repeats" checked={!isRecurring} onChange={() => setIsRecurring(false)} className="rounded" />
+                    One-off
+                  </label>
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="repeats" checked={isRecurring} onChange={() => setIsRecurring(true)} className="rounded" />
+                    Recurring
+                  </label>
+                </div>
+              </div>
+
+              {/* FREQUENCY OPTIONS - CONDITIONAL */}
+              {isRecurring && (
+                <div className="space-y-1.5 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Frequency</label>
+                  <select value={frequencyPattern} onChange={(e) => setFrequencyPattern(e.target.value as any)} title="Select task recurrence pattern"
+                    className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-blue-400">
+                    <option value="every_morning_shift">Every Morning shift</option>
+                    <option value="every_afternoon_shift">Every Afternoon shift</option>
+                    <option value="every_night_shift">Every Night shift</option>
+                    <option value="daily_all_shifts">Daily, regardless of shift</option>
+                    <option value="specific_days_of_week">Specific days of the week</option>
+                    <option value="custom">Custom schedule</option>
+                  </select>
+                </div>
+              )}
+
+              {/* REQUIREMENT */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Requirement</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="requirement" checked={isMandatory} onChange={() => setIsMandatory(true)} className="rounded" />
+                    Mandatory
+                  </label>
+                  <label className="flex items-center gap-2 text-[12px]">
+                    <input type="radio" name="requirement" checked={!isMandatory} onChange={() => setIsMandatory(false)} className="rounded" />
+                    Optional
+                  </label>
+                </div>
+              </div>
+
+              {/* NOTES FOR WORKER */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Notes for support worker</label>
+                <textarea value={taskInstructions} onChange={(e) => { setTaskInstructions(e.target.value); setTaskInstructionsAiApplied(false); }}
+                  placeholder="Any instructions the worker needs to know"
+                  rows={2}
+                  className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 transition-colors ${
+                    taskInstructionsAiApplied ? "border-emerald-200 bg-emerald-50/40 focus:ring-emerald-400" : "border-gray-200 focus:ring-purple-400"
+                  }`}
+                />
+                {taskInstructionsAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
+              </div>
+
+              {/* ACTION BUTTONS */}
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }}
+                  className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
+                <button type="button" disabled={!taskTitle.trim() || createTaskMut.isPending}
+                  onClick={() => createTaskMut.mutate({
+                    name: taskTitle.trim(),
+                    description: taskInstructions || null,
+                    goal_id: taskPurpose === "goal" ? linkedGoalId : null,
+                    is_mandatory: isMandatory,
+                    shift_type: taskShiftType,
+                    category: taskCategory,
+                    priority: taskPriority,
+                    evidence_required: taskEvidenceRequired,
+                    is_recurring: isRecurring,
+                    frequency_pattern: isRecurring ? frequencyPattern : null,
+                  })}
+                  className="flex-1 rounded-lg bg-purple-600 py-2.5 text-[12px] font-bold text-white hover:bg-purple-700 disabled:opacity-50">
+                  {createTaskMut.isPending ? "Creating…" : "Create task"}
+                </button>
+              </div>
+            </div>
+          );
+
+          return (
+            <section className="space-y-4">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#111827]">Goals & Tasks</h3>
+                  <p className="text-[12px] text-[#6B7280] mt-0.5">Manage {participant.full_name}'s NDIS goals and support tasks</p>
+                </div>
+                <div className="flex gap-2">
+                  <button type="button"
+                    onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); }}
+                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
+                    + Goal
+                  </button>
+                  <button type="button"
+                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); }}
+                    className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    + Task
+                  </button>
+                  <button type="button" onClick={() => setShiftModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                    <CalendarClock size={13} /> Assign Shift
+                  </button>
+                </div>
+              </div>
+
+              {/* Goal / task create-edit forms */}
+              {(createMode === "goal" || createMode === "edit_goal") && goalFormContent}
+              {createMode === "tasks" && taskFormContent}
+
+              {/* Loading */}
+              {ndisGoalsQuery.isLoading && (
+                <div className="flex items-center gap-2 py-4 text-[13px] text-[#6B7280]"><Loader2 size={14} className="animate-spin" /> Loading goals…</div>
+              )}
+
+              {/* Empty state */}
+              {!ndisGoalsQuery.isLoading && activeGoals.length === 0 && createMode !== "goal" && (
+                <div className="rounded-lg border border-purple-100/60 bg-purple-50/40 p-6 text-center">
+                  <Target className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
+                  <p className="text-[13px] font-bold text-[#111827]">No active goals</p>
+                  <p className="text-[12px] text-[#6B7280] mt-1">Click <strong>+ Goal</strong> to create the first NDIS goal for {participant.full_name}.</p>
+                </div>
+              )}
+
+              {/* Active goals */}
+              {activeGoals.map((goal) => {
+                const goalTasks = participantTasks.filter((t) => t.goal_id === goal.id);
+                const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
+                const progressData = progressGoalId === goal.id ? goalProgressQuery.data : undefined;
+                const progressLoading = progressGoalId === goal.id && goalProgressQuery.isLoading;
+                const pct = progressData && progressData.sessions_count > 0
+                  ? Math.round((progressData.evidence_count / progressData.sessions_count) * 100) : 0;
+
+                return (
+                  <div key={goal.id} className="rounded-lg border border-purple-100/60 bg-white">
+                    {/* Goal header */}
+                    <div className="flex items-start justify-between gap-3 px-4 py-3">
+                      <div className="flex items-start gap-2 min-w-0 flex-1">
+                        <Target size={15} className="shrink-0 mt-0.5 text-[#3730A3]" />
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-bold text-[#111827] leading-snug">{goal.name}</p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>
+                              {areaStyle.label}
+                            </span>
+                            <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
+                            {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
+                          </div>
+                          {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2">{goal.description}</p>}
+                          {goal.success_criteria && (
+                            <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6B7280]">
+                              <span className="font-bold text-[#374151]">Success: </span>{goal.success_criteria}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                        <button type="button" onClick={() => { setCreateMode("tasks"); setLinkedGoalId(goal.id); setTaskTitle(""); setTaskInstructions(""); setTaskPurpose("goal"); setTaskInstructionsAiApplied(false); }}
+                          className="px-2 py-1 text-[11px] font-bold rounded border border-purple-200 text-purple-700 hover:bg-purple-50">
+                          + Task
+                        </button>
+                        <button type="button" onClick={() => startEditGoal(goal)}
+                          className="p-1.5 rounded hover:bg-gray-100" title="Edit goal">
+                          <Edit2 size={12} className="text-[#6B7280]" />
+                        </button>
+                        <button type="button" onClick={() => completeGoalMut.mutate(goal.id)} disabled={completeGoalMut.isPending}
+                          className="p-1.5 rounded hover:bg-green-50" title="Mark completed">
+                          <CheckCircle2 size={12} className="text-[#059669]" />
+                        </button>
+                        <button type="button" onClick={() => archiveGoalMut.mutate(goal.id)} disabled={archiveGoalMut.isPending}
+                          className="p-1.5 rounded hover:bg-gray-100" title="Archive goal">
+                          <Archive size={12} className="text-[#6B7280]" />
+                        </button>
+                        <button type="button"
+                          onClick={() => setProgressGoalId((prev) => prev === goal.id ? null : goal.id)}
+                          className="p-1.5 rounded hover:bg-purple-50" title="View progress">
+                          <BarChart2 size={12} className={progressGoalId === goal.id ? "text-[#3730A3]" : "text-[#6B7280]"} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress panel */}
+                    {progressGoalId === goal.id && (
+                      <div className="border-t border-purple-100/60 px-4 py-3 bg-purple-50/30">
+                        {progressLoading && <p className="text-[12px] text-[#6B7280] flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Loading progress…</p>}
+                        {progressData && (
+                          <div className="space-y-3">
+                            <p className="text-[11px] font-black uppercase tracking-widest text-[#6B7280]">Progress — Last 30 Days</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {([["Sessions", progressData.sessions_count], ["With Evidence", progressData.evidence_count], ["Evidence Rate", `${pct}%`]] as [string, string | number][]).map(([l, v]) => (
+                                <div key={l} className="rounded-lg px-3 py-2 bg-white border border-purple-100/60 text-center">
+                                  <p className="text-[15px] font-black text-[#3730A3]">{v}</p>
+                                  <p className="text-[9px] font-semibold text-[#6B7280]">{l}</p>
+                                </div>
+                              ))}
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-[10px] font-semibold mb-1 text-[#6B7280]"><span>Evidence rate</span><span>{pct}%</span></div>
+                              <div className="h-1.5 rounded-full overflow-hidden bg-purple-100">
+                                <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: pct >= 70 ? "#22C55E" : pct >= 40 ? "#F59E0B" : "#EF4444" }} />
+                              </div>
+                            </div>
+                            {progressData.sessions.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#6B7280]">Recent Sessions</p>
+                                {progressData.sessions.slice(0, 4).map((s) => (
+                                  <div key={s.id} className="flex items-center justify-between rounded-lg px-3 py-1.5 bg-white text-[11px] border border-purple-100/60">
+                                    <span className="text-[#374151]">{s.session_date}</span>
+                                    <div className="flex items-center gap-2">
+                                      {s.notes && <span className="text-[#059669]">✓ Notes</span>}
+                                      {s.compliance_score != null && <span className={s.compliance_score >= 80 ? "text-[#059669]" : "text-[#D97706]"}>{s.compliance_score}%</span>}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tasks under this goal */}
+                    {goalTasks.length > 0 && (
+                      <div className="border-t border-purple-100/60 divide-y divide-gray-100">
+                        {goalTasks.map((task) => (
+                          <div key={task.id} className="flex items-center justify-between px-4 py-2.5 pl-9">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CheckCircle2 size={13} className="shrink-0 text-[#059669]" />
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
+                                {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                              <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
+                                className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {goalTasks.length === 0 && (
+                      <div className="border-t border-purple-100/60 px-4 py-2.5 pl-9">
+                        <p className="text-[11px] text-[#9CA3AF] italic">No tasks yet — click + Task to add one</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Core support tasks (no goal) */}
+              {(() => {
+                const coreTasks = participantTasks.filter((t) => !t.goal_id);
+                if (coreTasks.length === 0) return null;
+                return (
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest px-1">Core support — not linked to a goal</h4>
+                    <div className="rounded-lg border border-gray-200 bg-white divide-y divide-gray-100">
+                      {coreTasks.map((task) => (
+                        <div key={task.id} className="flex items-center justify-between px-4 py-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <ClipboardList size={13} className="shrink-0 text-[#6B7280]" />
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-semibold text-[#111827] truncate">{task.name}</p>
+                              {task.description && <p className="text-[11px] text-[#6B7280] truncate">{task.description}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {task.is_mandatory && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-bold">Required</span>}
+                            <button type="button" onClick={() => deleteTaskMut.mutate(task.id)} disabled={deleteTaskMut.isPending}
+                              className="p-1 rounded hover:bg-red-50 text-[#9CA3AF] hover:text-red-500" title="Delete task">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Archived / completed goals */}
+              {doneGoals.length > 0 && (
+                <div className="space-y-1">
+                  <button type="button" onClick={() => setShowArchivedGoals((v) => !v)}
+                    className="flex items-center gap-1.5 text-[11px] font-bold text-[#6B7280] hover:text-[#374151] px-1">
+                    <Archive size={12} />
+                    {showArchivedGoals ? "Hide" : "Show"} archived & completed ({doneGoals.length})
+                  </button>
+                  {showArchivedGoals && (
+                    <div className="space-y-1">
+                      {doneGoals.map((goal) => {
+                        const areaStyle = AREA_COLORS[goal.goal_area] ?? AREA_COLORS.other;
+                        return (
+                          <div key={goal.id} className="rounded-lg border border-gray-200 bg-gray-50/60 px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold text-[#374151] truncate">{goal.name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: areaStyle.bg, color: areaStyle.color }}>{areaStyle.label}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${goal.status === "completed" ? "bg-green-50 text-green-700" : "bg-gray-100 text-[#6B7280]"}`}>
+                                  {goal.status === "completed" ? "Completed" : "Archived"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })()}
 
         {/* GOALS TAB */}
         {activeTab === "goals" && (
@@ -1052,11 +2089,17 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CalendarDays className="h-3.5 w-3.5 text-[#3730A3]" />
-                <h4 className="text-[13px] font-black text-[#111827]">{translate("patients.section.sessionHistory")}</h4>
+                <h4 className="text-[13px] font-black text-[#111827]">Shift History</h4>
+                <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
+                  {sessions.length}
+                </span>
               </div>
-              <span className="rounded-full bg-[#EEEAFB] px-2.5 py-0.5 text-[10px] font-black text-[#3730A3]">
-                {sessions.length}
-              </span>
+              {isCoordinator && (
+                <button type="button" onClick={() => setShiftModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
+                  <CalendarClock size={13} /> Assign Shift
+                </button>
+              )}
             </div>
             {sessionsQuery.isLoading ? (
               <div className="space-y-2">
@@ -1065,8 +2108,8 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
             ) : sessions.length === 0 ? (
               <div className="rounded-xl bg-white border border-purple-100/60 p-6 text-center">
                 <CalendarDays className="h-8 w-8 text-[#6B7280] opacity-30 mx-auto mb-2" />
-                <p className="text-[13px] font-semibold text-[#111827]">{translate("patients.sessions.empty")}</p>
-                <p className="text-[11px] text-[#6B7280] mt-1">{translate("patients.sessions.emptyHint")}</p>
+                <p className="text-[13px] font-semibold text-[#111827]">No shifts yet</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">Shifts with this participant will appear here.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -1179,15 +2222,15 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
 
         {/* RESTRICTED CLINICAL TAB — coordinator only */}
         {activeTab === "restricted" && isCoordinator && (
-          <section className="rounded-2xl border border-cc-border bg-cc-soft p-4 space-y-4">
+          <section className="rounded-2xl border border-orange-200/70 bg-orange-50/30 p-4 space-y-4">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <Lock className="h-3.5 w-3.5 text-cc-coral" />
-                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-coral">{translate("patients.restricted.title")}</p>
+                <Lock className="h-3.5 w-3.5 text-orange-600" />
+                <p className="text-[12px] font-black uppercase tracking-[0.13em] text-orange-700">{translate("patients.restricted.title")}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase tracking-wide cc-status-critical">{translate("patients.restricted.coordinatorOnly")}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-orange-300 text-orange-600 font-semibold uppercase tracking-wide bg-orange-100">{translate("patients.restricted.coordinatorOnly")}</span>
             </div>
-            <p className="text-[12px] text-cc-muted leading-relaxed">
+            <p className="text-[12px] text-orange-700/80 leading-relaxed">
               This section contains restricted information accessible only to Support Coordinators. Handle in accordance with the participant's privacy consent and NDIS guidelines.
             </p>
             {restrictedQuery.isLoading ? (
@@ -1203,9 +2246,9 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   { key: "medical_alerts"               as const, label: "Medical Alerts",                 placeholder: "Known allergies, contraindications, emergency protocols…" },
                 ] as const).map(({ key, label, placeholder }) => (
                   <div key={key} className="space-y-1.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-cc-muted">{label}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">{label}</p>
                     <textarea
-                      className="cc-field w-full min-h-[80px] resize-none"
+                      className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 min-h-[80px]"
                       placeholder={placeholder}
                       value={restrictedDraft?.[key] ?? ""}
                       onChange={(e) => setRestrictedDraft((prev) => prev ? { ...prev, [key]: e.target.value } : prev)}
@@ -1216,7 +2259,7 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
                   size="sm"
                   disabled={saveRestricted.isPending || !restrictedDraft}
                   onClick={() => saveRestricted.mutate()}
-                  className="cc-btn-primary gap-1.5"
+                  className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5"
                 >
                   {saveRestricted.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {translate("patients.restricted.save")}
@@ -1229,17 +2272,17 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         {/* SHIFT CONTEXT TAB — coordinator only */}
         {activeTab === "shift_context" && isCoordinator && (
           <section className="space-y-3">
-            <div className="rounded-2xl border border-cc-border bg-cc-soft p-4">
+            <div className="rounded-2xl border border-violet-200/70 bg-violet-50/30 p-4">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Users className="h-3.5 w-3.5 text-cc-plum" />
-                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-cc-plum">{translate("patients.shiftContext.title")}</p>
+                  <Users className="h-3.5 w-3.5 text-violet-700" />
+                  <p className="text-[12px] font-black uppercase tracking-[0.13em] text-violet-800">{translate("patients.shiftContext.title")}</p>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full border border-cc-border text-cc-plum font-semibold uppercase tracking-wide bg-cc-active-bg">
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-violet-300 text-violet-700 font-semibold uppercase tracking-wide bg-violet-100">
                   Coordinator Authoring
                 </span>
               </div>
-              <p className="text-[12px] leading-relaxed text-cc-muted">
+              <p className="text-[12px] leading-relaxed text-violet-700/80">
                 This information appears in the Support Worker My Shift experience. Keep instructions concise, current, and action-oriented.
               </p>
             </div>
@@ -1249,6 +2292,15 @@ function ParticipantDetail({ id, onRefreshList }: { id: string; onRefreshList: (
         )}
 
       </div>
+
+      {isCoordinator && (
+        <ShiftAssignmentModal
+          open={shiftModalOpen}
+          onOpenChange={setShiftModalOpen}
+          workers={workersQuery.data ?? []}
+          initialParticipantId={id}
+        />
+      )}
     </div>
   );
 }
@@ -1271,6 +2323,19 @@ export default function Patients() {
   const [letterFilter, setLetterFilter] = useState<string | null>(null);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [showMobileDetail, setShowMobileDetail] = useState(false);
+
+  // Deep-link support: "Back to Participant" from session/shift detail pages
+  // passes ?id=<participantId>&tab=<tab> so the coordinator lands back on the
+  // exact participant + tab they came from instead of the bare list.
+  const deepLinkQuery = useSearch();
+  const deepLinkId = new URLSearchParams(deepLinkQuery).get("id");
+  const deepLinkTab = new URLSearchParams(deepLinkQuery).get("tab") as ParticipantDetailTab | null;
+  useEffect(() => {
+    if (deepLinkId) {
+      setSelectedId(deepLinkId);
+      setShowMobileDetail(true);
+    }
+  }, [deepLinkId]);
 
   const { data: participants, isLoading: participantsLoading, refetch } = useGetParticipants();
 
@@ -1509,7 +2574,7 @@ export default function Patients() {
               {translate("patients.backToList")}
             </button>
             <div className="flex-1 overflow-y-auto">
-              <ParticipantDetail id={selectedId} onRefreshList={refetch} />
+              <ParticipantDetail key={selectedId} id={selectedId} onRefreshList={refetch} initialTab={deepLinkId === selectedId ? deepLinkTab ?? undefined : undefined} />
             </div>
           </>
         ) : (
