@@ -46,6 +46,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
   const [notes, setNotes] = useState("");
   const [loadingAISuggestion, setLoadingAISuggestion] = useState(false);
   const [aiSuggestionApplied, setAiSuggestionApplied] = useState(false);
+  const [aiSourceDate, setAiSourceDate] = useState<string | null>(null);
 
   // Validation
   const canSave =
@@ -73,12 +74,17 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
         setTitle(titleResponse.suggestion);
       }
 
-      // Get metadata suggestions (priority, evidence)
+      // Get metadata suggestions (priority, evidence) with citations
       const metaParams = new URLSearchParams({ participant_id: participantId, shift_type: primaryShiftType, category, lookback_days: "30" });
-      const metadataResponse = await jsonFetch<{ suggestion_text: string | null; evidence_recommendation: EvidenceRequired | null }>(`/api/tasks/ai/task-suggestion?${metaParams}`);
+      const metadataResponse = await jsonFetch<{ suggestion_text: string | null; evidence_recommendation: EvidenceRequired | null; sources: Array<{ shift_date: string }> }>(`/api/tasks/ai/task-suggestion?${metaParams}`);
 
       if (metadataResponse.evidence_recommendation) {
         setEvidenceRequired(metadataResponse.evidence_recommendation);
+      }
+      if (metadataResponse.sources?.length) {
+        const raw = metadataResponse.sources[0].shift_date;
+        const formatted = raw ? new Date(raw).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }) : null;
+        setAiSourceDate(formatted);
       }
 
       setAiSuggestionApplied(true);
@@ -152,6 +158,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
     setEvidenceRequired("none");
     setNotes("");
     setAiSuggestionApplied(false);
+    setAiSourceDate(null);
     onClose();
   };
 
@@ -236,7 +243,7 @@ export function NewTaskModal({ participantId, isOpen, onClose, linkedGoalId }: P
               {/* Title - Auto-filled by AI */}
               <div className="mb-3">
                 <Label htmlFor="title" className="text-sm">
-                  Task Title * {aiSuggestionApplied && <span className="text-xs text-purple-600">(AI-suggested)</span>}
+                  Task Title * {aiSuggestionApplied && <span className="text-xs text-purple-600">(AI-suggested{aiSourceDate ? ` — from session ${aiSourceDate}` : ""})</span>}
                 </Label>
                 <Input
                   id="title"

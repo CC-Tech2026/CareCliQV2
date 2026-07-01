@@ -1618,6 +1618,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                               goal_name: goal?.name,
                               goal_description: goal?.description,
                               participant_name: participant.full_name,
+                              participant_id: id,
                             }),
                           });
                           setTaskInstructionsSuggestions(response.suggestions || []);

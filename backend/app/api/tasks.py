@@ -23,6 +23,7 @@ from ..services.task_ai_service import (
     suggest_task_description,
     suggest_task_metadata,
     suggest_goal_description,
+    suggest_goal_insight_recommendation,
 )
 from ..services.supabase_client import get_supabase_admin
 
@@ -270,31 +271,28 @@ async def get_task_suggestion(
     org_id = get_user_organization_id(current_user)
     
     try:
-        # Get task description suggestion
-        task_description = await suggest_task_description(
+        task_description, task_sources = await suggest_task_description(
             participant_id=str(participant_id),
             shift_type=shift_type,
             category=category,
             organisation_id=org_id,
             lookback_days=lookback_days,
         )
-        
-        # Get metadata suggestions
+
         metadata = await suggest_task_metadata(
             participant_id=str(participant_id),
             shift_type=shift_type,
             category=category,
             organisation_id=org_id,
         )
-        
+
         return TaskSuggestion(
             suggestion_text=task_description,
             evidence_recommendation=metadata.get("evidence_required"),
-            sources=[],  # RAG sources would be added here if needed
+            sources=task_sources,
         )
-        
+
     except Exception as e:
-        # Graceful fallback
         return TaskSuggestion(
             suggestion_text=None,
             evidence_recommendation=None,
@@ -329,14 +327,12 @@ async def get_goal_insight(
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=lookback_days)
         
-        # Get goal info
-        goal = await supabase.table("goals").select("title,description").eq(
+        goal = await supabase.table("ndis_goals").select("name,description").eq(
             "id", str(goal_id)
         ).single().execute()
-        
-        goal_title = goal.data.get("title", "Goal") if goal.data else "Goal"
-        
-        # Get task instances linked to this goal within timeframe
+
+        goal_title = (goal.data or {}).get("name") or "Goal"
+
         instances = await supabase.table("task_instances").select(
             "id,status,created_at"
         ).eq("participant_id", str(participant_id)).eq(
@@ -344,7 +340,7 @@ async def get_goal_insight(
         ).gte("created_at", start_date.isoformat()).lte(
             "created_at", end_date.isoformat()
         ).execute()
-        
+
         if not instances.data:
             return GoalInsight(
                 completion_rate=0.0,
@@ -355,23 +351,20 @@ async def get_goal_insight(
                 date_range_end=end_date.isoformat(),
                 ai_recommendation="No tasks completed yet for this goal.",
             )
-        
-        # Count completed vs total
+
         completed = sum(1 for inst in instances.data if inst.get("status") == "completed")
         total = len(instances.data)
         completion_rate = completed / total if total > 0 else 0.0
-        
-        # Get AI recommendation
-        ai_rec = None
-        if completion_rate >= 0.8:
-            ai_rec = f"Excellent progress! {completed}/{total} tasks completed. Consider increasing goal complexity or frequency."
-        elif completion_rate >= 0.5:
-            ai_rec = f"Good progress with {completed}/{total} tasks completed. Current pace is sustainable."
-        elif completion_rate > 0:
-            ai_rec = f"Partial completion ({completed}/{total}). Review barriers and adjust support or task frequency."
-        else:
-            ai_rec = f"No tasks completed yet. Consider simplifying or adding more support."
-        
+
+        ai_rec = await suggest_goal_insight_recommendation(
+            participant_id=str(participant_id),
+            goal_title=goal_title,
+            completion_rate=completion_rate,
+            completed=completed,
+            total=total,
+            organisation_id=org_id,
+        )
+
         return GoalInsight(
             completion_rate=completion_rate,
             completed_count=completed,
@@ -414,19 +407,17 @@ async def get_task_title_suggestion(
     org_id = get_user_organization_id(current_user)
     
     try:
-        suggestion = await suggest_task_description(
+        suggestion, _ = await suggest_task_description(
             participant_id=str(participant_id),
             shift_type=shift_type,
             category=category,
             organisation_id=org_id,
         )
-        
         return {
             "suggestion": suggestion,
             "category": category,
             "shift_type": shift_type,
         }
-        
     except Exception as e:
         logger.error(f"Task title suggestion failed: {e}")
         return {
@@ -454,17 +445,15 @@ async def get_goal_description_suggestion(
     org_id = get_user_organization_id(current_user)
     
     try:
-        suggestion = await suggest_goal_description(
+        suggestion, _ = await suggest_goal_description(
             participant_id=str(participant_id),
             goal_title=goal_title,
             organisation_id=org_id,
         )
-        
         return {
             "suggestion": suggestion,
             "goal_title": goal_title,
         }
-        
     except Exception as e:
         logger.error(f"Goal description suggestion failed: {e}")
         return {

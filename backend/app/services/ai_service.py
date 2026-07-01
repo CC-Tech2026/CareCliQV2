@@ -1537,33 +1537,60 @@ async def generate_task_instructions(
     goal_name: str = None,
     goal_description: str = None,
     participant_name: str = None,
+    participant_id: str = None,
+    organisation_id: str = None,
 ) -> dict:
-    """Generate instruction suggestions for a task using AI.
-    
-    Args:
-        task_title: The task title
-        task_purpose: Either "core" or "goal"
-        goal_name: Name of linked goal (if purpose is "goal")
-        goal_description: Description of linked goal
-        participant_name: Name of participant
-        
-    Returns:
-        {"suggestions": [list of 3-5 instruction options]}
+    """Generate instruction suggestions for a task, grounded in participant history
+    when available. Falls back to general NDIS guidance when no history exists —
+    session_context is empty and the prompt is clearly general, never falsely cited.
     """
     if not _openai_configured():
         return {"suggestions": []}
-    
+
+    # Fetch participant-scoped session history when participant_id is provided.
+    session_context = ""
+    if participant_id and organisation_id:
+        try:
+            from .supabase_client import get_supabase_admin
+            sb = get_supabase_admin()
+            rows = (
+                sb.table("sessions")
+                .select("id, session_date, compliance_input_text, translated_english_note, notes")
+                .eq("patient_id", participant_id)
+                .eq("organization_id", organisation_id)
+                .eq("status", "completed")
+                .order("session_date", desc=True)
+                .limit(3)
+                .execute()
+            )
+            snippets = []
+            for row in rows.data or []:
+                content = (
+                    row.get("compliance_input_text")
+                    or row.get("translated_english_note")
+                    or row.get("notes")
+                    or ""
+                ).strip()
+                date = str(row.get("session_date") or "")[:10]
+                if content:
+                    snippets.append(f"- [{date}] {content[:200]}")
+            if snippets:
+                session_context = "Recent session history:\n" + "\n".join(snippets)
+        except Exception as exc:
+            logger.warning("Session fetch for task-instructions grounding failed: %s", exc)
+
     goal_context = ""
     if task_purpose == "goal" and goal_name:
         goal_context = f"\nLinked NDIS Goal: {goal_name}"
         if goal_description:
             goal_context += f"\nGoal details: {goal_description}"
-    
+
     user_prompt = f"""Generate 3-4 specific, practical instruction options for support workers doing the following task for {participant_name}.
-    
+
 Task: "{task_title}"
-Purpose: {"Supporting a linked NDIS goal" if task_purpose == "goal" else "Core support (not linked to a specific goal"}
+Purpose: {"Supporting a linked NDIS goal" if task_purpose == "goal" else "Core support (not linked to a specific goal)"}
 {goal_context}
+{session_context}
 
 Requirements:
 - Instructions should be specific and actionable

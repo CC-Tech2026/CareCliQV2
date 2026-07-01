@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from ..services import ai_service, participant_service, session_service
 from ..core.security import get_current_user
+from ..core.access import get_user_organization_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,7 @@ class TaskInstructionsRequest(BaseModel):
     goal_name: Optional[str] = None
     goal_description: Optional[str] = None
     participant_name: str
+    participant_id: Optional[str] = None
 
 
 @router.post("/insight")
@@ -366,12 +368,15 @@ async def get_task_instructions(
         {"suggestions": [list of instruction options]}
     """
     try:
+        org_id = get_user_organization_id(current_user)
         result = await ai_service.generate_task_instructions(
             task_title=body.task_title,
             task_purpose=body.task_purpose,
             goal_name=body.goal_name,
             goal_description=body.goal_description,
             participant_name=body.participant_name,
+            participant_id=body.participant_id,
+            organisation_id=org_id,
         )
         return result
     except Exception as e:

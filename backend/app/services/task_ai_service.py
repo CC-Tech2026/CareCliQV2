@@ -1,14 +1,96 @@
-"""AI-powered task and goal suggestion service using RAG + OpenAI."""
+"""AI-powered task and goal suggestion service — participant-scoped, RAG-grounded.
 
+When this participant has completed session history, suggestions are grounded in
+that history and sources are populated with real session IDs and dates.
+When no history exists, suggestions are still generated using general NDIS
+knowledge — sources returns [] (honest: no citation because none exists).
+The LLM is never given a fake or misleading citation.
+"""
+
+import json
 import logging
-from uuid import UUID
 from typing import Optional
+
 from ..services.ai_service import client, _openai_configured
-from ..services.rag_service import retrieve_similar_sessions
 from ..services.supabase_client import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
+
+# ── Shared helpers ──────────────────────────────────────────────────────────────
+
+async def _fetch_participant_sessions(
+    participant_id: str,
+    organisation_id: str,
+    limit: int = 4,
+) -> list[dict]:
+    """Participant-scoped session fetch. Returns [] when no completed sessions exist."""
+    supabase = get_supabase_admin()
+    try:
+        result = (
+            supabase.table("sessions")
+            .select("id, session_date, compliance_input_text, translated_english_note, notes")
+            .eq("patient_id", participant_id)
+            .eq("organization_id", organisation_id)
+            .eq("status", "completed")
+            .order("session_date", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        out = []
+        for row in result.data or []:
+            content = (
+                row.get("compliance_input_text")
+                or row.get("translated_english_note")
+                or row.get("notes")
+                or ""
+            ).strip()
+            if content:
+                out.append({
+                    "session_id": str(row["id"]),
+                    "session_date": str(row.get("session_date") or ""),
+                    "content": content,
+                })
+        return out
+    except Exception as exc:
+        logger.warning("Participant session fetch failed for AI context: %s", exc)
+        return []
+
+
+def _build_sources(sessions: list[dict]) -> list[dict]:
+    return [
+        {
+            "type": "session",
+            "id": s["session_id"],
+            "shift_date": s["session_date"],
+            "snippet": s["content"][:120],
+        }
+        for s in sessions
+    ]
+
+
+def _context_block(sessions: list[dict]) -> str:
+    return "\n".join(
+        f"- [{s['session_date'][:10]}] {s['content'][:200]}" for s in sessions
+    )
+
+
+async def _get_participant_name(participant_id: str) -> str:
+    supabase = get_supabase_admin()
+    try:
+        result = (
+            supabase.table("patients")
+            .select("full_name")
+            .eq("id", participant_id)
+            .single()
+            .execute()
+        )
+        return (result.data or {}).get("full_name") or "Participant"
+    except Exception:
+        return "Participant"
+
+
+# ── Task description ────────────────────────────────────────────────────────────
 
 async def suggest_task_description(
     participant_id: str,
@@ -16,73 +98,42 @@ async def suggest_task_description(
     category: str,
     organisation_id: str,
     lookback_days: int = 30,
-) -> Optional[str]:
+) -> tuple[Optional[str], list[dict]]:
     """
-    Generate AI-powered task description suggestion based on participant history.
-    
-    Uses RAG to retrieve relevant past tasks/sessions, then calls GPT-4o-mini
-    to suggest a task description in NDIS-compliant language.
-    
-    Args:
-        participant_id: Participant UUID
-        shift_type: morning/afternoon/night/anytime
-        category: personal_care/medication/etc
-        organisation_id: Org UUID for isolation
-        lookback_days: How far back to look in history
-    
-    Returns:
-        Suggested task description string, or None if no history found
+    Returns (suggestion_text, sources).
+    When this participant has completed session history, suggestion is grounded in
+    that history and sources contains real session IDs and dates.
+    When no history exists, a general NDIS-compliant suggestion is returned with
+    sources=[] (honest — no citation because none exists).
     """
     if not _openai_configured():
-        logger.warning("OpenAI not configured, skipping task suggestion")
-        return None
-    
+        return None, []
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id)
+    participant_name = await _get_participant_name(participant_id)
+
+    if sessions:
+        history_section = f"Recent session history for this participant:\n{_context_block(sessions)}"
+    else:
+        history_section = "No prior session history available for this participant."
+
     try:
-        supabase = get_supabase_admin()
-        
-        # Get participant name and recent task history
-        participant = await supabase.table("patients").select("full_name").eq(
-            "id", participant_id
-        ).single().execute()
-
-        if not participant.data:
-            return None
-
-        participant_name = participant.data.get("full_name", "Participant")
-        
-        # Get recent completed tasks for this participant in same category
-        query = f"Tasks completed by {participant_name} for {category.replace('_', ' ')}"
-        
-        similar_sessions = await retrieve_similar_sessions(
-            query_text=query,
-            org_id=organisation_id,
-            limit=3,
-            min_similarity=0.65,
-        )
-        
-        context = ""
-        if similar_sessions:
-            context = "Past task completions:\n"
-            for session in similar_sessions[:3]:
-                context += f"- {session.get('content', '')[:200]}\n"
-        
-        # Build prompt for task suggestion
-        prompt = f"""You are an NDIS-compliant care coordinator helping create task templates.
+        prompt = f"""You are an NDIS-compliant care coordinator creating a task template.
 
 Participant: {participant_name}
 Shift type: {shift_type}
 Task category: {category.replace('_', ' ')}
 
-{f"Recent context: {context}" if context else "No recent history available."}
+{history_section}
 
-Generate a clear, specific task description (1-2 sentences) that:
+Generate a clear, specific task description (1–2 sentences) that:
 - Is concrete and measurable where possible
 - Uses person-centered language
 - Is appropriate for a {shift_type} shift
 - Aligns with the {category.replace('_', ' ')} category
 
 Respond with ONLY the task description, no additional text."""
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -90,19 +141,21 @@ Respond with ONLY the task description, no additional text."""
                     "role": "system",
                     "content": "You are an expert NDIS care coordinator. Generate concise, measurable task descriptions.",
                 },
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             temperature=0.7,
             max_tokens=150,
         )
-        
-        suggestion = response.choices[0].message.content.strip()
-        return suggestion if suggestion else None
-        
-    except Exception as e:
-        logger.error(f"Task suggestion generation failed: {e}")
-        return None
+        suggestion = (response.choices[0].message.content or "").strip()
+        sources = _build_sources(sessions)  # [] when no history — honest
+        return (suggestion or None), sources
 
+    except Exception as exc:
+        logger.error("Task description suggestion failed: %s", exc)
+        return None, []
+
+
+# ── Task metadata ───────────────────────────────────────────────────────────────
 
 async def suggest_task_metadata(
     participant_id: str,
@@ -111,44 +164,24 @@ async def suggest_task_metadata(
     organisation_id: str,
 ) -> dict:
     """
-    Generate AI suggestions for task metadata (priority, evidence requirements).
-    
-    Args:
-        participant_id: Participant UUID
-        shift_type: Shift type
-        category: Task category
-        organisation_id: Org UUID
-    
-    Returns:
-        Dict with suggested priority and evidence_required values
+    Returns {"priority": ..., "evidence_required": ...}.
+    Uses participant history when available; falls back to general NDIS guidance.
     """
     if not _openai_configured():
-        return {
-            "priority": "medium",
-            "evidence_required": "none",
-        }
-    
+        return {"priority": "medium", "evidence_required": "none"}
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id, limit=2)
+
+    if sessions:
+        context_line = f"- Recent context: {_context_block(sessions)}"
+    else:
+        context_line = ""
+
     try:
-        supabase = get_supabase_admin()
-        
-        # Get recent incidents/issues for this participant
-        similar_incidents = await retrieve_similar_sessions(
-            query_text=f"incidents or concerns for {category}",
-            org_id=organisation_id,
-            limit=2,
-            min_similarity=0.60,
-        )
-        
-        incident_context = ""
-        if similar_incidents:
-            incident_context = "Recent concerns: " + "; ".join(
-                [s.get("content", "")[:100] for s in similar_incidents[:2]]
-            )
-        
-        prompt = f"""Given these parameters:
+        prompt = f"""Given these task parameters:
 - Shift: {shift_type}
 - Category: {category.replace('_', ' ')}
-{f"- Recent context: {incident_context}" if incident_context else ""}
+{context_line}
 
 Suggest task metadata as JSON:
 {{
@@ -158,97 +191,64 @@ Suggest task metadata as JSON:
 
 Base priority on frequency/importance. Base evidence on safety/compliance needs.
 Respond ONLY with valid JSON, no other text."""
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
+            messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
             max_tokens=100,
         )
-        
-        import json
-        result_text = response.choices[0].message.content.strip()
+        result_text = (response.choices[0].message.content or "").strip()
         suggestion = json.loads(result_text)
-        
         return {
             "priority": suggestion.get("priority", "medium"),
             "evidence_required": suggestion.get("evidence_required", "none"),
         }
-        
-    except Exception as e:
-        logger.error(f"Task metadata suggestion failed: {e}")
-        return {
-            "priority": "medium",
-            "evidence_required": "none",
-        }
 
+    except Exception as exc:
+        logger.error("Task metadata suggestion failed: %s", exc)
+        return {"priority": "medium", "evidence_required": "none"}
+
+
+# ── Goal description ────────────────────────────────────────────────────────────
 
 async def suggest_goal_description(
     participant_id: str,
     goal_title: str,
     organisation_id: str,
-) -> Optional[str]:
+) -> tuple[Optional[str], list[dict]]:
     """
-    Generate AI-powered goal description suggestion.
-    
-    Uses participant's past goals and progress to suggest relevant
-    goal descriptions in NDIS-compliant language.
-    
-    Args:
-        participant_id: Participant UUID
-        goal_title: Goal title/name
-        organisation_id: Org UUID
-    
-    Returns:
-        Suggested goal description, or None if generation fails
+    Returns (suggestion_text, sources).
+    Grounded in participant history when available; general NDIS guidance otherwise.
+    sources=[] is honest when there is no session history to cite.
     """
     if not _openai_configured():
-        return None
-    
+        return None, []
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id)
+    participant_name = await _get_participant_name(participant_id)
+
+    if sessions:
+        context_section = f"Context from participant's recent sessions:\n{_context_block(sessions)}"
+    else:
+        context_section = "No prior session history available for this participant."
+
     try:
-        supabase = get_supabase_admin()
-        
-        # Get participant info
-        participant = await supabase.table("patients").select(
-            "full_name,date_of_birth"
-        ).eq("id", participant_id).single().execute()
-
-        if not participant.data:
-            return None
-
-        participant_name = participant.data.get("full_name", "Participant")
-        
-        # Retrieve past goals and related sessions
-        similar_goals = await retrieve_similar_sessions(
-            query_text=f"goals and plans for {goal_title}",
-            org_id=organisation_id,
-            limit=2,
-            min_similarity=0.65,
-        )
-        
-        context = ""
-        if similar_goals:
-            context = "Related past plans:\n" + "\n".join(
-                [f"- {s.get('content', '')[:150]}" for s in similar_goals[:2]]
-            )
-        
         prompt = f"""Create an NDIS-compliant goal description for:
 
 Participant: {participant_name}
 Goal: {goal_title}
 
-{f"Context: {context}" if context else "No prior goals found."}
+{context_section}
 
-Generate a 2-3 sentence goal description that:
+Generate a 2–3 sentence goal description that:
 - Clearly states what will be achieved
 - Is measurable where possible
 - Is person-centered and strength-based
 - Aligns with NDIS language and principles
 
 Respond with ONLY the goal description."""
-        
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -256,15 +256,93 @@ Respond with ONLY the goal description."""
                     "role": "system",
                     "content": "You are an expert NDIS planner. Generate clear, measurable goal descriptions.",
                 },
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             temperature=0.7,
             max_tokens=200,
         )
-        
-        suggestion = response.choices[0].message.content.strip()
-        return suggestion if suggestion else None
-        
-    except Exception as e:
-        logger.error(f"Goal description suggestion failed: {e}")
-        return None
+        suggestion = (response.choices[0].message.content or "").strip()
+        sources = _build_sources(sessions)
+        return (suggestion or None), sources
+
+    except Exception as exc:
+        logger.error("Goal description suggestion failed: %s", exc)
+        return None, []
+
+
+# ── Goal insight recommendation ─────────────────────────────────────────────────
+
+async def suggest_goal_insight_recommendation(
+    participant_id: str,
+    goal_title: str,
+    completion_rate: float,
+    completed: int,
+    total: int,
+    organisation_id: str,
+) -> str:
+    """
+    Returns an LLM-generated recommendation grounded in participant history when
+    available. Falls back to a deterministic stat-based message when AI is
+    unavailable — never claims AI grounding it doesn't have.
+    """
+
+    def _stat_fallback() -> str:
+        if completion_rate >= 0.8:
+            return (
+                f"{completed}/{total} tasks completed. "
+                "Excellent progress — consider increasing goal complexity or frequency."
+            )
+        if completion_rate >= 0.5:
+            return f"{completed}/{total} tasks completed. Good progress at a sustainable pace."
+        if completion_rate > 0:
+            return (
+                f"{completed}/{total} tasks completed. "
+                "Review barriers and consider adjusting support or task frequency."
+            )
+        return "No tasks completed yet. Consider simplifying the goal or adding more targeted support."
+
+    if not _openai_configured():
+        return _stat_fallback()
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id, limit=3)
+    participant_name = await _get_participant_name(participant_id)
+
+    if sessions:
+        history_section = f"Recent session history:\n{_context_block(sessions)}"
+    else:
+        history_section = "No prior session history available for this participant."
+
+    try:
+        prompt = f"""You are reviewing goal progress for an NDIS participant.
+
+Participant: {participant_name}
+Goal: {goal_title}
+Completion rate: {round(completion_rate * 100)}% ({completed}/{total} tasks)
+
+{history_section}
+
+Write a 2-sentence coordinator recommendation that:
+- Acknowledges the completion rate honestly
+- Suggests a specific, actionable next step
+- Is person-centered and practical
+
+Respond with ONLY the recommendation, no preamble."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert NDIS coordinator reviewing goal progress.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.6,
+            max_tokens=150,
+        )
+        text = (response.choices[0].message.content or "").strip()
+        return text if text else _stat_fallback()
+
+    except Exception as exc:
+        logger.error("Goal insight recommendation failed: %s", exc)
+        return _stat_fallback()
