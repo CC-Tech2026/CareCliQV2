@@ -929,7 +929,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["participant", id, "participant-tasks"] });
       setCreateMode(null);
-      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false);
+      setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false);
     },
     onError: () => toastFn({ title: "Failed to create task", variant: "destructive" }),
   });
@@ -957,6 +957,30 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
       toastFn({ title: 'AI unavailable', description: 'Could not generate suggestions.', variant: 'destructive' });
     } finally {
       setGoalAiLoading(false);
+    }
+  };
+
+  const fetchTaskSuggestions = async () => {
+    setTaskAiLoading(true);
+    try {
+      const linkedGoal = linkedGoalId ? ndisGoals.find(g => g.id === linkedGoalId) : null;
+      const params = new URLSearchParams({ participant_id: id, task_purpose: taskPurpose });
+      if (linkedGoal?.name) params.set('goal_name', linkedGoal.name);
+      if (linkedGoal?.description) {
+        const plain = (linkedGoal.description as string).replace(/<[^>]+>/g, '').trim().slice(0, 400);
+        if (plain) params.set('goal_description', plain);
+      }
+      const data = await jsonFetch<{ names: string[]; instructions: string[]; category: string | null; priority: string | null }>(
+        `/api/tasks/ai/task-full-suggestions?${params}`, { method: 'POST' }
+      );
+      setTaskAiSuggestions(data);
+      if (data.category) setTaskCategory(data.category as typeof taskCategory);
+      if (data.priority) setTaskPriority(data.priority as typeof taskPriority);
+    } catch (err) {
+      console.error('Task suggestions failed:', err);
+      toastFn({ title: 'AI unavailable', description: 'Could not generate task suggestions.', variant: 'destructive' });
+    } finally {
+      setTaskAiLoading(false);
     }
   };
 
@@ -1022,9 +1046,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [taskTitleSuggestions, setTaskTitleSuggestions] = useState<string[]>([]);
   const [taskTitleLoading, setTaskTitleLoading] = useState(false);
   const [taskInstructions, setTaskInstructions] = useState('');
-  const [taskInstructionsSuggestions, setTaskInstructionsSuggestions] = useState<string[]>([]);
   const [taskSupportCategory, setTaskSupportCategory] = useState('');
-  const [taskInstructionsLoading, setTaskInstructionsLoading] = useState(false);
   const [taskInstructionsAiApplied, setTaskInstructionsAiApplied] = useState(false);
   const [taskTitleAiApplied, setTaskTitleAiApplied] = useState(false);
   const [taskPurpose, setTaskPurpose] = useState<'core' | 'goal'>('core');
@@ -1038,6 +1060,8 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [taskEvidenceRequired, setTaskEvidenceRequired] = useState<'none' | 'photo' | 'notes' | 'photo_and_notes'>('none');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
+  const [taskAiSuggestions, setTaskAiSuggestions] = useState<{ names: string[]; instructions: string[]; category: string | null; priority: string | null } | null>(null);
+  const [taskAiLoading, setTaskAiLoading] = useState(false);
 
   // Sync contenteditable description div when goal form opens or switches between modes
   useEffect(() => {
@@ -1697,7 +1721,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   <h3 className="text-[16px] font-bold text-[#111827]">Create New Task</h3>
                   <p className="text-[12px] text-[#6B7280] mt-1">Setting up support for <span className="font-semibold">{participant.full_name}</span></p>
                 </div>
-                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }} title="Close" aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"><X size={16} className="text-[#9CA3AF]" /></button>
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }} title="Close" aria-label="Close" className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"><X size={16} className="text-[#9CA3AF]" /></button>
               </div>
 
               {/* PURPOSE SELECTION - FIRST FIELD */}
@@ -1739,6 +1763,103 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               )}
 
+              {/* AI TASK ASSISTANT */}
+              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
+                      <Sparkles size={12} className="text-violet-600" />
+                    </div>
+                    <div>
+                      <span className="text-[12px] font-bold text-violet-900">AI Task Assistant</span>
+                      {taskAiSuggestions && !taskAiLoading && (
+                        <span className="ml-1.5 text-[10px] text-violet-500 font-medium">
+                          {linkedGoalId ? 'grounded in linked goal' : `based on ${participant.full_name.split(' ')[0]}'s history`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchTaskSuggestions}
+                    disabled={taskAiLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-[11px] font-bold hover:bg-violet-700 disabled:opacity-60 transition-colors shrink-0"
+                  >
+                    {taskAiLoading
+                      ? <><Loader2 size={11} className="animate-spin" /> Generating…</>
+                      : taskAiSuggestions
+                        ? <><Wand2 size={11} /> Regenerate</>
+                        : <><Sparkles size={11} /> Suggest</>
+                    }
+                  </button>
+                </div>
+
+                {taskAiLoading && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Skeleton className="h-7 w-28 rounded-full" />
+                      <Skeleton className="h-7 w-36 rounded-full" />
+                      <Skeleton className="h-7 w-24 rounded-full" />
+                    </div>
+                    <Skeleton className="h-14 w-full rounded-lg" />
+                    <Skeleton className="h-14 w-full rounded-lg" />
+                  </div>
+                )}
+
+                {!taskAiLoading && taskAiSuggestions && (
+                  <div className="space-y-3">
+                    {taskAiSuggestions.names.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Task name ideas — tap to use</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {taskAiSuggestions.names.map((name, i) => (
+                            <button key={i} type="button"
+                              onClick={() => { setTaskTitle(name); setTaskTitleAiApplied(true); }}
+                              className="px-2.5 py-1 rounded-full bg-white border border-violet-200 text-[11px] font-semibold text-violet-800 hover:border-violet-400 hover:bg-violet-50 transition-colors text-left">
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {taskAiSuggestions.instructions.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-violet-700 uppercase tracking-wide">Worker instructions — tap to use</p>
+                        <div className="space-y-1.5">
+                          {taskAiSuggestions.instructions.map((instr, i) => (
+                            <div key={i}
+                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              onClick={() => { setTaskInstructions(instr); setTaskInstructionsAiApplied(true); }}
+                            >
+                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{instr}</p>
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                                Use
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {(taskAiSuggestions.category || taskAiSuggestions.priority) && (
+                      <div className="flex items-center gap-1.5 pt-1 border-t border-violet-100">
+                        <Wand2 size={10} className="text-violet-500 shrink-0" />
+                        <p className="text-[10px] text-violet-600">Category and priority pre-filled from AI — adjust below if needed</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!taskAiLoading && !taskAiSuggestions && (
+                  <p className="text-[11px] text-violet-500/80 text-center py-0.5">
+                    {taskPurpose === 'goal' && linkedGoalId
+                      ? 'Get task ideas grounded in the linked goal'
+                      : 'Get AI-powered task name and instruction suggestions'}
+                  </p>
+                )}
+              </div>
+
               {/* TASK TITLE */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Task title *</label>
@@ -1749,58 +1870,6 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                   }`} />
                 {taskTitleAiApplied && <p className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</p>}
               </div>
-
-              {/* AI INSTRUCTIONS BOX */}
-              {taskTitle.trim() && (
-                <div className="p-3 bg-purple-50/60 rounded-lg border border-purple-200 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Sparkles size={13} className="text-purple-600" />
-                      <span className="text-[12px] font-semibold text-purple-900">AI suggestion</span>
-                    </div>
-                    {!taskInstructionsAiApplied && (
-                      <button type="button" onClick={async () => {
-                        setTaskInstructionsLoading(true);
-                        try {
-                          const goal = linkedGoalId ? activeGoals.find(g => g.id === linkedGoalId) : null;
-                          const response = await jsonFetch<{ suggestions: string[] }>('/api/ai/task-instructions', {
-                            method: 'POST',
-                            body: JSON.stringify({
-                              task_title: taskTitle.trim(),
-                              task_purpose: taskPurpose,
-                              goal_name: goal?.name,
-                              goal_description: goal?.description,
-                              participant_name: participant.full_name,
-                              participant_id: id,
-                            }),
-                          });
-                          setTaskInstructionsSuggestions(response.suggestions || []);
-                        } catch (err) {
-                          console.error('Failed to get instruction suggestions:', err);
-                        } finally {
-                          setTaskInstructionsLoading(false);
-                        }
-                      }} disabled={taskInstructionsLoading}
-                        className="text-[11px] font-bold px-2.5 py-1 rounded-md border border-purple-300 bg-white text-purple-700 hover:bg-purple-50 disabled:opacity-60">
-                        {taskInstructionsLoading ? <>Generating…</> : <>Suggest instructions</>}
-                      </button>
-                    )}
-                  </div>
-                  {taskInstructionsSuggestions.length > 0 && (
-                    <div className="space-y-1.5">
-                      {taskInstructionsSuggestions.map((suggestion, idx) => (
-                        <div key={idx} className="p-2 rounded-lg bg-white border border-purple-100 flex items-start justify-between gap-2 hover:bg-purple-50/40 transition-colors">
-                          <p className="text-[11px] text-[#374151] flex-1 leading-snug">{suggestion}</p>
-                          <button type="button" onClick={() => { setTaskInstructions(suggestion); setTaskInstructionsAiApplied(true); setTaskInstructionsSuggestions([]); }}
-                            className="shrink-0 px-2 py-0.5 text-[10px] font-bold rounded bg-purple-600 text-white hover:bg-purple-700 whitespace-nowrap">
-                            Use
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* TASK CATEGORY */}
               <div className="space-y-1.5">
@@ -1935,7 +2004,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
 
               {/* ACTION BUTTONS */}
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); }}
+                <button type="button" onClick={() => { setCreateMode(null); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }}
                   className="flex-1 rounded-lg border border-gray-200 py-2.5 text-[12px] font-bold text-[#6B7280] hover:bg-gray-50">Cancel</button>
                 <button type="button" disabled={!taskTitle.trim() || createTaskMut.isPending}
                   onClick={() => createTaskMut.mutate({
@@ -1972,7 +2041,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                     + Goal
                   </button>
                   <button type="button"
-                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); }}
+                    onClick={() => { setCreateMode("tasks"); setTaskTitle(""); setTaskInstructions(""); setLinkedGoalId(null); setTaskPurpose("core"); setTaskInstructionsAiApplied(false); setTaskAiSuggestions(null); setTaskAiLoading(false); }}
                     className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-[#3730A3] text-white hover:bg-[#312E81]">
                     + Task
                   </button>

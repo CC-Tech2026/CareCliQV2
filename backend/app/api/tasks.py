@@ -25,6 +25,7 @@ from ..services.task_ai_service import (
     suggest_goal_description,
     suggest_goal_insight_recommendation,
     suggest_goal_full_suggestions,
+    suggest_task_full_suggestions,
 )
 from ..services.supabase_client import get_supabase_admin
 
@@ -486,3 +487,30 @@ async def get_goal_full_suggestions(
     except Exception as e:
         logger.error(f"Goal full suggestions error: {e}")
         return {"names": [], "descriptions": [], "success_criteria": []}
+
+
+@router.post("/ai/task-full-suggestions")
+async def get_task_full_suggestions(
+    participant_id: UUID = Query(...),
+    task_purpose: str = Query(default="core"),
+    goal_name: str = Query(default=""),
+    goal_description: str = Query(default=""),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get multiple AI suggestions for task name, worker instructions, category and priority.
+    When linked to a goal, grounded in that goal context + participant history.
+    """
+    org_id = get_user_organization_id(current_user)
+    try:
+        result = await suggest_task_full_suggestions(
+            participant_id=str(participant_id),
+            task_purpose=task_purpose,
+            organisation_id=org_id,
+            goal_name=goal_name,
+            goal_description=goal_description[:500] if goal_description else "",
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Task full suggestions error: {e}")
+        return {"names": [], "instructions": [], "category": None, "priority": None}

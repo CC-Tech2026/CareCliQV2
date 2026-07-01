@@ -348,6 +348,88 @@ Guidelines:
         return {"names": [], "descriptions": [], "success_criteria": []}
 
 
+# ── Task full suggestions (multi-field) ─────────────────────────────────────────
+
+async def suggest_task_full_suggestions(
+    participant_id: str,
+    task_purpose: str,
+    organisation_id: str,
+    goal_name: str = "",
+    goal_description: str = "",
+) -> dict:
+    """
+    Returns name options, instruction options, and suggested category/priority for a task.
+    Grounded in linked goal context (when provided) + participant session history.
+    """
+    if not _openai_configured():
+        return {"names": [], "instructions": [], "category": None, "priority": None}
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id)
+    participant_name = await _get_participant_name(participant_id)
+
+    if sessions:
+        context_section = (
+            f"Context from {participant_name}'s recent completed sessions:\n"
+            + _context_block(sessions)
+        )
+    else:
+        context_section = "No prior session history available. Use evidence-based NDIS best-practice guidance."
+
+    if goal_name.strip():
+        purpose_context = f'This task supports the NDIS goal: "{goal_name.strip()}"'
+        if goal_description.strip():
+            purpose_context += f"\nGoal description: {goal_description.strip()[:300]}"
+    else:
+        purpose_context = "This is a core support task (not linked to a specific goal)."
+
+    try:
+        prompt = f"""You are an expert NDIS support coordinator creating a support task.
+
+Participant: {participant_name}
+{purpose_context}
+
+{context_section}
+
+Generate task planning suggestions. Return ONLY valid JSON with this exact structure:
+{{
+  "names": ["<concise task name>", "<second option>", "<third option>"],
+  "instructions": ["<specific worker instruction>", "<second option>", "<third option>"],
+  "category": "<one of: personal_care | medication | domestic_assistance | community_access | transport | other>",
+  "priority": "<one of: low | medium | high>"
+}}
+
+Guidelines:
+- Names: under 8 words, action-oriented, specific to participant context
+- Instructions: 1-2 sentences, tell workers exactly what to do and how, person-centered
+- Category: most appropriate NDIS support category given the goal and participant history
+- Priority: based on frequency and importance relative to participant's goals"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert NDIS care coordinator creating participant-centered support tasks. Always return valid JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
+            max_tokens=600,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content or "{}")
+        return {
+            "names": (result.get("names") or [])[:3],
+            "instructions": (result.get("instructions") or [])[:3],
+            "category": result.get("category") or None,
+            "priority": result.get("priority") or None,
+        }
+
+    except Exception as exc:
+        logger.error("Task full suggestions failed: %s", exc)
+        return {"names": [], "instructions": [], "category": None, "priority": None}
+
+
 # ── Goal insight recommendation ─────────────────────────────────────────────────
 
 async def suggest_goal_insight_recommendation(
