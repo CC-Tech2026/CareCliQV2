@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import {
@@ -940,36 +940,24 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     onError: () => toastFn({ title: "Failed to delete task", variant: "destructive" }),
   });
 
-  const suggestGoalDescription = async () => {
-    if (!goalTitle.trim()) return;
-    setGoalDescriptionLoading(true); setGoalDescriptionAiApplied(false);
+  const fetchGoalSuggestions = async () => {
+    setGoalAiLoading(true);
     try {
-      const params = new URLSearchParams({ participant_id: id, goal_title: goalTitle.trim() });
-      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
-      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
-      const data = await res.json() as { suggestion: string | null };
-      if (data.suggestion) { setGoalDescription(data.suggestion); setGoalDescriptionAiApplied(true); toastFn({ title: "Description suggested", description: "Review and edit the AI-suggested text." }); }
-      else toastFn({ title: "No suggestion available", description: "Write a description manually." });
+      const params = new URLSearchParams({
+        participant_id: id,
+        goal_area: goalCategory,
+        ...(goalTitle.trim() ? { current_title: goalTitle.trim() } : {}),
+      });
+      const data = await jsonFetch<{ names: string[]; descriptions: string[]; success_criteria: string[] }>(
+        `/api/tasks/ai/goal-full-suggestions?${params}`, { method: 'POST' }
+      );
+      setGoalAiSuggestions(data);
     } catch (err) {
-      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
-      console.error("suggestGoalDescription error:", err);
-    } finally { setGoalDescriptionLoading(false); }
-  };
-
-  const suggestTaskInstructions = async () => {
-    if (!taskTitle.trim()) return;
-    setTaskInstructionsLoading(true); setTaskInstructionsAiApplied(false);
-    try {
-      const params = new URLSearchParams({ participant_id: id, goal_title: taskTitle.trim() });
-      const res = await apiFetch(`/api/tasks/ai/goal-description-suggestion?${params}`, { method: "POST" });
-      if (!res.ok) { toastFn({ title: "AI unavailable", description: `Server returned ${res.status}.`, variant: "destructive" }); return; }
-      const data = await res.json() as { suggestion: string | null };
-      if (data.suggestion) { setTaskInstructions(data.suggestion); setTaskInstructionsAiApplied(true); toastFn({ title: "Instructions suggested", description: "Review and edit the AI-suggested text." }); }
-      else toastFn({ title: "No suggestion available", description: "Write instructions manually." });
-    } catch (err) {
-      toastFn({ title: "AI unavailable", description: "Couldn't reach the suggestion service.", variant: "destructive" });
-      console.error("suggestTaskInstructions error:", err);
-    } finally { setTaskInstructionsLoading(false); }
+      console.error('Goal suggestions failed:', err);
+      toastFn({ title: 'AI unavailable', description: 'Could not generate suggestions.', variant: 'destructive' });
+    } finally {
+      setGoalAiLoading(false);
+    }
   };
 
   const restrictedQuery = useOrgQuery(["participant", id, "restricted-clinical"], {
@@ -1026,8 +1014,10 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [goalDescription, setGoalDescription] = useState('');
   const [goalTargetDate, setGoalTargetDate] = useState('');
   const [goalSuccessCriteria, setGoalSuccessCriteria] = useState('');
-  const [goalDescriptionLoading, setGoalDescriptionLoading] = useState(false);
   const [goalDescriptionAiApplied, setGoalDescriptionAiApplied] = useState(false);
+  const [goalAiSuggestions, setGoalAiSuggestions] = useState<{ names: string[]; descriptions: string[]; success_criteria: string[] } | null>(null);
+  const [goalAiLoading, setGoalAiLoading] = useState(false);
+  const goalDescriptionRef = useRef<HTMLDivElement>(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskTitleSuggestions, setTaskTitleSuggestions] = useState<string[]>([]);
   const [taskTitleLoading, setTaskTitleLoading] = useState(false);
@@ -1048,6 +1038,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const [taskEvidenceRequired, setTaskEvidenceRequired] = useState<'none' | 'photo' | 'notes' | 'photo_and_notes'>('none');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequencyPattern, setFrequencyPattern] = useState<'every_morning_shift' | 'every_afternoon_shift' | 'every_night_shift' | 'daily_all_shifts' | 'specific_days_of_week' | 'custom'>('daily_all_shifts');
+
+  // Sync contenteditable description div when goal form opens or switches between modes
+  useEffect(() => {
+    if (!goalDescriptionRef.current) return;
+    if (createMode === 'goal') {
+      goalDescriptionRef.current.innerHTML = '';
+    } else if (createMode === 'edit_goal') {
+      goalDescriptionRef.current.innerHTML = goalDescription || '';
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createMode, editingGoal]);
 
   if (participantQuery.isLoading) {
     return (
@@ -1424,12 +1425,17 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
             setGoalTargetDate(goal.target_date ?? "");
             setGoalSuccessCriteria(goal.success_criteria ?? "");
             setGoalDescriptionAiApplied(false);
+            setGoalAiSuggestions(null); setGoalAiLoading(false);
             setCreateMode("edit_goal");
           };
-          const cancelGoalForm = () => { setCreateMode(null); setEditingGoal(null); setGoalDescriptionAiApplied(false); };
+          const cancelGoalForm = () => {
+            setCreateMode(null); setEditingGoal(null);
+            setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false);
+          };
 
           const goalFormContent = (
             <div className="rounded-xl border border-purple-100 bg-white shadow-sm p-5 space-y-4">
+              {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
                   <h4 className="text-[14px] font-bold text-[#111827]">{createMode === "edit_goal" ? "Edit goal" : "New NDIS goal"}</h4>
@@ -1438,30 +1444,130 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <button type="button" onClick={cancelGoalForm} title="Close" aria-label="Close" className="p-1 rounded-full hover:bg-gray-100"><X size={15} className="text-[#9CA3AF]" /></button>
               </div>
 
+              {/* AI Goal Assistant panel */}
+              <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center shrink-0">
+                      <Sparkles size={12} className="text-violet-600" />
+                    </div>
+                    <div>
+                      <span className="text-[12px] font-bold text-violet-900">AI Goal Assistant</span>
+                      {goalAiSuggestions && !goalAiLoading && (
+                        <span className="ml-1.5 text-[10px] text-violet-500 font-medium">based on {participant.full_name.split(' ')[0]}'s history</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchGoalSuggestions}
+                    disabled={goalAiLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-[11px] font-bold hover:bg-violet-700 disabled:opacity-60 transition-colors shrink-0"
+                  >
+                    {goalAiLoading
+                      ? <><Loader2 size={11} className="animate-spin" /> Generating…</>
+                      : goalAiSuggestions
+                        ? <><Wand2 size={11} /> Regenerate</>
+                        : <><Sparkles size={11} /> Suggest</>
+                    }
+                  </button>
+                </div>
+
+                {goalAiLoading && (
+                  <div className="space-y-2 pt-0.5">
+                    <div className="h-7 rounded-lg bg-violet-100/70 animate-pulse" />
+                    <div className="h-7 rounded-lg bg-violet-100/50 animate-pulse w-4/5" />
+                    <div className="h-7 rounded-lg bg-violet-100/40 animate-pulse w-3/5" />
+                  </div>
+                )}
+
+                {!goalAiLoading && !goalAiSuggestions && (
+                  <p className="text-[11px] text-violet-400">Click <strong>Suggest</strong> to get AI-generated goal names, descriptions, and success criteria based on {participant.full_name.split(' ')[0]}'s support history.</p>
+                )}
+
+                {!goalAiLoading && goalAiSuggestions && (
+                  <div className="space-y-3 pt-0.5">
+                    {/* Name suggestions */}
+                    {goalAiSuggestions.names.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Goal names — tap to use</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {goalAiSuggestions.names.map((name, i) => (
+                            <button key={i} type="button"
+                              onClick={() => setGoalTitle(name)}
+                              className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-all text-left ${
+                                goalTitle === name
+                                  ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                                  : 'bg-white text-violet-800 border-violet-200 hover:border-violet-400 hover:bg-violet-50'
+                              }`}
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Description suggestions */}
+                    {goalAiSuggestions.descriptions.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Descriptions — tap to use</p>
+                        <div className="space-y-1.5">
+                          {goalAiSuggestions.descriptions.map((desc, i) => (
+                            <div key={i}
+                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              onClick={() => {
+                                const html = desc.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+                                if (goalDescriptionRef.current) goalDescriptionRef.current.innerHTML = html;
+                                setGoalDescription(desc);
+                                setGoalDescriptionAiApplied(true);
+                              }}
+                            >
+                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{desc}</p>
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                                Use
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Success criteria suggestions */}
+                    {goalAiSuggestions.success_criteria.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Success criteria — tap to use</p>
+                        <div className="space-y-1.5">
+                          {goalAiSuggestions.success_criteria.map((crit, i) => (
+                            <div key={i}
+                              className="group p-2.5 rounded-lg bg-white border border-violet-100 hover:border-violet-300 hover:shadow-sm cursor-pointer transition-all flex items-start gap-2"
+                              onClick={() => setGoalSuccessCriteria(crit)}
+                            >
+                              <p className="text-[11px] text-[#374151] leading-relaxed flex-1">{crit}</p>
+                              <span className="shrink-0 mt-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-violet-100 text-violet-700 group-hover:bg-violet-600 group-hover:text-white transition-colors whitespace-nowrap">
+                                Use
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Goal name */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Goal name *</label>
                 <input
                   value={goalTitle}
-                  onChange={(e) => { setGoalTitle(e.target.value); setGoalDescriptionAiApplied(false); }}
+                  onChange={(e) => setGoalTitle(e.target.value)}
                   placeholder="e.g. Increase independence in morning routine"
                   className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-purple-400"
                 />
-                {goalTitle.trim() && (
-                  <div className="flex items-center justify-between pt-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <Sparkles size={11} className="text-purple-400" />
-                      <button type="button" onClick={suggestGoalDescription} disabled={goalDescriptionLoading}
-                        className="text-[11px] text-purple-600 hover:text-purple-800 font-semibold disabled:opacity-60">
-                        {goalDescriptionLoading ? <><Loader2 size={10} className="animate-spin inline mr-1" />Generating…</> : "Suggest description"}
-                      </button>
-                    </div>
-                    {goalDescriptionAiApplied && <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1"><Wand2 size={10} /> AI-suggested</span>}
-                  </div>
-                )}
               </div>
 
-              {/* NDIS area — outcome domain */}
+              {/* NDIS outcome area */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">NDIS outcome area</label>
                 <div className="flex flex-wrap gap-1.5">
@@ -1475,7 +1581,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
               </div>
 
-              {/* NDIS support category — funding line */}
+              {/* NDIS support category */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">
                   NDIS support category <span className="text-red-500">*</span>
@@ -1487,17 +1593,61 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 )}
               </div>
 
-              {/* Description + target date */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 space-y-1.5">
+              {/* Description — rich text editor */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
                   <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Description</label>
-                  <textarea value={goalDescription}
-                    onChange={(e) => { setGoalDescription(e.target.value); setGoalDescriptionAiApplied(false); }}
-                    placeholder={goalDescriptionLoading ? "Generating AI description…" : "What does achieving this goal look like?"}
-                    rows={3}
-                    className={`w-full rounded-lg border bg-white px-3 py-2.5 text-[13px] outline-none resize-none focus:ring-1 focus:ring-purple-400 transition-colors ${goalDescriptionAiApplied ? "border-emerald-200 bg-emerald-50/30" : "border-gray-200"}`}
-                  />
+                  {goalDescriptionAiApplied && (
+                    <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
+                      <Wand2 size={10} /> AI-suggested — edit as needed
+                    </span>
+                  )}
                 </div>
+                <div className={`rounded-lg border overflow-hidden transition-colors ${goalDescriptionAiApplied ? 'border-emerald-200' : 'border-gray-200 focus-within:border-purple-300'}`}>
+                  {/* Formatting toolbar */}
+                  <div className="flex items-center gap-0.5 px-2 py-1 bg-gray-50 border-b border-gray-100">
+                    <button type="button"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand('bold'); goalDescriptionRef.current?.focus(); }}
+                      title="Bold"
+                      className="w-7 h-6 rounded flex items-center justify-center text-[13px] font-bold text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors">B</button>
+                    <button type="button"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand('italic'); goalDescriptionRef.current?.focus(); }}
+                      title="Italic"
+                      className="w-7 h-6 rounded flex items-center justify-center text-[13px] italic text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors">I</button>
+                    <div className="w-px h-3.5 bg-gray-300 mx-0.5" />
+                    <button type="button"
+                      onMouseDown={(e) => { e.preventDefault(); document.execCommand('insertUnorderedList'); goalDescriptionRef.current?.focus(); }}
+                      title="Bullet list"
+                      className="w-7 h-6 rounded flex items-center justify-center text-[12px] text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition-colors leading-none">•≡</button>
+                  </div>
+                  {/* Editable area */}
+                  <div className="relative">
+                    {!goalDescription && (
+                      <div className="absolute top-0 left-0 right-0 px-3 py-2.5 text-[13px] text-gray-400 pointer-events-none select-none">
+                        What does achieving this goal look like?
+                      </div>
+                    )}
+                    <div
+                      ref={goalDescriptionRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onInput={() => {
+                        if (goalDescriptionRef.current) {
+                          const text = goalDescriptionRef.current.textContent?.trim() || '';
+                          setGoalDescription(text ? goalDescriptionRef.current.innerHTML : '');
+                          if (goalDescriptionAiApplied && text !== (goalAiSuggestions?.descriptions[0] ?? '')) {
+                            setGoalDescriptionAiApplied(false);
+                          }
+                        }
+                      }}
+                      className="min-h-[90px] px-3 py-2.5 text-[13px] text-gray-800 outline-none [&_b]:font-bold [&_strong]:font-bold [&_i]:italic [&_em]:italic [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5 [&_ol]:list-decimal [&_ol]:pl-5"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Success criteria + target date */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-semibold text-[#374151] uppercase tracking-wide">Success criteria</label>
                   <textarea value={goalSuccessCriteria} onChange={(e) => setGoalSuccessCriteria(e.target.value)}
@@ -1518,11 +1668,14 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 <button type="button"
                   disabled={!goalTitle.trim() || createGoalMut.isPending || editGoalMut.isPending}
                   onClick={() => {
+                    const descHtml = goalDescriptionRef.current?.textContent?.trim()
+                      ? (goalDescriptionRef.current.innerHTML || null)
+                      : null;
                     const payload: NdisGoalPayload = {
                       participant_id: id, name: goalTitle.trim(),
                       goal_area: goalCategory as NdisGoal["goal_area"],
                       support_category: goalSupportCategory || null,
-                      description: goalDescription || null,
+                      description: descHtml,
                       target_date: goalTargetDate || null,
                       success_criteria: goalSuccessCriteria || null,
                       related_task_ids: [], status: "active",
@@ -1814,7 +1967,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                 </div>
                 <div className="flex gap-2">
                   <button type="button"
-                    onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); }}
+                    onClick={() => { setCreateMode("goal"); setGoalTitle(""); setGoalDescription(""); setGoalTargetDate(""); setGoalCategory("daily_living"); setGoalSuccessCriteria(""); setGoalSupportCategory(""); setEditingGoal(null); setGoalDescriptionAiApplied(false); setGoalAiSuggestions(null); setGoalAiLoading(false); }}
                     className="px-3 py-1.5 text-[12px] font-bold rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50">
                     + Goal
                   </button>
@@ -1872,7 +2025,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                             <span className="text-[10px] text-[#6B7280]">{goalTasks.length} task{goalTasks.length !== 1 ? "s" : ""}</span>
                             {goal.target_date && <span className="text-[10px] text-[#6B7280]">Due {goal.target_date}</span>}
                           </div>
-                          {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2">{goal.description}</p>}
+                          {goal.description && <p className="text-[11px] text-[#6B7280] mt-1 leading-relaxed line-clamp-2 [&_b]:font-semibold [&_strong]:font-semibold [&_i]:italic" dangerouslySetInnerHTML={{ __html: goal.description }} />}
                           {goal.success_criteria && (
                             <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-purple-50 text-[#6B7280]">
                               <span className="font-bold text-[#374151]">Success: </span>{goal.success_criteria}

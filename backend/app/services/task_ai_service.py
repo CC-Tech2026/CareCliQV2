@@ -270,6 +270,84 @@ Respond with ONLY the goal description."""
         return None, []
 
 
+# ── Goal full suggestions (multi-field) ─────────────────────────────────────────
+
+async def suggest_goal_full_suggestions(
+    participant_id: str,
+    goal_area: str,
+    organisation_id: str,
+    current_title: str = "",
+) -> dict:
+    """
+    Returns 3 options each for goal name, description, and success criteria.
+    Grounded in participant session history when available; NDIS-general otherwise.
+    """
+    if not _openai_configured():
+        return {"names": [], "descriptions": [], "success_criteria": []}
+
+    sessions = await _fetch_participant_sessions(participant_id, organisation_id)
+    participant_name = await _get_participant_name(participant_id)
+
+    if sessions:
+        context_section = (
+            f"Context from {participant_name}'s recent completed sessions:\n"
+            + _context_block(sessions)
+        )
+    else:
+        context_section = "No prior session history available. Use evidence-based NDIS best-practice guidance."
+
+    area_display = goal_area.replace("_", " ").title()
+    title_hint = (
+        f'The coordinator is considering the title: "{current_title}". '
+        if current_title.strip()
+        else ""
+    )
+
+    try:
+        prompt = f"""You are an expert NDIS support coordinator helping plan goals.
+
+Participant: {participant_name}
+Goal area: {area_display}
+{title_hint}
+{context_section}
+
+Generate suggestions for NDIS goal planning. Return ONLY valid JSON with this exact structure:
+{{
+  "names": ["<short action-oriented goal name>", "<second option>", "<third option>"],
+  "descriptions": ["<2-3 sentence description — measurable, strength-based>", "<second option>", "<third option>"],
+  "success_criteria": ["<specific measurable outcome>", "<second option>"]
+}}
+
+Guidelines:
+- Names: under 10 words, person-centered, active voice
+- Descriptions: state what will be achieved, how progress is measured, and support provided
+- Success criteria: observable, time-bound where possible, NDIS-compliant language"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert NDIS planner generating participant-centered goal suggestions. Always return valid JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.8,
+            max_tokens=700,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content or "{}")
+        return {
+            "names": (result.get("names") or [])[:3],
+            "descriptions": (result.get("descriptions") or [])[:3],
+            "success_criteria": (result.get("success_criteria") or [])[:2],
+        }
+
+    except Exception as exc:
+        logger.error("Goal full suggestions failed: %s", exc)
+        return {"names": [], "descriptions": [], "success_criteria": []}
+
+
 # ── Goal insight recommendation ─────────────────────────────────────────────────
 
 async def suggest_goal_insight_recommendation(
