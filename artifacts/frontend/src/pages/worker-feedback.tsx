@@ -72,7 +72,7 @@ export default function WorkerFeedbackPage() {
             {translate("feedback.title")}
           </p>
           <h1 className="text-xl font-black" style={{ color: TEXT }}>
-            {translateParams("feedback.from", { name: data.coordinator_name })}
+            {translateParams("feedback.from", { name: data.coordinator_name ?? "" })}
           </h1>
           <p className="text-xs font-bold" style={{ color: MUTED }}>
             {data.submitted_at

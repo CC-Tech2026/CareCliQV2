@@ -35,7 +35,7 @@ interface TaskFormModalProps {
 }
 
 function TaskFormModal({ goal, task, onClose, onSaved }: TaskFormModalProps) {
-  const { translate } = useAccessibility();
+  const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
   const [form, setForm] = useState({
     name: task?.name ?? "",

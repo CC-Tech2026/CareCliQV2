@@ -13,8 +13,6 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ParticipantAZFilter, type ParticipantItem } from "@/components/coordinator/ParticipantAZFilter";
 import { TaskManagementPanel } from "@/components/coordinator/TaskManagementPanel";
-import { NewTaskModal } from "@/components/shifts/NewTaskModal";
-import { TaskManagementView } from "@/components/shifts/TaskManagementView";
 import {
   getCoordinatorGoals,
   type ParticipantGoalGroup,
@@ -652,10 +650,6 @@ export default function CoordinatorGoals() {
   const [planningView, setPlanningView] = useState<"goals" | "goal-based-tasks">("goal-based-tasks");
   const [taskGoalFormOpen, setTaskGoalFormOpen] = useState(false);
   
-  // For Shift-Based Tasks tab
-  const [selectedParticipantIdForShiftTasks, setSelectedParticipantIdForShiftTasks] = useState("");
-  const [newShiftTaskModalOpen, setNewShiftTaskModalOpen] = useState(false);
-  
   // For Plan Overview tab
   const [overviewParticipant, setOverviewParticipant] = useState("");
   // Legacy data
@@ -713,7 +707,7 @@ export default function CoordinatorGoals() {
 
   const TABS = [
     { id: "planning",  labelKey: "coordinator.goals.tab.planning"   },
-    { id: "tasks",     labelKey: "coordinator.goals.tab.tasks"    },
+    { id: "shift-tasks", labelKey: "coordinator.goals.tab.tasks"    },
     { id: "overview",  labelKey: "coordinator.goals.tab.overview"      },
   ] as const;
 
@@ -918,109 +912,8 @@ export default function CoordinatorGoals() {
       {/* SHIFT-BASED TASKS TAB ─ Recurring shift-tied task templates */}
       {tab === "shift-tasks" && (
         <div className="px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border p-6" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="font-bold text-lg" style={{ color: TEXT }}>Shift-Based Task Templates</h3>
-                <p className="text-sm mt-1" style={{ color: MUTED }}>Create recurring tasks tied to specific shifts (Morning, Afternoon, Night)</p>
-              </div>
-              <Button
-                size="sm"
-                className="rounded-xl gap-1.5 cc-btn-primary"
-                onClick={() => {
-                  if (selectedParticipantIdForShiftTasks) {
-                    setNewShiftTaskModalOpen(true);
-                  } else {
-                    toast({ title: "Please select a participant first", variant: "destructive" });
-                  }
-                }}
-              >
-                <Plus size={14} /> New Task Template
-              </Button>
-            </div>
-
-            {/* RIGHT: Goals with tasks panel */}
-            <div className="flex flex-col overflow-hidden">
-              {selectedParticipantIdForTasks ? (
-                <div className="rounded-2xl border p-6 space-y-4 h-full flex flex-col overflow-hidden" style={{ borderColor: BORDER, background: SOFT }}>
-                  {taskGoalFormOpen ? (
-                    <>
-                      <button onClick={() => setTaskGoalFormOpen(false)} className="text-xs font-bold text-left mb-2" style={{ color: PLUM }}>{translate("coordinator.goals.backToTasks")}</button>
-                      <GoalFormModal
-                        goal={null}
-                        participants={legacyData}
-                        isModal={false}
-                        selectedParticipantId={selectedParticipantIdForTasks}
-                        onClose={() => setTaskGoalFormOpen(false)}
-                        onSaved={() => { 
-                          setTaskGoalFormOpen(false); 
-                          qc.invalidateQueries({ queryKey: ["ndis-goals", orgId] }); 
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between shrink-0">
-                        <h3 className="font-bold text-[15px]" style={{ color: TEXT }}>
-                          {translate("coordinator.goals.manageTasks")}
-                        </h3>
-                        <Button 
-                          size="sm"
-                          className="rounded-xl gap-1.5 cc-btn-primary"
-                          onClick={() => setTaskGoalFormOpen(true)}
-                        >
-                          <Plus size={14} /> {translate("coordinator.goals.goal")}
-                        </Button>
-                      </div>
-
-                      {participantGoalsLoading && <div className="flex items-center gap-2 text-sm" style={{ color: MUTED }}><Loader2 size={14} className="animate-spin" /> {translate("common.loading")}</div>}
-
-                      {!participantGoalsLoading && participantGoals.filter((g) => g.status === "active").length === 0 ? (
-                        <div className="rounded-xl border p-6 text-center flex-1 flex items-center justify-center" style={{ borderColor: BORDER, background: "var(--cc-surface)" }}>
-                          <div>
-                            <Target size={28} style={{ color: BORDER, margin: "0 auto" }} />
-                            <p className="mt-3 font-bold" style={{ color: TEXT }}>{translate("coordinator.goals.noActiveGoals")}</p>
-                            <p className="text-sm mt-2" style={{ color: MUTED }}>{translate("coordinator.goals.noActiveGoalsHint")}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex-1 overflow-y-auto space-y-4">
-                          {participantGoals.filter((g) => g.status === "active").map((goal) => (
-                            <TaskManagementPanel
-                              key={goal.id}
-                              goal={goal}
-                              tasks={tasks}
-                              onTasksChanged={() => {
-                                qc.invalidateQueries({ queryKey: ["participant-tasks", selectedParticipantIdForTasks, orgId] });
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-2xl border p-6 text-center h-full flex items-center justify-center" style={{ borderColor: BORDER, background: SOFT }}>
-                  <div>
-                    <ClipboardList size={32} style={{ color: BORDER, margin: "0 auto" }} />
-                    <p className="font-bold mt-3" style={{ color: TEXT }}>{translate("coordinator.goals.manageTasksTitle")}</p>
-                    <p className="text-sm mt-1" style={{ color: MUTED }}>{translate("coordinator.goals.manageTasksHint")}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <TaskTemplatesTab participants={legacyData} />
         </div>
-      )}
-
-      {/* Modal for creating new shift-based task */}
-      {selectedParticipantIdForShiftTasks && (
-        <NewTaskModal
-          participantId={selectedParticipantIdForShiftTasks}
-          isOpen={newShiftTaskModalOpen}
-          onClose={() => setNewShiftTaskModalOpen(false)}
-        />
       )}
 
       {/* PLAN OVERVIEW TAB - 2 column layout */}

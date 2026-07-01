@@ -64,7 +64,7 @@ export function NdisScheduleLoader({ onClose, onSuccess }: ScheduleLoaderProps) 
 
       toast({ 
         title: translate("coordinator.ndis.schedule.loaded"), 
-        description: translateParams("coordinator.ndis.schedule.loadedDesc", { count: String(res.items_loaded), year: res.financial_year }),
+        description: translateParams("coordinator.ndis.schedule.loadedDesc", { count: String(res.items_loaded), year: String(res.financial_year) }),
       });
       
       // Show any validation errors
