@@ -13,8 +13,6 @@ organization_members_table_missing: bool = False
 invitations_table_missing: bool = False
 session_messages_table_missing: bool = False
 ndis_goals_table_missing: bool = False
-# Deprecated alias — kept for backward-compatible health responses
-patient_goals_table_missing: bool = False
 practitioner_allocations_table_missing: bool = False
 upcoming_review_date_column_missing: bool = False
 progress_delta_column_missing: bool = False

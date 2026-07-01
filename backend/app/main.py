@@ -135,7 +135,6 @@ async def _apply_startup_migrations():
                 migration_state.invitations_table_missing = not ok
             elif key == "ndis_goals":
                 migration_state.ndis_goals_table_missing = not ok
-                migration_state.patient_goals_table_missing = not ok
             elif key == "practitioner_allocs":
                 migration_state.practitioner_allocations_table_missing = not ok
             elif key == "upcoming_review_date":
@@ -247,7 +246,6 @@ async def migration_status_endpoint(current_user: dict = Depends(get_current_use
         "invitations_table_missing":                  migration_state.invitations_table_missing,
         "session_messages_table_missing":             migration_state.session_messages_table_missing,
         "ndis_goals_table_missing":                   migration_state.ndis_goals_table_missing,
-        "patient_goals_table_missing":                migration_state.patient_goals_table_missing,
         "practitioner_allocations_table_missing":     migration_state.practitioner_allocations_table_missing,
         "progress_delta_column_missing":              migration_state.progress_delta_column_missing,
         "shifts_table_missing":                       migration_state.shifts_table_missing,

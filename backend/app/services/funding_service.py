@@ -371,7 +371,111 @@ async def create_or_update_plan(
     if not rows:
         return {}
 
-    return _normalize_plan(rows[0])
+    plan_row = _normalize_plan(rows[0])
+    _sync_patient_plan_mirror(participant_id, plan_row)
+    return plan_row
+
+
+def _sync_patient_plan_mirror(participant_id: str, plan: Dict[str, Any]) -> None:
+    """Keep patients plan mirror aligned with ndis_plans (until mirror columns drop)."""
+    if not participant_id or not plan:
+        return
+    try:
+        mirror: Dict[str, Any] = {
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if plan.get("plan_start") is not None:
+            mirror["plan_start_date"] = str(plan["plan_start"])[:10]
+        if plan.get("plan_end") is not None:
+            mirror["plan_end_date"] = str(plan["plan_end"])[:10]
+        if plan.get("total_funding") is not None:
+            mirror["total_budget"] = plan["total_funding"]
+        if plan.get("status") is not None:
+            mirror["plan_status"] = plan["status"]
+        if len(mirror) > 1:
+            get_supabase_admin().table("patients").update(mirror).eq("id", participant_id).execute()
+    except Exception as exc:
+        logger.debug("patient plan mirror sync skipped for %s: %s", participant_id, exc)
+
+
+async def get_plans_map_for_participants(
+    participant_ids: List[str],
+) -> Dict[str, Dict[str, Any]]:
+    """Latest plan per participant (active preferred), single query."""
+    ids = [str(pid) for pid in participant_ids if pid]
+    if not ids:
+        return {}
+
+    try:
+        result = (
+            get_supabase_admin()
+            .table("ndis_plans")
+            .select("*, plan_budgets(*)")
+            .in_("patient_id", ids)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("get_plans_map_for_participants failed: %s", exc)
+        return {}
+
+    picked: Dict[str, Dict[str, Any]] = {}
+
+    def _rank(row: Dict[str, Any]) -> tuple:
+        status = str(row.get("status") or "")
+        return (
+            0 if status == "active" else 1,
+            str(row.get("plan_start") or ""),
+            str(row.get("created_at") or ""),
+        )
+
+    for row in sorted(_safe_rows(result.data), key=_rank):
+        pid = str(row.get("patient_id") or "")
+        if pid and pid not in picked:
+            picked[pid] = _normalize_plan(row)
+
+    return picked
+
+
+def _overlay_plan_fields(participant: Dict[str, Any], plan: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(participant)
+    out["plan_start_date"] = plan.get("plan_start")
+    out["plan_end_date"] = plan.get("plan_end")
+    out["total_budget"] = plan.get("total_funding")
+    out["plan_status"] = plan.get("status") or out.get("plan_status")
+    budgets = plan.get("plan_budgets") or []
+    if isinstance(budgets, list):
+        out["total_used"] = round(
+            sum(float(b.get("used_amount") or 0) for b in budgets if isinstance(b, dict)),
+            2,
+        )
+    return out
+
+
+async def enrich_participant_plan_fields(participant: Dict[str, Any]) -> Dict[str, Any]:
+    """Overlay authoritative ndis_plans fields onto participant API responses."""
+    pid = str(participant.get("id") or "")
+    if not pid:
+        return participant
+    plan = await get_plan_for_participant(pid) or await get_latest_plan_for_participant(pid)
+    if not plan:
+        return participant
+    return _overlay_plan_fields(participant, plan)
+
+
+async def enrich_participants_plan_fields(
+    participants: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not participants:
+        return []
+    plan_map = await get_plans_map_for_participants(
+        [str(p.get("id") or "") for p in participants]
+    )
+    return [
+        _overlay_plan_fields(p, plan_map[str(p.get("id") or "")])
+        if str(p.get("id") or "") in plan_map
+        else p
+        for p in participants
+    ]
 
 
 async def list_available_categories(org_id: str) -> List[Dict[str, Any]]:

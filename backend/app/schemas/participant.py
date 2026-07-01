@@ -66,10 +66,6 @@ class NDISGoal(BaseModel):
 # Request bodies
 # ---------------------------------------------------------------------------
 
-class GoalsUpdateBody(BaseModel):
-    goals: List[NDISGoal]
-
-
 class ParticipantCreate(BaseModel):
     full_name: str
     ndis_number: str
@@ -80,12 +76,10 @@ class ParticipantCreate(BaseModel):
     plan_start_date: Optional[date] = None
     plan_end_date: Optional[date] = None
     total_budget: Optional[float] = 0.0
-    used_budget: Optional[float] = 0.0
     primary_disability: Optional[str] = None
     allergies: Optional[str] = None
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = "unspecified"
-    goals: Optional[List[NDISGoal]] = Field(default_factory=list)
     # Privacy Act 2026 — APP 2 Anonymity support
     external_pseudonym: Optional[str] = None   # auto-generated on create if not provided
     disposal_date: Optional[date] = None       # auto-set to 7 years from today if not provided
@@ -103,12 +97,10 @@ class ParticipantUpdate(BaseModel):
     plan_start_date: Optional[date] = None
     plan_end_date: Optional[date] = None
     total_budget: Optional[float] = None
-    used_budget: Optional[float] = None
     primary_disability: Optional[str] = None
     allergies: Optional[str] = None
     communication_preferences: Optional[str] = None
     biological_sex: Optional[BiologicalSex] = None
-    goals: Optional[List[NDISGoal]] = None
     external_pseudonym: Optional[str] = None
     disposal_date: Optional[date] = None
     upcoming_review_date: Optional[str] = None
@@ -145,28 +137,6 @@ class PlanBudgetCategoryUpsert(BaseModel):
 
 
 RiskLevel = Literal["low", "medium", "high"]
-
-
-# ---------------------------------------------------------------------------
-# Patient Goals (plan-linked, replaces JSONB goals on patients table)
-# ---------------------------------------------------------------------------
-
-GoalCategory2 = Literal["core", "capacity_building", "capital", "general"]
-
-
-class PatientGoalCreate(BaseModel):
-    description: str = Field(..., min_length=1)
-    category: GoalCategory2 = "general"
-    goal_code: Optional[str] = None
-    target_date: Optional[date] = None
-
-
-class PatientGoalUpdate(BaseModel):
-    description: Optional[str] = None
-    category: Optional[GoalCategory2] = None
-    goal_code: Optional[str] = None
-    target_date: Optional[date] = None
-    is_achieved: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------

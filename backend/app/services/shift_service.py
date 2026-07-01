@@ -979,7 +979,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
         "medications, medical_alerts, current_conditions, "
         "case_manager_name, case_manager_phone, likes_dislikes, sensory_preferences, "
         "cultural_preferences, preferred_activities, communication_guidance, "
-        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes, goals"
+        "previous_visit_notes, previous_visit_notes_updated_at, behavioural_notes"
     )
     try:
         resp = (
@@ -1008,6 +1008,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
 
     preferred_name = (row.get("preferred_name") or row.get("full_name") or "").strip() or None
     emergency = _parse_emergency_contact(row.get("emergency_contact"))
+    context_goals = _fetch_active_goals_for_participant(participant_id, organization_id)
 
     return {
         "profile": {
@@ -1045,7 +1046,7 @@ def _fetch_participant_context(participant_id: str, organization_id: str) -> dic
             "previous_visit_notes": row.get("previous_visit_notes"),
             "previous_visit_notes_updated_at": row.get("previous_visit_notes_updated_at"),
             "communication_guidance": row.get("communication_guidance"),
-            "goals": row.get("goals") or [],
+            "goals": context_goals,
         },
         "context_synced_at": synced_at,
     }

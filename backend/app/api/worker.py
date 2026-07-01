@@ -309,11 +309,10 @@ def _limited_participant(participant: dict) -> dict:
         "plan_status": participant.get("plan_status"),
         "plan_start_date": participant.get("plan_start_date"),
         "plan_end_date": participant.get("plan_end_date"),
-        "plan_management_type": plan_management_type_label(
-            normalize_plan_management_type(
-                participant.get("plan_management_type")
-                or participant.get("plan_management")
-            )
+        "plan_management_type": (
+            participant.get("plan_management_type")
+            or participant.get("plan_status")
+            or "Not recorded"
         ),
         "primary_disability": participant.get("primary_disability"),
         "allergies": participant.get("allergies"),

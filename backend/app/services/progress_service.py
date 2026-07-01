@@ -36,7 +36,9 @@ def _goal_title_map(participant: dict) -> dict[str, str]:
     titles: dict[str, str] = {}
     for goal in participant.get("goals") or []:
         if isinstance(goal, dict) and goal.get("id"):
-            titles[str(goal["id"])] = str(goal.get("title") or goal.get("description") or goal["id"])
+            titles[str(goal["id"])] = str(
+                goal.get("title") or goal.get("name") or goal.get("description") or goal["id"]
+            )
     return titles
 
 

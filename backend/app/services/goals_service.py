@@ -69,6 +69,7 @@ def _normalize(row: dict[str, Any]) -> dict[str, Any]:
     out["category"] = _goal_area_to_category(out.get("goal_area"))
     out["priority"] = out.get("priority") if out.get("priority") is not None else 99
     out["why_it_matters"] = out.get("why_it_matters") or out.get("success_criteria")
+    out["success_criteria"] = out.get("why_it_matters")  # API alias for UI
     out["worker_focus"] = out.get("worker_focus") if isinstance(out.get("worker_focus"), list) else []
 
     # Worker UI expects `title`; ndis_goals stores `name`.
@@ -234,6 +235,70 @@ def fetch_active_goals_for_shift(
         return []
 
 
+async def get_goals_map_for_participants(
+    participant_ids: list[str],
+    active_only: bool = False,
+) -> dict[str, list[dict[str, Any]]]:
+    """Batch-fetch goals for many participants (single query)."""
+    ids = [str(pid) for pid in participant_ids if pid]
+    if not ids:
+        return {}
+
+    try:
+        supabase = get_supabase_admin()
+        query = (
+            supabase
+            .table(TABLE)
+            .select("*")
+            .in_("participant_id", ids)
+        )
+        query = _apply_status_filter(query, active_only)
+        result = (
+            query
+            .order("priority", desc=False)
+            .order("created_at")
+            .execute()
+        )
+        grouped: dict[str, list[dict[str, Any]]] = {pid: [] for pid in ids}
+        for row in _safe_rows(result.data):
+            pid = str(row.get("participant_id") or "")
+            if pid in grouped:
+                grouped[pid].append(_normalize(row))
+        return grouped
+    except Exception as exc:
+        logger.warning("get_goals_map_for_participants failed: %s", exc)
+        return {pid: [] for pid in ids}
+
+
+async def enrich_participant(
+    participant: dict[str, Any],
+    *,
+    active_only: bool = True,
+) -> dict[str, Any]:
+    """Attach ndis_goals to a participant dict (replaces legacy patients.goals JSONB)."""
+    pid = str(participant.get("id") or "")
+    if not pid:
+        return {**participant, "goals": []}
+    goals = await get_goals_for_participant(pid, active_only=active_only)
+    return {**participant, "goals": goals}
+
+
+async def enrich_participants(
+    participants: list[dict[str, Any]],
+    *,
+    active_only: bool = False,
+) -> list[dict[str, Any]]:
+    """Attach ndis_goals to each participant in a list."""
+    if not participants:
+        return []
+    ids = [str(p.get("id") or "") for p in participants if p.get("id")]
+    goals_map = await get_goals_map_for_participants(ids, active_only=active_only)
+    return [
+        {**p, "goals": goals_map.get(str(p.get("id") or ""), [])}
+        for p in participants
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
@@ -270,7 +335,6 @@ async def create_goal(
         "goal_area": _category_to_goal_area(category),
         "description": description,
         "why_it_matters": why_it_matters,
-        "success_criteria": why_it_matters,
         "worker_focus": worker_focus or [],
         "priority": priority,
         "status": "active",
@@ -329,9 +393,6 @@ async def update_goal(
 
     if "target_date" in clean and clean["target_date"]:
         clean["target_date"] = str(clean["target_date"])
-
-    if "why_it_matters" in clean and clean["why_it_matters"] is not None:
-        clean["success_criteria"] = clean["why_it_matters"]
 
     clean["updated_at"] = datetime.now(timezone.utc).isoformat()
 

@@ -14,7 +14,6 @@ from ..core.access import is_coordinator_role
 from ..core.security import get_current_user
 from ..api.security import require_recent_reauth
 from ..schemas.participant import (
-    GoalsUpdateBody,
     NDISPlanCreate,
     ParticipantCreate,
     ParticipantUpdate,
@@ -277,47 +276,6 @@ async def delete_participant(
 
 
 # ============================================================================
-# Goals
-# ============================================================================
-
-
-@router.patch("/{participant_id}/goals")
-async def update_participant_goals(
-    participant_id: str,
-    body: GoalsUpdateBody,
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Replace full participant goals array.
-    """
-
-    if not is_coordinator_role(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only support coordinators can update participant goals",
-        )
-
-    await _require_participant_access(
-        participant_id,
-        current_user,
-    )
-
-    updated = await participant_service.update_participant_goals(
-        participant_id,
-        body.goals,
-        current_user,
-    )
-
-    if not updated:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update goals",
-        )
-
-    return updated
-
-
-# ============================================================================
 # NDIS Plans
 # ============================================================================
 
@@ -405,18 +363,6 @@ async def create_participant_plan(
             participant_id,
             plan_data,
         )
-
-        from ..services.supabase_client import get_supabase_admin
-
-        supabase = get_supabase_admin()
-        patient_update: dict[str, object] = {
-            "plan_start_date": str(body.plan_start),
-            "plan_end_date": str(body.plan_end),
-            "total_budget": body.total_funding,
-        }
-        plan_status = body.status or plan.get("status") or "active"
-        patient_update["plan_status"] = plan_status
-        supabase.table("patients").update(patient_update).eq("id", participant_id).execute()
 
         return await funding_service.get_budget_summary(
             participant_id,

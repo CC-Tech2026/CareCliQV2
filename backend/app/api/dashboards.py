@@ -71,11 +71,10 @@ def _client_payload(participant: dict, sessions: list[dict]) -> dict:
         "full_name": participant.get("full_name"),
         "ndis_number": participant.get("ndis_number"),
         "plan_status": participant.get("plan_status"),
-        "plan_management_type": plan_management_type_label(
-            normalize_plan_management_type(
-                participant.get("plan_management_type")
-                or participant.get("plan_management")
-            )
+        "plan_management_type": (
+            participant.get("plan_management_type")
+            or participant.get("plan_status")
+            or "Not recorded"
         ),
         "last_seen": latest_session.get("session_date") if latest_session else None,
         "compliance_status": _score_status(lowest_score) if lowest_score is not None else "at_risk",
@@ -394,7 +393,7 @@ def _goal_achievement_rate(participants: list[dict]) -> float:
         return 0.0
     achieved = sum(
         1 for p in participants
-        if p.get("plan_status") == "active" or p.get("goals_met") is True
+        if p.get("plan_status") == "active"
     )
     return round((achieved / len(participants)) * 100, 1)
 

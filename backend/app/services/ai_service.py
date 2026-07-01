@@ -465,8 +465,12 @@ Structured Fields Already Completed:
     # Estimate cost context
     duration = int(session_data.get("duration_minutes") or 0)
     session_type = session_data.get("session_type") or "Support"
-    total_budget = float(participant_data.get("total_budget") or 0)
-    used_budget = float(participant_data.get("used_budget") or 0)
+    total_budget = float(
+        participant_data.get("total_budget")
+        or participant_data.get("total_funding")
+        or 0
+    )
+    used_budget = float(participant_data.get("total_used") or 0)
 
     user_prompt = f"""Analyse this NDIS support session and return a full CareCliQ compliance report.
 

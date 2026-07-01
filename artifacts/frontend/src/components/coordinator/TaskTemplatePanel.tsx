@@ -88,7 +88,6 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
       const payload = {
         name: form.name,
         description: form.description || null,
-        linked_goal_ids: goal ? [goal.id] : [],
         primary_shift_type: form.primary_shift_type || null,
         additional_shift_types: form.additional_shift_types,
         recurrence_type: form.recurrence_type,
@@ -98,7 +97,7 @@ function TaskTemplateFormModal({ goal, participantId, template, onClose, onSaved
         due_window_end: form.due_window_end || null,
         category: form.category || null,
         priority: form.priority,
-        linked_goal_id: form.linked_goal_id || null,
+        linked_goal_id: form.linked_goal_id || goal?.id || null,
         status: "active" as const,
         evidence_required: "optional" as const,
         is_mandatory: false,

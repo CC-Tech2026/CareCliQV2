@@ -222,7 +222,7 @@ async def get_participant_context(
     
     # Get recent goals
     goals = await supabase_client.table("ndis_goals").select(
-        "id, goal_title, support_category, created_at"
+        "id, name, support_category, created_at"
     ).eq(
         "participant_id", participant_id
     ).order(
@@ -288,7 +288,7 @@ async def get_participant_context(
         recent_goals=[
             {
                 "id": g["id"],
-                "title": g["goal_title"],
+                "title": g["name"],
                 "category": g["support_category"],
                 "created_at": g["created_at"]
             }

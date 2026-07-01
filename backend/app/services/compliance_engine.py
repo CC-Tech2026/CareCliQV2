@@ -1187,8 +1187,12 @@ def check_budget_not_exceeded(
             "severity": "medium",
         }
 
-    total = float(participant.get("total_budget") or 0)
-    used = float(participant.get("used_budget") or 0)
+    total = float(
+        participant.get("total_budget")
+        or participant.get("total_funding")
+        or 0
+    )
+    used = float(participant.get("total_used") or 0)
 
     if total <= 0:
         return {

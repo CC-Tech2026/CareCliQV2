@@ -40,7 +40,7 @@ def period_bounds_for_date(as_of: date) -> tuple[date, date]:
 
 def resolve_participant_plan_management_type(participant: dict[str, Any]) -> Optional[str]:
     """Read current plan management type from a participant row."""
-    raw = participant.get("plan_management_type") or participant.get("plan_management")
+    raw = participant.get("plan_management_type")
     return normalize_plan_management_type(str(raw) if raw is not None else None)
 
 
@@ -142,7 +142,7 @@ def get_or_open_billing_period(
             get_supabase_admin()
             .table("patients")
             .select(
-                "id, organization_id, full_name, email, plan_management_type, plan_management, "
+                "id, organization_id, full_name, email, plan_management_type, "
                 "case_manager_name, case_manager_email, case_manager_phone"
             )
             .eq("id", participant_id)
@@ -253,7 +253,7 @@ def get_current_billing_period_view(
         patient_result = (
             get_supabase_admin()
             .table("patients")
-            .select("id, organization_id, plan_management_type, plan_management")
+            .select("id, organization_id, plan_management_type")
             .eq("id", participant_id)
             .limit(1)
             .execute()

@@ -2919,7 +2919,6 @@ class NdisGoalBody(BaseModel):
     worker_focus: Optional[list[str]] = None
     priority: Optional[int] = 99
     plan_id: Optional[str] = None
-    related_task_ids: Optional[list[str]] = None
 
 
 @router.get("/goals")
@@ -2961,12 +2960,10 @@ async def create_ndis_goal(
         "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
-        "success_criteria": body.success_criteria or body.why_it_matters,
         "why_it_matters": body.why_it_matters or body.success_criteria,
         "worker_focus": body.worker_focus or [],
         "priority": body.priority if body.priority is not None else 99,
         "plan_id": body.plan_id,
-        "related_task_ids": body.related_task_ids or [],
         "status": "active",
         "created_at": now,
         "updated_at": now,
@@ -2994,12 +2991,10 @@ async def update_ndis_goal(
         "support_category": body.support_category,
         "description": body.description,
         "target_date": body.target_date,
-        "success_criteria": body.success_criteria or body.why_it_matters,
         "why_it_matters": body.why_it_matters or body.success_criteria,
         "worker_focus": body.worker_focus or [],
         "priority": body.priority if body.priority is not None else 99,
         "plan_id": body.plan_id,
-        "related_task_ids": body.related_task_ids or [],
         "updated_at": now,
     }
     try:
@@ -3086,7 +3081,6 @@ async def get_goal_progress(
 class TaskTemplateBody(BaseModel):
     name: str
     description: Optional[str] = None
-    linked_goal_ids: Optional[list[str]] = None
     evidence_required: str = "optional"
     is_mandatory: bool = False
     estimated_duration_minutes: Optional[int] = None
@@ -3156,7 +3150,6 @@ async def create_task_template(
         "created_by": get_user_id(current_user),
         "name": body.name,
         "description": body.description,
-        "linked_goal_ids": body.linked_goal_ids or [],
         "evidence_required": body.evidence_required,
         "is_mandatory": body.is_mandatory,
         "estimated_duration_minutes": body.estimated_duration_minutes,
@@ -3199,7 +3192,6 @@ async def update_task_template(
     update = {
         "name": body.name,
         "description": body.description,
-        "linked_goal_ids": body.linked_goal_ids or [],
         "evidence_required": body.evidence_required,
         "is_mandatory": body.is_mandatory,
         "estimated_duration_minutes": body.estimated_duration_minutes,

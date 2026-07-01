@@ -1198,7 +1198,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
   const sessions = sessionsQuery.data ?? [];
   const budget = budgetQuery.data;
   const complianceHistory = complianceQuery.data ?? [];
-  const goals = Array.isArray(participant.goals) ? participant.goals : [];
+  const goals = ndisGoalsQuery.data ?? [];
   const categoryBudgets = budget?.budgets ?? [];
   const hasCategoryBudgets = categoryBudgets.length > 0;
   const hasPlan = !!budget?.plan_id;
@@ -1212,7 +1212,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
     : hasPlan
       ? Number(budget?.total_funding ?? 0)
       : Number(participant.total_budget ?? 0);
-  const usedBudget = hasCategoryBudgets ? Number(budget?.total_used ?? 0) : Number(participant.used_budget ?? 0);
+  const usedBudget = Number(budget?.total_used ?? 0);
   const remainingBudget = hasCategoryBudgets
     ? Number(budget?.total_remaining ?? totalBudget - usedBudget)
     : Math.max(totalBudget - usedBudget, 0);
@@ -1901,7 +1901,7 @@ function ParticipantDetail({ id, onRefreshList, initialTab }: { id: string; onRe
                       description: descHtml,
                       target_date: goalTargetDate || null,
                       success_criteria: goalSuccessCriteria || null,
-                      related_task_ids: [], status: "active",
+                      status: "active",
                     };
                     if (createMode === "edit_goal" && editingGoal) editGoalMut.mutate({ goalId: editingGoal.id, payload });
                     else createGoalMut.mutate(payload);

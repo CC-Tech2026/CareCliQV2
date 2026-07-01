@@ -315,7 +315,12 @@ export async function getCoordinatorGoals(): Promise<ParticipantGoalGroup[]> {
       is_achieved: Boolean(g.is_achieved ?? false),
       target_date: g.target_date ? String(g.target_date) : undefined,
       goal_code: g.goal_code ? String(g.goal_code) : undefined,
-      status: (g.status as GoalStatus) ?? (g.is_achieved ? "achieved" : "progressing"),
+      status:
+        g.status === "completed"
+          ? "achieved"
+          : g.status === "archived"
+            ? "blocked"
+            : (g.status as GoalStatus) ?? (g.is_achieved ? "achieved" : "progressing"),
     }));
 
     const pid = String(p.id ?? "");
@@ -891,7 +896,6 @@ export type NdisGoal = {
   worker_focus?: string[];
   priority?: number;
   plan_id?: string | null;
-  related_task_ids?: string[];
   status: "active" | "completed" | "archived";
   archived_at?: string | null;
   completed_at?: string | null;
@@ -907,7 +911,6 @@ export type TaskTemplate = {
   organization_id?: string;
   name: string;
   description?: string | null;
-  linked_goal_ids?: string[];
   evidence_required: "photo" | "voice" | "text" | "photo+voice" | "optional";
   is_mandatory: boolean;
   estimated_duration_minutes?: number | null;

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from .supabase_client import get_supabase_admin
 
@@ -22,7 +21,6 @@ from ..core.access import (
 )
 
 from ..schemas.participant import (
-    NDISGoal,
     ParticipantCreate,
     ParticipantUpdate,
 )
@@ -36,13 +34,31 @@ logger = logging.getLogger(__name__)
 
 TABLE = "patients"
 
-# Default values injected into goal objects that pre-date the new schema
-_GOAL_DEFAULTS: dict[str, Any] = {
-    "category": "general",
-    "progress_percentage": 0,
-    "target_date": None,
-    "progress_history": [],
+_PLAN_FIELD_MAP = {
+    "plan_start_date": "plan_start",
+    "plan_end_date": "plan_end",
+    "total_budget": "total_funding",
+    "plan_status": "status",
 }
+
+
+async def _sync_plan_fields_from_payload(
+    participant_id: str,
+    payload: dict,
+) -> dict:
+    """Route plan mirror edits to ndis_plans instead of patients."""
+    plan_payload: dict = {}
+    for patient_key, plan_key in _PLAN_FIELD_MAP.items():
+        if patient_key in payload:
+            plan_payload[plan_key] = payload.pop(patient_key)
+
+    if not plan_payload:
+        return payload
+
+    from . import funding_service
+
+    await funding_service.create_or_update_plan(participant_id, plan_payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -76,44 +92,6 @@ def _serialize_dates(payload: dict) -> dict:
     return payload
 
 
-def _normalize_goals(raw: Any) -> list:
-    """Normalize goals JSONB."""
-
-    if isinstance(raw, str) and raw:
-        try:
-            parsed = json.loads(raw)
-            raw = parsed if isinstance(parsed, list) else []
-        except Exception:
-            raw = []
-
-    if not isinstance(raw, list):
-        return []
-
-    normalized: list = []
-
-    for item in raw:
-        if not isinstance(item, dict):
-            continue
-
-        goal = {**_GOAL_DEFAULTS, **item}
-
-        history = goal.get("progress_history") or []
-
-        goal["progress_history"] = [
-            {
-                "date": h.get("date", ""),
-                "percentage": h.get("percentage", 0),
-                "note": h.get("note"),
-            }
-            for h in history
-            if isinstance(h, dict)
-        ]
-
-        normalized.append(goal)
-
-    return normalized
-
-
 def _normalize(row: dict) -> dict:
     """Normalize patient row."""
 
@@ -121,11 +99,11 @@ def _normalize(row: dict) -> dict:
         return row
 
     out = dict(row)
-
-    out["goals"] = _normalize_goals(out.get("goals"))
+    out.pop("goals", None)
+    out.pop("plan_management", None)
+    out.pop("used_budget", None)
 
     out.setdefault("total_budget", 0.0)
-    out.setdefault("used_budget", 0.0)
     out.setdefault("plan_status", "active")
 
     return out
@@ -159,17 +137,6 @@ def _strip_access_columns(payload: dict) -> dict:
         for k, v in payload.items()
         if k not in ACCESS_METADATA_FIELDS
     }
-
-
-def _goals_to_jsonb(
-    goals: Optional[List[NDISGoal]],
-) -> Optional[list]:
-    """Convert Pydantic models to JSONB."""
-
-    if goals is None:
-        return None
-
-    return [g.model_dump() for g in goals]
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +204,11 @@ async def get_all_participants(
 
         filtered_rows.append(scoped_row)
 
-    return [_normalize(r) for r in filtered_rows]
+    from . import goals_service, funding_service
+
+    normalized = [_normalize(r) for r in filtered_rows]
+    with_goals = await goals_service.enrich_participants(normalized, active_only=False)
+    return await funding_service.enrich_participants_plan_fields(with_goals)
 
 
 async def get_participant_by_id(
@@ -301,7 +272,13 @@ async def get_participant_by_id(
             purpose="Participant Record Access",
         )
 
-        return _normalize(participant)
+        from . import goals_service, funding_service
+
+        enriched = await goals_service.enrich_participant(
+            _normalize(participant),
+            active_only=False,
+        )
+        return await funding_service.enrich_participant_plan_fields(enriched)
 
     except Exception as exc:
 
@@ -335,20 +312,12 @@ async def create_participant(
 
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
+    payload.pop("goals", None)
 
-    if "goals" in payload:
-
-        goals_raw = payload["goals"]
-
-        payload["goals"] = (
-            [
-                g if isinstance(g, dict)
-                else g.model_dump()
-                for g in goals_raw
-            ]
-            if goals_raw
-            else []
-        )
+    plan_payload: dict = {}
+    for patient_key, plan_key in _PLAN_FIELD_MAP.items():
+        if patient_key in payload:
+            plan_payload[plan_key] = payload.pop(patient_key)
 
     ownership = owner_payload(current_user)
 
@@ -384,7 +353,16 @@ async def create_participant(
     if not rows:
         return None
 
-    return _normalize(rows[0])
+    participant_id = str(rows[0].get("id") or "")
+    if plan_payload and participant_id:
+        from . import funding_service
+
+        await funding_service.create_or_update_plan(participant_id, plan_payload)
+
+    from . import goals_service, funding_service
+
+    enriched = await goals_service.enrich_participant(_normalize(rows[0]), active_only=False)
+    return await funding_service.enrich_participant_plan_fields(enriched)
 
 
 async def update_participant(
@@ -408,20 +386,8 @@ async def update_participant(
 
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
-
-    if "goals" in payload:
-
-        goals_list = payload["goals"]
-
-        if goals_list is None:
-            payload.pop("goals")
-
-        else:
-            payload["goals"] = [
-                g if isinstance(g, dict)
-                else g.model_dump()
-                for g in goals_list
-            ]
+    payload.pop("goals", None)
+    payload = await _sync_plan_fields_from_payload(participant_id, payload)
 
     if not payload:
         return await get_participant_by_id(
@@ -468,7 +434,6 @@ async def update_participant(
 
         before_type = normalize_plan_management_type(
             existing_before.get("plan_management_type")
-            or existing_before.get("plan_management")
         )
         after_type = normalize_plan_management_type(updated.get("plan_management_type"))
         if before_type != after_type:
@@ -483,43 +448,10 @@ async def update_participant(
                 after_state={"plan_management_type": after_type},
             )
 
-    return updated
+    from . import goals_service, funding_service
 
-
-async def update_participant_goals(
-    participant_id: str,
-    goals: List[NDISGoal],
-    current_user: Optional[dict] = None,
-) -> Optional[dict]:
-
-    supabase = get_supabase_admin()
-
-    if current_user:
-
-        existing = await get_participant_by_id(
-            participant_id,
-            current_user,
-        )
-
-        if not existing:
-            return None
-
-    goals_data = _goals_to_jsonb(goals)
-
-    result = (
-        supabase.table(TABLE)
-        .update({"goals": goals_data})
-        .eq("id", participant_id)
-        .execute()
-    )
-
-    if not result.data:
-        return None
-
-    return await get_participant_by_id(
-        participant_id,
-        current_user,
-    )
+    enriched = await goals_service.enrich_participant(updated, active_only=False)
+    return await funding_service.enrich_participant_plan_fields(enriched)
 
 
 async def delete_participant(
