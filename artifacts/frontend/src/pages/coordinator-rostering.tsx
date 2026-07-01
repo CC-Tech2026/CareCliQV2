@@ -1,12 +1,13 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useMemo, useState, useEffect } from "react";
 import {
   format, isSameDay, parseISO, startOfMonth, endOfMonth,
   addMonths, subMonths, startOfWeek, endOfWeek,
-  eachDayOfInterval, isToday, isSameMonth, addDays,
+  eachDayOfInterval, isToday, isSameMonth, addDays, getDay,
 } from "date-fns";
 import {
   CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2,
   Plus, Users2, User2, AlertCircle, LayoutGrid, Settings2,
+  CheckCircle2, XCircle, MinusCircle, UserCheck,
 } from "lucide-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
 import { useGetParticipants } from "@workspace/api-client-react";
@@ -17,8 +18,11 @@ import {
 import {
   getCoordinatorWorkerStats,
   listCoordinatorShifts,
+  getWorkerAvailability,
   type CoordinatorShiftRecord,
   type WorkerStats,
+  type WorkerAvailability,
+  type BlackoutDate,
 } from "@/services/coordinatorService";
 import { ShiftAssignmentModal } from "@/components/coordinator/ShiftAssignmentModal";
 import { DndScheduleView }        from "@/components/coordinator/DndScheduleView";
@@ -168,133 +172,298 @@ function MonthGrid({
   );
 }
 
-function WeekGrid({
-  weekStart, shifts, workers,
+const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
+
+type AvailabilityMap = Record<string, WorkerAvailability & { blackout_dates?: BlackoutDate[] }>;
+
+/** Returns 0=Mon … 6=Sun matching the available_days encoding in WorkerAvailability */
+function ccDayIndex(date: Date): number {
+  const js = getDay(date); // 0=Sun, 1=Mon … 6=Sat
+  return js === 0 ? 6 : js - 1; // convert to 0=Mon … 6=Sun
+}
+
+function isBlackout(date: Date, blackouts: BlackoutDate[] = []): boolean {
+  const key = format(date, "yyyy-MM-dd");
+  return blackouts.some((b) => b.start_date <= key && key <= b.end_date);
+}
+
+function RosterGrid({
+  weekStart, shifts, workers, availMap, loadingAvail, onCellClick,
 }: {
   weekStart: Date;
   shifts: CoordinatorShiftRecord[];
   workers: WorkerStats[];
+  availMap: AvailabilityMap;
+  loadingAvail: boolean;
+  onCellClick: (worker: WorkerStats, date: string) => void;
 }) {
-  const { translate, translateParams } = useAccessibility();
+  const { translate } = useAccessibility();
   const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
-
-  // Placeholder UUID used for unassigned shifts (workaround for NOT NULL constraint)
-  const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
 
   const byWorkerDay = useMemo(() => {
     const map = new Map<string, CoordinatorShiftRecord[]>();
     for (const s of shifts) {
       const d = parseStart(s);
-      if (!d) continue;
-      // Skip unassigned shifts (those with placeholder worker_id)
-      if (!s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
+      if (!d || !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
       const key = `${s.worker_id}|${format(d, "yyyy-MM-dd")}`;
       map.set(key, [...(map.get(key) ?? []), s]);
     }
     return map;
   }, [shifts]);
 
-  const activeWorkers = workers.filter((w) =>
-    days.some((d) => (byWorkerDay.get(`${w.id}|${format(d, "yyyy-MM-dd")}`) ?? []).length > 0)
+  const unassigned = useMemo(
+    () => shifts.filter((s) => !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID),
+    [shifts]
   );
-  const rows = activeWorkers.length > 0 ? activeWorkers : workers.slice(0, 10);
+
+  // Each day's total shift count (for column header badge)
+  const shiftsByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of shifts) {
+      const d = parseStart(s);
+      if (!d || !s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
+      const k = format(d, "yyyy-MM-dd");
+      map.set(k, (map.get(k) ?? 0) + 1);
+    }
+    return map;
+  }, [shifts]);
+
+  const rows = workers.length > 0 ? workers : [];
 
   return (
-    <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
-      <table className="w-full border-separate border-spacing-0">
-        <thead>
-          <tr>
-            <th
-              className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[160px]"
-              style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
-            >
-              {translate("coordinator.rostering.worker")}
-            </th>
-            {days.map((d) => (
-              <th
-                key={d.toISOString()}
-                className="min-w-[130px] px-2 py-2.5 text-center"
-                style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "var(--cc-bg)" }}
-              >
-                <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
-                  {format(d, "EEE")}
-                </div>
-                <div
-                  className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[14px] font-black"
-                  style={{ background: isToday(d) ? PLUM : "transparent", color: isToday(d) ? "white" : TEXT }}
-                >
-                  {format(d, "d")}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((worker) => (
-            <tr key={worker.id}>
-              <td className="sticky left-0 z-10 bg-white px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white"
-                    style={{ background: PLUM }}
-                  >
-                    {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[12px] font-bold" style={{ color: TEXT }}>{worker.full_name}</p>
-                    {worker.avg_compliance != null && (
-                      <p className="text-[10px]" style={{
-                        color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
-                      }}>
-                        {translateParams("coordinator.rostering.compliance", { percent: worker.avg_compliance.toFixed(0) })}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </td>
-              {days.map((d) => {
-                const key       = `${worker.id}|${format(d, "yyyy-MM-dd")}`;
-                const dayShifts = byWorkerDay.get(key) ?? [];
+    <div className="space-y-3">
+      {/* Unassigned shifts banner */}
+      {unassigned.length > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertCircle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-amber-900">
+              {unassigned.length} unassigned {unassigned.length === 1 ? "shift" : "shifts"} need a worker
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {unassigned.map((s) => {
+                const d = parseStart(s);
                 return (
-                  <td
+                  <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
+                    <User2 size={10} />
+                    {s.participant_name?.split(" ")[0] || "Shift"}
+                    {d ? ` · ${format(d, "d MMM, h:mm a")}` : ""}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-white px-4 py-2.5" style={{ borderColor: BORDER }}>
+        <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: MUTED }}>Availability</span>
+        {[
+          { color: "#DCFCE7", border: "#86EFAC", text: "#166534", label: "Available" },
+          { color: "#EDE9FF", border: "#A78BFA", text: "#4C1D95", label: "Assigned" },
+          { color: "#FEF3C7", border: "#FCD34D", text: "#92400E", label: "On leave" },
+          { color: "#F1F5F9", border: "#CBD5E1", text: "#64748B", label: "Not rostered" },
+        ].map((l) => (
+          <div key={l.label} className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded" style={{ background: l.color, border: `1px solid ${l.border}` }} />
+            <span className="text-[11px]" style={{ color: MUTED }}>{l.label}</span>
+          </div>
+        ))}
+        {loadingAvail && <Loader2 size={12} className="ml-auto animate-spin" style={{ color: MUTED }} />}
+      </div>
+
+      {/* Main grid */}
+      <div className="rounded-2xl border bg-white overflow-auto" style={{ borderColor: BORDER }}>
+        <table className="w-full border-separate border-spacing-0">
+          <thead>
+            <tr>
+              <th
+                className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest min-w-[180px]"
+                style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}
+              >
+                Worker
+              </th>
+              {days.map((d) => {
+                const dayKey = format(d, "yyyy-MM-dd");
+                const count = shiftsByDay.get(dayKey) ?? 0;
+                return (
+                  <th
                     key={d.toISOString()}
-                    className="px-1.5 py-2 align-top"
-                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#FAFAFE" : "var(--cc-bg)" }}
+                    className="min-w-[120px] px-2 py-2.5 text-center"
+                    style={{ borderBottom: `1px solid ${BORDER}`, background: isToday(d) ? "#F0ECFF" : "var(--cc-soft)" }}
                   >
-                    <div className="space-y-1">
-                      {dayShifts.map((s) => {
-                        const cfg   = statusCfg(s.status, translate);
-                        const start = parseStart(s);
-                        const end   = s.scheduled_end ? parseISO(s.scheduled_end) : null;
-                        return (
-                          <div key={s.id} className="rounded-lg px-2 py-1.5 text-[10px] font-bold" style={{ background: cfg.bg, color: cfg.color }}>
-                            <div className="truncate">{s.participant_name?.split(" ")[0] || "—"}</div>
-                            {start && (
-                              <div className="mt-0.5 font-medium opacity-75">
-                                {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {dayShifts.length === 0 && (
-                        <div className="h-7 rounded-lg border border-dashed" style={{ borderColor: BORDER }} />
-                      )}
+                    <div className="text-[10px] font-black uppercase tracking-wider" style={{ color: isToday(d) ? PLUM : MUTED }}>
+                      {format(d, "EEE")}
                     </div>
-                  </td>
+                    <div
+                      className="mx-auto mt-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-black"
+                      style={{ background: isToday(d) ? PLUM : "transparent", color: isToday(d) ? "white" : TEXT }}
+                    >
+                      {format(d, "d")}
+                    </div>
+                    {count > 0 && (
+                      <div className="mt-1 text-[9px] font-black" style={{ color: PLUM }}>
+                        {count} shift{count !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </th>
                 );
               })}
             </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={8} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
-                {translate("coordinator.rostering.noShiftsWeek")}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((worker) => {
+              const avail = availMap[worker.id];
+              const weekShifts = days.reduce((n, d) => n + (byWorkerDay.get(`${worker.id}|${format(d, "yyyy-MM-dd")}`) ?? []).length, 0);
+              return (
+                <tr key={worker.id}>
+                  {/* Worker column */}
+                  <td className="sticky left-0 z-10 bg-white px-3 py-2.5" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-[11px] font-black text-white shadow-sm"
+                        style={{ background: PLUM }}
+                      >
+                        {worker.full_name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-bold leading-tight" style={{ color: TEXT }}>{worker.full_name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {worker.avg_compliance != null && (
+                            <span className="text-[10px] font-semibold" style={{
+                              color: worker.avg_compliance >= 85 ? "#16A34A" : worker.avg_compliance >= 60 ? "#D97706" : "#DC2626"
+                            }}>
+                              {worker.avg_compliance.toFixed(0)}% compliance
+                            </span>
+                          )}
+                          {weekShifts > 0 && (
+                            <span className="text-[10px]" style={{ color: MUTED }}>{weekShifts} shift{weekShifts !== 1 ? "s" : ""}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Day cells */}
+                  {days.map((d) => {
+                    const dayKey    = format(d, "yyyy-MM-dd");
+                    const dayShifts = byWorkerDay.get(`${worker.id}|${dayKey}`) ?? [];
+                    const dayIdx    = ccDayIndex(d);
+                    const onBlackout = avail ? isBlackout(d, avail.blackout_dates) : false;
+                    const isWorkDay  = avail ? avail.available_days.includes(dayIdx) : true; // assume available if not loaded
+                    const hasShift   = dayShifts.length > 0;
+
+                    // Cell state
+                    let cellBg    = "var(--cc-bg)";
+                    let cellState: "available" | "assigned" | "blackout" | "unavailable" | "loading" = "available";
+                    if (!avail && loadingAvail) {
+                      cellState = "loading";
+                    } else if (onBlackout) {
+                      cellState = "blackout";
+                      cellBg = "#FFFBEB";
+                    } else if (!isWorkDay) {
+                      cellState = "unavailable";
+                      cellBg = "#F8FAFC";
+                    } else if (hasShift) {
+                      cellState = "assigned";
+                      cellBg = isToday(d) ? "#FAFAFE" : "var(--cc-bg)";
+                    } else {
+                      cellState = "available";
+                      cellBg = isToday(d) ? "#F0FFF4" : "#F7FEF9";
+                    }
+
+                    return (
+                      <td
+                        key={d.toISOString()}
+                        className="px-1.5 py-1.5 align-top"
+                        style={{ borderBottom: `1px solid ${BORDER}`, background: cellBg, minWidth: 120 }}
+                      >
+                        {cellState === "loading" && (
+                          <div className="flex h-10 items-center justify-center">
+                            <div className="h-1.5 w-1.5 rounded-full animate-pulse" style={{ background: BORDER }} />
+                          </div>
+                        )}
+
+                        {cellState === "blackout" && (
+                          <div className="flex flex-col items-center justify-center h-10 gap-0.5">
+                            <XCircle size={13} className="text-amber-500" />
+                            <span className="text-[9px] font-bold text-amber-700">On leave</span>
+                            {avail?.blackout_dates?.find(b => {
+                              const k = format(d, "yyyy-MM-dd");
+                              return b.start_date <= k && k <= b.end_date && b.reason;
+                            })?.reason && (
+                              <span className="text-[8px] text-amber-600 truncate max-w-[90px]">
+                                {avail.blackout_dates!.find(b => { const k = format(d, "yyyy-MM-dd"); return b.start_date <= k && k <= b.end_date && b.reason; })!.reason}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {cellState === "unavailable" && (
+                          <div className="flex h-10 items-center justify-center">
+                            <MinusCircle size={12} className="opacity-25" style={{ color: MUTED }} />
+                          </div>
+                        )}
+
+                        {cellState === "available" && (
+                          <button
+                            type="button"
+                            title={`Assign shift to ${worker.full_name} on ${format(d, "d MMM")}`}
+                            onClick={() => onCellClick(worker, dayKey)}
+                            className="group flex h-10 w-full items-center justify-center rounded-lg border border-dashed border-green-200 hover:border-green-400 hover:bg-green-50 transition-all"
+                          >
+                            <Plus size={13} className="text-green-400 group-hover:text-green-600 transition-colors" />
+                          </button>
+                        )}
+
+                        {cellState === "assigned" && (
+                          <div className="space-y-1">
+                            {dayShifts.map((s) => {
+                              const cfg   = statusCfg(s.status, translate);
+                              const start = parseStart(s);
+                              const end   = s.scheduled_end ? parseISO(s.scheduled_end) : null;
+                              return (
+                                <div key={s.id}
+                                  className="rounded-lg px-2 py-1.5 text-[10px] font-bold"
+                                  style={{ background: cfg.bg, color: cfg.color, borderLeft: `3px solid ${cfg.color}` }}
+                                >
+                                  <div className="truncate font-black">{s.participant_name?.split(" ")[0] || "—"}</div>
+                                  {start && (
+                                    <div className="mt-0.5 font-medium opacity-80">
+                                      {format(start, "h:mm a")}{end ? `–${format(end, "h:mm a")}` : ""}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                            {/* Allow adding a second shift on the same day */}
+                            <button
+                              type="button"
+                              title={`Add another shift for ${worker.full_name} on ${format(d, "d MMM")}`}
+                              onClick={() => onCellClick(worker, dayKey)}
+                              className="flex h-5 w-full items-center justify-center rounded border border-dashed border-violet-200 hover:border-violet-400 hover:bg-violet-50 transition-all opacity-0 hover:opacity-100 focus:opacity-100"
+                            >
+                              <Plus size={9} style={{ color: PLUM }} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={8} className="py-16 text-center text-[13px]" style={{ color: MUTED }}>
+                  {translate("coordinator.rostering.noShiftsWeek")}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -405,6 +574,9 @@ export default function CoordinatorRosteringPage() {
   const [assignOpen,   setAssignOpen]   = useState(false);
   const [bulkOpen,     setBulkOpen]     = useState(false);
   const [availWorker,  setAvailWorker]  = useState<WorkerStats | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{ worker: WorkerStats; date: string } | null>(null);
+  const [availMap,     setAvailMap]     = useState<AvailabilityMap>({});
+  const [loadingAvail, setLoadingAvail] = useState(false);
 
   const participantsQuery = useGetParticipants();
   const participantList   = (participantsQuery.data as Array<{ id: string; full_name: string }> | undefined) ?? [];
@@ -437,6 +609,24 @@ export default function CoordinatorRosteringPage() {
 
   const workers = workersQuery.data ?? [];
   const shifts  = shiftsQuery.data  ?? [];
+
+  // Load availability for all workers when the list changes
+  useEffect(() => {
+    if (workers.length === 0) return;
+    let cancelled = false;
+    setLoadingAvail(true);
+    (async () => {
+      const map: AvailabilityMap = {};
+      for (const w of workers) {
+        try {
+          const data = await getWorkerAvailability(w.id);
+          map[w.id] = { ...data.availability, blackout_dates: data.blackout_dates };
+        } catch { /* skip unavailable */ }
+      }
+      if (!cancelled) { setAvailMap(map); setLoadingAvail(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [workers]);
 
   const todayKey       = appLocalDateKey(new Date().toISOString());
   const shiftsToday    = shifts.filter((s) => s.scheduled_start && appLocalDateKey(s.scheduled_start) === todayKey);
@@ -608,7 +798,17 @@ export default function CoordinatorRosteringPage() {
       )}
 
       {viewMode === "week" && (
-        <WeekGrid weekStart={weekStart} shifts={shifts} workers={workers} />
+        <RosterGrid
+          weekStart={weekStart}
+          shifts={shifts}
+          workers={workers}
+          availMap={availMap}
+          loadingAvail={loadingAvail}
+          onCellClick={(worker, date) => {
+            setAssignTarget({ worker, date });
+            setAssignOpen(true);
+          }}
+        />
       )}
 
       {viewMode === "list" && (
@@ -667,9 +867,10 @@ export default function CoordinatorRosteringPage() {
 
       <ShiftAssignmentModal
         open={assignOpen}
-        onOpenChange={setAssignOpen}
-        worker={assignWorker}
+        onOpenChange={(open) => { setAssignOpen(open); if (!open) setAssignTarget(null); }}
+        worker={assignTarget?.worker ?? assignWorker}
         workers={workers}
+        initialDate={assignTarget?.date}
       />
 
       {/* ── Schedule (DnD) view ──────────────────────────────────────────── */}

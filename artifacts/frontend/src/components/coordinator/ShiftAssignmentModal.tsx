@@ -59,6 +59,7 @@ interface ShiftAssignmentModalProps {
   worker?: WorkerStats | null;
   workers?: WorkerStats[];
   initialParticipantId?: string;
+  initialDate?: string; // "YYYY-MM-DD" — pre-fills the start time to 08:00 on that date
 }
 
 export function ShiftAssignmentModal({
@@ -67,6 +68,7 @@ export function ShiftAssignmentModal({
   worker,
   workers = [],
   initialParticipantId,
+  initialDate,
 }: ShiftAssignmentModalProps) {
   const { translate, translateParams } = useAccessibility();
   const { toast } = useToast();
@@ -89,6 +91,10 @@ export function ShiftAssignmentModal({
   useEffect(() => {
     if (initialParticipantId) setSelectedParticipantId(initialParticipantId);
   }, [initialParticipantId, open]);
+
+  useEffect(() => {
+    if (open) setScheduledStart(initialDate ? `${initialDate}T08:00` : "");
+  }, [initialDate, open]);
 
   const participants   = useGetParticipants();
   const credAlertsQuery = useOrgQuery([orgId, "coordinator-credential-alerts"], {
