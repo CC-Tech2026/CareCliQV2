@@ -234,7 +234,7 @@ export default function Login() {
         />
         <div className="relative z-10 px-6 pt-12 pb-9">
           {/* Logo row */}
-          <CareCliQLogoSVG size={32} />
+          <CareCliQLogoSVG size={80} />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.22em]" style={{ color: "var(--auth-marketing-muted)" }}>
             {t("auth.login.marketing.tagline")}
           </p>
@@ -286,7 +286,7 @@ export default function Login() {
       >
         {/* Logo — desktop only */}
         <div className="hidden lg:flex items-center px-12 pt-10">
-          <CareCliQLogoSVG size={40} />
+          <CareCliQLogoSVG size={80} />
         </div>
 
         {/* Mobile drag handle */}

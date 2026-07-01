@@ -10,8 +10,9 @@ export function CareCliQLogo({ compact = false, className = "" }: CareCliQLogoPr
     <div
       className={`flex items-center select-none gap-2 ${compact ? "justify-center" : "justify-start"} ${className}`}
       title="CareCliQ"
+      style={{ backgroundColor: "transparent" }}
     >
-      <CareCliQLogoSVG size={compact ? 32 : 42} />
+      <CareCliQLogoSVG size={compact ? 68 : 85} />
       {!compact && (
         <span
           className="font-black text-[18px] tracking-tight leading-none"
@@ -34,8 +35,8 @@ interface CareCliQLogoSmProps {
 
 export function CareCliQLogoSm({ className = "" }: CareCliQLogoSmProps) {
   return (
-    <div className={`flex items-center select-none ${className}`}>
-      <CareCliQLogoSVG size={32} />
+    <div className={`flex items-center select-none ${className}`} style={{ backgroundColor: "transparent" }}>
+      <CareCliQLogoSVG size={68} />
     </div>
   );
 }
