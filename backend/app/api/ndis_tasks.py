@@ -14,6 +14,7 @@ from datetime import date, datetime, timezone
 from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from ..core.security import get_current_user
 from ..services.supabase_client import get_supabase_admin
@@ -22,6 +23,8 @@ from ..services.invoice_service import (
     get_invoice_summary,
     finalize_invoice,
     mark_invoice_sent,
+    assemble_invoice_data,
+    render_invoice_pdf,
     InvoiceGenerationError,
 )
 from ..services.recurring_task_scheduler import (
@@ -347,7 +350,7 @@ async def get_invoice(
     """Get invoice details with line items."""
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
-    
+
     try:
         resp = (
             supabase.table("invoices")
@@ -360,6 +363,38 @@ async def get_invoice(
         return resp.data
     except Exception as e:
         raise HTTPException(status_code=404, detail="Invoice not found")
+
+
+@router.get("/invoices/{invoice_id}/pdf")
+async def get_invoice_pdf(
+    invoice_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generate and return a professional NDIS invoice PDF.
+
+    Fetches invoice + line items + provider + participant + plan data,
+    renders the Jinja2 template via WeasyPrint, and streams the PDF.
+    """
+    org_id = _require_coordinator(current_user)
+    supabase = get_supabase_admin()
+
+    try:
+        invoice_data = assemble_invoice_data(supabase, invoice_id, org_id)
+        pdf_bytes = render_invoice_pdf(invoice_data)
+        invoice_number = invoice_data.get("invoice_number", invoice_id)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{invoice_number}.pdf"',
+                "Content-Length": str(len(pdf_bytes)),
+            },
+        )
+    except InvoiceGenerationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tax Invoice {{ invoice_number }}</title>
+  <style>
+    /* ── Reset & base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 9pt;
+      color: #1a202c;
+      background: #fff;
+    }
+
+    /* ── Page layout ────────────────────────────────────────────────────────── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 14mm 16mm 14mm 16mm;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #1a56db;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+    .header-left h1 {
+      font-size: 22pt;
+      font-weight: 700;
+      color: #1a56db;
+      letter-spacing: -0.5px;
+    }
+    .header-left .tagline {
+      font-size: 7.5pt;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .header-right .doc-type {
+      font-size: 16pt;
+      font-weight: 700;
+      color: #1e293b;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .header-right .invoice-number {
+      font-size: 9pt;
+      color: #475569;
+      margin-top: 2px;
+    }
+    .status-badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-draft    { background: #f1f5f9; color: #475569; }
+    .status-finalized { background: #eff6ff; color: #1a56db; }
+    .status-sent     { background: #f0fdf4; color: #15803d; }
+    .status-paid     { background: #f0fdf4; color: #15803d; }
+    .status-overdue  { background: #fef2f2; color: #dc2626; }
+
+    /* ── Two-column info row ─────────────────────────────────────────────────── */
+    .info-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .info-box {
+      flex: 1;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 8px 10px;
+    }
+    .info-box.accent {
+      border-left: 3px solid #1a56db;
+    }
+    .info-box h3 {
+      font-size: 6.5pt;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 5px;
+    }
+    .info-box p {
+      font-size: 8.5pt;
+      color: #334155;
+      line-height: 1.5;
+    }
+    .info-box p strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+
+    /* ── Period / routing strip ──────────────────────────────────────────────── */
+    .period-strip {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .period-cell {
+      flex: 1;
+      background: #1a56db;
+      color: #fff;
+      border-radius: 4px;
+      padding: 6px 10px;
+      text-align: center;
+    }
+    .period-cell .label {
+      font-size: 6pt;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .period-cell .value {
+      font-size: 9pt;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+    .routing-cell {
+      flex: 1.5;
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid #7c3aed;
+      border-radius: 4px;
+      padding: 6px 10px;
+    }
+    .routing-cell .label {
+      font-size: 6pt;
+      color: #7c3aed;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+    }
+    .routing-cell .value {
+      font-size: 8.5pt;
+      color: #1e293b;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+    .routing-cell .sub {
+      font-size: 7pt;
+      color: #64748b;
+    }
+
+    /* ── Line items table ────────────────────────────────────────────────────── */
+    table.line-items {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    table.line-items thead tr {
+      background: #1e293b;
+      color: #fff;
+    }
+    table.line-items thead th {
+      padding: 6px 8px;
+      font-size: 7.5pt;
+      font-weight: 600;
+      text-align: left;
+      letter-spacing: 0.3px;
+    }
+    table.line-items thead th.right { text-align: right; }
+    table.line-items thead th.center { text-align: center; }
+
+    table.line-items tbody tr:nth-child(even) { background: #f8fafc; }
+    table.line-items tbody td {
+      padding: 5px 8px;
+      font-size: 8pt;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    table.line-items tbody td.right { text-align: right; }
+    table.line-items tbody td.center { text-align: center; }
+    table.line-items tbody td .item-code {
+      font-size: 7pt;
+      color: #64748b;
+      font-family: monospace;
+      margin-top: 1px;
+    }
+    table.line-items tbody td .category-badge {
+      display: inline-block;
+      font-size: 6.5pt;
+      padding: 1px 5px;
+      background: #eff6ff;
+      color: #1a56db;
+      border-radius: 3px;
+      margin-top: 2px;
+    }
+
+    /* Category group header row */
+    .cat-header td {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 7.5pt;
+      font-weight: 700;
+      padding: 4px 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* ── Totals ──────────────────────────────────────────────────────────────── */
+    .totals-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+    .totals-box {
+      width: 220px;
+    }
+    .totals-line {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 8.5pt;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .totals-line.total {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #1a56db;
+      border-bottom: none;
+      border-top: 2px solid #1a56db;
+      padding-top: 6px;
+      margin-top: 2px;
+    }
+    .totals-line .tl-label { color: #64748b; }
+    .totals-line .tl-value { font-weight: 600; }
+
+    /* ── Category summary ────────────────────────────────────────────────────── */
+    .cat-summary {
+      margin-bottom: 12px;
+    }
+    .cat-summary h4 {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+    .cat-summary-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cat-pill {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 7.5pt;
+    }
+    .cat-pill .cat-name { color: #1e40af; font-weight: 600; }
+    .cat-pill .cat-amount { color: #1a56db; }
+
+    /* ── Payment / routing info ──────────────────────────────────────────────── */
+    .payment-box {
+      border: 1px solid #e2e8f0;
+      border-left: 3px solid #059669;
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+    }
+    .payment-box h4 {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: #059669;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+    .payment-box p {
+      font-size: 8pt;
+      color: #334155;
+      line-height: 1.6;
+    }
+    .payment-box .ref-number {
+      font-family: monospace;
+      font-size: 9pt;
+      font-weight: 700;
+      color: #1e293b;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────────── */
+    .footer {
+      margin-top: auto;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer p {
+      font-size: 7pt;
+      color: #94a3b8;
+    }
+    .footer .compliance-note {
+      font-size: 6.5pt;
+      color: #cbd5e1;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+  <div class="header">
+    <div class="header-left">
+      <h1>CareCliQ</h1>
+      <p class="tagline">NDIS Support Provider Platform</p>
+    </div>
+    <div class="header-right">
+      <div class="doc-type">Tax Invoice</div>
+      <div class="invoice-number">{{ invoice_number }}</div>
+      <span class="status-badge status-{{ status }}">{{ status | title }}</span>
+    </div>
+  </div>
+
+  <!-- ── PROVIDER / PARTICIPANT INFO ───────────────────────────────────────── -->
+  <div class="info-row">
+    <div class="info-box accent">
+      <h3>Service Provider</h3>
+      <p>
+        <strong>{{ provider_name }}</strong><br />
+        {% if provider_abn %}ABN: {{ provider_abn }}<br />{% endif %}
+        {% if provider_ndis_number %}NDIS Provider: {{ provider_ndis_number }}<br />{% endif %}
+        {% if provider_address %}{{ provider_address }}<br />{% endif %}
+        {% if provider_email %}{{ provider_email }}<br />{% endif %}
+        {% if provider_phone %}{{ provider_phone }}{% endif %}
+      </p>
+    </div>
+    <div class="info-box">
+      <h3>Participant</h3>
+      <p>
+        <strong>{{ participant_name }}</strong><br />
+        {% if participant_ndis_number %}NDIS Number: <strong>{{ participant_ndis_number }}</strong><br />{% endif %}
+        {% if participant_dob %}DOB: {{ participant_dob }}<br />{% endif %}
+        {% if participant_address %}{{ participant_address }}{% endif %}
+      </p>
+    </div>
+    <div class="info-box">
+      <h3>Invoice Details</h3>
+      <p>
+        Invoice Date: <strong>{{ invoice_date }}</strong><br />
+        {% if plan_number %}Plan No: {{ plan_number }}<br />{% endif %}
+        Due: <strong>{{ due_date }}</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- ── SERVICE PERIOD / ROUTING STRIP ───────────────────────────────────── -->
+  <div class="period-strip">
+    <div class="period-cell">
+      <div class="label">Period Start</div>
+      <div class="value">{{ period_start }}</div>
+    </div>
+    <div class="period-cell">
+      <div class="label">Period End</div>
+      <div class="value">{{ period_end }}</div>
+    </div>
+    <div class="routing-cell">
+      <div class="label">Payment Route — {{ plan_management_type }}</div>
+      {% if plan_management_type == 'PLAN' %}
+      <div class="value">Plan Manager</div>
+      <div class="sub">Submit this invoice to your plan manager for processing</div>
+      {% elif plan_management_type == 'NDIA' %}
+      <div class="value">NDIA Agency-Managed</div>
+      <div class="sub">Provider claims directly via PRODA / myplace portal</div>
+      {% elif plan_management_type == 'SELF' %}
+      <div class="value">Self-Managed</div>
+      <div class="sub">Participant pays directly; retain for plan records</div>
+      {% else %}
+      <div class="value">To be confirmed</div>
+      <div class="sub">Contact coordinator for payment instructions</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ── LINE ITEMS ─────────────────────────────────────────────────────────── -->
+  <table class="line-items">
+    <thead>
+      <tr>
+        <th style="width:36%">Description</th>
+        <th style="width:15%">Support Category</th>
+        <th class="center" style="width:8%">Day Type</th>
+        <th class="right" style="width:9%">Qty (hrs)</th>
+        <th class="right" style="width:10%">Rate ($/hr)</th>
+        <th class="right" style="width:12%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in line_items %}
+      <tr>
+        <td>
+          {{ item.description }}
+          <div class="item-code">{{ item.price_item_code }}</div>
+        </td>
+        <td>
+          {% if item.support_category %}
+          <span class="category-badge">{{ item.support_category[:20] }}</span>
+          {% endif %}
+        </td>
+        <td class="center">
+          {% if item.day_type %}{{ item.day_type }}{% else %}—{% endif %}
+          {% if item.time_type %}<br /><span style="font-size:6.5pt;color:#94a3b8;">{{ item.time_type }}</span>{% endif %}
+        </td>
+        <td class="right">{{ "%.2f"|format(item.quantity|float) }}</td>
+        <td class="right">${{ "%.2f"|format(item.unit_price|float) }}</td>
+        <td class="right"><strong>${{ "%.2f"|format(item.total_price|float) }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ── CATEGORY SUMMARY + TOTALS ─────────────────────────────────────────── -->
+  <div style="display:flex;gap:16px;margin-bottom:12px;align-items:flex-start;">
+    {% if by_category %}
+    <div class="cat-summary" style="flex:1;">
+      <h4>Summary by Support Category</h4>
+      <div class="cat-summary-grid">
+        {% for cat_name, cat_amount in by_category.items() %}
+        <div class="cat-pill">
+          <div class="cat-name">{{ cat_name }}</div>
+          <div class="cat-amount">${{ "%.2f"|format(cat_amount|float) }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="totals-row" style="margin-bottom:0;">
+      <div class="totals-box">
+        <div class="totals-line">
+          <span class="tl-label">Subtotal</span>
+          <span class="tl-value">${{ "%.2f"|format(total_amount|float) }}</span>
+        </div>
+        <div class="totals-line">
+          <span class="tl-label">GST (0%)</span>
+          <span class="tl-value">$0.00</span>
+        </div>
+        <div class="totals-line total">
+          <span>Total Due</span>
+          <span>${{ "%.2f"|format(total_amount|float) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAYMENT INSTRUCTIONS ──────────────────────────────────────────────── -->
+  {% if plan_management_type == 'SELF' %}
+  <div class="payment-box">
+    <h4>Payment Instructions — Self-Managed</h4>
+    <p>
+      Please make payment within 30 days of invoice date.<br />
+      Reference: <span class="ref-number">{{ invoice_number }}</span><br />
+      {% if provider_email %}Remittance to: {{ provider_email }}{% endif %}
+    </p>
+  </div>
+  {% elif plan_management_type == 'PLAN' %}
+  <div class="payment-box">
+    <h4>Plan Manager Instructions</h4>
+    <p>
+      Forward this invoice to your NDIS plan manager for processing.<br />
+      Quote reference: <span class="ref-number">{{ invoice_number }}</span>
+    </p>
+  </div>
+  {% elif plan_management_type == 'NDIA' %}
+  <div class="payment-box">
+    <h4>NDIA Claim Instructions</h4>
+    <p>
+      Submit claim via PRODA / myplace provider portal.<br />
+      Line items correspond to NDIS support catalogue codes above.
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+  <div class="footer">
+    <p>{{ provider_name }}{% if provider_abn %} · ABN {{ provider_abn }}{% endif %}</p>
+    <p class="compliance-note">
+      NDIS-compliant tax invoice · Generated {{ generated_at }}<br />
+      Retain this document for NDIS audit purposes
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

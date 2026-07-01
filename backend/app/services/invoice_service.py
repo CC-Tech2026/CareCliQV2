@@ -9,8 +9,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-import json
 import logging
+import os
+import pathlib
 
 from .supabase_client import get_supabase_admin
 
@@ -370,3 +371,179 @@ def mark_invoice_sent(
     except Exception as e:
         logger.error(f"Mark sent failed: {e}")
         raise InvoiceGenerationError(f"Mark sent failed: {e}")
+
+
+# ── Templates directory (one level up from services/) ──────────────────────────
+_TEMPLATES_DIR = pathlib.Path(__file__).parent.parent / "templates"
+
+
+def generate_invoice_number_with_sequence(
+    supabase: Any,
+    org_id: str,
+    period_end: date,
+) -> str:
+    """Generate invoice number using per-org atomic sequence (requires migration 079)."""
+    try:
+        resp = supabase.rpc("increment_invoice_sequence", {"p_org_id": org_id}).execute()
+        seq = int(resp.data or 1)
+    except Exception:
+        # Fall back to timestamp-based numbering if sequence function not yet applied
+        seq = int(datetime.now().timestamp()) % 10000
+
+    year_month = period_end.strftime("%Y%m")
+    short_org = org_id[:4].upper()
+    return f"INV-{short_org}-{year_month}-{seq:04d}"
+
+
+def assemble_invoice_data(
+    supabase: Any,
+    invoice_id: str,
+    org_id: str,
+) -> Dict[str, Any]:
+    """
+    Fetch all data required to render the invoice PDF.
+
+    Joins invoice → line items → organization → participant → ndis_plan.
+    Returns a flat dict that maps directly to template variables.
+    """
+    # ── Invoice header ──────────────────────────────────────────────────────
+    inv_resp = (
+        supabase.table("invoices")
+        .select("*, invoice_line_items(*)")
+        .eq("id", invoice_id)
+        .eq("organization_id", org_id)
+        .single()
+        .execute()
+    )
+    invoice = inv_resp.data
+    if not invoice:
+        raise InvoiceGenerationError(f"Invoice {invoice_id} not found")
+
+    line_items_raw: List[Dict] = invoice.get("invoice_line_items") or []
+
+    # ── Organization (provider) ─────────────────────────────────────────────
+    org_resp = (
+        supabase.table("organizations")
+        .select(
+            "organization_name, abn, contact_number, email, "
+            "org_address, ndis_provider_number"
+        )
+        .eq("id", org_id)
+        .single()
+        .execute()
+    )
+    org = org_resp.data or {}
+
+    # ── Participant ─────────────────────────────────────────────────────────
+    participant_id = invoice.get("participant_id")
+    participant: Dict = {}
+    if participant_id:
+        pt_resp = (
+            supabase.table("patients")
+            .select("full_name, ndis_number, date_of_birth, address")
+            .eq("id", participant_id)
+            .single()
+            .execute()
+        )
+        participant = pt_resp.data or {}
+
+    # ── NDIS Plan ───────────────────────────────────────────────────────────
+    plan_id = invoice.get("plan_id")
+    plan: Dict = {}
+    if plan_id:
+        plan_resp = (
+            supabase.table("ndis_plans")
+            .select("plan_number, plan_management_type, plan_start, plan_end")
+            .eq("id", plan_id)
+            .single()
+            .execute()
+        )
+        plan = plan_resp.data or {}
+
+    # ── Build by_category map ───────────────────────────────────────────────
+    by_category: Dict[str, float] = {}
+    for item in line_items_raw:
+        cat = item.get("support_category") or "Other"
+        by_category[cat] = by_category.get(cat, 0.0) + float(item.get("total_price") or 0)
+
+    # ── Format dates ────────────────────────────────────────────────────────
+    def _fmt_date(val: Any) -> str:
+        if not val:
+            return ""
+        try:
+            return datetime.fromisoformat(str(val)).strftime("%d %b %Y")
+        except Exception:
+            return str(val)
+
+    invoice_date_raw = invoice.get("invoice_date") or date.today().isoformat()
+    try:
+        due_date = (
+            datetime.fromisoformat(str(invoice_date_raw)) + timedelta(days=30)
+        ).strftime("%d %b %Y")
+    except Exception:
+        due_date = ""
+
+    dob_raw = participant.get("date_of_birth")
+    dob_str = ""
+    if dob_raw:
+        try:
+            dob_str = datetime.fromisoformat(str(dob_raw)).strftime("%d %b %Y")
+        except Exception:
+            dob_str = str(dob_raw)
+
+    return {
+        # invoice
+        "invoice_number": invoice.get("invoice_number", ""),
+        "invoice_date": _fmt_date(invoice_date_raw),
+        "period_start": _fmt_date(invoice.get("period_start")),
+        "period_end": _fmt_date(invoice.get("period_end")),
+        "total_amount": float(invoice.get("total_amount") or 0),
+        "status": invoice.get("status", "draft"),
+        "due_date": due_date,
+        # provider
+        "provider_name": org.get("organization_name", ""),
+        "provider_abn": org.get("abn", ""),
+        "provider_ndis_number": org.get("ndis_provider_number", ""),
+        "provider_address": org.get("org_address", ""),
+        "provider_email": org.get("email", ""),
+        "provider_phone": org.get("contact_number", ""),
+        # participant
+        "participant_name": participant.get("full_name", ""),
+        "participant_ndis_number": participant.get("ndis_number", ""),
+        "participant_dob": dob_str,
+        "participant_address": participant.get("address", ""),
+        # plan
+        "plan_number": plan.get("plan_number", ""),
+        "plan_management_type": plan.get("plan_management_type") or "PLAN",
+        # line items (pass through as-is for template)
+        "line_items": line_items_raw,
+        "by_category": by_category,
+        # meta
+        "generated_at": datetime.now().strftime("%d %b %Y %H:%M UTC"),
+    }
+
+
+def render_invoice_pdf(invoice_data: Dict[str, Any]) -> bytes:
+    """
+    Render the Jinja2 invoice template to PDF using WeasyPrint.
+
+    Falls back gracefully if WeasyPrint is not available in the current
+    environment (e.g. local Windows without GTK).
+    """
+    try:
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+        from weasyprint import HTML, CSS
+    except ImportError as exc:
+        raise InvoiceGenerationError(
+            f"PDF rendering requires jinja2 and weasyprint: {exc}"
+        )
+
+    env = Environment(
+        loader=FileSystemLoader(str(_TEMPLATES_DIR)),
+        autoescape=select_autoescape(["html"]),
+    )
+    template = env.get_template("invoice.html")
+    html_str = template.render(**invoice_data)
+
+    pdf_bytes = HTML(string=html_str, base_url=str(_TEMPLATES_DIR)).write_pdf()
+    return pdf_bytes
