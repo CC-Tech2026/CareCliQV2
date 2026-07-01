@@ -142,7 +142,12 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
           <p className="text-[11px]" style={{ color: MUTED }}>{translate("coordinator.availability.subtitle")}</p>
         </div>
         {onClose && (
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100">
+          <button 
+            onClick={onClose} 
+            className="rounded-lg p-1.5 hover:bg-gray-100"
+            title="Close panel"
+            aria-label="Close availability panel"
+          >
             <X size={14} style={{ color: MUTED }} />
           </button>
         )}
@@ -247,11 +252,41 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
               ))}
               <div className="space-y-1.5 rounded-xl border p-3" style={{ borderColor: BORDER, background: SOFT }}>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="date" value={newBlackout.start_date} onChange={(e) => setNewBlackout((b) => ({ ...b, start_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.blackoutStart")} />
-                  <input type="date" value={newBlackout.end_date} onChange={(e) => setNewBlackout((b) => ({ ...b, end_date: e.target.value }))} className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.blackoutEnd")} />
+                  <input 
+                    type="date" 
+                    value={newBlackout.start_date} 
+                    onChange={(e) => setNewBlackout((b) => ({ ...b, start_date: e.target.value }))} 
+                    className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" 
+                    style={{ borderColor: BORDER }} 
+                    aria-label={translate("coordinator.availability.blackoutStart")}
+                    title={translate("coordinator.availability.blackoutStart")}
+                  />
+                  <input 
+                    type="date" 
+                    value={newBlackout.end_date} 
+                    onChange={(e) => setNewBlackout((b) => ({ ...b, end_date: e.target.value }))} 
+                    className="rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" 
+                    style={{ borderColor: BORDER }} 
+                    aria-label={translate("coordinator.availability.blackoutEnd")}
+                    title={translate("coordinator.availability.blackoutEnd")}
+                  />
                 </div>
-                <input value={newBlackout.reason} onChange={(e) => setNewBlackout((b) => ({ ...b, reason: e.target.value }))} className="w-full rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" style={{ borderColor: BORDER }} placeholder={translate("coordinator.availability.reasonOptional")} />
-                <button onClick={addBlackout} disabled={!newBlackout.start_date || !newBlackout.end_date} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white" style={{ background: PLUM, opacity: !newBlackout.start_date ? 0.5 : 1 }}>
+                <input 
+                  value={newBlackout.reason} 
+                  onChange={(e) => setNewBlackout((b) => ({ ...b, reason: e.target.value }))} 
+                  className="w-full rounded-lg border px-2.5 py-1.5 text-[11px] outline-none" 
+                  style={{ borderColor: BORDER }} 
+                  placeholder={translate("coordinator.availability.reasonOptional")}
+                  aria-label={translate("coordinator.availability.reasonOptional")}
+                />
+                <button 
+                  onClick={addBlackout} 
+                  disabled={!newBlackout.start_date || !newBlackout.end_date} 
+                  className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white" 
+                  style={{ background: PLUM, opacity: !newBlackout.start_date ? 0.5 : 1 }}
+                  title={translate("coordinator.availability.addDate")}
+                  aria-label={translate("coordinator.availability.addDate")}
+                >
                   <Plus size={10} /> {translate("coordinator.availability.addDate")}
                 </button>
               </div>
@@ -286,6 +321,8 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                       <button
                         onClick={() => removeSkillMut.mutate(s.skill)}
                         className="ml-0.5 rounded-full hover:bg-[#C4B5FD] transition-colors"
+                        title={`Remove ${s.skill} skill`}
+                        aria-label={`Remove ${s.skill} skill`}
                       >
                         <X size={9} />
                       </button>
@@ -312,6 +349,8 @@ export function WorkerAvailabilityPanel({ worker, onClose }: WorkerAvailabilityP
                   disabled={!newSkill.trim() || addSkillMut.isPending}
                   className="rounded-xl px-3 py-2 text-[12px] font-bold text-white"
                   style={{ background: PLUM, opacity: !newSkill.trim() ? 0.5 : 1 }}
+                  title="Add skill"
+                  aria-label="Add skill"
                 >
                   <Plus size={12} />
                 </button>

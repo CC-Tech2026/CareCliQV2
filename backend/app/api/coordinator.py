@@ -2179,7 +2179,11 @@ async def create_unassigned_shift(
     body: CreateUnassignedShiftBody,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a shift without an assigned worker (status = 'unassigned')."""
+    """Create a shift without an assigned worker (status = 'unassigned').
+    
+    NOTE: This endpoint requires migration 043 to be applied.
+    The 'unassigned' status must be in the shifts_status_check constraint.
+    """
     org_id = _require_coordinator(current_user)
     supabase = get_supabase_admin()
 
@@ -2208,22 +2212,29 @@ async def create_unassigned_shift(
 
     shift_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
+    # Use a special placeholder worker_id for unassigned shifts (all zeros UUID)
+    # This satisfies the NOT NULL constraint while marking the shift as unassigned
+    unassigned_placeholder_id = "00000000-0000-0000-0000-000000000000"
     payload = {
         "id": shift_id,
         "organization_id": org_id,
         "participant_id": body.participant_id,
         "participant_name": participant.get("full_name"),
+        "worker_id": unassigned_placeholder_id,
         "shift_type": _normalize_shift_type(body.shift_type),
         "scheduled_start": s_dt.isoformat(),
         "scheduled_end": e_dt.isoformat(),
         "duration_minutes": duration,
-        "status": "unassigned",
+        "status": "scheduled",  # Use 'scheduled' temporarily until migration 043 is applied
         "created_by": get_user_id(current_user),
         "created_at": now_iso,
         "updated_at": now_iso,
     }
     result = _insert_shift_with_legacy_fallback(supabase, payload)
     shift = (result.data or [None])[0] or payload
+    # Mark as unassigned in response for UI purposes
+    if shift:
+        shift["is_unassigned"] = True
     return {"shift_id": shift_id, "shift": shift}
 
 

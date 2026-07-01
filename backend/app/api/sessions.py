@@ -652,16 +652,13 @@ async def save_session_with_ai(
                 worker_id=session.get("worker_id"),
             )
 
-        # 4. Record budget usage (non-critical)
-        try:
-            duration = session.get("duration_minutes") or 0
-            session_type = session.get("session_type") or "Support"
-            if participant_id and duration > 0:
-                await funding_service.record_session_budget_usage(
-                    session_id, participant_id, int(duration), session_type
-                )
-        except Exception as side_e:
-            logger.warning(f"Budget usage record failed (non-critical): {side_e}")
+        # 4. Budget deduction is intentionally disabled here. This used to
+        # deduct plan_budgets.used_amount immediately on session save, with
+        # no review gate and using hardcoded per-category rates instead of
+        # the real price catalogue. Deduction must only happen after a shift
+        # has been explicitly verified (task_completions.status='verified') —
+        # that gate doesn't exist yet, so this path is off rather than left
+        # live and wrong in the meantime. See funding_service.record_session_budget_usage.
 
         # 5a. R9 — Auto-create an incident draft when incident trigger language is detected
         try:

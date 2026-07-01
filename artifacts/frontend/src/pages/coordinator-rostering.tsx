@@ -178,11 +178,16 @@ function WeekGrid({
   const { translate, translateParams } = useAccessibility();
   const days = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
+  // Placeholder UUID used for unassigned shifts (workaround for NOT NULL constraint)
+  const UNASSIGNED_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000";
+
   const byWorkerDay = useMemo(() => {
     const map = new Map<string, CoordinatorShiftRecord[]>();
     for (const s of shifts) {
       const d = parseStart(s);
-      if (!d || !s.worker_id) continue;
+      if (!d) continue;
+      // Skip unassigned shifts (those with placeholder worker_id)
+      if (!s.worker_id || s.worker_id === UNASSIGNED_PLACEHOLDER_ID) continue;
       const key = `${s.worker_id}|${format(d, "yyyy-MM-dd")}`;
       map.set(key, [...(map.get(key) ?? []), s]);
     }
