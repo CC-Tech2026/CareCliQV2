@@ -1,7 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Check, Loader2, Plus, TrendingUp, Zap, Settings } from "lucide-react";
+import { Check, Loader2, Plus, TrendingUp, Zap, Settings, Lock } from "lucide-react";
+import { useGetParticipants } from "@workspace/api-client-react";
 import { useOrgQuery } from "@/hooks/useOrgQuery";
-import { getRevenueReport } from "@/services/coordinatorService";
+import { getRevenueReport, getParticipantCurrentBillingPeriod, planManagementTypeLabel } from "@/services/coordinatorService";
 import { resolveNdisPrice, type NdisPriceResolution } from "@/services/ndisService";
 import { apiFetch } from "@/lib/api-fetch";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +12,9 @@ import { useReAuth } from "@/hooks/useReAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { NdisPriceEditor } from "@/components/NdisPriceEditor";
 import { NdisScheduleLoader } from "@/components/NdisScheduleLoader";
 
@@ -84,10 +88,80 @@ export default function Billing() {
   const [showScheduleLoader, setShowScheduleLoader] = useState(false);
 
   const [form, setForm] = useState({
+    participant_id: "",
     item_code: "", recipient_name: "", recipient_email: "",
     description: translate("billing.defaultDescription"), quantity: "1",
     unit_amount: "120", due_date: "",
   });
+
+  const participantsQuery = useGetParticipants();
+  const participants = useMemo(() => {
+    const raw = participantsQuery.data;
+    if (Array.isArray(raw)) return raw as Array<Record<string, unknown>>;
+    if (raw && typeof raw === "object" && Array.isArray((raw as { data?: unknown }).data)) {
+      return (raw as { data: Array<Record<string, unknown>> }).data;
+    }
+    return [];
+  }, [participantsQuery.data]);
+
+  const billingPeriodQuery = useOrgQuery(
+    ["billing", "participant-period", form.participant_id],
+    {
+      queryFn: () => getParticipantCurrentBillingPeriod(form.participant_id),
+      enabled: Boolean(form.participant_id),
+    },
+  );
+
+  function routingRecipient(
+    participant: Record<string, unknown>,
+    lockedType?: string | null,
+  ) {
+    const type = lockedType || String(participant.plan_management_type || "");
+    if (type === "NDIA-managed") {
+      return { recipient_name: "NDIA", recipient_email: "" };
+    }
+    if (type === "plan-managed") {
+      return {
+        recipient_name: String(participant.case_manager_name || "Plan Manager"),
+        recipient_email: String(participant.case_manager_email || participant.case_manager_phone || ""),
+      };
+    }
+    return {
+      recipient_name: String(participant.full_name || ""),
+      recipient_email: String(participant.email || ""),
+    };
+  }
+
+  async function onParticipantChange(value: string) {
+    if (value === "__none__") {
+      setForm((prev) => ({ ...prev, participant_id: "", recipient_name: "", recipient_email: "" }));
+      return;
+    }
+    const participant = participants.find((p) => String(p.id) === value);
+    if (!participant) {
+      setForm((prev) => ({ ...prev, participant_id: value }));
+      return;
+    }
+    try {
+      const period = await getParticipantCurrentBillingPeriod(value);
+      const lockedType = period.open_period?.locked_plan_management_type ?? period.current_plan_management_type;
+      const routed = routingRecipient(participant, lockedType);
+      setForm((prev) => ({
+        ...prev,
+        participant_id: value,
+        recipient_name: routed.recipient_name,
+        recipient_email: routed.recipient_email,
+      }));
+    } catch {
+      const routed = routingRecipient(participant, String(participant.plan_management_type || ""));
+      setForm((prev) => ({
+        ...prev,
+        participant_id: value,
+        recipient_name: routed.recipient_name,
+        recipient_email: routed.recipient_email,
+      }));
+    }
+  }
 
   const totalOutstanding = useMemo(
     () => invoices.filter(inv => !["paid", "void"].includes(inv.status)).reduce((s, inv) => s + inv.total_cents, 0),
@@ -164,6 +238,7 @@ export default function Billing() {
       const res = await apiFetch("/api/billing/invoices", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          participant_id: form.participant_id || null,
           recipient_name: form.recipient_name,
           recipient_email: form.recipient_email || null,
           due_date: form.due_date || null,
@@ -179,7 +254,7 @@ export default function Billing() {
       if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || "Could not create invoice."); }
       const inv = await res.json();
       setInvoices(prev => [inv, ...prev]);
-      setForm(prev => ({ ...prev, recipient_name: "", recipient_email: "", item_code: "" }));
+      setForm(prev => ({ ...prev, participant_id: "", recipient_name: "", recipient_email: "", item_code: "" }));
       setResolvedPrice(null);
       toast({ title: translate("billing.toast.draftCreated"), description: inv.invoice_number });
     } catch (err) {
@@ -370,6 +445,65 @@ export default function Billing() {
           {/* Invoice form */}
           <Card title={user?.role === "allied_health" ? translate("billing.newInvoice") : translate("billing.issueInvoice")}>
             <div className="space-y-4">
+              <div>
+                <Label className="text-xs font-bold text-cc-muted">{translate("billing.participant")}</Label>
+                <Select
+                  value={form.participant_id || "__none__"}
+                  onValueChange={onParticipantChange}
+                >
+                  <SelectTrigger className="mt-1.5 rounded-lg border-cc-border" data-testid="select-billing-participant">
+                    <SelectValue placeholder={translate("billing.participantPlaceholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">{translate("billing.participantPlaceholder")}</SelectItem>
+                    {participants.map((p) => (
+                      <SelectItem key={String(p.id)} value={String(p.id)}>
+                        {String(p.full_name ?? "Participant")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {form.participant_id && (
+                <div className="rounded-lg border border-cc-border bg-cc-soft px-3 py-2.5 space-y-2" role="status">
+                  <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-cc-muted">
+                    <Lock className="h-3.5 w-3.5" />
+                    {translate("billing.lockedRouting")}
+                  </div>
+                  {billingPeriodQuery.isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-cc-plum" />
+                  ) : (
+                    <>
+                      <p className="text-xs text-cc-muted">{translate("billing.lockedRoutingHint")}</p>
+                      <div className="grid grid-cols-1 gap-1.5 text-sm">
+                        <p>
+                          <span className="font-semibold text-cc-muted">{translate("billing.currentPlanType")}: </span>
+                          <span className="font-bold text-cc-text">
+                            {planManagementTypeLabel(billingPeriodQuery.data?.current_plan_management_type, translate)}
+                          </span>
+                        </p>
+                        <p>
+                          <span className="font-semibold text-cc-muted">{translate("billing.lockedPlanType")}: </span>
+                          <span className="font-bold text-cc-text">
+                            {planManagementTypeLabel(
+                              billingPeriodQuery.data?.open_period?.locked_plan_management_type
+                                ?? billingPeriodQuery.data?.current_plan_management_type,
+                              translate,
+                            )}
+                          </span>
+                        </p>
+                      </div>
+                      {billingPeriodQuery.data?.type_differs_from_lock && (
+                        <p className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                          {billingPeriodQuery.data.message ?? translate("billing.routingMismatch")}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
               <div>
                 <Label className="text-xs font-bold text-cc-muted">{translate("billing.recipientName")}</Label>
                 <Input value={form.recipient_name} onChange={e => setForm({ ...form, recipient_name: e.target.value })} className="mt-1.5 rounded-lg border-cc-border" placeholder={translate("billing.recipientNamePlaceholder")} />

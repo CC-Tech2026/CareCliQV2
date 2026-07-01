@@ -198,6 +198,47 @@ export function getRevenueReport() {
   return jsonFetch<RevenueReport>("/api/billing/revenue-report");
 }
 
+export type BillingPeriod = {
+  id: string;
+  organization_id: string;
+  participant_id: string;
+  period_start: string;
+  period_end: string;
+  locked_plan_management_type: "NDIA-managed" | "plan-managed" | "self-managed";
+  status: "open" | "closed";
+  locked_at: string;
+};
+
+export type BillingPeriodCurrent = {
+  current_plan_management_type: BillingPeriod["locked_plan_management_type"] | null;
+  open_period: BillingPeriod | null;
+  type_differs_from_lock: boolean;
+  message: string | null;
+};
+
+export function getParticipantBillingPeriods(participantId: string) {
+  return jsonFetch<{ items: BillingPeriod[] }>(
+    `/api/participants/${encodeURIComponent(participantId)}/billing-periods`,
+  );
+}
+
+export function getParticipantCurrentBillingPeriod(participantId: string) {
+  return jsonFetch<BillingPeriodCurrent>(
+    `/api/participants/${encodeURIComponent(participantId)}/billing-periods/current`,
+  );
+}
+
+export function planManagementTypeLabel(
+  value: string | null | undefined,
+  translate: (key: string) => string,
+): string {
+  if (!value) return translate("patients.planManagementType.notSet");
+  if (value === "NDIA-managed") return translate("patients.planManagementType.ndiaManaged");
+  if (value === "plan-managed") return translate("patients.planManagementType.planManaged");
+  if (value === "self-managed") return translate("patients.planManagementType.selfManaged");
+  return value;
+}
+
 export function getRestrictedClinical(participantId: string) {
   return jsonFetch<RestrictedClinical>(`/api/participants/${participantId}/restricted-clinical`);
 }

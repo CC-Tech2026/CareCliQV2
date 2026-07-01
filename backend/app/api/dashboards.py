@@ -15,6 +15,7 @@ from ..core.access import (
     is_support_worker,
 )
 from ..core.security import get_current_user
+from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..services import billing_service, incident_service, participant_service, session_service
 from ..services.dashboard_landing_service import build_worker_landing_dashboard
 from ..services.travel_time_service import estimate_travel_time
@@ -70,11 +71,11 @@ def _client_payload(participant: dict, sessions: list[dict]) -> dict:
         "full_name": participant.get("full_name"),
         "ndis_number": participant.get("ndis_number"),
         "plan_status": participant.get("plan_status"),
-        "plan_management_type": (
-            participant.get("plan_management_type")
-            or participant.get("plan_management")
-            or participant.get("plan_status")
-            or "Not recorded"
+        "plan_management_type": plan_management_type_label(
+            normalize_plan_management_type(
+                participant.get("plan_management_type")
+                or participant.get("plan_management")
+            )
         ),
         "last_seen": latest_session.get("session_date") if latest_session else None,
         "compliance_status": _score_status(lowest_score) if lowest_score is not None else "at_risk",

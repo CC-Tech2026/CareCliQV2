@@ -399,6 +399,13 @@ async def update_participant(
 
     payload.pop("address", None)
 
+    if "plan_management_type" in payload:
+        from . import billing_period_service
+
+        payload["plan_management_type"] = billing_period_service.validate_plan_management_type_update(
+            payload.get("plan_management_type")
+        )
+
     payload = _strip_optional_columns(payload)
     payload = _serialize_dates(payload)
 
@@ -422,14 +429,15 @@ async def update_participant(
             current_user,
         )
 
+    existing_before: Optional[dict] = None
     if current_user:
 
-        existing = await get_participant_by_id(
+        existing_before = await get_participant_by_id(
             participant_id,
             current_user,
         )
 
-        if not existing:
+        if not existing_before:
             return None
 
     result = (
@@ -447,7 +455,35 @@ async def update_participant(
     if not rows:
         return None
 
-    return _normalize(rows[0])
+    updated = _normalize(rows[0])
+
+    if (
+        existing_before
+        and current_user
+        and "plan_management_type" in payload
+    ):
+        from . import audit_service
+        from ..core.access import get_user_id, get_user_organization_id
+        from ..models.billing_period import normalize_plan_management_type
+
+        before_type = normalize_plan_management_type(
+            existing_before.get("plan_management_type")
+            or existing_before.get("plan_management")
+        )
+        after_type = normalize_plan_management_type(updated.get("plan_management_type"))
+        if before_type != after_type:
+            await audit_service.log_action(
+                action_type="participant.plan_management_type_changed",
+                entity_type="participant",
+                entity_id=participant_id,
+                user_id=get_user_id(current_user),
+                organization_id=get_user_organization_id(current_user)
+                or str(existing_before.get("organization_id") or ""),
+                before_state={"plan_management_type": before_type},
+                after_state={"plan_management_type": after_type},
+            )
+
+    return updated
 
 
 async def update_participant_goals(

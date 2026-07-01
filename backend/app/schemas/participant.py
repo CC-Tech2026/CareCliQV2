@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 GoalStatus   = Literal["active", "archived"]
 GoalCategory = Literal["core", "capacity_building", "capital", "general"]
 BiologicalSex = Literal["male", "female", "unspecified"]
+PlanManagementType = Literal["NDIA-managed", "plan-managed", "self-managed"]
 
 # Constrained int type for 0-100 percentage values
 Percentage = Annotated[int, Field(ge=0, le=100)]
@@ -98,6 +99,7 @@ class ParticipantUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     plan_status: Optional[str] = None
+    plan_management_type: Optional[PlanManagementType] = None
     plan_start_date: Optional[date] = None
     plan_end_date: Optional[date] = None
     total_budget: Optional[float] = None

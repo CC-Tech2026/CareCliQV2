@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..core.access import get_user_id, get_user_organization_id, is_support_worker
 from ..core.security import get_current_user
+from ..models.billing_period import normalize_plan_management_type, plan_management_type_label
 from ..schemas.session import GoalProgressNote, SessionCreate
 from ..services import audit_service, evidence_upload_service, funding_service, goals_service, participant_service, session_service, shift_service, travel_expense_service
 from ..services.compliance_evidence_service import get_evidence_metadata, list_session_evidence_metadata
@@ -308,11 +309,11 @@ def _limited_participant(participant: dict) -> dict:
         "plan_status": participant.get("plan_status"),
         "plan_start_date": participant.get("plan_start_date"),
         "plan_end_date": participant.get("plan_end_date"),
-        "plan_management_type": (
-            participant.get("plan_management_type")
-            or participant.get("plan_management")
-            or participant.get("plan_status")
-            or "Not recorded"
+        "plan_management_type": plan_management_type_label(
+            normalize_plan_management_type(
+                participant.get("plan_management_type")
+                or participant.get("plan_management")
+            )
         ),
         "primary_disability": participant.get("primary_disability"),
         "allergies": participant.get("allergies"),

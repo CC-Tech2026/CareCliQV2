@@ -14,6 +14,7 @@ import os
 import pathlib
 
 from .supabase_client import get_supabase_admin
+from . import billing_period_service
 
 logger = logging.getLogger(__name__)
 
@@ -211,12 +212,20 @@ async def create_invoice(
         
         # Generate invoice number
         invoice_number = generate_invoice_number(organization_id, participant_id, period_end)
-        
+
+        period = billing_period_service.get_or_open_billing_period(
+            participant_id,
+            organization_id,
+            as_of_date=period_start,
+        )
+        billing_period_id = period.get("id")
+
         # Create invoice header
         invoice_payload = {
             "organization_id": organization_id,
             "participant_id": participant_id,
             "plan_id": plan_id,
+            "billing_period_id": billing_period_id,
             "invoice_number": invoice_number,
             "invoice_date": date.today().isoformat(),
             "period_start": period_start.isoformat(),
