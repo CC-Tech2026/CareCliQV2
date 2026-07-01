@@ -79,12 +79,13 @@ class TaskTemplateCreate(BaseModel):
     
     # Shift binding — primary_shift_type is always required
     primary_shift_type: ShiftType
-    additional_shift_types: list[ShiftType] = []
-    
-    # Recurrence
+
+    # Recurrence (must precede additional_shift_types — validators read recurrence_type)
     recurrence_type: RecurrenceType = RecurrenceType.ONE_OFF
     recurrence_frequency: Optional[RecurrenceFrequency] = None
     recurrence_weekdays: Optional[list[int]] = None  # 0=Sunday, ..., 6=Saturday
+
+    additional_shift_types: list[ShiftType] = []
     
     # Time windows
     due_window_start: Optional[time] = None

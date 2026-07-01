@@ -117,6 +117,24 @@ def test_background_summary_sentence_validation():
             )
 
 
+def test_resolve_emergency_contacts_parses_json_string():
+    from backend.app.services.shift_service import _parse_emergency_contact
+
+    raw = '{"name": "Karen Walsh", "phone": "0418 220 145", "relationship": "Mother"}'
+    parsed = _parse_emergency_contact(raw)
+    assert parsed == {
+        "name": "Karen Walsh",
+        "phone": "0418 220 145",
+        "relationship": "Mother",
+        "display": "Karen Walsh — Mother — 0418 220 145",
+    }
+
+    contacts = briefing_service.resolve_emergency_contacts("patient-1", "org-1", raw)
+    assert contacts == [
+        {"name": "Karen Walsh", "role": "Mother", "phone": "0418 220 145"},
+    ]
+
+
 @patch("backend.app.services.briefing_service.get_briefing_for_worker")
 @patch("backend.app.services.briefing_service._acknowledge_all_briefing_alerts")
 @patch("backend.app.services.briefing_service._get_worker_shift")

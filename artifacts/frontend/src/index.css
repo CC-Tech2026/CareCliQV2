@@ -225,6 +225,15 @@
   --cc-shadow-sm:  0 2px 8px rgba(55,48,163,0.06), 0 1px 3px rgba(55,48,163,0.04);
   --cc-shadow-md:  0 4px 16px rgba(55,48,163,0.09), 0 2px 6px rgba(55,48,163,0.04);
   --cc-shadow-lg:  0 20px 60px rgba(55,48,163,0.13), 0 8px 24px rgba(55,48,163,0.06);
+  --cc-card-shadow: 0 1px 4px rgba(55,48,163,0.06), 0 0 0 1px color-mix(in srgb, var(--cc-border) 85%, transparent);
+  --cc-card-divider: color-mix(in srgb, var(--cc-border) 75%, transparent);
+  --cc-plum-subtle: rgba(55, 48, 163, 0.04);
+  --cc-plum-soft: rgba(55, 48, 163, 0.08);
+  --cc-plum-medium: rgba(55, 48, 163, 0.14);
+  --cc-plum-ring: rgba(55, 48, 163, 0.20);
+  --cc-plum-border: rgba(55, 48, 163, 0.12);
+  --cc-coral-soft: rgba(190, 24, 93, 0.08);
+  --cc-coral-ring: rgba(190, 24, 93, 0.20);
 
   /* Accessibility — scaled by AccessibilityContext on <html> */
   --font-scale: 1;
@@ -321,6 +330,15 @@
   --cc-shadow-sm:  0 2px 8px rgba(0,0,0,0.25);
   --cc-shadow-md:  0 4px 16px rgba(0,0,0,0.3);
   --cc-shadow-lg:  0 20px 60px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.2);
+  --cc-card-shadow: 0 1px 4px rgba(0,0,0,0.28), 0 0 0 1px var(--cc-border);
+  --cc-card-divider: var(--cc-border);
+  --cc-plum-subtle: rgba(129, 140, 248, 0.08);
+  --cc-plum-soft: rgba(129, 140, 248, 0.12);
+  --cc-plum-medium: rgba(129, 140, 248, 0.18);
+  --cc-plum-ring: rgba(129, 140, 248, 0.28);
+  --cc-plum-border: rgba(129, 140, 248, 0.22);
+  --cc-coral-soft: rgba(244, 114, 182, 0.12);
+  --cc-coral-ring: rgba(244, 114, 182, 0.28);
 
   /* Worker mobile spec v2 — dark */
   --wm-pink: #F472B6;
@@ -489,6 +507,90 @@
 .dark .text-sky-700     { color: var(--cc-sky) !important; }
 .dark .border-sky-100   { border-color: var(--cc-border) !important; }
 .dark .bg-slate-100     { background-color: var(--cc-soft) !important; }
+
+/* Slate scale — session detail, clinical pages */
+.dark .text-slate-400,
+.dark .text-slate-500   { color: var(--cc-muted) !important; }
+.dark .text-slate-700,
+.dark .text-slate-800,
+.dark .text-slate-900   { color: var(--cc-text) !important; }
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/80,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-50\/80:hover { background-color: var(--cc-soft) !important; }
+.dark .border-slate-300 { border-color: var(--cc-border) !important; }
+
+/* Indigo accent panels (goals, NDIS mapping) */
+.dark .bg-indigo-50,
+.dark .bg-indigo-50\/40,
+.dark .bg-indigo-50\/50 { background-color: color-mix(in srgb, var(--cc-plum) 12%, var(--cc-surface)) !important; }
+.dark .border-indigo-100,
+.dark .border-indigo-100\/40,
+.dark .border-indigo-100\/60 { border-color: var(--cc-border) !important; }
+.dark .text-indigo-700,
+.dark .text-indigo-900 { color: var(--cc-plum) !important; }
+
+/* Purple accent panels (AI notes, choice & control) */
+.dark .bg-purple-50\/50,
+.dark .bg-purple-50\/60 { background-color: var(--cc-active-bg) !important; }
+.dark .border-purple-200,
+.dark .border-purple-200\/50 { border-color: var(--cc-border) !important; }
+.dark .text-purple-400,
+.dark .text-purple-500,
+.dark .text-purple-700,
+.dark .text-purple-800,
+.dark .text-purple-900 { color: var(--cc-plum) !important; }
+.dark .hover\:bg-purple-100:hover { background-color: var(--cc-active-bg) !important; }
+
+/* Teal structured note labels */
+.dark .text-teal-700 { color: var(--cc-status-success) !important; }
+
+/* Semi-transparent white panels */
+.dark .bg-white\/60,
+.dark .bg-white\/80 { background-color: color-mix(in srgb, var(--cc-surface) 92%, transparent) !important; }
+
+/* Tiered compliance panel backgrounds */
+.dark .bg-amber-100,
+.dark .bg-amber-100\/60 { background-color: var(--cc-status-warning-bg) !important; }
+.dark .bg-red-100,
+.dark .bg-red-100\/60 { background-color: var(--cc-status-critical-bg) !important; }
+.dark .bg-blue-50\/30,
+.dark .bg-blue-50\/60 { background-color: var(--cc-status-info-bg) !important; }
+.dark .border-blue-100 { border-color: rgba(56, 189, 248, 0.25) !important; }
+.dark .border-amber-100,
+.dark .border-amber-200\/40,
+.dark .border-amber-200\/60 { border-color: rgba(252, 211, 77, 0.25) !important; }
+.dark .text-blue-500,
+.dark .text-blue-600 { color: var(--cc-status-info) !important; }
+.dark .border-emerald-300 { border-color: rgba(74, 222, 128, 0.30) !important; }
+.dark .border-amber-300 { border-color: rgba(252, 211, 77, 0.30) !important; }
+.dark .border-red-300 { border-color: rgba(244, 114, 182, 0.30) !important; }
+.dark .text-\[\#1C1626\] { color: var(--cc-text) !important; }
+.dark .text-\[\#7A6A8A\] { color: var(--cc-muted) !important; }
+
+/* Theme-aware surface cards */
+.cc-surface-card {
+  border-radius: 1rem;
+  background-color: var(--cc-surface);
+  overflow: hidden;
+  box-shadow: var(--cc-card-shadow);
+}
+.cc-card-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--cc-card-divider);
+}
+.cc-card-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--cc-text);
+}
+.cc-card-muted {
+  color: var(--cc-muted);
+}
+.cc-plum-panel {
+  background: var(--cc-plum-subtle);
+  border: 1px solid var(--cc-plum-border);
+}
 
 /* Theme-aware status pill utilities */
 .cc-status-success {

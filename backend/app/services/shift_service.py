@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -866,7 +867,16 @@ def _parse_emergency_contact(raw: Any) -> dict[str, Any] | str | None:
             "display": " — ".join(p for p in (name, relationship, phone) if p) or phone or name,
         }
     text = str(raw).strip()
-    return text or None
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                return _parse_emergency_contact(parsed)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+    return text
 
 
 def _fetch_participant_allergies(participant_id: str, organization_id: str) -> list[dict[str, Any]]:

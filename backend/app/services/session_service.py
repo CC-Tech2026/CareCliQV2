@@ -37,6 +37,19 @@ OPTIONAL_SESSION_COLUMNS = {
     "shift_id",
 }
 
+LEGAL_RECORD_COLUMNS = {
+    "original_language_input",
+    "detected_language",
+    "translated_english_note",
+    "compliance_input_text",
+    "translation_status",
+    "translation_provider",
+    "translation_confidence",
+    "translation_metadata",
+    "translation_error",
+    "translation_completed_at",
+}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -290,6 +303,63 @@ async def _apply_legal_record_normalization(
         and normalized.get("translation_status") in BLOCKING_TRANSLATION_STATUSES
     ):
         raise ValueError(COMPLIANCE_BLOCKED_MESSAGE)
+
+
+def _needs_legal_record_repair(session: Dict[str, Any]) -> bool:
+    legal_text = (
+        session.get("compliance_input_text")
+        or session.get("translated_english_note")
+        or ""
+    )
+    if str(legal_text).strip():
+        return False
+    return bool(_build_legal_source_text(session).strip())
+
+
+async def _ensure_legal_record_fields(
+    session: Dict[str, Any],
+    current_user: Optional[dict],
+    session_id: str,
+) -> Dict[str, Any]:
+    """Backfill English legal-record columns from notes when missing (legacy rows)."""
+    if not _needs_legal_record_repair(session):
+        return session
+
+    payload: Dict[str, Any] = {}
+    try:
+        await _apply_legal_record_normalization(
+            payload,
+            dict(session),
+            current_user,
+            session_id,
+            session,
+        )
+    except ValueError:
+        return session
+
+    legal_text = payload.get("compliance_input_text") or payload.get("translated_english_note")
+    if not str(legal_text or "").strip():
+        return session
+    if payload.get("translation_status") in BLOCKING_TRANSLATION_STATUSES:
+        return session
+
+    update_data = {key: payload[key] for key in LEGAL_RECORD_COLUMNS if key in payload}
+    if not update_data:
+        return session
+
+    supabase = get_supabase_admin()
+    try:
+        supabase.table("sessions").update(update_data).eq("id", session_id).execute()
+    except Exception as exc:
+        if _is_missing_column_error(exc):
+            logger.warning(
+                "Session legal-record repair skipped; optional columns unavailable"
+            )
+            return session
+        raise
+
+    repaired = {**session, **update_data}
+    return _normalize(repaired)
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +621,7 @@ async def get_session_by_id(
             "ndis_number": patient.get("ndis_number", ""),
         }
 
-    return row
+    return await _ensure_legal_record_fields(row, current_user, session_id)
 
 
 # ---------------------------------------------------------------------------
