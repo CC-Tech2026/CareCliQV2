@@ -202,6 +202,44 @@ class LegalRecordNormalizationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ComplianceBlockedError):
             run_compliance_check({"notes": "Bonjour", "translation_status": "pending"})
 
+    async def test_ensure_legal_record_fields_backfills_from_notes(self):
+        session = {
+            "id": "s-legacy",
+            "status": "completed",
+            "notes": "The participant completed a meal preparation task with support.",
+            "compliance_input_text": None,
+            "translated_english_note": None,
+            "translation_status": None,
+        }
+        update_payloads: list[dict] = []
+
+        supabase = MagicMock()
+        sessions = MagicMock()
+        supabase.table.return_value = sessions
+        sessions.update.return_value = sessions
+        sessions.execute.return_value = MagicMock(data=[session])
+
+        def capture_update(payload):
+            update_payloads.append(payload)
+            return sessions
+
+        sessions.update.side_effect = capture_update
+
+        with patch.object(session_service, "get_supabase_admin", return_value=supabase):
+            repaired = await session_service._ensure_legal_record_fields(
+                session,
+                {"sub": WORKER_ID, "role": "support_worker", "organization_id": ORG_A},
+                "s-legacy",
+            )
+
+        self.assertEqual(repaired["translation_status"], "not_required")
+        self.assertTrue(repaired["compliance_input_text"])
+        self.assertEqual(
+            repaired["compliance_input_text"],
+            repaired["translated_english_note"],
+        )
+        self.assertIn("compliance_input_text", update_payloads[0])
+
 
 class EmailDeliveryTests(unittest.TestCase):
     def setUp(self):

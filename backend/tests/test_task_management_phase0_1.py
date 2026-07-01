@@ -14,8 +14,8 @@ from datetime import datetime, timedelta, time
 from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.task_management_service import TaskManagementService
-from app.models.task_models import (
+from backend.app.services.task_management_service import TaskManagementService
+from backend.app.models.task_models import (
     TaskCategory, TaskPriority, ShiftType, RecurrenceType, RecurrenceFrequency,
     RequirementLevel, EvidenceRequired, TaskTemplateCreate, TaskInstanceComplete
 )
@@ -77,18 +77,51 @@ class TestIdempotentGeneration:
         # Mock instance lookup: first call returns empty, second call returns existing instance
         instance_check_response = MagicMock()
         instance_check_response.data = []  # First check: doesn't exist
-        
-        # Setup mock chain
-        mock_supabase.table.return_value.select.return_value = MagicMock()
-        mock_supabase.table.return_value.select.return_value.eq.return_value = MagicMock()
+
+        shift_response_execute = MagicMock()
+        shift_response_execute.data = shift_response.data
+
+        template_response_execute = MagicMock()
+        template_response_execute.data = template_response.data
+
+        instance_check_empty = MagicMock(data=[])
+        instance_check_existing = MagicMock(data=[{"id": str(uuid4())}])
+        insert_response = MagicMock(data=[{"id": str(uuid4()), "task_template_id": str(template_id)}])
+
+        shifts_table = MagicMock()
+        shifts_table.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            shift_response_execute
+        )
+
+        templates_table = MagicMock()
+        templates_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
+            template_response_execute
+        )
+
+        instances_table = MagicMock()
+        instances_table.select.return_value.eq.return_value.eq.return_value.execute.side_effect = [
+            instance_check_empty,
+            instance_check_existing,
+        ]
+        instances_table.insert.return_value.execute.return_value = insert_response
+
+        def table_router(name):
+            if name == "shifts":
+                return shifts_table
+            if name == "task_templates":
+                return templates_table
+            if name == "task_instances":
+                return instances_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_router
         
         # This is complex to mock fully, so we'll do a simpler assertion
         instances1 = await task_service.generate_task_instances_for_shift(shift_id)
         instances2 = await task_service.generate_task_instances_for_shift(shift_id)
         
-        # Both should call generate but the service should check for existing first
-        assert len(instances1) >= 0  # May be empty due to mock limitations
-        assert len(instances2) >= 0
+        assert len(instances1) == 1
+        assert len(instances2) == 0
     
     @pytest.mark.asyncio
     async def test_missing_shift_returns_empty(self, task_service, mock_supabase):
@@ -102,8 +135,12 @@ class TestIdempotentGeneration:
         # Mock shift doesn't exist
         shift_response = MagicMock()
         shift_response.data = None
-        
-        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value = shift_response
+
+        shifts_table = MagicMock()
+        shifts_table.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            shift_response
+        )
+        mock_supabase.table.side_effect = lambda name: shifts_table if name == "shifts" else MagicMock()
         
         instances = await task_service.generate_task_instances_for_shift(shift_id)
         
@@ -196,11 +233,25 @@ class TestEvidenceValidation:
             "requirement_level": "mandatory",
         }
         
-        # Setup mock chain
-        select_mock = MagicMock()
-        select_mock.eq.return_value = select_mock
-        select_mock.single.return_value = instance_response
-        mock_supabase.table.return_value.select.return_value = select_mock
+        # Setup per-table mock chains
+        instances_table = MagicMock()
+        instances_table.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            instance_response
+        )
+
+        templates_table = MagicMock()
+        templates_table.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            template_response
+        )
+
+        def table_router(name):
+            if name == "task_instances":
+                return instances_table
+            if name == "task_templates":
+                return templates_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_router
         
         # Attempt completion without evidence
         result = await task_service.complete_task_instance(
@@ -211,7 +262,9 @@ class TestEvidenceValidation:
         )
         
         # Should return error with missing_evidence list
-        assert "error" in result or "missing_evidence" in result
+        assert "error" in result
+        assert "missing_evidence" in result
+        assert "photo" in result["missing_evidence"]
     
     @pytest.mark.asyncio
     async def test_optional_task_completes_without_evidence(self, task_service, mock_supabase):
